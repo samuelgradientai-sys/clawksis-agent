@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import tempfile
 from concurrent.futures import TimeoutError as FutureTimeout
 from contextvars import ContextVar, Token
@@ -41,13 +42,7 @@ _EDIT_APPROVAL_REQUESTER: ContextVar[EditApprovalRequester | None] = ContextVar(
 _PERMISSION_REQUEST_IDS = count(1)
 
 
-SENSITIVE_AUTO_APPROVE_NAMES = {
-    ".env",
-    ".env.local",
-    ".env.production",
-    "id_rsa",
-    "id_ed25519",
-}
+SENSITIVE_AUTO_APPROVE_NAMES = {".env", ".env.local", ".env.production", "id_rsa", "id_ed25519"}
 AUTO_APPROVE_ASK = "ask"
 AUTO_APPROVE_WORKSPACE = "workspace_session"
 AUTO_APPROVE_SESSION = "session"
@@ -133,15 +128,64 @@ def _proposal_for_patch_replace(arguments: dict[str, Any]) -> EditProposal:
     )
 
 
-def build_edit_proposal(
-    tool_name: str, arguments: dict[str, Any]
-) -> EditProposal | None:
+def _extract_v4a_patch_paths(patch_body: str) -> list[str]:
+    paths: list[str] = []
+    for match in re.finditer(
+        r'^\*\*\*\s+(?:Update|Add|Delete)\s+File:\s*(.+)$',
+        patch_body,
+        re.MULTILINE,
+    ):
+        path = match.group(1).strip()
+        if path:
+            paths.append(path)
+    for match in re.finditer(
+        r'^\*\*\*\s+Move\s+File:\s*(.+?)\s*->\s*(.+)$',
+        patch_body,
+        re.MULTILINE,
+    ):
+        src = match.group(1).strip()
+        dst = match.group(2).strip()
+        if src:
+            paths.append(src)
+        if dst:
+            paths.append(dst)
+    return paths
+
+
+def _proposal_for_patch_v4a(arguments: dict[str, Any]) -> EditProposal:
+    patch_body = arguments.get("patch")
+    if not isinstance(patch_body, str) or not patch_body:
+        raise ValueError("patch content required")
+
+    paths = _extract_v4a_patch_paths(patch_body)
+    if not paths:
+        raise ValueError("no file paths found in V4A patch")
+
+    proposal_path = paths[0] if len(paths) == 1 else ", ".join(paths)
+    old_text = _read_text_if_exists(paths[0]) if len(paths) == 1 else None
+    return EditProposal(
+        tool_name="patch",
+        path=proposal_path,
+        old_text=old_text,
+        # ACP only supports a single diff payload here.  Surface the exact V4A
+        # patch content before execution so patch-mode calls are permissioned
+        # and denied patches cannot mutate.
+        new_text=patch_body,
+        arguments=dict(arguments),
+    )
+
+
+def build_edit_proposal(tool_name: str, arguments: dict[str, Any]) -> EditProposal | None:
     """Return an edit proposal for supported file mutation calls."""
 
     if tool_name == "write_file":
         return _proposal_for_write_file(arguments)
-    if tool_name == "patch" and arguments.get("mode", "replace") == "replace":
-        return _proposal_for_patch_replace(arguments)
+    if tool_name == "patch":
+        mode = arguments.get("mode", "replace")
+        if mode == "replace":
+            return _proposal_for_patch_replace(arguments)
+        if mode == "patch":
+            return _proposal_for_patch_v4a(arguments)
     return None
 
 
@@ -153,9 +197,7 @@ def _is_sensitive_auto_approve_path(path: str) -> bool:
     return Path(path).name.lower() in SENSITIVE_AUTO_APPROVE_NAMES
 
 
-def should_auto_approve_edit(
-    proposal: EditProposal, policy: str, cwd: str | None = None
-) -> bool:
+def should_auto_approve_edit(proposal: EditProposal, policy: str, cwd: str | None = None) -> bool:
     """Return whether an ACP edit proposal may bypass the prompt for this session.
 
     This is intentionally session-scoped and conservative: sensitive paths still
@@ -188,9 +230,7 @@ def should_auto_approve_edit(
     return False
 
 
-def maybe_require_edit_approval(
-    tool_name: str, arguments: dict[str, Any]
-) -> str | None:
+def maybe_require_edit_approval(tool_name: str, arguments: dict[str, Any]) -> str | None:
     """Run ACP edit approval if bound.
 
     Returns a JSON tool-error string when the edit must be blocked, otherwise
@@ -204,13 +244,8 @@ def maybe_require_edit_approval(
     try:
         proposal = build_edit_proposal(tool_name, arguments)
     except Exception as exc:
-        logger.warning(
-            "Could not build ACP edit approval proposal for %s: %s", tool_name, exc
-        )
-        return json.dumps(
-            {"error": f"Edit approval denied: could not prepare diff ({exc})"},
-            ensure_ascii=False,
-        )
+        logger.warning("Could not build ACP edit approval proposal for %s: %s", tool_name, exc)
+        return json.dumps({"error": f"Edit approval denied: could not prepare diff ({exc})"}, ensure_ascii=False)
 
     if proposal is None:
         return None
@@ -223,10 +258,7 @@ def maybe_require_edit_approval(
 
     if approved:
         return None
-    return json.dumps(
-        {"error": "Edit approval denied by ACP client; file was not modified."},
-        ensure_ascii=False,
-    )
+    return json.dumps({"error": "Edit approval denied by ACP client; file was not modified."}, ensure_ascii=False)
 
 
 def build_acp_edit_tool_call(proposal: EditProposal):
@@ -268,21 +300,13 @@ def make_acp_edit_approval_requester(
             try:
                 policy, cwd = auto_approve_getter()
                 if should_auto_approve_edit(proposal, policy, cwd):
-                    logger.info(
-                        "Auto-approved ACP edit under policy %s: %s",
-                        policy,
-                        proposal.path,
-                    )
+                    logger.info("Auto-approved ACP edit under policy %s: %s", policy, proposal.path)
                     return True
             except Exception:
-                logger.debug(
-                    "ACP edit auto-approval policy check failed", exc_info=True
-                )
+                logger.debug("ACP edit auto-approval policy check failed", exc_info=True)
 
         options = [
-            PermissionOption(
-                option_id="allow_once", kind="allow_once", name="Allow edit"
-            ),
+            PermissionOption(option_id="allow_once", kind="allow_once", name="Allow edit"),
             PermissionOption(option_id="deny", kind="reject_once", name="Deny"),
         ]
         tool_call = build_acp_edit_tool_call(proposal)

@@ -1,0 +1,24 @@
+--- a/website/docs/guides/run-nemotron-3-ultra-free.md
++++ b/website/docs/guides/run-nemotron-3-ultra-free.md
+@@ -42,12 +42,20 @@
+ 
+ ## Option B — Command line
+ 
+-Prefer the terminal? You'll need macOS, Linux, or Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) with `curl` installed (`curl` is preinstalled on most systems).
++Prefer the terminal?
+ 
+ ### 1. Install Clawksis
+ 
++On macOS/Linux/WSL2/Android, run
++
+ ```bash
+ curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
++```
++
++On Windows, run
++
++```powershell
++iex (irm https://clawksis-agent.nousresearch.com/install.ps1)
+ ```
+ 
+ Prefer to review first? Download [`install.sh`](https://clawksis-agent.nousresearch.com/install.sh), inspect it, then run it.

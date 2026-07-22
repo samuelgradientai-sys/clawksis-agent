@@ -20,10 +20,6 @@ from clawk_cli import web_server
 from clawk_cli.dashboard_auth import clear_providers, register_provider
 from tests.clawk_cli.conftest_dashboard_auth import StubAuthProvider
 
-# These tests mutate ``web_server.app.state.auth_required`` so they share
-# the same xdist group as the other dashboard-auth gated_app tests.
-pytestmark = pytest.mark.xdist_group("dashboard_auth_app_state")
-
 
 @pytest.fixture
 def gated_client():
@@ -88,23 +84,11 @@ def test_status_preserves_existing_fields(loopback_client):
     r = loopback_client.get("/api/status")
     body = r.json()
     expected_keys = {
-        "version",
-        "release_date",
-        "clawk_home",
-        "config_path",
-        "env_path",
-        "config_version",
-        "latest_config_version",
-        "gateway_running",
-        "gateway_pid",
-        "gateway_health_url",
-        "gateway_state",
-        "gateway_platforms",
-        "gateway_exit_reason",
-        "gateway_updated_at",
-        "active_sessions",
-        "auth_required",
-        "auth_providers",
+        "version", "release_date", "clawk_home", "config_path", "env_path",
+        "config_version", "latest_config_version", "gateway_running",
+        "gateway_pid", "gateway_health_url", "gateway_state",
+        "gateway_platforms", "gateway_exit_reason", "gateway_updated_at",
+        "active_sessions", "auth_required", "auth_providers",
     }
     missing = expected_keys - set(body.keys())
     assert not missing, f"/api/status dropped fields: {missing}"
@@ -115,10 +99,7 @@ def test_status_preserves_existing_fields(loopback_client):
 # (it is in ``PUBLIC_API_PATHS``), so on a network-exposed bind it must not
 # leak that detail to anonymous callers.
 _HOST_DETAIL_FIELDS = frozenset({
-    "clawk_home",
-    "config_path",
-    "env_path",
-    "gateway_pid",
+    "clawk_home", "config_path", "env_path", "gateway_pid",
     "gateway_health_url",
 })
 

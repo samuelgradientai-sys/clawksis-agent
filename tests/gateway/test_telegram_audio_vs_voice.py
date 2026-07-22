@@ -57,7 +57,6 @@ def _audio_event(path: str = "/tmp/song.mp3") -> MessageEvent:
 # 1. VOICE still goes through STT
 # ---------------------------------------------------------------------------
 
-
 @pytest.mark.asyncio
 async def test_voice_message_still_transcribed():
     """MessageType.VOICE must still be sent through _enrich_message_with_transcription."""
@@ -67,11 +66,7 @@ async def test_voice_message_still_transcribed():
 
     with patch(
         "tools.transcription_tools.transcribe_audio",
-        return_value={
-            "success": True,
-            "transcript": "hello world",
-            "provider": "whisper",
-        },
+        return_value={"success": True, "transcript": "hello world", "provider": "whisper"},
     ) as mock_transcribe:
         result = await runner._prepare_inbound_message_text(
             event=event,
@@ -80,14 +75,14 @@ async def test_voice_message_still_transcribed():
         )
 
     mock_transcribe.assert_called_once_with("/tmp/voice.ogg")
+    # The transcript passes through as a plain quoted line — no "voice message"
+    # meta-commentary in the LLM-visible prompt.
     assert "hello world" in result
-    assert "voice message" in result.lower()
 
 
 # ---------------------------------------------------------------------------
 # 2. AUDIO file attachment bypasses STT
 # ---------------------------------------------------------------------------
-
 
 @pytest.mark.asyncio
 async def test_audio_attachment_skips_stt():
@@ -98,9 +93,7 @@ async def test_audio_attachment_skips_stt():
 
     with patch(
         "tools.transcription_tools.transcribe_audio",
-        side_effect=AssertionError(
-            "transcribe_audio must NOT be called for audio file attachments"
-        ),
+        side_effect=AssertionError("transcribe_audio must NOT be called for audio file attachments"),
     ):
         with patch(
             "tools.credential_files.to_agent_visible_cache_path",
@@ -115,6 +108,26 @@ async def test_audio_attachment_skips_stt():
     assert result is not None
     assert "/tmp/song.mp3" in result
     assert "audio file attachment" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_pending_audio_attachment_is_not_selected_for_stt():
+    """Pending Telegram AUDIO files retain file semantics during interrupts."""
+    runner = _make_runner(stt_enabled=True)
+    event = _audio_event("/tmp/pending-song.mp3")
+
+    with patch(
+        "tools.transcription_tools.transcribe_audio",
+        side_effect=AssertionError("pending audio attachments must not enter STT"),
+    ):
+        result, transcripts = await runner._transcribe_pending_audio_event_once(
+            event,
+            event.text,
+        )
+
+    assert runner._pending_event_audio_paths(event) == []
+    assert result == ""
+    assert transcripts == []
 
 
 @pytest.mark.asyncio
@@ -152,7 +165,6 @@ async def test_audio_attachment_context_note_format():
 # 3. STT disabled still results in no transcription for audio file attachments
 # ---------------------------------------------------------------------------
 
-
 @pytest.mark.asyncio
 async def test_audio_attachment_skips_stt_when_stt_disabled():
     """Even with STT disabled, AUDIO must NOT produce STT disabled notice — just a file note."""
@@ -183,7 +195,6 @@ async def test_audio_attachment_skips_stt_when_stt_disabled():
 # ---------------------------------------------------------------------------
 # 4. Telegram gateway: msg.audio → MessageType.AUDIO (not VOICE)
 # ---------------------------------------------------------------------------
-
 
 def test_telegram_media_type_detection_audio_vs_voice():
     """The Telegram platform must set MessageType.AUDIO for msg.audio, VOICE for msg.voice."""

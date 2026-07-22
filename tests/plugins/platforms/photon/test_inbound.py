@@ -4,7 +4,6 @@ These bypass the loopback HTTP stream — they call ``_dispatch_inbound`` /
 ``_on_inbound_line`` / ``_is_duplicate`` directly, exercising the
 sidecar-event parsing without spawning the Node sidecar or binding ports.
 """
-
 from __future__ import annotations
 
 import base64
@@ -26,9 +25,7 @@ def _make_adapter(monkeypatch: pytest.MonkeyPatch) -> PhotonAdapter:
     return PhotonAdapter(cfg)
 
 
-def _capture(
-    adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch
-) -> List[MessageEvent]:
+def _capture(adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch) -> List[MessageEvent]:
     captured: List[MessageEvent] = []
 
     async def fake_handle(event: MessageEvent) -> None:
@@ -124,11 +121,9 @@ async def test_dispatch_attachment_without_bytes_surfaces_marker(
     adapter = _make_adapter(monkeypatch)
     captured = _capture(adapter, monkeypatch)
 
-    event = _attachment_event({
-        "name": "IMG_4127.HEIC",
-        "mimeType": "image/heic",
-        "size": 12345,
-    })
+    event = _attachment_event(
+        {"name": "IMG_4127.HEIC", "mimeType": "image/heic", "size": 12345}
+    )
     await adapter._dispatch_inbound(event)
     assert len(captured) == 1
     ev = captured[0]
@@ -148,13 +143,15 @@ async def test_dispatch_attachment_downloads_image(
     captured = _capture(adapter, monkeypatch)
 
     raw = base64.b64decode(_PNG_1X1_B64)
-    event = _attachment_event({
-        "name": "photo.png",
-        "mimeType": "image/png",
-        "size": len(raw),
-        "data": _PNG_1X1_B64,
-        "encoding": "base64",
-    })
+    event = _attachment_event(
+        {
+            "name": "photo.png",
+            "mimeType": "image/png",
+            "size": len(raw),
+            "data": _PNG_1X1_B64,
+            "encoding": "base64",
+        }
+    )
     await adapter._dispatch_inbound(event)
 
     assert len(captured) == 1
@@ -172,6 +169,56 @@ async def test_dispatch_attachment_downloads_image(
 
 
 @pytest.mark.asyncio
+async def test_dispatch_group_preserves_text_and_attachment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Spectrum group content from a mixed text+image iMessage must not drop text."""
+    adapter = _make_adapter(monkeypatch)
+    captured = _capture(adapter, monkeypatch)
+    raw = base64.b64decode(_PNG_1X1_B64)
+
+    event = _attachment_event(
+        {},
+        msg_id="spc-msg-mixed",
+    )
+    event["content"] = {
+        "type": "group",
+        "items": [
+            {
+                "id": "p:0/spc-msg-mixed",
+                "content": {"type": "text", "text": "请分析这张图的重点"},
+            },
+            {
+                "id": "p:1/spc-msg-mixed",
+                "content": {
+                    "type": "attachment",
+                    "name": "photo.png",
+                    "mimeType": "image/png",
+                    "size": len(raw),
+                    "data": _PNG_1X1_B64,
+                    "encoding": "base64",
+                },
+            },
+        ],
+    }
+
+    await adapter._dispatch_inbound(event)
+
+    assert len(captured) == 1
+    ev = captured[0]
+    assert ev.text == "请分析这张图的重点"
+    assert ev.message_type == MessageType.PHOTO
+    assert ev.media_types == ["image/png"]
+    assert len(ev.media_urls) == 1
+    cached = Path(ev.media_urls[0])
+    try:
+        assert cached.is_file()
+        assert cached.read_bytes() == raw
+    finally:
+        cached.unlink(missing_ok=True)
+
+
+@pytest.mark.asyncio
 async def test_dispatch_voice_downloads_audio(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -180,14 +227,16 @@ async def test_dispatch_voice_downloads_audio(
     captured = _capture(adapter, monkeypatch)
 
     raw = b"OggS" + b"\x00" * 32
-    event = _voice_event({
-        "name": "note.ogg",
-        "mimeType": "audio/ogg",
-        "duration": 7,
-        "size": len(raw),
-        "data": base64.b64encode(raw).decode("ascii"),
-        "encoding": "base64",
-    })
+    event = _voice_event(
+        {
+            "name": "note.ogg",
+            "mimeType": "audio/ogg",
+            "duration": 7,
+            "size": len(raw),
+            "data": base64.b64encode(raw).decode("ascii"),
+            "encoding": "base64",
+        }
+    )
     await adapter._dispatch_inbound(event)
 
     assert len(captured) == 1
@@ -212,12 +261,9 @@ async def test_dispatch_voice_without_bytes_surfaces_marker(
     adapter = _make_adapter(monkeypatch)
     captured = _capture(adapter, monkeypatch)
 
-    event = _voice_event({
-        "name": "note.m4a",
-        "mimeType": "audio/mp4",
-        "duration": 12,
-        "size": 12345,
-    })
+    event = _voice_event(
+        {"name": "note.m4a", "mimeType": "audio/mp4", "duration": 12, "size": 12345}
+    )
     await adapter._dispatch_inbound(event)
 
     assert len(captured) == 1
@@ -239,13 +285,15 @@ async def test_dispatch_attachment_downloads_document(
     captured = _capture(adapter, monkeypatch)
 
     raw = b"%PDF-1.4 clawk test document"
-    event = _attachment_event({
-        "name": "report.pdf",
-        "mimeType": "application/pdf",
-        "size": len(raw),
-        "data": base64.b64encode(raw).decode("ascii"),
-        "encoding": "base64",
-    })
+    event = _attachment_event(
+        {
+            "name": "report.pdf",
+            "mimeType": "application/pdf",
+            "size": len(raw),
+            "data": base64.b64encode(raw).decode("ascii"),
+            "encoding": "base64",
+        }
+    )
     await adapter._dispatch_inbound(event)
 
     assert len(captured) == 1
@@ -278,9 +326,7 @@ async def test_on_inbound_line_dispatches_and_dedups(
 
 
 @pytest.mark.asyncio
-async def test_on_inbound_line_ignores_bad_json(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_on_inbound_line_ignores_bad_json(monkeypatch: pytest.MonkeyPatch) -> None:
     adapter = _make_adapter(monkeypatch)
     captured = _capture(adapter, monkeypatch)
 

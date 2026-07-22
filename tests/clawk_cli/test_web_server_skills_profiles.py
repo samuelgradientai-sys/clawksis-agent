@@ -7,7 +7,6 @@ process. Before the ``profile`` parameter existed, toggling a skill after
 These tests pin the new behavior: reads and writes land in the REQUESTED
 profile's CLAWK_HOME, and the dashboard's own profile stays untouched.
 """
-
 import pytest
 import yaml
 
@@ -181,7 +180,7 @@ class TestProfileScopedHubActions:
         assert calls == [
             (
                 ["-p", "worker_alpha", "skills", "install", "official/demo", "--yes"],
-                "skills-install",
+                web_server._hub_action_name("install", "official/demo"),
             )
         ]
 

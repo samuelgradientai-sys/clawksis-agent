@@ -4,7 +4,6 @@ Plugins call ``register_provider`` via the plugin context hook at startup.
 The auth gate middleware iterates ``list_providers()`` and uses
 ``get_provider`` to dispatch on the session's ``provider`` field.
 """
-
 from __future__ import annotations
 
 import logging
@@ -37,8 +36,7 @@ def register_provider(provider: DashboardAuthProvider) -> None:
         _providers[provider.name] = provider
     _log.info(
         "dashboard-auth: registered provider %r (%s)",
-        provider.name,
-        provider.display_name,
+        provider.name, provider.display_name,
     )
 
 
@@ -52,6 +50,29 @@ def list_providers() -> List[DashboardAuthProvider]:
     """All registered providers, in registration order."""
     with _lock:
         return list(_providers.values())
+
+
+def list_token_providers() -> List[DashboardAuthProvider]:
+    """Registered providers that support non-interactive token auth.
+
+    The subset of ``list_providers()`` whose ``supports_token`` flag is True,
+    in registration order. The ``token_auth`` middleware seam consults these
+    (and only these) when a token-authable route is hit, so OAuth/password-only
+    providers are never asked to ``verify_token``. Returns an empty list when
+    no token provider is registered — a token-authable route then fails
+    closed (401), never open.
+    """
+    with _lock:
+        return [p for p in _providers.values() if getattr(p, "supports_token", False)]
+
+
+def list_session_providers() -> List[DashboardAuthProvider]:
+    """Registered providers with supports_session True (interactive cookie
+    sessions). The login page, /auth/login, and the gate's verify/refresh loops
+    consult only these. Mirror of list_token_providers.
+    """
+    with _lock:
+        return [p for p in _providers.values() if getattr(p, "supports_session", True)]
 
 
 def clear_providers() -> None:

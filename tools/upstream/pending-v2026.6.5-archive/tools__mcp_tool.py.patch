@@ -1,0 +1,11 @@
+--- a/tools/mcp_tool.py
++++ b/tools/mcp_tool.py
+@@ -3800,7 +3800,7 @@
+         if future is not None:
+             try:
+                 future.result(timeout=15)
+-            except Exception as exc:
++            except BaseException as exc:
+                 logger.debug("Error during MCP shutdown: %s", exc)
+ 
+     _stop_mcp_loop()

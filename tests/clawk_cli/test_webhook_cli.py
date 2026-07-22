@@ -8,6 +8,7 @@ from argparse import Namespace
 
 from clawk_cli.webhook import (
     webhook_command,
+    _get_webhook_base_url,
     _load_subscriptions,
     _save_subscriptions,
     _subscriptions_path,
@@ -18,7 +19,9 @@ from clawk_cli.webhook import (
 def _isolate(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     # Default: webhooks enabled (most tests need this)
-    monkeypatch.setattr("clawk_cli.webhook._is_webhook_enabled", lambda: True)
+    monkeypatch.setattr(
+        "clawk_cli.webhook._is_webhook_enabled", lambda: True
+    )
 
 
 def _make_args(**kwargs):
@@ -33,9 +36,27 @@ def _make_args(**kwargs):
         "deliver_chat_id": "",
         "secret": "",
         "payload": "",
+        "script": "",
     }
     defaults.update(kwargs)
     return Namespace(**defaults)
+
+
+@pytest.mark.parametrize("host", [None, "", "0.0.0.0", "::"])
+def test_webhook_base_url_maps_wildcard_hosts_to_localhost(monkeypatch, host):
+    monkeypatch.setattr(
+        "clawk_cli.webhook._get_webhook_config",
+        lambda: {"extra": {"host": host, "port": 9123}},
+    )
+    assert _get_webhook_base_url() == "http://localhost:9123"
+
+
+def test_webhook_base_url_brackets_pinned_ipv6_host(monkeypatch):
+    monkeypatch.setattr(
+        "clawk_cli.webhook._get_webhook_config",
+        lambda: {"extra": {"host": "::1", "port": 9123}},
+    )
+    assert _get_webhook_base_url() == "http://[::1]:9123"
 
 
 class TestSubscribe:
@@ -48,17 +69,15 @@ class TestSubscribe:
         assert "test-hook" in subs
 
     def test_with_options(self, capsys):
-        webhook_command(
-            _make_args(
-                webhook_action="subscribe",
-                name="gh-issues",
-                events="issues,pull_request",
-                prompt="Issue: {issue.title}",
-                deliver="telegram",
-                deliver_chat_id="12345",
-                description="Watch GitHub",
-            )
-        )
+        webhook_command(_make_args(
+            webhook_action="subscribe",
+            name="gh-issues",
+            events="issues,pull_request",
+            prompt="Issue: {issue.title}",
+            deliver="telegram",
+            deliver_chat_id="12345",
+            description="Watch GitHub",
+        ))
         subs = _load_subscriptions()
         route = subs["gh-issues"]
         assert route["events"] == ["issues", "pull_request"]
@@ -67,10 +86,16 @@ class TestSubscribe:
         assert route["deliver_extra"] == {"chat_id": "12345"}
 
     def test_custom_secret(self):
-        webhook_command(
-            _make_args(webhook_action="subscribe", name="s", secret="my-secret")
-        )
+        webhook_command(_make_args(
+            webhook_action="subscribe", name="s", secret="my-secret"
+        ))
         assert _load_subscriptions()["s"]["secret"] == "my-secret"
+
+    def test_script_option_is_persisted(self):
+        webhook_command(_make_args(
+            webhook_action="subscribe", name="s", script="todoist_filter.py"
+        ))
+        assert _load_subscriptions()["s"]["script"] == "todoist_filter.py"
 
     def test_auto_secret(self):
         webhook_command(_make_args(webhook_action="subscribe", name="s"))
@@ -202,7 +227,6 @@ class TestWebhookEnabledGate:
             lambda: bool({}.get("enabled")),
         )
         import clawk_cli.webhook as wh_mod
-
         assert wh_mod._is_webhook_enabled() is False
 
     def test_real_check_enabled(self, monkeypatch):
@@ -211,5 +235,4 @@ class TestWebhookEnabledGate:
             lambda: True,
         )
         import clawk_cli.webhook as wh_mod
-
         assert wh_mod._is_webhook_enabled() is True

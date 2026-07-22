@@ -6,9 +6,7 @@ from agent.context_compressor import ContextCompressor, SUMMARY_PREFIX
 
 
 def _compressor() -> ContextCompressor:
-    with patch(
-        "agent.context_compressor.get_model_context_length", return_value=100000
-    ):
+    with patch("agent.context_compressor.get_model_context_length", return_value=100000):
         return ContextCompressor(
             model="test/model",
             threshold_percent=0.85,
@@ -44,9 +42,7 @@ def test_existing_previous_summary_is_not_serialized_again_as_new_turn():
     old_summary = "OLD-SUMMARY-BODY unique continuity facts"
     compressor._previous_summary = old_summary
 
-    with patch(
-        "agent.context_compressor.call_llm", return_value=_response("updated summary")
-    ) as mock_call:
+    with patch("agent.context_compressor.call_llm", return_value=_response("updated summary")) as mock_call:
         compressor.compress(_messages_with_handoff(old_summary))
 
     prompt = mock_call.call_args.kwargs["messages"][0]["content"]
@@ -62,9 +58,7 @@ def test_resume_rehydrates_previous_summary_from_handoff_message():
     old_summary = "RESUMED-SUMMARY-BODY durable continuity facts"
     assert compressor._previous_summary is None
 
-    with patch(
-        "agent.context_compressor.call_llm", return_value=_response("updated summary")
-    ) as mock_call:
+    with patch("agent.context_compressor.call_llm", return_value=_response("updated summary")) as mock_call:
         compressor.compress(_messages_with_handoff(old_summary))
 
     prompt = mock_call.call_args.kwargs["messages"][0]["content"]
@@ -81,13 +75,15 @@ def test_handoff_in_protected_head_populates_previous_summary_before_update():
     old_summary = "PROTECTED-HEAD-SUMMARY durable facts from before restart"
     seen_turns = []
 
-    def fake_generate_summary(turns_to_summarize, focus_topic=None):
+    def fake_generate_summary(
+        turns_to_summarize,
+        focus_topic=None,
+        memory_context="",
+    ):
         seen_turns.extend(turns_to_summarize)
         return "new summary from resumed turns"
 
-    with patch.object(
-        compressor, "_generate_summary", side_effect=fake_generate_summary
-    ):
+    with patch.object(compressor, "_generate_summary", side_effect=fake_generate_summary):
         compressor.compress(_messages_with_handoff(old_summary))
 
     assert compressor._previous_summary == old_summary

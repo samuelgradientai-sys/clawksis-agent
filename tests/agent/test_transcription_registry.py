@@ -50,11 +50,7 @@ class _FakeProvider(TranscriptionProvider):
     def transcribe(self, file_path: str, **kw):
         if self._transcribe_impl is not None:
             return self._transcribe_impl(file_path, **kw)
-        return {
-            "success": True,
-            "transcript": f"fake({file_path})",
-            "provider": self._name,
-        }
+        return {"success": True, "transcript": f"fake({file_path})", "provider": self._name}
 
 
 @pytest.fixture(autouse=True)
@@ -74,9 +70,7 @@ class TestRegistration:
         p = _FakeProvider(name="openrouter")
         transcription_registry.register_provider(p)
         assert transcription_registry.get_provider("openrouter") is p
-        assert [r.name for r in transcription_registry.list_providers()] == [
-            "openrouter"
-        ]
+        assert [r.name for r in transcription_registry.list_providers()] == ["openrouter"]
 
     def test_rejects_non_provider_type(self):
         with pytest.raises(TypeError, match="expects a TranscriptionProvider instance"):
@@ -97,7 +91,16 @@ class TestRegistration:
 
     @pytest.mark.parametrize(
         "builtin",
-        ["local", "local_command", "groq", "openai", "mistral", "xai"],
+        [
+            "local",
+            "local_command",
+            "groq",
+            "openai",
+            "mistral",
+            "xai",
+            "elevenlabs",
+            "deepinfra",
+        ],
     )
     def test_rejects_builtin_shadow_with_warning(self, builtin, caplog):
         p = _FakeProvider(name=builtin)
@@ -111,9 +114,7 @@ class TestRegistration:
     def test_builtin_shadow_case_insensitive(self, caplog):
         for variant in ("OPENAI", "OpenAi", "  openai  ", "oPeNaI"):
             transcription_registry._reset_for_tests()
-            with caplog.at_level(
-                logging.WARNING, logger="agent.transcription_registry"
-            ):
+            with caplog.at_level(logging.WARNING, logger="agent.transcription_registry"):
                 transcription_registry.register_provider(_FakeProvider(name=variant))
             assert transcription_registry.list_providers() == [], (
                 f"variant {variant!r} should have been rejected as a built-in shadow"
@@ -172,7 +173,6 @@ class TestABCContract:
             @property
             def name(self) -> str:
                 return "incomplete"
-
             # transcribe NOT implemented
 
         with pytest.raises(TypeError, match="abstract"):
@@ -182,7 +182,6 @@ class TestABCContract:
         class Incomplete(TranscriptionProvider):
             def transcribe(self, file_path, **kw):
                 return {"success": True, "transcript": "", "provider": "incomplete"}
-
             # name NOT implemented
 
         with pytest.raises(TypeError, match="abstract"):

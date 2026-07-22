@@ -13,7 +13,6 @@ repeating across cron jobs and gateway sessions, with the user unable to
 tell whether the gateway was broken, the model was down, or their prompt
 was the problem.
 """
-
 from __future__ import annotations
 
 
@@ -38,6 +37,27 @@ class TestContentPolicyBlockedClassification:
         assert result.reason == FailoverReason.content_policy_blocked
         assert result.retryable is False
         # Recovery is fallback model, not credential rotation or compression.
+        assert result.should_fallback is True
+        assert result.should_compress is False
+        assert result.should_rotate_credential is False
+
+    def test_minimax_output_safety_filter(self):
+        """#32421 — MiniMax output-layer safety filter (e.g. ``output
+        new_sensitive (1027)``) trips mid-stream when the model emits a
+        large tool-call argument block. Must classify as
+        ``content_policy_blocked`` so the loop aborts the 3x retry burn and
+        routes to a configured fallback model.
+        """
+        from agent.error_classifier import classify_api_error, FailoverReason
+
+        e = Exception(
+            "Stream stalled mid tool-call: output new_sensitive (1027) "
+            "[MiniMax-M2.7] — request was rejected by upstream safety "
+            "filter, see provider response for details."
+        )
+        result = classify_api_error(e, provider="MiniMax", model="MiniMax-M2.7")
+        assert result.reason == FailoverReason.content_policy_blocked
+        assert result.retryable is False
         assert result.should_fallback is True
         assert result.should_compress is False
         assert result.should_rotate_credential is False
@@ -71,8 +91,7 @@ class TestContentPolicyTriggersClientErrorAbort:
             or (
                 not classified_retryable
                 and not classified_should_compress
-                and classified_reason
-                not in {
+                and classified_reason not in {
                     FailoverReason.rate_limit,
                     FailoverReason.overloaded,
                     FailoverReason.context_overflow,
@@ -128,9 +147,7 @@ class TestContentPolicyPatternsAreNarrow:
                 self.status_code = status_code
 
         e = _Err("Insufficient credits. Top up your balance.", status_code=402)
-        result = classify_api_error(
-            e, provider="openrouter", model="anthropic/claude-opus"
-        )
+        result = classify_api_error(e, provider="openrouter", model="anthropic/claude-opus")
         assert result.reason == FailoverReason.billing
 
     def test_openrouter_account_policy_block_stays_distinct(self):
@@ -151,8 +168,6 @@ class TestContentPolicyPatternsAreNarrow:
             "and data policy",
             status_code=404,
         )
-        result = classify_api_error(
-            e, provider="openrouter", model="anthropic/claude-opus"
-        )
+        result = classify_api_error(e, provider="openrouter", model="anthropic/claude-opus")
         assert result.reason == FailoverReason.provider_policy_blocked
         assert result.reason != FailoverReason.content_policy_blocked

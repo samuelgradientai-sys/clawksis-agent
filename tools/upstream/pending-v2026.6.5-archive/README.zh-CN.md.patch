@@ -1,0 +1,11 @@
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -31,7 +31,7 @@
+ ## 快速安装
+ 
+ ```bash
+-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
++curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
+ ```
+ 
+ 支持 Linux、macOS、WSL2 和 Android (Termux)。安装程序会自动处理平台特定的配置。

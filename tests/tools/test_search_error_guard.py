@@ -28,6 +28,7 @@ import pytest
 
 from tools.file_operations import (
     ShellFileOperations,
+    _pattern_has_regex_newline,
     _split_tool_diagnostics,
 )
 from tools.environments.local import LocalEnvironment
@@ -67,15 +68,9 @@ if shutil.which("rg"):
 
 def _search(ops, method, pattern, path, **kw):
     fn = getattr(ops, method)
-    return fn(
-        pattern,
-        str(path),
-        kw.get("file_glob"),
-        kw.get("limit", 50),
-        kw.get("offset", 0),
-        kw.get("output_mode", "content"),
-        kw.get("context", 0),
-    )
+    return fn(pattern, str(path), kw.get("file_glob"), kw.get("limit", 50),
+              kw.get("offset", 0), kw.get("output_mode", "content"),
+              kw.get("context", 0))
 
 
 @pytest.mark.parametrize("method", _METHODS)
@@ -116,29 +111,75 @@ class TestSearchErrorGuard:
 
     def test_files_only_excludes_diagnostics(self, method, partial_error_tree):
         # files_only mode must not list a diagnostic line as a fake file path.
-        res = _search(
-            _ops(partial_error_tree),
-            method,
-            "needle",
-            partial_error_tree,
-            output_mode="files_only",
-        )
+        res = _search(_ops(partial_error_tree), method, "needle",
+                      partial_error_tree, output_mode="files_only")
         assert res.error is None
         assert res.files, "expected matching files"
-        assert all(
-            "Permission denied" not in f and "locked.txt" not in f for f in res.files
-        ), f"diagnostic leaked into files: {res.files}"
+        assert all("Permission denied" not in f and "locked.txt" not in f
+                   for f in res.files), f"diagnostic leaked into files: {res.files}"
 
     def test_count_mode_with_partial_error(self, method, partial_error_tree):
-        res = _search(
-            _ops(partial_error_tree),
-            method,
-            "needle",
-            partial_error_tree,
-            output_mode="count",
-        )
+        res = _search(_ops(partial_error_tree), method, "needle",
+                      partial_error_tree, output_mode="count")
         assert res.error is None
         assert res.total_count >= 4
+
+
+class TestSearchContentNewlineWarning:
+    def test_odd_backslash_n_is_detected_as_regex_newline(self):
+        assert _pattern_has_regex_newline(r"needle\n")
+        assert _pattern_has_regex_newline(r"needle\\\n")
+
+    def test_even_backslash_n_is_literal_and_not_detected(self):
+        assert not _pattern_has_regex_newline(r"needle\\n")
+        assert not _pattern_has_regex_newline(r"needle\\\\n")
+
+    def test_zero_matches_with_regex_newline_adds_warning_not_error(self, match_tree):
+        res = _ops(match_tree).search(
+            r"absent\npattern",
+            path=str(match_tree),
+            target="content",
+            context=2,
+        )
+
+        assert res.error is None
+        assert res.total_count == 0
+        assert res.warning is not None
+        assert "0 results found" in res.warning
+        assert "-U/--multiline" in res.warning
+
+    def test_actual_newline_pattern_adds_warning_not_error(self, match_tree):
+        res = _ops(match_tree).search(
+            "absent\npattern",
+            path=str(match_tree),
+            target="content",
+        )
+
+        assert res.error is None
+        assert res.total_count == 0
+        assert res.warning is not None
+
+    def test_search_with_matching_alternative_and_regex_newline_warns(self, match_tree):
+        res = _ops(match_tree).search(
+            r"needle|absent\npattern",
+            path=str(match_tree),
+            target="content",
+        )
+
+        assert res.error is None
+        assert res.total_count == 0
+        assert res.warning is not None
+
+    def test_literal_backslash_n_pattern_does_not_warn(self, match_tree):
+        res = _ops(match_tree).search(
+            r"absent\\npattern",
+            path=str(match_tree),
+            target="content",
+        )
+
+        assert res.error is None
+        assert res.total_count == 0
+        assert res.warning is None
 
 
 class TestSplitToolDiagnostics:
@@ -151,10 +192,8 @@ class TestSplitToolDiagnostics:
         assert "regex parse error" in diagnostics
 
     def test_partial_error_separates_matches(self):
-        out = (
-            "rg: sub/locked.txt: Permission denied (os error 13)\n"
-            "a.txt:1:needle here\nb.txt:2:needle there\n"
-        )
+        out = ("rg: sub/locked.txt: Permission denied (os error 13)\n"
+               "a.txt:1:needle here\nb.txt:2:needle there\n")
         diagnostics, payload = _split_tool_diagnostics(out)
         assert "Permission denied" in diagnostics
         assert "a.txt:1:needle here" in payload

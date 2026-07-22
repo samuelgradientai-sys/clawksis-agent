@@ -17,12 +17,13 @@ Differences from Claude Code:
       ``write_file``, ``delegate_task``, ``browser_*``, ``web_*``) — the
       recap surfaces which classes of work were most active.
 """
-
 from __future__ import annotations
 
 import os
 from collections import Counter
 from typing import Any, Iterable, List, Mapping, Optional, Sequence, Tuple
+
+from tools.ansi_strip import sanitize_display_text
 
 # How many recent user/assistant turns we consider "recent activity".
 _RECENT_TURN_WINDOW = 20
@@ -230,6 +231,10 @@ def _summarise_tool_activity(
 
 
 def _truncate(text: str, limit: int) -> str:
+    # Stored history is untrusted for display — remove escape sequences and
+    # control chars so a recap line can't clear the screen / retitle the
+    # window when echoed to a terminal (openai/codex#31494 bug class).
+    text = sanitize_display_text(text)
     text = " ".join(text.split())  # collapse newlines for a compact one-liner
     if len(text) <= limit:
         return text
@@ -281,9 +286,7 @@ def build_recap(
     )
     if (users, assistants) != (win_users, win_assistants):
         scope += f" (of {users}/{assistants} total)"
-    lines.append(
-        f"  Recent: {scope}, {tool_msgs} tool result{'s' if tool_msgs != 1 else ''}"
-    )
+    lines.append(f"  Recent: {scope}, {tool_msgs} tool result{'s' if tool_msgs != 1 else ''}")
 
     tool_calls = list(_iter_assistant_tool_calls(window))
     tool_counts, files = _summarise_tool_activity(tool_calls)
@@ -307,9 +310,7 @@ def build_recap(
 
     latest_reply = _latest_assistant_text(window)
     if latest_reply:
-        lines.append(
-            f"  Last reply: {_truncate(latest_reply, _ASSISTANT_PREVIEW_CHARS)}"
-        )
+        lines.append(f"  Last reply: {_truncate(latest_reply, _ASSISTANT_PREVIEW_CHARS)}")
 
     if len(lines) == 2:
         # Only the header + scope line — nothing substantive to show.

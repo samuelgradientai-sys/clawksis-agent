@@ -10,7 +10,7 @@ Tools are functions that extend the agent's capabilities. They're organized into
 
 ## Available Tools
 
-Clawksis ships with a broad built-in tool registry covering web search, browser automation, terminal execution, file editing, memory, delegation, RL training, messaging delivery, Home Assistant, and more.
+Clawksis ships with a broad built-in tool registry covering web search, browser automation, terminal execution, file editing, memory, delegation, scheduled tasks, Home Assistant, and more.
 
 :::note
 **Honcho cross-session memory** is available as a memory provider plugin (`plugins/memory/honcho/`), not as a built-in toolset. See [Plugins](./plugins.md) for installation.
@@ -27,7 +27,7 @@ High-level categories:
 | **Media** | `vision_analyze`, `image_generate`, `text_to_speech` | Multimodal analysis and generation. |
 | **Agent orchestration** | `todo`, `clarify`, `execute_code`, `delegate_task` | Planning, clarification, code execution, and subagent delegation. |
 | **Memory & recall** | `memory`, `session_search` | Persistent memory and session search. |
-| **Automation & delivery** | `cronjob`, `send_message` | Scheduled tasks with create/list/update/pause/resume/run/remove actions, plus outbound messaging delivery. |
+| **Automation** | `cronjob` | Scheduled tasks with create/list/update/pause/resume/run/remove actions. Outbound delivery is handled by cron's own delivery, the `clawk send` CLI, and the gateway notifier — not by an agent-callable tool. |
 | **Integrations** | `ha_*`, MCP server tools | Home Assistant, MCP, and other integrations. |
 
 For the authoritative code-derived registry, see [Built-in Tools Reference](/reference/tools-reference) and [Toolsets Reference](/reference/toolsets-reference).
@@ -49,7 +49,7 @@ clawk tools
 clawk tools
 ```
 
-Common toolsets include `web`, `search`, `terminal`, `file`, `browser`, `vision`, `image_gen`, `moa`, `skills`, `tts`, `todo`, `memory`, `session_search`, `cronjob`, `code_execution`, `delegation`, `clarify`, `homeassistant`, `messaging`, `spotify`, `discord`, `discord_admin`, `debugging`, and `safe`.
+Common toolsets include `web`, `search`, `terminal`, `file`, `browser`, `vision`, `image_gen`, `skills`, `tts`, `todo`, `memory`, `session_search`, `cronjob`, `code_execution`, `delegation`, `clarify`, `homeassistant`, `messaging`, `spotify`, `discord`, `discord_admin`, `debugging`, and `safe`.
 
 See [Toolsets Reference](/reference/toolsets-reference) for the full set, including platform presets such as `clawk-cli`, `clawk-telegram`, and dynamic MCP toolsets like `mcp-<server>`.
 
@@ -159,11 +159,11 @@ terminal(command="pytest -v tests/", background=true)
 # Returns: {"session_id": "proc_abc123", "pid": 12345}
 
 # Then manage with the process tool:
-process(action="list")  # Show all running processes
-process(action="poll", session_id="proc_abc123")  # Check status
-process(action="wait", session_id="proc_abc123")  # Block until done
-process(action="log", session_id="proc_abc123")  # Full output
-process(action="kill", session_id="proc_abc123")  # Terminate
+process(action="list")       # Show all running processes
+process(action="poll", session_id="proc_abc123")   # Check status
+process(action="wait", session_id="proc_abc123")   # Block until done
+process(action="log", session_id="proc_abc123")    # Full output
+process(action="kill", session_id="proc_abc123")   # Terminate
 process(action="write", session_id="proc_abc123", data="y")  # Send input
 ```
 

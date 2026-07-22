@@ -1,0 +1,47 @@
+--- a/tests/tui_gateway/test_protocol.py
++++ b/tests/tui_gateway/test_protocol.py
+@@ -315,7 +315,7 @@
+             ]
+ 
+     monkeypatch.setattr(server, "_get_db", lambda: _DB())
+-    monkeypatch.setattr(server, "_make_agent", lambda sid, key, session_id=None: object())
++    monkeypatch.setattr(server, "_make_agent", lambda sid, key, session_id=None, session_db=None: object())
+     monkeypatch.setattr(server, "_init_session", lambda sid, key, agent, history, cols=80: None)
+     monkeypatch.setattr(server, "_session_info", lambda _agent, _session=None: {"model": "test/model"})
+ 
+@@ -366,7 +366,7 @@
+             return [multimodal_user, text_only_assistant]
+ 
+     monkeypatch.setattr(server, "_get_db", lambda: _DB())
+-    monkeypatch.setattr(server, "_make_agent", lambda sid, key, session_id=None: object())
++    monkeypatch.setattr(server, "_make_agent", lambda sid, key, session_id=None, session_db=None: object())
+     monkeypatch.setattr(server, "_init_session", lambda sid, key, agent, history, cols=80: None)
+     monkeypatch.setattr(server, "_session_info", lambda _agent, _session=None: {"model": "test/model"})
+ 
+@@ -432,7 +432,7 @@
+         def close(self):
+             closed_sids.append(self.sid)
+ 
+-    def make_agent(sid, key, session_id=None):
++    def make_agent(sid, key, session_id=None, session_db=None):
+         created_sids.append(sid)
+         first_agent_started.set()
+         assert agent_can_finish.wait(timeout=1)
+@@ -547,7 +547,7 @@
+     monkeypatch.setattr(
+         server,
+         "_make_agent",
+-        lambda _sid, key, session_id=None: types.SimpleNamespace(
++        lambda _sid, key, session_id=None, session_db=None: types.SimpleNamespace(
+             model="test/model", session_id=session_id or key
+         ),
+     )
+@@ -647,7 +647,7 @@
+     monkeypatch.setattr(
+         server,
+         "_make_agent",
+-        lambda _sid, key, session_id=None: types.SimpleNamespace(
++        lambda _sid, key, session_id=None, session_db=None: types.SimpleNamespace(
+             model="test/model", session_id=session_id or key
+         ),
+     )

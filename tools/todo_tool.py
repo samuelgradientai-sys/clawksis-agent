@@ -30,6 +30,11 @@ VALID_STATUSES = {"pending", "in_progress", "completed", "cancelled"}
 # task description, and active lists are a handful of items, not hundreds.
 MAX_TODO_CONTENT_CHARS = 4000
 MAX_TODO_ITEMS = 256
+# Upper bound on a single todo tool-result payload accepted during history
+# hydration. The gateway/API server replays caller-supplied conversation
+# history to rebuild the store, so an oversized forged result is dropped
+# before it is parsed and re-injected (see AIAgent._hydrate_todo_store).
+MAX_TODO_RESULT_CHARS = 512_000
 _TRUNCATION_MARKER = "… [truncated]"
 
 
@@ -46,9 +51,7 @@ class TodoStore:
     def __init__(self):
         self._items: List[Dict[str, str]] = []
 
-    def write(
-        self, todos: List[Dict[str, Any]], merge: bool = False
-    ) -> List[Dict[str, str]]:
+    def write(self, todos: List[Dict[str, Any]], merge: bool = False) -> List[Dict[str, str]]:
         """
         Write todos. Returns the full current list after writing.
 
@@ -71,9 +74,7 @@ class TodoStore:
                 if item_id in existing:
                     # Update only the fields the LLM actually provided
                     if "content" in t and t["content"]:
-                        existing[item_id]["content"] = self._cap_content(
-                            str(t["content"]).strip()
-                        )
+                        existing[item_id]["content"] = self._cap_content(str(t["content"]).strip())
                     if "status" in t and t["status"]:
                         status = str(t["status"]).strip().lower()
                         if status in VALID_STATUSES:
@@ -128,7 +129,8 @@ class TodoStore:
         # Only inject pending/in_progress items — completed/cancelled ones
         # cause the model to re-do finished work after compression.
         active_items = [
-            item for item in self._items if item["status"] in {"pending", "in_progress"}
+            item for item in self._items
+            if item["status"] in {"pending", "in_progress"}
         ]
         if not active_items:
             return None
@@ -136,9 +138,7 @@ class TodoStore:
         lines = ["[Your active task list was preserved across context compression]"]
         for item in active_items:
             marker = markers.get(item["status"], "[?]")
-            lines.append(
-                f"- {marker} {item['id']}. {item['content']} ({item['status']})"
-            )
+            lines.append(f"- {marker} {item['id']}. {item['content']} ({item['status']})")
 
         return "\n".join(lines)
 
@@ -163,6 +163,9 @@ class TodoStore:
         Ensures required fields exist and status is valid.
         Returns a clean dict with only {id, content, status}.
         """
+        if not isinstance(item, dict):
+            return {"id": "?", "content": "(invalid item)", "status": "pending"}
+
         item_id = str(item.get("id", "")).strip()
         if not item_id:
             item_id = "?"
@@ -184,6 +187,10 @@ class TodoStore:
         """Collapse duplicate ids, keeping the last occurrence in its position."""
         last_index: Dict[str, int] = {}
         for i, item in enumerate(todos):
+            if not isinstance(item, dict):
+                # Non-dict items get a synthetic key so _validate can handle them
+                last_index[f"__invalid_{i}"] = i
+                continue
             item_id = str(item.get("id", "")).strip() or "?"
             last_index[item_id] = i
         return [todos[i] for i in sorted(last_index.values())]
@@ -209,6 +216,16 @@ def todo_tool(
         return tool_error("TodoStore not initialized")
 
     if todos is not None:
+        # Guard: LLM sometimes sends todos as a JSON string instead of a list
+        if isinstance(todos, str):
+            try:
+                todos = json.loads(todos)
+            except (json.JSONDecodeError, TypeError):
+                return tool_error("todos must be a list of objects, got unparseable string")
+        if not isinstance(todos, list):
+            return tool_error(
+                f"todos must be a list, got {type(todos).__name__}"
+            )
         items = store.write(todos, merge)
     else:
         items = store.read()
@@ -219,19 +236,16 @@ def todo_tool(
     completed = sum(1 for i in items if i["status"] == "completed")
     cancelled = sum(1 for i in items if i["status"] == "cancelled")
 
-    return json.dumps(
-        {
-            "todos": items,
-            "summary": {
-                "total": len(items),
-                "pending": pending,
-                "in_progress": in_progress,
-                "completed": completed,
-                "cancelled": cancelled,
-            },
+    return json.dumps({
+        "todos": items,
+        "summary": {
+            "total": len(items),
+            "pending": pending,
+            "in_progress": in_progress,
+            "completed": completed,
+            "cancelled": cancelled,
         },
-        ensure_ascii=False,
-    )
+    }, ensure_ascii=False)
 
 
 def check_todo_requirements() -> bool:
@@ -273,25 +287,20 @@ TODO_SCHEMA = {
                     "properties": {
                         "id": {
                             "type": "string",
-                            "description": "Unique item identifier",
+                            "description": "Unique item identifier"
                         },
                         "content": {
                             "type": "string",
-                            "description": "Task description",
+                            "description": "Task description"
                         },
                         "status": {
                             "type": "string",
-                            "enum": [
-                                "pending",
-                                "in_progress",
-                                "completed",
-                                "cancelled",
-                            ],
-                            "description": "Current status",
-                        },
+                            "enum": ["pending", "in_progress", "completed", "cancelled"],
+                            "description": "Current status"
+                        }
                     },
-                    "required": ["id", "content", "status"],
-                },
+                    "required": ["id", "content", "status"]
+                }
             },
             "merge": {
                 "type": "boolean",
@@ -299,11 +308,11 @@ TODO_SCHEMA = {
                     "true: update existing items by id, add new ones. "
                     "false (default): replace the entire list."
                 ),
-                "default": False,
-            },
+                "default": False
+            }
         },
-        "required": [],
-    },
+        "required": []
+    }
 }
 
 
@@ -315,8 +324,7 @@ registry.register(
     toolset="todo",
     schema=TODO_SCHEMA,
     handler=lambda args, **kw: todo_tool(
-        todos=args.get("todos"), merge=args.get("merge", False), store=kw.get("store")
-    ),
+        todos=args.get("todos"), merge=args.get("merge", False), store=kw.get("store")),
     check_fn=check_todo_requirements,
     emoji="📋",
 )

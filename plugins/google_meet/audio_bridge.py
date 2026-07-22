@@ -107,7 +107,7 @@ class AudioBridge:
                     "load-module",
                     "module-null-sink",
                     f"sink_name={sink_name}",
-                    f"sink_properties=device.description=ClawksisMeetSink",
+                    "sink_properties=device.description=ClawksisMeetSink",
                 ],
                 check=True,
                 capture_output=True,
@@ -180,7 +180,9 @@ class AudioBridge:
                 "system_profiler not found (macOS-only command)"
             ) from exc
         except subprocess.CalledProcessError as exc:
-            raise RuntimeError(f"system_profiler failed: {exc.output}") from exc
+            raise RuntimeError(
+                f"system_profiler failed: {exc.output}"
+            ) from exc
 
         if "BlackHole" not in out:
             raise RuntimeError(

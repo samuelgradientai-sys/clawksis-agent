@@ -7,7 +7,7 @@ import pytest
 
 from gateway.config import PlatformConfig
 from gateway.platforms.base import SendResult
-from gateway.platforms.telegram import TelegramAdapter
+from plugins.platforms.telegram.adapter import TelegramAdapter
 from gateway.stream_consumer import GatewayStreamConsumer
 
 
@@ -24,9 +24,7 @@ def telegram_adapter() -> TelegramAdapter:
 
 
 @pytest.mark.asyncio
-async def test_edit_overflow_split_reports_success_when_all_continuations_land(
-    telegram_adapter,
-):
+async def test_edit_overflow_split_reports_success_when_all_continuations_land(telegram_adapter):
     """Complete overflow delivery keeps the existing successful contract."""
     content = "word " * 120
     telegram_adapter._bot.edit_message_text = AsyncMock(return_value=True)
@@ -42,17 +40,13 @@ async def test_edit_overflow_split_reports_success_when_all_continuations_land(
     assert result.message_id == result.continuation_message_ids[-1]
     assert result.raw_response is None
     assert telegram_adapter._bot.edit_message_text.await_count == 1
-    assert telegram_adapter._bot.send_message.await_count == len(
-        result.continuation_message_ids
-    )
+    assert telegram_adapter._bot.send_message.await_count == len(result.continuation_message_ids)
     for call in telegram_adapter._bot.send_message.await_args_list:
         assert call.kwargs["message_thread_id"] == 77
 
 
 @pytest.mark.asyncio
-async def test_edit_overflow_split_reports_later_partial_failure_after_some_continuations_land(
-    telegram_adapter,
-):
+async def test_edit_overflow_split_reports_later_partial_failure_after_some_continuations_land(telegram_adapter):
     """Partial metadata tracks the last delivered continuation before failure."""
     content = "word " * 120
     telegram_adapter._bot.edit_message_text = AsyncMock(return_value=True)
@@ -77,17 +71,12 @@ async def test_edit_overflow_split_reports_later_partial_failure_after_some_cont
 
 
 @pytest.mark.asyncio
-async def test_edit_overflow_split_reports_partial_failure_when_continuation_fails(
-    telegram_adapter,
-):
+async def test_edit_overflow_split_reports_partial_failure_when_continuation_fails(telegram_adapter):
     """A failed continuation must not be reported as final delivery."""
     content = "word " * 120
     telegram_adapter._bot.edit_message_text = AsyncMock(return_value=True)
     telegram_adapter._bot.send_message = AsyncMock(
-        side_effect=[
-            RuntimeError("telegram send failed"),
-            RuntimeError("telegram send failed"),
-        ]
+        side_effect=[RuntimeError("telegram send failed"), RuntimeError("telegram send failed")]
     )
 
     result = await telegram_adapter._edit_overflow_split(
@@ -145,7 +134,7 @@ async def test_stream_consumer_fallback_sends_tail_after_partial_overflow():
 
     adapter.send.assert_awaited_once()
     assert adapter.send.await_args.kwargs["content"] == "world"
-    assert adapter.send.await_args.kwargs["metadata"] == {"thread_id": "77"}
+    assert adapter.send.await_args.kwargs["metadata"] == {"thread_id": "77", "notify": True}
     adapter.delete_message.assert_not_awaited()
     assert consumer.final_response_sent is True
     assert consumer.final_content_delivered is True

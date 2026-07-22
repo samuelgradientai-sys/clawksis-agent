@@ -2,9 +2,9 @@
   "upstream": "NousResearch/hermes-agent",
   "baseline_commit": "1eeb7da2e6e5463018cb4be9aff1ec97bb09488a",
   "baseline_note": "upstream main del 2026-06-04, punto de corte del fork (entre v2026.5.29.2 y v2026.6.5)",
-  "last_synced_commit": "f3fe99863d134bd05316882dee0d469439110ca6",
-  "last_synced_tag": "v2026.6.5",
-  "last_synced_date": "2026-06-14T16:47:57-07:00",
+  "last_synced_commit": "3ef6bbd201263d354fd83ec55b3c306ded2eb72a",
+  "last_synced_tag": "v2026.7.20",
+  "last_synced_date": "2026-07-20T11:35:21-07:00",
   "skip_paths": [
     "*nous*"
   ]

@@ -9,16 +9,21 @@ import pytest
 
 from gateway.config import PlatformConfig
 from gateway.platforms.signal import SignalAdapter
+from gateway.platforms.signal_format import markdown_to_signal
 
 
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
 
-
 def _m2s(text: str):
     """Shorthand: call the static method and return (plain_text, styles)."""
     return SignalAdapter._markdown_to_signal(text)
+
+
+def test_shared_helper_matches_signal_adapter_wrapper():
+    text = "🙂 **bold** and `code`"
+    assert markdown_to_signal(text) == SignalAdapter._markdown_to_signal(text)
 
 
 def _style_types(styles: list[str]) -> list[str]:
@@ -34,7 +39,6 @@ def _find_style(styles: list[str], style_type: str) -> list[str]:
 # ===========================================================================
 # Basic formatting
 # ===========================================================================
-
 
 class TestMarkdownToSignalBasic:
     """Core formatting: bold, italic, strikethrough, monospace."""
@@ -109,7 +113,6 @@ class TestMarkdownToSignalBasic:
 # Italic false-positive regressions
 # ===========================================================================
 
-
 class TestItalicFalsePositives:
     """Regressions from signal-italic-false-positive-fix.md and
     signal-italic-bullet-list-fix.md."""
@@ -141,7 +144,28 @@ class TestItalicFalsePositives:
         """* item lines must NOT be treated as italic delimiters."""
         md = "* item one\n* item two\n* item three"
         text, styles = _m2s(md)
+        assert text == "• item one\n• item two\n• item three"
         assert _find_style(styles, "ITALIC") == []
+
+    def test_hyphen_bullet_list_uses_signal_safe_bullets(self):
+        """Signal does not render Markdown list markers; normalize them."""
+        md = "- item one\n- item two"
+        text, styles = _m2s(md)
+        assert text == "• item one\n• item two"
+        assert styles == []
+
+    def test_plus_bullet_list_uses_signal_safe_bullets(self):
+        md = "+ item one\n+ item two"
+        text, styles = _m2s(md)
+        assert text == "• item one\n• item two"
+        assert styles == []
+
+    def test_markdown_bullets_inside_fenced_code_are_preserved(self):
+        md = "before\n```\n- literal\n* literal\n```\nafter"
+        text, styles = _m2s(md)
+        assert "- literal\n* literal" in text
+        assert "• literal" not in text
+        assert any(s.endswith(":MONOSPACE") for s in styles)
 
     def test_bullet_list_with_content_before(self):
         md = "Here are things:\n\n* first thing\n* second thing"
@@ -223,7 +247,6 @@ class TestItalicFalsePositives:
 # Style position accuracy
 # ===========================================================================
 
-
 class TestStylePositions:
     """Verify that start:length positions map to the correct text."""
 
@@ -264,7 +287,6 @@ class TestStylePositions:
 # ===========================================================================
 # Edge cases
 # ===========================================================================
-
 
 class TestEdgeCases:
     """Tricky inputs that have caused issues or could regress."""
@@ -320,10 +342,9 @@ class TestEdgeCases:
 # signal-markdown-strip-patch: core conversion pipeline
 # ===========================================================================
 
-
 class TestMarkdownStripPatch:
     """Tests for the original signal-markdown-strip-patch.
-
+    
     Covers: fenced code blocks with language tags, links preserved,
     headings converted to bold, multiple headings, UTF-16 correctness
     for multi-byte characters, and marker stripping completeness.
@@ -418,10 +439,9 @@ class TestMarkdownStripPatch:
 # signal-streaming-patch: SUPPORTS_MESSAGE_EDITING and send() behavior
 # ===========================================================================
 
-
 class TestSignalStreamingPatch:
     """Tests for signal-streaming-patch: cursor suppression and edit support.
-
+    
     These verify the adapter-level properties that prevent the streaming
     cursor from leaking into Signal messages.
     """
@@ -430,7 +450,6 @@ class TestSignalStreamingPatch:
         """SignalAdapter.SUPPORTS_MESSAGE_EDITING must be False."""
         monkeypatch.setenv("SIGNAL_GROUP_ALLOWED_USERS", "")
         from gateway.platforms.signal import SignalAdapter
-
         assert SignalAdapter.SUPPORTS_MESSAGE_EDITING is False
 
     @pytest.mark.asyncio

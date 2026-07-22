@@ -80,15 +80,15 @@ Once `NTFY_HOME_CHANNEL` is set, cron jobs can deliver to ntfy:
 cronjob(
     action="create",
     schedule="every 1h",
-    deliver="ntfy",  # uses NTFY_HOME_CHANNEL
-    prompt="Check for alerts and summarise.",
+    deliver="ntfy",          # uses NTFY_HOME_CHANNEL
+    prompt="Check for alerts and summarise."
 )
 ```
 
-Or target a specific topic explicitly:
+Or target a specific topic explicitly via the cron job's `deliver:` field, or from a shell script with the [`clawk send` CLI](/guides/pipe-script-output):
 
-```python
-send_message(target="ntfy:alerts-channel", message="Done!")
+```bash
+clawk send ntfy:alerts-channel "Done!"
 ```
 
 This works even when the cron runs out-of-process from the gateway — the plugin registers a `standalone_sender_fn` that opens its own HTTP connection.

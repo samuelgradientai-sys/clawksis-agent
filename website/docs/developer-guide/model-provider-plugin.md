@@ -113,7 +113,6 @@ Subclass `ProviderProfile` for non-trivial quirks:
 from typing import Any
 from providers.base import ProviderProfile
 
-
 class AcmeProfile(ProviderProfile):
     def prepare_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Provider-specific message preprocessing. Runs after codex
@@ -166,16 +165,14 @@ Say you want to point `gmi` at your private staging endpoint for testing. Create
 from providers import register_provider
 from providers.base import ProviderProfile
 
-register_provider(
-    ProviderProfile(
-        name="gmi",
-        aliases=("gmi-cloud", "gmicloud"),
-        env_vars=("GMI_API_KEY",),
-        base_url="https://gmi-staging.internal.example.com/v1",
-        auth_type="api_key",
-        default_aux_model="google/gemini-3.1-flash-lite-preview",
-    )
-)
+register_provider(ProviderProfile(
+    name="gmi",
+    aliases=("gmi-cloud", "gmicloud"),
+    env_vars=("GMI_API_KEY",),
+    base_url="https://gmi-staging.internal.example.com/v1",
+    auth_type="api_key",
+    default_aux_model="google/gemini-3.1-flash-lite-preview",
+))
 ```
 
 Next session, `get_provider_profile("gmi").base_url` returns the staging URL. No repo patch, no rebuild. Because user plugins are discovered after bundled ones, the user `register_provider()` call wins.
@@ -198,7 +195,7 @@ Set `profile.api_mode` to match the default your provider ships — it acts as a
 |---|---|---|
 | `api_key` | Single env var carries a static API key | Most providers |
 | `oauth_device_code` | Device-code OAuth flow | — |
-| `oauth_external` | User signs in elsewhere, tokens land in `auth.json` | Anthropic OAuth, MiniMax OAuth, Gemini Cloud Code, Qwen Portal, Nous Portal |
+| `oauth_external` | User signs in elsewhere, tokens land in `auth.json` | Anthropic OAuth, MiniMax OAuth, Qwen Portal, Nous Portal |
 | `copilot` | GitHub Copilot token refresh cycle | `copilot` plugin only |
 | `aws_sdk` | AWS SDK credential chain (IAM role, profile, env) | `bedrock` plugin only |
 | `external_process` | Auth handled by a subprocess the agent spawns | `copilot-acp` plugin only |
@@ -219,7 +216,6 @@ For programmatic inspection:
 
 ```python
 from providers import list_providers
-
 for p in list_providers():
     print(p.name, p.base_url, p.api_mode)
 ```
@@ -261,7 +257,7 @@ acme-inference = "acme_clawk_plugin:register"
 
 …where `acme_clawk_plugin:register` is a function that calls `register_provider(profile)`. The general PluginManager picks up entry-point plugins during `discover_and_load()`. For `kind: model-provider` pip plugins, you still need to declare the kind in your manifest (or rely on the source-text heuristic).
 
-See [Building a Clawksis Plugin](/guides/build-a-clawk-plugin#distribute-via-pip) for the full entry-points setup.
+See [Building a Clawksis Plugin](/developer-guide/plugins#distribute-via-pip) for the full entry-points setup.
 
 ## Related pages
 
@@ -269,4 +265,4 @@ See [Building a Clawksis Plugin](/guides/build-a-clawk-plugin#distribute-via-pip
 - [Adding Providers](/developer-guide/adding-providers) — end-to-end checklist for new inference backends (covers both the fast plugin path and the full CLI/auth integration)
 - [Memory Provider Plugins](/developer-guide/memory-provider-plugin)
 - [Context Engine Plugins](/developer-guide/context-engine-plugin)
-- [Building a Clawksis Plugin](/guides/build-a-clawk-plugin) — general plugin authoring
+- [Building a Clawksis Plugin](/developer-guide/plugins) — general plugin authoring

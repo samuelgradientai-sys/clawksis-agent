@@ -28,7 +28,9 @@ import logging
 import os
 import socket
 import asyncio
-from urllib.parse import quote, urlparse, urlsplit, urlunsplit
+import re
+from typing import Any, Optional
+from urllib.parse import parse_qsl, quote, unquote, urljoin, urlparse, urlsplit, urlunsplit
 
 from utils import is_truthy_value
 
@@ -50,6 +52,13 @@ def normalize_url_for_request(url: str) -> str:
     raw = url.strip()
     if not raw:
         return raw
+
+    # Models sometimes emit otherwise valid URLs with whitespace between the
+    # scheme separator and authority (``https:// docs.example``). That position
+    # is never meaningful in HTTP(S) URLs, and repairing it before parsing keeps
+    # web tools from failing on a formatting artifact while leaving path/query
+    # whitespace to the normal percent-encoding path below.
+    raw = re.sub(r"^([A-Za-z][A-Za-z0-9+.-]*://)\s+", r"\1", raw)
 
     try:
         parsed = urlsplit(raw)
@@ -76,6 +85,63 @@ def normalize_url_for_request(url: str) -> str:
     return urlunsplit((parsed.scheme, netloc, path, query, fragment))
 
 
+# Query parameter names that are unambiguously credential-bearing. Kept
+# deliberately narrow: bare English words that double as normal page facets
+# (``code`` on promo/challenge pages, ``key``/``auth``/``session``/``sig`` as
+# search or routing params) are intentionally EXCLUDED to avoid blocking
+# ordinary browsing. Prefix-based token redaction (``is_safe_url``) still
+# catches recognizable vendor key shapes; this set is the belt-and-suspenders
+# for opaque secrets that carry an explicit credential-named parameter.
+_SENSITIVE_QUERY_PARAM_NAMES = frozenset({
+    "access_token",
+    "api_key",
+    "apikey",
+    "auth_token",
+    "authorization",
+    "awsaccesskeyid",
+    "client_secret",
+    "credential",
+    "credentials",
+    "jwt",
+    "password",
+    "passwd",
+    "secret",
+    "session_id",
+    "signature",
+    "token",
+    "x_amz_security_token",
+    "x_amz_signature",
+    "x-amz-security-token",
+    "x-amz-signature",
+})
+
+
+def sensitive_query_param_name(url: str) -> Optional[str]:
+    """Return the first sensitive query parameter name in ``url``, if any.
+
+    Used before handing URLs to third-party fetch/browser backends. Prefix-based
+    token redaction catches known credential shapes; this catches opaque magic
+    links, OAuth codes, signed URL signatures, and custom ``?token=...`` values
+    that do not have a recognizable vendor prefix.
+    """
+    if not isinstance(url, str) or "?" not in url:
+        return None
+    try:
+        parsed = urlsplit(url.strip())
+    except ValueError:
+        return None
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.query:
+        return None
+    for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+        if value and unquote(key).lower() in _SENSITIVE_QUERY_PARAM_NAMES:
+            return key
+    return None
+
+
+def has_sensitive_query_params(url: str) -> bool:
+    """Return True when ``url`` carries likely credential-bearing query params."""
+    return sensitive_query_param_name(url) is not None
+
 # Hostnames that should always be blocked regardless of IP resolution
 # or any config toggle.  These are cloud metadata endpoints that an
 # attacker could use to steal instance credentials.
@@ -95,10 +161,10 @@ _BLOCKED_HOSTNAMES = frozenset({
 # address (they won't match ``ip in frozenset`` or ``ip in network``).
 _ALWAYS_BLOCKED_IPS = frozenset({
     ipaddress.ip_address("169.254.169.254"),  # AWS/GCP/Azure/DO/Oracle metadata
-    ipaddress.ip_address("169.254.170.2"),  # AWS ECS task metadata (task IAM creds)
-    ipaddress.ip_address("169.254.169.253"),  # Azure IMDS wire server
-    ipaddress.ip_address("fd00:ec2::254"),  # AWS metadata (IPv6)
-    ipaddress.ip_address("100.100.100.200"),  # Alibaba Cloud metadata
+    ipaddress.ip_address("169.254.170.2"),     # AWS ECS task metadata (task IAM creds)
+    ipaddress.ip_address("169.254.169.253"),   # Azure IMDS wire server
+    ipaddress.ip_address("fd00:ec2::254"),     # AWS metadata (IPv6)
+    ipaddress.ip_address("100.100.100.200"),   # Alibaba Cloud metadata
     # IPv4-mapped IPv6 variants — same endpoints reachable via ::ffff:x.x.x.x
     ipaddress.ip_address("::ffff:169.254.169.254"),
     ipaddress.ip_address("::ffff:169.254.170.2"),
@@ -106,10 +172,8 @@ _ALWAYS_BLOCKED_IPS = frozenset({
     ipaddress.ip_address("::ffff:100.100.100.200"),
 })
 _ALWAYS_BLOCKED_NETWORKS = (
-    ipaddress.ip_network(
-        "169.254.0.0/16"
-    ),  # Entire link-local range (no legit agent target)
-    ipaddress.ip_network("::ffff:169.254.0.0/112"),  # IPv4-mapped link-local range
+    ipaddress.ip_network("169.254.0.0/16"),    # Entire link-local range (no legit agent target)
+    ipaddress.ip_network("::ffff:169.254.0.0/112"), # IPv4-mapped link-local range
 )
 
 # Exact HTTPS hostnames allowed to resolve to private/benchmark-space IPs.
@@ -162,7 +226,6 @@ def _global_allow_private_urls() -> bool:
     # 2. Config file
     try:
         from clawk_cli.config import read_raw_config
-
         cfg = read_raw_config()
         # security.allow_private_urls (preferred)
         sec = cfg.get("security", {})
@@ -198,15 +261,10 @@ def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     # by their embedded IPv4 address, not as IPv6
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         embedded_ip = ip.ipv4_mapped
-        return (
-            embedded_ip.is_private
-            or embedded_ip.is_loopback
-            or embedded_ip.is_link_local
-            or embedded_ip.is_reserved
-            or embedded_ip.is_multicast
-            or embedded_ip.is_unspecified
-            or embedded_ip in _CGNAT_NETWORK
-        )
+        return (embedded_ip.is_private or embedded_ip.is_loopback or
+                embedded_ip.is_link_local or embedded_ip.is_reserved or
+                embedded_ip.is_multicast or embedded_ip.is_unspecified or
+                embedded_ip in _CGNAT_NETWORK)
 
     # Standard IPv4/IPv6 address checking
     if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
@@ -291,9 +349,12 @@ def is_always_blocked_url(url: str) -> bool:
 
         for _family, _, _, _, sockaddr in addr_info:
             ip_str = sockaddr[0]
+            if '%' in ip_str:
+                ip_str = ip_str.split('%')[0]
             try:
                 resolved = ipaddress.ip_address(ip_str)
             except ValueError:
+                logger.warning("Unparseable IP address %r for hostname %s — skipping address", sockaddr[0], hostname)
                 continue
             if resolved in _ALWAYS_BLOCKED_IPS or any(
                 resolved in net for net in _ALWAYS_BLOCKED_NETWORKS
@@ -336,9 +397,7 @@ def is_safe_url(url: str) -> bool:
         hostname = (parsed.hostname or "").strip().lower().rstrip(".")
         scheme = (parsed.scheme or "").strip().lower()
         if scheme not in {"http", "https"}:
-            logger.warning(
-                "Blocked request — unsupported URL scheme: %s", scheme or "<empty>"
-            )
+            logger.warning("Blocked request — unsupported URL scheme: %s", scheme or "<empty>")
             return False
         if not hostname:
             return False
@@ -355,9 +414,7 @@ def is_safe_url(url: str) -> bool:
 
         # Try to resolve and check IP
         try:
-            addr_info = socket.getaddrinfo(
-                hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM
-            )
+            addr_info = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         except socket.gaierror:
             # DNS resolution failed — fail closed. If DNS can't resolve it,
             # the HTTP client will also fail, so blocking loses nothing.
@@ -366,27 +423,27 @@ def is_safe_url(url: str) -> bool:
 
         for family, _, _, _, sockaddr in addr_info:
             ip_str = sockaddr[0]
+            if '%' in ip_str:
+                ip_str = ip_str.split('%')[0]
             try:
                 ip = ipaddress.ip_address(ip_str)
             except ValueError:
-                continue
+                # Still unparseable after scope ID strip — fail closed
+                logger.warning("Blocked request — unparseable IP address %r for hostname %s", sockaddr[0], hostname)
+                return False
 
             # Always block cloud metadata IPs and link-local, even with toggle on
-            if ip in _ALWAYS_BLOCKED_IPS or any(
-                ip in net for net in _ALWAYS_BLOCKED_NETWORKS
-            ):
+            if ip in _ALWAYS_BLOCKED_IPS or any(ip in net for net in _ALWAYS_BLOCKED_NETWORKS):
                 logger.warning(
                     "Blocked request to cloud metadata address: %s -> %s",
-                    hostname,
-                    ip_str,
+                    hostname, ip_str,
                 )
                 return False
 
             if not allow_all_private and not allow_private_ip and _is_blocked_ip(ip):
                 logger.warning(
                     "Blocked request to private/internal address: %s -> %s",
-                    hostname,
-                    ip_str,
+                    hostname, ip_str,
                 )
                 return False
 
@@ -417,3 +474,30 @@ async def async_is_safe_url(url: str) -> bool:
     ``web_extract_tool``, vision download hooks) instead of ``is_safe_url``.
     """
     return await asyncio.to_thread(is_safe_url, url)
+
+
+def redirect_target_from_response(response: Any) -> Optional[str]:
+    """Return the redirect target visible from inside an httpx response hook.
+
+    In ``httpx.AsyncClient`` response event hooks, ``response.next_request`` is
+    frequently ``None`` even for a genuine redirect (it is populated later by
+    the redirect-following machinery). Relying on ``next_request`` alone means
+    an SSRF redirect guard silently never fires: a public URL that 302s to
+    ``http://169.254.169.254/`` gets followed anyway. The ``Location`` header,
+    however, is already present on the response, so resolve the target from it
+    first (handling relative Locations via ``urljoin``) and only fall back to
+    ``next_request`` when no ``Location`` header is set.
+    """
+    if not getattr(response, "is_redirect", False):
+        return None
+
+    headers = getattr(response, "headers", {}) or {}
+    location = headers.get("location")
+    if location:
+        return urljoin(str(getattr(response, "url", "")), str(location))
+
+    next_request = getattr(response, "next_request", None)
+    if next_request:
+        return str(next_request.url)
+
+    return None

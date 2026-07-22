@@ -10,20 +10,40 @@ from typing import Callable
 
 
 def build_login_parser(subparsers, *, cmd_login: Callable) -> None:
-    """Attach the ``login`` subcommand to ``subparsers``."""
-    # =========================================================================
-    # login command
-    # =========================================================================
+    """Attach the deprecated ``login`` subcommand to ``subparsers``.
+
+    ``clawk login`` was removed in favor of ``clawk auth`` / ``clawk model``
+    (the runtime handler in ``clawk_cli/auth.py::login_command`` just prints a
+    deprecation message and exits).  The subparser is kept registered so that
+    old scripts/aliases invoking ``clawk login [--flags]`` still receive the
+    actionable deprecation message rather than an argparse ``invalid choice:
+    'login'`` error — but:
+
+    - The subparser is registered WITHOUT a ``help=`` kwarg so the row is
+      omitted from ``clawk --help`` (argparse only lists subcommands that
+      have a help string).  This hides a command that no longer works (#24756)
+      without the ``help=argparse.SUPPRESS`` ``==SUPPRESS==`` leak that
+      argparse emits for a top-level subparser on Python 3.12+.
+    - ``--provider`` accepts ANY value (no ``choices=``) so that, e.g.,
+      ``clawk login --provider anthropic`` reaches the deprecation handler and
+      gets pointed at ``clawk model`` instead of crashing in argparse with
+      ``invalid choice: 'anthropic'`` before the handler can run.
+    """
     login_parser = subparsers.add_parser(
         "login",
-        help="Authenticate with an inference provider",
-        description="Run OAuth device authorization flow for Clawksis CLI",
+        description=(
+            "Deprecated. Use `clawk auth` to manage credentials, "
+            "`clawk model` to select a provider, or `clawk setup` for full setup."
+        ),
     )
+    # No ``choices=`` on purpose — the handler is a deprecation notice that
+    # ignores the value, and a restrictive list would reject providers the user
+    # legitimately wants (e.g. ``anthropic``) with an argparse error before the
+    # friendly redirect message is ever printed.
     login_parser.add_argument(
         "--provider",
-        choices=["nous", "openai-codex", "xai-oauth"],
         default=None,
-        help="Provider to authenticate with (default: nous)",
+        help="(deprecated) Provider name; ignored — see `clawk model`",
     )
     login_parser.add_argument(
         "--portal-url", help="Portal base URL (default: production portal)"

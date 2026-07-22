@@ -41,7 +41,7 @@ class _StubAdapter(BasePlatformAdapter):
         self.sent_animations = []
         self.sent_files = []
 
-    async def connect(self):
+    async def connect(self, *, is_reconnect: bool = False):
         return True
 
     async def disconnect(self):
@@ -49,7 +49,6 @@ class _StubAdapter(BasePlatformAdapter):
 
     async def send(self, chat_id, content, reply_to=None, **kwargs):
         from gateway.platforms.base import SendResult
-
         return SendResult(success=True)
 
     async def get_chat_info(self, chat_id):
@@ -57,19 +56,16 @@ class _StubAdapter(BasePlatformAdapter):
 
     async def send_image(self, chat_id, image_url, caption=None, **kwargs):
         from gateway.platforms.base import SendResult
-
         self.sent_images.append((chat_id, image_url, caption))
         return SendResult(success=True, message_id=str(len(self.sent_images)))
 
     async def send_animation(self, chat_id, animation_url, caption=None, **kwargs):
         from gateway.platforms.base import SendResult
-
         self.sent_animations.append((chat_id, animation_url, caption))
         return SendResult(success=True, message_id=str(len(self.sent_animations)))
 
     async def send_image_file(self, chat_id, image_path, caption=None, **kwargs):
         from gateway.platforms.base import SendResult
-
         self.sent_files.append((chat_id, image_path, caption))
         return SendResult(success=True, message_id=str(len(self.sent_files)))
 
@@ -119,7 +115,7 @@ def _ensure_telegram_mock():
 
 _ensure_telegram_mock()
 
-from gateway.platforms.telegram import TelegramAdapter  # noqa: E402
+from plugins.platforms.telegram.adapter import TelegramAdapter  # noqa: E402
 
 
 class TestTelegramMultiImage:
@@ -134,12 +130,9 @@ class TestTelegramMultiImage:
     def test_single_batch_under_10_calls_send_media_group_once(self, adapter):
         """3 photos → one send_media_group call with 3 items."""
         import telegram
-
         images = [(f"https://x.com/{i}.png", f"alt{i}") for i in range(3)]
         # Make InputMediaPhoto a concrete class that records its args
-        telegram.InputMediaPhoto = MagicMock(
-            side_effect=lambda media, caption=None: {"media": media, "caption": caption}
-        )
+        telegram.InputMediaPhoto = MagicMock(side_effect=lambda media, caption=None: {"media": media, "caption": caption})
 
         _run(adapter.send_multiple_images("12345", images))
 
@@ -151,28 +144,19 @@ class TestTelegramMultiImage:
     def test_batch_over_10_chunks(self, adapter):
         """15 photos → two send_media_group calls (10 + 5)."""
         import telegram
-
         images = [(f"https://x.com/{i}.png", "") for i in range(15)]
-        telegram.InputMediaPhoto = MagicMock(
-            side_effect=lambda media, caption=None: {"media": media}
-        )
+        telegram.InputMediaPhoto = MagicMock(side_effect=lambda media, caption=None: {"media": media})
 
         _run(adapter.send_multiple_images("12345", images))
 
         assert adapter._bot.send_media_group.await_count == 2
-        sizes = [
-            len(c.kwargs["media"])
-            for c in adapter._bot.send_media_group.await_args_list
-        ]
+        sizes = [len(c.kwargs["media"]) for c in adapter._bot.send_media_group.await_args_list]
         assert sizes == [10, 5]
 
     def test_animations_routed_to_send_animation(self, adapter):
         """GIFs are peeled off and sent individually via send_animation."""
         import telegram
-
-        telegram.InputMediaPhoto = MagicMock(
-            side_effect=lambda media, caption=None: {"media": media}
-        )
+        telegram.InputMediaPhoto = MagicMock(side_effect=lambda media, caption=None: {"media": media})
         adapter.send_animation = AsyncMock()
         # 2 photos + 1 gif
         images = [
@@ -190,10 +174,7 @@ class TestTelegramMultiImage:
     def test_fallback_to_per_image_on_send_media_group_failure(self, adapter):
         """If send_media_group raises, each photo falls back to send_image."""
         import telegram
-
-        telegram.InputMediaPhoto = MagicMock(
-            side_effect=lambda media, caption=None: {"media": media}
-        )
+        telegram.InputMediaPhoto = MagicMock(side_effect=lambda media, caption=None: {"media": media})
         adapter._bot.send_media_group = AsyncMock(side_effect=Exception("boom"))
         adapter.send_image = AsyncMock(return_value=MagicMock(success=True))
         adapter.send_animation = AsyncMock(return_value=MagicMock(success=True))
@@ -294,15 +275,10 @@ def _ensure_slack_mock():
         return
     slack_mod = MagicMock()
     for name in (
-        "slack_bolt",
-        "slack_bolt.app",
-        "slack_bolt.app.async_app",
-        "slack_bolt.adapter",
-        "slack_bolt.adapter.socket_mode",
+        "slack_bolt", "slack_bolt.app", "slack_bolt.app.async_app",
+        "slack_bolt.adapter", "slack_bolt.adapter.socket_mode",
         "slack_bolt.adapter.socket_mode.async_handler",
-        "slack_sdk",
-        "slack_sdk.web",
-        "slack_sdk.web.async_client",
+        "slack_sdk", "slack_sdk.web", "slack_sdk.web.async_client",
         "slack_sdk.errors",
     ):
         sys.modules.setdefault(name, slack_mod)
@@ -310,7 +286,7 @@ def _ensure_slack_mock():
 
 _ensure_slack_mock()
 
-from gateway.platforms.slack import SlackAdapter  # noqa: E402
+from plugins.platforms.slack.adapter import SlackAdapter  # noqa: E402
 
 
 class TestSlackMultiImage:
@@ -353,10 +329,7 @@ class TestSlackMultiImage:
 
         client = adapter._get_client("C12345")
         assert client.files_upload_v2.await_count == 2
-        sizes = [
-            len(c.kwargs["file_uploads"])
-            for c in client.files_upload_v2.await_args_list
-        ]
+        sizes = [len(c.kwargs["file_uploads"]) for c in client.files_upload_v2.await_args_list]
         assert sizes == [10, 2]
 
     def test_empty_noop(self, adapter):
@@ -384,9 +357,7 @@ class TestMattermostMultiImage:
         a._session = MagicMock()
         a._reply_mode = "thread"
         a._api_post = AsyncMock(return_value={"id": "post123"})
-        a._upload_file = AsyncMock(
-            side_effect=lambda *args, **kwargs: f"fid_{a._upload_file.await_count}"
-        )
+        a._upload_file = AsyncMock(side_effect=lambda *args, **kwargs: f"fid_{a._upload_file.await_count}")
         return a
 
     def test_local_files_uploaded_and_single_post(self, adapter, tmp_path):
@@ -431,7 +402,7 @@ class TestMattermostMultiImage:
 # ---------------------------------------------------------------------------
 
 
-from gateway.platforms.email import EmailAdapter  # noqa: E402
+from plugins.platforms.email.adapter import EmailAdapter  # noqa: E402
 
 
 class TestEmailMultiImage:

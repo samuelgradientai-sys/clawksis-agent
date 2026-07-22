@@ -32,34 +32,27 @@ class TestStripImagesPreservesAlternation:
         assert msgs[0]["content"] == "just text"
 
     def test_strips_image_url_part_preserves_text(self):
-        msgs = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "describe"},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": "data:image/png;base64,abc"},
-                    },
-                ],
-            }
-        ]
+        msgs = [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "describe"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+            ],
+        }]
         changed = _strip_images_from_messages(msgs)
         assert changed is True
         assert msgs[0]["content"] == [{"type": "text", "text": "describe"}]
 
     def test_strips_all_recognized_image_types(self):
-        msgs = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "hi"},
-                    {"type": "image_url", "image_url": {}},
-                    {"type": "image", "source": {}},
-                    {"type": "input_image", "image_url": "http://x"},
-                ],
-            }
-        ]
+        msgs = [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "hi"},
+                {"type": "image_url", "image_url": {}},
+                {"type": "image", "source": {}},
+                {"type": "input_image", "image_url": "http://x"},
+            ],
+        }]
         changed = _strip_images_from_messages(msgs)
         assert changed is True
         assert msgs[0]["content"] == [{"type": "text", "text": "hi"}]
@@ -73,22 +66,17 @@ class TestStripImagesPreservesAlternation:
             {
                 "role": "assistant",
                 "content": None,
-                "tool_calls": [
-                    {
-                        "id": "call_abc",
-                        "type": "function",
-                        "function": {"name": "computer_use", "arguments": "{}"},
-                    }
-                ],
+                "tool_calls": [{
+                    "id": "call_abc",
+                    "type": "function",
+                    "function": {"name": "computer_use", "arguments": "{}"},
+                }],
             },
             {
                 "role": "tool",
                 "tool_call_id": "call_abc",
                 "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": "data:image/png;base64,..."},
-                    },
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}},
                 ],
             },
         ]
@@ -108,13 +96,7 @@ class TestStripImagesPreservesAlternation:
             {
                 "role": "assistant",
                 "content": None,
-                "tool_calls": [
-                    {
-                        "id": "call_1",
-                        "type": "function",
-                        "function": {"name": "x", "arguments": "{}"},
-                    }
-                ],
+                "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "x", "arguments": "{}"}}],
             },
             {
                 "role": "tool",
@@ -155,16 +137,8 @@ class TestStripImagesPreservesAlternation:
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [
-                    {
-                        "id": "c1",
-                        "type": "function",
-                        "function": {"name": "x", "arguments": "{}"},
-                    },
-                    {
-                        "id": "c2",
-                        "type": "function",
-                        "function": {"name": "x", "arguments": "{}"},
-                    },
+                    {"id": "c1", "type": "function", "function": {"name": "x", "arguments": "{}"}},
+                    {"id": "c2", "type": "function", "function": {"name": "x", "arguments": "{}"}},
                 ],
             },
             {
@@ -221,6 +195,7 @@ class TestImageRejectionPhraseIsolation:
         "does not support vision",
         "model does not support image",
         "image_url'. expected",
+        "no endpoints found that support image input",
     )
 
     def _matches(self, body: str) -> bool:
@@ -270,9 +245,27 @@ class TestImageRejectionPhraseIsolation:
             # match the agent cascaded into compression / context-too-large
             # recovery instead of just stripping the images.
             "Invalid 'input[56].content[1].image_url'. Expected a valid URL, but got a value with an invalid format.",
+            # OpenRouter 404 when no upstream endpoint for the model accepts
+            # image input — issue #21160. The exact wording from the report.
+            "HTTP 404: No endpoints found that support image input",
         ]
         for body in bodies:
             assert self._matches(body) is True, f"false negative on: {body}"
+
+    def test_openrouter_data_policy_no_endpoints_does_not_trip(self):
+        """OpenRouter has several 'no endpoints ...' 404 bodies. Only the
+        image-input one is an image rejection — the guardrail / data-policy
+        variants (agent/error_classifier.py) are about routing restrictions,
+        not vision, and must route to their own handler, not get their images
+        stripped.
+        """
+        bodies = [
+            "No endpoints available matching your guardrail restrictions",
+            "No endpoints available matching your data policy",
+            "No endpoints found matching your data policy",
+        ]
+        for body in bodies:
+            assert self._matches(body) is False, f"false positive on: {body}"
 
     def test_codex_data_url_rejection_does_not_false_match_other_url_errors(self):
         """The narrow 'image_url'. expected' phrase (keyed on the

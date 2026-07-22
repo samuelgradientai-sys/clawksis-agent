@@ -1,0 +1,11 @@
+--- a/website/docs/user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-clawksis-agent.md
++++ b/website/docs/user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-clawksis-agent.md
+@@ -52,7 +52,7 @@
+ 
+ ```bash
+ # Install
+-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
++curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
+ 
+ # Interactive chat (default)
+ clawk

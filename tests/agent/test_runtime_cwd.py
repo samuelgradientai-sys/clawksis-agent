@@ -39,9 +39,7 @@ class TestResolveAgentCwd:
         monkeypatch.setenv("TERMINAL_CWD", "~")
         assert resolve_agent_cwd() == Path(os.path.expanduser("~"))
 
-    def test_whitespace_only_terminal_cwd_falls_back_to_getcwd(
-        self, monkeypatch, tmp_path
-    ):
+    def test_whitespace_only_terminal_cwd_falls_back_to_getcwd(self, monkeypatch, tmp_path):
         # "   ".strip() → "" → falsy, so the launch dir wins (not a "   " path).
         monkeypatch.setenv("TERMINAL_CWD", "   ")
         monkeypatch.chdir(tmp_path)
@@ -68,12 +66,21 @@ class TestResolveContextCwd:
         monkeypatch.delenv("TERMINAL_CWD", raising=False)
         assert resolve_context_cwd() is None
 
-    def test_returns_nonexistent_dir_unguarded(self, monkeypatch, tmp_path):
-        # Deliberate asymmetry vs resolve_agent_cwd: context discovery has no isdir
-        # guard, so a missing dir is returned (not None) — discovery just finds nothing.
+    def test_returns_none_for_nonexistent_dir(self, monkeypatch, tmp_path):
+        # A configured but missing dir must not be returned. It previously was,
+        # which diverged from resolve_agent_cwd and let an invalid cwd steer
+        # context discovery. Now it is validated and drops to None.
         missing = tmp_path / "gone"
         monkeypatch.setenv("TERMINAL_CWD", str(missing))
-        assert resolve_context_cwd() == missing
+        assert resolve_context_cwd() is None
+
+    def test_returns_install_tree_when_explicitly_configured(self, monkeypatch):
+        # An EXPLICITLY configured install-tree cwd is honored verbatim — the
+        # Clawksis source tree is a legitimate workspace when the user is
+        # developing Clawksis. Only the fallback path (cwd=None → os.getcwd())
+        # is policed, in build_context_files_prompt (#64590).
+        monkeypatch.setenv("TERMINAL_CWD", str(rt._PACKAGE_ROOT))
+        assert resolve_context_cwd() == rt._PACKAGE_ROOT
 
     def test_expands_leading_tilde(self, monkeypatch):
         monkeypatch.setenv("TERMINAL_CWD", "~")

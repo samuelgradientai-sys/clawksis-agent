@@ -1,0 +1,45 @@
+--- a/.dockerignore
++++ b/.dockerignore
+@@ -2,6 +2,21 @@
+ .git
+ .gitignore
+ .gitmodules
++
++# Python
++__pycache__
++*.py[cod]
++*$py.class
++*.so
++.Python
++*.egg-info/
++dist/
++build/
++
++# Virtual environments
++venv/
++env/
++ENV/
+ 
+ # Dependencies
+ node_modules
+@@ -24,7 +39,20 @@
+ 
+ # Environment files
+ .env
++.env.*
+ 
++# IDE
++.vscode/
++.idea/
++*.swp
++*.swo
++
++# Testing
++.pytest_cache/
++.coverage
++htmlcov/
++
++# Documentation
+ *.md
+ 
+ # Runtime data (bind-mounted at /opt/data; must not leak into build context)

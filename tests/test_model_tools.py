@@ -18,7 +18,6 @@ from model_tools import (
 # handle_function_call
 # =========================================================================
 
-
 class TestHandleFunctionCall:
     def test_agent_loop_tool_returns_error(self):
         for tool_name in _AGENT_LOOP_TOOLS:
@@ -113,7 +112,9 @@ class TestHandleFunctionCall:
         ):
             handle_function_call("web_search", {"q": "test"}, task_id="t1")
 
-        kwargs_by_hook = {c.args[0]: c.kwargs for c in mock_invoke_hook.call_args_list}
+        kwargs_by_hook = {
+            c.args[0]: c.kwargs for c in mock_invoke_hook.call_args_list
+        }
         assert "duration_ms" in kwargs_by_hook["post_tool_call"]
         assert "duration_ms" in kwargs_by_hook["transform_tool_result"]
 
@@ -146,20 +147,16 @@ class TestHandleFunctionCall:
         assert "post_tool_call" not in fired
         assert "transform_tool_result" not in fired
 
-    def test_tool_request_and_execution_middleware_wrap_registry_dispatch(
-        self, monkeypatch
-    ):
+    def test_tool_request_and_execution_middleware_wrap_registry_dispatch(self, monkeypatch):
         seen = {}
 
         def fake_invoke_middleware(kind, **kwargs):
             if kind == "tool_request":
-                return [
-                    {
-                        "args": {**kwargs["args"], "rewritten": True},
-                        "source": "test-middleware",
-                        "reason": "rewrite",
-                    }
-                ]
+                return [{
+                    "args": {**kwargs["args"], "rewritten": True},
+                    "source": "test-middleware",
+                    "reason": "rewrite",
+                }]
             return []
 
         def execution_middleware(**kwargs):
@@ -173,16 +170,9 @@ class TestHandleFunctionCall:
         manager = type(
             "Manager",
             (),
-            {
-                "_middleware": {
-                    "tool_request": [fake_invoke_middleware],
-                    "tool_execution": [execution_middleware],
-                }
-            },
+            {"_middleware": {"tool_request": [fake_invoke_middleware], "tool_execution": [execution_middleware]}},
         )()
-        monkeypatch.setattr(
-            "clawk_cli.plugins.invoke_middleware", fake_invoke_middleware
-        )
+        monkeypatch.setattr("clawk_cli.plugins.invoke_middleware", fake_invoke_middleware)
         monkeypatch.setattr("clawk_cli.plugins.get_plugin_manager", lambda: manager)
         hook_calls = []
         monkeypatch.setattr(
@@ -216,7 +206,6 @@ class TestHandleFunctionCall:
 # Agent loop tools
 # =========================================================================
 
-
 class TestAgentLoopTools:
     def test_expected_tools_in_set(self):
         assert "todo" in _AGENT_LOOP_TOOLS
@@ -232,7 +221,6 @@ class TestAgentLoopTools:
 # =========================================================================
 # Pre-tool-call blocking via plugin hooks
 # =========================================================================
-
 
 class TestPreToolCallBlocking:
     """Verify that pre_tool_call hooks can block tool execution."""
@@ -258,9 +246,7 @@ class TestPreToolCallBlocking:
         monkeypatch.setattr("clawk_cli.plugins.has_hook", lambda name: True)
         monkeypatch.setattr("model_tools.registry.dispatch", fake_dispatch)
 
-        result = json.loads(
-            handle_function_call("read_file", {"path": "test.txt"}, task_id="t1")
-        )
+        result = json.loads(handle_function_call("read_file", {"path": "test.txt"}, task_id="t1"))
         assert result == {"error": "Blocked by policy"}
         assert not dispatch_called
         post_call = next(call for call in hook_calls if call[0] == "post_tool_call")
@@ -278,41 +264,31 @@ class TestPreToolCallBlocking:
             return []
 
         monkeypatch.setattr("clawk_cli.plugins.invoke_hook", fake_invoke_hook)
-        monkeypatch.setattr(
-            "model_tools.registry.dispatch",
-            lambda *a, **kw: (_ for _ in ()).throw(AssertionError("should not run")),
-        )
-        monkeypatch.setattr(
-            "tools.file_tools.notify_other_tool_call",
-            lambda task_id: notifications.append(task_id),
-        )
+        monkeypatch.setattr("model_tools.registry.dispatch",
+                            lambda *a, **kw: (_ for _ in ()).throw(AssertionError("should not run")))
+        monkeypatch.setattr("tools.file_tools.notify_other_tool_call",
+                            lambda task_id: notifications.append(task_id))
 
-        result = json.loads(
-            handle_function_call("web_search", {"q": "test"}, task_id="t1")
-        )
+        result = json.loads(handle_function_call("web_search", {"q": "test"}, task_id="t1"))
         assert result == {"error": "Blocked"}
         assert notifications == []
 
     def test_invalid_hook_returns_do_not_block(self, monkeypatch):
         """Malformed hook returns should be ignored — tool executes normally."""
-
         def fake_invoke_hook(hook_name, **kwargs):
             if hook_name == "pre_tool_call":
                 return [
                     "block",
-                    {"action": "block"},  # missing message
+                    {"action": "block"},           # missing message
                     {"action": "deny", "message": "nope"},
                 ]
             return []
 
         monkeypatch.setattr("clawk_cli.plugins.invoke_hook", fake_invoke_hook)
-        monkeypatch.setattr(
-            "model_tools.registry.dispatch", lambda *a, **kw: json.dumps({"ok": True})
-        )
+        monkeypatch.setattr("model_tools.registry.dispatch",
+                            lambda *a, **kw: json.dumps({"ok": True}))
 
-        result = json.loads(
-            handle_function_call("read_file", {"path": "test.txt"}, task_id="t1")
-        )
+        result = json.loads(handle_function_call("read_file", {"path": "test.txt"}, task_id="t1"))
         assert result == {"ok": True}
 
     def test_skip_flag_prevents_double_fire(self, monkeypatch):
@@ -332,13 +308,11 @@ class TestPreToolCallBlocking:
 
         monkeypatch.setattr("clawk_cli.plugins.invoke_hook", fake_invoke_hook)
         monkeypatch.setattr("clawk_cli.plugins.has_hook", lambda name: True)
-        monkeypatch.setattr(
-            "model_tools.registry.dispatch", lambda *a, **kw: json.dumps({"ok": True})
-        )
+        monkeypatch.setattr("model_tools.registry.dispatch",
+                            lambda *a, **kw: json.dumps({"ok": True}))
 
-        handle_function_call(
-            "web_search", {"q": "test"}, task_id="t1", skip_pre_tool_call_hook=True
-        )
+        handle_function_call("web_search", {"q": "test"}, task_id="t1",
+                             skip_pre_tool_call_hook=True)
 
         # Single-fire contract: when skip=True the caller already fired
         # pre_tool_call, so handle_function_call must not fire it again.
@@ -372,23 +346,18 @@ class TestPreToolCallBlocking:
             return []
 
         monkeypatch.setattr("clawk_cli.plugins.invoke_hook", fake_invoke_hook)
-        monkeypatch.setattr(
-            "model_tools.registry.dispatch", lambda *a, **kw: json.dumps({"ok": True})
-        )
+        monkeypatch.setattr("model_tools.registry.dispatch",
+                            lambda *a, **kw: json.dumps({"ok": True}))
 
         # Step 1: caller checks for a block directive (this fires pre_tool_call once).
         block = get_pre_tool_call_block_message(
-            "web_search",
-            {"q": "test"},
-            task_id="t1",
+            "web_search", {"q": "test"}, task_id="t1",
         )
         assert block is None
 
         # Step 2: caller dispatches with skip=True so the hook isn't re-fired.
         handle_function_call(
-            "web_search",
-            {"q": "test"},
-            task_id="t1",
+            "web_search", {"q": "test"}, task_id="t1",
             skip_pre_tool_call_hook=True,
         )
 
@@ -403,20 +372,12 @@ class TestPreToolCallBlocking:
 # Legacy toolset map
 # =========================================================================
 
-
 class TestLegacyToolsetMap:
     def test_expected_legacy_names(self):
         expected = [
-            "web_tools",
-            "terminal_tools",
-            "vision_tools",
-            "moa_tools",
-            "image_tools",
-            "skills_tools",
-            "browser_tools",
-            "cronjob_tools",
-            "file_tools",
-            "tts_tools",
+            "web_tools", "terminal_tools", "vision_tools",
+            "image_tools", "skills_tools", "browser_tools", "cronjob_tools",
+            "file_tools", "tts_tools",
         ]
         for name in expected:
             assert name in _LEGACY_TOOLSET_MAP, f"Missing legacy toolset: {name}"
@@ -431,7 +392,6 @@ class TestLegacyToolsetMap:
 # =========================================================================
 # Backward-compat wrappers
 # =========================================================================
-
 
 class TestBackwardCompat:
     def test_get_all_tool_names_returns_list(self):
@@ -461,7 +421,6 @@ class TestBackwardCompat:
 # (regression: fix: eliminate duplicate checkpoint entries and JSON-unsafe coercion)
 # =========================================================================
 
-
 class TestCoerceNumberInfNan:
     """_coerce_number must honor its documented contract ("Returns original
     string on failure") for inf/nan inputs, because float('inf') and
@@ -469,22 +428,18 @@ class TestCoerceNumberInfNan:
 
     def test_inf_returns_original_string(self):
         from model_tools import _coerce_number
-
         assert _coerce_number("inf") == "inf"
 
     def test_negative_inf_returns_original_string(self):
         from model_tools import _coerce_number
-
         assert _coerce_number("-inf") == "-inf"
 
     def test_nan_returns_original_string(self):
         from model_tools import _coerce_number
-
         assert _coerce_number("nan") == "nan"
 
     def test_infinity_spelling_returns_original_string(self):
         from model_tools import _coerce_number
-
         # Python's float() parses "Infinity" too — still not JSON-safe.
         assert _coerce_number("Infinity") == "Infinity"
 
@@ -492,7 +447,6 @@ class TestCoerceNumberInfNan:
         """Whatever _coerce_number returns for inf/nan must round-trip
         through strict (allow_nan=False) json.dumps without raising."""
         from model_tools import _coerce_number
-
         for s in ("inf", "-inf", "nan", "Infinity"):
             result = _coerce_number(s)
             json.dumps({"x": result}, allow_nan=False)  # must not raise
@@ -500,7 +454,136 @@ class TestCoerceNumberInfNan:
     def test_normal_numbers_still_coerce(self):
         """Guard against over-correction — real numbers still coerce."""
         from model_tools import _coerce_number
-
         assert _coerce_number("42") == 42
         assert _coerce_number("3.14") == 3.14
         assert _coerce_number("1e3") == 1000
+
+class TestDisabledToolsetsPlatformBundle:
+    """Regression test for #33924: disabling a platform bundle (clawk-*)
+    must not remove core tools from other enabled toolsets."""
+
+    def test_disabling_platform_bundle_preserves_core_tools(self):
+        """Disabling clawk-yuanbao should not strip core tools from clawk-telegram."""
+        from model_tools import get_tool_definitions
+
+        tools_telegram = get_tool_definitions(
+            enabled_toolsets=["clawk-telegram"],
+            quiet_mode=True,
+        )
+        tools_telegram_no_yuanbao = get_tool_definitions(
+            enabled_toolsets=["clawk-telegram"],
+            disabled_toolsets=["clawk-yuanbao"],
+            quiet_mode=True,
+        )
+        names_telegram = {t["function"]["name"] for t in tools_telegram}
+        names_no_yuanbao = {t["function"]["name"] for t in tools_telegram_no_yuanbao}
+
+        # Disabling a *different* platform bundle must not remove any tools
+        assert names_telegram == names_no_yuanbao, (
+            f"Tools lost after disabling clawk-yuanbao: "
+            f"{names_telegram - names_no_yuanbao}"
+        )
+
+    def test_disabling_platform_bundle_removes_own_tools(self):
+        """Disabling clawk-discord should remove discord-specific tools."""
+        from model_tools import get_tool_definitions
+
+        tools = get_tool_definitions(
+            enabled_toolsets=["clawk-discord"],
+            disabled_toolsets=["clawk-discord"],
+            quiet_mode=True,
+        )
+        names = {t["function"]["name"] for t in tools}
+        assert "discord" not in names
+
+    def test_disabling_non_platform_toolset_still_works(self):
+        """Disabling a regular (non-clawk-) toolset still subtracts all tools."""
+        from model_tools import get_tool_definitions
+
+        tools_normal = get_tool_definitions(
+            enabled_toolsets=["clawk-telegram"],
+            quiet_mode=True,
+        )
+        tools_no_web = get_tool_definitions(
+            enabled_toolsets=["clawk-telegram"],
+            disabled_toolsets=["web"],
+            quiet_mode=True,
+        )
+        names_normal = {t["function"]["name"] for t in tools_normal}
+        names_no_web = {t["function"]["name"] for t in tools_no_web}
+
+        web_tools = {"web_search", "web_extract"}
+        removed = names_normal - names_no_web
+        # web tools should be removed (if they were present)
+        present_web = web_tools & names_normal
+        assert present_web <= removed, (
+            f"Web tools not removed: {present_web - removed}"
+        )
+
+
+    def test_disabling_bundle_removes_platform_tools_but_keeps_core(self):
+        """Disabling clawk-discord (when enabled) removes discord/discord_admin
+        from the resolved delta but keeps core tools — via bundle_non_core_tools."""
+        from toolsets import bundle_non_core_tools, _CLAWK_CORE_TOOLS
+
+        delta = bundle_non_core_tools("clawk-yuanbao")
+        # The delta is the bundle's platform-specific tools, NOT core.
+        assert "yb_send_dm" in delta
+        assert not (delta & set(_CLAWK_CORE_TOOLS)), "core tools must not be in the removal delta"
+
+    def test_bundle_non_core_tools_unknown_falls_back(self):
+        """An unknown/garbage bundle name falls back to full resolution (best effort)."""
+        from toolsets import bundle_non_core_tools
+        # A non-existent bundle resolves to an empty set (no tools), not a crash.
+        assert bundle_non_core_tools("clawk-does-not-exist") == set()
+
+
+class TestDisabledToolsetsPostureToolset:
+    """Regression test for #57315: disabling a posture toolset (`coding`,
+    posture: True) must preserve the shared core tools it re-lists but does
+    not own -- same non-core-delta subtraction as clawk-* bundles (#33924) --
+    while atomic toolsets stay fully removable."""
+
+    def test_disabling_coding_preserves_core_but_atomic_disables_still_remove(self):
+        from model_tools import get_tool_definitions
+
+        # web_search is check_fn-gated (needs an API key); probe only the core
+        # tools actually present in baseline so gating cannot mask the fix.
+        core_probe = {"terminal", "read_file", "write_file", "web_search", "execute_code"}
+
+        baseline = {
+            t["function"]["name"]
+            for t in get_tool_definitions(quiet_mode=True)
+        }
+        present_core = core_probe & baseline
+        # Sanity: at least some probed core tools are available in this env.
+        assert present_core, "no probed core tools present in baseline"
+
+        no_coding = {
+            t["function"]["name"]
+            for t in get_tool_definitions(
+                disabled_toolsets=["coding"], quiet_mode=True
+            )
+        }
+        # Previously the full resolve_toolset("coding") subtraction stripped
+        # these shared core tools, collapsing the schema to a handful (#57315).
+        assert present_core <= no_coding, (
+            f"Core tools stripped by disabling 'coding': {present_core - no_coding}"
+        )
+
+        # Atomic (non-posture) toolsets must still be fully removable.
+        no_terminal = {
+            t["function"]["name"]
+            for t in get_tool_definitions(
+                disabled_toolsets=["terminal"], quiet_mode=True
+            )
+        }
+        assert "terminal" not in no_terminal
+
+        no_file = {
+            t["function"]["name"]
+            for t in get_tool_definitions(
+                disabled_toolsets=["file"], quiet_mode=True
+            )
+        }
+        assert "write_file" not in no_file

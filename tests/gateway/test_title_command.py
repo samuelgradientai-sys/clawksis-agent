@@ -14,9 +14,8 @@ from gateway.platforms.base import MessageEvent
 from gateway.session import SessionSource
 
 
-def _make_event(
-    text="/title", platform=Platform.TELEGRAM, user_id="12345", chat_id="67890"
-):
+def _make_event(text="/title", platform=Platform.TELEGRAM,
+                user_id="12345", chat_id="67890"):
     """Build a MessageEvent for testing."""
     source = SessionSource(
         platform=platform,
@@ -30,10 +29,13 @@ def _make_event(
 def _make_runner(session_db=None):
     """Create a bare GatewayRunner with a mock session_store and optional session_db."""
     from gateway.run import GatewayRunner
-
     runner = object.__new__(GatewayRunner)
     runner.adapters = {}
     runner._voice_mode = {}
+    # Gateway holds the async facade; the slash handlers await it.
+    if session_db is not None:
+        from clawk_state import AsyncSessionDB
+        session_db = AsyncSessionDB(session_db)
     runner._session_db = session_db
 
     # Mock session_store that returns a session entry with a known session_id
@@ -59,7 +61,6 @@ class TestHandleTitleCommand:
     async def test_set_title(self, tmp_path):
         """Setting a title returns confirmation."""
         from clawk_state import SessionDB
-
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
 
@@ -77,7 +78,6 @@ class TestHandleTitleCommand:
     async def test_show_title_when_set(self, tmp_path):
         """Showing title when one is set returns the title."""
         from clawk_state import SessionDB
-
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
         db.set_session_title("test_session_123", "Existing Title")
@@ -93,7 +93,6 @@ class TestHandleTitleCommand:
     async def test_show_title_when_not_set(self, tmp_path):
         """Showing title when none is set returns usage hint."""
         from clawk_state import SessionDB
-
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
 
@@ -108,7 +107,6 @@ class TestHandleTitleCommand:
     async def test_title_conflict(self, tmp_path):
         """Setting a title already used by another session returns error."""
         from clawk_state import SessionDB
-
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("other_session", "telegram")
         db.set_session_title("other_session", "Taken Title")
@@ -133,7 +131,6 @@ class TestHandleTitleCommand:
     async def test_title_too_long(self, tmp_path):
         """Setting a title that exceeds max length returns error."""
         from clawk_state import SessionDB
-
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
 
@@ -149,7 +146,6 @@ class TestHandleTitleCommand:
     async def test_title_control_chars_sanitized(self, tmp_path):
         """Control characters are stripped and sanitized title is stored."""
         from clawk_state import SessionDB
-
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
 
@@ -164,7 +160,6 @@ class TestHandleTitleCommand:
     async def test_title_only_control_chars(self, tmp_path):
         """Title with only control chars returns empty error."""
         from clawk_state import SessionDB
-
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
 
@@ -175,10 +170,45 @@ class TestHandleTitleCommand:
         db.close()
 
     @pytest.mark.asyncio
+    async def test_set_title_propagates_to_telegram_topic_rename(self, tmp_path):
+        """/title <name> also renames the visible Telegram topic, not just the DB."""
+        from clawk_state import SessionDB
+        db = SessionDB(db_path=tmp_path / "state.db")
+        db.create_session("test_session_123", "telegram")
+
+        runner = _make_runner(session_db=db)
+        runner._schedule_telegram_topic_title_rename = MagicMock()
+
+        event = _make_event(text="/title My Topic Name")
+        result = await runner._handle_title_command(event)
+
+        assert "My Topic Name" in result
+        runner._schedule_telegram_topic_title_rename.assert_called_once_with(
+            event.source, "test_session_123", "My Topic Name"
+        )
+        db.close()
+
+    @pytest.mark.asyncio
+    async def test_show_title_does_not_rename_topic(self, tmp_path):
+        """Showing the title (no arg) must not trigger a topic rename."""
+        from clawk_state import SessionDB
+        db = SessionDB(db_path=tmp_path / "state.db")
+        db.create_session("test_session_123", "telegram")
+        db.set_session_title("test_session_123", "Existing Title")
+
+        runner = _make_runner(session_db=db)
+        runner._schedule_telegram_topic_title_rename = MagicMock()
+
+        event = _make_event(text="/title")
+        await runner._handle_title_command(event)
+
+        runner._schedule_telegram_topic_title_rename.assert_not_called()
+        db.close()
+
+    @pytest.mark.asyncio
     async def test_works_across_platforms(self, tmp_path):
         """The /title command works for Discord, Slack, and WhatsApp too."""
         from clawk_state import SessionDB
-
         for platform in [Platform.DISCORD, Platform.TELEGRAM]:
             db = SessionDB(db_path=tmp_path / f"state_{platform.value}.db")
             db.create_session("test_session_123", platform.value)
@@ -206,7 +236,6 @@ class TestTitleInHelp:
         event = _make_event(text="/help")
         # Need hooks for help command
         from gateway.hooks import HookRegistry
-
         runner.hooks = HookRegistry()
         result = await runner._handle_help_command(event)
         assert "/title" in result
@@ -215,7 +244,6 @@ class TestTitleInHelp:
         """The /title command is in the _known_commands set."""
         from gateway.run import GatewayRunner
         import inspect
-
         source = inspect.getsource(GatewayRunner._handle_message)
         assert '"title"' in source
 
@@ -272,7 +300,7 @@ class TestResetCommandWithTitle:
         runner._running_agents = {}
         runner._pending_messages = {}
         runner._pending_approvals = {}
-        runner._session_db = MagicMock()
+        runner._session_db = AsyncMock()
         runner._agent_cache = {}
         runner._agent_cache_lock = None
         runner._is_user_authorized = lambda _source: True
@@ -332,7 +360,7 @@ class TestResetCommandWithTitle:
         runner._running_agents = {}
         runner._pending_messages = {}
         runner._pending_approvals = {}
-        runner._session_db = MagicMock()
+        runner._session_db = AsyncMock()
         runner._session_db.set_session_title.side_effect = ValueError(
             "Title 'Dup' is already in use by session abc-123"
         )
@@ -363,7 +391,6 @@ class TestNewInHelp:
     def test_new_command_in_help_output(self):
         """The gateway help output includes /new with the [name] hint."""
         from clawk_cli.commands import gateway_help_lines
-
         lines = gateway_help_lines()
         new_line = next((line for line in lines if line.startswith("`/new ")), None)
         assert new_line is not None

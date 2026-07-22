@@ -34,7 +34,7 @@ def _ensure_telegram_mock():
 
 _ensure_telegram_mock()
 
-from gateway.platforms.telegram import TelegramAdapter
+from plugins.platforms.telegram.adapter import TelegramAdapter
 from gateway.config import PlatformConfig
 
 
@@ -47,6 +47,7 @@ def _make_adapter():
 
 
 class TestSendSlashConfirm:
+
     @pytest.mark.asyncio
     async def test_uses_markdown_v2_and_escapes_special_chars(self):
         """send_slash_confirm must pass preview through format_message and use

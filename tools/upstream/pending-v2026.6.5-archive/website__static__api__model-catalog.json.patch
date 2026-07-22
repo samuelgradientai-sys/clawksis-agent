@@ -1,0 +1,31 @@
+--- a/website/static/api/model-catalog.json
++++ b/website/static/api/model-catalog.json
+@@ -1,6 +1,6 @@
+ {
+   "version": 1,
+-  "updated_at": "2026-06-01T08:20:18Z",
++  "updated_at": "2026-06-04T23:57:51Z",
+   "metadata": {
+     "source": "clawksis-agent repo",
+     "docs": "https://clawksis-agent.nousresearch.com/docs/reference/model-catalog"
+@@ -69,6 +69,10 @@
+           "description": ""
+         },
+         {
++          "id": "qwen/qwen3.7-plus",
++          "description": ""
++        },
++        {
+           "id": "qwen/qwen3.6-35b-a3b",
+           "description": ""
+         },
+@@ -172,6 +176,9 @@
+           "id": "qwen/qwen3.7-max"
+         },
+         {
++          "id": "qwen/qwen3.7-plus"
++        },
++        {
+           "id": "qwen/qwen3.6-35b-a3b"
+         },
+         {

@@ -57,7 +57,7 @@ tts:
     base_url: "https://api.openai.com/v1"  # Override for OpenAI-compatible TTS endpoints
     speed: 1.0                  # 0.25 - 4.0
   minimax:
-    model: "speech-2.8-hd"     # speech-2.8-hd (default), speech-2.8-turbo
+    model: "speech-02-hd"     # speech-02-hd (default), speech-02-turbo
     voice_id: "English_Graceful_Lady"  # See https://platform.minimax.io/faq/system-voice-id
     speed: 1                    # 0.5 - 2.0
     vol: 1                      # 0 - 10
@@ -374,25 +374,14 @@ class MyTTSProvider(TTSProvider):
         # Return False when credentials/deps are missing — picker skips
         # this row but the dispatcher still routes here on explicit config.
         import os
-
         return bool(os.environ.get("MY_TTS_API_KEY"))
 
-    def synthesize(
-        self,
-        text,
-        output_path,
-        *,
-        voice=None,
-        model=None,
-        speed=None,
-        format="mp3",
-        **extra,
-    ) -> str:
+    def synthesize(self, text, output_path, *, voice=None, model=None,
+                   speed=None, format="mp3", **extra) -> str:
         # Write audio bytes to output_path, return the path.
         # Raise on failure — the dispatcher converts exceptions to a
         # standard error envelope.
         import my_tts_sdk
-
         client = my_tts_sdk.Client()
         audio_bytes = client.synthesize(text=text, voice=voice or "default")
         with open(output_path, "wb") as f:
@@ -464,7 +453,7 @@ stt:
 
 **OpenAI API** — Accepts `VOICE_TOOLS_OPENAI_KEY` first and falls back to `OPENAI_API_KEY`. Supports `whisper-1`, `gpt-4o-mini-transcribe`, and `gpt-4o-transcribe`.
 
-**Mistral API (Voxtral Transcribe)** — Requires `MISTRAL_API_KEY`. Uses Mistral's [Voxtral Transcribe](https://docs.mistral.ai/capabilities/audio/speech_to_text/) models. Supports 13 languages, speaker diarization, and word-level timestamps. Install with `pip install clawksis-agent[mistral]`.
+**Mistral API (Voxtral Transcribe)** — Requires `MISTRAL_API_KEY`. Uses Mistral's [Voxtral Transcribe](https://docs.mistral.ai/capabilities/audio/speech_to_text/) models. Supports 13 languages, speaker diarization, and word-level timestamps. Install with `cd ~/.clawksis/clawksis-agent && uv pip install -e ".[mistral]"`.
 
 **xAI Grok STT** — Requires `XAI_API_KEY`. Posts to `https://api.x.ai/v1/stt` as multipart/form-data. Good choice if you're already using xAI for chat or TTS and want one API key for everything. Auto-detection order puts it after Groq — explicitly set `stt.provider: xai` to force it.
 
@@ -641,7 +630,6 @@ class MySTTProvider(TranscriptionProvider):
         # Return False when credentials/deps are missing — picker skips
         # this row but the dispatcher still routes here on explicit config.
         import os
-
         return bool(os.environ.get("MY_STT_API_KEY"))
 
     def transcribe(self, file_path, *, model=None, language=None, **extra):
@@ -651,7 +639,6 @@ class MySTTProvider(TranscriptionProvider):
         # gateway/CLI caller sees a consistent shape on failure.
         try:
             import my_stt_sdk
-
             client = my_stt_sdk.Client()
             text = client.transcribe(open(file_path, "rb"))
             return {

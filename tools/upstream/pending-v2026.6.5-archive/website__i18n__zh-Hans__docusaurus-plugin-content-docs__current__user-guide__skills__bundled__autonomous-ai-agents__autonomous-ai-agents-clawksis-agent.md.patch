@@ -1,0 +1,11 @@
+--- a/website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-clawksis-agent.md
++++ b/website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/user-guide/skills/bundled/autonomous-ai-agents/autonomous-ai-agents-clawksis-agent.md
+@@ -52,7 +52,7 @@
+ 
+ ```bash
+ # 安装
+-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
++curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
+ 
+ # 交互式聊天（默认）
+ clawk

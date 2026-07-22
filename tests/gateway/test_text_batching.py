@@ -21,7 +21,6 @@ from gateway.platforms.base import MessageEvent, MessageType, SessionSource
 # Helpers
 # =====================================================================
 
-
 def _make_event(
     text: str,
     platform: Platform,
@@ -38,7 +37,6 @@ def _make_event(
 # =====================================================================
 # Discord text batching
 # =====================================================================
-
 
 def _make_discord_adapter():
     """Create a minimal DiscordAdapter for testing text batching."""
@@ -84,9 +82,7 @@ class TestDiscordTextBatching:
 
         adapter._enqueue_text_event(_make_event("Part one of a long", Platform.DISCORD))
         await asyncio.sleep(0.02)
-        adapter._enqueue_text_event(
-            _make_event("message that was split.", Platform.DISCORD)
-        )
+        adapter._enqueue_text_event(_make_event("message that was split.", Platform.DISCORD))
 
         adapter.handle_message.assert_not_called()
 
@@ -119,12 +115,8 @@ class TestDiscordTextBatching:
     async def test_different_chats_not_merged(self):
         adapter = _make_discord_adapter()
 
-        adapter._enqueue_text_event(
-            _make_event("from A", Platform.DISCORD, chat_id="111")
-        )
-        adapter._enqueue_text_event(
-            _make_event("from B", Platform.DISCORD, chat_id="222")
-        )
+        adapter._enqueue_text_event(_make_event("from A", Platform.DISCORD, chat_id="111"))
+        adapter._enqueue_text_event(_make_event("from B", Platform.DISCORD, chat_id="222"))
 
         await asyncio.sleep(0.2)
 
@@ -224,10 +216,9 @@ class TestDiscordTextBatching:
 # Matrix text batching
 # =====================================================================
 
-
 def _make_matrix_adapter():
     """Create a minimal MatrixAdapter for testing text batching."""
-    from gateway.platforms.matrix import MatrixAdapter
+    from plugins.platforms.matrix.adapter import MatrixAdapter
 
     config = PlatformConfig(enabled=True, token="test-token")
     adapter = object.__new__(MatrixAdapter)
@@ -278,12 +269,8 @@ class TestMatrixTextBatching:
     async def test_different_rooms_not_merged(self):
         adapter = _make_matrix_adapter()
 
-        adapter._enqueue_text_event(
-            _make_event("room A", Platform.MATRIX, chat_id="!aaa:matrix.org")
-        )
-        adapter._enqueue_text_event(
-            _make_event("room B", Platform.MATRIX, chat_id="!bbb:matrix.org")
-        )
+        adapter._enqueue_text_event(_make_event("room A", Platform.MATRIX, chat_id="!aaa:matrix.org"))
+        adapter._enqueue_text_event(_make_event("room B", Platform.MATRIX, chat_id="!bbb:matrix.org"))
 
         await asyncio.sleep(0.2)
 
@@ -291,9 +278,9 @@ class TestMatrixTextBatching:
 
     @pytest.mark.asyncio
     async def test_adaptive_delay_for_near_limit_chunk(self):
-        """Chunks near the 4000-char limit should trigger longer delay."""
+        """Chunks near the outbound limit should trigger longer delay."""
         adapter = _make_matrix_adapter()
-        long_text = "x" * 3950
+        long_text = "x" * (adapter._split_threshold + 50)
         adapter._enqueue_text_event(_make_event(long_text, Platform.MATRIX))
 
         await asyncio.sleep(0.15)
@@ -314,10 +301,9 @@ class TestMatrixTextBatching:
 # WeCom text batching
 # =====================================================================
 
-
 def _make_wecom_adapter():
     """Create a minimal WeComAdapter for testing text batching."""
-    from gateway.platforms.wecom import WeComAdapter
+    from plugins.platforms.wecom.adapter import WeComAdapter
 
     config = PlatformConfig(enabled=True, token="test-token")
     adapter = object.__new__(WeComAdapter)
@@ -368,12 +354,8 @@ class TestWeComTextBatching:
     async def test_different_chats_not_merged(self):
         adapter = _make_wecom_adapter()
 
-        adapter._enqueue_text_event(
-            _make_event("chat A", Platform.WECOM, chat_id="chat_a")
-        )
-        adapter._enqueue_text_event(
-            _make_event("chat B", Platform.WECOM, chat_id="chat_b")
-        )
+        adapter._enqueue_text_event(_make_event("chat A", Platform.WECOM, chat_id="chat_a"))
+        adapter._enqueue_text_event(_make_event("chat B", Platform.WECOM, chat_id="chat_b"))
 
         await asyncio.sleep(0.2)
 
@@ -404,10 +386,9 @@ class TestWeComTextBatching:
 # Telegram adaptive delay (PR #6891)
 # =====================================================================
 
-
 def _make_telegram_adapter():
     """Create a minimal TelegramAdapter for testing adaptive delay."""
-    from gateway.platforms.telegram import TelegramAdapter
+    from plugins.platforms.telegram.adapter import TelegramAdapter
 
     config = PlatformConfig(enabled=True, token="test-token")
     adapter = object.__new__(TelegramAdapter)
@@ -469,10 +450,9 @@ class TestTelegramAdaptiveDelay:
 # Feishu adaptive delay
 # =====================================================================
 
-
 def _make_feishu_adapter():
     """Create a minimal FeishuAdapter for testing adaptive delay."""
-    from gateway.platforms.feishu import FeishuAdapter, FeishuBatchState
+    from plugins.platforms.feishu.adapter import FeishuAdapter, FeishuBatchState
 
     config = PlatformConfig(enabled=True, token="test-token")
     adapter = object.__new__(FeishuAdapter)
@@ -523,9 +503,7 @@ class TestFeishuAdaptiveDelay:
 
         await adapter._enqueue_text_event(_make_event("x" * 4050, Platform.FEISHU))
         await asyncio.sleep(0.05)
-        await adapter._enqueue_text_event(
-            _make_event("continuation text", Platform.FEISHU)
-        )
+        await adapter._enqueue_text_event(_make_event("continuation text", Platform.FEISHU))
 
         await asyncio.sleep(0.15)
         adapter._handle_message_with_guards.assert_called_once()

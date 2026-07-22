@@ -1,0 +1,10 @@
+--- a/tools/environments/local.py
++++ b/tools/environments/local.py
+@@ -175,6 +175,7 @@
+         "EMAIL_SMTP_HOST",
+         "EMAIL_HOME_ADDRESS",
+         "EMAIL_HOME_ADDRESS_NAME",
++        "CLAWK_DASHBOARD_SESSION_TOKEN",
+         "GATEWAY_ALLOWED_USERS",
+         "GH_TOKEN",
+         "GITHUB_APP_ID",

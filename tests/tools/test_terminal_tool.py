@@ -56,9 +56,7 @@ def test_actual_sudo_command_uses_configured_password(monkeypatch):
     monkeypatch.setenv("SUDO_PASSWORD", "testpass")
     monkeypatch.delenv("CLAWK_INTERACTIVE", raising=False)
 
-    transformed, sudo_stdin = terminal_tool._transform_sudo_command(
-        "sudo apt install -y ripgrep"
-    )
+    transformed, sudo_stdin = terminal_tool._transform_sudo_command("sudo apt install -y ripgrep")
 
     assert transformed == "sudo -S -p '' apt install -y ripgrep"
     assert sudo_stdin == "testpass\n"
@@ -68,9 +66,7 @@ def test_actual_sudo_after_leading_env_assignment_is_rewritten(monkeypatch):
     monkeypatch.setenv("SUDO_PASSWORD", "testpass")
     monkeypatch.delenv("CLAWK_INTERACTIVE", raising=False)
 
-    transformed, sudo_stdin = terminal_tool._transform_sudo_command(
-        "DEBUG=1 sudo whoami"
-    )
+    transformed, sudo_stdin = terminal_tool._transform_sudo_command("DEBUG=1 sudo whoami")
 
     assert transformed == "DEBUG=1 sudo -S -p '' whoami"
     assert sudo_stdin == "testpass\n"
@@ -81,9 +77,7 @@ def test_explicit_empty_sudo_password_tries_empty_without_prompt(monkeypatch):
     monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
 
     def _fail_prompt(*_args, **_kwargs):
-        raise AssertionError(
-            "interactive sudo prompt should not run for explicit empty password"
-        )
+        raise AssertionError("interactive sudo prompt should not run for explicit empty password")
 
     monkeypatch.setattr(terminal_tool, "_prompt_for_sudo_password", _fail_prompt)
 
@@ -98,9 +92,7 @@ def test_cached_sudo_password_is_used_when_env_is_unset(monkeypatch):
     monkeypatch.delenv("CLAWK_INTERACTIVE", raising=False)
     terminal_tool._set_cached_sudo_password("cached-pass")
 
-    transformed, sudo_stdin = terminal_tool._transform_sudo_command(
-        "echo ok && sudo whoami"
-    )
+    transformed, sudo_stdin = terminal_tool._transform_sudo_command("echo ok && sudo whoami")
 
     assert transformed == "echo ok && sudo -S -p '' whoami"
     assert sudo_stdin == "cached-pass\n"
@@ -155,9 +147,7 @@ def test_passwordless_sudo_skips_interactive_prompt_and_rewrite(monkeypatch):
         )
 
     monkeypatch.setattr(terminal_tool, "_prompt_for_sudo_password", _fail_prompt)
-    monkeypatch.setattr(
-        terminal_tool, "_sudo_nopasswd_works", lambda: True, raising=False
-    )
+    monkeypatch.setattr(terminal_tool, "_sudo_nopasswd_works", lambda: True, raising=False)
 
     transformed, sudo_stdin = terminal_tool._transform_sudo_command("sudo whoami")
 
@@ -242,6 +232,30 @@ def test_get_env_config_ignores_bad_docker_json_for_ssh_backend(monkeypatch):
     assert config["docker_env"] == {}
 
 
+def test_get_env_config_preserves_ssh_tilde_cwd(monkeypatch):
+    """SSH cwd '~' is expanded by the remote shell, not the Clawksis host."""
+    monkeypatch.setenv("TERMINAL_ENV", "ssh")
+    monkeypatch.setenv("TERMINAL_CWD", "~")
+    monkeypatch.setenv("HOME", "/opt/data")
+
+    config = terminal_tool._get_env_config()
+
+    assert config["env_type"] == "ssh"
+    assert config["cwd"] == "~"
+
+
+def test_get_env_config_preserves_ssh_tilde_child_cwd(monkeypatch):
+    """SSH cwd '~/x' must not become the local/container HOME path."""
+    monkeypatch.setenv("TERMINAL_ENV", "ssh")
+    monkeypatch.setenv("TERMINAL_CWD", "~/project")
+    monkeypatch.setenv("HOME", "/opt/data")
+
+    config = terminal_tool._get_env_config()
+
+    assert config["env_type"] == "ssh"
+    assert config["cwd"] == "~/project"
+
+
 def test_get_env_config_still_rejects_bad_docker_json_for_docker_backend(monkeypatch):
     """Selecting Docker should keep the existing actionable config error."""
     monkeypatch.setenv("TERMINAL_ENV", "docker")
@@ -253,3 +267,59 @@ def test_get_env_config_still_rejects_bad_docker_json_for_docker_backend(monkeyp
         assert "TERMINAL_DOCKER_VOLUMES" in str(exc)
     else:
         raise AssertionError("Docker backend must validate TERMINAL_DOCKER_VOLUMES")
+
+
+def test_sudo_wrong_password_failure_detects_rejection_output():
+    output = (
+        "sudo: Authentication failed, try again.\n\n"
+        "sudo: maximum 3 incorrect authentication attempts\n"
+    )
+    assert terminal_tool._sudo_wrong_password_failure(output) is True
+
+
+def test_sudo_wrong_password_failure_ignores_tty_required_message():
+    output = "sudo: a terminal is required to authenticate"
+    assert terminal_tool._sudo_wrong_password_failure(output) is False
+
+
+def test_invalidate_cached_sudo_on_auth_failure_clears_session_cache(monkeypatch):
+    monkeypatch.delenv("SUDO_PASSWORD", raising=False)
+    terminal_tool._set_cached_sudo_password("wrong-pass")
+
+    cleared = terminal_tool._invalidate_cached_sudo_on_auth_failure(
+        "sudo apt install fprintd",
+        "sudo: Authentication failed, try again.",
+    )
+
+    assert cleared is True
+    assert terminal_tool._get_cached_sudo_password() == ""
+
+
+def test_invalidate_cached_sudo_on_auth_failure_keeps_env_password(monkeypatch):
+    monkeypatch.setenv("SUDO_PASSWORD", "from-env")
+    terminal_tool._set_cached_sudo_password("wrong-pass")
+
+    cleared = terminal_tool._invalidate_cached_sudo_on_auth_failure(
+        "sudo true",
+        "sudo: Authentication failed, try again.",
+    )
+
+    assert cleared is False
+    assert terminal_tool._get_cached_sudo_password() == "wrong-pass"
+
+
+def test_transform_sudo_command_pipes_one_password_line_per_invocation(monkeypatch):
+    monkeypatch.setenv("SUDO_PASSWORD", "testpass")
+    monkeypatch.delenv("CLAWK_INTERACTIVE", raising=False)
+
+    transformed, sudo_stdin = terminal_tool._transform_sudo_command(
+        "sudo true && sudo whoami"
+    )
+
+    assert transformed == "sudo -S -p '' true && sudo -S -p '' whoami"
+    assert sudo_stdin == "testpass\ntestpass\n"
+
+
+def test_count_real_sudo_invocations_ignores_mentions(monkeypatch):
+    assert terminal_tool._count_real_sudo_invocations("grep sudo README.md") == 0
+    assert terminal_tool._count_real_sudo_invocations("sudo a; sudo b") == 2

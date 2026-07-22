@@ -38,10 +38,8 @@ def _install_fake_telegram(monkeypatch):
     fake_constants = types.ModuleType("telegram.constants")
     fake_constants.ParseMode = SimpleNamespace(MARKDOWN_V2="MarkdownV2")
     fake_constants.ChatType = SimpleNamespace(
-        GROUP="group",
-        SUPERGROUP="supergroup",
-        CHANNEL="channel",
-        PRIVATE="private",
+        GROUP="group", SUPERGROUP="supergroup",
+        CHANNEL="channel", PRIVATE="private",
     )
     fake_telegram.constants = fake_constants
 
@@ -66,7 +64,7 @@ def _install_fake_telegram(monkeypatch):
 @pytest.fixture
 def adapter(monkeypatch):
     _install_fake_telegram(monkeypatch)
-    from gateway.platforms.telegram import TelegramAdapter
+    from plugins.platforms.telegram.adapter import TelegramAdapter
 
     a = TelegramAdapter(PlatformConfig(enabled=True, token="fake-token"))
     a._bot = MagicMock()
@@ -116,8 +114,7 @@ async def test_edit_failure_falls_back_to_fresh_send(adapter):
         SendResult(success=True, message_id="200"),
     ]
     adapter.edit_message.return_value = SendResult(
-        success=False,
-        error="Bad Request: message to edit not found",
+        success=False, error="Bad Request: message to edit not found",
     )
 
     await adapter.send_or_update_status("chat-1", "lifecycle", "step 1")

@@ -62,19 +62,14 @@ class TestIsNetworkAccessible:
         loopback_result = [
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 0)),
         ]
-        with patch(
-            "gateway.platforms.base._socket.getaddrinfo", return_value=loopback_result
-        ):
+        with patch("gateway.platforms.base._socket.getaddrinfo", return_value=loopback_result):
             assert is_network_accessible("localhost") is False
 
     def test_hostname_resolving_to_non_loopback(self):
         non_loopback_result = [
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0)),
         ]
-        with patch(
-            "gateway.platforms.base._socket.getaddrinfo",
-            return_value=non_loopback_result,
-        ):
+        with patch("gateway.platforms.base._socket.getaddrinfo", return_value=non_loopback_result):
             assert is_network_accessible("my-server.local") is True
 
     def test_hostname_mixed_resolution(self):
@@ -84,9 +79,7 @@ class TestIsNetworkAccessible:
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 0)),
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0)),
         ]
-        with patch(
-            "gateway.platforms.base._socket.getaddrinfo", return_value=mixed_result
-        ):
+        with patch("gateway.platforms.base._socket.getaddrinfo", return_value=mixed_result):
             assert is_network_accessible("dual-host.local") is True
 
     def test_dns_failure_fails_closed(self):
@@ -108,9 +101,7 @@ class TestConnectBindGuard:
 
     @pytest.mark.asyncio
     async def test_refuses_ipv4_wildcard_without_key(self):
-        adapter = APIServerAdapter(
-            PlatformConfig(enabled=True, extra={"host": "0.0.0.0"})
-        )
+        adapter = APIServerAdapter(PlatformConfig(enabled=True, extra={"host": "0.0.0.0"}))
         result = await adapter.connect()
         assert result is False
 
@@ -123,13 +114,24 @@ class TestConnectBindGuard:
     @pytest.mark.asyncio
     async def test_refuses_loopback_without_key(self):
         """Loopback binds are still an auth boundary and require API_SERVER_KEY."""
-        adapter = APIServerAdapter(
-            PlatformConfig(enabled=True, extra={"host": "127.0.0.1"})
-        )
+        adapter = APIServerAdapter(PlatformConfig(enabled=True, extra={"host": "127.0.0.1"}))
         assert adapter._api_key == ""
         assert is_network_accessible(adapter._host) is False
         result = await adapter.connect()
         assert result is False
+        assert adapter._app is None
+        assert adapter._background_tasks == set()
+
+    @pytest.mark.asyncio
+    async def test_refuses_weak_key_without_partial_startup(self):
+        """Weak API_SERVER_KEY rejection must not create app or background tasks."""
+        adapter = APIServerAdapter(
+            PlatformConfig(enabled=True, extra={"host": "127.0.0.1", "key": "short"}),
+        )
+        result = await adapter.connect()
+        assert result is False
+        assert adapter._app is None
+        assert adapter._background_tasks == set()
 
     @pytest.mark.asyncio
     async def test_allows_wildcard_with_key(self):
@@ -142,3 +144,102 @@ class TestConnectBindGuard:
         assert adapter._api_key == "sk-test"
         assert is_network_accessible("0.0.0.0") is True
         # Combined: the guard condition is False (key is set), so it passes
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: bind mechanics (direct bind, no pre-probe — #10297)
+# ---------------------------------------------------------------------------
+
+
+class TestBindMechanics:
+    """connect() binds directly instead of pre-probing 127.0.0.1.
+
+    The old ``_port_is_available()`` probe connected to 127.0.0.1 only and
+    reported a lingering TIME_WAIT socket as "in use", failing gateway
+    restarts for up to ~60s (#10297). The fix removes the probe: bind
+    directly, keep SO_REUSEADDR default semantics on Linux (rebind past
+    TIME_WAIT), and surface a real bind conflict as a clean ``False`` with
+    the runner torn down.
+    """
+
+    _KEY = "sk-test-strong-key-0123456789"
+
+    def _make_adapter(self, port: int) -> APIServerAdapter:
+        return APIServerAdapter(
+            PlatformConfig(
+                enabled=True,
+                extra={"host": "127.0.0.1", "port": port, "key": self._KEY},
+            )
+        )
+
+    @staticmethod
+    def _free_port() -> int:
+        with socket.socket() as s:
+            s.bind(("", 0))
+            return s.getsockname()[1]
+
+    @pytest.mark.asyncio
+    async def test_immediate_rebind_after_disconnect(self):
+        """A restarted adapter can rebind the same port immediately.
+
+        This is the #10297 symptom: the old pre-probe (and disabled address
+        reuse) made a quick gateway restart fail while the previous socket
+        sat in TIME_WAIT.
+        """
+        port = self._free_port()
+        first = self._make_adapter(port)
+        assert await first.connect() is True
+        await first.disconnect()
+
+        second = self._make_adapter(port)
+        try:
+            assert await second.connect() is True
+        finally:
+            await second.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_live_listener_conflict_returns_false_and_cleans_up(self):
+        """A second adapter on an occupied port fails cleanly, not with a raise."""
+        port = self._free_port()
+        first = self._make_adapter(port)
+        assert await first.connect() is True
+        second = self._make_adapter(port)
+        try:
+            result = await second.connect()
+            assert result is False
+            assert second._runner is None
+            assert second._site is None
+            assert second.is_connected is False
+        finally:
+            await first.disconnect()
+            await second.disconnect()
+
+    def test_pre_probe_helper_removed(self):
+        """The racy single-family pre-probe must not come back."""
+        assert not hasattr(APIServerAdapter, "_port_is_available")
+
+    @pytest.mark.asyncio
+    async def test_port_conflict_sets_non_retryable_fatal_error(self):
+        """A real port conflict (EADDRINUSE) must set a non-retryable fatal
+        error so the reconnect watcher drops the platform from the retry
+        queue instead of looping indefinitely.
+
+        Previously connect() returned bare ``False``, which the reconnect
+        watcher treated as retryable — retrying every 5 minutes forever,
+        filling errors.log and leaking 2 fds per retry (#52132: 1568+
+        retries over 5 days in a multi-profile setup).
+        """
+        port = self._free_port()
+        first = self._make_adapter(port)
+        assert await first.connect() is True
+        second = self._make_adapter(port)
+        try:
+            result = await second.connect()
+            assert result is False
+            assert second.has_fatal_error is True
+            assert second.fatal_error_retryable is False
+            assert second.fatal_error_code == "api_server_port_in_use"
+            assert str(port) in (second.fatal_error_message or "")
+        finally:
+            await first.disconnect()
+            await second.disconnect()

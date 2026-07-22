@@ -1,0 +1,11 @@
+--- a/plugins/platforms/google_chat/adapter.py
++++ b/plugins/platforms/google_chat/adapter.py
+@@ -1390,7 +1390,7 @@
+         if arg == "start":
+             if not oauth_helper._client_secret_path().exists():
+                 await _reply(
+-                    "⚠️ No client credentials stored on the host. Send "
++                    "⚠️ No client credentials stored for this profile. Send "
+                     "`/setup-files` (no args) for setup instructions."
+                 )
+                 return True

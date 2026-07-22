@@ -73,7 +73,7 @@ def _split_frontmatter(text: str) -> Optional[Dict[str, Any]]:
     """Return the parsed YAML frontmatter mapping, or None if absent/invalid."""
     if not isinstance(text, str):
         return None
-    stripped = text.lstrip()
+    stripped = text.lstrip("\ufeff").lstrip()  # BOM is not whitespace; strip explicitly
     if not stripped.startswith("---"):
         return None
     # Find the closing fence after the opening one.
@@ -234,11 +234,7 @@ def register_blueprint_suggestion(spec: BlueprintSpec) -> Optional[Dict[str, Any
         title=f"Schedule '{spec.skill_name}'",
         description=(
             f"The '{spec.skill_name}' blueprint runs on schedule {spec.schedule}"
-            + (
-                f", delivering to {spec.deliver}"
-                if spec.deliver and spec.deliver != "origin"
-                else ""
-            )
+            + (f", delivering to {spec.deliver}" if spec.deliver and spec.deliver != "origin" else "")
             + "."
         ),
         source="blueprint",
@@ -247,9 +243,7 @@ def register_blueprint_suggestion(spec: BlueprintSpec) -> Optional[Dict[str, Any
     )
 
 
-def export_blueprint(
-    job: Dict[str, Any], body: str, *, blueprint_name: Optional[str] = None
-) -> str:
+def export_blueprint(job: Dict[str, Any], body: str, *, blueprint_name: Optional[str] = None) -> str:
     """Render a shareable blueprint SKILL.md from an existing cron job dict.
 
     The inverse of ``create_blueprint_job``: take a cron job a user already built

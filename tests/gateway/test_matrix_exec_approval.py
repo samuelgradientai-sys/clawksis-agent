@@ -8,23 +8,13 @@ from gateway.config import PlatformConfig
 
 class TestMatrixExecApprovalReactions:
     @pytest.mark.asyncio
-    async def test_send_exec_approval_registers_prompt_and_seeds_reactions(
-        self, monkeypatch
-    ):
+    async def test_send_exec_approval_registers_prompt_and_seeds_reactions(self, monkeypatch):
         monkeypatch.setenv("MATRIX_ALLOWED_USERS", "@liizfq:liizfq.top")
-        from gateway.platforms.matrix import MatrixAdapter
+        from plugins.platforms.matrix.adapter import MatrixAdapter
 
-        adapter = MatrixAdapter(
-            PlatformConfig(
-                enabled=True,
-                token="tok",
-                extra={"homeserver": "https://matrix.example.org"},
-            )
-        )
+        adapter = MatrixAdapter(PlatformConfig(enabled=True, token="tok", extra={"homeserver": "https://matrix.example.org"}))
         adapter._client = types.SimpleNamespace()
-        adapter.send = AsyncMock(
-            return_value=types.SimpleNamespace(success=True, message_id="$evt1")
-        )
+        adapter.send = AsyncMock(return_value=types.SimpleNamespace(success=True, message_id="$evt1"))
         adapter._send_reaction = AsyncMock(return_value="$r")
 
         result = await adapter.send_exec_approval(
@@ -44,15 +34,9 @@ class TestMatrixExecApprovalReactions:
     @pytest.mark.asyncio
     async def test_reaction_resolves_pending_approval(self, monkeypatch):
         monkeypatch.setenv("MATRIX_ALLOWED_USERS", "@liizfq:liizfq.top")
-        from gateway.platforms.matrix import MatrixAdapter, _MatrixApprovalPrompt
+        from plugins.platforms.matrix.adapter import MatrixAdapter, _MatrixApprovalPrompt
 
-        adapter = MatrixAdapter(
-            PlatformConfig(
-                enabled=True,
-                token="tok",
-                extra={"homeserver": "https://matrix.example.org"},
-            )
-        )
+        adapter = MatrixAdapter(PlatformConfig(enabled=True, token="tok", extra={"homeserver": "https://matrix.example.org"}))
         # Resolve user_id so _is_self_sender doesn't defensively drop all traffic (#15763).
         adapter._user_id = "@bot:example.org"
         adapter._approval_prompts_by_event["$target"] = _MatrixApprovalPrompt(
@@ -68,9 +52,7 @@ class TestMatrixExecApprovalReactions:
             content=content,
         )
 
-        with patch(
-            "tools.approval.resolve_gateway_approval", return_value=1
-        ) as mock_resolve:
+        with patch("tools.approval.resolve_gateway_approval", return_value=1) as mock_resolve:
             await adapter._on_reaction(event)
 
         mock_resolve.assert_called_once_with("sess-1", "once")

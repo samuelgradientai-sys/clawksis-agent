@@ -10,7 +10,6 @@ making /stop take multiple retry cycles × read-timeout to actually stop
 The fix adds an `_interrupt_requested` check at the top of the retry loop
 so the agent exits immediately instead of retrying.
 """
-
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -38,7 +37,9 @@ def _make_agent(**kwargs):
 class TestStreamInterruptBeforeRetry:
     """Verify _interrupt_requested is checked before each streaming retry."""
 
-    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+    @pytest.mark.filterwarnings(
+        "ignore::pytest.PytestUnhandledThreadExceptionWarning"
+    )
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_interrupt_prevents_stream_retry(self, mock_close, mock_create):
@@ -75,7 +76,9 @@ class TestStreamInterruptBeforeRetry:
             "The retry loop retried despite _interrupt_requested being set."
         )
 
-    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+    @pytest.mark.filterwarnings(
+        "ignore::pytest.PytestUnhandledThreadExceptionWarning"
+    )
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_interrupt_before_first_attempt(self, mock_close, mock_create):
@@ -157,3 +160,83 @@ class TestStreamInterruptBeforeRetry:
         result = agent._interruptible_streaming_api_call({})
         assert result is not None
         assert attempts[0] == 3
+
+    @pytest.mark.filterwarnings(
+        "ignore::pytest.PytestUnhandledThreadExceptionWarning"
+    )
+    @patch("run_agent.AIAgent._replace_primary_openai_client")
+    @patch("run_agent.AIAgent._abort_request_openai_client")
+    @patch("run_agent.AIAgent._create_request_openai_client")
+    @patch("run_agent.AIAgent._close_request_openai_client")
+    def test_stale_stream_attempt_cannot_emit_late_chunks_after_retry(
+        self,
+        mock_close,
+        mock_create,
+        mock_abort,
+        mock_replace,
+        monkeypatch,
+    ):
+        """A stale attempt must not keep writing deltas after it is killed.
+
+        This reproduces the race where the outer stale detector aborts an SSE
+        connection, but the old iterator still yields one more chunk before
+        surfacing the connection error that triggers the retry.
+        """
+        import httpx
+        import time
+
+        from tests.run_agent.test_streaming import (
+            _make_stream_chunk,
+            _make_tool_call_delta,
+        )
+
+        monkeypatch.setenv("CLAWK_STREAM_STALE_TIMEOUT", "0.05")
+        monkeypatch.setenv("CLAWK_STREAM_RETRIES", "1")
+
+        class LateChunkAfterStaleStream:
+            response = SimpleNamespace(headers={})
+
+            def __iter__(self):
+                yield _make_stream_chunk(content="old start ")
+                yield _make_stream_chunk(
+                    tool_calls=[
+                        _make_tool_call_delta(
+                            index=0,
+                            tc_id="call_1",
+                            name="terminal",
+                        )
+                    ]
+                )
+                time.sleep(0.45)
+                yield _make_stream_chunk(content="old late ")
+                raise httpx.RemoteProtocolError("peer closed connection")
+
+        retry_chunks = [
+            _make_stream_chunk(content="new final"),
+            _make_stream_chunk(finish_reason="stop", model="test/model"),
+        ]
+        class RetryStream:
+            response = SimpleNamespace(headers={})
+
+            def __iter__(self):
+                return iter(retry_chunks)
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = [
+            LateChunkAfterStaleStream(),
+            RetryStream(),
+        ]
+        mock_create.return_value = mock_client
+
+        agent = _make_agent()
+        agent._interrupt_requested = False
+        deltas = []
+        agent.stream_delta_callback = deltas.append
+
+        response = agent._interruptible_streaming_api_call({})
+
+        delivered = "".join(deltas)
+        assert "old late" not in delivered
+        assert "new final" in delivered
+        assert response.choices[0].message.content == "new final"
+        assert mock_abort.called

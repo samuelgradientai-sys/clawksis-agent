@@ -4,7 +4,6 @@ Uses a tiny in-process ``websockets`` server to simulate a CDP endpoint —
 gives real protocol coverage (connect, send, recv, close) without needing
 a real Chrome instance.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -114,7 +113,6 @@ class _CDPServer:
 
     def stop(self) -> None:
         if self._loop and self._server:
-
             def _close() -> None:
                 self._server.close()
 
@@ -136,7 +134,9 @@ def cdp_server(monkeypatch):
     """Start a CDP mock and route tool resolution to it."""
     server = _CDPServer()
     ws_url = server.start()
-    monkeypatch.setattr(browser_cdp_tool, "_resolve_cdp_endpoint", lambda: ws_url)
+    monkeypatch.setattr(
+        browser_cdp_tool, "_resolve_cdp_endpoint", lambda: ws_url
+    )
     try:
         yield server
     finally:
@@ -211,18 +211,8 @@ def test_browser_level_success(cdp_server):
         "Target.getTargets",
         lambda params, sid: {
             "targetInfos": [
-                {
-                    "targetId": "A",
-                    "type": "page",
-                    "title": "Tab 1",
-                    "url": "about:blank",
-                },
-                {
-                    "targetId": "B",
-                    "type": "page",
-                    "title": "Tab 2",
-                    "url": "https://a.test",
-                },
+                {"targetId": "A", "type": "page", "title": "Tab 1", "url": "about:blank"},
+                {"targetId": "B", "type": "page", "title": "Tab 2", "url": "https://a.test"},
             ]
         },
     )
@@ -236,6 +226,21 @@ def test_browser_level_success(cdp_server):
     assert len(calls) == 1
     assert calls[0]["method"] == "Target.getTargets"
     assert "sessionId" not in calls[0]
+
+
+def test_browser_level_redacts_secret_result(cdp_server):
+    fake_key = "sk-" + "CDPSECRETRESULT1234567890"
+    cdp_server.on(
+        "Runtime.evaluate",
+        lambda params, sid: {"result": {"type": "string", "value": fake_key}},
+    )
+
+    result = json.loads(browser_cdp_tool.browser_cdp(method="Runtime.evaluate"))
+
+    assert result["success"] is True
+    serialized = json.dumps(result)
+    assert "CDPSECRETRESULT" not in serialized
+    assert result["result"]["result"]["value"].startswith("sk-")
 
 
 def test_empty_params_sends_empty_object(cdp_server):
@@ -287,7 +292,9 @@ def test_target_attach_then_call(cdp_server):
 
 def test_cdp_method_error_returns_tool_error(cdp_server):
     # No handler registered -> server returns CDP error
-    result = json.loads(browser_cdp_tool.browser_cdp(method="NonExistent.method"))
+    result = json.loads(
+        browser_cdp_tool.browser_cdp(method="NonExistent.method")
+    )
     assert "error" in result
     assert "CDP error" in result["error"]
     assert result.get("method") == "NonExistent.method"
@@ -319,7 +326,9 @@ def test_timeout_when_server_never_replies(cdp_server):
 
     cdp_server.on("Page.slowMethod", slow)
     result = json.loads(
-        browser_cdp_tool.browser_cdp(method="Page.slowMethod", timeout=0.5)
+        browser_cdp_tool.browser_cdp(
+            method="Page.slowMethod", timeout=0.5
+        )
     )
     assert "error" in result
     assert "tim" in result["error"].lower()
@@ -377,6 +386,168 @@ def test_dispatch_through_registry(cdp_server):
     result = json.loads(raw)
     assert result["success"] is True
     assert result["method"] == "Target.getTargets"
+
+
+# ---------------------------------------------------------------------------
+# Private-network guard
+# ---------------------------------------------------------------------------
+
+
+PRIVATE_URL = "http://169.254.169.254/latest/meta-data/"
+
+
+def test_runtime_evaluate_blocked_when_current_page_is_private(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        browser_cdp_tool,
+        "_resolve_cdp_endpoint",
+        lambda: "ws://127.0.0.1:9222/devtools/browser/mock",
+    )
+
+    import tools.browser_tool as bt
+
+    monkeypatch.setattr(bt, "_eval_ssrf_guard_active", lambda task_id: True)
+    monkeypatch.setattr(bt, "_current_page_private_url", lambda task_id: PRIVATE_URL)
+
+    async def fake_call(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {"result": {"value": "private data"}}
+
+    monkeypatch.setattr(browser_cdp_tool, "_cdp_call", fake_call)
+
+    result = json.loads(
+        browser_cdp_tool.browser_cdp(
+            method="Runtime.evaluate",
+            params={"expression": "document.body.innerText"},
+            task_id="task-1",
+        )
+    )
+
+    assert "error" in result
+    assert PRIVATE_URL in result["error"]
+    assert "private or internal address" in result["error"]
+    assert calls == []
+
+
+def test_frame_id_route_blocked_when_current_page_is_private(monkeypatch):
+    """frame_id routing (OOPIF via supervisor) must not bypass the guard
+    applied to the stateless path — same private-page boundary either way."""
+    supervisor_calls = []
+
+    import tools.browser_tool as bt
+
+    monkeypatch.setattr(bt, "_eval_ssrf_guard_active", lambda task_id: True)
+    monkeypatch.setattr(bt, "_current_page_private_url", lambda task_id: PRIVATE_URL)
+
+    def fake_supervisor_route(**kwargs):
+        supervisor_calls.append(kwargs)
+        return json.dumps({"success": True, "result": {"value": "private data"}})
+
+    monkeypatch.setattr(
+        browser_cdp_tool, "_browser_cdp_via_supervisor", fake_supervisor_route
+    )
+
+    result = json.loads(
+        browser_cdp_tool.browser_cdp(
+            method="Runtime.evaluate",
+            params={"expression": "document.body.innerText"},
+            frame_id="frame-1",
+            task_id="task-1",
+        )
+    )
+
+    assert "error" in result
+    assert PRIVATE_URL in result["error"]
+    assert "private or internal address" in result["error"]
+    assert supervisor_calls == []
+
+
+def test_frame_id_route_allowed_when_page_is_not_private(monkeypatch):
+    """Sanity check: the new guard call must not block ordinary frame_id
+    routing when the current page isn't private."""
+    supervisor_calls = []
+
+    import tools.browser_tool as bt
+
+    monkeypatch.setattr(bt, "_eval_ssrf_guard_active", lambda task_id: True)
+    monkeypatch.setattr(bt, "_current_page_private_url", lambda task_id: None)
+
+    def fake_supervisor_route(**kwargs):
+        supervisor_calls.append(kwargs)
+        return json.dumps({"success": True, "result": {"value": "ok"}})
+
+    monkeypatch.setattr(
+        browser_cdp_tool, "_browser_cdp_via_supervisor", fake_supervisor_route
+    )
+
+    result = json.loads(
+        browser_cdp_tool.browser_cdp(
+            method="Runtime.evaluate",
+            params={"expression": "document.title"},
+            frame_id="frame-1",
+            task_id="task-1",
+        )
+    )
+
+    assert result.get("success") is True
+    assert len(supervisor_calls) == 1
+
+
+def test_page_navigate_to_private_url_blocked_before_cdp(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        browser_cdp_tool,
+        "_resolve_cdp_endpoint",
+        lambda: "ws://127.0.0.1:9222/devtools/browser/mock",
+    )
+
+    import tools.browser_tool as bt
+
+    monkeypatch.setattr(bt, "_eval_ssrf_guard_active", lambda task_id: True)
+
+    async def fake_call(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {"frameId": "f"}
+
+    monkeypatch.setattr(browser_cdp_tool, "_cdp_call", fake_call)
+
+    result = json.loads(
+        browser_cdp_tool.browser_cdp(
+            method="Page.navigate",
+            params={"url": PRIVATE_URL},
+            task_id="task-1",
+        )
+    )
+
+    assert "error" in result
+    assert PRIVATE_URL in result["error"]
+    assert calls == []
+
+
+def test_private_guard_inactive_does_not_probe(monkeypatch, cdp_server):
+    cdp_server.on("Runtime.evaluate", lambda params, sid: {"result": {"value": "ok"}})
+
+    import tools.browser_tool as bt
+
+    monkeypatch.setattr(bt, "_eval_ssrf_guard_active", lambda task_id: False)
+
+    def fail_probe(task_id):
+        raise AssertionError("_current_page_private_url must not be probed")
+
+    monkeypatch.setattr(bt, "_current_page_private_url", fail_probe)
+
+    result = json.loads(
+        browser_cdp_tool.browser_cdp(
+            method="Runtime.evaluate",
+            params={"expression": "document.title"},
+            task_id="task-1",
+        )
+    )
+
+    assert result["success"] is True
+    assert result["result"]["result"]["value"] == "ok"
 
 
 # ---------------------------------------------------------------------------

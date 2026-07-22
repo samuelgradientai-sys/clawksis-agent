@@ -37,9 +37,7 @@ def _make_event(text):
     return MessageEvent(
         text=text,
         message_type=MessageType.TEXT,
-        source=SessionSource(
-            platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"
-        ),
+        source=SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"),
     )
 
 
@@ -75,10 +73,7 @@ def _setup_isolated_home(tmp_path, monkeypatch, *, warn):
     clawk_home.mkdir()
     cfg_path = clawk_home / "config.yaml"
     cfg_path.write_text(
-        yaml.safe_dump({
-            "model": {"default": "old-model", "provider": "openrouter"},
-            "providers": {},
-        }),
+        yaml.safe_dump({"model": {"default": "old-model", "provider": "openrouter"}, "providers": {}}),
         encoding="utf-8",
     )
 
@@ -98,9 +93,7 @@ def _setup_isolated_home(tmp_path, monkeypatch, *, warn):
 
 
 @pytest.mark.asyncio
-async def test_typed_model_expensive_prompts_instead_of_switching(
-    tmp_path, monkeypatch
-):
+async def test_typed_model_expensive_prompts_instead_of_switching(tmp_path, monkeypatch):
     """Expensive model typed directly → confirm prompt, no switch applied."""
     _setup_isolated_home(tmp_path, monkeypatch, warn=True)
     runner = _make_runner()
@@ -113,9 +106,7 @@ async def test_typed_model_expensive_prompts_instead_of_switching(
 
     runner._request_slash_confirm = _fake_request_slash_confirm
 
-    result = await runner._handle_model_command(
-        _make_event("/model openai/gpt-5.5-pro")
-    )
+    result = await runner._handle_model_command(_make_event("/model openai/gpt-5.5-pro"))
 
     assert result is not None
     assert "EXPENSIVE MODEL WARNING" in result
@@ -164,9 +155,7 @@ async def test_typed_model_expensive_cancel_keeps_current_model(tmp_path, monkey
 
     runner._request_slash_confirm = _fake_request_slash_confirm
 
-    await runner._handle_model_command(
-        _make_event("/model openai/gpt-5.5-pro --global")
-    )
+    await runner._handle_model_command(_make_event("/model openai/gpt-5.5-pro --global"))
 
     reply = await captured["handler"]("cancel")
 
@@ -189,11 +178,59 @@ async def test_typed_model_cheap_switches_without_prompt(tmp_path, monkeypatch):
 
     runner._request_slash_confirm = _fail_request_slash_confirm
 
-    result = await runner._handle_model_command(
-        _make_event("/model openai/gpt-5.5-pro")
-    )
+    result = await runner._handle_model_command(_make_event("/model openai/gpt-5.5-pro"))
 
     assert result is not None
     assert "gpt-5.5-pro" in result
     overrides = list(runner._session_model_overrides.values())
     assert len(overrides) == 1
+
+
+@pytest.mark.asyncio
+async def test_failed_inplace_swap_aborts_commit(tmp_path, monkeypatch):
+    """A failed in-place agent swap must be a no-op, not a dead session.
+
+    Regression for #50163: the resolution pipeline succeeds (valid model name)
+    but the cached agent's ``switch_model()`` raises mid-conversation (bad key /
+    unreachable URL). The agent rolls itself back to the old working model; the
+    gateway must NOT then commit the broken model as a session override or evict
+    the working cached agent — otherwise the next message rebuilds a dead agent
+    and the conversation is lost.
+    """
+    _setup_isolated_home(tmp_path, monkeypatch, warn=False)
+    runner = _make_runner()
+
+    # Working cached agent whose in-place swap fails (and rolls itself back).
+    class _FailingAgent:
+        def __init__(self):
+            self.model = "old-model"
+            self.provider = "openrouter"
+
+        def switch_model(self, **kwargs):
+            # Mirrors agent_runtime_helpers.switch_model: the real method
+            # restores old state then re-raises. We keep model unchanged.
+            raise RuntimeError("connection refused: bad base_url")
+
+    import threading
+
+    agent = _FailingAgent()
+    runner._agent_cache = {}
+    runner._agent_cache_lock = threading.Lock()
+    session_key = runner._session_key_for_source(_make_event("/model x").source)
+    runner._agent_cache[session_key] = [agent, None]
+    runner._session_db = None
+
+    evicted = []
+    runner._evict_cached_agent = lambda sk: evicted.append(sk)
+
+    result = await runner._handle_model_command(_make_event("/model openai/gpt-5.5-pro"))
+
+    # Error surfaced to the user, not a success confirmation.
+    assert result is not None
+    assert "failed" in result.lower()
+    # The broken switch must NOT have been committed anywhere.
+    assert runner._session_model_overrides == {}
+    # The working cached agent must NOT have been evicted.
+    assert evicted == []
+    # The agent stayed on its old model (rolled back).
+    assert agent.model == "old-model"

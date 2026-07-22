@@ -1,0 +1,74 @@
+--- a/website/docs/user-guide/messaging/google_chat.md
++++ b/website/docs/user-guide/messaging/google_chat.md
+@@ -231,28 +231,29 @@
+ credentials. So the bot has to act *as a user* whenever it uploads a file —
+ specifically, as the user who asked for the file.
+ 
+-### One-time host setup
++### One-time setup (per profile)
+ 
+ 1. Go to **APIs & Services → Credentials** in the same GCP project.
+ 2. **Create credentials → OAuth client ID → Desktop app**.
+ 3. Download the JSON. Move it onto the host that runs Clawksis.
+-4. On the host, register the client with Clawksis:
+-
+-```bash
++4. Register the client with Clawksis (run under the profile you want it scoped to):
++
++```bash
++# Default profile:
+ python -m plugins.platforms.google_chat.oauth \
+     --client-secret /path/to/client_secret.json
+-```
+-
+-That writes `~/.clawksis/google_chat_user_client_secret.json`. This is shared
+-infrastructure — it identifies the OAuth *app*, not any individual user. One
+-file per host is enough no matter how many users authorize later.
+-
+-This file lives at the default Clawksis root, so a gateway running under a named
+-profile (`clawk -p <name> gateway …`) finds the same host-wide secret — you do
+-**not** re-run this step per profile. To deliberately use a separate OAuth app
+-for one profile, drop a `google_chat_user_client_secret.json` inside that
+-profile's `CLAWK_HOME` and it takes precedence. Per-user tokens always stay
+-scoped to the active profile.
++
++# A named profile gets its own separate registration:
++clawk -p <profile> python -m plugins.platforms.google_chat.oauth \
++    --client-secret /path/to/client_secret.json
++```
++
++That writes the client secret into the active profile's Clawksis home (e.g.
++`~/.clawksis/google_chat_user_client_secret.json` for the default profile). The
++client secret is **profile-scoped, not shared across profiles** — each profile
++registers its own. This is deliberate: profiles are isolated auth boundaries, so
++two profiles can point at different Google OAuth apps / accounts. Register it
++once per profile that needs Google Chat attachment delivery.
+ 
+ ### Per-user authorization (in chat)
+ 
+@@ -333,13 +334,19 @@
+ `/setup-files` in their DM and follow Step 10. After the exchange completes
+ the next file request uploads natively without a gateway restart.
+ 
+-**`/setup-files start` says "No client credentials stored on the host."**
+-
+-The one-time host setup wasn't done. From a terminal on the host that runs
+-Clawksis:
+-
+-```bash
++**`/setup-files start` says "No client credentials stored."**
++
++The one-time setup wasn't done *for this profile* (the client secret is
++profile-scoped, so a registration under one profile won't be seen by another).
++From a terminal, run it under the profile the gateway uses:
++
++```bash
++# Default profile:
+ python -m plugins.platforms.google_chat.oauth \
++    --client-secret /path/to/client_secret.json
++
++# Named profile:
++clawk -p <profile> python -m plugins.platforms.google_chat.oauth \
+     --client-secret /path/to/client_secret.json
+ ```
+ 

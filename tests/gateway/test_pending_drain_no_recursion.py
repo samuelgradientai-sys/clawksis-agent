@@ -35,7 +35,7 @@ from gateway.session import SessionSource, build_session_key
 
 
 class _StubAdapter(BasePlatformAdapter):
-    async def connect(self):
+    async def connect(self, *, is_reconnect: bool = False):
         pass
 
     async def disconnect(self):
@@ -58,9 +58,7 @@ def _make_event(text="hi", chat_id="42"):
     return MessageEvent(
         text=text,
         message_type=MessageType.TEXT,
-        source=SessionSource(
-            platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"
-        ),
+        source=SessionSource(platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"),
     )
 
 

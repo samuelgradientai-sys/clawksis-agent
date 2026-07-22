@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -24,6 +25,48 @@ def _make_store(tmp_path):
     """Create a PairingStore with PAIRING_DIR pointed to tmp_path."""
     with patch("gateway.pairing.PAIRING_DIR", tmp_path):
         return PairingStore()
+
+
+class TestSplitPairingDirMigration:
+    def test_merges_new_approved_into_active_legacy_dir(self, tmp_path):
+        home = tmp_path / "home"
+        legacy = home / "pairing"
+        new = home / "platforms" / "pairing"
+        legacy.mkdir(parents=True)
+        new.mkdir(parents=True)
+        (new / "feishu-approved.json").write_text(json.dumps({
+            "ou_user": {"user_name": "Alice", "approved_at": 123.0}
+        }))
+
+        with patch("gateway.pairing.PAIRING_DIR", legacy), patch("gateway.pairing.get_clawk_home", return_value=home):
+            store = PairingStore()
+            assert store.is_approved("feishu", "ou_user") is True
+
+        migrated = json.loads((legacy / "feishu-approved.json").read_text())
+        assert "ou_user" in migrated
+
+    def test_active_entries_win_when_merging_split_dirs(self, tmp_path):
+        home = tmp_path / "home"
+        legacy = home / "pairing"
+        new = home / "platforms" / "pairing"
+        legacy.mkdir(parents=True)
+        new.mkdir(parents=True)
+        (legacy / "feishu-approved.json").write_text(json.dumps({
+            "ou_user": {"user_name": "Active", "approved_at": 2.0}
+        }))
+        (new / "feishu-approved.json").write_text(json.dumps({
+            "ou_user": {"user_name": "Inactive", "approved_at": 1.0},
+            "ou_other": {"user_name": "Other", "approved_at": 1.0},
+        }))
+
+        with patch("gateway.pairing.PAIRING_DIR", legacy), patch("gateway.pairing.get_clawk_home", return_value=home):
+            store = PairingStore()
+            assert store.is_approved("feishu", "ou_user") is True
+            assert store.is_approved("feishu", "ou_other") is True
+
+        migrated = json.loads((legacy / "feishu-approved.json").read_text())
+        assert migrated["ou_user"]["user_name"] == "Active"
+        assert migrated["ou_other"]["user_name"] == "Other"
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +229,6 @@ class TestLegacyPendingFileCompat:
     def _write_legacy(tmp_path, code="ABCD1234", created_at=None):
         """Write a pre-hash pending.json with plaintext code as the key."""
         import time as _time
-
         if created_at is None:
             created_at = _time.time()
         legacy = {
@@ -227,7 +269,6 @@ class TestLegacyPendingFileCompat:
     def test_cleanup_expired_removes_legacy_at_ttl(self, tmp_path):
         """Legacy entries past CODE_TTL must still get pruned."""
         import time as _time
-
         with patch("gateway.pairing.PAIRING_DIR", tmp_path):
             self._write_legacy(
                 tmp_path,
@@ -262,16 +303,11 @@ class TestLegacyPendingFileCompat:
     def test_approve_code_skips_malformed_entries(self, tmp_path):
         """Malformed entries must not crash approve_code's hash loop."""
         import time as _time
-
         with patch("gateway.pairing.PAIRING_DIR", tmp_path):
             (tmp_path / "telegram-pending.json").write_text(
                 json.dumps({
-                    "broken": {
-                        "user_id": "x",
-                        "created_at": _time.time(),
-                        "salt": "not-hex",
-                        "hash": "doesntmatter",
-                    },
+                    "broken": {"user_id": "x", "created_at": _time.time(),
+                               "salt": "not-hex", "hash": "doesntmatter"},
                 }),
                 encoding="utf-8",
             )
@@ -350,10 +386,7 @@ class TestMaxPending:
                 codes.append(code)
 
         # First MAX_PENDING_PER_PLATFORM should succeed
-        assert all(
-            isinstance(c, str) and len(c) == CODE_LENGTH
-            for c in codes[:MAX_PENDING_PER_PLATFORM]
-        )
+        assert all(isinstance(c, str) and len(c) == CODE_LENGTH for c in codes[:MAX_PENDING_PER_PLATFORM])
         # Next one should be blocked
         assert codes[MAX_PENDING_PER_PLATFORM] is None
 
@@ -440,9 +473,7 @@ class TestApprovalFlow:
 
         with patch("gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
-            code = store.generate_code(
-                "whatsapp", "15551234567@s.whatsapp.net", "Alice"
-            )
+            code = store.generate_code("whatsapp", "15551234567@s.whatsapp.net", "Alice")
             store.approve_code("whatsapp", code)
 
             assert store.is_approved("whatsapp", "15551234567@s.whatsapp.net") is True
@@ -453,9 +484,7 @@ class TestApprovalFlow:
         assert len(approved) == 1
         assert approved[0]["user_id"] == "15551234567"
 
-    def test_whatsapp_legacy_raw_jid_approval_survives_alias_flip(
-        self, tmp_path, monkeypatch
-    ):
+    def test_whatsapp_legacy_raw_jid_approval_survives_alias_flip(self, tmp_path, monkeypatch):
         mapping_dir = tmp_path / "whatsapp" / "session"
         mapping_dir.mkdir(parents=True, exist_ok=True)
         (mapping_dir / "lid-mapping-999999999999999.json").write_text(
@@ -665,3 +694,178 @@ class TestListAndClear:
             store.generate_code("discord", "user2")
             count = store.clear_pending()
         assert count == 2
+
+
+# ---------------------------------------------------------------------------
+# Unreadable approved-list file logs a warning instead of failing silently
+# (issue #10270: Docker `docker exec` writes root-owned 0600 files that the
+# post-gosu gateway can't read; the previous OSError swallow turned the bug
+# into a mystery "Unauthorized user" message)
+# ---------------------------------------------------------------------------
+
+
+class TestUnreadablePairingFile:
+    def test_permission_error_logs_warning_and_returns_empty(self, tmp_path, caplog):
+        import logging
+        import builtins
+
+        approved_path = tmp_path / "weixin-approved.json"
+        approved_path.write_text(
+            '{"o9cq80fake@im.wechat": {"user_name": "x", "approved_at": 0}}'
+        )
+
+        real_open = builtins.open
+
+        def fake_read_text(self, *a, **kw):
+            # Path.read_text uses Path.open internally; raise PermissionError
+            # to mimic a 0600 file owned by a different uid.
+            raise PermissionError(13, "Permission denied", str(self))
+
+        with patch("gateway.pairing.PAIRING_DIR", tmp_path), \
+             patch.object(Path, "read_text", fake_read_text), \
+             caplog.at_level(logging.WARNING, logger="gateway.pairing"):
+            store = PairingStore()
+            result = store._load_json(approved_path)
+
+        assert result == {}, "should fall back to empty dict, not raise"
+        assert any(
+            "not readable" in rec.getMessage() and "#10270" not in rec.getMessage()
+            or "not readable" in rec.getMessage()
+            for rec in caplog.records
+        ), f"expected a warning about unreadable pairing file, got {caplog.records!r}"
+        # And the warning should include actionable advice
+        msgs = " ".join(rec.getMessage() for rec in caplog.records)
+        assert "docker exec" in msgs
+        assert "-u clawk" in msgs
+
+    def test_is_approved_returns_false_when_file_unreadable(self, tmp_path, caplog):
+        """End-to-end: an unreadable approved.json must not crash the gateway,
+        and the affected user must stay unauthorized (the documented fallback
+        behaviour) rather than triggering a 500."""
+        import logging
+
+        approved_path = tmp_path / "weixin-approved.json"
+        approved_path.write_text(
+            '{"o9cq80fake@im.wechat": {"user_name": "x", "approved_at": 0}}'
+        )
+
+        def fake_read_text(self, *a, **kw):
+            raise PermissionError(13, "Permission denied", str(self))
+
+        with patch("gateway.pairing.PAIRING_DIR", tmp_path), \
+             patch.object(Path, "read_text", fake_read_text), \
+             caplog.at_level(logging.WARNING, logger="gateway.pairing"):
+            store = PairingStore()
+            ok = store.is_approved("weixin", "o9cq80fake@im.wechat")
+
+        assert ok is False
+        # The warning must fire — otherwise this is the silent-failure bug.
+        assert any(rec.levelno == logging.WARNING for rec in caplog.records), \
+            "PermissionError on approved.json must produce a WARNING log line"
+# Profile-scoped storage (multiplexing gateway isolation)
+# ---------------------------------------------------------------------------
+
+
+class TestProfileScopedStorage:
+    """PairingStore(profile="<name>") should isolate per-profile whitelists
+    under <CLAWK_HOME>/profiles/<name>/pairing/ so a multiplexing gateway
+    can keep each profile's allowlist separate.
+    """
+
+    def test_default_store_uses_global_dir(self, tmp_path, monkeypatch):
+        """PairingStore() (no profile) keeps the legacy global path so the
+        ``clawk pairing`` CLI continues to work without a profile context."""
+        from clawk_constants import get_clawk_home
+        monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: tmp_path)
+        # Re-import PAIRING_DIR (it's a module-level constant resolved at
+        # import time) so the test exercises the right path. We patch it
+        # rather than re-importing so the assertion is unambiguous.
+        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+            store = PairingStore()
+        assert store.profile is None
+        assert store._dir == tmp_path
+        assert store._approved_path("weixin") == tmp_path / "weixin-approved.json"
+
+    def test_profile_store_uses_profiles_subdir(self, tmp_path, monkeypatch):
+        """PairingStore(profile="yangyang") puts files under
+        <CLAWK_HOME>/profiles/yangyang/pairing/."""
+        from clawk_constants import get_clawk_home
+        monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: tmp_path)
+        store = PairingStore(profile="yangyang")
+        assert store.profile == "yangyang"
+        expected = tmp_path / "profiles" / "yangyang" / "pairing"
+        assert store._dir == expected
+        assert store._approved_path("weixin") == expected / "weixin-approved.json"
+        # Auto-creates the directory
+        assert expected.is_dir()
+
+    def test_profile_approval_does_not_leak_to_global(self, tmp_path, monkeypatch):
+        """Approving in a profile-scoped store must not appear in the global
+        store — and vice versa. This is the whole point of the fix."""
+        from clawk_constants import get_clawk_home
+        monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: tmp_path)
+        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+            global_store = PairingStore()
+            profile_store = PairingStore(profile="yangyang")
+
+        # Approve in the profile store
+        profile_store._approve_user("weixin", "yangyang_user", "杨洋")
+        # And in the global store, a different user
+        global_store._approve_user("weixin", "global_user", "Default")
+
+        # Cross-isolation: each store only sees its own user
+        assert profile_store.is_approved("weixin", "yangyang_user") is True
+        assert profile_store.is_approved("weixin", "global_user") is False
+        assert global_store.is_approved("weixin", "global_user") is True
+        assert global_store.is_approved("weixin", "yangyang_user") is False
+
+    def test_profile_uses_distinct_rate_limit_file(self, tmp_path, monkeypatch):
+        """Rate-limit state is per-profile, not shared globally — otherwise
+        one profile's flood would lock out the other profile's users."""
+        from clawk_constants import get_clawk_home
+        monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: tmp_path)
+        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+            global_store = PairingStore()
+            profile_store = PairingStore(profile="yangyang")
+
+        assert global_store._rate_limit_path() == tmp_path / "_rate_limits.json"
+        assert profile_store._rate_limit_path() == (
+            tmp_path / "profiles" / "yangyang" / "pairing" / "_rate_limits.json"
+        )
+
+    def test_pairing_store_for_helper_routes_by_profile(self, tmp_path, monkeypatch):
+        """_pairing_store_for(source) on a gateway-like object picks the
+        per-profile store when source.profile is set, and falls back to
+        the global store when it isn't (defensive — single-profile
+        gateways, or any code path that hasn't stamped source.profile)."""
+        from gateway.session import SessionSource
+        from gateway.config import Platform
+
+        class FakeGateway:
+            def __init__(self):
+                self.pairing_store = object()  # sentinel
+                self.pairing_stores = {
+                    "default": "default-store",
+                    "yangyang": "yangyang-store",
+                }
+
+            # Method under test — copy of the real helper so this test
+            # is self-contained even if the real one moves.
+            def _pairing_store_for(self, source):
+                per_profile = getattr(self, "pairing_stores", None) or {}
+                profile = getattr(source, "profile", None)
+                if profile and profile in per_profile:
+                    return per_profile[profile]
+                return getattr(self, "pairing_store", None)
+
+        g = FakeGateway()
+        # source with profile="yangyang" → per-profile store
+        s_yy = SessionSource(platform=Platform.WEIXIN, chat_id="c", profile="yangyang")
+        assert g._pairing_store_for(s_yy) == "yangyang-store"
+        # source with no profile → fallback to global
+        s_none = SessionSource(platform=Platform.WEIXIN, chat_id="c")
+        assert g._pairing_store_for(s_none) is g.pairing_store
+        # source with an unknown profile → fallback (defensive)
+        s_unknown = SessionSource(platform=Platform.WEIXIN, chat_id="c", profile="ghost")
+        assert g._pairing_store_for(s_unknown) is g.pairing_store
+

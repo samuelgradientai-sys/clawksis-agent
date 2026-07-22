@@ -1,0 +1,10 @@
+--- a/tests/tools/test_send_message_tool.py
++++ b/tests/tools/test_send_message_tool.py
+@@ -595,6 +595,7 @@
+             "***",
+             "C123",
+             "*hello* from <https://example.com|Clawksis>",
++            thread_ts=None,
+         )
+ 
+     def test_slack_bold_italic_formatted_before_send(self, monkeypatch):
