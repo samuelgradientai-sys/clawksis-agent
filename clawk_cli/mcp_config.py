@@ -128,14 +128,33 @@ def _get_mcp_servers(config: Optional[dict] = None) -> Dict[str, dict]:
     return servers
 
 
-def _save_mcp_server(name: str, server_config: dict):
-    """Add or update a server entry in config.yaml."""
+def _save_mcp_server(name: str, server_config: dict) -> bool:
+    """Add or update a server entry in config.yaml.
+
+    Returns ``False`` (and skips the write) for exfiltration-shaped entries so
+    the dangerous config never reaches disk. Returns ``True`` on success.
+    """
+
+    from clawk_cli.mcp_security import validate_mcp_server_entry
+
+    issues = validate_mcp_server_entry(name, server_config)
+
+    if issues:
+        logger.warning(
+            "Refusing to save suspicious MCP server '%s': %s",
+            name,
+            "; ".join(issues),
+        )
+
+        return False
 
     config = load_config()
 
     config.setdefault("mcp_servers", {})[name] = server_config
 
     save_config(config)
+
+    return True
 
 
 def _remove_mcp_server(name: str) -> bool:
@@ -313,6 +332,13 @@ def _probe_single_server(
         _connect_server,
         _stop_mcp_loop,
     )
+
+    from clawk_cli.mcp_security import validate_mcp_server_entry
+
+    issues = validate_mcp_server_entry(name, config)
+
+    if issues:
+        raise ValueError("; ".join(issues))
 
     config = _resolve_mcp_server_config(config)
 
@@ -575,6 +601,19 @@ def cmd_mcp_add(args):
                     server_config["headers"] = {
                         "Authorization": f"Bearer ${{{env_key}}}"
                     }
+
+    # ── Security: refuse exfiltration-shaped configs before any spawn ──
+
+    from clawk_cli.mcp_security import validate_mcp_server_entry
+
+    issues = validate_mcp_server_entry(name, server_config)
+
+    if issues:
+        _error(f"Refusing to add '{name}': {issues[0]}")
+
+        _info("Config NOT saved.")
+
+        return
 
     # ── Discovery: connect and list tools ─────────────────────────────
 

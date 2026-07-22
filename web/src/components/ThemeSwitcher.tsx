@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Palette, Check } from "lucide-react";
+import { Palette, Check, Type, Layers, Move } from "lucide-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { ListItem } from "@nous-research/ui/ui/components/list-item";
 import { BottomSheet } from "@nous-research/ui/ui/components/bottom-sheet";
 import { Typography } from "@nous-research/ui/ui/components/typography/index";
 import { useBelowBreakpoint } from "@nous-research/ui/hooks/use-below-breakpoint";
-import { BUILTIN_THEMES, useTheme } from "@/themes";
-import type { DashboardTheme, ThemeListEntry } from "@/themes";
+import {
+  BUILTIN_THEMES,
+  THEME_DEFAULT_FONT_ID,
+  THEME_DEFAULT_BACKGROUND_ID,
+  useTheme,
+} from "@/themes";
+import type {
+  BackgroundChoice,
+  DashboardTheme,
+  FontChoice,
+  ThemeListEntry,
+} from "@/themes";
+import { isSmoothScrollOn, setSmoothScrollOn } from "@/components/SmoothScroll";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +36,17 @@ import { cn } from "@/lib/utils";
  * the sidebar (same idea as a responsive Drawer).
  */
 export function ThemeSwitcher({ collapsed = false, dropUp = false }: ThemeSwitcherProps) {
-  const { themeName, availableThemes, setTheme } = useTheme();
+  const {
+    themeName,
+    availableThemes,
+    setTheme,
+    fontId,
+    fontChoices,
+    setFont,
+    bgId,
+    backgroundChoices,
+    setBackground,
+  } = useTheme();
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -104,6 +125,17 @@ export function ThemeSwitcher({ collapsed = false, dropUp = false }: ThemeSwitch
               setTheme={setTheme}
               themeName={themeName}
             />
+            <FontSection
+              fontChoices={fontChoices}
+              fontId={fontId}
+              setFont={setFont}
+            />
+            <BackgroundSection
+              backgroundChoices={backgroundChoices}
+              bgId={bgId}
+              setBackground={setBackground}
+            />
+            <MotionSection />
           </div>
         </BottomSheet>
       )}
@@ -142,6 +174,17 @@ export function ThemeSwitcher({ collapsed = false, dropUp = false }: ThemeSwitch
               setTheme={setTheme}
               themeName={themeName}
             />
+            <FontSection
+              fontChoices={fontChoices}
+              fontId={fontId}
+              setFont={setFont}
+            />
+            <BackgroundSection
+              backgroundChoices={backgroundChoices}
+              bgId={bgId}
+              setBackground={setBackground}
+            />
+            <MotionSection />
           </div>
         );
         return dropUp ? createPortal(dropdown, document.body) : dropdown;
@@ -207,6 +250,234 @@ function ThemeSwitcherOptions({
   );
 }
 
+const FONT_CATEGORY_LABEL_KEY: Record<FontChoice["category"], "fontSans" | "fontSerif" | "fontMono"> = {
+  sans: "fontSans",
+  serif: "fontSerif",
+  mono: "fontMono",
+};
+
+/** Font-override section rendered below the theme list. Lets the user pick
+ *  any catalog font independently of the active theme, or "Theme default"
+ *  to clear the override. Each row previews itself in its own font. */
+function FontSection({ fontChoices, fontId, setFont }: FontSectionProps) {
+  const { t } = useI18n();
+  const order: FontChoice["category"][] = ["sans", "serif", "mono"];
+  return (
+    <>
+      <div className="mt-1 border-t border-current/20 px-3 pb-1 pt-2">
+        <span className="inline-flex items-center gap-1.5">
+          <Type className="h-3 w-3 text-text-tertiary" />
+          <Typography
+            mondwest
+            className="text-display text-xs tracking-[0.12em] text-text-tertiary"
+          >
+            {t.theme?.fontTitle ?? "Font"}
+          </Typography>
+        </span>
+      </div>
+
+      {/* Theme-default (clears the override). */}
+      <ListItem
+        active={fontId === THEME_DEFAULT_FONT_ID}
+        aria-selected={fontId === THEME_DEFAULT_FONT_ID}
+        className="gap-3"
+        onClick={() => setFont(THEME_DEFAULT_FONT_ID)}
+        role="option"
+      >
+        <span aria-hidden className="h-4 w-9 shrink-0" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <Typography className="truncate text-xs tracking-normal">
+            {t.theme?.fontDefault ?? "Theme default"}
+          </Typography>
+          <Typography className="truncate text-xs tracking-normal text-text-tertiary">
+            {t.theme?.fontDefaultHint ?? "Use the active theme's font"}
+          </Typography>
+        </div>
+        <Check
+          className={cn(
+            "h-3 w-3 shrink-0 text-midground",
+            fontId === THEME_DEFAULT_FONT_ID ? "opacity-100" : "opacity-0",
+          )}
+        />
+      </ListItem>
+
+      {order.map((cat) => {
+        const fonts = fontChoices.filter((f) => f.category === cat);
+        if (fonts.length === 0) return null;
+        const catLabel = t.theme?.[FONT_CATEGORY_LABEL_KEY[cat]] ?? cat;
+        return (
+          <div key={cat}>
+            <div className="px-3 pb-0.5 pt-1.5">
+              <Typography className="text-[0.65rem] uppercase tracking-[0.1em] text-text-tertiary">
+                {catLabel}
+              </Typography>
+            </div>
+            {fonts.map((f) => {
+              const isActive = f.id === fontId;
+              return (
+                <ListItem
+                  active={isActive}
+                  aria-selected={isActive}
+                  className="gap-3"
+                  key={f.id}
+                  onClick={() => setFont(f.id)}
+                  role="option"
+                >
+                  <span aria-hidden className="h-4 w-9 shrink-0" />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    {/* Preview the font in its own stack. */}
+                    <span
+                      className="truncate text-sm"
+                      style={{ fontFamily: f.stack }}
+                    >
+                      {f.label}
+                    </span>
+                  </div>
+                  <Check
+                    className={cn(
+                      "h-3 w-3 shrink-0 text-midground",
+                      isActive ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                </ListItem>
+              );
+            })}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/** Background section: pick an animated/static backdrop independently of the
+ *  theme, or "theme default" to use the theme's own backdrop. */
+function BackgroundSection({
+  backgroundChoices,
+  bgId,
+  setBackground,
+}: BackgroundSectionProps) {
+  const { t } = useI18n();
+  return (
+    <>
+      <div className="mt-1 border-t border-current/20 px-3 pb-1 pt-2">
+        <span className="inline-flex items-center gap-1.5">
+          <Layers className="h-3 w-3 text-text-tertiary" />
+          <Typography
+            mondwest
+            className="text-display text-xs tracking-[0.12em] text-text-tertiary"
+          >
+            {t.theme?.backgroundTitle ?? "Fondo"}
+          </Typography>
+        </span>
+      </div>
+
+      {/* Theme-default (clears the override). */}
+      <ListItem
+        active={bgId === THEME_DEFAULT_BACKGROUND_ID}
+        aria-selected={bgId === THEME_DEFAULT_BACKGROUND_ID}
+        className="gap-3"
+        onClick={() => setBackground(THEME_DEFAULT_BACKGROUND_ID)}
+        role="option"
+      >
+        <span aria-hidden className="h-4 w-9 shrink-0" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <Typography className="truncate text-xs tracking-normal">
+            {t.theme?.backgroundDefault ?? "Predeterminado del tema"}
+          </Typography>
+          <Typography className="truncate text-xs tracking-normal text-text-tertiary">
+            {t.theme?.backgroundDefaultHint ?? "Usar el fondo que trae el tema"}
+          </Typography>
+        </div>
+        <Check
+          className={cn(
+            "h-3 w-3 shrink-0 text-midground",
+            bgId === THEME_DEFAULT_BACKGROUND_ID ? "opacity-100" : "opacity-0",
+          )}
+        />
+      </ListItem>
+
+      {backgroundChoices.map((b) => {
+        const isActive = b.id === bgId;
+        return (
+          <ListItem
+            active={isActive}
+            aria-selected={isActive}
+            className="gap-3"
+            key={b.id}
+            onClick={() => setBackground(b.id)}
+            role="option"
+          >
+            <span aria-hidden className="h-4 w-9 shrink-0" />
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <Typography className="truncate text-xs tracking-normal">
+                {b.label}
+              </Typography>
+              <Typography className="truncate text-xs tracking-normal text-text-tertiary">
+                {b.description}
+              </Typography>
+            </div>
+            <Check
+              className={cn(
+                "h-3 w-3 shrink-0 text-midground",
+                isActive ? "opacity-100" : "opacity-0",
+              )}
+            />
+          </ListItem>
+        );
+      })}
+    </>
+  );
+}
+
+/** Motion section: opt-in smooth scroll (mini-Lenis casero). OFF por defecto. */
+function MotionSection() {
+  const { t } = useI18n();
+  const [on, setOn] = useState(isSmoothScrollOn());
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    setSmoothScrollOn(next);
+  };
+  return (
+    <>
+      <div className="mt-1 border-t border-current/20 px-3 pb-1 pt-2">
+        <span className="inline-flex items-center gap-1.5">
+          <Move className="h-3 w-3 text-text-tertiary" />
+          <Typography
+            mondwest
+            className="text-display text-xs tracking-[0.12em] text-text-tertiary"
+          >
+            {t.theme?.motionTitle ?? "Movimiento"}
+          </Typography>
+        </span>
+      </div>
+      <ListItem
+        active={on}
+        aria-selected={on}
+        className="gap-3"
+        onClick={toggle}
+        role="option"
+      >
+        <span aria-hidden className="h-4 w-9 shrink-0" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <Typography className="truncate text-xs tracking-normal">
+            {t.theme?.smoothScroll ?? "Scroll suave (parallax)"}
+          </Typography>
+          <Typography className="truncate text-xs tracking-normal text-text-tertiary">
+            {t.theme?.smoothScrollHint ?? "Momentum al scrollear, como la landing"}
+          </Typography>
+        </div>
+        <Check
+          className={cn(
+            "h-3 w-3 shrink-0 text-midground",
+            on ? "opacity-100" : "opacity-0",
+          )}
+        />
+      </ListItem>
+    </>
+  );
+}
+
 function ThemeSwatch({ theme }: { theme: DashboardTheme }) {
   // Inverted themes (Nous Blue / future lens themes) author their palette
   // pre-inversion — `#FFAC02` reads as `#0053FD` blue once the foreground-
@@ -245,6 +516,18 @@ interface ThemeSwitcherOptionsProps {
   close: () => void;
   setTheme: (name: string) => void;
   themeName: string;
+}
+
+interface FontSectionProps {
+  fontChoices: FontChoice[];
+  fontId: string;
+  setFont: (id: string) => void;
+}
+
+interface BackgroundSectionProps {
+  backgroundChoices: BackgroundChoice[];
+  bgId: string;
+  setBackground: (id: string) => void;
 }
 
 interface ThemeSwitcherProps {

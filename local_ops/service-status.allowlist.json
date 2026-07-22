@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.1.0",
+  "description": "Allowlisted systemd services that Clawksis may inspect in read-only mode.",
+  "services": [
+    {
+      "name": "ollama",
+      "unit": "ollama.service",
+      "description": "Local Ollama model server."
+    },
+    {
+      "name": "ssh",
+      "unit": "ssh.service",
+      "description": "SSH server."
+    },
+    {
+      "name": "clawksis",
+      "unit": "clawksis.service",
+      "description": "Clawksis service, if installed as a systemd service."
+    },
+    {
+      "name": "hermes",
+      "unit": "hermes.service",
+      "description": "Hermes service, if installed as a systemd service."
+    }
+  ]
+}

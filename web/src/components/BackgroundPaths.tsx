@@ -1,10 +1,22 @@
-import { motion } from "motion/react";
+// Static flowing SVG paths used as the dashboard backdrop.
+//
+// History: was framer-motion (pulled 122KB vendor-motion), then a CSS version
+// that animated `stroke-dashoffset` on 72 full-screen paths EVERY frame. That
+// property is not GPU-compositable, so it forced a continuous full-screen
+// repaint of this `fixed inset-0` layer behind the whole dashboard — visible as
+// flicker + stutter.
+//
+// This version draws the paths STATICALLY (zero per-frame paint) and adds only a
+// slow opacity "breath" on the WRAPPER element. Opacity on a single element is
+// GPU-composited (the compositor adjusts layer alpha; it does not repaint the
+// SVG contents), so the cost is ~nil. Honors prefers-reduced-motion.
+// Stroke colour = Clawksis purple #6C4FD6.
 
-// Animated flowing SVG paths used as the dashboard backdrop. Adapted from a
-// Next.js/shadcn snippet to Vite + the `motion` package: the demo title and
-// button were dropped — here it is purely a background layer that sits behind
-// the app content (pointer-events-none, fixed inset-0). Stroke colour is the
-// Clawksis brand purple #6C4FD6 via `currentColor`.
+const BREATHE_CSS = `
+@keyframes clawk-bg-breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.9; } }
+.clawk-bg-wrap { animation: clawk-bg-breathe 16s ease-in-out infinite; will-change: opacity; }
+@media (prefers-reduced-motion: reduce) { .clawk-bg-wrap { animation: none; opacity: 0.6; } }
+`;
 
 function FloatingPaths({ position }: { position: number }) {
   const paths = Array.from({ length: 36 }, (_, i) => ({
@@ -27,26 +39,12 @@ function FloatingPaths({ position }: { position: number }) {
       viewBox="0 0 696 316"
     >
       {paths.map((path) => (
-        <motion.path
-          animate={{
-            opacity: [0.2, 0.5, 0.2],
-            pathLength: 1,
-            pathOffset: [0, 1, 0],
-          }}
+        <path
           d={path.d}
-          initial={{ opacity: 0.5, pathLength: 0.3 }}
           key={path.id}
           stroke="currentColor"
           strokeOpacity={0.08 + path.id * 0.025}
           strokeWidth={path.width}
-          transition={{
-            // Deterministic per-path variance (no Math.random) so the field
-            // shimmers without every line moving in lockstep. 10–14s per
-            // cycle keeps the flow visibly passing without being frantic.
-            duration: 10 + (path.id % 5),
-            ease: "linear",
-            repeat: Number.POSITIVE_INFINITY,
-          }}
         />
       ))}
     </svg>
@@ -57,9 +55,10 @@ export function BackgroundPaths() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 z-[2] overflow-hidden"
+      className="clawk-bg-wrap pointer-events-none fixed inset-0 z-[2] overflow-hidden"
       style={{ color: "#6C4FD6" }}
     >
+      <style>{BREATHE_CSS}</style>
       <FloatingPaths position={1} />
       <FloatingPaths position={-1} />
     </div>

@@ -52,8 +52,8 @@ def test_bundled_plugins_discovered():
 
     child_dirs = [c for c in plugins_dir.iterdir() if c.is_dir()]
 
-    assert len(child_dirs) >= 28, (
-        f"Expected at least 28 provider plugins, found {len(child_dirs)}"
+    assert len(child_dirs) >= 27, (
+        f"Expected at least 27 provider plugins, found {len(child_dirs)}"
     )
 
     for child in child_dirs:

@@ -44,8 +44,6 @@ from typing import Optional, Dict, Any
 from clawk_cli.nous_subscription import get_nous_subscription_features
 from clawk_cli.banner import print_clawksis_banner
 
-from tools.tool_backend_helpers import managed_nous_tools_enabled
-
 from utils import base_url_hostname
 
 from clawk_constants import get_optional_skills_dir
@@ -321,10 +319,10 @@ def prompt(question: str, default: str = None, password: bool = False) -> str:
 
     try:
         if password:
-            value = masked_secret_prompt(color(display, Colors.YELLOW))
+            value = masked_secret_prompt(color(display, Colors.MORADO))
 
         else:
-            value = input(color(display, Colors.YELLOW))
+            value = input(color(display, Colors.MORADO))
 
         cleaned = _sanitize_pasted_input(value)
 
@@ -387,7 +385,7 @@ def prompt_choice(
 
         return idx
 
-    print(color(question, Colors.YELLOW))
+    print(color(question, Colors.MORADO))
 
     for i, choice in enumerate(choices):
         marker = "●" if i == default else "○"
@@ -433,7 +431,7 @@ def prompt_yes_no(question: str, default: bool = True) -> bool:
     while True:
         try:
             value = (
-                input(color(f"{question} [{default_str}]: ", Colors.YELLOW))
+                input(color(f"{question} [{default_str}]: ", Colors.MORADO))
                 .strip()
                 .lower()
             )
@@ -581,10 +579,7 @@ def _print_setup_summary(config: dict, clawk_home):
 
     # Web tools (Exa, Parallel, Firecrawl, or Tavily)
 
-    if subscription_features.web.managed_by_nous:
-        tool_status.append(("Web Search & Extract (Nous subscription)", True, None))
-
-    elif subscription_features.web.available:
+    if subscription_features.web.available:
         label = "Web Search & Extract"
 
         if subscription_features.web.current_provider:
@@ -605,10 +600,7 @@ def _print_setup_summary(config: dict, clawk_home):
 
     browser_provider = subscription_features.browser.current_provider
 
-    if subscription_features.browser.managed_by_nous:
-        tool_status.append(("Browser Automation (Nous Browser Use)", True, None))
-
-    elif subscription_features.browser.available:
+    if subscription_features.browser.available:
         label = "Browser Automation"
 
         if browser_provider:
@@ -634,9 +626,21 @@ def _print_setup_summary(config: dict, clawk_home):
             missing_browser_hint = "CAMOFOX_URL"
 
         elif browser_provider == "Local browser":
-            missing_browser_hint = (
-                "npm install -g agent-browser && agent-browser install --with-deps"
+            # Distinguish the two local failure modes: the agent-browser CLI
+            # missing entirely vs. present-but-without-a-Chromium-engine. The
+            # latter is the common case (npm install but never ran the browser
+            # download), and the right fix is to fetch the engine, not reinstall
+            # the CLI. Mirrors tools.browser_tool.check_browser_requirements.
+            from clawk_cli.nous_subscription import (
+                _has_agent_browser,
+                _local_browser_runtime_ready,
             )
+
+            if _has_agent_browser() and not _local_browser_runtime_ready():
+                missing_browser_hint = "agent-browser install --with-deps"
+
+            else:
+                missing_browser_hint = "npm install -g agent-browser"
 
         tool_status.append(("Browser Automation", False, missing_browser_hint))
 
@@ -644,10 +648,7 @@ def _print_setup_summary(config: dict, clawk_home):
 
     # provider (OpenAI, etc.)
 
-    if subscription_features.image_gen.managed_by_nous:
-        tool_status.append(("Image Generation (Nous subscription)", True, None))
-
-    elif subscription_features.image_gen.available:
+    if subscription_features.image_gen.available:
         tool_status.append(("Image Generation", True, None))
 
     else:
@@ -692,10 +693,7 @@ def _print_setup_summary(config: dict, clawk_home):
 
     # users who don't care about video gen with a "missing" status line.
 
-    if subscription_features.video_gen.managed_by_nous:
-        tool_status.append(("Video Generation (FAL via Nous subscription)", True, None))
-
-    else:
+    if not subscription_features.video_gen.managed_by_nous:
         try:
             from agent.video_gen_registry import list_providers as _list_video_providers
 
@@ -725,14 +723,7 @@ def _print_setup_summary(config: dict, clawk_home):
 
     tts_provider = cfg_get(config, "tts", "provider", default="edge")
 
-    if subscription_features.tts.managed_by_nous:
-        tool_status.append((
-            "Text-to-Speech (OpenAI via Nous subscription)",
-            True,
-            None,
-        ))
-
-    elif tts_provider == "elevenlabs" and get_env_value("ELEVENLABS_API_KEY"):
+    if tts_provider == "elevenlabs" and get_env_value("ELEVENLABS_API_KEY"):
         tool_status.append(("Text-to-Speech (ElevenLabs)", True, None))
 
     elif tts_provider == "openai" and (
@@ -788,22 +779,12 @@ def _print_setup_summary(config: dict, clawk_home):
     else:
         tool_status.append(("Text-to-Speech (Edge TTS)", True, None))
 
-    if subscription_features.modal.managed_by_nous:
-        tool_status.append(("Modal Execution (Nous subscription)", True, None))
-
-    elif cfg_get(config, "terminal", "backend") == "modal":
+    if cfg_get(config, "terminal", "backend") == "modal":
         if subscription_features.modal.direct_override:
             tool_status.append(("Modal Execution (direct Modal)", True, None))
 
         else:
             tool_status.append(("Modal Execution", False, "run 'clawk setup terminal'"))
-
-    elif managed_nous_tools_enabled() and subscription_features.nous_auth_present:
-        tool_status.append((
-            "Modal Execution (optional via Nous subscription)",
-            True,
-            None,
-        ))
 
     # Home Assistant
 
@@ -909,12 +890,12 @@ def _print_setup_summary(config: dict, clawk_home):
 
     print()
 
-    print(f"   {color('Settings:', Colors.YELLOW)}  {get_config_path()}")
+    print(f"   {color('Settings:', Colors.MORADO)}  {get_config_path()}")
 
-    print(f"   {color('API Keys:', Colors.YELLOW)}  {get_env_path()}")
+    print(f"   {color('API Keys:', Colors.MORADO)}  {get_env_path()}")
 
     print(
-        f"   {color('Data:', Colors.YELLOW)}      {clawk_home}/cron/, sessions/, logs/"
+        f"   {color('Data:', Colors.MORADO)}      {clawk_home}/cron/, sessions/, logs/"
     )
 
     print()
@@ -1438,13 +1419,6 @@ def _setup_tts_provider(config: dict):
 
     providers = []
 
-    if managed_nous_tools_enabled() and subscription_features.nous_auth_present:
-        choices.append(
-            "Nous Subscription (managed OpenAI TTS, billed to your subscription)"
-        )
-
-        providers.append("nous-openai")
-
     choices.extend([
         "Edge TTS (free, cloud-based, no setup needed)",
         "ElevenLabs (premium quality, needs API key)",
@@ -1904,56 +1878,10 @@ def setup_terminal_backend(config: dict):
 
         print_info("Serverless cloud sandboxes. Each session gets its own container.")
 
-        from tools.managed_tool_gateway import is_managed_tool_gateway_ready
-
-        from tools.tool_backend_helpers import normalize_modal_mode
-
-        managed_modal_available = bool(
-            managed_nous_tools_enabled()
-            and get_nous_subscription_features(config).nous_auth_present
-            and is_managed_tool_gateway_ready("modal")
-        )
-
-        modal_mode = normalize_modal_mode(cfg_get(config, "terminal", "modal_mode"))
-
+        # Modal siempre BYOK: usás tu propia cuenta de Modal.
         use_managed_modal = False
 
-        if managed_modal_available:
-            modal_choices = [
-                "Use my Nous subscription",
-                "Use my own Modal account",
-            ]
-
-            if modal_mode == "managed":
-                default_modal_idx = 0
-
-            elif modal_mode == "direct":
-                default_modal_idx = 1
-
-            else:
-                default_modal_idx = 1 if get_env_value("MODAL_TOKEN_ID") else 0
-
-            modal_mode_idx = prompt_choice(
-                "Select how Modal execution should be billed:",
-                modal_choices,
-                default_modal_idx,
-            )
-
-            use_managed_modal = modal_mode_idx == 0
-
-        if use_managed_modal:
-            config["terminal"]["modal_mode"] = "managed"
-
-            print_info(
-                "Modal execution will use the managed Nous gateway and bill to your subscription."
-            )
-
-            if get_env_value("MODAL_TOKEN_ID") or get_env_value("MODAL_TOKEN_SECRET"):
-                print_info(
-                    "Direct Modal credentials are still configured, but this backend is pinned to managed mode."
-                )
-
-        else:
+        if not use_managed_modal:
             config["terminal"]["modal_mode"] = "direct"
 
             print_info("Requires a Modal account: https://modal.com")
@@ -2511,35 +2439,38 @@ def _is_valid_telegram_bot_token(token: str) -> bool:
     return bool(_TELEGRAM_BOT_TOKEN_RE.match(token))
 
 
+def _profile_name_from_clawk_home(home) -> Optional[str]:
+    """Return the profile name when CLAWK_HOME points at a named profile dir.
+
+    Profile homes live under ``<root>/profiles/<name>`` on every OS. Inspect the
+    path *parts* so Windows-style separators are handled correctly even when the
+    value is a ``PureWindowsPath``. Returns None for the default (non-profile)
+    home so the managed-bot setup falls back to the global account.
+    """
+
+    parts = getattr(home, "parts", ())
+
+    if "profiles" in parts:
+        idx = parts.index("profiles")
+
+        if idx + 1 < len(parts):
+            return parts[idx + 1]
+
+    return None
+
+
 def _setup_telegram_auto_result():
-    """Attempt automatic Telegram bot creation via managed QR onboarding."""
+    """Run the automatic managed-bot Telegram setup, scoped to the active
+    profile when CLAWK_HOME is a named profile.
 
-    try:
-        from clawk_cli.telegram_managed_bot import auto_setup_telegram_bot_result
+    Returns the :class:`TelegramBotSetupResult` (or None on failure/timeout).
+    """
 
-    except ImportError:
-        return None
+    from clawk_cli.telegram_managed_bot import auto_setup_telegram_bot_result
 
-    profile_name: str | None = None
-
-    try:
-        clawk_home = str(get_clawk_home())
-
-        if "/profiles/" in clawk_home:
-            profile_name = clawk_home.rstrip("/").rsplit("/", 1)[-1]
-
-    except Exception:
-        pass
+    profile_name = _profile_name_from_clawk_home(get_clawk_home())
 
     return auto_setup_telegram_bot_result(profile_name=profile_name)
-
-
-def _setup_telegram_auto() -> str | None:
-    """Attempt automatic Telegram bot creation and return only the token."""
-
-    result = _setup_telegram_auto_result()
-
-    return result.token if result else None
 
 
 def _prompt_telegram_bot_token() -> str | None:
@@ -2560,6 +2491,19 @@ def _prompt_telegram_bot_token() -> str | None:
             continue
 
         return token
+
+
+def _setup_telegram_auto() -> Optional[str]:
+    """Run the automatic managed-bot Telegram setup and persist the token."""
+
+    result = _setup_telegram_auto_result()
+
+    if not result:
+        return None
+
+    save_env_value("TELEGRAM_BOT_TOKEN", result.token)
+
+    return result.token
 
 
 def _setup_telegram():
@@ -4443,36 +4387,55 @@ def _run_portal_one_shot(config: dict) -> None:
 
 
 # Welcome check-in delivery target: the messaging channel the operator
-# configured during setup, identified by its home-channel env var being set.
-# Mirrors cron.scheduler._HOME_TARGET_ENV_VARS, kept local so setup never has
-# to import the scheduler. Ordered by how likely a fresh user is to reach for
-# the channel.
-_WELCOME_DELIVER_HOME_ENV = [
-    ("telegram", "TELEGRAM_HOME_CHANNEL"),
-    ("whatsapp", "WHATSAPP_HOME_CHANNEL"),
-    ("discord", "DISCORD_HOME_CHANNEL"),
-    ("slack", "SLACK_HOME_CHANNEL"),
-    ("signal", "SIGNAL_HOME_CHANNEL"),
-    ("matrix", "MATRIX_HOME_ROOM"),
-    ("mattermost", "MATTERMOST_HOME_CHANNEL"),
-    ("bluebubbles", "BLUEBUBBLES_HOME_CHANNEL"),
-    ("sms", "SMS_HOME_CHANNEL"),
-    ("email", "EMAIL_HOME_ADDRESS"),
-    ("dingtalk", "DINGTALK_HOME_CHANNEL"),
-    ("feishu", "FEISHU_HOME_CHANNEL"),
-    ("wecom", "WECOM_HOME_CHANNEL"),
-    ("weixin", "WEIXIN_HOME_CHANNEL"),
-    ("qqbot", "QQBOT_HOME_CHANNEL"),
+# configured during setup. Each entry is (platform, credential env var,
+# home-channel env var). Home vars mirror cron.scheduler._HOME_TARGET_ENV_VARS;
+# credential vars mirror the platform tables in clawk_cli.status / gateway
+# config — kept local so setup never has to import the scheduler. Ordered by
+# how likely a fresh user is to reach for the channel.
+_WELCOME_DELIVER_CHANNELS = [
+    ("telegram", "TELEGRAM_BOT_TOKEN", "TELEGRAM_HOME_CHANNEL"),
+    ("whatsapp", "WHATSAPP_ENABLED", "WHATSAPP_HOME_CHANNEL"),
+    ("discord", "DISCORD_BOT_TOKEN", "DISCORD_HOME_CHANNEL"),
+    ("slack", "SLACK_BOT_TOKEN", "SLACK_HOME_CHANNEL"),
+    ("signal", "SIGNAL_HTTP_URL", "SIGNAL_HOME_CHANNEL"),
+    ("matrix", "MATRIX_ACCESS_TOKEN", "MATRIX_HOME_ROOM"),
+    ("mattermost", "MATTERMOST_TOKEN", "MATTERMOST_HOME_CHANNEL"),
+    ("bluebubbles", "BLUEBUBBLES_SERVER_URL", "BLUEBUBBLES_HOME_CHANNEL"),
+    ("sms", "TWILIO_ACCOUNT_SID", "SMS_HOME_CHANNEL"),
+    ("email", "EMAIL_ADDRESS", "EMAIL_HOME_ADDRESS"),
+    ("dingtalk", "DINGTALK_CLIENT_ID", "DINGTALK_HOME_CHANNEL"),
+    ("feishu", "FEISHU_APP_ID", "FEISHU_HOME_CHANNEL"),
+    ("wecom", "WECOM_BOT_ID", "WECOM_HOME_CHANNEL"),
+    ("weixin", "WEIXIN_ACCOUNT_ID", "WEIXIN_HOME_CHANNEL"),
+    ("qqbot", "QQ_APP_ID", "QQBOT_HOME_CHANNEL"),
 ]
 
 
 def _resolve_welcome_deliver_target() -> str:
-    """Return the messaging channel the operator just configured (the one whose
-    home channel is set) so the welcome check-in lands where they'll see it.
-    Falls back to ``"local"`` when no channel is wired up yet."""
+    """Return the messaging channel the operator configured during setup so the
+    welcome check-in lands where they'll see it.
 
-    for platform, env_var in _WELCOME_DELIVER_HOME_ENV:
-        if get_env_value(env_var):
+    Two passes: first a platform whose home channel is already set (delivery is
+    guaranteed), then a platform with credentials but the home channel deferred
+    ("set later with /set-home") — the scheduler resolves the actual chat at
+    fire time, so a /set-home before the job fires still lands it there, and an
+    unresolved target degrades to the locally saved output. Falls back to
+    ``"local"`` when no channel is wired up at all."""
+
+    for platform, _credential_var, home_var in _WELCOME_DELIVER_CHANNELS:
+        if get_env_value(home_var):
+            return platform
+
+    for platform, credential_var, _home_var in _WELCOME_DELIVER_CHANNELS:
+        value = get_env_value(credential_var)
+
+        # WHATSAPP_ENABLED is a boolean flag, not a token — "false"/"0"/"no"
+        # means the channel is explicitly off, not configured.
+        if credential_var == "WHATSAPP_ENABLED":
+            if str(value).lower() not in {"true", "1", "yes"}:
+                continue
+
+        if value:
             return platform
 
     return "local"
@@ -4575,6 +4538,23 @@ def _install_coding_clis() -> None:
         "MiroFish (opinion simulation) runs as a Docker server — configure it "
         "in `clawk tools` → MiroFish. Not auto-installed."
     )
+
+
+def _upgrade_welcome_checkin_delivery() -> None:
+    """After a gateway (re)configuration, point a still-pending welcome
+    check-in that was seeded with local delivery at the channel that now
+    exists. Best-effort like seeding — a failure never breaks setup."""
+
+    try:
+        from cron.jobs import upgrade_welcome_checkin_delivery
+
+        deliver = _resolve_welcome_deliver_target()
+
+        if upgrade_welcome_checkin_delivery(deliver):
+            print_info(f"Welcome check-in will now be delivered via {deliver}.")
+
+    except Exception as exc:
+        logger.debug("welcome check-in delivery upgrade skipped: %s", exc)
 
 
 def run_setup_wizard(args):
@@ -4695,6 +4675,11 @@ def run_setup_wizard(args):
                 func(config)
 
                 save_config(config)
+
+                # Connecting a channel after install must redirect a pending
+                # welcome check-in that was seeded with local delivery.
+                if key == "gateway":
+                    _upgrade_welcome_checkin_delivery()
 
                 print()
 
@@ -4899,11 +4884,14 @@ def run_setup_wizard(args):
         print_info(f"  cp {_backup_path} {config_path}")
 
     # Fresh installs get one proactive welcome check-in cron, seeded here so the
-    # installer (not the agent) owns it. Idempotent — never duplicates.
+    # installer (not the agent) owns it. Idempotent — never duplicates. On
+    # existing installs only retarget a pending local welcome, never create one.
     if not is_existing:
         _install_coding_clis()
 
         _seed_welcome_checkin()
+    else:
+        _upgrade_welcome_checkin_delivery()
 
     _print_setup_summary(config, clawk_home)
 
@@ -5020,11 +5008,14 @@ def _run_first_time_quick_setup(config: dict, clawk_home, is_existing: bool):
     print()
 
     # Fresh installs get one proactive welcome check-in cron, seeded here so the
-    # installer (not the agent) owns it. Idempotent — never duplicates.
+    # installer (not the agent) owns it. Idempotent — never duplicates. On
+    # existing installs only retarget a pending local welcome, never create one.
     if not is_existing:
         _install_coding_clis()
 
         _seed_welcome_checkin()
+    else:
+        _upgrade_welcome_checkin_delivery()
 
     _print_setup_summary(config, clawk_home)
 

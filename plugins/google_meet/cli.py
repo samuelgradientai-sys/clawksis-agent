@@ -141,9 +141,17 @@ def register_cli(subparser: argparse.ArgumentParser) -> None:
 
         # flag it. The argparse dispatch will surface a clear error.
 
-        def _node_unavailable(args):
+        # Bind the message now: Python deletes `e` when the except block
 
-            print(f"clawk meet node: module unavailable ({e})")
+        # exits, so a closure reading `e` later raises NameError instead
+
+        # of printing the import failure.
+
+        _node_err = str(e)
+
+        def _node_unavailable(args, _msg=_node_err):
+
+            print(f"clawk meet node: module unavailable ({_msg})")
 
             return 1
 

@@ -284,7 +284,7 @@ fallback_providers:
 
   - provider: nous
 
-    model: nous-clawk-3
+    model: nous-hermes-3
 
 ```
 

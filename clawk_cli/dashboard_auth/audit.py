@@ -97,17 +97,19 @@ def _resolve_log_path() -> Path:
 
 
 
-    Mirrors ``clawk_constants.get_clawk_home`` semantics: env var wins,
+    Delegates to ``clawk_constants.get_clawk_home`` (env var wins, then the
 
-    else ``~/.clawksis``. A local copy avoids an import cycle with the
+    platform-native default — including ``%LOCALAPPDATA%\\clawksis`` on
 
-    middleware which lives below ``clawk_cli``.
+    Windows). Imported lazily inside the function so the module-level import
+
+    graph stays free of a cycle with the middleware below ``clawk_cli``.
 
     """
 
-    home = os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawksis")
+    from clawk_constants import get_clawk_home
 
-    return Path(home) / "logs" / "dashboard-auth.log"
+    return get_clawk_home() / "logs" / "dashboard-auth.log"
 
 
 def audit_log(event: AuditEvent, **fields: Any) -> None:

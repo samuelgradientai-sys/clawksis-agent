@@ -43,6 +43,8 @@ import logging
 
 import re
 
+import threading
+
 from dataclasses import dataclass
 
 from typing import List, NamedTuple, Optional
@@ -74,45 +76,95 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 
+# Picker cache prewarm
+
+# ---------------------------------------------------------------------------
+
+
+# Process-level guard so the warm path runs at most once per process — a
+# long-lived gateway must never leak one OS thread per /model open.
+_picker_prewarm_done = threading.Event()
+
+
+def prewarm_picker_cache_async() -> Optional[threading.Thread]:
+    """Warm the provider-models disk cache off the user's critical path.
+
+    Spawns a background daemon thread that calls
+    ``list_authenticated_providers()`` (which disk-caches per provider) so the
+    first ``/model`` open in a session is fast instead of blocking ~1-2s on
+    serial ``/v1/models`` fetches.
+
+    Returns the spawned ``Thread`` on the first call, or ``None`` on every
+    subsequent call (the process-level guard makes repeats no-ops).  The worker
+    is best-effort: any failure is swallowed and never surfaces into the
+    session.
+    """
+
+    if _picker_prewarm_done.is_set():
+        return None
+
+    _picker_prewarm_done.set()
+
+    def _warm() -> None:
+        try:
+            list_authenticated_providers()
+        except Exception:
+            # Best-effort prewarm — an offline/failing provider must never
+            # surface an error into the session.
+            logger.debug("picker cache prewarm failed", exc_info=True)
+
+    thread = threading.Thread(
+        target=_warm,
+        name="picker-cache-prewarm",
+        daemon=True,
+    )
+
+    thread.start()
+
+    return thread
+
+
+# ---------------------------------------------------------------------------
+
 # Non-agentic model warning
 
 # ---------------------------------------------------------------------------
 
 
 _CLAWK_MODEL_WARNING = (
-    "Nous Research Clawksis 3 & 4 models are NOT agentic and are not designed "
+    "Nous Research Hermes 3 & 4 models are NOT agentic and are not designed "
     "for use with Clawksis. They lack the tool-calling capabilities "
     "required for agent workflows. Consider using an agentic model instead "
     "(Claude, GPT, Gemini, DeepSeek, etc.)."
 )
 
 
-# Match only the real Nous Research Clawksis 3 / Clawksis 4 chat families.
+# Match only the real Nous Research Hermes 3 / Hermes 4 chat families.
 
-# The previous substring check (`"clawk" in name.lower()`) false-positived on
+# A bare substring check would false-positive on unrelated local Modelfiles
 
-# unrelated local Modelfiles like ``clawk-brain:qwen3-14b-ctx16k`` that just
+# like ``clawk-brain:qwen3-14b-ctx16k`` that carry the project's own "clawk"
 
-# happen to carry "clawk" in their tag but are fully tool-capable.
+# tag but are fully tool-capable, so we anchor on the "hermes" model family.
 
 #
 
 # Positive examples the regex must match:
 
-#   NousResearch/Clawksis-3-Llama-3.1-70B, clawk-4-405b, openrouter/clawk3:70b
+#   NousResearch/Hermes-3-Llama-3.1-70B, hermes-4-405b, openrouter/hermes3:70b
 
 # Negative examples it must NOT match:
 
 #   clawk-brain:qwen3-14b-ctx16k, qwen3:14b, claude-opus-4-6
 
 _NOUS_CLAWK_NON_AGENTIC_RE = re.compile(
-    r"(?:^|[/:])clawk[-_ ]?[34](?:[-_.:]|$)",
+    r"(?:^|[/:])hermes[-_ ]?[34](?:[-_.:]|$)",
     re.IGNORECASE,
 )
 
 
 def is_nous_clawk_non_agentic(model_name: str) -> bool:
-    """Return True if *model_name* is a real Nous Clawksis 3/4 chat model.
+    """Return True if *model_name* is a real Nous Hermes 3/4 chat model.
 
 
 
@@ -131,7 +183,7 @@ def is_nous_clawk_non_agentic(model_name: str) -> bool:
 
 
 def _check_clawk_model_warning(model_name: str) -> str:
-    """Return a warning string if *model_name* is a Nous Clawksis 3/4 chat model."""
+    """Return a warning string if *model_name* is a Nous Hermes 3/4 chat model."""
 
     if is_nous_clawk_non_agentic(model_name):
         return _CLAWK_MODEL_WARNING
@@ -998,13 +1050,72 @@ def switch_model(
     # =================================================================
 
     if explicit_provider:
-        # Resolve the provider
+        # Bare active custom endpoint: ``provider=custom`` configured directly
+        # under ``model:`` (with ``base_url`` but no named ``providers:`` /
+        # ``custom_providers:`` row). resolve_provider_full has no slug to match
+        # for a plain "custom", so a picker selection of this row would fail
+        # with "Unknown provider 'custom'". Route the requested model straight
+        # at the currently active endpoint instead.
 
-        pdef = resolve_provider_full(
+        _explicit_bare = explicit_provider.strip().lower()
+
+        _bare_custom_resolvable = resolve_provider_full(
             explicit_provider,
             user_providers,
             custom_providers,
         )
+
+        if (
+            _explicit_bare == "custom"
+            and _bare_custom_resolvable is None
+            and str(current_base_url or "").strip()
+        ):
+            base_url = current_base_url
+
+            api_key = current_api_key
+
+            new_model = normalize_model_for_provider(new_model, "custom")
+
+            try:
+                validation = validate_requested_model(
+                    new_model,
+                    "custom",
+                    api_key=api_key,
+                    base_url=base_url,
+                )
+
+            except Exception:
+                validation = {"accepted": True, "message": None}
+
+            if validation.get("corrected_model"):
+                new_model = validation["corrected_model"]
+
+            api_mode = determine_api_mode("custom", base_url)
+
+            warnings: list[str] = []
+
+            if validation.get("message"):
+                warnings.append(validation["message"])
+
+            return ModelSwitchResult(
+                success=True,
+                new_model=new_model,
+                target_provider="custom",
+                provider_changed=False,
+                api_key=api_key,
+                base_url=base_url,
+                api_mode=api_mode,
+                warning_message=" | ".join(warnings) if warnings else "",
+                provider_label="Custom endpoint",
+                resolved_via_alias="",
+                capabilities=get_model_capabilities("custom", new_model),
+                model_info=get_model_info("custom", new_model),
+                is_global=is_global,
+            )
+
+        # Resolve the provider
+
+        pdef = _bare_custom_resolvable
 
         if pdef is None:
             _switch_err = (
@@ -1730,6 +1841,8 @@ def list_authenticated_providers(
     custom_providers: list | None = None,
     max_models: int = 8,
     current_model: str = "",
+    *,
+    force_fresh_nous_tier: bool = False,
 ) -> List[dict]:
     """Detect which providers have credentials and list their curated models.
 
@@ -2354,6 +2467,88 @@ def list_authenticated_providers(
 
         _record_builtin_endpoint(clawk_slug)
 
+    # --- 2a. Nous Portal (standalone) ---
+
+    # Nous is no longer registered in CLAWK_OVERLAYS / CANONICAL_PROVIDERS /
+    # PROVIDER_TO_MODELS_DEV (it was pulled from the provider registries), but
+    # its curated list still ships in _PROVIDER_MODELS["nous"] and the /model
+    # picker must still surface it when the user has Nous credentials in the
+    # auth store or credential pool. Detect creds directly and emit the curated
+    # row here so the GUI picker matches the `clawk model` CLI.
+
+    if "nous" not in seen_slugs:
+        _nous_has_creds = False
+
+        try:
+            from clawk_cli.auth import _load_auth_store
+
+            _nous_store = _load_auth_store()
+
+            if _nous_store and "nous" in _nous_store.get("providers", {}):
+                _nous_has_creds = True
+
+        except Exception as exc:
+            logger.debug("Auth store check failed for nous: %s", exc)
+
+        if not _nous_has_creds:
+            try:
+                from agent.credential_pool import load_pool
+
+                if load_pool("nous").has_credentials():
+                    _nous_has_creds = True
+
+            except Exception as exc:
+                logger.debug("Credential pool check failed for nous: %s", exc)
+
+        if _nous_has_creds:
+            model_ids = curated.get("nous", [])
+
+            try:
+                from clawk_cli.models import (
+                    get_pricing_for_provider as _nous_pricing,
+                    check_nous_free_tier as _nous_free,
+                    union_with_portal_free_recommendations as _union_free,
+                    union_with_portal_paid_recommendations as _union_paid,
+                )
+
+                from clawk_cli.auth import get_provider_auth_state as _nous_state
+
+                _pricing = _nous_pricing("nous") or {}
+
+                _portal = ""
+
+                try:
+                    _st = _nous_state("nous") or {}
+
+                    _portal = _st.get("portal_base_url", "") or ""
+
+                except Exception:
+                    _portal = ""
+
+                if _nous_free(force_fresh=True):
+                    model_ids, _ = _union_free(model_ids, _pricing, _portal)
+
+                else:
+                    model_ids, _ = _union_paid(model_ids, _pricing, _portal)
+
+            except Exception:
+                # Portal recommendation fetch failed — fall back to the
+                # curated list alone (still correct, just may lag newly
+                # launched models, exactly like an offline CLI run).
+                pass
+
+            results.append({
+                "slug": "nous",
+                "name": get_label("nous"),
+                "is_current": current_provider == "nous",
+                "is_user_defined": False,
+                "models": model_ids[:max_models],
+                "total_models": len(model_ids),
+                "source": "clawk",
+            })
+
+            seen_slugs.add("nous")
+
     # --- 2b. Cross-check canonical provider list ---
 
     # Catches providers that are in CANONICAL_PROVIDERS but weren't found
@@ -2683,12 +2878,9 @@ def list_authenticated_providers(
                 else (f"env:{key_env}" if key_env else "")
             )
 
-            # Read discover_models from the entry (same semantics as
-
-            # section 3: true by default, set false to keep the explicit
-
-            # ``models:`` list instead of replacing it with live /models).
-
+            # Honor an explicit ``discover_models: false`` opt-out (matches
+            # section 3 for user ``providers:``).  Accept both the boolean
+            # ``False`` and string forms from hand-edited / env-style configs.
             discover = entry.get("discover_models", True)
 
             if isinstance(discover, str):
@@ -2731,10 +2923,8 @@ def list_authenticated_providers(
                 if api_key and not groups[group_key].get("api_key"):
                     groups[group_key]["api_key"] = api_key
 
-                # If any entry in this group opts out of discovery,
-
-                # honour that for the whole grouped row.
-
+                # If any entry in the group opts out of discovery, the whole
+                # grouped row keeps its explicit ``models:`` subset.
                 if not discover:
                     groups[group_key]["discover_models"] = False
 
@@ -2903,8 +3093,8 @@ def list_authenticated_providers(
 
             should_probe = (
                 bool(api_url)
-                and (bool(api_key) or not grp["models"])
                 and grp.get("discover_models", True)
+                and (bool(api_key) or not grp["models"])
             )
 
             if should_probe:
@@ -2941,6 +3131,85 @@ def list_authenticated_providers(
             seen_slugs.add(slug.lower())
 
             _section4_emitted_slugs.add(slug.lower())
+
+    # --- 4b. Bare active custom endpoint ---
+    #
+    # A user can wire a one-off OpenAI-compatible endpoint directly under
+    # ``model:`` (provider=custom + base_url) without a named ``providers:``
+    # or ``custom_providers:`` row. The gateway picker only receives the
+    # current model/base_url slice in that case, so none of sections 1-4
+    # emits a row and /model would look like config was ignored. Surface the
+    # active endpoint as a "custom" row so the user sees their live target.
+
+    _bare_custom_url = str(current_base_url or "").strip().rstrip("/")
+
+    _bare_custom_url_norm = _bare_custom_url.lower()
+
+    # Skip when an earlier section already surfaced this endpoint under its
+    # canonical slug (e.g. a ``custom_providers:`` "Ollama — GLM 5.1" row for
+    # the same base_url). Emitting a second bare "custom" row would duplicate
+    # it and resurrect the broken literal slug from #17478.
+    _endpoint_already_listed = any(
+        str(r.get("api_url") or "").strip().rstrip("/").lower() == _bare_custom_url_norm
+        for r in results
+    )
+
+    if (
+        str(current_provider or "").strip().lower() == "custom"
+        and _bare_custom_url
+        and "custom" not in seen_slugs
+        and not _endpoint_already_listed
+    ):
+        _bare_models = [current_model] if current_model else []
+
+        results.append({
+            "slug": "custom",
+            "name": "Custom endpoint",
+            "is_current": True,
+            "is_user_defined": True,
+            "models": _bare_models,
+            "total_models": len(_bare_models),
+            "source": "user-config",
+            "api_url": _bare_custom_url,
+        })
+
+        seen_slugs.add("custom")
+
+    # Local Ollama daemon (Cookbook): surface a first-class "ollama" provider
+    # row listing the models the user has pulled locally, but only when the
+    # daemon is actually running. Lazy import + best-effort: never let a missing
+    # cookbook module or an Ollama hiccup break provider listing. Selecting a
+    # model here persists provider="ollama", which resolve_runtime_provider
+    # resolves to the local /v1 endpoint with a dummy key.
+
+    if "ollama" not in seen_slugs:
+        try:
+            from clawk_cli import cookbook as _cookbook
+
+            if _cookbook.ollama_running():
+                _ollama_models = [m for m in _cookbook.ollama_models() if m]
+
+                if _ollama_models:
+                    _ollama_is_current = (
+                        _norm_url(current_base_url)
+                        == _norm_url(_cookbook.OLLAMA_OPENAI_URL)
+                        or str(current_provider or "").strip().lower() == "ollama"
+                    )
+
+                    results.append({
+                        "slug": "ollama",
+                        "name": "Ollama (local)",
+                        "is_current": _ollama_is_current,
+                        "is_user_defined": False,
+                        "models": _ollama_models[:max_models],
+                        "total_models": len(_ollama_models),
+                        "source": "local",
+                    })
+
+                    seen_slugs.add("ollama")
+
+        except Exception:
+            pass
 
     # Sort: current provider first, then by model count descending
 

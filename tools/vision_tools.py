@@ -182,6 +182,20 @@ async def _validate_image_url_async(url: str) -> bool:
     return await async_is_safe_url(url)
 
 
+async def _validate_image_url_async(url: str) -> bool:
+    """Async wrapper around :func:`_validate_image_url`.
+
+    URL validation performs DNS resolution and SSRF checks (via
+    ``is_safe_url``) which are blocking. Running them through
+    ``asyncio.to_thread`` keeps that work off the event loop so the async
+    vision dispatch path doesn't stall the loop (issue #2104).
+    """
+
+    import asyncio
+
+    return await asyncio.to_thread(_validate_image_url, url)
+
+
 def _detect_image_mime_type(image_path: Path) -> Optional[str]:
     """Return a MIME type when the file looks like a supported image."""
 

@@ -18,15 +18,21 @@ of 4000+ models across 109+ providers.  Provides:
 
 
 
-Data resolution order (like TypeScript OpenCode):
+Data resolution order:
 
-  1. Bundled snapshot (ships with the package — offline-first)
+  1. In-memory cache (< 1 h old)
 
-  2. Disk cache (~/.clawksis/models_dev_cache.json)
+  2. Disk cache (~/.clawksis/models_dev_cache.json, < 1 h old)
 
   3. Network fetch (https://models.dev/api.json)
 
-  4. Background refresh every 60 minutes
+  4. Stale disk cache (any age, when the network is unreachable)
+
+  5. Bundled snapshot (vendored with the package — offline-first floor, so
+
+     capability lookups never collapse to an empty registry on a sealed/CI
+
+     install with no network and no prior disk cache)
 
 
 
@@ -291,6 +297,44 @@ def _load_disk_cache() -> Dict[str, Any]:
     return {}
 
 
+_BUNDLED_SNAPSHOT_PATH = Path(__file__).resolve().parent / "models_dev_snapshot.json"
+
+_bundled_snapshot_cache: Optional[Dict[str, Any]] = None
+
+
+def _load_bundled_snapshot() -> Dict[str, Any]:
+    """Load the models.dev snapshot vendored with the package.
+
+    This is the offline-first floor: when there is no fresh in-memory cache,
+    no usable disk cache, and the network is unreachable (fresh install, CI
+    sandbox, air-gapped host), callers still get a populated registry instead
+    of an empty dict — which would otherwise collapse every downstream
+    capability lookup (context length, vision/tool support, etc.). Parsed once
+    and memoized for the life of the process.
+    """
+
+    global _bundled_snapshot_cache
+
+    if _bundled_snapshot_cache is not None:
+        return _bundled_snapshot_cache
+
+    try:
+        with open(_BUNDLED_SNAPSHOT_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+
+        if isinstance(data, dict) and data:
+            _bundled_snapshot_cache = data
+
+            return data
+
+    except Exception as e:
+        logger.debug("Failed to load bundled models.dev snapshot: %s", e)
+
+    _bundled_snapshot_cache = {}
+
+    return _bundled_snapshot_cache
+
+
 def _disk_cache_age_seconds() -> Optional[float]:
     """Return age (in seconds) of the disk cache file, or None if missing.
 
@@ -373,6 +417,12 @@ def fetch_models_dev(force_refresh: bool = False) -> Dict[str, Any]:
       4. Network fails → fall back to ANY available disk cache (even stale)
 
          with a short 5 min in-mem grace period before retrying network.
+
+      5. No disk cache either → fall back to the bundled snapshot vendored
+
+         with the package, so the registry is never empty on a sealed/CI
+
+         install. Same 5 min in-mem grace period before retrying network.
 
 
 
@@ -478,6 +528,23 @@ def fetch_models_dev(force_refresh: bool = False) -> Dict[str, Any]:
             logger.debug(
                 "Loaded models.dev from disk cache (%d providers)",
                 len(_models_dev_cache),
+            )
+
+    # Stage 5: offline-first floor. No fresh cache, network down, and no disk
+    # cache exists (fresh install, CI sandbox, air-gapped host). Fall back to
+    # the vendored snapshot so capability lookups never collapse to {}.
+
+    if not _models_dev_cache:
+        bundled = _load_bundled_snapshot()
+
+        if bundled:
+            _models_dev_cache = bundled
+
+            _models_dev_cache_time = time.time() - _MODELS_DEV_CACHE_TTL + 300
+
+            logger.debug(
+                "Loaded models.dev from bundled snapshot (%d providers)",
+                len(bundled),
             )
 
     return _models_dev_cache

@@ -587,6 +587,39 @@ def to_agent_visible_cache_path(
     return host_path
 
 
+def map_cache_path_to_container(
+    host_path: str,
+    container_base: str = "/root/.clawksis",
+) -> str:
+    """Translate a host cache path to its agent-visible path under ``container_base``.
+
+    Unlike :func:`to_agent_visible_cache_path`, this does NOT gate on
+    ``TERMINAL_ENV`` — the caller has already resolved the backend's cache root
+    (a remote SSH home, a container ``/root``, …) and passes it as
+    ``container_base``. The returned path always uses forward slashes (it names
+    a POSIX/remote location, never the host filesystem). Returns ``host_path``
+    unchanged when it isn't under a known auto-mounted cache directory.
+    """
+
+    path = Path(host_path)
+
+    for mount in get_cache_directory_mounts(container_base=container_base):
+        host_dir = Path(mount["host_path"])
+
+        try:
+            rel = path.relative_to(host_dir)
+
+        except ValueError:
+            continue
+
+        # ``container_path`` is already forward-slash (string-built); join the
+        # POSIX form of the remainder so a Windows host doesn't leak backslashes
+        # into the remote/container path.
+        return f"{mount['container_path']}/{rel.as_posix()}"
+
+    return host_path
+
+
 def iter_cache_files(
     container_base: str = "/root/.clawksis",
 ) -> List[Dict[str, str]]:

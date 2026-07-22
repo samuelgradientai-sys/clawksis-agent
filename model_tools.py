@@ -54,6 +54,8 @@ import threading
 
 import time
 
+from collections import OrderedDict
+
 from typing import Dict, Any, List, Optional, Tuple
 
 
@@ -418,7 +420,14 @@ _LEGACY_TOOLSET_MAP = {
 
 # daemon start/stop, env var changes, etc.) on a 30 s horizon.
 
-_tool_defs_cache: Dict[tuple, List[Dict[str, Any]]] = {}
+# Bound on the number of memoized get_tool_definitions() results. A long-lived
+# Gateway varies cache keys (enabled/disabled toolsets, kanban task flag, config
+# fingerprint) over its lifetime; without a cap the cache grows unbounded
+# (#19251). When the cap is reached we evict the oldest entry (FIFO) rather than
+# clearing everything, so hot keys stay warm.
+_TOOL_DEFS_CACHE_MAX = 64
+
+_tool_defs_cache: "OrderedDict[tuple, List[Dict[str, Any]]]" = OrderedDict()
 
 
 def _clear_tool_defs_cache() -> None:
@@ -549,6 +558,18 @@ def get_tool_definitions(
         # (DeepSeek, Xiaomi MiMo, Moonshot Kimi) reject the request with
 
         # HTTP 400. Mirrors the cache-hit path above. (issue #17335)
+
+        # Evict the oldest entry once we hit the cap so the cache stays bounded
+
+        # over a long-lived Gateway's lifetime (#19251), rather than clearing
+
+        # everything or growing without limit.
+
+        if (
+            cache_key not in _tool_defs_cache
+            and len(_tool_defs_cache) >= _TOOL_DEFS_CACHE_MAX
+        ):
+            _tool_defs_cache.popitem(last=False)
 
         _tool_defs_cache[cache_key] = result
 
@@ -1304,6 +1325,91 @@ def _tool_result_observer_fields(
     return "ok", None, None
 
 
+def _short_tool_context(function_name: str, function_args: Any) -> Optional[str]:
+    """Best-effort short context string for the agent-events log (no raw dumps).
+
+    Picks a single human-meaningful argument (a command, path, query, ...) and
+    truncates it. Never includes the whole args dict.
+    """
+
+    if not isinstance(function_args, dict):
+        return None
+
+    for key in (
+        "command",
+        "path",
+        "file_path",
+        "query",
+        "url",
+        "prompt",
+        "to",
+        "name",
+        "pattern",
+        "message",
+    ):
+        val = function_args.get(key)
+
+        if isinstance(val, str) and val.strip():
+            return val.strip()[:120]
+
+    return None
+
+
+def _emit_agent_activity_event(
+    kind: str,
+    *,
+    function_name: str,
+    function_args: Any,
+    session_id: Optional[str],
+    task_id: Optional[str],
+    tool_call_id: Optional[str],
+    result: Any = None,
+) -> None:
+    """Mirror a tool start/complete into the cross-process agent-events log.
+
+    Best-effort and non-blocking (the log just enqueues). Wrapped so a logging
+    failure can never affect tool execution. Drives the dashboard Visualization
+    office for ALL agents (chat, gateway platforms, cron), not only the chat PTY.
+    """
+
+    try:
+        import agent_events
+
+        if kind == "start":
+            agent_events.emit_tool_start(
+                session_id=session_id,
+                tool_name=function_name,
+                task_id=task_id,
+                tool_call_id=tool_call_id,
+                context=_short_tool_context(function_name, function_args),
+            )
+
+        else:
+            ok = True
+
+            try:
+                if (
+                    isinstance(result, str)
+                    and result[:1] == "{"
+                    and '"error"' in result[:300]
+                ):
+                    ok = False
+
+            except Exception:
+                pass
+
+            agent_events.emit_tool_complete(
+                session_id=session_id,
+                tool_name=function_name,
+                task_id=task_id,
+                tool_call_id=tool_call_id,
+                ok=ok,
+            )
+
+    except Exception:
+        pass
+
+
 def _emit_post_tool_call_hook(
     *,
     function_name: str,
@@ -1318,6 +1424,7 @@ def _emit_post_tool_call_hook(
     status: Optional[str] = None,
     error_type: Optional[str] = None,
     error_message: Optional[str] = None,
+    middleware_trace: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     """Emit the ``post_tool_call`` observer hook.
 
@@ -1360,6 +1467,7 @@ def _emit_post_tool_call_hook(
             status=status,
             error_type=error_type,
             error_message=error_message,
+            middleware_trace=list(middleware_trace or []),
         )
 
     except Exception as _hook_err:
@@ -1379,6 +1487,8 @@ def handle_function_call(
     skip_pre_tool_call_hook: bool = False,
     enabled_toolsets: Optional[List[str]] = None,
     disabled_toolsets: Optional[List[str]] = None,
+    skip_tool_request_middleware: bool = False,
+    tool_request_middleware_trace: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
 
@@ -1563,6 +1673,38 @@ def handle_function_call(
                 "error": f"{function_name} must be handled by the agent loop"
             })
 
+        # Apply tool_request middleware (unless the caller already ran it and
+        # passed the resulting trace).  The agent loop applies request
+        # middleware itself and forwards skip_tool_request_middleware=True plus
+        # tool_request_middleware_trace so the rewrite is not double-applied;
+        # direct callers (gateway, tests, bridge) rely on this path to rewrite
+        # args before hooks, guardrails, and execution observe them.
+        middleware_trace: List[Dict[str, Any]] = list(
+            tool_request_middleware_trace or []
+        )
+
+        if not skip_tool_request_middleware:
+            try:
+                from clawk_cli.middleware import apply_tool_request_middleware
+
+                _request_result = apply_tool_request_middleware(
+                    function_name,
+                    function_args,
+                    task_id=task_id or "",
+                    session_id=session_id or "",
+                    tool_call_id=tool_call_id or "",
+                    turn_id=turn_id or "",
+                    api_request_id=api_request_id or "",
+                )
+
+                if isinstance(_request_result.payload, dict):
+                    function_args = _request_result.payload
+
+                middleware_trace = list(_request_result.trace)
+
+            except Exception as _mw_err:
+                logger.debug("tool_request middleware error: %s", _mw_err)
+
         # Check plugin hooks for a block directive (unless caller already
 
         # checked — e.g. run_agent._invoke_tool passes skip=True to
@@ -1597,6 +1739,7 @@ def handle_function_call(
                     tool_call_id=tool_call_id or "",
                     turn_id=turn_id or "",
                     api_request_id=api_request_id or "",
+                    middleware_trace=middleware_trace,
                 )
 
             except Exception as _hook_err:
@@ -1617,6 +1760,7 @@ def handle_function_call(
                     status="blocked",
                     error_type="plugin_block",
                     error_message=block_message,
+                    middleware_trace=middleware_trace,
                 )
 
                 return result
@@ -1673,6 +1817,17 @@ def handle_function_call(
 
         # unaffected by wall-clock adjustments during the call.
 
+        # Mirror "tool started" to the cross-process agent-events log so the
+        # dashboard office shows this agent working (all agents, any process).
+        _emit_agent_activity_event(
+            "start",
+            function_name=function_name,
+            function_args=function_args,
+            session_id=session_id,
+            task_id=task_id,
+            tool_call_id=tool_call_id,
+        )
+
         _dispatch_start = time.monotonic()
 
         _approval_tokens = None
@@ -1709,6 +1864,7 @@ def handle_function_call(
                         function_name,
                         next_args,
                         task_id=task_id,
+                        session_id=session_id,
                         enabled_tools=sandbox_enabled,
                     )
 
@@ -1720,10 +1876,31 @@ def handle_function_call(
                         function_name,
                         next_args,
                         task_id=task_id,
+                        session_id=session_id,
                         user_task=user_task,
                     )
 
-            result = _dispatch(function_args)
+            # Run the actual dispatch through tool_execution middleware so
+            # plugins can wrap the call (retries, timeouts, arg rewriting at
+            # exec time).  With no execution middleware registered this is a
+            # straight passthrough to _dispatch.
+            try:
+                from clawk_cli.middleware import run_tool_execution_middleware
+
+                result = run_tool_execution_middleware(
+                    function_name,
+                    function_args,
+                    _dispatch,
+                    original_args=function_args,
+                    task_id=task_id or "",
+                    session_id=session_id or "",
+                    tool_call_id=tool_call_id or "",
+                    turn_id=turn_id or "",
+                    api_request_id=api_request_id or "",
+                )
+
+            except ImportError:
+                result = _dispatch(function_args)
 
         finally:
             if (
@@ -1738,6 +1915,17 @@ def handle_function_call(
 
         duration_ms = int((time.monotonic() - _dispatch_start) * 1000)
 
+        # Mirror "tool completed" to the cross-process agent-events log.
+        _emit_agent_activity_event(
+            "complete",
+            function_name=function_name,
+            function_args=function_args,
+            session_id=session_id,
+            task_id=task_id,
+            tool_call_id=tool_call_id,
+            result=result,
+        )
+
         _emit_post_tool_call_hook(
             function_name=function_name,
             function_args=function_args,
@@ -1748,6 +1936,7 @@ def handle_function_call(
             turn_id=turn_id,
             api_request_id=api_request_id,
             duration_ms=duration_ms,
+            middleware_trace=middleware_trace,
         )
 
         # Generic tool-result canonicalization seam: plugins receive the

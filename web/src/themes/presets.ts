@@ -106,7 +106,11 @@ export const defaultTheme: DashboardTheme = {
 
   layout: DEFAULT_LAYOUT,
 
-  terminalBackground: "#000000",
+  // Bug #23 (Fase 1): integramos el fondo del chat con la paleta del dashboard.
+  // Antes era "#000000" (negro puro) — se sentía como un terminal aparte. Ahora
+  // un poco más oscuro que background para mantener jerarquía visual pero con
+  // la misma familia de color.
+  terminalBackground: "#021414",
 
 };
 
@@ -602,6 +606,51 @@ export const defaultLargeTheme: DashboardTheme = {
 
 
 
+export const pixelTheme: DashboardTheme = {
+  name: "pixel",
+  label: "Clawksis Pixel",
+  description: "16-bit retro — pixel font, purple grid & scanlines",
+  palette: {
+    background: { hex: "#0b0b16", alpha: 1 },
+    midground: { hex: "#cfc4ff", alpha: 1 },
+    foreground: { hex: "#ffffff", alpha: 0 },
+    warmGlow: "rgba(108, 79, 214, 0.30)",
+    noiseOpacity: 0.5,
+  },
+  typography: {
+    ...DEFAULT_TYPOGRAPHY,
+    fontSans: `"Pixelify Sans", ${SYSTEM_SANS}`,
+    fontMono: `"VT323", ${SYSTEM_MONO}`,
+    fontUrl:
+      "https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=VT323&display=swap",
+    letterSpacing: "0",
+  },
+  layout: {
+    ...DEFAULT_LAYOUT,
+    radius: "0",
+  },
+  // Scanlines CRT sutiles en morado de marca. Theme-scoped: el ThemeProvider
+  // las quita al cambiar de tema. Estáticas (sin flicker) para no molestar.
+  customCSS: `
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(108, 79, 214, 0.07) 0 1px,
+        transparent 1px 3px
+      );
+      mix-blend-mode: screen;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      body::after { background: none; }
+    }
+  `,
+};
+
 export const BUILTIN_THEMES: Record<string, DashboardTheme> = {
 
   default: defaultTheme,
@@ -619,6 +668,8 @@ export const BUILTIN_THEMES: Record<string, DashboardTheme> = {
   cyberpunk: cyberpunkTheme,
 
   rose: roseTheme,
+
+  pixel: pixelTheme,
 
 };
 

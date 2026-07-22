@@ -1032,7 +1032,7 @@ class TestMentionPatterns:
             monkeypatch, extra={"mention_patterns": ["^clawk"]}
         )
 
-        assert adapter._message_matches_mention_patterns("HERMES help") is True
+        assert adapter._message_matches_mention_patterns("CLAWK help") is True
 
     def test_invalid_regex_is_skipped_not_raised(self, monkeypatch):
 

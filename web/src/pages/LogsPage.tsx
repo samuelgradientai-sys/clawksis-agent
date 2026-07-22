@@ -149,8 +149,18 @@ export default function LogsPage() {
 
   useEffect(() => {
     if (!autoRefresh) return;
-    const interval = setInterval(fetchLogs, 5000);
-    return () => clearInterval(interval);
+    const tick = () => {
+      if (!document.hidden) fetchLogs();
+    };
+    const interval = setInterval(tick, 5000);
+    const onVisible = () => {
+      if (!document.hidden) fetchLogs();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [autoRefresh, fetchLogs]);
 
   return (

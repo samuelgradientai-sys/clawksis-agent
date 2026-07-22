@@ -244,9 +244,10 @@ class TestDefaultConfig:
         assert "backend" in web
         assert "search_backend" in web
         assert "extract_backend" in web
-        # All empty string by default (no override)
+        # backend/extract default to empty (auto-detect); search defaults to
+        # the free DuckDuckGo backend so a fresh agent can search out of the box.
         assert web["backend"] == ""
-        assert web["search_backend"] == ""
+        assert web["search_backend"] == "ddgs"
         assert web["extract_backend"] == ""
 
 
@@ -331,6 +332,7 @@ class TestUnconfiguredErrorEnvelopeParity:
         # Reset firecrawl client cache so the unconfigured state is re-evaluated
         monkeypatch.setattr(web_tools, "_firecrawl_client", None, raising=False)
         monkeypatch.setattr(web_tools, "_firecrawl_client_config", None, raising=False)
+        monkeypatch.setattr(web_tools, "_ddgs_package_importable", lambda: False)
         monkeypatch.setattr(web_tools, "_load_web_config", lambda: {})
 
         result = json.loads(web_tools.web_search_tool("hello world", limit=3))

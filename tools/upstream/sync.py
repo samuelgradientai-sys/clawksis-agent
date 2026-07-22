@@ -121,18 +121,44 @@ CONTENT_MAP = [
     ("hermes", "clawk"),
 ]
 
+# IDs de modelo de Nous (Hermes-3 / Hermes-4 y sus variantes, incluidos los
+# slugs de OpenRouter ``nousresearch/hermes-*``). El blanket hermes->clawk de
+# arriba los corrompe a ``clawk-3``/``clawk-4``, que NO existen en ningun
+# proveedor y fallan en runtime. Se preservan haciendo stash/unstash alrededor
+# del CONTENT_MAP (ver ``rebrand``). "Hermes" como producto/agente SI se
+# rebrandea; solo los nombres de modelo Herme quedan intactos.
+_MODEL_ID_RE = re.compile(r"(?:nousresearch/)?[Hh]ermes[ _-]?[34][\w.\-]*")
+
 # Solo estos tipos de archivo se rebrandean en contenido (igual que rebrand.sh).
 REBRAND_EXTS = {
-    ".py", ".toml", ".json", ".md", ".sh", ".ps1", ".yml", ".yaml",
-    ".html", ".tsx", ".ts", ".js", ".txt", ".cfg", ".ini", ".rst",
+    ".py",
+    ".toml",
+    ".json",
+    ".md",
+    ".sh",
+    ".ps1",
+    ".yml",
+    ".yaml",
+    ".html",
+    ".tsx",
+    ".ts",
+    ".js",
+    ".txt",
+    ".cfg",
+    ".ini",
+    ".rst",
 }
 REBRAND_BASENAMES = {"Dockerfile", "dockerfile"}
 
 
 def git(*args: str, check: bool = True) -> str:
     res = subprocess.run(
-        ["git", *args], cwd=ROOT, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
+        ["git", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     if check and res.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)} fallo:\n{res.stderr.strip()}")
@@ -140,7 +166,12 @@ def git(*args: str, check: bool = True) -> str:
 
 
 def git_bytes(*args: str) -> bytes | None:
-    res = subprocess.run(["git", *args], cwd=ROOT, capture_output=True)
+    res = subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+    )
     return res.stdout if res.returncode == 0 else None
 
 
@@ -163,8 +194,20 @@ def rebrand(content: bytes, path: str) -> bytes:
         text = content.decode("utf-8")
     except UnicodeDecodeError:
         return content
+    # Stash IDs de modelo Hermes detras de placeholders inertes (NUL-delimitados,
+    # imposibles en fuente) para que el blanket hermes->clawk no los corrompa.
+    stash: dict[str, str] = {}
+
+    def _stash(m: "re.Match[str]") -> str:
+        key = f"\x00MODELID{len(stash)}\x00"
+        stash[key] = m.group(0)
+        return key
+
+    text = _MODEL_ID_RE.sub(_stash, text)
     for old, new in CONTENT_MAP:
         text = text.replace(old, new)
+    for key, orig in stash.items():
+        text = text.replace(key, orig)
     return text.encode("utf-8")
 
 
@@ -215,9 +258,16 @@ def fetch_rev(rev: str) -> None:
     if rev_exists(rev):
         return
     print(f"[sync] trayendo {rev} de upstream...")
-    for refspec in (["fetch", "--depth", "1", "upstream", "tag", rev],
-                    ["fetch", "upstream", rev]):
-        res = subprocess.run(["git", *refspec], cwd=ROOT, capture_output=True)
+    for refspec in (
+        ["fetch", "--depth", "1", "upstream", "tag", rev],
+        ["fetch", "upstream", rev],
+    ):
+        res = subprocess.run(
+            ["git", *refspec],
+            cwd=ROOT,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+        )
         if res.returncode == 0 and rev_exists(rev):
             return
     raise RuntimeError(f"No pude traer '{rev}' de upstream.")
@@ -232,7 +282,12 @@ def ensure_history(state: dict) -> None:
     args = ["fetch", "upstream", "main"]
     if since:
         args.insert(1, f"--shallow-since={since}")
-    subprocess.run(["git", *args], cwd=ROOT, capture_output=True)
+    subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+    )
     if not rev_exists(last):
         raise RuntimeError(
             f"El commit base {last[:9]} sigue sin estar disponible. "
@@ -242,9 +297,16 @@ def ensure_history(state: dict) -> None:
 
 def latest_release_tag() -> str:
     res = subprocess.run(
-        ["gh", "api", "repos/NousResearch/hermes-agent/releases/latest",
-         "--jq", ".tag_name"],
-        capture_output=True, text=True, encoding="utf-8",
+        [
+            "gh",
+            "api",
+            "repos/NousResearch/hermes-agent/releases/latest",
+            "--jq",
+            ".tag_name",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     if res.returncode == 0 and res.stdout.strip():
         return res.stdout.strip()
@@ -283,8 +345,12 @@ def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):  # consolas Windows cp1252
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--target", help="tag o commit de upstream (default: ultimo release)")
-    ap.add_argument("--apply", action="store_true", help="escribir cambios (default: dry-run)")
+    ap.add_argument(
+        "--target", help="tag o commit de upstream (default: ultimo release)"
+    )
+    ap.add_argument(
+        "--apply", action="store_true", help="escribir cambios (default: dry-run)"
+    )
     args = ap.parse_args()
 
     state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
@@ -326,7 +392,11 @@ def main() -> int:
                 if args.apply:
                     dest.unlink()
             else:
-                diverged.append((fork_path, up_path, "upstream lo borra, fork lo modifico"))
+                diverged.append((
+                    fork_path,
+                    up_path,
+                    "upstream lo borra, fork lo modifico",
+                ))
         elif ours is None:
             if base_r is None or status == "A":
                 added.append(fork_path)
@@ -334,7 +404,11 @@ def main() -> int:
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     dest.write_bytes(targ_r)
             else:
-                diverged.append((fork_path, up_path, "upstream lo modifica, fork lo elimino"))
+                diverged.append((
+                    fork_path,
+                    up_path,
+                    "upstream lo modifica, fork lo elimino",
+                ))
         elif norm(ours) == norm(targ_r):
             already.append(fork_path)
         elif norm(ours) == norm(base_r):
@@ -367,9 +441,12 @@ def main() -> int:
 
     if args.apply and diverged:
         import difflib
+
         PENDING_DIR.mkdir(parents=True, exist_ok=True)
-        report = ["# Merges pendientes de upstream\n",
-                  f"Sync {last[:9]} -> {target} ({target_sha[:9]})\n"]
+        report = [
+            "# Merges pendientes de upstream\n",
+            f"Sync {last[:9]} -> {target} ({target_sha[:9]})\n",
+        ]
         for fork_path, up_path, why in diverged:
             safe = fork_path.replace("/", "__")
             base = show(last, up_path)
@@ -380,23 +457,27 @@ def main() -> int:
             diff = difflib.unified_diff(
                 base_r.decode("utf-8", "replace").splitlines(keepends=True),
                 targ_r.decode("utf-8", "replace").splitlines(keepends=True),
-                fromfile=f"a/{fork_path}", tofile=f"b/{fork_path}",
+                fromfile=f"a/{fork_path}",
+                tofile=f"b/{fork_path}",
             )
-            (PENDING_DIR / f"{safe}.patch").write_text(
-                "".join(diff), encoding="utf-8")
+            (PENDING_DIR / f"{safe}.patch").write_text("".join(diff), encoding="utf-8")
             report.append(f"- `{fork_path}` — {why}\n")
         (PENDING_DIR / "REPORT.md").write_text("".join(report), encoding="utf-8")
-        print(f"  Material para los merges manuales en {PENDING_DIR.relative_to(ROOT)}/")
-        print("  (aplicar cada .patch a mano sobre el archivo del fork y borrar pending/)\n")
+        print(
+            f"  Material para los merges manuales en {PENDING_DIR.relative_to(ROOT)}/"
+        )
+        print(
+            "  (aplicar cada .patch a mano sobre el archivo del fork y borrar pending/)\n"
+        )
 
     if args.apply:
         state["last_synced_commit"] = target_sha
         if re.fullmatch(r"v[\d.]+", target):
             state["last_synced_tag"] = target
-        state["last_synced_date"] = git(
-            "log", "-1", "--format=%cI", target_sha).strip()
+        state["last_synced_date"] = git("log", "-1", "--format=%cI", target_sha).strip()
         STATE_FILE.write_text(
-            json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
         print("[sync] sync_state.json actualizado. Proximos pasos:")
         print("  1. Resolver pending/ si hay divergentes")
         print("  2. Revisar:  git status && git diff --stat")

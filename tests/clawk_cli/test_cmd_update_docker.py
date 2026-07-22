@@ -66,7 +66,7 @@ def test_cmd_update_in_docker_prints_guidance_and_exits(
 
     assert "doesn't apply inside the Docker container" in out
 
-    assert "docker pull nousresearch/clawksis-agent:latest" in out
+    assert "docker compose build" in out
 
     # No git invocations — the early-return must beat every git command.
 
@@ -96,7 +96,7 @@ def test_cmd_update_check_in_docker_prints_guidance_and_exits(
 
     assert "doesn't apply inside the Docker container" in out
 
-    assert "docker pull nousresearch/clawksis-agent:latest" in out
+    assert "docker compose build" in out
 
     git_calls = [
         c
@@ -260,7 +260,7 @@ def test_format_docker_update_message_contents():
 
     # Primary command — the entire reason this message exists.
 
-    assert "docker pull nousresearch/clawksis-agent:latest" in msg
+    assert "docker compose build" in msg
 
     # The four key concepts the message must cover:
 

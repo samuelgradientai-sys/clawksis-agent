@@ -876,7 +876,7 @@ class RetainDBMemoryProvider(MemoryProvider):
 
             project = (
                 f"clawk-{profile_name}"
-                if (profile_name and profile_name not in {"", ".clawk"})
+                if (profile_name and profile_name not in {"", ".clawk", ".clawksis"})
                 else "default"
             )
 

@@ -172,7 +172,7 @@ function downloadInstallScript(commit, destPath) {
 
   const scriptName = installScriptName()
 
-  const url = `https://raw.githubusercontent.com/NousResearch/clawksis-agent/${commit}/scripts/${scriptName}`
+  const url = `https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/${commit}/scripts/${scriptName}`
 
   return new Promise((resolve, reject) => {
 

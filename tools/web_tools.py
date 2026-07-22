@@ -174,7 +174,24 @@ from tools.tool_backend_helpers import (  # noqa: F401
     prefers_gateway,
 )
 
-from tools.url_safety import async_is_safe_url
+from tools.url_safety import (
+    is_safe_url,
+    normalize_url_for_request,
+)
+
+
+async def async_is_safe_url(url: str) -> bool:
+    """Off-event-loop SSRF probe used by the web tools.
+
+    Wraps the module-level ``is_safe_url`` (which does blocking DNS) in a thread
+    so it never stalls the loop. Defined locally — rather than imported from
+    ``tools.url_safety`` — so tests can monkeypatch EITHER
+    ``web_tools.is_safe_url`` OR ``web_tools.async_is_safe_url`` and the web
+    tools honour the patch (the website-policy gate patches the former; the
+    brave/secret-exfil suites patch the latter).
+    """
+    return await asyncio.to_thread(is_safe_url, url)
+
 
 import sys
 
@@ -189,6 +206,20 @@ def _has_env(name: str) -> bool:
 
     val = os.getenv(name)
 
+    if not (val and val.strip()):
+        # Also honor the Clawksis config-aware env (~/.clawksis/.env), matching
+        # how providers resolve their own keys (e.g. SearXNG's is_available reads
+        # SEARXNG_URL via get_env_value). Without this, a key set only in .env
+        # made the tool *available* but backend selection silently fell back.
+
+        try:
+            from clawk_cli.config import get_env_value
+
+            val = get_env_value(name)
+
+        except (ImportError, AttributeError, TypeError, OSError):
+            val = None
+
     return bool(val and val.strip())
 
 
@@ -200,7 +231,7 @@ def _load_web_config() -> dict:
 
         return load_config().get("web", {})
 
-    except (ImportError, Exception):
+    except (ImportError, OSError, TypeError):
         return {}
 
 
@@ -296,13 +327,38 @@ def _get_extract_backend() -> str:
 
     1. ``web.extract_backend`` (per-capability override)
 
-    2. ``web.backend`` (shared fallback — existing behavior)
+    2. Local ScrapeGraphAI when installed — prefer our own infrastructure over
+       paid third-party extract APIs (Firecrawl/Exa/...) when no explicit
+       override is set.
 
-    3. Auto-detect from env vars
+    3. ``web.backend`` (shared fallback — existing behavior)
+
+    4. Auto-detect from env vars
 
     """
 
-    return _get_capability_backend("extract")
+    cfg = _load_web_config()
+    specific = (cfg.get("extract_backend") or "").lower().strip()
+    if specific and _is_backend_available(specific):
+        return specific
+
+    # Prefer in-house ScrapeGraphAI for extraction over paid 3rd-party APIs once
+    # the local library is present (the `scrapegraph` tool installs it on first
+    # use). Explicit web.extract_backend above still wins.
+    if _scrapegraph_importable():
+        return "scrapegraph"
+
+    return _get_backend()
+
+
+def _scrapegraph_importable() -> bool:
+    """True when the local scrapegraphai library is installed."""
+    try:
+        from tools.scrapegraph_common import is_available
+
+        return is_available()
+    except ImportError:
+        return False
 
 
 def _get_capability_backend(capability: str) -> str:
@@ -350,6 +406,9 @@ def _is_backend_available(backend: str) -> bool:
     if backend == "ddgs":
         return _ddgs_package_importable()
 
+    if backend == "scrapegraph":
+        return _scrapegraph_importable()
+
     if backend == "xai":
         # Cheap probe — env var OR auth.json has OAuth tokens. Must not
 
@@ -364,7 +423,7 @@ def _is_backend_available(backend: str) -> bool:
 
             return has_xai_credentials()
 
-        except Exception:
+        except (ImportError, AttributeError, OSError):
             return False
 
     return False
@@ -500,9 +559,7 @@ def _resolve_web_extract_auxiliary(
     if client is not None and _is_nous_auxiliary_client(client):
         from agent.auxiliary_client import get_auxiliary_extra_body
 
-        from agent.portal_tags import nous_portal_tags
-
-        extra_body = get_auxiliary_extra_body() or {"tags": nous_portal_tags()}
+        extra_body = get_auxiliary_extra_body() or {}
 
     return client, effective_model, extra_body
 
@@ -1241,15 +1298,11 @@ def _ensure_web_plugins_loaded() -> None:
 
         _ensure_plugins_discovered()
 
-    except Exception as exc:  # noqa: BLE001
+    except (ImportError, AttributeError, OSError, SyntaxError) as exc:
         # Warning, not debug: if a plugin import is genuinely broken the
-
         # user otherwise hits the misleading "No web extract provider
-
         # configured" error this helper is meant to eliminate, with no
-
         # clue in normal logs about the real cause.
-
         logger.warning("Web plugin discovery failed (non-fatal): %s", exc)
 
 
@@ -1511,16 +1564,27 @@ async def web_extract_tool(
         ssrf_blocked: List[Dict[str, Any]] = []
 
         for url in urls:
-            if not await async_is_safe_url(url):
+            # Normalize first (IDNA host + percent-encode non-ASCII path/query)
+            # so the SSRF check and the backend both see a canonical ASCII URL —
+            # otherwise an international URL like ``wttr.in/Köln`` reaches the
+            # provider unescaped. Use the async SSRF probe so DNS resolution
+            # doesn't block the event loop.
+            normalized = normalize_url_for_request(url)
+
+            # Run the (DNS-resolving, blocking) SSRF probe off the event loop so
+            # it doesn't stall the loop; async_is_safe_url wraps the module-level
+            # is_safe_url so monkeypatching either symbol works and the
+            # website-policy gate downstream still runs.
+            if not await async_is_safe_url(normalized):
                 ssrf_blocked.append({
-                    "url": url,
+                    "url": normalized,
                     "title": "",
                     "content": "",
                     "error": "Blocked: URL targets a private or internal network address",
                 })
 
             else:
-                safe_urls.append(url)
+                safe_urls.append(normalized)
 
         # Dispatch only safe URLs to the configured backend
 
@@ -1775,8 +1839,26 @@ async def web_extract_tool(
 
         trimmed_response = {"results": trimmed_results}
 
+        # When extraction came back empty / blocked, point the agent at the
+        # anti-bot fallback instead of giving up or brute-forcing the same URL.
+        def _looks_failed(r):
+            return not (r.get("content") or "").strip() or bool(r.get("error"))
+
+        if trimmed_results and all(_looks_failed(r) for r in trimmed_results):
+            trimmed_response["hint"] = (
+                "No usable content (possible anti-bot / JS-required / 403). "
+                "Next step: use the `scrape` tool (Scrapling anti-bot bypass) for "
+                "Cloudflare/JS sites; use web_search for search queries. If you see "
+                "429 / 'too many requests' / a captcha, that's an IP block — it "
+                "needs a residential proxy (SCRAPLING_PROXY), not retries."
+            )
+
         if trimmed_response.get("results") == []:
-            result_json = tool_error("Content was inaccessible or not found")
+            result_json = tool_error(
+                "Content was inaccessible or not found. Try the `scrape` tool "
+                "(Scrapling anti-bot bypass) for anti-bot/JS sites, or web_search "
+                "for search queries."
+            )
 
             cleaned_result = clean_base64_images(result_json)
 

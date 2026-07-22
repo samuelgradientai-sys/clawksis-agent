@@ -13,6 +13,8 @@ export function useSidebarStatus() {
 
   useEffect(() => {
     const load = () => {
+      // Skip polling while the tab is hidden — refresh on return instead.
+      if (document.hidden) return;
       api
         .getStatus()
         .then(setStatus)
@@ -20,7 +22,14 @@ export function useSidebarStatus() {
     };
     load();
     const id = setInterval(load, POLL_MS);
-    return () => clearInterval(id);
+    const onVisible = () => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   return status;

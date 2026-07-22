@@ -1,0 +1,256 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+DEFAULT_INPUT = "business_ops/examples/sample_sales.csv"
+
+ALLOWED_TYPES = {
+    "ejecutivo": "./business_ops/ventas-resumen",
+    "semanal": "./business_ops/ventas",
+    "clientes": "./business_ops/ventas",
+    "productos": "./business_ops/ventas",
+    "vendedores": "./business_ops/ventas",
+}
+
+
+@dataclass(frozen=True)
+class IntentResult:
+    report_type: str
+    confidence: str
+    reason: str
+
+
+def normalize(text: str) -> str:
+    text = text.lower().strip()
+    replacements = {
+        "á": "a",
+        "é": "e",
+        "í": "i",
+        "ó": "o",
+        "ú": "u",
+        "ñ": "n",
+    }
+    for src, dst in replacements.items():
+        text = text.replace(src, dst)
+    text = re.sub(r"[^a-z0-9\s_-]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def detect_intent(request: str) -> IntentResult:
+    text = normalize(request)
+
+    patterns = [
+        (
+            "clientes",
+            [
+                "cliente",
+                "clientes",
+                "customer",
+                "customers",
+                "seguimiento",
+                "retencion",
+                "recurrente",
+                "principales clientes",
+                "clientes principales",
+            ],
+            "La solicitud menciona clientes o seguimiento comercial.",
+        ),
+        (
+            "productos",
+            [
+                "producto",
+                "productos",
+                "product",
+                "products",
+                "impulsar",
+                "portafolio",
+                "plan",
+                "planes",
+                "mas vendido",
+                "producto lider",
+            ],
+            "La solicitud menciona productos, planes o portafolio.",
+        ),
+        (
+            "vendedores",
+            [
+                "vendedor",
+                "vendedores",
+                "sales rep",
+                "representante",
+                "representantes",
+                "equipo comercial",
+                "desempeno de vendedores",
+                "comercial",
+                "laura",
+            ],
+            "La solicitud menciona vendedores o equipo comercial.",
+        ),
+        (
+            "semanal",
+            [
+                "semanal",
+                "semana",
+                "weekly",
+                "reporte de ventas",
+                "ventas de la semana",
+                "ventas semanal",
+            ],
+            "La solicitud menciona reporte semanal o ventas de la semana.",
+        ),
+        (
+            "ejecutivo",
+            [
+                "ejecutivo",
+                "resumen ejecutivo",
+                "gerencial",
+                "direccion",
+                "directivo",
+                "general",
+                "comercial",
+                "summary",
+                "executive",
+                "resumen comercial",
+            ],
+            "La solicitud pide un resumen ejecutivo o general.",
+        ),
+    ]
+
+    scores: dict[str, int] = {}
+    reasons: dict[str, str] = {}
+
+    for report_type, keywords, reason in patterns:
+        score = 0
+        for keyword in keywords:
+            keyword_norm = normalize(keyword)
+            if keyword_norm in text:
+                score += 1
+        if score:
+            scores[report_type] = score
+            reasons[report_type] = reason
+
+    if not scores:
+        return IntentResult(
+            report_type="ejecutivo",
+            confidence="low",
+            reason="No se detectó una intención específica; se usa resumen ejecutivo por defecto.",
+        )
+
+    sorted_scores = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    best_type, best_score = sorted_scores[0]
+
+    confidence = "high" if best_score >= 2 else "medium"
+
+    return IntentResult(
+        report_type=best_type,
+        confidence=confidence,
+        reason=reasons[best_type],
+    )
+
+
+def build_command(report_type: str, input_path: str, output_format: str) -> list[str]:
+    if report_type not in ALLOWED_TYPES:
+        raise ValueError(f"Tipo de reporte no permitido: {report_type}")
+
+    if report_type == "ejecutivo":
+        command = ["./business_ops/ventas-resumen"]
+        return command
+
+    command = [
+        "./business_ops/ventas",
+        "--tipo",
+        report_type,
+        "--input",
+        input_path,
+    ]
+
+    if output_format == "json":
+        command.append("--json")
+    else:
+        command.append("--markdown")
+
+    return command
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Router seguro de lenguaje natural para reportes comerciales de Clawksis."
+    )
+    parser.add_argument("--request", required=True, help="Solicitud del usuario en lenguaje natural.")
+    parser.add_argument("--input", default=DEFAULT_INPUT, help="Archivo CSV de ventas.")
+    parser.add_argument("--json", action="store_true", help="Salida JSON estructurada del router.")
+    parser.add_argument("--markdown", action="store_true", help="Salida Markdown del reporte.")
+    parser.add_argument("--dry-run", action="store_true", help="Solo muestra la intención y comando seleccionado.")
+    parser.add_argument("--version", action="store_true", help="Muestra versión.")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    intent = detect_intent(args.request)
+    output_format = "json" if args.json else "markdown"
+    command = build_command(intent.report_type, args.input, output_format)
+
+    metadata = {
+        "status": "ok",
+        "request": args.request,
+        "detected_type": intent.report_type,
+        "confidence": intent.confidence,
+        "reason": intent.reason,
+        "command": command,
+    }
+
+    if args.dry_run:
+        print(json.dumps(metadata, ensure_ascii=False, indent=2))
+        return 0
+
+    result = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        shell=False,
+        capture_output=True,
+        text=True,
+        timeout=90,
+    )
+
+    if args.json:
+        payload = {
+            **metadata,
+            "exit_code": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return result.returncode
+
+    print("NATURAL_SALES_REPORT_STATUS=ok")
+    print(f"detected_type={intent.report_type}")
+    print(f"confidence={intent.confidence}")
+    print(f"reason={intent.reason}")
+    print()
+
+    if result.stdout:
+        print(result.stdout, end="")
+
+    if result.stderr:
+        print(result.stderr, file=sys.stderr, end="")
+
+    return result.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

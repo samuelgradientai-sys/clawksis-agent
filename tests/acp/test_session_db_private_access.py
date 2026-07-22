@@ -31,6 +31,7 @@ def _mock_agent():
 # clawk_state.SessionDB.update_session_meta — unit tests
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateSessionMeta:
     """Direct unit tests for the new public method."""
 
@@ -101,6 +102,7 @@ class TestUpdateSessionMeta:
 # AST check: session.py must not access db._lock or db._conn
 # ---------------------------------------------------------------------------
 
+
 class TestNoPrviateDBAccess:
     """_persist() in session.py must not access db._lock or db._conn."""
 
@@ -116,9 +118,7 @@ class TestNoPrviateDBAccess:
             if isinstance(node, ast.Attribute):
                 if isinstance(node.value, ast.Name) and node.value.id == "db":
                     if node.attr in ("_lock", "_conn"):
-                        violations.append(
-                            f"db.{node.attr} at line {node.lineno}"
-                        )
+                        violations.append(f"db.{node.attr} at line {node.lineno}")
 
         assert violations == [], (
             "session.py accesses private SessionDB internals: "
@@ -152,6 +152,7 @@ class TestNoPrviateDBAccess:
 # ---------------------------------------------------------------------------
 # Integration: _persist round-trip via SessionManager
 # ---------------------------------------------------------------------------
+
 
 class TestPersistRoundTrip:
     """End-to-end: save a session and verify DB state is correct."""
@@ -189,7 +190,9 @@ class TestPersistRoundTrip:
 
         state = manager.create_session()
         # Manually set a model in DB
-        db.update_session_meta(state.session_id, json.dumps({"cwd": "."}), model="stored-model")
+        db.update_session_meta(
+            state.session_id, json.dumps({"cwd": "."}), model="stored-model"
+        )
 
         # Now save with empty model
         state.model = ""

@@ -277,9 +277,7 @@ time so you can quickly verify the upstream repo.
 Manifests pin a `manifest_version`. The catalog is forward-compatible: if a
 
 PR adds an entry with a newer `manifest_version` than your installed Clawksis
-
 understands, the picker will surface a warning (`⚠ '<name>' requires a newer
-
 Clawksis`) for that entry instead of silently hiding it. Run `clawk update`
 
 to install the latest Clawksis when you see that.

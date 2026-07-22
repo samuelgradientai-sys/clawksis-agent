@@ -120,7 +120,7 @@ Base URL:   http://127.0.0.1:8645/v1
 
 API key:    anything (e.g. "sk-unused")
 
-Model:      Clawksis-4-70B    # or Clawksis-4.3-36B, Clawksis-4-405B
+Model:      Hermes-4-70B    # or Hermes-4.3-36B, Hermes-4-405B
 
 ```
 
@@ -246,7 +246,7 @@ Edit `~/.openviking/ov.conf`:
 
     "provider": "openai",
 
-    "model": "Clawksis-4-70B",
+    "model": "Hermes-4-70B",
 
     "api_base": "http://127.0.0.1:8645/v1",
 
@@ -308,7 +308,7 @@ OPENAI_API_BASE_URL=http://127.0.0.1:8645/v1
 
 OPENAI_API_KEY=any-non-empty-string
 
-INFERENCE_TEXT_MODEL=Clawksis-4-70B
+INFERENCE_TEXT_MODEL=Hermes-4-70B
 
 ```
 

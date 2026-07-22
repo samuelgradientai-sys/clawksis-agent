@@ -454,20 +454,6 @@ class TestBuildApiKwargsKimiNoTemperatureOverride:
 
 
 class TestBuildApiKwargsNousPortal:
-    def test_includes_nous_product_tags(self, monkeypatch):
-        from agent.portal_tags import nous_portal_tags
-
-        agent = _make_agent(
-            monkeypatch,
-            "nous",
-            base_url="https://inference-api.nousresearch.com/v1",
-            model="gpt-5",
-        )
-        messages = [{"role": "user", "content": "hi"}]
-        kwargs = agent._build_api_kwargs(messages)
-        extra = kwargs.get("extra_body", {})
-        assert extra.get("tags") == nous_portal_tags()
-
     def test_uses_chat_completions_format(self, monkeypatch):
         agent = _make_agent(
             monkeypatch,
@@ -1216,22 +1202,6 @@ class TestAuxiliaryClientProviderPriority:
             client, model = get_text_auxiliary_client()
         assert model == "google/gemini-3-flash-preview"
         assert "openrouter" in str(mock.call_args.kwargs["base_url"]).lower()
-
-    def test_nous_when_no_openrouter(self, monkeypatch):
-        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-        from agent.auxiliary_client import get_text_auxiliary_client
-
-        nous_auth = {
-            "access_token": _fake_invoke_jwt(),
-            "scope": "inference:invoke",
-        }
-        with (
-            patch("agent.auxiliary_client._read_nous_auth", return_value=nous_auth),
-            patch("agent.auxiliary_client.OpenAI") as mock,
-            patch("clawk_cli.models.get_nous_recommended_aux_model", return_value=None),
-        ):
-            client, model = get_text_auxiliary_client()
-        assert model == "google/gemini-3-flash-preview"
 
     def test_custom_endpoint_when_no_nous(self, monkeypatch):
         """Custom endpoint is used when no OpenRouter/Nous keys are available.

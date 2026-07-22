@@ -6,7 +6,9 @@ import {
   ChevronRight,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
+
+import { DiffViewer } from "./DiffViewer";
 
 /**
  * Expandable tool call row — the web equivalent of Ink's ToolTrail node.
@@ -48,9 +50,9 @@ const BULLET_TONE: Record<ToolEntry["status"], string> = {
   error: "text-destructive",
 };
 
-const TICK_MS = 500;
+const TICK_MS = 1000;
 
-export function ToolCall({ tool }: { tool: ToolEntry }) {
+export const ToolCall = memo(function ToolCall({ tool }: { tool: ToolEntry }) {
   // `open` is derived: errors default-expanded, everything else collapsed.
   // `null` means "follow the default"; any explicit bool is the user's override.
   // This lets a running tool flip to expanded automatically when it errors,
@@ -59,11 +61,35 @@ export function ToolCall({ tool }: { tool: ToolEntry }) {
   const open = userOverride ?? tool.status === "error";
 
   // Tick `now` while the tool is running so the elapsed label updates live.
+  // The ticker pauses while the tab is hidden (no point updating an off-screen
+  // label, and it avoids N background timers when many tools have run) and
+  // resyncs immediately on becoming visible again.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (tool.status !== "running") return;
-    const id = window.setInterval(() => setNow(() => Date.now()), TICK_MS);
-    return () => window.clearInterval(id);
+    let id = 0;
+    const start = () => {
+      if (id) return;
+      id = window.setInterval(() => setNow(() => Date.now()), TICK_MS);
+    };
+    const stop = () => {
+      if (id) window.clearInterval(id);
+      id = 0;
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        setNow(() => Date.now());
+        start();
+      }
+    };
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [tool.status]);
 
   // Historical tools (hydrated from session.resume) signal missing timestamps
@@ -147,9 +173,7 @@ export function ToolCall({ tool }: { tool: ToolEntry }) {
 
           {tool.inline_diff && (
             <Section label="diff">
-              <pre className="whitespace-pre overflow-x-auto text-[0.7rem] leading-snug">
-                {colorizeDiff(tool.inline_diff)}
-              </pre>
+              <DiffViewer diff={tool.inline_diff} />
             </Section>
           )}
 
@@ -172,7 +196,7 @@ export function ToolCall({ tool }: { tool: ToolEntry }) {
       )}
     </div>
   );
-}
+});
 
 function Section({
   label,
@@ -207,22 +231,4 @@ function fmtElapsed(ms: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.round(sec % 60);
   return s ? `${m}m ${s}s` : `${m}m`;
-}
-
-/** Colorize unified-diff lines for the inline diff section. */
-function colorizeDiff(diff: string): React.ReactNode {
-  return diff.split("\n").map((line, i) => (
-    <div key={i} className={diffLineClass(line)}>
-      {line || "\u00A0"}
-    </div>
-  ));
-}
-
-function diffLineClass(line: string): string {
-  if (line.startsWith("+") && !line.startsWith("+++"))
-    return "text-success";
-  if (line.startsWith("-") && !line.startsWith("---"))
-    return "text-destructive";
-  if (line.startsWith("@@")) return "text-primary";
-  return "text-text-secondary";
 }

@@ -1235,7 +1235,7 @@ class TestEditMessageStreamingSafety:
         assert second_call == {
             "chat_id": 123,
             "message_id": 456,
-            "text": "final **bold**",
+            "text": "final bold",
         }
 
     @pytest.mark.asyncio

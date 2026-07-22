@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$REPO_ROOT"
+
+echo "== Clawksis Local Ops Bootstrap =="
+echo "Repo: $REPO_ROOT"
+echo
+
+echo "[1/5] Checking repository layout..."
+test -d ".git"
+test -d "local_ops"
+test -f "hermes_lite/hermes_lite.py"
+echo "OK"
+echo
+
+echo "[2/5] Creating portable runtime directories..."
+mkdir -p "hermes_lite/data"
+touch "hermes_lite/data/.gitkeep"
+echo "OK"
+echo
+
+echo "[3/5] Setting safe local permissions..."
+chmod 750 "local_ops"
+chmod 750 "local_ops/bootstrap"
+chmod 750 "local_ops/doctor"
+chmod 750 "local_ops/clawk-safe-ops"
+chmod 750 "local_ops/repo-status"
+chmod 750 "local_ops/system-health"
+chmod 640 "local_ops/service-status.allowlist.json"
+chmod 750 "local_ops/service-status"
+chmod 750 "local_ops/client-report"
+chmod 750 "local_ops/quality-gate"
+chmod 750 "local_ops/security-audit"
+chmod 750 "local_ops/health-json"
+chmod 640 "local_ops/capabilities.json"
+chmod 750 "local_ops/capabilities"
+chmod 640 "local_ops/clawk_safe_ops.py"
+chmod 640 "local_ops/tests/test_clawk_safe_ops.py"
+chmod 750 "hermes_lite"
+chmod 640 "hermes_lite/hermes_lite.py"
+chmod 640 "hermes_lite/README.md" 2>/dev/null || true
+chmod 750 "hermes_lite/data"
+chmod 750 "business_ops" 2>/dev/null || true
+chmod 750 "business_ops/examples" 2>/dev/null || true
+chmod 750 "business_ops/reports" 2>/dev/null || true
+chmod 750 "business_ops/tests" 2>/dev/null || true
+chmod 750 "business_ops/weekly-sales-report" 2>/dev/null || true
+chmod 750 "business_ops/customer-insights" 2>/dev/null || true
+chmod 750 "business_ops/product-performance" 2>/dev/null || true
+chmod 750 "business_ops/sales-rep-performance" 2>/dev/null || true
+chmod 750 "business_ops/executive-summary" 2>/dev/null || true
+chmod 750 "business_ops/ventas" 2>/dev/null || true
+chmod 640 "business_ops/examples/sample_sales.csv" 2>/dev/null || true
+chmod 640 "business_ops/reports/.gitkeep" 2>/dev/null || true
+chmod 640 "hermes_lite/data/.gitkeep"
+echo "OK"
+echo
+
+echo "[4/5] Checking Python syntax..."
+python3 -m py_compile hermes_lite/hermes_lite.py
+python3 -m py_compile local_ops/clawk_safe_ops.py
+echo "OK"
+echo
+
+echo "[5/5] Running doctor..."
+./local_ops/doctor
+
+echo
+echo "BOOTSTRAP_STATUS=OK"

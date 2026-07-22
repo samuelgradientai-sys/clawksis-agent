@@ -18,7 +18,7 @@ Usage:
 
 """
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 
 
 import asyncio
@@ -61,7 +61,13 @@ import urllib.error
 
 import urllib.parse
 
+import mimetypes
+
+import shutil
+
 import urllib.request
+
+from dataclasses import dataclass
 
 from pathlib import Path
 
@@ -104,7 +110,16 @@ from utils import env_var_enabled
 
 
 try:
-    from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+    from fastapi import (
+        FastAPI,
+        File,
+        Form,
+        HTTPException,
+        Request,
+        UploadFile,
+        WebSocket,
+        WebSocketDisconnect,
+    )
 
     from fastapi.middleware.cors import CORSMiddleware
 
@@ -128,8 +143,11 @@ except ImportError:
 
         from fastapi import (
             FastAPI,
+            File,
+            Form,
             HTTPException,
             Request,
+            UploadFile,
             WebSocket,
             WebSocketDisconnect,
         )
@@ -283,6 +301,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Gzip JS/CSS/JSON on the wire. The dashboard ships ~1MB of hashed JS/CSS per
+# cold load; gzip cuts that ~3-4x (e.g. the 405KB index chunk → ~131KB),
+# which dominates first-load time over the Cloudflare tunnel.
+from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
+
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+
+@app.middleware("http")
+async def _immutable_asset_cache(request: "Request", call_next):
+    """Mark Vite's content-hashed assets immutable so the browser stops doing a
+    conditional GET + 304 for every chunk on each reload. The filename changes
+    when the content changes, and index.html is forced to ``no-cache`` (always
+    revalidate) so it always re-resolves the current hashes — without an
+    explicit header, browsers apply heuristic caching to the SPA shell and a
+    stale index keeps pointing at deleted chunks after a server-side rebuild
+    (frozen navigation until a hard refresh)."""
+    response = await call_next(request)
+    if response.status_code != 200:
+        return response
+    path = request.url.path
+    if path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 
 # ---------------------------------------------------------------------------
 
@@ -346,7 +391,17 @@ def _has_valid_session_token(request: Request) -> bool:
 
 
 def _require_token(request: Request) -> None:
-    """Validate the ephemeral session token.  Raises 401 on mismatch."""
+    """Validate the ephemeral session token.  Raises 401 on mismatch.
+
+    Under the OAuth gate the legacy session token is not injected into the SPA;
+    the gate middleware authenticates via the session cookie and attaches a
+    verified ``request.state.session`` before the handler runs. Defer to that so
+    cookie-authenticated requests aren't re-checked against an absent token —
+    that double-check is the plugin install-popup 401 bug.
+    """
+
+    if getattr(request.state, "session", None):
+        return
 
     if not _has_valid_session_token(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -394,9 +449,37 @@ def should_require_auth(host: str, allow_public: bool) -> bool:
 
     exactly the threat model the gate is designed for.
 
+    Override: ``CLAWK_DASHBOARD_FORCE_GATE`` truthy engages the gate even on
+    a loopback bind. Es el modo reverse-proxy (``clawk dashboard domain``):
+    el dashboard escucha solo en 127.0.0.1 pero Caddy/Nginx lo publica en un
+    dominio, así que el login tiene que estar activo aunque el bind sea
+    loopback. Gana sobre ``--insecure`` (env explícito > flag heredado).
+
     """
 
+    if _env_truthy("CLAWK_DASHBOARD_FORCE_GATE"):
+        return True
+
     return (host not in _LOOPBACK_HOST_VALUES) and (not allow_public)
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _public_proxy_hosts() -> "set[str]":
+    """Hostnames extra aceptados en el Host header (modo reverse-proxy).
+
+    ``CLAWK_DASHBOARD_PUBLIC_HOST`` — lista separada por comas de dominios
+    por los que un proxy local publica el dashboard (los setea la unit que
+    escribe ``clawk dashboard domain``). Sin él, la defensa anti-rebinding
+    de ``_is_accepted_host`` rechazaría el Host del dominio porque el bind
+    es loopback.
+    """
+
+    raw = os.environ.get("CLAWK_DASHBOARD_PUBLIC_HOST", "")
+
+    return {h.strip().lower() for h in raw.split(",") if h.strip()}
 
 
 def _is_accepted_host(host_header: str, bound_host: str) -> bool:
@@ -456,6 +539,13 @@ def _is_accepted_host(host_header: str, bound_host: str) -> bool:
     # defence can protect that mode; rely on operator network controls.
 
     if bound_host in {"0.0.0.0", "::"}:
+        return True
+
+    # Modo reverse-proxy: dominios publicados por un proxy local (Caddy) —
+
+    # allowlist explícito, así el anti-rebinding sigue activo para el resto.
+
+    if host_only in _public_proxy_hosts():
         return True
 
     # Loopback bind: accept the loopback names
@@ -561,6 +651,620 @@ async def auth_middleware(request: Request, call_next):
             )
 
     return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# Media gallery — serve locally cached files from ~/.clawksis/media/
+# ---------------------------------------------------------------------------
+#
+# Companion to the media_generations table (populated by
+# tools/media_persistence.py). The DB stores absolute file_path; this
+# endpoint validates and serves it with correct MIME type.
+#
+# This route intentionally lives outside /api/ (mirrors /artifacts/download):
+# direct <img src="/media/file/xxx"> in the React gallery cannot attach the
+# session token header. Security is kept by strict loopback-only access and
+# a narrow allowlist of the media root + extensions.
+# ---------------------------------------------------------------------------
+
+
+_MEDIA_ALLOWED_EXT_TO_MIME: Dict[str, str] = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+}
+
+
+@app.get("/media/file/{media_id}")
+async def get_media_file(media_id: str, request: Request):
+    """Serve a media file registered in media_generations by ID.
+
+    Security model (mirrors /artifacts/download):
+    - loopback / SSH-tunnel only
+    - file_path comes from the DB (not user-controllable directly)
+    - path validated to be inside ~/.clawksis/media/
+    - only allowed extensions are served (image/video MIME)
+    - symlinks resolved before allowlist check
+    """
+    import sqlite3
+    from pathlib import Path
+
+    if not _artifact_is_loopback_request(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Media files are only available from local or SSH-tunnel dashboard access.",
+        )
+
+    if not media_id or len(media_id) > 128 or "/" in media_id or ".." in media_id:
+        raise HTTPException(status_code=400, detail="Invalid media id.")
+
+    db_path = Path.home() / ".clawksis" / "state.db"
+    if not db_path.exists():
+        raise HTTPException(status_code=503, detail="State DB unavailable.")
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT file_path, media_type, status FROM media_generations WHERE id = ?",
+            (media_id,),
+        )
+        row = cur.fetchone()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB error: {e}")
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Media not found.")
+
+    file_path_str, media_type, status = row
+
+    if status == "expired":
+        raise HTTPException(status_code=410, detail="Media URL expired before caching.")
+
+    if status != "ready":
+        raise HTTPException(
+            status_code=409, detail=f"Media not ready (status={status})."
+        )
+
+    media_root = (Path.home() / ".clawksis" / "media").resolve(strict=False)
+    candidate = Path(file_path_str).expanduser().resolve(strict=False)
+
+    # register_media descarga a ~/.clawksis/media/, pero register_local_media
+    # registra archivos in-place (cache/images de image_gen, audio_cache de
+    # TTS, artifacts) — mismos roots que sirve /media/local.
+    allowed_roots = [media_root, *_local_media_allowed_roots()]
+    if not any(_artifact_is_within_root(candidate, root) for root in allowed_roots):
+        raise HTTPException(
+            status_code=403,
+            detail="Media file is outside the allowed media directory.",
+        )
+
+    if not candidate.exists():
+        raise HTTPException(status_code=404, detail="Media file missing on disk.")
+
+    if not candidate.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file.")
+
+    ext = candidate.suffix.lower()
+    # El mapa extendido cubre también audio (TTS en audio_cache).
+    mime = _MEDIA_ALLOWED_EXT_TO_MIME.get(ext) or _LOCAL_MEDIA_EXT_TO_MIME.get(ext)
+    if not mime:
+        raise HTTPException(status_code=400, detail=f"Extension not allowed: {ext}")
+
+    return FileResponse(
+        str(candidate),
+        media_type=mime,
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "Content-Disposition": f'inline; filename="{candidate.name}"',
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Local media bridge — el agente referencia archivos locales en sus respuestas
+# (líneas "MEDIA:/root/.clawksis/audio_cache/briefing_x.ogg" de TTS y markdown
+# ![](/root/.clawksis/cache/images/x.png)). El chat Modern reescribe esas
+# referencias a GET /media/local?path=… y este endpoint las sirve.
+#
+# Security model (espejo de /media/file y /artifacts/download):
+# - loopback / SSH-tunnel only; con el OAuth gate activo la cookie de sesión
+#   sigue aplicando (la ruta NO está en _GATE_PUBLIC_PREFIXES a propósito);
+# - symlinks resueltos ANTES del chequeo de allowlist (sin escape vía link);
+# - traversal (..) neutralizado por resolve();
+# - SOLO archivos bajo ~/.clawksis/{audio_cache, cache/images, artifacts};
+# - solo extensiones allowlisted, MIME inferido del mapa (sin .svg: servirlo
+#   inline same-origin permitiría XSS).
+# Vive fuera de /api/ porque <img src>/<audio src> no pueden adjuntar el
+# session token header.
+# ---------------------------------------------------------------------------
+
+
+_LOCAL_MEDIA_EXT_TO_MIME: Dict[str, str] = {
+    # audio (TTS briefings, notas de voz)
+    ".ogg": "audio/ogg",
+    ".oga": "audio/ogg",
+    ".opus": "audio/opus",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
+    ".flac": "audio/flac",
+    # imágenes
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+    ".avif": "image/avif",
+    # video
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".m4v": "video/x-m4v",
+    ".ogv": "video/ogg",
+}
+
+
+def _local_media_allowed_roots() -> "List[Path]":
+    """Roots servibles por /media/local (resueltos para comparar post-symlink)."""
+    home = get_clawk_home()
+    return [
+        (home / "audio_cache").resolve(strict=False),
+        (home / "cache" / "images").resolve(strict=False),
+        (home / "artifacts").resolve(strict=False),
+    ]
+
+
+@app.get("/media/local")
+async def get_local_media(path: str, request: Request):
+    """Serve a local media file referenced by the agent, by absolute path.
+
+    Security model (mirrors /media/file and /artifacts/download):
+    - loopback / SSH-tunnel only;
+    - symlinks resolved BEFORE the allowlist check;
+    - only files under ~/.clawksis/{audio_cache, cache/images, artifacts};
+    - only allowlisted media extensions (MIME inferred from the map).
+    """
+    from pathlib import Path
+    from urllib.parse import unquote
+
+    if not _artifact_is_loopback_request(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Local media is only available from local or SSH-tunnel dashboard access.",
+        )
+
+    raw_path = unquote(str(path or "")).strip()
+    if raw_path.startswith("file://"):
+        raw_path = raw_path[len("file://") :]
+    if not raw_path:
+        raise HTTPException(status_code=400, detail="Missing media path.")
+
+    # resolve() colapsa ".." y resuelve symlinks ANTES del chequeo de roots.
+    candidate = Path(raw_path).expanduser().resolve(strict=False)
+
+    if not any(
+        _artifact_is_within_root(candidate, root)
+        for root in _local_media_allowed_roots()
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Media path is outside the allowed local media directories.",
+        )
+
+    ext = candidate.suffix.lower()
+    local_mime = _LOCAL_MEDIA_EXT_TO_MIME.get(ext)
+    if not local_mime:
+        raise HTTPException(
+            status_code=400, detail=f"Extension not allowed: {ext or '(none)'}"
+        )
+
+    if not candidate.exists():
+        raise HTTPException(status_code=404, detail="Media file not found.")
+
+    if not candidate.is_file():
+        raise HTTPException(status_code=400, detail="Media path is not a file.")
+
+    return FileResponse(
+        str(candidate),
+        media_type=local_mime,
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "Content-Disposition": f'inline; filename="{candidate.name}"',
+        },
+    )
+
+
+# REST endpoints for the gallery UI (consumed by MediaPage.tsx).
+# Path: /api/gallery (NOT /api/media — that's taken by the equipo's endpoint
+# that serves images from cache/screenshots as base64 data URLs).
+# These live under /api/ so the auth middleware protects them like other
+# dashboard data endpoints. The file-serving endpoint above is outside /api/
+# because <img src="..."> can't attach the session token.
+
+
+@app.get("/api/gallery")
+async def get_media_list(
+    limit: int = 60,
+    offset: int = 0,
+    media_type: Optional[str] = None,
+    date_from: Optional[float] = None,
+    date_to: Optional[float] = None,
+    model: Optional[str] = None,
+    session_id: Optional[str] = None,
+    search: Optional[str] = None,
+    min_size: Optional[int] = None,
+    max_size: Optional[int] = None,
+):
+    """List media with filters + pagination.
+
+    All filters are optional. Sorts by created_at DESC.
+    Returns: {items: [...], total: int, has_more: bool}
+    """
+    import sqlite3
+    from pathlib import Path
+
+    limit = min(max(int(limit), 1), 200)
+    offset = max(int(offset), 0)
+
+    where_clauses = []
+    args: list = []
+
+    if media_type in ("image", "video"):
+        where_clauses.append("media_type = ?")
+        args.append(media_type)
+
+    if date_from is not None:
+        where_clauses.append("created_at >= ?")
+        args.append(float(date_from))
+
+    if date_to is not None:
+        where_clauses.append("created_at <= ?")
+        args.append(float(date_to))
+
+    if model:
+        where_clauses.append("model = ?")
+        args.append(str(model))
+
+    if session_id:
+        where_clauses.append("session_id = ?")
+        args.append(str(session_id))
+
+    if search:
+        where_clauses.append("LOWER(prompt) LIKE ?")
+        args.append(f"%{str(search).lower()}%")
+
+    if min_size is not None:
+        where_clauses.append("file_size_bytes >= ?")
+        args.append(int(min_size))
+
+    if max_size is not None:
+        where_clauses.append("file_size_bytes <= ?")
+        args.append(int(max_size))
+
+    where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    db_path = Path.home() / ".clawksis" / "state.db"
+    if not db_path.exists():
+        return JSONResponse(status_code=503, content={"detail": "State DB unavailable"})
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        cur.execute(f"SELECT COUNT(*) as c FROM media_generations{where_sql}", args)
+        total = cur.fetchone()["c"]
+
+        cur.execute(
+            f"SELECT id, session_id, message_id, media_type, status, "
+            f"file_path, original_url, file_size_bytes, width, height, "
+            f"prompt, model, provider, created_at "
+            f"FROM media_generations{where_sql} "
+            f"ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            args + [limit, offset],
+        )
+        items = [dict(row) for row in cur.fetchall()]
+        conn.close()
+
+        return {
+            "items": items,
+            "total": total,
+            "has_more": offset + len(items) < total,
+        }
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"DB error: {e}"})
+
+
+@app.get("/api/gallery/stats")
+async def get_media_stats():
+    """Aggregate stats for the gallery header."""
+    import sqlite3
+    from pathlib import Path
+
+    db_path = Path.home() / ".clawksis" / "state.db"
+    if not db_path.exists():
+        return JSONResponse(status_code=503, content={"detail": "State DB unavailable"})
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cur = conn.cursor()
+
+        cur.execute("SELECT COUNT(*) FROM media_generations WHERE media_type = 'image'")
+        total_images = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM media_generations WHERE media_type = 'video'")
+        total_videos = cur.fetchone()[0]
+
+        cur.execute("SELECT COALESCE(SUM(file_size_bytes), 0) FROM media_generations")
+        total_size = cur.fetchone()[0]
+
+        seven_days_ago = time.time() - (7 * 86400)
+        cur.execute(
+            "SELECT COUNT(*) FROM media_generations WHERE created_at >= ?",
+            (seven_days_ago,),
+        )
+        last_7 = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM media_generations WHERE status = 'expired'")
+        expired = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM media_generations WHERE status = 'ready'")
+        ready = cur.fetchone()[0]
+
+        conn.close()
+
+        return {
+            "total_images": total_images,
+            "total_videos": total_videos,
+            "total_size_bytes": total_size,
+            "last_7_days": last_7,
+            "expired_count": expired,
+            "ready_count": ready,
+        }
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"DB error: {e}"})
+
+
+@app.delete("/api/gallery/{media_id}")
+async def delete_media(media_id: str):
+    """Delete a media entry: removes DB row + file from disk."""
+    import sqlite3
+    from pathlib import Path
+
+    if not media_id or len(media_id) > 128 or "/" in media_id or ".." in media_id:
+        raise HTTPException(status_code=400, detail="Invalid media id")
+
+    db_path = Path.home() / ".clawksis" / "state.db"
+    if not db_path.exists():
+        return JSONResponse(status_code=503, content={"detail": "State DB unavailable"})
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cur = conn.cursor()
+
+        cur.execute(
+            "SELECT file_path, file_size_bytes FROM media_generations WHERE id = ?",
+            (media_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Media not found")
+
+        file_path_str, file_size = row
+        freed = int(file_size or 0)
+        file_missing = False
+
+        try:
+            fp = Path(file_path_str)
+            if fp.exists():
+                fp.unlink()
+            else:
+                file_missing = True
+        except Exception:
+            logger.exception("Failed to delete file %s", file_path_str)
+
+        cur.execute("DELETE FROM media_generations WHERE id = ?", (media_id,))
+        conn.commit()
+        conn.close()
+
+        return {
+            "deleted": True,
+            "freed_bytes": freed,
+            "file_missing": file_missing,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"DB error: {e}"})
+
+
+# ---------------------------------------------------------------------------
+# Local artifact downloads — artifact-download-v1
+# ---------------------------------------------------------------------------
+#
+# This route intentionally lives outside /api because direct Markdown links in
+# the chat cannot attach the X-Clawksis-Session-Token header. Security is kept
+# by strict local-only access and a narrow export-directory allowlist.
+# ---------------------------------------------------------------------------
+
+_ARTIFACT_ALLOWED_SUFFIXES = {
+    ".xlsx",
+    ".csv",
+    ".pdf",
+    ".docx",
+    ".txt",
+    ".md",
+    ".json",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".svg",
+    ".mp4",
+    ".webm",
+    ".mov",
+    ".m4v",
+    ".zip",
+}
+
+# Media types served INLINE so the dashboard chat can render images/videos the
+# agent "sends" (markdown ![](/artifacts/download?path=…)) instead of forcing a
+# download. Everything else stays application/octet-stream (download).
+_ARTIFACT_INLINE_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".m4v": "video/x-m4v",
+}
+
+_ARTIFACT_BLOCKED_NAMES = {
+    ".env",
+    "env",
+    "id_rsa",
+    "id_ed25519",
+    "authorized_keys",
+    "known_hosts",
+    "config.yaml",
+    "auth.json",
+    "credentials.json",
+    "token.json",
+}
+
+
+def _artifact_allowed_root() -> "Path":
+    from pathlib import Path
+
+    return (Path.home() / "clawksis_exports").resolve()
+
+
+def _artifact_is_loopback_request(request: "Request") -> bool:
+    # Modo gated (OAuth / `clawk dashboard domain`): estas rutas NO están en
+    # _GATE_PUBLIC_PREFIXES, así que gated_auth_middleware ya exigió una sesión
+    # válida antes de llegar acá, y start_server rehúsa arrancar gated sin auth
+    # provider. Además, con el gate activo uvicorn corre con proxy_headers=True
+    # y reescribe request.client.host a la IP REAL del navegador (vía el
+    # X-Forwarded-For que setea Caddy/Nginx), así que el peer NUNCA es loopback
+    # aunque el proxy sí lo sea — sin este short-circuit, toda la media del
+    # agente (imágenes/video del chat, galería, audio TTS) daría 403 a usuarios
+    # ya autenticados. La sesión del gate ES la credencial equivalente al peer
+    # loopback.
+    if getattr(getattr(request, "app", None), "state", None) is not None and getattr(
+        request.app.state, "auth_required", False
+    ):
+        return True
+
+    client = getattr(request, "client", None)
+    host = getattr(client, "host", "") if client else ""
+    host = str(host or "").strip().lower()
+
+    return host == "localhost" or host == "::1" or host.startswith("127.")
+
+
+def _artifact_is_within_root(candidate: "Path", root: "Path") -> bool:
+    try:
+        candidate.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+@app.get("/artifacts/download")
+async def download_local_artifact(path: str, request: Request):
+    """Download a generated local artifact from the Clawksis exports directory.
+
+    Security model:
+    - direct chat links work without custom headers;
+    - only loopback / SSH-tunnel access is allowed;
+    - only files under ~/clawksis_exports are allowed;
+    - symlinks are resolved before the allowlist check;
+    - only safe export file extensions are allowed.
+    """
+
+    from pathlib import Path
+    from urllib.parse import unquote
+
+    if not _artifact_is_loopback_request(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Artifact downloads are only available from local or SSH-tunnel dashboard access.",
+        )
+
+    raw_path = unquote(str(path or "")).strip()
+    if not raw_path:
+        raise HTTPException(status_code=400, detail="Missing artifact path.")
+
+    root = _artifact_allowed_root()
+    candidate = Path(raw_path).expanduser().resolve(strict=False)
+
+    if not _artifact_is_within_root(candidate, root):
+        # El agente también manda media generada como
+        # ![](/artifacts/download?path=~/.clawksis/cache/images/…). Esos
+        # archivos viven fuera de exports; delegar al bridge de media local,
+        # que aplica sus propias reglas (loopback, symlinks resueltos antes
+        # del allowlist, roots de media y extensiones de media solamente).
+        if any(
+            _artifact_is_within_root(candidate, media_root)
+            for media_root in _local_media_allowed_roots()
+        ):
+            return await get_local_media(path=raw_path, request=request)
+        raise HTTPException(
+            status_code=403,
+            detail="Artifact path is outside the allowed exports directory.",
+        )
+
+    if not candidate.exists():
+        raise HTTPException(status_code=404, detail="Artifact not found.")
+
+    if not candidate.is_file():
+        raise HTTPException(status_code=400, detail="Artifact path is not a file.")
+
+    if candidate.suffix.lower() not in _ARTIFACT_ALLOWED_SUFFIXES:
+        raise HTTPException(
+            status_code=400, detail="Artifact file type is not allowed."
+        )
+
+    parts_lower = {part.lower() for part in candidate.parts}
+    if parts_lower & _ARTIFACT_BLOCKED_NAMES:
+        raise HTTPException(
+            status_code=403, detail="Sensitive file names are not downloadable."
+        )
+
+    inline_media_type = _ARTIFACT_INLINE_MEDIA_TYPES.get(candidate.suffix.lower())
+    if inline_media_type:
+        # Serve media inline (correct Content-Type + inline disposition) so the
+        # chat's <img>/<video> render it instead of triggering a download.
+        return FileResponse(
+            str(candidate),
+            media_type=inline_media_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "Content-Disposition": f'inline; filename="{candidate.name}"',
+            },
+        )
+
+    return FileResponse(
+        str(candidate),
+        filename=candidate.name,
+        media_type="application/octet-stream",
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -698,6 +1402,10 @@ _CATEGORY_MERGE: Dict[str, str] = {
     # with the other messaging-platform config (discord) so it isn't an
     # orphan tab of one field.
     "telegram": "discord",
+    # `onboarding.profile_build` is the only schema-surfaced onboarding field
+    # (`onboarding.seen` is an internal latch dict, not a user setting), so fold
+    # it into the agent tab rather than leave a single-field "onboarding" tab.
+    "onboarding": "agent",
 }
 
 
@@ -718,6 +1426,7 @@ _CATEGORY_ORDER = [
     "stt",
     "logging",
     "discord",
+    "resilience",
     "auxiliary",
 ]
 
@@ -826,6 +1535,7 @@ CONFIG_SCHEMA = _ordered_schema
 
 class ConfigUpdate(BaseModel):
     config: dict
+    profile: Optional[str] = None
 
 
 class EnvVarUpdate(BaseModel):
@@ -833,9 +1543,13 @@ class EnvVarUpdate(BaseModel):
 
     value: str
 
+    profile: Optional[str] = None
+
 
 class EnvVarDelete(BaseModel):
     key: str
+
+    profile: Optional[str] = None
 
 
 class EnvVarReveal(BaseModel):
@@ -848,6 +1562,8 @@ class MessagingPlatformUpdate(BaseModel):
     env: Dict[str, str] = {}
 
     clear_env: List[str] = []
+
+    profile: Optional[str] = None
 
 
 class TelegramOnboardingStart(BaseModel):
@@ -862,30 +1578,6 @@ class AudioTranscriptionRequest(BaseModel):
     data_url: str
 
     mime_type: Optional[str] = None
-
-
-class ModelAssignment(BaseModel):
-    """Payload for POST /api/model/set — assign a provider/model to a slot.
-
-
-
-    scope="main"        → writes model.provider + model.default
-
-    scope="auxiliary"   → writes auxiliary.<task>.provider + auxiliary.<task>.model
-
-    scope="auxiliary" with task=""  → applied to every auxiliary.* slot
-
-    scope="auxiliary" with task="__reset__"  → resets every slot to provider="auto"
-
-    """
-
-    scope: str
-
-    provider: str
-
-    model: str
-
-    task: str = ""
 
 
 _AUDIO_MIME_EXTENSIONS: Dict[str, str] = {
@@ -949,6 +1641,14 @@ class ModelAssignment(BaseModel):
 
     base_url: str = ""
 
+    # Accepted (and ignored by this inline handler) so the GUI's expensive-model
+    # confirmation round-trip doesn't 422; the model write itself is unaffected.
+    confirm_expensive_model: bool = False
+
+    # When set, scope the config write to this profile's CLAWK_HOME instead of
+    # the dashboard process's own profile (machine-level profile switcher).
+    profile: Optional[str] = None
+
 
 def _apply_main_model_assignment(
     model_cfg: "Any", provider: str, model: str, base_url: str = ""
@@ -980,12 +1680,26 @@ def _apply_main_model_assignment(
     if not isinstance(model_cfg, dict):
         model_cfg = {}
 
+    provider_norm = provider.strip().lower()
+
     model_cfg["provider"] = provider
 
     model_cfg["default"] = model
 
-    if provider.strip().lower() == "custom" and base_url.strip():
+    if provider_norm == "custom" and base_url.strip():
         model_cfg["base_url"] = base_url.strip()
+
+    elif provider_norm == "ollama":
+        # Local Ollama daemon: persist the OpenAI-compatible /v1 endpoint and a
+        # dummy api_key so the runtime resolver wires the local server without an
+        # auth prompt (Ollama ignores the key). Honor a caller-supplied base_url
+        # (LAN/remote Ollama) over the localhost default.
+        from clawk_cli.runtime_provider import DEFAULT_OLLAMA_LOCAL_BASE_URL
+
+        model_cfg["base_url"] = base_url.strip() or DEFAULT_OLLAMA_LOCAL_BASE_URL
+
+        if not str(model_cfg.get("api_key") or "").strip():
+            model_cfg["api_key"] = "ollama"
 
     elif model_cfg.get("base_url"):
         model_cfg["base_url"] = ""
@@ -1248,17 +1962,12 @@ async def get_status():
 
         pass
 
-    return {
+    body = {
         "version": __version__,
         "release_date": __release_date__,
-        "clawk_home": str(get_clawk_home()),
-        "config_path": str(get_config_path()),
-        "env_path": str(get_env_path()),
         "config_version": current_ver,
         "latest_config_version": latest_ver,
         "gateway_running": gateway_running,
-        "gateway_pid": gateway_pid,
-        "gateway_health_url": _GATEWAY_HEALTH_URL,
         "gateway_state": gateway_state,
         "gateway_platforms": gateway_platforms,
         "gateway_exit_reason": gateway_exit_reason,
@@ -1267,6 +1976,21 @@ async def get_status():
         "auth_required": auth_required,
         "auth_providers": auth_providers,
     }
+
+    # Host/deployment recon (absolute paths, gateway PID, internal health URL)
+    # is only safe on a trusted loopback bind. Under the OAuth gate this probe
+    # bypasses dashboard auth and is reachable cold by anyone who can hit the
+    # host, so withhold it there — the SPA reads it from authenticated routes.
+    if not auth_required:
+        body.update({
+            "clawk_home": str(get_clawk_home()),
+            "config_path": str(get_config_path()),
+            "env_path": str(get_env_path()),
+            "gateway_pid": gateway_pid,
+            "gateway_health_url": _GATEWAY_HEALTH_URL,
+        })
+
+    return body
 
 
 @app.get("/api/system/stats")
@@ -1668,6 +2392,7 @@ _ACTION_LOG_FILES: Dict[str, str] = {
     "prompt-size": "action-prompt-size.log",
     "dump": "action-dump.log",
     "config-migrate": "action-config-migrate.log",
+    "tools-post-setup": "action-tools-post-setup.log",
 }
 
 
@@ -2234,6 +2959,474 @@ async def get_action_status(name: str, lines: int = 200):
     }
 
 
+# ---------------------------------------------------------------------------
+# Chat projects / folders — chat-projects-v1
+# ---------------------------------------------------------------------------
+
+
+class ChatProjectCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    instructions: Optional[str] = None
+
+
+class ChatProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    instructions: Optional[str] = None
+    archived: Optional[bool] = None
+
+
+class SessionProjectUpdate(BaseModel):
+    project_id: Optional[str] = None
+
+
+def _chat_projects_db_path():
+    from clawk_constants import get_clawk_home
+
+    return get_clawk_home() / "state.db"
+
+
+def _chat_projects_connect():
+    import sqlite3
+
+    conn = sqlite3.connect(_chat_projects_db_path())
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _chat_project_clean_text(
+    value: Any, *, field: str, max_len: int, required: bool = False
+) -> str:
+    text = str(value or "").strip()
+
+    if required and not text:
+        raise HTTPException(status_code=400, detail=f"{field} is required")
+
+    if len(text) > max_len:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field} must be at most {max_len} characters",
+        )
+
+    if any(ord(ch) < 32 and ch not in ("\t", "\n", "\r") for ch in text):
+        raise HTTPException(
+            status_code=400, detail=f"{field} contains control characters"
+        )
+
+    return text
+
+
+def _ensure_chat_projects_schema(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS chat_projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            instructions TEXT,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            archived INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+
+    project_cols = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(chat_projects)").fetchall()
+    }
+
+    if "instructions" not in project_cols:
+        conn.execute("ALTER TABLE chat_projects ADD COLUMN instructions TEXT")
+
+    session_cols = {
+        row["name"] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
+    }
+
+    if "project_id" not in session_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN project_id TEXT")
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chat_projects_archived_name "
+        "ON chat_projects(archived, name)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id)"
+    )
+    conn.commit()
+
+
+def _project_row_to_dict(row) -> Dict[str, Any]:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": row["description"] or "",
+        "instructions": row["instructions"] or "",
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "archived": bool(row["archived"]),
+        "session_count": int(row["session_count"] or 0),
+    }
+
+
+def _project_exists(conn, project_id: str, *, include_archived: bool = False) -> bool:
+    if include_archived:
+        row = conn.execute(
+            "SELECT id FROM chat_projects WHERE id = ?",
+            (project_id,),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id FROM chat_projects WHERE id = ? AND archived = 0",
+            (project_id,),
+        ).fetchone()
+
+    return row is not None
+
+
+def _attach_session_projects(sessions: List[Dict[str, Any]]) -> None:
+    if not sessions:
+        return
+
+    conn = _chat_projects_connect()
+    try:
+        _ensure_chat_projects_schema(conn)
+
+        ids = [str(s.get("id") or "") for s in sessions if s.get("id")]
+        if not ids:
+            return
+
+        placeholders = ",".join("?" for _ in ids)
+        rows = conn.execute(
+            f"""
+            SELECT
+                s.id AS session_id,
+                s.project_id AS project_id,
+                p.name AS project_name,
+                p.archived AS project_archived
+            FROM sessions s
+            LEFT JOIN chat_projects p ON p.id = s.project_id
+            WHERE s.id IN ({placeholders})
+            """,
+            ids,
+        ).fetchall()
+
+        project_map = {
+            row["session_id"]: {
+                "project_id": row["project_id"],
+                "project_name": row["project_name"],
+                "project_archived": bool(row["project_archived"])
+                if row["project_archived"] is not None
+                else False,
+            }
+            for row in rows
+        }
+
+        for session in sessions:
+            meta = project_map.get(str(session.get("id") or ""), {})
+            session["project_id"] = meta.get("project_id")
+            session["project_name"] = meta.get("project_name")
+            session["project_archived"] = bool(meta.get("project_archived", False))
+
+    finally:
+        conn.close()
+
+
+@app.get("/api/projects")
+async def list_chat_projects(include_archived: bool = False):
+    conn = _chat_projects_connect()
+    try:
+        _ensure_chat_projects_schema(conn)
+
+        where = "" if include_archived else "WHERE p.archived = 0"
+        rows = conn.execute(
+            f"""
+            SELECT
+                p.id,
+                p.name,
+                p.description,
+                p.instructions,
+                p.created_at,
+                p.updated_at,
+                p.archived,
+                COUNT(s.id) AS session_count
+            FROM chat_projects p
+            LEFT JOIN sessions s ON s.project_id = p.id
+            {where}
+            GROUP BY p.id
+            ORDER BY p.archived ASC, LOWER(p.name) ASC
+            """
+        ).fetchall()
+
+        return {"projects": [_project_row_to_dict(row) for row in rows]}
+
+    finally:
+        conn.close()
+
+
+@app.post("/api/projects")
+async def create_chat_project(body: ChatProjectCreate):
+    import time
+    import uuid
+
+    name = _chat_project_clean_text(body.name, field="name", max_len=80, required=True)
+    description = _chat_project_clean_text(
+        body.description,
+        field="description",
+        max_len=500,
+        required=False,
+    )
+    instructions = _chat_project_clean_text(
+        body.instructions,
+        field="instructions",
+        max_len=4000,
+        required=False,
+    )
+
+    conn = _chat_projects_connect()
+    try:
+        _ensure_chat_projects_schema(conn)
+
+        duplicate = conn.execute(
+            "SELECT id FROM chat_projects WHERE LOWER(name) = LOWER(?) AND archived = 0",
+            (name,),
+        ).fetchone()
+        if duplicate:
+            raise HTTPException(
+                status_code=409, detail="A project with that name already exists"
+            )
+
+        now = time.time()
+        project_id = uuid.uuid4().hex[:12]
+
+        conn.execute(
+            """
+            INSERT INTO chat_projects (id, name, description, instructions, created_at, updated_at, archived)
+            VALUES (?, ?, ?, ?, ?, ?, 0)
+            """,
+            (project_id, name, description, instructions, now, now),
+        )
+        conn.commit()
+
+        row = conn.execute(
+            """
+            SELECT
+                p.id,
+                p.name,
+                p.description,
+                p.instructions,
+                p.created_at,
+                p.updated_at,
+                p.archived,
+                COUNT(s.id) AS session_count
+            FROM chat_projects p
+            LEFT JOIN sessions s ON s.project_id = p.id
+            WHERE p.id = ?
+            GROUP BY p.id
+            """,
+            (project_id,),
+        ).fetchone()
+
+        return _project_row_to_dict(row)
+
+    finally:
+        conn.close()
+
+
+@app.patch("/api/projects/{project_id}")
+async def update_chat_project(project_id: str, body: ChatProjectUpdate):
+    import time
+
+    conn = _chat_projects_connect()
+    try:
+        _ensure_chat_projects_schema(conn)
+
+        row = conn.execute(
+            "SELECT * FROM chat_projects WHERE id = ?",
+            (project_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        updates = []
+        params: List[Any] = []
+
+        if body.name is not None:
+            name = _chat_project_clean_text(
+                body.name, field="name", max_len=80, required=True
+            )
+            duplicate = conn.execute(
+                """
+                SELECT id FROM chat_projects
+                WHERE LOWER(name) = LOWER(?) AND archived = 0 AND id <> ?
+                """,
+                (name, project_id),
+            ).fetchone()
+            if duplicate:
+                raise HTTPException(
+                    status_code=409, detail="A project with that name already exists"
+                )
+            updates.append("name = ?")
+            params.append(name)
+
+        if body.description is not None:
+            description = _chat_project_clean_text(
+                body.description,
+                field="description",
+                max_len=500,
+                required=False,
+            )
+            updates.append("description = ?")
+            params.append(description)
+
+        if body.instructions is not None:
+            instructions = _chat_project_clean_text(
+                body.instructions,
+                field="instructions",
+                max_len=4000,
+                required=False,
+            )
+            updates.append("instructions = ?")
+            params.append(instructions)
+
+        if body.archived is not None:
+            updates.append("archived = ?")
+            params.append(1 if body.archived else 0)
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="Nothing to update")
+
+        updates.append("updated_at = ?")
+        params.append(time.time())
+        params.append(project_id)
+
+        conn.execute(
+            f"UPDATE chat_projects SET {', '.join(updates)} WHERE id = ?",
+            params,
+        )
+        conn.commit()
+
+        updated = conn.execute(
+            """
+            SELECT
+                p.id,
+                p.name,
+                p.description,
+                p.instructions,
+                p.created_at,
+                p.updated_at,
+                p.archived,
+                COUNT(s.id) AS session_count
+            FROM chat_projects p
+            LEFT JOIN sessions s ON s.project_id = p.id
+            WHERE p.id = ?
+            GROUP BY p.id
+            """,
+            (project_id,),
+        ).fetchone()
+
+        return _project_row_to_dict(updated)
+
+    finally:
+        conn.close()
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_chat_project(project_id: str):
+    import time
+
+    conn = _chat_projects_connect()
+    try:
+        _ensure_chat_projects_schema(conn)
+
+        if not _project_exists(conn, project_id, include_archived=True):
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Safe delete semantics: do not delete chats. Unassign sessions, then archive the project.
+        conn.execute(
+            "UPDATE sessions SET project_id = NULL WHERE project_id = ?", (project_id,)
+        )
+        conn.execute(
+            "UPDATE chat_projects SET archived = 1, updated_at = ? WHERE id = ?",
+            (time.time(), project_id),
+        )
+        conn.commit()
+
+        return {"ok": True}
+
+    finally:
+        conn.close()
+
+
+@app.patch("/api/sessions/{session_id}/project")
+async def move_session_to_project(session_id: str, body: SessionProjectUpdate):
+    from clawk_state import SessionDB
+
+    db = SessionDB()
+    try:
+        sid = db.resolve_session_id(session_id)
+        if not sid:
+            raise HTTPException(status_code=404, detail="Session not found")
+    finally:
+        db.close()
+
+    project_id = str(body.project_id or "").strip() or None
+
+    conn = _chat_projects_connect()
+    try:
+        _ensure_chat_projects_schema(conn)
+
+        if project_id is not None and not _project_exists(conn, project_id):
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        conn.execute(
+            "UPDATE sessions SET project_id = ? WHERE id = ?",
+            (project_id, sid),
+        )
+        conn.commit()
+
+        row = conn.execute(
+            """
+            SELECT
+                s.id,
+                s.project_id,
+                p.name AS project_name
+            FROM sessions s
+            LEFT JOIN chat_projects p ON p.id = s.project_id
+            WHERE s.id = ?
+            """,
+            (sid,),
+        ).fetchone()
+
+        return {
+            "ok": True,
+            "session_id": row["id"],
+            "project_id": row["project_id"],
+            "project_name": row["project_name"],
+        }
+
+    finally:
+        conn.close()
+
+
+@app.get("/api/sessions/running")
+async def get_running_sessions():
+    """DB session_ids that currently have an in-flight turn.
+
+    Powers the sidebar's per-conversation running indicator (a spinner while a
+    turn runs, even for conversations the user is not viewing — the turn runs in
+    a worker thread independent of the WebSocket). Best-effort: returns an empty
+    list if the in-process gateway is unavailable (e.g. nothing has run yet).
+    """
+    try:
+        from tui_gateway.server import get_running_session_ids
+
+        return {"running": get_running_session_ids()}
+    except Exception:
+        return {"running": []}
+
+
 @app.get("/api/sessions")
 async def get_sessions(
     limit: int = 20,
@@ -2241,6 +3434,7 @@ async def get_sessions(
     min_messages: int = 0,
     archived: str = "exclude",
     order: str = "created",
+    project_id: Optional[str] = None,
 ):
     """List sessions.
 
@@ -2305,6 +3499,20 @@ async def get_sessions(
                 archived_only=archived_only,
                 exclude_children=True,
             )
+
+            _attach_session_projects(sessions)
+
+            requested_project_id = (project_id or "").strip()
+            if requested_project_id:
+                if requested_project_id.lower() in ("none", "null", "unassigned"):
+                    sessions = [s for s in sessions if not s.get("project_id")]
+                else:
+                    sessions = [
+                        s
+                        for s in sessions
+                        if s.get("project_id") == requested_project_id
+                    ]
+                total = len(sessions)
 
             now = time.time()
 
@@ -2735,9 +3943,10 @@ def _normalize_config_for_web(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.get("/api/config")
-async def get_config():
+async def get_config(profile: Optional[str] = None):
 
-    config = _normalize_config_for_web(load_config())
+    with _profile_scope(profile):
+        config = _normalize_config_for_web(load_config())
 
     # Strip internal keys that the frontend shouldn't see or send back
 
@@ -2767,7 +3976,7 @@ _EMPTY_MODEL_INFO: dict = {
 
 
 @app.get("/api/model/info")
-def get_model_info():
+def get_model_info(profile: Optional[str] = None):
     """Return resolved model metadata for the currently configured model.
 
 
@@ -2781,7 +3990,8 @@ def get_model_info():
     """
 
     try:
-        cfg = load_config()
+        with _profile_scope(profile):
+            cfg = load_config()
 
         model_cfg = cfg.get("model", "")
 
@@ -2865,6 +4075,11 @@ def get_model_info():
             "capabilities": caps,
         }
 
+    except HTTPException:
+        # Unknown/invalid profile → propagate the 404 instead of masking it
+        # as a silently-empty "no model set" payload.
+        raise
+
     except Exception:
         _log.exception("GET /api/model/info failed")
 
@@ -2902,7 +4117,7 @@ _AUX_TASK_SLOTS: Tuple[str, ...] = (
 
 
 @app.get("/api/model/options")
-def get_model_options():
+def get_model_options(profile: Optional[str] = None):
     """Return authenticated providers + their curated model lists.
 
 
@@ -2915,14 +4130,26 @@ def get_model_options():
 
     can share the same types.
 
+
+
+    ``profile`` scopes the picker context (current model/provider, custom
+
+    providers from config, per-profile .env auth state) so the Models page
+
+    reads the SAME profile /api/model/set writes.
+
     """
 
     try:
         from clawk_cli.inventory import build_models_payload, load_picker_context
 
-        return build_models_payload(
-            load_picker_context(), max_models=50, pricing=True, capabilities=True
-        )
+        with _profile_scope(profile):
+            return build_models_payload(
+                load_picker_context(), max_models=50, pricing=True, capabilities=True
+            )
+
+    except HTTPException:
+        raise
 
     except Exception:
         _log.exception("GET /api/model/options failed")
@@ -3036,7 +4263,7 @@ def get_recommended_default_model(provider: str = ""):
 
 
 @app.get("/api/model/auxiliary")
-def get_auxiliary_models():
+def get_auxiliary_models(profile: Optional[str] = None):
     """Return current auxiliary task assignments.
 
 
@@ -3057,10 +4284,17 @@ def get_auxiliary_models():
 
       }
 
+    ``profile`` scopes the read — without it, the Models page would show the
+
+    dashboard profile's auxiliary pins while /api/model/set wrote the selected
+
+    profile's (read/write asymmetry).
+
     """
 
     try:
-        cfg = load_config()
+        with _profile_scope(profile):
+            cfg = load_config()
 
         aux_cfg = cfg.get("auxiliary", {})
 
@@ -3094,6 +4328,9 @@ def get_auxiliary_models():
 
         return {"tasks": tasks, "main": main}
 
+    except HTTPException:
+        raise
+
     except Exception:
         _log.exception("GET /api/model/auxiliary failed")
 
@@ -3101,7 +4338,7 @@ def get_auxiliary_models():
 
 
 @app.post("/api/model/set")
-async def set_model_assignment(body: ModelAssignment):
+async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = None):
     """Assign a model to the main slot or an auxiliary task slot.
 
 
@@ -3111,6 +4348,12 @@ async def set_model_assignment(body: ModelAssignment):
     The currently running chat PTY (if any) is not affected; use the
 
     ``/model`` slash command inside a chat to hot-swap that specific session.
+
+
+
+    ``profile`` scopes the config write to the selected profile's CLAWK_HOME
+
+    so the machine-level profile switcher targets the same profile its reads do.
 
     """
 
@@ -3128,6 +4371,22 @@ async def set_model_assignment(body: ModelAssignment):
         raise HTTPException(
             status_code=400, detail="scope must be 'main' or 'auxiliary'"
         )
+
+    # Scope load_config/save_config to the requested profile via the
+    # context-local CLAWK_HOME override (same mechanism as _write_profile_model).
+    # Resolved BEFORE the try so an unknown profile surfaces a clean 404 rather
+    # than a 500. The body runs synchronously (no await), so the contextvar
+    # override stays valid for its entire duration.
+    from clawk_constants import set_clawk_home_override, reset_clawk_home_override
+
+    _profile_token = None
+
+    _requested_profile = (body.profile or profile or "").strip()
+
+    if _requested_profile and _requested_profile.lower() != "current":
+        _profile_dir = _resolve_profile_dir(_requested_profile)
+
+        _profile_token = set_clawk_home_override(str(_profile_dir))
 
     try:
         cfg = load_config()
@@ -3272,6 +4531,10 @@ async def set_model_assignment(body: ModelAssignment):
 
         raise HTTPException(status_code=500, detail="Failed to save model assignment")
 
+    finally:
+        if _profile_token is not None:
+            reset_clawk_home_override(_profile_token)
+
 
 def _denormalize_config_from_web(config: Dict[str, Any]) -> Dict[str, Any]:
     """Reverse _normalize_config_for_web before saving.
@@ -3357,12 +4620,16 @@ def _denormalize_config_from_web(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.put("/api/config")
-async def update_config(body: ConfigUpdate):
+async def update_config(body: ConfigUpdate, profile: Optional[str] = None):
 
     try:
-        save_config(_denormalize_config_from_web(body.config))
+        with _profile_scope(body.profile or profile):
+            save_config(_denormalize_config_from_web(body.config))
 
         return {"ok": True}
+
+    except HTTPException:
+        raise
 
     except Exception:
         _log.exception("PUT /api/config failed")
@@ -3371,9 +4638,10 @@ async def update_config(body: ConfigUpdate):
 
 
 @app.get("/api/env")
-async def get_env_vars():
+async def get_env_vars(profile: Optional[str] = None):
 
-    env_on_disk = load_env()
+    with _profile_scope(profile):
+        env_on_disk = load_env()
 
     channel_keys = _channel_managed_env_keys()
 
@@ -3401,12 +4669,16 @@ async def get_env_vars():
 
 
 @app.put("/api/env")
-async def set_env_var(body: EnvVarUpdate):
+async def set_env_var(body: EnvVarUpdate, profile: Optional[str] = None):
 
     try:
-        save_env_value(body.key, body.value)
+        with _profile_scope(body.profile or profile):
+            save_env_value(body.key, body.value)
 
         return {"ok": True, "key": body.key}
+
+    except HTTPException:
+        raise
 
     except ValueError as exc:
         # save_env_value raises ValueError for invalid names and for keys
@@ -3594,10 +4866,11 @@ async def validate_provider_credential(body: EnvVarUpdate, request: Request):
 
 
 @app.delete("/api/env")
-async def remove_env_var(body: EnvVarDelete):
+async def remove_env_var(body: EnvVarDelete, profile: Optional[str] = None):
 
     try:
-        removed = remove_env_value(body.key)
+        with _profile_scope(body.profile or profile):
+            removed = remove_env_value(body.key)
 
         if not removed:
             raise HTTPException(status_code=404, detail=f"{body.key} not found in .env")
@@ -4393,22 +5666,29 @@ def _write_platform_enabled(platform_id: str, enabled: bool) -> None:
 
 
 @app.get("/api/messaging/platforms")
-async def get_messaging_platforms():
+async def get_messaging_platforms(profile: Optional[str] = None):
 
-    env_on_disk = load_env()
+    # Profile-scoped so the dashboard's global profile switcher shows the
+    # TARGET profile's channel credentials/state, not the root install's.
+    # Inside _profile_scope, load_env()/read_runtime_status() resolve against
+    # the requested profile's CLAWK_HOME.
+    with _profile_scope(profile):
+        env_on_disk = load_env()
 
-    runtime = read_runtime_status()
+        runtime = read_runtime_status()
 
-    return {
-        "platforms": [
-            _messaging_platform_payload(entry, env_on_disk, runtime)
-            for entry in _messaging_platform_catalog()
-        ]
-    }
+        return {
+            "platforms": [
+                _messaging_platform_payload(entry, env_on_disk, runtime)
+                for entry in _messaging_platform_catalog()
+            ]
+        }
 
 
 @app.put("/api/messaging/platforms/{platform_id}")
-async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpdate):
+async def update_messaging_platform(
+    platform_id: str, body: MessagingPlatformUpdate, profile: Optional[str] = None
+):
 
     entry = _catalog_lookup(platform_id)
 
@@ -4420,29 +5700,30 @@ async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpd
     allowed_env = set(entry["env_vars"])
 
     try:
-        for key in body.clear_env:
-            if key not in allowed_env:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"{key} is not configurable for {entry['name']}",
-                )
+        with _profile_scope(body.profile or profile):
+            for key in body.clear_env:
+                if key not in allowed_env:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{key} is not configurable for {entry['name']}",
+                    )
 
-            remove_env_value(key)
+                remove_env_value(key)
 
-        for key, value in body.env.items():
-            if key not in allowed_env:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"{key} is not configurable for {entry['name']}",
-                )
+            for key, value in body.env.items():
+                if key not in allowed_env:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{key} is not configurable for {entry['name']}",
+                    )
 
-            trimmed = value.strip()
+                trimmed = value.strip()
 
-            if trimmed:
-                save_env_value(key, trimmed)
+                if trimmed:
+                    save_env_value(key, trimmed)
 
-        if body.enabled is not None:
-            _write_platform_enabled(platform_id, body.enabled)
+            if body.enabled is not None:
+                _write_platform_enabled(platform_id, body.enabled)
 
         return {"ok": True, "platform": platform_id}
 
@@ -4630,33 +5911,35 @@ def _anthropic_oauth_status() -> Dict[str, Any]:
             "has_refresh_token": bool(clawk_creds.get("refreshToken")),
         }
 
-    cc_creds = None
+    # Claude Code's ``~/.claude/.credentials.json`` is deliberately NOT read
+    # here — it has its own dedicated catalog entry (``claude-code`` →
+    # ``_claude_code_only_status``). Reporting it under the API-key entry would
+    # double-count the token and shadow a real ANTHROPIC_API_KEY.
+    env_var_order: tuple = (
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_TOKEN",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+    )
 
-    if read_claude_code_credentials:
-        try:
-            cc_creds = read_claude_code_credentials()
+    try:
+        from clawk_cli.auth import PROVIDER_REGISTRY
 
-        except Exception:
-            cc_creds = None
+        env_var_order = PROVIDER_REGISTRY["anthropic"].api_key_env_vars or env_var_order
 
-    if cc_creds and cc_creds.get("accessToken"):
-        return {
-            "logged_in": True,
-            "source": "claude_code",
-            "source_label": "Claude Code (~/.claude/.credentials.json)",
-            "token_preview": _truncate_token(cc_creds.get("accessToken")),
-            "expires_at": cc_creds.get("expiresAt"),
-            "has_refresh_token": bool(cc_creds.get("refreshToken")),
-        }
+    except (ImportError, KeyError):
+        pass
 
-    env_token = os.getenv("ANTHROPIC_TOKEN") or os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
+    for var in env_var_order:
+        value = os.getenv(var)
 
-    if env_token:
+        if not value:
+            continue
+
         return {
             "logged_in": True,
             "source": "env_var",
-            "source_label": "ANTHROPIC_TOKEN environment variable",
-            "token_preview": _truncate_token(env_token),
+            "source_label": f"{var} environment variable",
+            "token_preview": _truncate_token(value),
             "expires_at": None,
             "has_refresh_token": False,
         }
@@ -4872,6 +6155,27 @@ def _resolve_provider_status(provider_id: str, status_fn) -> Dict[str, Any]:
     return {"logged_in": False}
 
 
+def _oauth_provider_disconnect_hint(
+    provider: Dict[str, Any], status: Dict[str, Any]
+) -> Optional[str]:
+    """Return the manual disconnect path when the API cannot clear this provider.
+
+    External providers store their credentials outside Clawksis (another CLI
+    owns them), so the disconnect API must refuse — we never silently delete
+    files another tool owns. Env/.env-backed API keys are removed from the Keys
+    page, not the OAuth Accounts tab. ``None`` means the provider IS safely
+    disconnectable via the API.
+    """
+
+    if provider.get("flow") == "external":
+        return "Managed by that provider's CLI; remove it there."
+
+    if status.get("source") == "env_var":
+        return "Remove the API key from Settings → Keys instead."
+
+    return None
+
+
 @app.get("/api/providers/oauth")
 async def list_oauth_providers():
     """Enumerate every OAuth-capable LLM provider with current status.
@@ -4911,12 +6215,16 @@ async def list_oauth_providers():
     for p in _OAUTH_PROVIDER_CATALOG:
         status = _resolve_provider_status(p["id"], p.get("status_fn"))
 
+        disconnect_hint = _oauth_provider_disconnect_hint(p, status)
+
         providers.append({
             "id": p["id"],
             "name": p["name"],
             "flow": p["flow"],
             "cli_command": p["cli_command"],
             "docs_url": p["docs_url"],
+            "disconnect_hint": disconnect_hint,
+            "disconnectable": disconnect_hint is None,
             "status": status,
         })
 
@@ -4929,13 +6237,40 @@ async def disconnect_oauth_provider(provider_id: str, request: Request):
 
     _require_token(request)
 
-    valid_ids = {p["id"] for p in _OAUTH_PROVIDER_CATALOG}
+    catalog_by_id = {p["id"]: p for p in _OAUTH_PROVIDER_CATALOG}
 
-    if provider_id not in valid_ids:
+    provider = catalog_by_id.get(provider_id)
+
+    if provider is None:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown provider: {provider_id}. "
-            f"Available: {', '.join(sorted(valid_ids))}",
+            f"Available: {', '.join(sorted(catalog_by_id))}",
+        )
+
+    # Fail closed BEFORE touching any credential store: external providers are
+    # owned by another CLI and env/.env-backed keys belong to the Keys page —
+    # neither may be cleared via this endpoint. Checked against both the
+    # static metadata and the live status so an env-sourced key can't slip
+    # through as a silent no-op "disconnect".
+    disconnect_hint = _oauth_provider_disconnect_hint(provider, {})
+
+    if disconnect_hint:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{provider['name']} cannot be disconnected automatically. "
+            f"{disconnect_hint}",
+        )
+
+    status = _resolve_provider_status(provider_id, provider.get("status_fn"))
+
+    disconnect_hint = _oauth_provider_disconnect_hint(provider, status)
+
+    if disconnect_hint:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{provider['name']} cannot be disconnected automatically. "
+            f"{disconnect_hint}",
         )
 
     # Anthropic and claude-code clear the same Clawksis-managed PKCE file
@@ -6734,6 +8069,98 @@ async def bulk_delete_sessions_endpoint(body: BulkDeleteSessions):
         db.close()
 
 
+class SessionCleanup(BaseModel):
+    source: Optional[str] = None
+    model: Optional[str] = None
+    older_than_days: Optional[int] = None
+    max_messages: Optional[int] = None
+    dry_run: bool = True
+
+
+@app.post("/api/sessions/cleanup")
+async def cleanup_sessions_endpoint(body: SessionCleanup):
+    """Filtered bulk session cleanup to free space.
+
+    Deletes sessions matching ANY combination of: ``source`` (cron / cli /
+    telegram…), ``model`` (substring — e.g. a model that no longer works),
+    ``older_than_days``, and ``max_messages`` (empty / near-empty junk).
+    ``dry_run`` (default True) returns the match count + total messages so the
+    dashboard can preview before committing. Matches the same logical-session
+    listing the sessions page shows, then reuses ``delete_sessions``.
+    """
+    has_filter = (
+        bool((body.source or "").strip())
+        or bool((body.model or "").strip())
+        or body.older_than_days is not None
+        or body.max_messages is not None
+    )
+    if not has_filter:
+        raise HTTPException(status_code=400, detail="at least one filter is required")
+
+    import time as _time
+
+    from clawk_state import SessionDB
+
+    db = SessionDB()
+    try:
+        src = (body.source or "").strip().lower()
+        # Enumerate RAW rows (not the display projection): the cleanup panel
+        # frees disk, so it must see every deletable row — children (sub-agent,
+        # compression continuations, branches) included — not just the surfaced
+        # logical tips. The display defaults (include_children=False,
+        # project_compression_tips=True) made preview undercount and "Eliminar"
+        # leave most of the garbage on disk. This matches the surface that
+        # count_empty_sessions/delete_empty_sessions already operate on.
+        rows = db.list_sessions_rich(
+            source=src or None,
+            limit=1_000_000,
+            offset=0,
+            include_archived=True,
+            include_children=True,
+            project_compression_tips=False,
+        )
+        now = _time.time()
+        model_q = (body.model or "").strip().lower()
+        matched_ids: List[str] = []
+        matched_msgs = 0
+        for s in rows:
+            if model_q and model_q not in str(s.get("model") or "").lower():
+                continue
+            mc = int(s.get("message_count") or 0)
+            if body.max_messages is not None and mc > body.max_messages:
+                continue
+            if body.older_than_days is not None:
+                last = (
+                    s.get("last_active")
+                    or s.get("ended_at")
+                    or s.get("started_at")
+                    or 0
+                )
+                try:
+                    last = float(last)
+                except (TypeError, ValueError):
+                    last = 0.0
+                if not last or (now - last) < body.older_than_days * 86400:
+                    continue
+            sid = s.get("id")
+            if sid:
+                matched_ids.append(sid)
+                matched_msgs += mc
+
+        if body.dry_run:
+            return {"ok": True, "matched": len(matched_ids), "messages": matched_msgs}
+
+        if len(matched_ids) > 2000:
+            raise HTTPException(
+                status_code=400,
+                detail="too many matches (>2000) — narrow the filter or delete in batches",
+            )
+        deleted = db.delete_sessions(matched_ids)
+        return {"ok": True, "deleted": deleted}
+    finally:
+        db.close()
+
+
 @app.get("/api/sessions/empty/count")
 async def count_empty_sessions_endpoint():
     """Return the number of empty, ended, non-archived sessions.
@@ -6811,7 +8238,7 @@ async def delete_empty_sessions_endpoint():
 
 
 @app.get("/api/sessions/stats")
-async def get_session_stats():
+def get_session_stats():
     """Session-store statistics for the Sessions page (mirrors `clawk sessions stats`).
 
 
@@ -7160,6 +8587,16 @@ class CronJobCreate(BaseModel):
 
     no_agent: bool = False
 
+    silent_notice: bool = True
+
+    use_soul: bool = True
+
+    use_user_md: bool = True
+
+    use_memory: bool = False
+
+    fallback_models: List[str] = []
+
 
 class CronJobUpdate(BaseModel):
     updates: dict
@@ -7350,6 +8787,11 @@ async def create_cron_job(body: CronJobCreate, profile: str = "default"):
             enabled_toolsets=body.enabled_toolsets or None,
             workdir=body.workdir or None,
             no_agent=body.no_agent,
+            silent_notice=body.silent_notice,
+            use_soul=body.use_soul,
+            use_user_md=body.use_user_md,
+            use_memory=body.use_memory,
+            fallback_models=body.fallback_models or None,
         )
 
     except Exception as e:
@@ -7378,6 +8820,66 @@ async def update_cron_job(
         raise HTTPException(status_code=404, detail="Job not found")
 
     return job
+
+
+@app.get("/api/cron/occurrences")
+async def cron_occurrences(start: str, end: str, profile: str = "all"):
+    """Per-job firing days within [start, end] (YYYY-MM-DD) for the calendar
+    view. Enumerates each enabled job's schedule with the canonical scheduler
+    logic (croniter / interval phase / one-shot) and buckets by local date."""
+    from datetime import datetime as _dt
+    from cron.jobs import compute_occurrences, _ensure_aware
+
+    try:
+        win_start = _ensure_aware(_dt.fromisoformat(f"{start}T00:00:00"))
+        win_end = _ensure_aware(_dt.fromisoformat(f"{end}T23:59:59"))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=400, detail=f"invalid start/end (use YYYY-MM-DD): {exc}"
+        )
+
+    requested = (profile or "all").strip()
+    jobs: List[Dict[str, Any]] = []
+    if requested.lower() != "all":
+        jobs = _call_cron_for_profile(requested, "list_jobs", True)
+    else:
+        for item in _cron_profile_dicts():
+            name = str(item.get("name") or "")
+            if not name:
+                continue
+            try:
+                jobs.extend(_call_cron_for_profile(name, "list_jobs", True))
+            except Exception:
+                _log.exception("Failed to list cron jobs for profile %s", name)
+
+    result: List[Dict[str, Any]] = []
+    for job in jobs:
+        if not job.get("enabled", True) or job.get("state") == "paused":
+            continue
+        schedule = job.get("schedule") or {}
+        if not isinstance(schedule, dict):
+            continue
+        anchor = job.get("next_run_at") or job.get("created_at")
+        try:
+            occ = compute_occurrences(schedule, win_start, win_end, anchor=anchor)
+        except Exception:
+            _log.exception("occurrences failed for job %s", job.get("id"))
+            occ = []
+        days: Dict[str, int] = {}
+        for dt in occ:
+            key = dt.strftime("%Y-%m-%d")
+            days[key] = days.get(key, 0) + 1
+        if days:
+            result.append({
+                "id": job.get("id"),
+                "name": job.get("name") or job.get("id"),
+                "profile": job.get("profile"),
+                "schedule_display": job.get("schedule_display")
+                or schedule.get("display"),
+                "days": days,
+            })
+
+    return {"start": start, "end": end, "jobs": result}
 
 
 @app.post("/api/cron/jobs/{job_id}/pause")
@@ -7482,13 +8984,61 @@ class MCPServerCreate(BaseModel):
 
     auth: Optional[str] = None
 
+    profile: Optional[str] = None
+
+
+def _coerce_mapping(value: Any) -> Dict[str, Any]:
+    """Best-effort coerce a config value into a dict.
+
+    Older/hand-edited config.yaml entries sometimes store ``env`` as a
+    JSON-encoded string instead of a native mapping. Tolerate that here so a
+    single malformed server entry can't 500 the whole list endpoint. (#mcpfix)
+    """
+
+    if isinstance(value, dict):
+        return value
+
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+
+            if isinstance(parsed, dict):
+                return parsed
+
+        except Exception:
+            pass
+
+    return {}
+
+
+def _coerce_sequence(value: Any) -> List[Any]:
+    """Best-effort coerce a config value into a list (see ``_coerce_mapping``)."""
+
+    if isinstance(value, list):
+        return value
+
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+
+            if isinstance(parsed, list):
+                return parsed
+
+        except Exception:
+            pass
+
+        # A bare string is a single arg, not a char sequence.
+        return [value] if value else []
+
+    return list(value or [])
+
 
 def _redact_mcp_env(env: Dict[str, Any]) -> Dict[str, str]:
     """Mask secret-shaped MCP env values for read responses."""
 
     out: Dict[str, str] = {}
 
-    for k, v in (env or {}).items():
+    for k, v in _coerce_mapping(env).items():
         try:
             out[str(k)] = redact_key(str(v)) if v else ""
 
@@ -7509,8 +9059,8 @@ def _mcp_server_summary(name: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
         "transport": transport,
         "url": cfg.get("url"),
         "command": cfg.get("command"),
-        "args": list(cfg.get("args") or []),
-        "env": _redact_mcp_env(cfg.get("env") or {}),
+        "args": _coerce_sequence(cfg.get("args")),
+        "env": _redact_mcp_env(cfg.get("env")),
         "auth": cfg.get("auth"),
         "enabled": cfg.get("enabled", True) is not False,
         # Tool selection: list of enabled tool names, or None = all.
@@ -7519,11 +9069,12 @@ def _mcp_server_summary(name: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.get("/api/mcp/servers")
-async def list_mcp_servers():
+async def list_mcp_servers(profile: Optional[str] = None):
 
     from clawk_cli.mcp_config import _get_mcp_servers
 
-    servers = _get_mcp_servers()
+    with _profile_scope(profile):
+        servers = _get_mcp_servers()
 
     return {
         "servers": [
@@ -7533,7 +9084,7 @@ async def list_mcp_servers():
 
 
 @app.post("/api/mcp/servers")
-async def add_mcp_server(body: MCPServerCreate):
+async def add_mcp_server(body: MCPServerCreate, profile: Optional[str] = None):
 
     from clawk_cli.mcp_config import _get_mcp_servers, _save_mcp_server
 
@@ -7542,7 +9093,10 @@ async def add_mcp_server(body: MCPServerCreate):
     if not name:
         raise HTTPException(status_code=400, detail="Server name is required")
 
-    if name in _get_mcp_servers():
+    with _profile_scope(body.profile or profile):
+        existing = _get_mcp_servers()
+
+    if name in existing:
         raise HTTPException(status_code=409, detail=f"Server '{name}' already exists")
 
     if not body.url and not body.command:
@@ -7568,45 +9122,81 @@ async def add_mcp_server(body: MCPServerCreate):
     if body.auth:
         server_config["auth"] = body.auth
 
+    from clawk_cli.mcp_security import validate_mcp_server_entry
+
+    issues = validate_mcp_server_entry(name, server_config)
+
+    if issues:
+        raise HTTPException(
+            status_code=400,
+            detail=f"MCP server '{name}' rejected: {issues[0]}",
+        )
+
     try:
-        _save_mcp_server(name, server_config)
+        with _profile_scope(body.profile or profile):
+            saved = _save_mcp_server(name, server_config)
+
+    except HTTPException:
+        raise
 
     except Exception as exc:
         _log.exception("POST /api/mcp/servers failed")
 
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    if saved is False:
+        raise HTTPException(
+            status_code=400,
+            detail=f"MCP server '{name}' rejected by security policy",
+        )
+
     return _mcp_server_summary(name, server_config)
 
 
 @app.delete("/api/mcp/servers/{name}")
-async def remove_mcp_server(name: str):
+async def remove_mcp_server(name: str, profile: Optional[str] = None):
 
     from clawk_cli.mcp_config import _remove_mcp_server
 
-    if not _remove_mcp_server(name):
+    with _profile_scope(profile):
+        removed = _remove_mcp_server(name)
+
+    if not removed:
         raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
 
     return {"ok": True}
 
 
 @app.post("/api/mcp/servers/{name}/test")
-async def test_mcp_server(name: str):
+async def test_mcp_server(name: str, profile: Optional[str] = None):
     """Connect to the server, list its tools, disconnect.  Returns tool list."""
 
     from clawk_cli.mcp_config import _get_mcp_servers, _probe_single_server
 
-    servers = _get_mcp_servers()
+    with _profile_scope(profile):
+        servers = _get_mcp_servers()
 
     if name not in servers:
         raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
+
+    def _probe_scoped():
+        # Re-enter the scope INSIDE the worker thread so call-time resolution
+
+        # during the probe (env-placeholder expansion reading the profile's
+
+        # .env) sees the selected profile, matching the config the server was
+
+        # saved into.
+
+        with _profile_scope(profile):
+            return _probe_single_server(name, servers[name])
 
     try:
         # Probe blocks on a dedicated MCP event loop — run in a thread so the
 
         # FastAPI event loop is never blocked.
 
-        tools = await asyncio.to_thread(_probe_single_server, name, servers[name])
+        tools = await asyncio.to_thread(_probe_scoped)
 
     except Exception as exc:
         return {
@@ -7624,9 +9214,13 @@ async def test_mcp_server(name: str):
 class MCPEnabledToggle(BaseModel):
     enabled: bool
 
+    profile: Optional[str] = None
+
 
 @app.put("/api/mcp/servers/{name}/enabled")
-async def set_mcp_server_enabled(name: str, body: MCPEnabledToggle):
+async def set_mcp_server_enabled(
+    name: str, body: MCPEnabledToggle, profile: Optional[str] = None
+):
     """Enable or disable an MCP server (takes effect on next session/gateway).
 
 
@@ -7639,25 +9233,26 @@ async def set_mcp_server_enabled(name: str, body: MCPEnabledToggle):
 
     """
 
-    cfg = load_config()
+    with _profile_scope(body.profile or profile):
+        cfg = load_config()
 
-    servers = cfg.get("mcp_servers")
+        servers = cfg.get("mcp_servers")
 
-    if not isinstance(servers, dict) or name not in servers:
-        raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
+        if not isinstance(servers, dict) or name not in servers:
+            raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
 
-    if not isinstance(servers[name], dict):
-        raise HTTPException(status_code=400, detail="Malformed server config")
+        if not isinstance(servers[name], dict):
+            raise HTTPException(status_code=400, detail="Malformed server config")
 
-    servers[name]["enabled"] = bool(body.enabled)
+        servers[name]["enabled"] = bool(body.enabled)
 
-    save_config(cfg)
+        save_config(cfg)
 
     return {"ok": True, "name": name, "enabled": bool(body.enabled)}
 
 
 @app.get("/api/mcp/catalog")
-async def list_mcp_catalog():
+async def list_mcp_catalog(profile: Optional[str] = None):
     """Browse the Nous-approved MCP catalog (the optional-mcps/ manifests).
 
 
@@ -7666,7 +9261,11 @@ async def list_mcp_catalog():
 
     can show install / enabled state inline.  This is the same catalog
 
-    `clawk mcp catalog` / `clawk mcp install` read.
+    `clawk mcp catalog` / `clawk mcp install` read.  ``profile`` scopes the
+
+    installed/enabled annotations (the catalog itself is repo-shipped and
+
+    identical for every profile).
 
     """
 
@@ -7681,24 +9280,29 @@ async def list_mcp_catalog():
     entries = []
 
     try:
-        for entry in mcp_catalog.list_catalog():
-            auth = entry.auth
+        with _profile_scope(profile):
+            for entry in mcp_catalog.list_catalog():
+                auth = entry.auth
 
-            entries.append({
-                "name": entry.name,
-                "description": entry.description,
-                "source": entry.source,
-                "transport": entry.transport.type,
-                "auth_type": getattr(auth, "type", "none"),
-                # Env vars the user must supply (names + prompts only, never values).
-                "required_env": [
-                    {"name": e.name, "prompt": e.prompt, "required": e.required}
-                    for e in getattr(auth, "env", []) or []
-                ],
-                "needs_install": entry.install is not None,
-                "installed": mcp_catalog.is_installed(entry.name),
-                "enabled": mcp_catalog.is_enabled(entry.name),
-            })
+                entries.append({
+                    "name": entry.name,
+                    "description": entry.description,
+                    "source": entry.source,
+                    "transport": entry.transport.type,
+                    "auth_type": getattr(auth, "type", "none"),
+                    # Env vars the user must supply (names + prompts only, never values).
+                    "required_env": [
+                        {"name": e.name, "prompt": e.prompt, "required": e.required}
+                        for e in getattr(auth, "env", []) or []
+                    ],
+                    "needs_install": entry.install is not None,
+                    "installed": mcp_catalog.is_installed(entry.name),
+                    "enabled": mcp_catalog.is_enabled(entry.name),
+                })
+
+    except HTTPException:
+        # Unknown/invalid profile → 404, not a silently-empty catalog.
+        raise
 
     except Exception:
         _log.exception("list_mcp_catalog failed")
@@ -8853,9 +10457,11 @@ async def prune_checkpoints():
 class SkillInstallRequest(BaseModel):
     identifier: str
 
+    profile: Optional[str] = None
+
 
 @app.post("/api/skills/hub/install")
-async def install_skill_hub(body: SkillInstallRequest):
+async def install_skill_hub(body: SkillInstallRequest, profile: Optional[str] = None):
 
     identifier = (body.identifier or "").strip()
 
@@ -8863,7 +10469,14 @@ async def install_skill_hub(body: SkillInstallRequest):
         raise HTTPException(status_code=400, detail="identifier is required")
 
     try:
-        proc = _spawn_clawk_action(["skills", "install", identifier], "skills-install")
+        proc = _spawn_clawk_action(
+            _profile_cli_args(body.profile or profile)
+            + ["skills", "install", identifier, "--yes"],
+            "skills-install",
+        )
+
+    except HTTPException:
+        raise
 
     except Exception as exc:
         _log.exception("Failed to spawn skills install")
@@ -9154,6 +10767,123 @@ def _resolve_profile_dir(name: str) -> Path:
     return profiles_mod.get_profile_dir(name)
 
 
+def _profile_cli_args(profile: Optional[str]) -> List[str]:
+    """Return ``["-p", <name>]`` for a validated non-default profile.
+
+    Hub install/uninstall/update and tools post-setup run in a fresh ``clawk``
+    subprocess; ``-p`` in the child's argv is the only mechanism that reaches
+    import-time-bound globals like ``skills_hub.SKILLS_DIR``. Empty/"current"/
+    "default" means the dashboard's own profile (no args, legacy behavior).
+    Raises HTTPException(404) for an unknown profile.
+    """
+
+    requested = (profile or "").strip()
+
+    if not requested or requested.lower() in {"current", "default"}:
+        return []
+
+    from clawk_cli import profiles as profiles_mod
+
+    _resolve_profile_dir(requested)
+
+    return ["-p", profiles_mod.normalize_profile_name(requested)]
+
+
+_SKILLS_PROFILE_LOCK = threading.RLock()
+
+
+@contextmanager
+def _profile_scope(profile: Optional[str]):
+    """Scope config + skill-directory resolution to ``profile`` for one request.
+
+    Two seams must be redirected for skills/toolsets endpoints:
+
+    1. ``load_config``/``save_config`` resolve ``get_clawk_home()`` at call
+       time — the context-local override from ``set_clawk_home_override``
+       reaches them (same pattern as ``_write_profile_model``).
+    2. ``tools.skills_tool`` and ``tools.skill_manager_tool`` bind
+       ``SKILLS_DIR`` at import time, so the override CANNOT reach them.
+       Temporarily retarget both under a lock and restore them
+       immediately after.
+
+    ``profile`` of None/""/"current" means "the dashboard's own profile" —
+    config resolution is untouched, but the skill-module globals are still
+    retargeted to the *current* ``get_clawk_home()`` so writes land in the
+    live home even when the import-time binding is stale (e.g. the process
+    imported the modules before a CLAWK_HOME override, or under test
+    isolation).
+    """
+    requested = (profile or "").strip()
+
+    from clawk_constants import (
+        get_clawk_home,
+        set_clawk_home_override,
+        reset_clawk_home_override,
+    )
+    from tools import skills_tool as _skills_tool
+    from tools import skill_manager_tool as _skill_mgr
+
+    token = None
+    if not requested or requested.lower() == "current":
+        profile_dir = get_clawk_home()
+    else:
+        profile_dir = _resolve_profile_dir(requested)
+        token = set_clawk_home_override(str(profile_dir))
+
+    with _SKILLS_PROFILE_LOCK:
+        old_home = _skills_tool.CLAWK_HOME
+        old_skills_dir = _skills_tool.SKILLS_DIR
+        old_mgr_home = _skill_mgr.CLAWK_HOME
+        old_mgr_skills_dir = _skill_mgr.SKILLS_DIR
+        _skills_tool.CLAWK_HOME = profile_dir
+        _skills_tool.SKILLS_DIR = profile_dir / "skills"
+        _skill_mgr.CLAWK_HOME = profile_dir
+        _skill_mgr.SKILLS_DIR = profile_dir / "skills"
+        try:
+            yield profile_dir if token is not None else None
+        finally:
+            _skills_tool.CLAWK_HOME = old_home
+            _skills_tool.SKILLS_DIR = old_skills_dir
+            _skill_mgr.CLAWK_HOME = old_mgr_home
+            _skill_mgr.SKILLS_DIR = old_mgr_skills_dir
+            if token is not None:
+                reset_clawk_home_override(token)
+
+
+@contextmanager
+def _config_profile_scope(profile: Optional[str]):
+    """Await-safe, config-only profile scope for handlers that ``await``.
+
+    Unlike ``_profile_scope`` this touches ONLY the context-local
+    ``set_clawk_home_override`` contextvar — it does NOT swap the
+    process-global ``skills_tool``/``skill_manager`` module attributes.
+    Those globals are shared across all event-loop tasks, so holding them
+    across an ``await`` lets a concurrent skills request restore THIS
+    request's profile dir on its ``finally`` (cross-contamination). The
+    contextvar override is task-local and survives an ``await`` cleanly,
+    which is all endpoints that resolve ``get_clawk_home()`` at call time
+    (config, env, gateway status) actually need.
+
+    None/""/"current" means the dashboard's own profile — no override.
+    """
+    requested = (profile or "").strip()
+    if not requested or requested.lower() == "current":
+        yield None
+        return
+
+    from clawk_constants import (
+        set_clawk_home_override,
+        reset_clawk_home_override,
+    )
+
+    profile_dir = _resolve_profile_dir(requested)
+    token = set_clawk_home_override(str(profile_dir))
+    try:
+        yield profile_dir
+    finally:
+        reset_clawk_home_override(token)
+
+
 def _profile_setup_command(name: str) -> str:
     """Return the shell command used to configure a profile in the CLI."""
 
@@ -9194,6 +10924,72 @@ def _write_profile_model(profile_dir: Path, provider: str, model: str) -> None:
 
     finally:
         reset_clawk_home_override(token)
+
+
+def _write_profile_mcp_servers(
+    profile_dir: Path, servers: "List[MCPServerCreate]"
+) -> int:
+    """Write MCP server entries into a specific profile's config.yaml.
+
+    Exfiltration-shaped entries (shell interpreter + network egress, #45620)
+    are skipped fail-closed and never reach the profile config. Returns the
+    number of servers actually written.
+
+    Scopes ``load_config``/``save_config`` to ``profile_dir`` via the
+    context-local CLAWK_HOME override so the write lands in the target
+    profile rather than the dashboard process's active profile.
+    """
+
+    from clawk_constants import set_clawk_home_override, reset_clawk_home_override
+
+    from clawk_cli.mcp_security import validate_mcp_server_entry
+
+    written = 0
+
+    token = set_clawk_home_override(str(profile_dir))
+
+    try:
+        cfg = load_config()
+
+        mcp_servers = cfg.setdefault("mcp_servers", {})
+
+        for srv in servers:
+            server_config: Dict[str, Any] = {}
+
+            if srv.url:
+                server_config["url"] = srv.url.strip()
+
+            if srv.command:
+                server_config["command"] = srv.command.strip()
+
+                if srv.args:
+                    server_config["args"] = list(srv.args)
+
+            if srv.env:
+                server_config["env"] = dict(srv.env)
+
+            if srv.auth:
+                server_config["auth"] = srv.auth
+
+            if validate_mcp_server_entry(srv.name, server_config):
+                _log.warning(
+                    "Skipping suspicious MCP server '%s' for profile %s",
+                    srv.name,
+                    profile_dir,
+                )
+
+                continue
+
+            mcp_servers[srv.name] = server_config
+
+            written += 1
+
+        save_config(cfg)
+
+    finally:
+        reset_clawk_home_override(token)
+
+    return written
 
 
 @app.get("/api/profiles")
@@ -9633,19 +11429,22 @@ class SkillToggle(BaseModel):
 
     enabled: bool
 
+    profile: Optional[str] = None
+
 
 @app.get("/api/skills")
-async def get_skills():
+async def get_skills(profile: Optional[str] = None):
 
     from tools.skills_tool import _find_all_skills
 
     from clawk_cli.skills_config import get_disabled_skills
 
-    config = load_config()
+    with _profile_scope(profile):
+        config = load_config()
 
-    disabled = get_disabled_skills(config)
+        disabled = get_disabled_skills(config)
 
-    skills = _find_all_skills(skip_disabled=True)
+        skills = _find_all_skills(skip_disabled=True)
 
     for s in skills:
         s["enabled"] = s["name"] not in disabled
@@ -9654,27 +11453,136 @@ async def get_skills():
 
 
 @app.put("/api/skills/toggle")
-async def toggle_skill(body: SkillToggle):
+async def toggle_skill(body: SkillToggle, profile: Optional[str] = None):
 
     from clawk_cli.skills_config import get_disabled_skills, save_disabled_skills
 
-    config = load_config()
+    with _profile_scope(body.profile or profile):
+        config = load_config()
 
-    disabled = get_disabled_skills(config)
+        disabled = get_disabled_skills(config)
 
-    if body.enabled:
-        disabled.discard(body.name)
+        if body.enabled:
+            disabled.discard(body.name)
 
-    else:
-        disabled.add(body.name)
+        else:
+            disabled.add(body.name)
 
-    save_disabled_skills(config, disabled)
+        save_disabled_skills(config, disabled)
 
     return {"ok": True, "name": body.name, "enabled": body.enabled}
 
 
+class SkillCreate(BaseModel):
+    name: str
+
+    content: str
+
+    category: Optional[str] = None
+
+    profile: Optional[str] = None
+
+
+class SkillContentUpdate(BaseModel):
+    name: str
+
+    content: str
+
+    profile: Optional[str] = None
+
+
+def _clear_skills_prompt_cache() -> None:
+    """Best-effort: invalidate the skills system-prompt snapshot after a write.
+
+    Mirrors what ``skill_manage`` does so a dashboard-authored skill is picked
+    up by the next session without a manual cache reset.
+    """
+
+    try:
+        from agent.prompt_builder import clear_skills_system_prompt_cache
+
+        clear_skills_system_prompt_cache(clear_snapshot=True)
+
+    except Exception:
+        pass
+
+
+@app.get("/api/skills/content")
+async def get_skill_content(name: str, profile: Optional[str] = None):
+    """Return the raw SKILL.md text for a skill, for the dashboard editor."""
+
+    from tools.skill_manager_tool import _find_skill
+
+    with _profile_scope(profile):
+        found = _find_skill(name)
+
+        if not found:
+            raise HTTPException(status_code=404, detail=f"Skill '{name}' not found.")
+
+        skill_md = found["path"] / "SKILL.md"
+
+        if not skill_md.exists():
+            raise HTTPException(
+                status_code=404, detail=f"Skill '{name}' has no SKILL.md."
+            )
+
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        return {"name": name, "content": content, "path": str(skill_md)}
+
+
+@app.post("/api/skills")
+async def create_skill(body: SkillCreate):
+    """Create a new custom skill (SKILL.md) from the dashboard editor.
+
+    Calls the same validated write path as the agent's ``skill_manage``
+    tool (frontmatter validation, name/category validation, size limit,
+    optional security scan) — but bypasses the agent write-approval gate:
+    a write from the authenticated dashboard IS the user acting directly.
+    """
+
+    from tools.skill_manager_tool import _create_skill
+
+    with _profile_scope(body.profile):
+        result = _create_skill(body.name, body.content, body.category or None)
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400, detail=result.get("error", "Failed to create skill.")
+        )
+
+    _clear_skills_prompt_cache()
+
+    return result
+
+
+@app.put("/api/skills/content")
+async def update_skill_content(body: SkillContentUpdate):
+    """Replace the SKILL.md of an existing skill (full rewrite) from the editor."""
+
+    from tools.skill_manager_tool import _edit_skill
+
+    with _profile_scope(body.profile):
+        result = _edit_skill(body.name, body.content)
+
+    if not result.get("success"):
+        err = result.get("error", "Failed to update skill.")
+
+        status = 404 if "not found" in str(err).lower() else 400
+
+        raise HTTPException(status_code=status, detail=err)
+
+    _clear_skills_prompt_cache()
+
+    return result
+
+
 @app.get("/api/tools/toolsets")
-async def get_toolsets():
+async def get_toolsets(profile: Optional[str] = None):
 
     from clawk_cli.tools_config import (
         _get_effective_configurable_toolsets,
@@ -9685,13 +11593,14 @@ async def get_toolsets():
 
     from toolsets import resolve_toolset
 
-    config = load_config()
+    with _profile_scope(profile):
+        config = load_config()
 
-    enabled_toolsets = _get_platform_tools(
-        config,
-        "cli",
-        include_default_mcp_servers=False,
-    )
+        enabled_toolsets = _get_platform_tools(
+            config,
+            "cli",
+            include_default_mcp_servers=False,
+        )
 
     result = []
 
@@ -9720,9 +11629,11 @@ async def get_toolsets():
 class ToolsetToggle(BaseModel):
     enabled: bool
 
+    profile: Optional[str] = None
+
 
 @app.put("/api/tools/toolsets/{name}")
-async def toggle_toolset(name: str, body: ToolsetToggle):
+async def toggle_toolset(name: str, body: ToolsetToggle, profile: Optional[str] = None):
     """Enable/disable a configurable toolset for the desktop (cli) platform.
 
 
@@ -9731,7 +11642,7 @@ async def toggle_toolset(name: str, body: ToolsetToggle):
 
     helper the CLI ``clawk tools`` picker uses, so the GUI and CLI stay in
 
-    lockstep. Returns 400 for unknown toolset keys.
+    lockstep. Returns 400 for unknown toolset keys, 404 for unknown profile.
 
     """
 
@@ -9746,17 +11657,20 @@ async def toggle_toolset(name: str, body: ToolsetToggle):
     if name not in valid:
         raise HTTPException(status_code=400, detail=f"Unknown toolset: {name}")
 
-    config = load_config()
+    with _profile_scope(body.profile or profile):
+        config = load_config()
 
-    enabled = set(_get_platform_tools(config, "cli", include_default_mcp_servers=False))
+        enabled = set(
+            _get_platform_tools(config, "cli", include_default_mcp_servers=False)
+        )
 
-    if body.enabled:
-        enabled.add(name)
+        if body.enabled:
+            enabled.add(name)
 
-    else:
-        enabled.discard(name)
+        else:
+            enabled.discard(name)
 
-    _save_platform_tools(config, "cli", enabled)
+        _save_platform_tools(config, "cli", enabled)
 
     return {"ok": True, "name": name, "enabled": body.enabled}
 
@@ -9890,6 +11804,77 @@ async def select_toolset_provider(name: str, body: ToolsetProviderSelect):
     return {"ok": True, "name": name, "provider": body.provider}
 
 
+class ToolsetPostSetup(BaseModel):
+    key: str
+
+    profile: Optional[str] = None
+
+
+@app.post("/api/tools/toolsets/{name}/post-setup")
+async def run_toolset_post_setup(
+    name: str, body: ToolsetPostSetup, profile: Optional[str] = None
+):
+    """Spawn a provider's post-setup install hook as a background action.
+
+
+
+    Post-setup hooks (npm install for browser/Camofox, pip install for
+
+    KittenTTS/Piper/ddgs, cua-driver fetch, etc.) are long-running and
+
+    text-output, so this follows the spawn-action pattern: it launches
+
+    ``clawk tools post-setup <key>`` and the frontend tails the log via
+
+    ``GET /api/actions/tools-post-setup/status``. The ``key`` is validated
+
+    against the declared post-setup allowlist before spawning. Returns 400
+
+    for unknown toolset or post-setup key.
+
+
+
+    ``profile`` spawns the hook as ``clawk -p <profile> tools post-setup`` so
+
+    hooks that read config or write per-profile state see the same CLAWK_HOME
+
+    the rest of the drawer's writes targeted.
+
+    """
+
+    from clawk_cli.tools_config import (
+        _get_effective_configurable_toolsets,
+        valid_post_setup_keys,
+    )
+
+    valid_ts = {ts_key for ts_key, _, _ in _get_effective_configurable_toolsets()}
+
+    if name not in valid_ts:
+        raise HTTPException(status_code=400, detail=f"Unknown toolset: {name}")
+
+    if body.key not in valid_post_setup_keys():
+        raise HTTPException(
+            status_code=400, detail=f"Unknown post-setup key: {body.key}"
+        )
+
+    try:
+        proc = _spawn_clawk_action(
+            _profile_cli_args(body.profile or profile)
+            + ["tools", "post-setup", body.key],
+            "tools-post-setup",
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        _log.exception("Failed to spawn tools post-setup")
+
+        raise HTTPException(status_code=500, detail=f"Failed to run post-setup: {exc}")
+
+    return {"ok": True, "pid": proc.pid, "name": "tools-post-setup", "key": body.key}
+
+
 # ---------------------------------------------------------------------------
 
 # Raw YAML config endpoint
@@ -9900,20 +11885,29 @@ async def select_toolset_provider(name: str, body: ToolsetProviderSelect):
 class RawConfigUpdate(BaseModel):
     yaml_text: str
 
+    profile: Optional[str] = None
+
 
 @app.get("/api/config/raw")
-async def get_config_raw():
+async def get_config_raw(profile: Optional[str] = None):
+    """Raw config.yaml text plus its resolved path.
 
-    path = get_config_path()
+    ``path`` is resolved inside ``_profile_scope`` so the Config page header
+    shows the file the switched profile actually reads/writes, not the
+    dashboard process's own profile.
+    """
+
+    with _profile_scope(profile):
+        path = get_config_path()
 
     if not path.exists():
-        return {"yaml": ""}
+        return {"yaml": "", "path": str(path)}
 
-    return {"yaml": path.read_text(encoding="utf-8")}
+    return {"yaml": path.read_text(encoding="utf-8"), "path": str(path)}
 
 
 @app.put("/api/config/raw")
-async def update_config_raw(body: RawConfigUpdate):
+async def update_config_raw(body: RawConfigUpdate, profile: Optional[str] = None):
 
     try:
         parsed = yaml.safe_load(body.yaml_text)
@@ -9921,7 +11915,8 @@ async def update_config_raw(body: RawConfigUpdate):
         if not isinstance(parsed, dict):
             raise HTTPException(status_code=400, detail="YAML must be a mapping")
 
-        save_config(parsed)
+        with _profile_scope(body.profile or profile):
+            save_config(parsed)
 
         return {"ok": True}
 
@@ -10118,12 +12113,30 @@ async def get_models_analytics(days: int = 30):
 
         rows = [dict(r) for r in cur.fetchall()]
 
+        # Modelos ocultados por el usuario desde la página Modelos (borrar
+        # de la lista sin tocar las sesiones que los usaron). Claves
+        # "provider|model" en config dashboard.hidden_models.
+        hidden = set()
+        try:
+            from clawk_cli.config import cfg_get, load_config
+
+            raw_hidden = cfg_get(
+                load_config(), "dashboard", "hidden_models", default=None
+            )
+            if isinstance(raw_hidden, list):
+                hidden = {str(h) for h in raw_hidden}
+        except Exception:
+            pass
+
         models = []
 
         for row in rows:
             provider = row.get("billing_provider") or ""
 
             model_name = row["model"]
+
+            if f"{provider}|{model_name}" in hidden or model_name in hidden:
+                continue
 
             caps = {}
 
@@ -10201,6 +12214,45 @@ async def get_models_analytics(days: int = 30):
         db.close()
 
 
+class HideModelBody(BaseModel):
+    model: str
+    provider: str = ""
+
+
+@app.post("/api/analytics/models/hide")
+async def post_analytics_models_hide(body: HideModelBody):
+    """Oculta un modelo de la página Modelos (no borra sesiones ni historia).
+
+    Se persiste en config ``dashboard.hidden_models`` como "provider|model";
+    para restaurarlo basta quitar la entrada de esa lista en Config.
+    """
+
+    model = (body.model or "").strip()
+    if not model:
+        raise HTTPException(status_code=400, detail="model is required")
+
+    from clawk_cli.config import load_config, save_config
+
+    def _persist():
+        cfg = load_config()
+        dashboard = cfg.get("dashboard")
+        if not isinstance(dashboard, dict):
+            dashboard = {}
+            cfg["dashboard"] = dashboard
+        hidden = dashboard.get("hidden_models")
+        if not isinstance(hidden, list):
+            hidden = []
+        key = f"{(body.provider or '').strip()}|{model}"
+        if key not in hidden:
+            hidden.append(key)
+        dashboard["hidden_models"] = hidden
+        save_config(cfg)
+        return hidden
+
+    hidden = await asyncio.to_thread(_persist)
+    return {"ok": True, "hidden_models": hidden}
+
+
 # ---------------------------------------------------------------------------
 
 # /api/pty — PTY-over-WebSocket bridge for the dashboard "Chat" tab.
@@ -10231,28 +12283,823 @@ async def get_models_analytics(days: int = 30):
 import re
 
 
-# PTY bridge is POSIX-only (depends on fcntl/termios/ptyprocess).  On native
+class ManagedFileUpload(BaseModel):
+    path: str
+    data_url: str
+    overwrite: bool = True
 
-# Windows the import raises; catch and leave PtyBridge=None so the rest of
 
-# the dashboard (sessions, jobs, metrics, config editor) still loads and the
+class ManagedDirectoryCreate(BaseModel):
+    path: str
 
-# /api/pty endpoint cleanly refuses with a WSL-suggested message.
 
-try:
-    from clawk_cli.pty_bridge import PtyBridge, PtyUnavailableError
+class ManagedFileDelete(BaseModel):
+    path: str
+    recursive: bool = False
 
-    _PTY_BRIDGE_AVAILABLE = True
 
-except ImportError as _pty_import_err:  # pragma: no cover - Windows-only path
-    PtyBridge = None  # type: ignore[assignment]
+_MEDIA_MAX_BYTES = 25 * 1024 * 1024
+_MANAGED_FILES_ROOT_ENV = "CLAWK_DASHBOARD_FILES_ROOT"
+_MANAGED_FILE_MAX_BYTES = 100 * 1024 * 1024
+_HOSTED_MANAGED_FILES_ROOT = Path("/opt/data")
 
-    _PTY_BRIDGE_AVAILABLE = False
 
-    class PtyUnavailableError(RuntimeError):  # type: ignore[no-redef]
-        """Stub on platforms where pty_bridge can't be imported."""
+@dataclass(frozen=True)
+class ManagedFilesPolicy:
+    default_path: Path
+    locked_root: Path | None
+    can_change_path: bool
 
+
+_FS_READDIR_HIDDEN = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".cache",
+    ".next",
+    ".turbo",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+}
+_FS_DATA_URL_MAX_BYTES = 16 * 1024 * 1024
+_FS_TEXT_SOURCE_MAX_BYTES = 64 * 1024 * 1024
+_FS_TEXT_PREVIEW_MAX_BYTES = 512 * 1024
+_FS_PREVIEW_LANGUAGE_BY_EXT = {
+    ".c": "c",
+    ".conf": "ini",
+    ".cpp": "cpp",
+    ".css": "css",
+    ".csv": "csv",
+    ".go": "go",
+    ".graphql": "graphql",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".html": "html",
+    ".java": "java",
+    ".js": "javascript",
+    ".json": "json",
+    ".jsx": "jsx",
+    ".kt": "kotlin",
+    ".lua": "lua",
+    ".md": "markdown",
+    ".mjs": "javascript",
+    ".py": "python",
+    ".rb": "ruby",
+    ".rs": "rust",
+    ".sh": "shell",
+    ".sql": "sql",
+    ".svg": "xml",
+    ".toml": "toml",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".txt": "text",
+    ".xml": "xml",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".zsh": "shell",
+}
+_FS_MIME_TYPES = {
+    ".avi": "video/x-msvideo",
+    ".bmp": "image/bmp",
+    ".flac": "audio/flac",
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".m4a": "audio/mp4",
+    ".mkv": "video/x-matroska",
+    ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg",
+    ".mp4": "video/mp4",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/ogg; codecs=opus",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".wav": "audio/wav",
+    ".webm": "video/webm",
+    ".webp": "image/webp",
+}
+
+
+def _fs_path(raw_path: str) -> Path:
+    raw = str(raw_path or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Path is required")
+    if "\0" in raw:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    try:
+        if raw.lower().startswith("file:"):
+            parsed = urllib.parse.urlparse(raw)
+            if parsed.netloc and parsed.netloc not in {"", "localhost"}:
+                raise ValueError
+            raw = urllib.request.url2pathname(parsed.path)
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            candidate = Path.cwd() / candidate
+        return candidate.resolve(strict=False)
+    except (OSError, RuntimeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid path")
+
+
+def _fs_mime_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in _FS_MIME_TYPES:
+        return _FS_MIME_TYPES[suffix]
+    guessed, _ = mimetypes.guess_type(str(path))
+    return guessed or "application/octet-stream"
+
+
+def _fs_looks_binary(data: bytes) -> bool:
+    if not data:
+        return False
+    if b"\0" in data:
+        return True
+    suspicious = sum(1 for byte in data if byte < 32 and byte not in {9, 10, 13})
+    return suspicious / len(data) > 0.12
+
+
+def _fs_regular_file(path: Path) -> tuple[Path, os.stat_result]:
+    target = _fs_path(str(path))
+    try:
+        st = target.stat()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found")
+    except NotADirectoryError:
+        raise HTTPException(status_code=404, detail="File not found")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="File is not readable")
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "Invalid path")
+    if stat.S_ISDIR(st.st_mode):
+        raise HTTPException(status_code=400, detail="Path points to a directory")
+    if not stat.S_ISREG(st.st_mode):
+        raise HTTPException(status_code=400, detail="Only regular files can be read")
+    return target, st
+
+
+def _fs_find_git_root(start: Path) -> str | None:
+    directory = start
+    for _ in range(50):
+        try:
+            if (directory / ".git").exists():
+                return str(directory)
+        except OSError:
+            return None
+        parent = directory.parent
+        if parent == directory:
+            return None
+        directory = parent
+    return None
+
+
+def _fs_default_cwd() -> str:
+    cfg_terminal = load_config().get("terminal") or {}
+    raw = str(cfg_terminal.get("cwd") or os.environ.get("TERMINAL_CWD") or "").strip()
+    if raw and raw not in {".", "auto", "cwd"}:
+        try:
+            candidate = Path(raw).expanduser().resolve(strict=False)
+            if candidate.is_dir():
+                return str(candidate)
+        except (OSError, RuntimeError):
+            pass
+    return str(Path.cwd())
+
+
+def _fs_git_branch(cwd: str) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "-C", cwd, "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def _media_serve_roots() -> list[Path]:
+    """Directories ``GET /api/media`` is allowed to read from.
+
+    Confined to where the agent and attach pipeline actually write media on the
+    gateway host — its images dir and cache subtree. This stops an authenticated
+    client from reading image-extension files anywhere on disk (e.g. a renamed
+    key or a screenshot outside the cache) merely because the suffix passes the
+    allowlist.
+    """
+    home = get_clawk_home()
+    roots = [home / "images", home / "screenshots", home / "cache"]
+    out: list[Path] = []
+    for root in roots:
+        try:
+            out.append(root.resolve())
+        except (OSError, RuntimeError):
+            continue
+    return out
+
+
+@app.get("/api/media")
+async def get_media(path: str):
+    """Return a gateway-local image file as a base64 data URL.
+
+    Lets remote clients (the desktop app over the network, or the web dashboard
+    in a browser) display images the agent wrote to *this* machine's filesystem
+    — they can't read the gateway's local disk directly.
+
+    Auth-gated by the session token like every other /api route. Restricted to
+    an image-extension allowlist, a size cap, AND the gateway's own media roots
+    (resolved, symlink-safe) so it can't be used to read arbitrary files.
+    """
+    try:
+        target = Path(path).expanduser().resolve()
+    except (OSError, RuntimeError):
+        raise HTTPException(status_code=400, detail="Invalid path")
+
+    if target.suffix.lower() not in _MEDIA_CONTENT_TYPES:
+        raise HTTPException(status_code=415, detail="Unsupported media type")
+
+    roots = _media_serve_roots()
+    if not any(target == root or root in target.parents for root in roots):
+        raise HTTPException(status_code=403, detail="Path outside media roots")
+
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    if target.stat().st_size > _MEDIA_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File too large")
+
+    encoded = base64.b64encode(target.read_bytes()).decode("ascii")
+    return {
+        "data_url": f"data:{_MEDIA_CONTENT_TYPES[target.suffix.lower()]};base64,{encoded}"
+    }
+
+
+def _canonical_path(path: Path, *, require_exists: bool = False) -> Path:
+    try:
+        return path.expanduser().resolve(strict=require_exists)
+    except FileNotFoundError:
+        if require_exists:
+            raise HTTPException(status_code=404, detail="Path not found")
+        raise
+    except (OSError, RuntimeError):
+        raise HTTPException(status_code=400, detail="Invalid path")
+
+
+def _ensure_managed_root(raw_path: str | Path) -> Path:
+    root = Path(raw_path).expanduser()
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        resolved = root.resolve()
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Managed files root is unavailable: {exc}"
+        )
+    if not resolved.is_dir():
+        raise HTTPException(
+            status_code=500, detail="Managed files root is not a directory"
+        )
+    return resolved
+
+
+def _path_is_under(root: Path, target: Path) -> bool:
+    return target == root or root in target.parents
+
+
+def _path_text(raw_path: str | None) -> str:
+    text = str(raw_path or "").strip()
+    if "\x00" in text:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    return text
+
+
+def _local_dashboard_request(request: Request) -> bool:
+    if getattr(request.app.state, "auth_required", False):
+        return False
+    host = (request.url.hostname or "").lower()
+    client_host = (request.client.host if request.client else "").lower()
+    local_hosts = {"", "localhost", "127.0.0.1", "::1", "testserver", "testclient"}
+    return host in local_hosts or client_host in local_hosts
+
+
+def _default_clawk_root_is_opt_data() -> bool:
+    raw = os.environ.get("CLAWK_HOME", "").strip()
+    if not raw:
+        return False
+    try:
+        from clawk_constants import get_default_clawk_root
+
+        root = get_default_clawk_root().expanduser().resolve(strict=False)
+    except (OSError, RuntimeError):
+        root = Path(raw).expanduser().resolve(strict=False)
+    return root == _HOSTED_MANAGED_FILES_ROOT
+
+
+def _dashboard_local_update_managed_externally() -> bool:
+    """Return true when the dashboard should not offer ``clawk update``.
+
+    Containerized dashboards are updated by the outer launcher/image, not by an
+    in-browser local update action. Keep this dashboard capability separate
+    from install-method detection: manual git/pip installs inside containers can
+    still behave like their actual install method in the CLI.
+
+    However, when the install method is ``git`` (a bind-mounted checkout inside
+    a container — e.g. the clawk-webui image sharing the Clawksis source tree),
+    the dashboard's ``clawk update`` button is the correct update path and
+    should not be suppressed. Other containerized install methods remain
+    externally managed unless their apply path is proven safe inside the
+    running container filesystem.
+    """
+    if _default_clawk_root_is_opt_data():
+        return True
+    try:
+        from clawk_constants import is_container
+
+        if not is_container():
+            return False
+    except Exception:
+        return False
+    # We are inside a container, but the install may still be self-managed.
+    # If the install method is git, the dashboard update button works against
+    # the mounted checkout and should be offered. Keep pip blocked inside
+    # containers: its apply path mutates the running container filesystem and
+    # is not the bind-mounted checkout case this gate is meant to recover.
+    try:
+        method = detect_install_method(PROJECT_ROOT)
+        if method == "git":
+            return False
+    except Exception:
         pass
+    return True
+
+
+def _managed_files_policy(
+    request: Request, *, create_root: bool = True
+) -> ManagedFilesPolicy:
+    raw_forced_root = os.environ.get(_MANAGED_FILES_ROOT_ENV, "").strip()
+    if raw_forced_root:
+        root = (
+            _ensure_managed_root(raw_forced_root)
+            if create_root
+            else _canonical_path(Path(raw_forced_root))
+        )
+        return ManagedFilesPolicy(
+            default_path=root, locked_root=root, can_change_path=False
+        )
+
+    # Remote/OAuth access does not imply a hosted container. Users can expose a
+    # local dashboard through the auth gate (for example a macOS launchd install)
+    # and still expect the Files page to browse their local home directory. Lock
+    # to /opt/data only when the installation's Clawksis root is actually /opt/data
+    # (the container/hosted layout) or when CLAWK_DASHBOARD_FILES_ROOT is set.
+    if _default_clawk_root_is_opt_data():
+        root = (
+            _ensure_managed_root(_HOSTED_MANAGED_FILES_ROOT)
+            if create_root
+            else _HOSTED_MANAGED_FILES_ROOT
+        )
+        return ManagedFilesPolicy(
+            default_path=root, locked_root=root, can_change_path=False
+        )
+
+    home = _canonical_path(Path.home())
+    return ManagedFilesPolicy(default_path=home, locked_root=None, can_change_path=True)
+
+
+def _resolve_managed_path(
+    raw_path: str | None,
+    request: Request,
+    *,
+    for_write: bool = False,
+) -> tuple[ManagedFilesPolicy, Path, str]:
+    policy = _managed_files_policy(request)
+    text = _path_text(raw_path)
+    root = policy.locked_root
+
+    if root is not None and (not text or text in {".", "/"}):
+        candidate = root
+    elif not text:
+        candidate = policy.default_path
+    else:
+        candidate = Path(text).expanduser()
+        if root is not None and not candidate.is_absolute():
+            if any(part == ".." for part in candidate.parts):
+                raise HTTPException(status_code=400, detail="Path cannot contain '..'")
+            candidate = root / candidate
+        elif not candidate.is_absolute():
+            # No locked managed root (root is None — e.g. the dashboard running
+            # with HOME=/root and no CLAWK_DASHBOARD_FILES_ROOT): resolve a
+            # RELATIVE path against the policy's default path (the home) instead
+            # of rejecting it. The chat image/file upload sends a relative path
+            # ("chat-uploads/<ts>_<name>"), so this makes paste/upload work the
+            # same in local / VPS / hosted. The '..' guard still applies.
+            if any(part == ".." for part in candidate.parts):
+                raise HTTPException(status_code=400, detail="Path cannot contain '..'")
+            candidate = policy.default_path / candidate
+
+    if ".." in candidate.parts:
+        raise HTTPException(status_code=400, detail="Path cannot contain '..'")
+
+    if for_write and not candidate.exists():
+        parent = _canonical_path(candidate.parent)
+        resolved = parent / candidate.name
+    else:
+        resolved = _canonical_path(candidate, require_exists=not for_write)
+
+    if root is not None and not _path_is_under(root, resolved):
+        raise HTTPException(status_code=403, detail="Path outside managed files root")
+
+    return policy, resolved, str(resolved)
+
+
+def _managed_response_meta(policy: ManagedFilesPolicy) -> Dict[str, Any]:
+    locked_root = str(policy.locked_root) if policy.locked_root is not None else None
+    return {
+        "root": locked_root,
+        "locked_root": locked_root,
+        "can_change_path": policy.can_change_path,
+    }
+
+
+def _managed_file_entry(policy: ManagedFilesPolicy, target: Path) -> Dict[str, Any]:
+    try:
+        resolved = target.resolve()
+    except (OSError, RuntimeError):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if policy.locked_root is not None and not _path_is_under(
+        policy.locked_root, resolved
+    ):
+        raise HTTPException(status_code=403, detail="Path outside managed files root")
+
+    try:
+        st = resolved.stat()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not stat path: {exc}")
+
+    is_dir = resolved.is_dir()
+    mime_type = (
+        None
+        if is_dir
+        else (mimetypes.guess_type(resolved.name)[0] or "application/octet-stream")
+    )
+    return {
+        "name": target.name or resolved.name or str(resolved),
+        "path": str(resolved),
+        "is_directory": is_dir,
+        "size": None if is_dir else st.st_size,
+        "mtime": st.st_mtime,
+        "mime_type": mime_type,
+    }
+
+
+def _decode_data_url(data_url: str) -> tuple[bytes, str]:
+    text = (data_url or "").strip()
+    if not text.startswith("data:") or "," not in text:
+        raise HTTPException(status_code=400, detail="Upload payload must be a data URL")
+    header, encoded = text.split(",", 1)
+    mime_type = header[5:].split(";", 1)[0] or "application/octet-stream"
+    if ";base64" not in header:
+        raise HTTPException(
+            status_code=400, detail="Upload payload must be base64 encoded"
+        )
+    try:
+        data = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(
+            status_code=400, detail="Upload payload is not valid base64"
+        )
+    if len(data) > _MANAGED_FILE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File is too large")
+    return data, mime_type
+
+
+@app.get("/api/files")
+async def list_managed_files(request: Request, path: Optional[str] = None):
+    policy, target, display_path = _resolve_managed_path(path, request)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Path not found")
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail="Path is not a directory")
+
+    try:
+        entries = [_managed_file_entry(policy, child) for child in target.iterdir()]
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Directory is not readable")
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not read directory: {exc}")
+
+    entries.sort(key=lambda item: (not item["is_directory"], str(item["name"]).lower()))
+    locked_root = policy.locked_root
+    parent = None
+    if target.parent != target and (locked_root is None or target != locked_root):
+        parent = str(target.parent)
+    return {
+        "path": display_path,
+        "parent": parent,
+        "entries": entries,
+        **_managed_response_meta(policy),
+    }
+
+
+@app.get("/api/files/read")
+async def read_managed_file(request: Request, path: str):
+    policy, target, display_path = _resolve_managed_path(path, request)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    if not target.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
+
+    try:
+        size = target.stat().st_size
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not stat file: {exc}")
+    if size > _MANAGED_FILE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File is too large")
+
+    mime_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+    try:
+        encoded = base64.b64encode(target.read_bytes()).decode("ascii")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="File is not readable")
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not read file: {exc}")
+
+    return {
+        "name": target.name,
+        "path": display_path,
+        "size": size,
+        "mime_type": mime_type,
+        "data_url": f"data:{mime_type};base64,{encoded}",
+        **_managed_response_meta(policy),
+    }
+
+
+@app.get("/api/files/download")
+async def download_managed_file(request: Request, path: str):
+    """Stream a managed file as an attachment download.
+
+    Remote clients (desktop app, browser dashboard) open agent-written files
+    that live on *this* gateway's disk, not theirs. Auth-gated like every other
+    managed-files route — ``auth_middleware`` additionally accepts the session
+    token as a ``?token=`` query param here so a shell/browser-opened download
+    (which can't set the session header) still authenticates. See ``/api/pty``
+    for the same query-token precedent.
+    """
+    policy, target, _display_path = _resolve_managed_path(path, request)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    if not target.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
+
+    try:
+        size = target.stat().st_size
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not stat file: {exc}")
+    if size > _MANAGED_FILE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File is too large")
+
+    mime_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+
+    return FileResponse(
+        path=str(target),
+        media_type=mime_type,
+        filename=target.name,
+        content_disposition_type="attachment",
+    )
+
+
+@app.post("/api/files/upload")
+async def upload_managed_file(payload: ManagedFileUpload, request: Request):
+    policy, target, display_path = _resolve_managed_path(
+        payload.path, request, for_write=True
+    )
+    if target.exists() and target.is_dir():
+        raise HTTPException(
+            status_code=409, detail="A directory already exists at that path"
+        )
+    if target.exists() and not payload.overwrite:
+        raise HTTPException(status_code=409, detail="File already exists")
+
+    data, _mime_type = _decode_data_url(payload.data_url)
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="File is not writable")
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not write file: {exc}")
+
+    return {
+        "ok": True,
+        "entry": _managed_file_entry(policy, target),
+        "path": display_path,
+        **_managed_response_meta(policy),
+    }
+
+
+# Stream uploads to disk in fixed-size chunks. The legacy JSON endpoint above
+# buffers the whole file as a base64 data URL in a JSON body, which (a) inflates
+# the payload ~33%, (b) holds the entire file (plus its decoded copy) in memory,
+# and (c) reliably trips upstream proxy body-size/timeout limits with a 502 on
+# large backup archives (NS-501). This multipart endpoint reads the request body
+# in 1 MiB chunks straight to a temp file, enforces the size cap as it goes, and
+# atomically renames into place — constant memory, no base64 inflation.
+_UPLOAD_CHUNK_BYTES = 1024 * 1024
+
+
+# NOTE: the multipart streaming upload endpoint (/api/files/upload-stream)
+# is intentionally omitted here — it requires the optional ``python-multipart``
+# dependency, which is not part of the base install. The dashboard uploads via
+# the base64 JSON path (/api/files/upload) instead.
+
+
+@app.post("/api/files/mkdir")
+async def create_managed_directory(payload: ManagedDirectoryCreate, request: Request):
+    policy, target, display_path = _resolve_managed_path(
+        payload.path, request, for_write=True
+    )
+    if target.exists() and not target.is_dir():
+        raise HTTPException(
+            status_code=409, detail="A file already exists at that path"
+        )
+
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Directory is not writable")
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Could not create directory: {exc}"
+        )
+
+    return {
+        "ok": True,
+        "entry": _managed_file_entry(policy, target),
+        "path": display_path,
+        **_managed_response_meta(policy),
+    }
+
+
+@app.delete("/api/files")
+async def delete_managed_file(payload: ManagedFileDelete, request: Request):
+    policy, target, display_path = _resolve_managed_path(payload.path, request)
+    if policy.locked_root is not None and target == policy.locked_root:
+        raise HTTPException(
+            status_code=400, detail="Cannot delete the managed files root"
+        )
+    if target.parent == target:
+        raise HTTPException(status_code=400, detail="Cannot delete the filesystem root")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Path not found")
+
+    try:
+        if target.is_dir():
+            if payload.recursive:
+                shutil.rmtree(target)
+            else:
+                target.rmdir()
+        else:
+            target.unlink()
+    except OSError as exc:
+        status_code = 409 if target.is_dir() and not payload.recursive else 500
+        raise HTTPException(
+            status_code=status_code, detail=f"Could not delete path: {exc}"
+        )
+
+    return {"ok": True, "path": display_path, **_managed_response_meta(policy)}
+
+
+@app.get("/api/fs/list")
+async def fs_list(path: str):
+    target = _fs_path(path)
+    try:
+        entries = []
+        with os.scandir(target) as scan:
+            for entry in scan:
+                if entry.name in _FS_READDIR_HIDDEN:
+                    continue
+                entries.append({
+                    "name": entry.name,
+                    "path": str(target / entry.name),
+                    "isDirectory": entry.is_dir(follow_symlinks=False),
+                })
+        entries.sort(
+            key=lambda item: (
+                not item["isDirectory"],
+                item["name"].lower(),
+                item["name"],
+            )
+        )
+        return {"entries": entries}
+    except FileNotFoundError:
+        return {"entries": [], "error": "ENOENT"}
+    except NotADirectoryError:
+        return {"entries": [], "error": "ENOTDIR"}
+    except PermissionError:
+        return {"entries": [], "error": "EACCES"}
+    except OSError as exc:
+        return {"entries": [], "error": getattr(exc, "strerror", None) or "read-error"}
+
+
+@app.get("/api/fs/read-text")
+async def fs_read_text(path: str):
+    target, st = _fs_regular_file(_fs_path(path))
+    if st.st_size > _FS_TEXT_SOURCE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File too large")
+    bytes_to_read = min(st.st_size, _FS_TEXT_PREVIEW_MAX_BYTES)
+    try:
+        with target.open("rb") as handle:
+            data = handle.read(bytes_to_read)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="File is not readable")
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "File read failed")
+    return {
+        "binary": _fs_looks_binary(data[:4096]),
+        "byteSize": st.st_size,
+        "language": _FS_PREVIEW_LANGUAGE_BY_EXT.get(target.suffix.lower(), "text"),
+        "mimeType": _fs_mime_type(target),
+        "path": str(target),
+        "text": data.decode("utf-8", errors="replace"),
+        "truncated": st.st_size > _FS_TEXT_PREVIEW_MAX_BYTES,
+    }
+
+
+@app.get("/api/fs/read-data-url")
+async def fs_read_data_url(path: str):
+    target, st = _fs_regular_file(_fs_path(path))
+    if st.st_size > _FS_DATA_URL_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File too large")
+    try:
+        encoded = base64.b64encode(target.read_bytes()).decode("ascii")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="File is not readable")
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "File read failed")
+    return {"dataUrl": f"data:{_fs_mime_type(target)};base64,{encoded}"}
+
+
+@app.get("/api/fs/git-root")
+async def fs_git_root(path: str):
+    target = _fs_path(path)
+    try:
+        st = target.stat()
+        start = target if stat.S_ISDIR(st.st_mode) else target.parent
+    except OSError:
+        start = target
+    return {"root": _fs_find_git_root(start)}
+
+
+@app.get("/api/fs/default-cwd")
+async def fs_default_cwd():
+    cwd = _fs_default_cwd()
+    return {"cwd": cwd, "branch": _fs_git_branch(cwd)}
+
+
+# PTY bridge is platform-branched at import time: native Windows uses the
+# ConPTY backend (win_pty_bridge / pywinpty), POSIX uses the fcntl/termios one
+# (pty_bridge / ptyprocess).  Either native dependency may be missing, so each
+# branch catches ImportError and leaves PtyBridge=None so the rest of the
+# dashboard (sessions, jobs, metrics, config editor) still loads and the
+# /api/pty endpoint cleanly refuses with a platform-appropriate message.
+
+if sys.platform.startswith("win"):
+    try:
+        from clawk_cli.win_pty_bridge import (
+            WinPtyBridge as PtyBridge,
+            PtyUnavailableError,
+        )
+
+        _PTY_BRIDGE_AVAILABLE = True
+
+    except ImportError:  # pragma: no cover - pywinpty missing
+        PtyBridge = None  # type: ignore[assignment]
+
+        _PTY_BRIDGE_AVAILABLE = False
+
+        class PtyUnavailableError(RuntimeError):  # type: ignore[no-redef]
+            """Stub when win_pty_bridge cannot be imported."""
+
+            pass
+
+else:
+    try:
+        from clawk_cli.pty_bridge import PtyBridge, PtyUnavailableError
+
+        _PTY_BRIDGE_AVAILABLE = True
+
+    except ImportError:  # pragma: no cover - dev env without ptyprocess
+        PtyBridge = None  # type: ignore[assignment]
+
+        _PTY_BRIDGE_AVAILABLE = False
+
+        class PtyUnavailableError(RuntimeError):  # type: ignore[no-redef]
+            """Stub on platforms where pty_bridge can't be imported."""
+
+            pass
 
 
 _RESIZE_RE = re.compile(rb"\x1b\[RESIZE:(\d+);(\d+)\]")
@@ -10624,6 +13471,7 @@ def _ws_auth_ok(ws: "WebSocket") -> bool:
 def _resolve_chat_argv(
     resume: Optional[str] = None,
     sidecar_url: Optional[str] = None,
+    profile: Optional[str] = None,
 ) -> tuple[list[str], Optional[str], Optional[dict]]:
     """Resolve the argv + cwd + env for the chat PTY.
 
@@ -10665,6 +13513,17 @@ def _resolve_chat_argv(
 
     from clawk_cli.main import PROJECT_ROOT, _make_tui_argv
 
+    # Resolve the requested profile BEFORE building argv so an unknown profile
+    # surfaces a clean 404 (the endpoint propagates it). A scoped chat points
+    # CLAWK_HOME at the profile dir so every spawned process (TUI + the
+    # tui_gateway.entry it launches) binds that profile's config/skills/state.
+    profile_dir: Optional[Path] = None
+
+    requested_profile = (profile or "").strip()
+
+    if requested_profile and requested_profile.lower() != "current":
+        profile_dir = _resolve_profile_dir(requested_profile)
+
     argv, cwd = _make_tui_argv(PROJECT_ROOT / "ui-tui", tui_dev=False)
 
     env = os.environ.copy()
@@ -10687,6 +13546,9 @@ def _resolve_chat_argv(
 
     env.setdefault("CLAWK_TUI_INLINE", "1")
 
+    if profile_dir is not None:
+        env["CLAWK_HOME"] = str(profile_dir)
+
     if resume:
         latest_resume, _latest_path = _session_latest_descendant(resume)
 
@@ -10698,8 +13560,13 @@ def _resolve_chat_argv(
     if sidecar_url:
         env["CLAWK_TUI_SIDECAR_URL"] = sidecar_url
 
-    if gateway_ws_url := _build_gateway_ws_url():
-        env["CLAWK_TUI_GATEWAY_URL"] = gateway_ws_url
+    # Profile-scoped chats must NOT attach to the dashboard's in-memory gateway —
+    # it runs under the dashboard's own profile. Without the attach URL,
+    # gatewayClient spawns its own ``tui_gateway.entry``, which inherits the
+    # profile CLAWK_HOME set above.
+    if profile_dir is None:
+        if gateway_ws_url := _build_gateway_ws_url():
+            env["CLAWK_TUI_GATEWAY_URL"] = gateway_ws_url
 
     return list(argv), str(cwd) if cwd else None, env
 
@@ -11472,6 +14339,11 @@ _BUILTIN_DASHBOARD_THEMES = [
         "label": "Rosé",
         "description": "Soft pink and warm ivory — easy on the eyes",
     },
+    {
+        "name": "pixel",
+        "label": "Clawksis Pixel",
+        "description": "16-bit retro — pixel font, purple grid & scanlines",
+    },
 ]
 
 
@@ -11883,7 +14755,7 @@ async def get_dashboard_themes():
 
     config = load_config()
 
-    active = cfg_get(config, "dashboard", "theme", default="default")
+    active = cfg_get(config, "dashboard", "theme", default="midnight")
 
     user_themes = _discover_user_themes()
 
@@ -12039,6 +14911,526 @@ async def get_visualization_agent_messages(limit: int = 100, since_id: int = 0):
     return {"messages": messages}
 
 
+# Session metadata (title/source/model) cache for the Visualization office.
+# Rebuilt at most every TTL seconds so the per-1.5s events poll stays cheap.
+_VIZ_SESSION_META: Dict[str, Any] = {"ts": 0.0, "data": {}}
+_VIZ_SESSION_META_TTL = 10.0
+
+
+def _build_viz_session_meta() -> Dict[str, Dict[str, str]]:
+    """Map session_id -> {title, source, model} from the sessions store (blocking)."""
+
+    out: Dict[str, Dict[str, str]] = {}
+
+    try:
+        from clawk_state import SessionDB
+
+        db = SessionDB()
+
+        try:
+            rows = db.list_sessions_rich(
+                limit=300,
+                offset=0,
+                min_message_count=0,
+                include_archived=True,
+                archived_only=False,
+                order_by_last_active=True,
+            )
+
+            for s in rows:
+                sid = s.get("id")
+
+                if not sid:
+                    continue
+
+                out[sid] = {
+                    "title": (s.get("title") or "").strip(),
+                    "source": (s.get("source") or "").strip(),
+                    "model": (s.get("model") or "").strip(),
+                }
+
+        finally:
+            db.close()
+
+    except Exception:
+        _log.debug("viz session meta build failed", exc_info=True)
+
+    return out
+
+
+async def _viz_session_meta_cached() -> Dict[str, Dict[str, str]]:
+    now = time.time()
+
+    if (
+        now - _VIZ_SESSION_META["ts"] > _VIZ_SESSION_META_TTL
+        or not _VIZ_SESSION_META["data"]
+    ):
+        data = await asyncio.to_thread(_build_viz_session_meta)
+
+        if data:
+            _VIZ_SESSION_META["data"] = data
+
+            _VIZ_SESSION_META["ts"] = now
+
+    return _VIZ_SESSION_META["data"]
+
+
+@app.get("/api/visualization/agent-events")
+async def get_visualization_agent_events(limit: int = 300, since_id: int = 0):
+    """Return recent tool-activity events across ALL agents (oldest-first).
+
+    Reads the cross-process ``agent_events.db`` that every agent (chat, gateway
+    platforms, cron) writes to via ``model_tools.handle_function_call``. This is
+    what lets the Visualization office show agents from every channel, not just
+    the dashboard chat PTY. Also returns a ``sessions`` map (session_id ->
+    {title, source, model}) so the office can label desks with the real session
+    name + model instead of the raw id. Returns empties when nothing has run.
+    """
+
+    try:
+        import agent_events
+
+        events = await asyncio.to_thread(
+            agent_events.read_recent,
+            limit=limit,
+            since_id=since_id if since_id > 0 else None,
+        )
+
+    except Exception:
+        events = []
+
+    sessions: Dict[str, Dict[str, str]] = {}
+
+    try:
+        sids = {e.get("session_id") for e in events if e.get("session_id")}
+
+        if sids:
+            meta = await _viz_session_meta_cached()
+
+            sessions = {sid: meta[sid] for sid in sids if sid in meta}
+
+    except Exception:
+        sessions = {}
+
+    return {"events": events, "sessions": sessions}
+
+
+# ---------------------------------------------------------------------------
+
+# Cookbook — local models (run open LLMs locally via Ollama)
+
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/cookbook/hardware")
+async def get_cookbook_hardware():
+    """Detected hardware (RAM / CPU / GPU + VRAM) for the fit recommender."""
+
+    try:
+        from clawk_cli import cookbook
+
+        hw = await asyncio.to_thread(cookbook.detect_hardware)
+
+    except Exception:
+        hw = {}
+
+    return {"hardware": hw}
+
+
+@app.get("/api/cookbook/catalog")
+async def get_cookbook_catalog():
+    """Curated local-model catalog enriched with a per-model fit verdict.
+
+    Each entry carries ``fit`` ({mode, tier, reason}) for the detected hardware
+    and an ``installed`` flag (already pulled into the local Ollama).
+    """
+
+    try:
+        from clawk_cli import cookbook
+
+        def _build():
+            hw = cookbook.detect_hardware()
+            installed = cookbook.ollama_models()
+            return {
+                "hardware": hw,
+                "ollama": cookbook.ollama_status(),
+                "models": cookbook.catalog_with_fit(hw, installed),
+            }
+
+        return await asyncio.to_thread(_build)
+
+    except Exception:
+        return {"hardware": {}, "ollama": {}, "models": []}
+
+
+@app.get("/api/cookbook/search")
+async def get_cookbook_search(q: str):
+    """Live search of the FULL Ollama library (scraped) for models matching *q*.
+
+    Returns catalog-shaped rows (one per size tag) with fit + installed flags,
+    so ANY model in ollama.com/library is findable — not just the curated set.
+    Returns [] if ollama.com is unreachable.
+    """
+
+    query = (q or "").strip()
+    if not query:
+        return {"models": []}
+
+    try:
+        from clawk_cli import cookbook
+
+        def _build():
+            hw = cookbook.detect_hardware()
+            installed = cookbook.ollama_models()
+            return {
+                "models": cookbook.rows_with_fit(
+                    cookbook.search_ollama_library(query), hw, installed
+                )
+            }
+
+        return await asyncio.to_thread(_build)
+
+    except Exception:
+        return {"models": []}
+
+
+@app.get("/api/cookbook/library")
+async def get_cookbook_library():
+    """The FULL Ollama library (scraped, cached ~30 min) with fit + installed."""
+
+    try:
+        from clawk_cli import cookbook
+
+        def _build():
+            hw = cookbook.detect_hardware()
+            installed = cookbook.ollama_models()
+            return {
+                "hardware": hw,
+                "ollama": cookbook.ollama_status(),
+                "models": cookbook.rows_with_fit(
+                    cookbook.full_ollama_library(), hw, installed
+                ),
+            }
+
+        return await asyncio.to_thread(_build)
+
+    except Exception:
+        return {"hardware": {}, "ollama": {}, "models": []}
+
+
+@app.get("/api/cookbook/ollama")
+async def get_cookbook_ollama():
+    """Ollama status (installed / running / pulled models)."""
+
+    try:
+        from clawk_cli import cookbook
+
+        return await asyncio.to_thread(cookbook.ollama_status)
+
+    except Exception:
+        return {"installed": False, "running": False, "models": []}
+
+
+class CookbookTagBody(BaseModel):
+    tag: str
+
+
+@app.post("/api/cookbook/pull")
+async def post_cookbook_pull(body: CookbookTagBody):
+    """Start `ollama pull <tag>` in the background. Poll /pull-status for progress."""
+
+    tag = (body.tag or "").strip()
+    if not tag:
+        raise HTTPException(status_code=400, detail="tag is required")
+
+    from clawk_cli import cookbook
+
+    return await asyncio.to_thread(cookbook.start_pull, tag)
+
+
+@app.get("/api/cookbook/pull-status")
+async def get_cookbook_pull_status(tag: str):
+    """Background pull status for a tag: pulling / validating / done / error.
+
+    Incluye el progreso real del streaming pull (bytes, %, velocidad, ETA).
+    """
+
+    from clawk_cli import cookbook
+
+    progress = cookbook.pull_progress(tag)
+    return {"tag": tag, "status": cookbook.pull_status(tag), **progress}
+
+
+@app.post("/api/cookbook/pull-cancel")
+async def post_cookbook_pull_cancel(body: CookbookTagBody):
+    """Cancela un `ollama pull` en curso (los blobs parciales se conservan)."""
+
+    from clawk_cli import cookbook
+
+    return await asyncio.to_thread(cookbook.cancel_pull, (body.tag or "").strip())
+
+
+@app.post("/api/cookbook/install-ollama")
+async def post_cookbook_install_ollama():
+    """Install Ollama on the clawk host (background) so the Cookbook works here.
+
+    "We ship Ollama with clawk" — install it on demand on the machine where the
+    agent runs. Poll /install-ollama-status. Best-effort (Linux / macOS-brew).
+    """
+
+    from clawk_cli import cookbook
+
+    return await asyncio.to_thread(cookbook.start_ollama_install)
+
+
+@app.get("/api/cookbook/install-ollama-status")
+async def get_cookbook_install_ollama_status():
+    """Ollama install progress: installing / done / error / "" (unknown)."""
+
+    from clawk_cli import cookbook
+
+    return {"status": cookbook.ollama_install_status()}
+
+
+@app.post("/api/cookbook/use")
+async def post_cookbook_use(body: CookbookTagBody):
+    """Set a local Ollama model as the agent's active model."""
+
+    tag = (body.tag or "").strip()
+    if not tag:
+        raise HTTPException(status_code=400, detail="tag is required")
+
+    from clawk_cli import cookbook
+
+    result = await asyncio.to_thread(cookbook.use_model, tag)
+    if not result.get("ok"):
+        raise HTTPException(status_code=500, detail=result.get("error", "failed"))
+    return result
+
+
+# ── Cookbook: provider architecture (Ollama + llama.cpp + futuros) ──────────
+#
+# Los endpoints de arriba quedan por compatibilidad (Ollama directo). Los de
+# abajo hablan con clawk_cli.cookbook_providers — la superficie común que
+# permite agregar backends (LM Studio, vLLM, MLX…) sin tocar el frontend.
+
+
+@app.get("/api/cookbook/providers")
+async def get_cookbook_providers():
+    """Estado de todos los backends de modelos locales (ollama, llamacpp…)."""
+
+    from clawk_cli import cookbook_providers
+
+    return await asyncio.to_thread(cookbook_providers.providers_status)
+
+
+class CookbookProviderBody(BaseModel):
+    provider: str
+
+
+@app.post("/api/cookbook/provider-install")
+async def post_cookbook_provider_install(body: CookbookProviderBody):
+    """Instala un backend en este host, en background. Poll provider-install-status."""
+
+    from clawk_cli import cookbook_providers
+
+    p = cookbook_providers.get_provider(body.provider)
+    if p is None:
+        raise HTTPException(
+            status_code=404, detail=f"unknown provider: {body.provider}"
+        )
+    return await asyncio.to_thread(p.start_install)
+
+
+@app.get("/api/cookbook/provider-install-status")
+async def get_cookbook_provider_install_status(provider: str):
+    from clawk_cli import cookbook_providers
+
+    p = cookbook_providers.get_provider(provider)
+    if p is None:
+        raise HTTPException(status_code=404, detail=f"unknown provider: {provider}")
+    return {"provider": provider, "status": p.install_status()}
+
+
+@app.get("/api/cookbook/hf-search")
+async def get_cookbook_hf_search(q: str):
+    """Búsqueda EN VIVO de repos GGUF en Hugging Face (para llama.cpp)."""
+
+    query = (q or "").strip()
+    if not query:
+        return {"models": []}
+
+    from clawk_cli import cookbook_hf
+
+    rows = await asyncio.to_thread(cookbook_hf.search_gguf, query)
+    return {"models": rows}
+
+
+@app.get("/api/cookbook/hf-files")
+async def get_cookbook_hf_files(repo: str):
+    """Archivos .gguf de un repo HF con tamaño y cuantización (elegir variante)."""
+
+    r = (repo or "").strip()
+    if not r:
+        raise HTTPException(status_code=400, detail="repo is required")
+
+    from clawk_cli import cookbook_hf
+
+    files = await asyncio.to_thread(cookbook_hf.repo_gguf_files, r)
+    return {"repo": r, "files": files}
+
+
+class CookbookDownloadBody(BaseModel):
+    repo: str
+    file: str
+
+
+@app.post("/api/cookbook/download")
+async def post_cookbook_download(body: CookbookDownloadBody):
+    """Descarga un GGUF de HF directo a la carpeta de modelos de llama.cpp.
+
+    Devuelve {download_id}; el progreso (bytes, %, velocidad, ETA, cancel) se
+    consulta con /download-status. Con un .part previo, RESUME donde quedó.
+    """
+
+    from clawk_cli import cookbook_llamacpp
+
+    result = await asyncio.to_thread(
+        cookbook_llamacpp.start_download, body.repo, body.file
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "failed"))
+    return result
+
+
+@app.get("/api/cookbook/download-status")
+async def get_cookbook_download_status(id: str):
+    from clawk_cli import cookbook_llamacpp
+
+    return {"download_id": id, **cookbook_llamacpp.download_progress(id)}
+
+
+class CookbookDownloadIdBody(BaseModel):
+    id: str
+
+
+@app.post("/api/cookbook/download-cancel")
+async def post_cookbook_download_cancel(body: CookbookDownloadIdBody):
+    """Cancela una descarga GGUF (el .part queda para reanudar después)."""
+
+    from clawk_cli import cookbook_llamacpp
+
+    return await asyncio.to_thread(cookbook_llamacpp.cancel_download, body.id)
+
+
+@app.get("/api/cookbook/active")
+async def get_cookbook_active():
+    """Descargas GGUF y pulls de Ollama EN CURSO (server-side, en background).
+
+    Las descargas corren en threads del server y NO dependen del navegador:
+    al volver a la pestaña, la UI llama esto para re-engancharse al progreso
+    en vez de dar por muerta la instalación.
+    """
+
+    from clawk_cli import cookbook, cookbook_llamacpp
+
+    downloads = await asyncio.to_thread(cookbook_llamacpp.active_downloads)
+    pulls = await asyncio.to_thread(cookbook.active_pulls)
+    interrupted = await asyncio.to_thread(cookbook_llamacpp.interrupted_downloads)
+    return {"downloads": downloads, "pulls": pulls, "interrupted": interrupted}
+
+
+@app.get("/api/cookbook/installed")
+async def get_cookbook_installed():
+    """Modelos instalados de TODOS los providers (tamaño, ruta, quant, origen)."""
+
+    from clawk_cli import cookbook_providers
+
+    models = await asyncio.to_thread(cookbook_providers.all_installed_models)
+    return {"models": models}
+
+
+class CookbookModelBody(BaseModel):
+    provider: str
+    id: str
+
+
+@app.post("/api/cookbook/model-delete")
+async def post_cookbook_model_delete(body: CookbookModelBody):
+    from clawk_cli import cookbook_providers
+
+    p = cookbook_providers.get_provider(body.provider)
+    if p is None:
+        raise HTTPException(
+            status_code=404, detail=f"unknown provider: {body.provider}"
+        )
+    result = await asyncio.to_thread(p.delete_model, body.id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "failed"))
+    return result
+
+
+@app.post("/api/cookbook/model-use")
+async def post_cookbook_model_use(body: CookbookModelBody):
+    """Deja un modelo instalado (de cualquier provider) como modelo del agente.
+
+    Para llamacpp además arranca el servidor OpenAI-compatible si hace falta.
+    Aplica en todo lo que usa el modelo del agente: chat, agentes, skills,
+    workflows, crons.
+    """
+
+    from clawk_cli import cookbook_providers
+
+    p = cookbook_providers.get_provider(body.provider)
+    if p is None:
+        raise HTTPException(
+            status_code=404, detail=f"unknown provider: {body.provider}"
+        )
+    result = await asyncio.to_thread(p.use_model, body.id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=500, detail=result.get("error", "failed"))
+    return result
+
+
+class CookbookRenameBody(BaseModel):
+    id: str
+    name: str
+
+
+@app.post("/api/cookbook/model-rename")
+async def post_cookbook_model_rename(body: CookbookRenameBody):
+    """Renombra el display-name de un GGUF registrado (solo llamacpp)."""
+
+    from clawk_cli import cookbook_llamacpp
+
+    result = await asyncio.to_thread(cookbook_llamacpp.rename_model, body.id, body.name)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "failed"))
+    return result
+
+
+class CookbookIdBody(BaseModel):
+    id: str
+
+
+@app.post("/api/cookbook/model-verify")
+async def post_cookbook_model_verify(body: CookbookIdBody):
+    """Chequeo de integridad de un GGUF (existencia, tamaño, magic bytes)."""
+
+    from clawk_cli import cookbook_llamacpp
+
+    return await asyncio.to_thread(cookbook_llamacpp.verify_model, body.id)
+
+
+@app.post("/api/cookbook/llamacpp-stop")
+async def post_cookbook_llamacpp_stop():
+    """Frena el llama-server en curso (libera la RAM del modelo)."""
+
+    from clawk_cli import cookbook_llamacpp
+
+    return await asyncio.to_thread(cookbook_llamacpp.stop_server)
+
+
 # ---------------------------------------------------------------------------
 
 # Dashboard plugin system
@@ -12158,7 +15550,7 @@ def _discover_dashboard_plugins() -> list:
     # ``clawk_cli/plugins.py`` and the documented user contract.
 
     if env_var_enabled("CLAWK_ENABLE_PROJECT_PLUGINS"):
-        search_dirs.append((Path.cwd() / ".clawk" / "plugins", "project"))
+        search_dirs.append((Path.cwd() / ".clawksis" / "plugins", "project"))
 
     for plugins_root, source in search_dirs:
         if not plugins_root.is_dir():
@@ -12371,11 +15763,11 @@ def _merged_plugins_hub() -> Dict[str, Any]:
 
     rows: List[Dict[str, Any]] = []
 
-    for name, version, description, source, dir_str in _discover_all_plugins():
-        if name in disabled_set:
+    for name, version, description, source, dir_str, key in _discover_all_plugins():
+        if name in disabled_set or key in disabled_set:
             runtime_status = "disabled"
 
-        elif name in enabled_set:
+        elif name in enabled_set or key in enabled_set:
             runtime_status = "enabled"
 
         else:
@@ -12990,54 +16382,62 @@ def start_server(
         # provider to be registered, else fail closed".
 
         from clawk_cli.dashboard_auth import list_providers
+        from clawk_cli.dashboard_auth.first_run import setup_available
 
         if not list_providers():
-            # Surface the *specific* reason any bundled provider declined
+            # No provider registered yet. If first-run setup is available (no
+            # basic_auth configured), boot ANYWAY: the public /auth/setup page
+            # bootstraps the admin login on first visit. This is the documented
+            # flow for `clawk dashboard domain` — sin esto el gate forzado sobre
+            # un bind loopback quedaba en un deadlock (rehúsa arrancar → nunca se
+            # llega a la página que crearía el login). Solo rehusamos cuando el
+            # setup NO está disponible (credenciales a medio configurar).
+            if setup_available():
+                _log.warning(
+                    "Dashboard binding to %s with the auth gate ON but no login "
+                    "configured yet. The first visit will show the setup page "
+                    "and create the admin login — open the dashboard and set it "
+                    "IMMEDIATELY so nobody else claims it, or set it now with "
+                    "`clawk dashboard password`.",
+                    host,
+                )
+            else:
+                # Surface the *specific* reason any bundled provider declined to
+                # register (e.g. username sin password, o falta el client_id de
+                # OAuth). Cada plugin de auth expone ``LAST_SKIP_REASON``.
+                skip_reasons: list[str] = []
 
-            # to register (e.g. missing CLAWK_DASHBOARD_OAUTH_CLIENT_ID).
+                for _mod_path, _label in (
+                    ("plugins.dashboard_auth.basic", "basic"),
+                    ("plugins.dashboard_auth.nous", "nous"),
+                ):
+                    try:
+                        import importlib
 
-            # Each provider plugin that ships with Clawksis exposes a
+                        _plugin = importlib.import_module(_mod_path)
 
-            # module-level ``LAST_SKIP_REASON`` string for this purpose;
+                        if getattr(_plugin, "LAST_SKIP_REASON", ""):
+                            skip_reasons.append(
+                                f"  • {_label}: {_plugin.LAST_SKIP_REASON}"
+                            )
 
-            # without it the operator would only see "no providers" which
+                    except Exception:
+                        pass
 
-            # is misleading when the provider IS installed but unconfigured.
-
-            skip_reasons: list[str] = []
-
-            try:
-                from plugins.dashboard_auth import nous as _nous_plugin
-
-                if _nous_plugin.LAST_SKIP_REASON:
-                    skip_reasons.append(f"  • nous: {_nous_plugin.LAST_SKIP_REASON}")
-
-            except Exception:
-                pass
-
-            if skip_reasons:
-                raise SystemExit(
-                    f"Refusing to bind dashboard to {host} — the OAuth auth "
-                    f"gate engages on non-loopback binds, but no auth "
-                    f"providers are registered.\n"
-                    f"\n"
-                    f"Bundled providers reported these issues:\n"
-                    + "\n".join(skip_reasons)
-                    + "\n"
-                    f"\n"
-                    f"Or pass --insecure to skip the auth gate (NOT "
-                    f"recommended on untrusted networks)."
+                detail = (
+                    "\n\nLos providers reportaron:\n" + "\n".join(skip_reasons)
+                    if skip_reasons
+                    else ""
                 )
 
-            raise SystemExit(
-                f"Refusing to bind dashboard to {host} — the OAuth auth "
-                f"gate engages on non-loopback binds, but no auth providers "
-                f"are registered and no bundled plugin reported a reason "
-                f"(was the dashboard_auth/nous plugin removed?).\n"
-                f"Install a DashboardAuthProvider plugin, or pass --insecure "
-                f"to skip the auth gate (NOT recommended on untrusted "
-                f"networks)."
-            )
+                raise SystemExit(
+                    f"Refusing to bind dashboard to {host} — the auth gate is "
+                    f"required but no login is configured and the first-run "
+                    f"setup page is unavailable.{detail}\n\n"
+                    f"Set a login with `clawk dashboard password`, or pass "
+                    f"--insecure to skip the gate (NOT recommended on untrusted "
+                    f"networks)."
+                )
 
         _log.info(
             "Dashboard binding to %s with OAuth auth gate enabled. Providers: %s",
@@ -13139,10 +16539,36 @@ def start_server(
 
     # we flip proxy_headers on for that mode.
 
-    uvicorn.run(
+    config = uvicorn.Config(
         app,
         host=host,
         port=port,
         log_level="warning",
         proxy_headers=bool(app.state.auth_required),
+        # WS keepalive pings so half-open connections (reverse-proxy 524, dropped
+        # tunnels) surface as WebSocketDisconnect into the reaping path instead
+        # of lingering as silent ghosts (#32377). uvicorn.run() doesn't let us
+        # set these cleanly, so drive uvicorn.Server directly.
+        ws_ping_interval=20.0,
+        ws_ping_timeout=20.0,
     )
+
+    server = uvicorn.Server(config)
+
+    async def _serve() -> None:
+        if not config.loaded:
+            config.load()
+
+        server.lifespan = config.lifespan_class(config)
+
+        await server.startup()
+
+        if server.should_exit:
+            return
+
+        await server.main_loop()
+
+        await server.shutdown()
+
+    with server.capture_signals():
+        asyncio.run(_serve())

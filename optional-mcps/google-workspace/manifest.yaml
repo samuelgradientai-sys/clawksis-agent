@@ -1,0 +1,92 @@
+# Clawksis-approved MCP catalog entry.
+# Presence in this directory = approval. Merged via PR review.
+#
+# Schema version 1.
+manifest_version: 1
+
+name: google-workspace
+description: Gmail, Drive, Docs, Sheets, and Calendar (plus Slides, Forms, Tasks, Contacts, Chat) via the open-source Google Workspace MCP — self-hosted, with your own Google OAuth client.
+source: https://github.com/taylorwilsdon/google_workspace_mcp
+
+# Launched with uvx — the package fetch IS the install (same pattern as the
+# linkedin entry / npx servers), so no separate `install:` block is needed.
+# Requires `uv` on PATH (https://docs.astral.sh/uv/) and Python >= 3.10. stdio
+# transport, runs locally. `--tool-tier core` keeps the surface to the most-used
+# tools; raise it to `extended`/`complete` (or add `--read-only`) by editing the
+# args in ~/.clawksis/config.yaml.
+transport:
+  type: stdio
+  command: "uvx"
+  args:
+    - "workspace-mcp@latest"
+    - "--tool-tier"
+    - "core"
+  version: "1.22.0"  # tested reference (PyPI package `workspace-mcp`)
+
+# This server authenticates with YOUR OWN Google OAuth 2.0 client (created in
+# the Google Cloud Console). We prompt for the client id/secret here and store
+# them in ~/.clawksis/.env so the server process inherits them; the actual
+# Google consent is a one-time browser flow the server runs on first tool use,
+# caching tokens under ~/.google_workspace_mcp/credentials/.
+#
+# Modeled as `api_key` on purpose: the catalog must PROMPT FOR + INJECT the
+# OAuth client credentials as env vars. The `oauth` auth types are for native
+# MCP-protocol OAuth (e.g. the `linear` entry) and do not collect env vars, so
+# they would leave this server without its credentials.
+auth:
+  type: api_key
+  env:
+    - name: GOOGLE_OAUTH_CLIENT_ID
+      prompt: "Google OAuth client ID (GCP Console, APIs & Services, Credentials, OAuth client of type Desktop)"
+      required: true
+      secret: true
+    - name: GOOGLE_OAUTH_CLIENT_SECRET
+      prompt: "Google OAuth client secret"
+      required: true
+      secret: true
+    - name: USER_GOOGLE_EMAIL
+      prompt: "Default Google account email (optional, single-user convenience)"
+      required: false
+      secret: false
+
+# Tool selection at install time:
+# This server exposes a LARGE surface across 12 Google services, including
+# mutating actions (send Gmail, create/modify Drive/Docs/Sheets/Calendar). We
+# leave `default_enabled` unset so the install-time checklist starts with the
+# `--tool-tier core` surface pre-checked — review it and prune the mutating
+# tools you do not want before enabling. Re-run any time with
+# `clawk mcp configure google-workspace`.
+
+post_install: |
+  This MCP acts on your real Google account using your OWN Google OAuth client.
+
+  One-time Google Cloud setup (before first use):
+    1. Create a Google Cloud project, then enable the APIs you want under
+       APIs & Services -> Library: Gmail, Drive, Calendar, Docs, Sheets,
+       Slides, Forms, Tasks, People (Contacts), Chat.
+    2. Configure the OAuth consent screen and add yourself (and any other
+       users) as Test users while it is in "testing", or sign-in is blocked.
+    3. Create an OAuth client (type: Desktop app), copy the Client ID and
+       Client secret -> those are the values you entered above (saved to
+       ~/.clawksis/.env).
+
+  First use:
+    On the first Google tool call the server opens a browser for consent. On a
+    headless server it instead returns the authorization URL in the tool
+    response — open it once, approve, and it caches the tokens under
+    ~/.google_workspace_mcp/credentials/ for subsequent calls.
+
+  Caution — write access:
+    The `core` tier includes MUTATING tools (send Gmail; create/modify Drive,
+    Docs, Sheets, Calendar). Review the install checklist and prune what you do
+    not want, or add `--read-only` to the args in ~/.clawksis/config.yaml to
+    limit the server to read-only scopes.
+
+  Notes:
+    - Requires `uv` on PATH and Python >= 3.10.
+    - Google Chat tools only work with Google Workspace accounts (not @gmail.com)
+      and need a Chat app configured in GCP.
+    - Custom Search needs a separate Programmable Search Engine + API key
+      (GOOGLE_PSE_API_KEY / GOOGLE_PSE_ENGINE_ID).
+
+  Start a new Clawksis session to load the Google Workspace tools.

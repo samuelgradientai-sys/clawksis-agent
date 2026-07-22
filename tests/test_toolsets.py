@@ -54,7 +54,13 @@ class TestGetToolset:
 
         assert ts is not None
 
-        assert set(ts["tools"]) == {"web_search", "web_extract", "web_search_plus"}
+        assert set(ts["tools"]) == {
+            "web_search",
+            "web_extract",
+            "scrape",
+            "scrapegraph",
+            "web_search_plus",
+        }
 
     def test_unknown_returns_none(self):
 
@@ -66,7 +72,7 @@ class TestResolveToolset:
 
         tools = resolve_toolset("web")
 
-        assert set(tools) == {"web_search", "web_extract"}
+        assert set(tools) == {"web_search", "web_extract", "scrape", "scrapegraph"}
 
     def test_composite_toolset(self):
 
@@ -215,7 +221,7 @@ class TestGetToolsetInfo:
 
         assert info["is_composite"] is False
 
-        assert info["tool_count"] == 2
+        assert info["tool_count"] == 4
 
     def test_composite(self):
 

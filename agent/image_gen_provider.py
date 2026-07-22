@@ -264,6 +264,26 @@ def resolve_aspect_ratio(value: Optional[str]) -> str:
     return DEFAULT_ASPECT_RATIO
 
 
+def _register_saved_image(path, prefix: str) -> None:
+    """Alta best-effort en la galería del dashboard (tabla media_generations).
+
+    Punto único para TODOS los providers que guardan vía save_b64_image /
+    save_url_image — sin esto, solo el camino fal registraba y la página
+    Media quedaba vacía para OpenAI y compañía.
+    """
+    try:
+        from tools.media_persistence import register_local_media
+
+        register_local_media(
+            path,
+            "image",
+            model=prefix,
+            provider=(prefix.split("_", 1)[0] if prefix else None),
+        )
+    except Exception:
+        pass
+
+
 def _images_cache_dir() -> Path:
     """Return ``$CLAWK_HOME/cache/images/``, creating parents as needed."""
 
@@ -303,6 +323,8 @@ def save_b64_image(
     path = _images_cache_dir() / f"{prefix}_{ts}_{short}.{extension}"
 
     path.write_bytes(raw)
+
+    _register_saved_image(path, prefix)
 
     return path
 
@@ -423,6 +445,8 @@ def save_url_image(
             pass
 
         raise ValueError(f"Image at {url} returned 0 bytes; refusing to cache.")
+
+    _register_saved_image(path, prefix)
 
     return path
 

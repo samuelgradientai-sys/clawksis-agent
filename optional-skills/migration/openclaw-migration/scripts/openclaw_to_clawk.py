@@ -546,7 +546,20 @@ def _case_preserving_replacement(replacement: str):
         matched = match.group(0)
 
         if matched and matched.islower():
-            return replacement.lower()
+            whole = match.string
+
+            start = match.start()
+
+            end = match.end()
+
+            preceded_by_dot = start > 0 and whole[start - 1] == "."
+
+            followed_by_slash = end < len(whole) and whole[end] == "/"
+
+            if preceded_by_dot and followed_by_slash:
+                return replacement.lower()
+
+            return "clawk"
 
         return replacement
 

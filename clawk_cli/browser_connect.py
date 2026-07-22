@@ -128,7 +128,9 @@ def get_chrome_debug_candidates(system: str) -> list[str]:
         for _, group in install_groups:
             for base in filter(None, bases):
                 for parts in group:
-                    add(os.path.join(base, *parts))
+                    # WSL bases are POSIX paths (/mnt/c/...); always join with "/"
+                    # so they resolve correctly even when the host OS is Windows.
+                    add("/".join((base, *parts)))
 
     if system == "Darwin":
         for app in _DARWIN_APPS:

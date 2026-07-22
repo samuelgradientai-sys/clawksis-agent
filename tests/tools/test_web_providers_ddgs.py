@@ -45,6 +45,16 @@ def _install_fake_ddgs(monkeypatch, *, text_results=None, text_raises=None):
     return fake
 
 
+@pytest.fixture(autouse=True)
+def _stub_ddgs_lazy_install(monkeypatch):
+    """``DDGSWebSearchProvider.search()`` lazy-installs the ddgs package on
+    first use. Tests fake ``ddgs`` via sys.modules, so stub ``ensure`` to a
+    no-op — otherwise it'd attempt a real ``pip install`` (the fake module has
+    no installed distribution metadata, so it reads as "missing")."""
+    monkeypatch.setattr("tools.lazy_deps.ensure", lambda *a, **k: None)
+    yield
+
+
 # ---------------------------------------------------------------------------
 # DDGSWebSearchProvider unit tests
 # ---------------------------------------------------------------------------

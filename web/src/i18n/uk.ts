@@ -492,6 +492,10 @@ export const uk: Translations = {
 
       onceAt: "Виконати о",
 
+      onceUseCalendar: "Календар",
+
+      onceUseManual: "Вручну",
+
       customLabel: "Cron-вираз",
 
       customPlaceholder: "0 9 * * *",

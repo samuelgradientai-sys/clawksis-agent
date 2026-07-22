@@ -12,7 +12,29 @@ import subprocess
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 from clawk_cli.main import cmd_update
+
+
+@pytest.fixture(autouse=True)
+def _fast_update(monkeypatch):
+    """Keep cmd_update fast for the CI per-file cap: skip the long (~3s)
+    post-restart sleep (preserving short install-simulation sleeps) and make the
+    gateway-restart process sweep (psutil scan + drain wait + SIGKILL, slow on
+    Linux CI) a no-op. These tests cover update logic, not the restart."""
+    import clawk_cli.main as _m
+    import clawk_cli.gateway as _gw
+
+    _real_sleep = _m._time.sleep
+    monkeypatch.setattr(
+        _m._time,
+        "sleep",
+        lambda secs=0, *a, **k: None if (secs or 0) >= 2 else _real_sleep(secs),
+    )
+    monkeypatch.setattr(_gw, "find_gateway_pids", lambda *a, **k: [])
+    monkeypatch.setattr(_gw, "_get_service_pids", lambda *a, **k: set())
+    monkeypatch.setattr(_gw, "find_profile_gateway_processes", lambda *a, **k: [])
 
 
 def _make_run_side_effect(branch="main", verify_ok=True, commit_count="1", dirty=False):

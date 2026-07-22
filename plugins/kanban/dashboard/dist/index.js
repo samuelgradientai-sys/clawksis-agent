@@ -138,6 +138,38 @@
 
 
 
+  // Small "(i)" help affordance — hover or keyboard-focus reveals the
+  // explanation, so the create form stays compact while every field is
+  // self-explanatory. Returns null when there's nothing to explain.
+  function HelpDot(text) {
+    if (!text) return null;
+    return h("span", {
+      className: "clawk-kanban-help",
+      title: text,
+      tabIndex: 0,
+      role: "img",
+      "aria-label": text,
+      style: {
+        cursor: "help",
+        opacity: 0.55,
+        marginLeft: "0.3rem",
+        fontSize: "0.72rem",
+        userSelect: "none",
+      },
+    }, "ⓘ");
+  }
+
+
+
+  // A small muted field caption with an optional (i) help dot beside it.
+  function FieldLabel(text, help) {
+    return h("div", {
+      className: "flex items-center text-[11px] font-medium text-muted-foreground mt-1 mb-0.5",
+    }, text, HelpDot(help));
+  }
+
+
+
   // ``fetchJSON`` throws ``Error("<status>: <raw body>")`` on non-2xx, and
 
   // FastAPI bodies look like ``{"detail":"<message>"}``.  Pull the
@@ -975,6 +1007,36 @@
     const [laneByProfile, setLaneByProfile] = useState(true);
 
     const [configApplied, setConfigApplied] = useState(false);
+
+    // Simple vs advanced view. Simple mode (default) hides boards, tenants,
+    // per-profile lanes, the archived toggle, the nudge button and the
+    // orchestration panel so a first-time user sees only the essentials.
+    // Persisted per-browser so a choice sticks across reloads.
+    const [simpleMode, setSimpleMode] = useState(function () {
+      try { return localStorage.getItem("clawk-kanban-simple") !== "0"; }
+      catch (_e) { return true; }
+    });
+
+    const toggleSimpleMode = useCallback(function () {
+      setSimpleMode(function (prev) {
+        const next = !prev;
+        try { localStorage.setItem("clawk-kanban-simple", next ? "1" : "0"); }
+        catch (_e) { /* private mode — keep in-memory only */ }
+        return next;
+      });
+    }, []);
+
+    // Dismissable onboarding guide. Hidden once the user closes it.
+    const [guideDismissed, setGuideDismissed] = useState(function () {
+      try { return localStorage.getItem("clawk-kanban-guide") === "0"; }
+      catch (_e) { return false; }
+    });
+
+    const dismissGuide = useCallback(function () {
+      setGuideDismissed(true);
+      try { localStorage.setItem("clawk-kanban-guide", "0"); }
+      catch (_e) { /* noop */ }
+    }, []);
 
 
 
@@ -1976,7 +2038,26 @@
 
       h("div", { className: "clawk-kanban flex flex-col gap-4" },
 
-        h(BoardSwitcher, {
+        h("div", { className: "clawk-kanban-modebar" },
+          h(Button, {
+            size: "sm",
+            onClick: toggleSimpleMode,
+            title: simpleMode
+              ? tx(t, "simpleModeHint", "Estás en modo simple: ves solo lo esencial. Tocá para mostrar las opciones avanzadas (tableros, etiquetas, carriles y orquestación).")
+              : tx(t, "advancedModeHint", "Estás en modo avanzado. Tocá para volver al modo simple."),
+          }, simpleMode
+            ? tx(t, "simpleModeLabel", "🟢 Modo simple")
+            : tx(t, "advancedModeLabel", "⚙️ Modo avanzado")),
+          guideDismissed ? h(Button, {
+            size: "sm",
+            onClick: function () { setGuideDismissed(false); },
+            title: tx(t, "guideReopenHint", "Volver a mostrar la guía rápida"),
+          }, tx(t, "guideReopenLabel", "¿Cómo funciona?")) : null,
+        ),
+
+        guideDismissed ? null : h(KanbanGuide, { onDismiss: dismissGuide }),
+
+        simpleMode ? null : h(BoardSwitcher, {
 
           board: board,
 
@@ -2002,7 +2083,7 @@
 
         }) : null,
 
-        h(OrchestrationPanel, null),
+        simpleMode ? null : h(OrchestrationPanel, null),
 
         h(AttentionStrip, {
 
@@ -2015,6 +2096,8 @@
         h(BoardToolbar, {
 
           board: boardData,
+
+          simpleMode: simpleMode,
 
           tenantFilter, setTenantFilter,
 
@@ -3922,6 +4005,58 @@
 
   // -------------------------------------------------------------------------
 
+  // Onboarding guide — plain-language "how it works", dismissable.
+
+  // -------------------------------------------------------------------------
+
+
+
+  function KanbanGuide(props) {
+
+    const { t } = useI18n();
+
+    return h("div", { className: "clawk-kanban-guide" },
+
+      h("button", {
+
+        type: "button",
+
+        className: "clawk-kanban-guide-close",
+
+        onClick: props.onDismiss,
+
+        title: tx(t, "guideHide", "Ocultar esta guía"),
+
+        "aria-label": tx(t, "guideHide", "Ocultar esta guía"),
+
+      }, "✕"),
+
+      h("div", { className: "clawk-kanban-guide-title" },
+
+        tx(t, "guideTitle", "¿Cómo funciona este tablero?")),
+
+      h("p", { className: "clawk-kanban-guide-lead" },
+
+        tx(t, "guideLead", "Es como un pizarrón de tareas, pero las hacen tus agentes de IA. Vos tirás la idea y la tarjeta avanza sola.")),
+
+      h("ol", { className: "clawk-kanban-guide-steps" },
+
+        h("li", null, tx(t, "guideStep1", "Escribí una idea suelta, en tus palabras, en la columna «Ideas» (tocá el botón +). No tiene que estar perfecta.")),
+
+        h("li", null, tx(t, "guideStep2", "El sistema la convierte en una tarea clara y elige qué agente la hace.")),
+
+        h("li", null, tx(t, "guideStep3", "La tarjeta avanza sola: Listas → En curso → Hecho. Vos solo mirás, y ayudás si alguna queda «Trabada».")),
+
+      ),
+
+    );
+
+  }
+
+
+
+  // -------------------------------------------------------------------------
+
   // Toolbar
 
   // -------------------------------------------------------------------------
@@ -3940,7 +4075,7 @@
 
       h("div", { className: "flex flex-col gap-1",
 
-                 title: "Fuzzy-match tasks by id, title, or description. Matches across all columns." },
+                 title: "Buscá tarjetas por texto: id, título o descripción. Busca en todas las columnas." },
 
         h(Label, { className: "text-xs text-muted-foreground" }, tx(t, "search", "Search")),
 
@@ -3958,9 +4093,9 @@
 
       ),
 
-      h("div", { className: "flex flex-col gap-1",
+      props.simpleMode ? null : h("div", { className: "flex flex-col gap-1",
 
-                 title: "Tenants are free-form tags on a task (e.g. customer, project, team). Set them via the task drawer or kanban_create." },
+                 title: "Etiqueta libre para agrupar tareas (cliente, proyecto, equipo). Opción avanzada." },
 
         h(Label, { className: "text-xs text-muted-foreground" }, tx(t, "tenant", "Tenant")),
 
@@ -3984,9 +4119,9 @@
 
       ),
 
-      h("div", { className: "flex flex-col gap-1",
+      props.simpleMode ? null : h("div", { className: "flex flex-col gap-1",
 
-                 title: "Filter by assigned Clawksis profile. Profiles are the named agent identities that claim and work on tasks." },
+                 title: "Filtrar por el agente asignado a la tarea." },
 
         h(Label, { className: "text-xs text-muted-foreground" }, tx(t, "assignee", "Assignee")),
 
@@ -4010,9 +4145,9 @@
 
       ),
 
-      h("label", { className: "flex items-center gap-2 text-xs",
+      props.simpleMode ? null : h("label", { className: "flex items-center gap-2 text-xs",
 
-                   title: "Include archived tasks in the board view. Archived tasks are hidden by default." },
+                   title: "Mostrar también las tareas archivadas (ocultas por defecto)." },
 
         h(Checkbox, {
 
@@ -4026,9 +4161,9 @@
 
       ),
 
-      h("label", { className: "flex items-center gap-2 text-xs",
+      props.simpleMode ? null : h("label", { className: "flex items-center gap-2 text-xs",
 
-                   title: "Group the Running column by assigned profile" },
+                   title: "Agrupar la columna «En curso» por agente." },
 
         h(Checkbox, {
 
@@ -4044,13 +4179,13 @@
 
       h("div", { className: "flex-1" }),
 
-      h(Button, {
+      props.simpleMode ? null : h(Button, {
 
         onClick: props.onNudgeDispatch,
 
         size: "sm",
 
-        title: "Wake the dispatcher to claim ready tasks now instead of waiting for the next tick. Use this after adding tasks if you want them picked up immediately.",
+        title: "Buscar y arrancar tareas listas ahora mismo, sin esperar al chequeo automático (cada ~60s).",
 
       }, tx(t, "nudgeDispatcher", "Nudge dispatcher")),
 
@@ -4060,11 +4195,11 @@
 
         size: "sm",
 
-        title: "Reload the board from the database. The board auto-refreshes on task events; this is for forcing a re-read.",
+        title: "Recargar el tablero. Se actualiza solo cuando hay cambios; esto fuerza una relectura.",
 
       }, tx(t, "refresh", "Refresh")),
 
-      h(Button, {
+      props.simpleMode ? null : h(Button, {
 
         onClick: function () {
 
@@ -4080,7 +4215,7 @@
 
         size: "sm",
 
-        title: "Clear all active filters (search, tenant, assignee, archived).",
+        title: "Limpiar todos los filtros activos (búsqueda, etiqueta, agente, archivados).",
 
       }, tx(t, "clearFilters", "Clear filters")),
 
@@ -5238,6 +5373,48 @@
 
 
 
+    // Roster of profiles for the agent picker. Union of profiles on disk and
+    // anyone already used on the board, so a freshly-created profile shows up
+    // even before it has tasks. Blank = automatic (the dispatcher picks). If
+    // the endpoint is unavailable we keep an empty list; automatic still works.
+    const [roster, setRoster] = useState([]);
+
+    useEffect(function () {
+      let alive = true;
+      SDK.fetchJSON(`${API}/assignees`)
+        .then(function (data) {
+          if (!alive) return;
+          const names = ((data && data.assignees) || [])
+            .map(function (a) { return a && a.name; })
+            .filter(Boolean);
+          setRoster(names);
+        })
+        .catch(function () { /* keep empty roster; automatic pick still works */ });
+      return function () { alive = false; };
+    }, []);
+
+    // Roster of installed skills for the skills picker (the global /api/skills
+    // catalog, not the kanban plugin API). Empty list just hides the dropdown
+    // options; the chips below still reflect whatever is selected.
+    const [skillRoster, setSkillRoster] = useState([]);
+
+    useEffect(function () {
+      let alive = true;
+      SDK.fetchJSON("/api/skills")
+        .then(function (data) {
+          if (!alive) return;
+          const names = (Array.isArray(data) ? data : [])
+            .map(function (s) { return s && s.name; })
+            .filter(Boolean)
+            .sort();
+          setSkillRoster(names);
+        })
+        .catch(function () { /* keep empty; nothing to pick from */ });
+      return function () { alive = false; };
+    }, []);
+
+
+
     const submit = function () {
 
       const trimmed = title.trim();
@@ -5328,6 +5505,15 @@
 
     return h("div", { className: "clawk-kanban-inline-create" },
 
+      FieldLabel(
+        props.columnName === "triage"
+          ? tx(t, "fieldIdeaLabel", "Your idea")
+          : tx(t, "fieldTitleLabel", "Task title"),
+        props.columnName === "triage"
+          ? tx(t, "fieldIdeaHelp", "Write your idea in a few words — the AI turns it into a task with a goal, steps and acceptance criteria. Press Enter to create, Shift+Enter for a new line.")
+          : tx(t, "fieldTitleHelp", "A short title for the task. Press Enter to create, Shift+Enter for a new line.")
+      ),
+
       h("textarea", {
 
         value: title,
@@ -5356,79 +5542,106 @@
 
       }),
 
-      h("div", { className: "flex gap-2" },
+      FieldLabel(
+        props.columnName === "triage"
+          ? tx(t, "fieldSpecifierLabel", "Which agent specs it?")
+          : tx(t, "fieldAssigneeLabel", "Which agent does it?"),
+        props.columnName === "triage"
+          ? tx(t, "fieldSpecifierHelp", "The Clawksis profile that writes the spec for this idea. Leave it on automatic and the system picks one.")
+          : tx(t, "fieldAssigneeHelp", "The Clawksis profile that runs this task. On automatic, the system picks an available one when the task is Ready.")
+      ),
 
-        h(Input, {
+      h(Select, Object.assign({
+        value: assignee,
+        className: "h-7 text-xs w-full",
+      }, selectChangeHandler(setAssignee)),
+        h(SelectOption, { value: "" }, tx(t, "assigneeAuto", "— automatic —")),
+        roster.map(function (name) {
+          return h(SelectOption, { key: name, value: name }, name);
+        })
+      ),
 
-          value: assignee,
-
-          onChange: function (e) { setAssignee(e.target.value); },
-
-          placeholder: props.columnName === "triage"
-
-            ? tx(t, "specifier", "specifier")
-
-            : tx(t, "assigneePlaceholder", "assignee"),
-
-          className: "h-7 text-xs flex-1",
-
-          title: props.columnName === "triage"
-
-            ? "Clawksis profile that will spec this task (default: the dispatcher's configured specifier). Leave blank to let the dispatcher pick."
-
-            : "Clawksis profile to assign. Leave blank and the dispatcher will pick from available profiles when the task is Ready.",
-
-          style: { textTransform: "none" },
-
-          autoCapitalize: "none",
-
-          autoCorrect: "off",
-
-          spellCheck: false,
-
-        }),
-
-        h(Input, {
-
-          type: "number",
-
-          value: priority,
-
-          onChange: function (e) { setPriority(e.target.value); },
-
-          placeholder: "pri",
-
-          className: "h-7 text-xs w-16",
-
-          title: "Priority. Higher-priority tasks are claimed first by the dispatcher. 0 = default.",
-
-        }),
-
+      FieldLabel(
+        tx(t, "fieldPriorityLabel", "Priority"),
+        tx(t, "fieldPriorityHelp", "Higher-priority tasks are claimed first. 0 = normal.")
       ),
 
       h(Input, {
-
-        value: skills,
-
-        onChange: function (e) { setSkills(e.target.value); },
-
-        placeholder: tx(t, "skillsPlaceholder",
-
-          "skills (optional, comma-separated): translation, github-code-review"),
-
-        title: "Force-load these skills into the worker (in addition to the built-in kanban-worker).",
-
-        className: "h-7 text-xs",
-
+        type: "number",
+        value: priority,
+        onChange: function (e) { setPriority(e.target.value); },
+        placeholder: "0",
+        className: "h-7 text-xs w-20",
       }),
+
+      FieldLabel(
+        tx(t, "fieldSkillsLabel", "Skills (optional)"),
+        tx(t, "fieldSkillsHelp", "Extra skills to force-load into the agent, comma-separated. e.g. translation, github-code-review.")
+      ),
+
+      (function () {
+        // Skills picker: chips for what's chosen + a dropdown to add more.
+        // Source of truth stays the comma-separated `skills` string the
+        // submit handler already consumes.
+        const selectedSkills = skills
+          .split(",")
+          .map(function (s) { return s.trim(); })
+          .filter(Boolean);
+        const addSkill = function (name) {
+          const n = (name || "").trim();
+          if (!n || selectedSkills.indexOf(n) !== -1) return;
+          setSkills(selectedSkills.concat([n]).join(", "));
+        };
+        const removeSkill = function (name) {
+          setSkills(
+            selectedSkills.filter(function (x) { return x !== name; }).join(", ")
+          );
+        };
+        const available = skillRoster.filter(function (n) {
+          return selectedSkills.indexOf(n) === -1;
+        });
+        return h("div", { className: "flex flex-col gap-1" },
+          selectedSkills.length
+            ? h("div", { className: "flex flex-wrap gap-1" },
+                selectedSkills.map(function (name) {
+                  return h("span", {
+                    key: name,
+                    className: "inline-flex items-center gap-1 rounded-sm bg-primary/20 px-1.5 py-0.5 text-[10px] text-foreground",
+                  },
+                    name,
+                    h("button", {
+                      type: "button",
+                      title: tx(t, "skillRemove", "remove"),
+                      onClick: function () { removeSkill(name); },
+                      className: "leading-none opacity-70 hover:opacity-100",
+                    }, "×")
+                  );
+                })
+              )
+            : null,
+          h(Select, Object.assign({
+            value: "",
+            className: "h-7 text-xs w-full",
+          }, {
+            onValueChange: addSkill,
+            onChange: function (e) { addSkill(e && e.target ? e.target.value : e); },
+          }),
+            h(SelectOption, { value: "" },
+              available.length
+                ? tx(t, "skillAdd", "+ add a skill…")
+                : tx(t, "skillNone", "(no skills available)")),
+            available.map(function (name) {
+              return h(SelectOption, { key: name, value: name }, name);
+            })
+          )
+        );
+      })(),
 
       h("div", { className: "flex gap-2 items-center" },
 
         h("label", {
 
           className: "flex items-center gap-1.5 text-xs cursor-pointer select-none",
-
-          title: "Goal mode: the worker keeps going in the same session until a judge agrees the card is done (or the turn budget runs out, which blocks it for review). Best for open-ended cards one shot rarely finishes.",
 
         },
 
@@ -5444,9 +5657,11 @@
 
           }),
 
-          tx(t, "goalMode", "goal mode"),
+          tx(t, "goalMode", "Goal mode"),
 
         ),
+
+        HelpDot(tx(t, "goalModeHelp", "The agent keeps going in the same session until a judge agrees the card is done (or the turn budget runs out, which blocks it for review). Best for open-ended cards one shot rarely finishes.")),
 
         goalMode ? h(Input, {
 
@@ -5468,23 +5683,26 @@
 
       ),
 
+      FieldLabel(
+        tx(t, "fieldWorkspaceLabel", "Where it works"),
+        tx(t, "fieldWorkspaceHelp", "isolated: a temp folder (the usual). worktree: a git copy of the agent's project. folder: an exact path.")
+      ),
+
       h("div", { className: "flex gap-2" },
 
         h(Select, Object.assign({
 
           value: workspaceKind,
 
-          title: "scratch: isolated temp dir (default). worktree: git worktree on the assignee profile. dir: exact path (required below).",
-
           className: "h-7 text-xs w-28",
 
         }, selectChangeHandler(setWorkspaceKind)),
 
-          h(SelectOption, { value: "scratch" }, "scratch"),
+          h(SelectOption, { value: "scratch" }, tx(t, "workspaceScratch", "isolated")),
 
-          h(SelectOption, { value: "worktree" }, "worktree"),
+          h(SelectOption, { value: "worktree" }, tx(t, "workspaceWorktree", "worktree (git)")),
 
-          h(SelectOption, { value: "dir" }, "dir"),
+          h(SelectOption, { value: "dir" }, tx(t, "workspaceDir", "exact folder")),
 
         ),
 
@@ -5502,13 +5720,16 @@
 
       ),
 
+      FieldLabel(
+        tx(t, "fieldParentLabel", "Parent task (optional)"),
+        tx(t, "fieldParentHelp", "If you pick one, this card stays blocked until the parent task is marked done.")
+      ),
+
       h(Select, Object.assign({
 
         value: parent,
 
-        className: "h-7 text-xs",
-
-        title: "Optional parent task. A child stays blocked in its current column until the parent is marked done.",
+        className: "h-7 text-xs w-full",
 
       }, selectChangeHandler(setParent)),
 
@@ -5532,7 +5753,7 @@
 
           size: "sm",
 
-        }, "Create"),
+        }, tx(t, "create", "Create")),
 
         h(Button, {
 
@@ -7271,9 +7492,7 @@
         h(Select, Object.assign({
 
           value: newParent,
-
           className: "h-7 text-xs flex-1",
-
         }, selectChangeHandler(setNewParent)),
 
           h(SelectOption, { value: "" }, tx(t, "addParent", "— add parent —")),
@@ -7347,9 +7566,7 @@
         h(Select, Object.assign({
 
           value: newChild,
-
           className: "h-7 text-xs flex-1",
-
         }, selectChangeHandler(setNewChild)),
 
           h(SelectOption, { value: "" }, tx(t, "addChild", "— add child —")),

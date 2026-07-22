@@ -22,6 +22,46 @@ Clawksis works with any Matrix homeserver — Synapse, Conduit, Dendrite, or mat
 
 
 
+## Capabilities
+
+
+
+The Matrix gateway supports the following (kept in sync with `get_matrix_capabilities()` in `gateway/platforms/matrix.py`):
+
+
+
+| Capability | Status |
+
+|------------|--------|
+
+| text | yes |
+
+| threads | yes |
+
+| reactions | yes |
+
+| approvals | yes |
+
+| model picker | yes |
+
+| thinking panes | yes |
+
+| images | yes |
+
+| multiple images | yes |
+
+| files | yes |
+
+| voice/audio | yes |
+
+| video | yes |
+
+| E2EE | off / optional / required |
+
+| diagnostics | yes |
+
+
+
 Before setup, here's the part most people want to know: how Clawksis behaves once it's connected.
 
 

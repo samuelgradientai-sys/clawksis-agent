@@ -18,7 +18,7 @@ metadata:
 
     tags: [powerpoint, pptx, python-pptx, presentation, finance]
 
-    related_skills: [excel-author, powerpoint]
+    related_skills: [excel-author]
 
 ---
 

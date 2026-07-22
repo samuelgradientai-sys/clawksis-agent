@@ -516,7 +516,7 @@
 
     ctx.textBaseline = "bottom";
 
-    ctx.fillText("HERMES AGENT  ·  clawksis-agent.nousresearch.com", 70, H - 40);
+    ctx.fillText("CLAWKSIS  ·  github.com/samuelgradientai-sys/clawksis-agent", 70, H - 40);
 
 
 

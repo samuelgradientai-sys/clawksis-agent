@@ -21,7 +21,9 @@ np = pytest.importorskip("numpy")
 # same way the adapter does.
 _DISCORD_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "plugins", "platforms", "discord",
+    "plugins",
+    "platforms",
+    "discord",
 )
 if _DISCORD_DIR not in sys.path:
     sys.path.insert(0, _DISCORD_DIR)
@@ -32,6 +34,7 @@ import voice_mixer as vm  # noqa: E402
 # =====================================================================
 # Pure mixer unit tests
 # =====================================================================
+
 
 class TestVoiceMixerCore:
     def test_frame_geometry_matches_discord(self):
@@ -56,8 +59,10 @@ class TestVoiceMixerCore:
         amb = vm.synth_ambient_pcm(seconds=0.5)
         assert len(amb) % vm.FRAME_SIZE == 0  # frame-aligned for seamless loop
         mx.set_ambient(amb)
-        peaks = [int(np.max(np.abs(np.frombuffer(mx.read(), dtype=np.int16))))
-                 for _ in range(100)]  # 2s >> 0.5s loop
+        peaks = [
+            int(np.max(np.abs(np.frombuffer(mx.read(), dtype=np.int16))))
+            for _ in range(100)
+        ]  # 2s >> 0.5s loop
         # Produces audio after the fade-in and stays under the configured gain.
         assert any(p > 0 for p in peaks[10:])
         assert max(peaks) < int(32767 * 0.5)
@@ -65,15 +70,20 @@ class TestVoiceMixerCore:
     def test_speech_audible_over_ambient_then_releases(self):
         mx = vm.VoiceMixer(ambient_gain=0.2, duck_gain=0.05, duck_release_ms=200)
         mx.set_ambient(vm.synth_ambient_pcm(seconds=0.5))
-        base = max(int(np.max(np.abs(np.frombuffer(mx.read(), dtype=np.int16))))
-                   for _ in range(10))
-        tone = (np.sin(2 * np.pi * 440 * np.arange(int(48000 * 0.4)) / 48000)
-                * 20000).astype(np.int16)
+        base = max(
+            int(np.max(np.abs(np.frombuffer(mx.read(), dtype=np.int16))))
+            for _ in range(10)
+        )
+        tone = (
+            np.sin(2 * np.pi * 440 * np.arange(int(48000 * 0.4)) / 48000) * 20000
+        ).astype(np.int16)
         stereo = np.repeat(tone[:, None], 2, axis=1).reshape(-1).tobytes()
         mx.play_speech(stereo, fade_in_ms=0)
         assert mx.speech_active
-        speech_peak = max(int(np.max(np.abs(np.frombuffer(mx.read(), dtype=np.int16))))
-                          for _ in range(15))
+        speech_peak = max(
+            int(np.max(np.abs(np.frombuffer(mx.read(), dtype=np.int16))))
+            for _ in range(15)
+        )
         assert speech_peak > base
         # Drain past speech + release ramp; speech_active clears.
         for _ in range(40):
@@ -86,7 +96,7 @@ class TestVoiceMixerCore:
         mx.play_speech(loud, fade_in_ms=0)
         mx.play_speech(loud, fade_in_ms=0)
         out = np.frombuffer(mx.read(), dtype=np.int16)
-        assert int(out.max()) == 32767     # clamped, not wrapped to negative
+        assert int(out.max()) == 32767  # clamped, not wrapped to negative
         assert int(out.min()) >= -32768
 
     def test_stop_speech_clears_in_flight(self):
@@ -129,9 +139,11 @@ class TestVoiceMixerCore:
 # Adapter integration
 # =====================================================================
 
+
 def _make_adapter(fx_cfg=None):
     from plugins.platforms.discord.adapter import DiscordAdapter
     from gateway.config import Platform, PlatformConfig
+
     config = PlatformConfig(enabled=True, extra={})
     config.token = "fake-token"
     adapter = object.__new__(DiscordAdapter)
@@ -147,11 +159,20 @@ def _make_adapter(fx_cfg=None):
     adapter._voice_listen_tasks = {}
     adapter._voice_mixers = {}
     adapter._ambient_pcm_cache = None
-    adapter._voice_fx_cfg = fx_cfg if fx_cfg is not None else {
-        "enabled": True, "ambient_enabled": True, "ambient_path": "",
-        "ambient_gain": 0.18, "duck_gain": 0.06, "speech_gain": 1.0,
-        "ack_enabled": True, "ack_phrases": ["One moment."],
-    }
+    adapter._voice_fx_cfg = (
+        fx_cfg
+        if fx_cfg is not None
+        else {
+            "enabled": True,
+            "ambient_enabled": True,
+            "ambient_path": "",
+            "ambient_gain": 0.18,
+            "duck_gain": 0.06,
+            "speech_gain": 1.0,
+            "ack_enabled": True,
+            "ack_phrases": ["One moment."],
+        }
+    )
     return adapter
 
 
@@ -169,6 +190,7 @@ class TestVoiceMixerActive:
         # Defensive getattr path (object.__new__ helper that forgot the attr).
         from plugins.platforms.discord.adapter import DiscordAdapter
         from gateway.config import Platform
+
         bare = object.__new__(DiscordAdapter)
         bare.platform = Platform.DISCORD
         assert bare.voice_mixer_active(111) is False
@@ -217,8 +239,10 @@ class TestPlayInVoiceChannelMixerPath:
         adapter._reset_voice_timeout = MagicMock()
         adapter._voice_receivers[111] = MagicMock()
 
-        with patch.object(vm, "decode_to_pcm", return_value=None), \
-                patch("plugins.platforms.discord.adapter.discord") as mock_discord:
+        with (
+            patch.object(vm, "decode_to_pcm", return_value=None),
+            patch("plugins.platforms.discord.adapter.discord") as mock_discord,
+        ):
             mock_discord.FFmpegPCMAudio.return_value = MagicMock()
             mock_discord.PCMVolumeTransformer.return_value = MagicMock()
 
@@ -228,6 +252,7 @@ class TestPlayInVoiceChannelMixerPath:
                 if hasattr(coro, "close"):
                     coro.close()
                 return None
+
             with patch("asyncio.wait_for", _fast):
                 ok = await adapter.play_in_voice_channel(111, "/tmp/x.mp3")
         # Fell through to legacy path -> vc.play called.
@@ -256,9 +281,14 @@ class TestPlayAckInVoice:
         ack_file = tmp_path / "ack.mp3"
         ack_file.write_bytes(b"id3")
         import json as _json
-        with patch("tools.tts_tool.text_to_speech_tool",
-                   return_value=_json.dumps({"success": True, "file_path": str(ack_file)})), \
-                patch.object(vm, "decode_to_pcm", return_value=b"\x00" * vm.FRAME_SIZE):
+
+        with (
+            patch(
+                "tools.tts_tool.text_to_speech_tool",
+                return_value=_json.dumps({"success": True, "file_path": str(ack_file)}),
+            ),
+            patch.object(vm, "decode_to_pcm", return_value=b"\x00" * vm.FRAME_SIZE),
+        ):
             ok = await adapter.play_ack_in_voice(111, phrase="Testing one two.")
         assert ok is True
         mixer.play_speech.assert_called_once()

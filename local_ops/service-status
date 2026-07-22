@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+ALLOWLIST_PATH = REPO_ROOT / "local_ops" / "service-status.allowlist.json"
+
+
+def load_allowlist() -> list[dict]:
+    data = json.loads(ALLOWLIST_PATH.read_text(encoding="utf-8"))
+
+    services = data.get("services")
+    if not isinstance(services, list):
+        raise ValueError("allowlist must contain a services list")
+
+    for item in services:
+        if not isinstance(item, dict):
+            raise ValueError("each service entry must be an object")
+        for key in ("name", "unit", "description"):
+            if key not in item:
+                raise ValueError(f"service entry missing required key: {key}")
+
+    return services
+
+
+def run_systemctl(args: list[str], *, timeout: int = 8) -> dict:
+    started = time.time()
+
+    if shutil.which("systemctl") is None:
+        return {
+            "ok": False,
+            "returncode": 127,
+            "duration_seconds": 0,
+            "stdout": "",
+            "stderr": "systemctl not found",
+            "command": ["systemctl", *args],
+        }
+
+    try:
+        result = subprocess.run(
+            ["systemctl", *args],
+            cwd=REPO_ROOT,
+            shell=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+
+        return {
+            "ok": result.returncode == 0,
+            "returncode": result.returncode,
+            "duration_seconds": round(time.time() - started, 3),
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+            "command": ["systemctl", *args],
+        }
+
+    except subprocess.TimeoutExpired:
+        return {
+            "ok": False,
+            "returncode": 124,
+            "duration_seconds": round(time.time() - started, 3),
+            "stdout": "",
+            "stderr": "systemctl command timed out",
+            "command": ["systemctl", *args],
+        }
+
+
+def parse_show_output(text: str) -> dict:
+    data = {}
+
+    for line in text.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        data[key] = value
+
+    return data
+
+
+def service_status(service: dict) -> dict:
+    unit = service["unit"]
+
+    show = run_systemctl([
+        "show",
+        unit,
+        "--no-pager",
+        "--property=LoadState,ActiveState,SubState,UnitFileState,MainPID"
+    ])
+
+    active = run_systemctl(["is-active", unit])
+    enabled = run_systemctl(["is-enabled", unit])
+
+    show_data = parse_show_output(show["stdout"])
+
+    return {
+        "name": service["name"],
+        "unit": unit,
+        "description": service["description"],
+        "load_state": show_data.get("LoadState"),
+        "active_state": show_data.get("ActiveState") or active["stdout"],
+        "sub_state": show_data.get("SubState"),
+        "unit_file_state": show_data.get("UnitFileState") or enabled["stdout"],
+        "main_pid": show_data.get("MainPID"),
+        "commands": {
+            "show": show,
+            "is_active": active,
+            "is_enabled": enabled,
+        },
+    }
+
+
+def collect(target: str | None) -> dict:
+    services = load_allowlist()
+
+    if target:
+        matches = [item for item in services if item["name"] == target or item["unit"] == target]
+        if not matches:
+            return {
+                "version": VERSION,
+                "status": "blocked",
+                "message": "Service is not in the allowlist.",
+                "requested_service": target,
+                "allowed_services": [item["name"] for item in services],
+                "services": [],
+            }
+        services = matches
+
+    results = [service_status(service) for service in services]
+
+    return {
+        "version": VERSION,
+        "status": "ok",
+        "mode": "read-only",
+        "allowlist": str(ALLOWLIST_PATH),
+        "services": results,
+    }
+
+
+def print_human(payload: dict) -> None:
+    print("CLAWKSIS_SERVICE_STATUS")
+    print(f"status={payload['status']}")
+    print(f"mode={payload.get('mode')}")
+    print()
+
+    if payload["status"] != "ok":
+        print(f"MESSAGE={payload.get('message')}")
+        print("ALLOWED_SERVICES:")
+        for name in payload.get("allowed_services", []):
+            print(f"  {name}")
+        return
+
+    for service in payload["services"]:
+        print(f"- {service['name']} ({service['unit']})")
+        print(f"  load_state: {service.get('load_state')}")
+        print(f"  active_state: {service.get('active_state')}")
+        print(f"  sub_state: {service.get('sub_state')}")
+        print(f"  unit_file_state: {service.get('unit_file_state')}")
+        print(f"  main_pid: {service.get('main_pid')}")
+        print(f"  description: {service.get('description')}")
+        print()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Read-only allowlisted service status for Clawksis")
+    parser.add_argument("service", nargs="?", help="Allowed service name or unit, for example ollama")
+    parser.add_argument("--json", action="store_true", help="Print service status as JSON")
+    parser.add_argument("--names", action="store_true", help="Print allowed service names only")
+    parser.add_argument("--version", action="store_true", help="Print command version")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    try:
+        services = load_allowlist()
+    except Exception as exc:
+        print(f"STATUS=error\nMESSAGE={type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+
+    if args.names:
+        for service in services:
+            print(service["name"])
+        return 0
+
+    payload = collect(args.service)
+
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print_human(payload)
+
+    return 0 if payload["status"] == "ok" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

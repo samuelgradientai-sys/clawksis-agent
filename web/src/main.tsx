@@ -17,6 +17,22 @@ import { CLAWK_BASE_PATH } from "./lib/api";
 // can access React, components, etc. immediately.
 exposePluginSDK();
 
+// Recover open tabs after a server-side rebuild (`clawk update` / auto-mejora):
+// hashed chunk filenames change and the old ones are deleted, so a pending
+// lazy route import 404s and the router transition never commits — the URL
+// changes but the view stays frozen until a manual refresh. Vite emits
+// `vite:preloadError` for exactly this; reload once to pick up the fresh
+// index.html. The timestamp guard prevents a reload loop when the server is
+// genuinely broken (let the error surface instead).
+window.addEventListener("vite:preloadError", (event) => {
+  const KEY = "clawk-chunk-reload-at";
+  const last = Number(window.sessionStorage.getItem(KEY) || 0);
+  if (Date.now() - last < 30_000) return;
+  window.sessionStorage.setItem(KEY, String(Date.now()));
+  event.preventDefault();
+  window.location.reload();
+});
+
 createRoot(document.getElementById("root")!).render(
   <BrowserRouter basename={CLAWK_BASE_PATH || undefined}>
     <I18nProvider>

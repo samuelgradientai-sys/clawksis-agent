@@ -15,7 +15,6 @@ class TestRegistry:
         assert get_provider_profile("moonshot").name == "kimi-coding"
         assert get_provider_profile("kimi-coding-cn").name == "kimi-coding-cn"
         assert get_provider_profile("or").name == "openrouter"
-        assert get_provider_profile("nous-portal").name == "nous"
         assert get_provider_profile("qwen").name == "qwen-oauth"
         assert get_provider_profile("qwen-portal").name == "qwen-oauth"
 
@@ -72,7 +71,10 @@ class TestKimiProfile:
         eb, tl = p.build_api_kwargs_extras(
             reasoning_config={"enabled": True, "effort": "high"}
         )
-        assert eb["thinking"] == {"type": "enabled"}
+        # XOR: a recognized effort turns reasoning on by itself, so the
+        # thinking toggle is omitted (Moonshot treats them as mutually
+        # exclusive — mirrors the opencode-zen kimi-k2 branch).
+        assert "thinking" not in eb
         assert tl["reasoning_effort"] == "high"
 
     def test_thinking_disabled(self):
@@ -84,13 +86,17 @@ class TestKimiProfile:
     def test_reasoning_effort_default(self):
         p = get_provider_profile("kimi")
         eb, tl = p.build_api_kwargs_extras(reasoning_config={"enabled": True})
-        assert tl["reasoning_effort"] == "medium"
+        # Enabled but no recognized effort → fall back to the thinking toggle
+        # only (XOR: no reasoning_effort).
+        assert eb["thinking"] == {"type": "enabled"}
+        assert "reasoning_effort" not in tl
 
     def test_no_config_defaults(self):
         p = get_provider_profile("kimi")
         eb, tl = p.build_api_kwargs_extras(reasoning_config=None)
+        # No config → thinking on via the binary toggle only (XOR).
         assert eb["thinking"] == {"type": "enabled"}
-        assert tl["reasoning_effort"] == "medium"
+        assert "reasoning_effort" not in tl
 
 
 class TestOpenRouterProfile:
@@ -214,35 +220,6 @@ class TestOpenRouterProfile:
         )
         assert eb["reasoning"] == {"enabled": True, "effort": "high"}
         assert tl["extra_headers"]["x-grok-conv-id"] == "sess-123"
-
-
-class TestNousProfile:
-    def test_tags(self):
-        from agent.portal_tags import nous_portal_tags
-
-        p = get_provider_profile("nous")
-        body = p.build_extra_body()
-        assert body["tags"] == nous_portal_tags()
-
-    def test_auth_type(self):
-        p = get_provider_profile("nous")
-        assert p.auth_type == "oauth_device_code"
-
-    def test_reasoning_enabled(self):
-        p = get_provider_profile("nous")
-        eb, _ = p.build_api_kwargs_extras(
-            reasoning_config={"enabled": True, "effort": "medium"},
-            supports_reasoning=True,
-        )
-        assert eb["reasoning"] == {"enabled": True, "effort": "medium"}
-
-    def test_reasoning_omitted_when_disabled(self):
-        p = get_provider_profile("nous")
-        eb, _ = p.build_api_kwargs_extras(
-            reasoning_config={"enabled": False},
-            supports_reasoning=True,
-        )
-        assert "reasoning" not in eb
 
 
 class TestQwenProfile:

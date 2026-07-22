@@ -45,12 +45,7 @@ from clawk_cli.config import (
 
 from clawk_cli.colors import Colors, color
 
-from clawk_cli.nous_subscription import (
-    apply_nous_managed_defaults,
-    get_nous_subscription_features,
-)
-
-from clawk_cli.nous_account import format_nous_portal_entitlement_message
+from clawk_cli.nous_subscription import get_nous_subscription_features
 
 from tools.tool_backend_helpers import fal_key_is_configured
 
@@ -85,7 +80,7 @@ from clawk_cli.cli_output import (  # noqa: E402 — late import block
 # These map to keys in toolsets.py TOOLSETS dict.
 
 CONFIGURABLE_TOOLSETS = [
-    ("web", "🔍 Web Search & Scraping", "web_search, web_extract"),
+    ("web", "🔍 Web Search & Scraping", "web_search, web_extract, scrape"),
     ("browser", "🌐 Browser Automation", "navigate, click, type, scroll"),
     ("terminal", "💻 Terminal & Processes", "terminal, process"),
     ("file", "📁 File Operations", "read, write, patch, search"),
@@ -357,6 +352,45 @@ def _get_plugin_toolset_keys() -> set:
         return set()
 
 
+def valid_post_setup_keys() -> Set[str]:
+    """Return the set of post-setup keys declared by any visible provider.
+
+    Collected from ``TOOL_CATEGORIES`` plus the plugin-registered web /
+    image-gen / video-gen / browser providers (which can also carry a
+    ``post_setup``). This is the allowlist the ``clawk tools post-setup``
+    command and the dashboard post-setup endpoint validate against, so a
+    caller can't drive ``_run_post_setup`` with an arbitrary key.
+    """
+
+    keys: Set[str] = set()
+
+    for cat in TOOL_CATEGORIES.values():
+        for prov in cat.get("providers", []):
+            ps = prov.get("post_setup")
+
+            if ps:
+                keys.add(ps)
+
+    # Plugin-registered providers can declare their own post_setup hooks.
+    for builder in (
+        _plugin_web_search_providers,
+        _plugin_image_gen_providers,
+        _plugin_video_gen_providers,
+        _plugin_browser_providers,
+    ):
+        try:
+            for prov in builder():
+                ps = prov.get("post_setup")
+
+                if ps:
+                    keys.add(ps)
+
+        except Exception:  # pragma: no cover — defensive; plugins optional
+            continue
+
+    return keys
+
+
 def _checklist_toolset_keys(platform: str) -> Set[str]:
     """Return the toolset keys the ``clawk tools`` checklist actually offers
 
@@ -433,16 +467,6 @@ TOOL_CATEGORIES = {
                 "desc": "Free Microsoft voice engine — no account or API key required.",
                 "env_vars": [],
                 "tts_provider": "edge",
-            },
-            {
-                "name": "Nous Subscription",
-                "badge": "subscription",
-                "tag": "Managed OpenAI TTS billed to your subscription",
-                "env_vars": [],
-                "tts_provider": "openai",
-                "requires_nous_auth": True,
-                "managed_nous_feature": "tts",
-                "override_env_vars": ["VOICE_TOOLS_OPENAI_KEY", "OPENAI_API_KEY"],
             },
             {
                 "name": "OpenAI TTS",
@@ -538,22 +562,10 @@ TOOL_CATEGORIES = {
         # plugins.web.<vendor>.provider via _plugin_web_search_providers()
         # in _visible_providers(). Only non-provider UX setup-flow rows
         # for the firecrawl backend are listed here:
-        #   - "Nous Subscription" — managed Firecrawl billed via Nous
-        #     subscription (requires_nous_auth + override_env_vars).
         #   - "Firecrawl Self-Hosted" — points firecrawl at a private
         #     Docker instance via FIRECRAWL_API_URL only.
         # See PR #25182 for the migration rationale.
         "providers": [
-            {
-                "name": "Nous Subscription",
-                "badge": "subscription",
-                "tag": "Managed Firecrawl billed to your subscription",
-                "web_backend": "firecrawl",
-                "env_vars": [],
-                "requires_nous_auth": True,
-                "managed_nous_feature": "web",
-                "override_env_vars": ["FIRECRAWL_API_KEY", "FIRECRAWL_API_URL"],
-            },
             {
                 "name": "Firecrawl Self-Hosted",
                 "badge": "free · self-hosted",
@@ -582,18 +594,7 @@ TOOL_CATEGORIES = {
         #     Uses the fal plugin as the underlying backend but has a
         #     distinct setup UX.
         # Mirrors the shape browser/video_gen ship today.
-        "providers": [
-            {
-                "name": "Nous Subscription",
-                "badge": "subscription",
-                "tag": "Managed FAL image generation billed to your subscription",
-                "env_vars": [],
-                "requires_nous_auth": True,
-                "managed_nous_feature": "image_gen",
-                "override_env_vars": ["FAL_KEY"],
-                "imagegen_backend": "fal",
-            },
-        ],
+        "providers": [],
     },
     "video_gen": {
         "name": "Video Generation",
@@ -602,22 +603,7 @@ TOOL_CATEGORIES = {
         # FAL video generation billed via the Nous Portal.  Plugin-backed
         # provider rows (FAL BYOK, xAI, …) are injected at runtime by
         # ``_plugin_video_gen_providers()`` in ``_visible_providers``.
-        "providers": [
-            {
-                "name": "Nous Subscription",
-                "badge": "subscription",
-                "tag": "Managed FAL video generation billed to your subscription",
-                "env_vars": [],
-                "requires_nous_auth": True,
-                "managed_nous_feature": "video_gen",
-                "override_env_vars": ["FAL_KEY"],
-                # The underlying plugin backend — when the user picks
-                # "Nous Subscription" we set video_gen.provider = "fal"
-                # and video_gen.use_gateway = True so the FAL plugin
-                # routes through the managed queue gateway.
-                "video_gen_plugin_name": "fal",
-            },
-        ],
+        "providers": [],
     },
     "x_search": {
         "name": "X (Twitter) Search",
@@ -679,17 +665,6 @@ TOOL_CATEGORIES = {
                 "desc": "Runs a hidden Chrome on this machine — free, no account needed.",
                 "env_vars": [],
                 "browser_provider": "local",
-                "post_setup": "agent_browser",
-            },
-            {
-                "name": "Nous Subscription (Browser Use cloud)",
-                "badge": "subscription",
-                "tag": "Managed Browser Use billed to your subscription",
-                "env_vars": [],
-                "browser_provider": "browser-use",
-                "requires_nous_auth": True,
-                "managed_nous_feature": "browser",
-                "override_env_vars": ["BROWSER_USE_API_KEY"],
                 "post_setup": "agent_browser",
             },
             {
@@ -1275,6 +1250,70 @@ def _run_cua_driver_installer(label: str = "Installing", verbose: bool = True) -
         return False
 
 
+def _npm_global_bin_dir(npm_bin: str) -> str:
+    """Return npm's global bin directory ("" when undeterminable).
+
+    `npm install -g` places binaries in `<prefix>/bin` (POSIX) or `<prefix>`
+    (Windows). When that directory is not on PATH — the default for non-root
+    installs with a user-scoped prefix like ~/.npm-global — `shutil.which()`
+    can't see an already-installed CLI, so every `clawk setup` run would
+    reinstall it and then report the install as failed. Resolving the real
+    bin dir breaks that loop.
+    """
+
+    import os
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            [npm_bin, "prefix", "-g"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+
+    except Exception:
+        return ""
+
+    prefix = (result.stdout or "").strip()
+
+    if result.returncode != 0 or not prefix:
+        return ""
+
+    if os.name == "nt":
+        return prefix
+
+    return os.path.join(prefix, "bin")
+
+
+def _resolve_npm_cli(bin_name: str, npm_bin: str = "") -> str:
+    """Absolute path to *bin_name*, checking PATH then npm's global bin dir."""
+
+    import os
+    import shutil
+
+    found = shutil.which(bin_name)
+
+    if found:
+        return found
+
+    if not npm_bin:
+        return ""
+
+    bin_dir = _npm_global_bin_dir(npm_bin)
+
+    if not bin_dir:
+        return ""
+
+    candidate = os.path.join(bin_dir, bin_name)
+
+    for path in (candidate, candidate + ".cmd", candidate + ".exe"):
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+
+    return ""
+
+
 def _install_npm_cli(
     pkg: str, bin_name: str, label: str, *, login_hint: str = ""
 ) -> None:
@@ -1288,15 +1327,28 @@ def _install_npm_cli(
     import shutil
     import subprocess
 
-    if shutil.which(bin_name):
-        _print_success(f"    {label} is already installed ({bin_name} on PATH)")
+    npm_bin = shutil.which("npm") or ""
+
+    already = _resolve_npm_cli(bin_name, npm_bin)
+
+    if already:
+        if shutil.which(bin_name):
+            _print_success(f"    {label} is already installed ({bin_name} on PATH)")
+
+        else:
+            import os
+
+            _print_success(f"    {label} is already installed ({already})")
+
+            _print_warning(
+                f"    {os.path.dirname(already)} is not on PATH — add it to your "
+                f"shell profile so `{bin_name}` works everywhere."
+            )
 
         if login_hint:
             _print_info(f"    {login_hint}")
 
         return
-
-    npm_bin = shutil.which("npm")
 
     if not npm_bin:
         _print_warning(f"    npm not found — cannot auto-install {label}.")
@@ -1322,8 +1374,23 @@ def _install_npm_cli(
 
         return
 
+    installed_at = _resolve_npm_cli(bin_name, npm_bin)
+
     if result.returncode == 0 and shutil.which(bin_name):
         _print_success(f"    {label} installed")
+
+        if login_hint:
+            _print_info(f"    {login_hint}")
+
+    elif result.returncode == 0 and installed_at:
+        import os
+
+        _print_success(f"    {label} installed ({installed_at})")
+
+        _print_warning(
+            f"    {os.path.dirname(installed_at)} is not on PATH — add it to "
+            f"your shell profile so `{bin_name}` works everywhere."
+        )
 
         if login_hint:
             _print_info(f"    {login_hint}")
@@ -1432,9 +1499,9 @@ def _run_post_setup(post_setup_key: str):
         if _running_in_docker():
             _print_warning("    Chromium is missing but you're running in Docker.")
 
-            _print_info("    Pull the latest image to get the bundled Chromium:")
+            _print_info("    Rebuild the image to get the bundled Chromium:")
 
-            _print_info("      docker pull ghcr.io/nousresearch/clawksis-agent:latest")
+            _print_info("      docker compose build")
 
             return
 
@@ -1909,15 +1976,13 @@ def _run_post_setup(post_setup_key: str):
         # MiroFish is a Docker service, not a CLI binary — we can't `pip`/`npm`
         # it. Print the stand-up steps; the tool's check_fn activates it once
         # the server answers /health.
-        base = (
-            get_env_value("MIROFISH_BASE_URL") or "http://localhost:5001"
-        ).rstrip("/")
+        base = (get_env_value("MIROFISH_BASE_URL") or "http://localhost:5001").rstrip(
+            "/"
+        )
 
         _print_info("    MiroFish runs as a server (Docker), not a CLI binary. Setup:")
 
-        _print_info(
-            "      git clone https://github.com/666ghj/MiroFish && cd MiroFish"
-        )
+        _print_info("      git clone https://github.com/666ghj/MiroFish && cd MiroFish")
 
         _print_info("      cp .env.example .env   # set LLM_API_KEY and ZEP_API_KEY")
 
@@ -2250,6 +2315,13 @@ def _get_platform_tools(
         if ts_def.get("includes"):
             continue
 
+        # Posture toolsets (e.g. ``coding``) are selected per-session by
+        # agent/coding_context.py, never baked into per-platform tool config —
+        # recovering them here would leak the coding posture into every
+        # platform's default toolset list. See toolsets.py ``"posture": True``.
+        if ts_def.get("posture"):
+            continue
+
         ts_tools = set(resolve_toolset(ts_key))
 
         if not ts_tools or not ts_tools.issubset(platform_tool_universe):
@@ -2516,7 +2588,7 @@ def _toolset_has_keys(
 
         feature = features.features.get(ts_key)
 
-        if feature and (feature.available or feature.managed_by_nous):
+        if feature and feature.available:
             return True
 
     # Check TOOL_CATEGORIES first (provider-aware)
@@ -3520,23 +3592,6 @@ def _configure_tool_category(
 
         # Plain text labels only (no ANSI codes in menu items)
 
-        # When the user is logged into Nous, surface a marker on providers
-
-        # whose access is included in their subscription so it's visually
-
-        # obvious which options cost extra vs. cost nothing on top of Nous.
-
-        try:
-            _nous_logged_in = bool(
-                get_nous_subscription_features(
-                    config,
-                    force_fresh=force_fresh,
-                ).nous_auth_present
-            )
-
-        except Exception:
-            _nous_logged_in = False
-
         provider_choices = []
 
         provider_descs = []
@@ -3560,26 +3615,7 @@ def _configure_tool_category(
                 else:
                     configured = " [configured]"
 
-            # Mark Nous-managed entries. Logged-in paid subscribers get the
-
-            # "included" star; everyone else gets a "via Nous Portal" hint so
-
-            # it's clear selecting the row triggers a Portal login. The rows
-
-            # are always shown now (see _visible_providers) — selecting one
-
-            # drives an inline login + entitlement check.
-
-            sub_marker = ""
-
-            if p.get("managed_nous_feature"):
-                if _nous_logged_in:
-                    sub_marker = "  ★ Included with your Nous subscription"
-
-                else:
-                    sub_marker = "  ★ via Nous Portal (login on select)"
-
-            provider_choices.append(f"{p['name']}{badge}{tag}{configured}{sub_marker}")
+            provider_choices.append(f"{p['name']}{badge}{tag}{configured}")
 
             # Plain-language line shown dimmed beneath the row so a
             # non-technical user understands what the option actually is.
@@ -4373,31 +4409,6 @@ def _configure_provider(
 
             return
 
-    # Pure pre-auth UX rows (requires_nous_auth without a managed gateway
-
-    # feature) keep the old gate. Managed rows are handled by the inline
-
-    # login above, so don't double-check them here.
-
-    if provider.get("requires_nous_auth") and not managed_feature:
-        features = get_nous_subscription_features(config, force_fresh=force_fresh)
-
-        entitled = bool(
-            features.account_info and features.account_info.paid_service_access is True
-        )
-
-        if not features.nous_auth_present or not entitled:
-            message = format_nous_portal_entitlement_message(
-                features.account_info,
-                capability=f"{provider.get('name', 'Nous Subscription')}",
-            )
-
-            _print_warning(
-                f"  {message or 'Nous Subscription is only available after logging into Nous Portal.'}"
-            )
-
-            return
-
     # Set TTS provider in config if applicable
 
     if provider.get("tts_provider"):
@@ -4493,44 +4504,6 @@ def _configure_provider(
     # Prompt for each required env var
 
     all_configured = True
-
-    # If this BYOK provider lives in a category that ALSO has a
-
-    # Nous-managed sibling, show a single dim hint so users know
-
-    # they can avoid the key entirely via a Portal subscription.
-
-    # Suppressed when the user is already authed to Nous.
-
-    _show_portal_hint = False
-
-    if env_vars and not managed_feature and not provider.get("requires_nous_auth"):
-        try:
-            _has_managed_sibling = False
-
-            for _cat_key, _cat in TOOL_CATEGORIES.items():
-                _providers = _cat.get("providers", [])
-
-                if provider in _providers and any(
-                    sib.get("managed_nous_feature") for sib in _providers
-                ):
-                    _has_managed_sibling = True
-
-                    break
-
-            if _has_managed_sibling:
-                _features = get_nous_subscription_features(
-                    config,
-                    force_fresh=force_fresh,
-                )
-
-                _show_portal_hint = not _features.nous_auth_present
-
-        except Exception:
-            _show_portal_hint = False
-
-    if _show_portal_hint:
-        _print_info("  Available through Nous Portal subscription.")
 
     for var in env_vars:
         existing = get_env_value(var["key"])
@@ -4924,29 +4897,6 @@ def _reconfigure_provider(
 
             return
 
-    # Pure pre-auth UX rows keep the old gate; managed rows already handled
-
-    # by the inline login above.
-
-    if provider.get("requires_nous_auth") and not managed_feature:
-        features = get_nous_subscription_features(config, force_fresh=force_fresh)
-
-        entitled = bool(
-            features.account_info and features.account_info.paid_service_access is True
-        )
-
-        if not features.nous_auth_present or not entitled:
-            message = format_nous_portal_entitlement_message(
-                features.account_info,
-                capability=f"{provider.get('name', 'Nous Subscription')}",
-            )
-
-            _print_warning(
-                f"  {message or 'Nous Subscription is only available after logging into Nous Portal.'}"
-            )
-
-            return
-
     if provider.get("tts_provider"):
         tts_cfg = config.setdefault("tts", {})
 
@@ -5304,24 +5254,6 @@ def tools_command(args=None, first_install: bool = False, config: dict = None):
 
                     print(color(f"  - {label}", Colors.RED))
 
-            auto_configured = apply_nous_managed_defaults(
-                config,
-                enabled_toolsets=new_enabled,
-                force_fresh=True,
-            )
-
-            for ts_key in sorted(auto_configured):
-                label = next(
-                    (l for k, l, _ in CONFIGURABLE_TOOLSETS if k == ts_key), ts_key
-                )
-
-                print(
-                    color(
-                        f"  ✓ {label}: using your Nous subscription defaults",
-                        Colors.GREEN,
-                    )
-                )
-
             # Walk through ALL selected tools that have provider options or
 
             # need API keys.  This ensures browser (Local vs Browserbase),
@@ -5334,7 +5266,6 @@ def tools_command(args=None, first_install: bool = False, config: dict = None):
                 ts_key
                 for ts_key in sorted(new_enabled)
                 if (TOOL_CATEGORIES.get(ts_key) or TOOLSET_ENV_REQUIREMENTS.get(ts_key))
-                and ts_key not in auto_configured
             ]
 
             if to_configure:

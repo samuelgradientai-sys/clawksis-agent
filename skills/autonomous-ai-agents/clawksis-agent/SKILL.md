@@ -218,6 +218,43 @@ clawk status [--all]       Show component status
 
 
 
+### Web Dashboard
+
+Clawksis ships an **incorporated web dashboard** — a built-in local web UI for
+managing config, API keys, models, sessions, skills, tools, profiles, and
+files. It is not a separate app; it is part of the CLI and is launched with
+`clawk dashboard`. (Users often call it "the Clawksis dashboard"; the command
+is `clawk dashboard`.)
+
+```
+
+clawk dashboard                  Build (if needed) + serve the web UI, opens the browser
+
+clawk dashboard --port 9119      Port (default 9119)
+
+clawk dashboard --host HOST      Bind host (default 127.0.0.1)
+
+clawk dashboard --no-open        Don't open the browser automatically
+
+clawk dashboard --skip-build     Serve the existing prebuilt dist without rebuilding
+
+clawk dashboard --stop           Stop all running dashboard processes
+
+clawk dashboard --status         List running dashboard processes
+
+clawk dashboard --remote U@HOST  Open a dashboard running on another host over an SSH tunnel
+
+clawk dashboard register         Register a self-hosted dashboard with Nous Portal (OAuth)
+
+```
+
+Default URL: http://127.0.0.1:9119. On first launch it builds the web UI
+(Node.js + npm required). For non-interactive contexts (Scheduled Tasks, CI),
+pre-build with `cd web && npm run build` and start with `clawk dashboard
+--skip-build`.
+
+
+
 ### Tools & Skills
 
 

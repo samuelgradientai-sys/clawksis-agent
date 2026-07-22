@@ -1,0 +1,9 @@
+date,order_id,customer,product,quantity,unit_price,discount,region,sales_rep
+2026-06-01,SO-001,Cliente A,Plan Premium,2,120000,0,Bogota,Laura
+2026-06-01,SO-002,Cliente B,Plan Basico,1,50000,0,Medellin,Carlos
+2026-06-02,SO-003,Cliente C,Plan Premium,1,120000,10000,Bogota,Laura
+2026-06-03,SO-004,Cliente D,Addon Soporte,3,30000,0,Cali,Mariana
+2026-06-04,SO-005,Cliente E,Plan Empresarial,1,250000,20000,Bogota,Laura
+2026-06-05,SO-006,Cliente F,Plan Premium,2,120000,0,Barranquilla,Carlos
+2026-06-06,SO-007,Cliente G,Plan Basico,4,50000,0,Medellin,Mariana
+2026-06-07,SO-008,Cliente H,Plan Empresarial,2,250000,50000,Bogota,Laura

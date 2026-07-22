@@ -180,7 +180,7 @@ def _resolve_user(user: Optional[str]) -> str:
 
     sys.exit(
         "Missing Hyperliquid address. Pass <address> explicitly or set "
-        f"{DEFAULT_USER_ENV} in your environment or ~/.clawksis/.env."
+        f"{DEFAULT_USER_ENV} in your environment or {_clawk_home() / '.env'}."
     )
 
 

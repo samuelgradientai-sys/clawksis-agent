@@ -1,21 +1,13 @@
 """
-
 Shared platform registry for Clawksis.
 
-
-
 Single source of truth for platform metadata consumed by both
-
 skills_config (label display) and tools_config (default toolset
-
 resolution).  Import ``PLATFORMS`` from here instead of maintaining
-
 duplicate dicts in each module.
-
 """
 
 from collections import OrderedDict
-
 from typing import NamedTuple
 
 
@@ -23,18 +15,22 @@ class PlatformInfo(NamedTuple):
     """Metadata for a single platform entry."""
 
     label: str
-
     default_toolset: str
 
 
 # Ordered so that TUI menus are deterministic.
-
 PLATFORMS: OrderedDict[str, PlatformInfo] = OrderedDict([
     ("cli", PlatformInfo(label="🖥️  CLI", default_toolset="clawk-cli")),
     ("telegram", PlatformInfo(label="📱 Telegram", default_toolset="clawk-telegram")),
     ("discord", PlatformInfo(label="💬 Discord", default_toolset="clawk-discord")),
     ("slack", PlatformInfo(label="💼 Slack", default_toolset="clawk-slack")),
     ("whatsapp", PlatformInfo(label="📱 WhatsApp", default_toolset="clawk-whatsapp")),
+    (
+        "whatsapp_cloud",
+        PlatformInfo(
+            label="📱 WhatsApp Business (Cloud)", default_toolset="clawk-whatsapp"
+        ),
+    ),
     ("signal", PlatformInfo(label="📡 Signal", default_toolset="clawk-signal")),
     (
         "bluebubbles",
@@ -72,48 +68,31 @@ PLATFORMS: OrderedDict[str, PlatformInfo] = OrderedDict([
 def platform_label(key: str, default: str = "") -> str:
     """Return the display label for a platform key, or *default*.
 
-
-
     Checks the static PLATFORMS dict first, then the plugin platform
-
     registry for dynamically registered platforms.
-
     """
-
     info = PLATFORMS.get(key)
-
     if info is not None:
         return info.label
-
     # Check plugin registry
-
     try:
         from gateway.platform_registry import platform_registry
 
         entry = platform_registry.get(key)
-
         if entry:
             return f"{entry.emoji}  {entry.label}" if entry.emoji else entry.label
-
     except Exception:
         pass
-
     return default
 
 
 def get_all_platforms() -> "OrderedDict[str, PlatformInfo]":
     """Return PLATFORMS merged with any plugin-registered platforms.
 
-
-
     Plugin platforms are appended after builtins.  This is the function
-
     that tools_config and skills_config should use for platform menus.
-
     """
-
     merged = OrderedDict(PLATFORMS)
-
     try:
         from gateway.platform_registry import platform_registry
 
@@ -125,8 +104,6 @@ def get_all_platforms() -> "OrderedDict[str, PlatformInfo]":
                     else entry.label,
                     default_toolset=f"clawk-{entry.name}",
                 )
-
     except Exception:
         pass
-
     return merged

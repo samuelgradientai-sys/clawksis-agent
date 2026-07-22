@@ -104,6 +104,43 @@ from utils import base_url_host_matches, env_var_enabled
 
 logger = logging.getLogger(__name__)
 
+# Prefix of the local "waiting for model response" interrupt status. It's
+# metadata, not assistant prose, so consumers (e.g. the ACP adapter) match on
+# this prefix to suppress it from the user-facing response.
+INTERRUPT_WAITING_FOR_MODEL_PREFIX = (
+    "Operation interrupted: waiting for model response ("
+)
+
+
+# ── Per-provider circuit breaker (OPT-IN, resilience.circuit_breaker) ──────
+# Fast-fails to a fallback provider after repeated *transient* failures instead
+# of burning the retry budget. No-op unless enabled. Reuses the existing
+# _try_activate_fallback + FailoverReason; it augments — never replaces — the
+# base retry/rotation/fallback path. Only transient provider failures trip it
+# (NOT auth/billing/content/format/context, which have their own handling).
+_BREAKER_TRANSIENT_REASONS = frozenset({
+    FailoverReason.rate_limit,
+    FailoverReason.server_error,
+    FailoverReason.overloaded,
+    FailoverReason.timeout,
+    FailoverReason.unknown,
+})
+
+
+def _resilience_breaker(agent):
+    """Return ``(breaker, key)`` for the active provider, or ``(None, "")`` when
+    the circuit breaker is disabled. Never raises."""
+    try:
+        from agent.resilience.circuit_breaker import make_key
+        from agent.resilience.runtime import get_circuit_breaker
+
+        breaker = get_circuit_breaker()
+        if breaker is None:
+            return None, ""
+        return breaker, make_key(getattr(agent, "provider", "") or "")
+    except Exception:
+        return None, ""
+
 
 def _ollama_context_limit_error(agent: Any, request_tokens: int) -> Optional[str]:
     """Return a user-facing error when Ollama is loaded with too little context."""
@@ -217,12 +254,60 @@ def _is_nous_inference_route(provider: str, base_url: str) -> bool:
     ) or base_url_host_matches(base, "inference.nousresearch.com")
 
 
+def _classify_billing_subtype(error_message: str) -> str:
+    """Disambiguate a 402/billing error for accurate user-facing wording.
+
+    Three real cases hide behind FailoverReason.billing:
+      - 'insufficient_for_request': the account HAS balance, but this request's
+        max_tokens exceeds what the credits can cover (OpenRouter: "requires
+        more credits, or fewer max_tokens ... can only afford N"). NOT exhausted.
+      - 'no_credits': no / insufficient credits, or billing not set up.
+      - 'exhausted': default — credits/billing ran out.
+    """
+    low = (error_message or "").lower()
+    if (
+        "can only afford" in low
+        or "fewer max_tokens" in low
+        or ("more credits" in low and "max_tokens" in low)
+    ):
+        return "insufficient_for_request"
+    if (
+        "insufficient" in low
+        or "out of credits" in low
+        or "no credits" in low
+        or "add more credits" in low
+        or "requires more credits" in low
+        or "payment required" in low
+    ):
+        return "no_credits"
+    return "exhausted"
+
+
+def _billing_headline(error_message: str) -> str:
+    """Short, accurate one-liner describing a billing/credit failure."""
+    subtype = _classify_billing_subtype(error_message)
+    if subtype == "insufficient_for_request":
+        return (
+            "Provider balance can't cover this request (max_tokens too high for "
+            "your remaining credits)"
+        )
+    if subtype == "no_credits":
+        return "Provider has no / insufficient credits"
+    return "Billing or credits exhausted"
+
+
+def _billing_status_line(error_message: str) -> str:
+    """Chat status shown when eagerly switching to a fallback on a billing 402."""
+    return f"⚠️ {_billing_headline(error_message)} — switching to fallback provider..."
+
+
 def _billing_or_entitlement_message(
     *,
     capability: str,
     provider: str,
     base_url: str,
     model: str,
+    error_message: str = "",
 ) -> str:
 
     if _is_nous_inference_route(provider, base_url):
@@ -232,13 +317,33 @@ def _billing_or_entitlement_message(
 
     model_label = (model or "").strip() or "the selected model"
 
-    lines = [
-        (
-            f"{provider_label} reported that billing, credits, or account "
-            f"entitlement is exhausted for {model_label}."
-        ),
-        "Add credits or update billing with that provider, then retry.",
-    ]
+    subtype = _classify_billing_subtype(error_message)
+
+    if subtype == "insufficient_for_request":
+        lines = [
+            (
+                f"{provider_label} couldn't cover this request for {model_label}: "
+                "your remaining credits aren't enough for the requested max_tokens "
+                "(you have balance — it just isn't enough for this call)."
+            ),
+            "Add credits, or lower the model's max output tokens, then retry.",
+        ]
+    elif subtype == "no_credits":
+        lines = [
+            (
+                f"{provider_label} reported no or insufficient credits for "
+                f"{model_label}."
+            ),
+            "Add credits or set up billing with that provider, then retry.",
+        ]
+    else:
+        lines = [
+            (
+                f"{provider_label} reported that billing, credits, or account "
+                f"entitlement is exhausted for {model_label}."
+            ),
+            "Add credits or update billing with that provider, then retry.",
+        ]
 
     if base_url_host_matches(str(base_url or ""), "openrouter.ai"):
         lines.append("OpenRouter credits: https://openrouter.ai/settings/credits")
@@ -273,25 +378,6 @@ def _print_billing_or_entitlement_guidance(
         agent._vprint(f"{agent.log_prefix}   💡 {line}", force=True)
 
     return True
-
-
-def _try_refresh_nous_paid_entitlement_credentials(agent) -> bool:
-    """Refresh Nous runtime credentials after a fresh paid-entitlement check."""
-
-    try:
-        from clawk_cli.nous_account import get_nous_portal_account_info
-
-        account_info = get_nous_portal_account_info(force_fresh=True)
-
-        if account_info.paid_service_access is not True:
-            return False
-
-        return agent._try_refresh_nous_client_credentials(
-            force=True,
-        )
-
-    except Exception:
-        return False
 
 
 def _restore_or_build_system_prompt(agent, system_message, conversation_history):
@@ -378,14 +464,27 @@ def _restore_or_build_system_prompt(agent, system_message, conversation_history)
                 exc,
             )
 
-    if stored_prompt:
+    if stored_prompt and _stored_prompt_matches_runtime(agent, stored_prompt):
         # Continuing session — reuse the exact system prompt from the
-
         # previous turn so the Anthropic cache prefix matches.
-
         agent._cached_system_prompt = stored_prompt
-
         return
+
+    if stored_prompt:
+        # The stored prompt names a Model/Provider that no longer matches the
+        # runtime (a model switch or a fallback activated between turns).
+        # Reusing it would report the wrong backend to the model and to the
+        # user — rebuild instead. This matters because Clawksis rotates
+        # models/keys via the fallback chain, so a resumed session would
+        # otherwise keep the previous backend's identity in its prompt.
+        stored_state = "stale_runtime"
+        logger.info(
+            "Stored system prompt for session %s has stale runtime identity; "
+            "rebuilding for model=%s provider=%s.",
+            agent.session_id,
+            getattr(agent, "model", "") or "",
+            getattr(agent, "provider", "") or "",
+        )
 
     if conversation_history and stored_state in ("null", "empty"):
         # Continuing session whose stored prompt is unusable.  The
@@ -452,6 +551,37 @@ def _restore_or_build_system_prompt(agent, system_message, conversation_history)
                 agent.session_id,
                 exc,
             )
+
+
+def _stored_prompt_matches_runtime(agent, prompt: str) -> bool:
+    """Return False when the persisted Model/Provider lines are stale.
+
+    The system prompt embeds ``Model: <x>`` / ``Provider: <y>`` lines. If the
+    user switched models or the fallback chain rotated the backend between
+    turns, a resumed session must NOT reuse the old prompt verbatim (it would
+    misreport the active backend). Conservative: only rebuilds when a stored
+    line is present AND differs from the runtime value.
+    """
+
+    def line_value(label: str) -> str:
+        prefix = f"{label}:"
+        value = ""
+        for line in prompt.splitlines():
+            if line.startswith(prefix):
+                value = line[len(prefix) :].strip()
+        return value
+
+    stored_model = line_value("Model")
+    current_model = str(getattr(agent, "model", "") or "").strip()
+    if stored_model and current_model and stored_model != current_model:
+        return False
+
+    stored_provider = line_value("Provider")
+    current_provider = str(getattr(agent, "provider", "") or "").strip()
+    if stored_provider and current_provider and stored_provider != current_provider:
+        return False
+
+    return True
 
 
 def _get_continuation_prompt(
@@ -1042,6 +1172,18 @@ def run_conversation(
                 if not _compressor.should_compress(_preflight_tokens):
                     break  # Under threshold or anti-thrash guard stopped it
 
+    # Persist the inbound user turn before any provider/tool work.  If the
+    # provider call (or tool execution) crashes mid-turn, the user's message
+    # is already flushed to the session log + SQLite so it survives the crash
+    # and resumes correctly on the next turn.  Subsequent in-loop persists
+    # overwrite this with the fuller transcript as the turn progresses.
+
+    try:
+        agent._persist_session(messages, conversation_history)
+
+    except Exception:
+        pass
+
     # Plugin hook: pre_llm_call
 
     # Fired once per turn before the tool-calling loop.  Plugins can
@@ -1618,7 +1760,17 @@ def run_conversation(
 
         # UI transcript and session persistence.
 
-        api_messages = agent._drop_thinking_only_and_merge_users(api_messages)
+        # In codex_responses mode, encrypted ``codex_reasoning_items`` are
+        # replayed to the Responses API on purpose (cross-turn coherence).
+        # They are NOT Anthropic-style thinking blocks, so a turn carrying
+        # only reasoning items must survive — dropping it here would strip
+        # the replay before the request and defeat the
+        # ``invalid_encrypted_content`` recovery contract (which only
+        # disables replay AFTER the provider rejects it).
+        api_messages = agent._drop_thinking_only_and_merge_users(
+            api_messages,
+            drop_codex_reasoning_items=agent.api_mode != "codex_responses",
+        )
 
         # Normalize message whitespace and tool-call JSON for consistent
 
@@ -1804,8 +1956,6 @@ def run_conversation(
 
         nous_auth_retry_attempted = False
 
-        nous_paid_entitlement_refresh_attempted = False
-
         copilot_auth_retry_attempted = False
 
         thinking_sig_retry_attempted = False
@@ -1837,72 +1987,6 @@ def run_conversation(
         agent._current_api_request_id = api_request_id
 
         while retry_count < max_retries:
-            # ── Nous Portal rate limit guard ──────────────────────
-
-            # If another session already recorded that Nous is rate-
-
-            # limited, skip the API call entirely.  Each attempt
-
-            # (including SDK-level retries) counts against RPH and
-
-            # deepens the rate limit hole.
-
-            if agent.provider == "nous":
-                try:
-                    from agent.nous_rate_guard import (
-                        nous_rate_limit_remaining,
-                        format_remaining as _fmt_nous_remaining,
-                    )
-
-                    _nous_remaining = nous_rate_limit_remaining()
-
-                    if _nous_remaining is not None and _nous_remaining > 0:
-                        _nous_msg = (
-                            f"Nous Portal rate limit active — "
-                            f"resets in {_fmt_nous_remaining(_nous_remaining)}."
-                        )
-
-                        agent._buffer_vprint(f"⏳ {_nous_msg} Trying fallback...")
-
-                        agent._buffer_status(f"⏳ {_nous_msg}")
-
-                        if agent._try_activate_fallback():
-                            retry_count = 0
-
-                            compression_attempts = 0
-
-                            primary_recovery_attempted = False
-
-                            continue
-
-                        # No fallback available — surface buffered context
-
-                        # so user sees the rate-limit message that led here.
-
-                        agent._flush_status_buffer()
-
-                        agent._persist_session(messages, conversation_history)
-
-                        return {
-                            "final_response": (
-                                f"⏳ {_nous_msg}\n\n"
-                                "No fallback provider available. "
-                                "Try again after the reset, or add a "
-                                "fallback provider in config.yaml."
-                            ),
-                            "messages": messages,
-                            "api_calls": api_call_count,
-                            "completed": False,
-                            "failed": True,
-                            "error": _nous_msg,
-                        }
-
-                except ImportError:
-                    pass
-
-                except Exception:
-                    pass  # Never let rate guard break the agent loop
-
             try:
                 agent._reset_stream_delivery_tracking()
 
@@ -3210,22 +3294,11 @@ def run_conversation(
 
                 # genuinely successful content is detected later (~L4127).
 
-                # Clear Nous rate limit state on successful request —
-
-                # proves the limit has reset and other sessions can
-
-                # resume hitting Nous.
-
-                if agent.provider == "nous":
-                    try:
-                        from agent.nous_rate_guard import clear_nous_rate_limit
-
-                        clear_nous_rate_limit()
-
-                    except Exception:
-                        pass
-
                 agent._touch_activity(f"API call #{api_call_count} completed")
+
+                _cb_ok, _cb_ok_key = _resilience_breaker(agent)
+                if _cb_ok is not None:
+                    _cb_ok.record_success(_cb_ok_key)
 
                 break  # Success, exit retry loop
 
@@ -3248,7 +3321,9 @@ def run_conversation(
 
                 interrupted = True
 
-                final_response = f"Operation interrupted: waiting for model response ({api_elapsed:.1f}s elapsed)."
+                final_response = (
+                    f"{INTERRUPT_WAITING_FOR_MODEL_PREFIX}{api_elapsed:.1f}s elapsed)."
+                )
 
                 break
 
@@ -3683,6 +3758,14 @@ def run_conversation(
                     num_messages=len(api_messages) if api_messages else 0,
                 )
 
+                # Circuit breaker (opt-in): count transient provider failures so a
+                # provider that keeps erroring fast-fails to fallback below. Counted
+                # exactly once here, only for transient reasons.
+                if classified.reason in _BREAKER_TRANSIENT_REASONS:
+                    _cb_fail, _cb_fail_key = _resilience_breaker(agent)
+                    if _cb_fail is not None:
+                        _cb_fail.record_failure(_cb_fail_key)
+
                 logger.debug(
                     "Error classified: reason=%s status=%s retryable=%s compress=%s rotate=%s fallback=%s",
                     classified.reason.value,
@@ -3708,25 +3791,6 @@ def run_conversation(
                     retryable=classified.retryable,
                     reason=classified.reason.value,
                 )
-
-                if (
-                    classified.reason == FailoverReason.billing
-                    and _is_nous_inference_route(
-                        getattr(agent, "provider", "") or "",
-                        getattr(agent, "base_url", "") or "",
-                    )
-                    and not nous_paid_entitlement_refresh_attempted
-                ):
-                    nous_paid_entitlement_refresh_attempted = True
-
-                    if _try_refresh_nous_paid_entitlement_credentials(agent):
-                        agent._vprint(
-                            f"{agent.log_prefix}🔐 Nous paid access verified — "
-                            "refreshed runtime credentials and retrying request...",
-                            force=True,
-                        )
-
-                        continue
 
                 recovered_with_pool, has_retried_429 = (
                     agent._recover_with_credential_pool(
@@ -4502,7 +4566,16 @@ def run_conversation(
                     FailoverReason.billing,
                 }
 
-                if is_rate_limited and agent._fallback_index < len(
+                # Circuit breaker (opt-in): when this provider's breaker is open
+                # (repeated transient failures), fast-fail to the fallback too —
+                # the same pool_may_recover guard below keeps credential rotation
+                # in charge first, so this only fires once rotation can't help.
+                _cb_open_obj, _cb_open_key = _resilience_breaker(agent)
+                breaker_open = _cb_open_obj is not None and _cb_open_obj.is_open(
+                    _cb_open_key
+                )
+
+                if (is_rate_limited or breaker_open) and agent._fallback_index < len(
                     agent._fallback_chain
                 ):
                     # Don't eagerly fallback if credential pool rotation may
@@ -4522,7 +4595,7 @@ def run_conversation(
                     if not pool_may_recover:
                         if classified.reason == FailoverReason.billing:
                             agent._buffer_status(
-                                "⚠️ Billing or credits exhausted — switching to fallback provider..."
+                                _billing_status_line(classified.message)
                             )
 
                         else:
@@ -4538,105 +4611,6 @@ def run_conversation(
                             primary_recovery_attempted = False
 
                             continue
-
-                # ── Nous Portal: record rate limit & skip retries ─────
-
-                # When Nous returns a 429 that is a genuine account-
-
-                # level rate limit, record the reset time to a shared
-
-                # file so ALL sessions (cron, gateway, auxiliary) know
-
-                # not to pile on, then skip further retries -- each
-
-                # one burns another RPH request and deepens the hole.
-
-                # The retry loop's top-of-iteration guard will catch
-
-                # this on the next pass and try fallback or bail.
-
-                #
-
-                # IMPORTANT: Nous Portal multiplexes multiple upstream
-
-                # providers (DeepSeek, Kimi, MiMo, Clawksis).  A 429 can
-
-                # also mean an UPSTREAM provider is out of capacity
-
-                # for one specific model -- transient, clears in
-
-                # seconds, nothing to do with the caller's quota.
-
-                # Tripping the cross-session breaker on that would
-
-                # block every Nous model for minutes.  We use
-
-                # ``is_genuine_nous_rate_limit`` to tell the two
-
-                # apart via the 429's own x-ratelimit-* headers and
-
-                # the last-known-good state captured on the previous
-
-                # successful response.
-
-                if (
-                    is_rate_limited
-                    and agent.provider == "nous"
-                    and classified.reason == FailoverReason.rate_limit
-                    and not recovered_with_pool
-                ):
-                    _genuine_nous_rate_limit = False
-
-                    try:
-                        from agent.nous_rate_guard import (
-                            is_genuine_nous_rate_limit,
-                            record_nous_rate_limit,
-                        )
-
-                        _err_resp = getattr(api_error, "response", None)
-
-                        _err_hdrs = (
-                            getattr(_err_resp, "headers", None) if _err_resp else None
-                        )
-
-                        _genuine_nous_rate_limit = is_genuine_nous_rate_limit(
-                            headers=_err_hdrs,
-                            last_known_state=agent._rate_limit_state,
-                        )
-
-                        if _genuine_nous_rate_limit:
-                            record_nous_rate_limit(
-                                headers=_err_hdrs,
-                                error_context=error_context,
-                            )
-
-                        else:
-                            logger.info(
-                                "Nous 429 looks like upstream capacity "
-                                "(no exhausted bucket in headers or "
-                                "last-known state) -- not tripping "
-                                "cross-session breaker."
-                            )
-
-                    except Exception:
-                        pass
-
-                    if _genuine_nous_rate_limit:
-                        # Skip straight to max_retries -- the
-
-                        # top-of-loop guard will handle fallback or
-
-                        # bail cleanly.
-
-                        retry_count = max_retries
-
-                        continue
-
-                    # Upstream capacity 429: fall through to normal
-
-                    # retry logic.  A different model (or the same
-
-                    # model a moment later) will typically succeed.
 
                 is_payload_too_large = (
                     classified.reason == FailoverReason.payload_too_large
@@ -5485,7 +5459,7 @@ def run_conversation(
 
                     if classified.reason == FailoverReason.billing:
                         agent._emit_status(
-                            f"❌ Billing or credits exhausted — {_final_summary}"
+                            f"❌ {_billing_headline(classified.message)} — {_final_summary}"
                         )
 
                         _billing_guidance = _billing_or_entitlement_message(
@@ -5493,6 +5467,7 @@ def run_conversation(
                             provider=_provider,
                             base_url=str(_base),
                             model=_model,
+                            error_message=classified.message,
                         )
 
                         _print_billing_or_entitlement_guidance(
@@ -5581,7 +5556,7 @@ def run_conversation(
 
                     if classified.reason == FailoverReason.billing:
                         _final_response = (
-                            f"Billing or credits exhausted: {_final_summary}"
+                            f"{_billing_headline(classified.message)}: {_final_summary}"
                         )
 
                         if _billing_guidance:

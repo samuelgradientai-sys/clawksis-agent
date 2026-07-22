@@ -1,0 +1,306 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+
+REQUIRED_COLUMNS = {
+    "date",
+    "order_id",
+    "customer",
+    "product",
+    "quantity",
+    "unit_price",
+    "discount",
+    "region",
+    "sales_rep",
+}
+
+
+def money(value: float) -> str:
+    return f"{value:,.0f}"
+
+
+def parse_float(value: str) -> float:
+    value = str(value).strip()
+    if not value:
+        return 0.0
+    return float(value)
+
+
+def parse_date(value: str):
+    return datetime.strptime(value.strip(), "%Y-%m-%d").date()
+
+
+def load_sales(path: Path) -> list[dict]:
+    if not path.exists():
+        raise FileNotFoundError(f"Input file not found: {path}")
+
+    with path.open("r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        columns = set(reader.fieldnames or [])
+
+        missing = sorted(REQUIRED_COLUMNS - columns)
+        if missing:
+            raise ValueError(f"Missing required columns: {', '.join(missing)}")
+
+        rows = []
+        for raw in reader:
+            quantity = parse_float(raw["quantity"])
+            unit_price = parse_float(raw["unit_price"])
+            discount = parse_float(raw["discount"])
+            gross_sales = quantity * unit_price
+            net_sales = gross_sales - discount
+
+            rows.append({
+                "date": parse_date(raw["date"]),
+                "order_id": raw["order_id"].strip(),
+                "customer": raw["customer"].strip(),
+                "product": raw["product"].strip(),
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "discount": discount,
+                "region": raw["region"].strip(),
+                "sales_rep": raw["sales_rep"].strip(),
+                "gross_sales": gross_sales,
+                "net_sales": net_sales,
+            })
+
+    if not rows:
+        raise ValueError("Input file has no sales rows")
+
+    return rows
+
+
+def build_report(rows: list[dict]) -> dict:
+    by_product = {}
+
+    product_sales = defaultdict(float)
+    product_gross_sales = defaultdict(float)
+    product_discounts = defaultdict(float)
+    product_units = defaultdict(float)
+    product_orders = defaultdict(set)
+    product_customers = defaultdict(set)
+
+    for row in rows:
+        product = row["product"]
+        product_sales[product] += row["net_sales"]
+        product_gross_sales[product] += row["gross_sales"]
+        product_discounts[product] += row["discount"]
+        product_units[product] += row["quantity"]
+        product_orders[product].add(row["order_id"])
+        product_customers[product].add(row["customer"])
+
+    total_net_sales = sum(product_sales.values())
+    total_units = sum(product_units.values())
+    total_discounts = sum(product_discounts.values())
+    total_gross_sales = sum(product_gross_sales.values())
+
+    products = []
+
+    for product, net_sales in product_sales.items():
+        gross_sales = product_gross_sales[product]
+        discount = product_discounts[product]
+        units = product_units[product]
+        orders = len(product_orders[product])
+        customers = len(product_customers[product])
+
+        products.append({
+            "product": product,
+            "net_sales": net_sales,
+            "gross_sales": gross_sales,
+            "discount": discount,
+            "units": units,
+            "orders": orders,
+            "customers": customers,
+            "sales_share_percent": round((net_sales / total_net_sales * 100), 2) if total_net_sales else 0,
+            "unit_share_percent": round((units / total_units * 100), 2) if total_units else 0,
+            "discount_rate_percent": round((discount / gross_sales * 100), 2) if gross_sales else 0,
+            "average_revenue_per_order": net_sales / orders if orders else 0,
+        })
+
+    products_by_revenue = sorted(products, key=lambda item: item["net_sales"], reverse=True)
+    products_by_units = sorted(products, key=lambda item: item["units"], reverse=True)
+    products_by_discount_rate = sorted(products, key=lambda item: item["discount_rate_percent"], reverse=True)
+    low_performers = sorted(products, key=lambda item: item["net_sales"])[:3]
+
+    revenue_leader = products_by_revenue[0] if products_by_revenue else None
+    units_leader = products_by_units[0] if products_by_units else None
+    discount_leader = products_by_discount_rate[0] if products_by_discount_rate else None
+
+    top_3_revenue = sum(item["net_sales"] for item in products_by_revenue[:3])
+    top_3_share = round((top_3_revenue / total_net_sales * 100), 2) if total_net_sales else 0
+
+    findings = []
+
+    if revenue_leader:
+        findings.append(
+            f"El producto con mayor ingreso fue {revenue_leader['product']}, con {money(revenue_leader['net_sales'])} en ventas netas."
+        )
+
+    if units_leader:
+        findings.append(
+            f"El producto con más unidades vendidas fue {units_leader['product']}, con {money(units_leader['units'])} unidades."
+        )
+
+    if discount_leader and discount_leader["discount_rate_percent"] > 0:
+        findings.append(
+            f"El producto con mayor tasa de descuento fue {discount_leader['product']} con {discount_leader['discount_rate_percent']:.1f}%."
+        )
+
+    findings.append(
+        f"Los 3 productos principales concentran {top_3_share:.1f}% de las ventas netas."
+    )
+
+    if top_3_share >= 80:
+        findings.append("La dependencia de pocos productos es alta; existe riesgo de concentración.")
+    elif top_3_share >= 60:
+        findings.append("La concentración en productos principales es moderada; conviene monitorearla.")
+    else:
+        findings.append("La venta está relativamente diversificada entre productos.")
+
+    recommendations = [
+        "Impulsar campañas comerciales sobre los productos con mayor ingreso.",
+        "Revisar productos de bajo desempeño para decidir si se promocionan, ajustan o descontinúan.",
+        "Monitorear productos con descuentos altos para proteger el margen.",
+        "Analizar si el producto líder puede convertirse en paquete, upsell o promoción recurrente.",
+    ]
+
+    return {
+        "version": VERSION,
+        "report_type": "product-performance",
+        "summary": {
+            "products": len(products),
+            "net_sales": total_net_sales,
+            "gross_sales": total_gross_sales,
+            "total_discount": total_discounts,
+            "units_sold": total_units,
+            "top_3_product_share_percent": top_3_share,
+        },
+        "leaders": {
+            "revenue": revenue_leader,
+            "units": units_leader,
+            "discount_rate": discount_leader,
+        },
+        "products_by_revenue": products_by_revenue,
+        "products_by_units": products_by_units,
+        "products_by_discount_rate": products_by_discount_rate,
+        "low_performers": low_performers,
+        "findings": findings,
+        "recommendations": recommendations,
+    }
+
+
+def render_markdown(report: dict) -> str:
+    summary = report["summary"]
+    leaders = report["leaders"]
+
+    lines = [
+        "# Desempeño de productos",
+        "",
+        "## Resumen ejecutivo",
+        "",
+        f"- Productos analizados: {summary['products']}",
+        f"- Ventas brutas: {money(summary['gross_sales'])}",
+        f"- Descuentos: {money(summary['total_discount'])}",
+        f"- Ventas netas: {money(summary['net_sales'])}",
+        f"- Unidades vendidas: {money(summary['units_sold'])}",
+        f"- Concentración top 3 productos: {summary['top_3_product_share_percent']:.1f}%",
+        "",
+        "## Líderes",
+        "",
+    ]
+
+    if leaders["revenue"]:
+        lines.append(f"- Mayor ingreso: {leaders['revenue']['product']} ({money(leaders['revenue']['net_sales'])})")
+
+    if leaders["units"]:
+        lines.append(f"- Más unidades vendidas: {leaders['units']['product']} ({money(leaders['units']['units'])})")
+
+    if leaders["discount_rate"]:
+        lines.append(f"- Mayor tasa de descuento: {leaders['discount_rate']['product']} ({leaders['discount_rate']['discount_rate_percent']:.1f}%)")
+
+    lines.extend([
+        "",
+        "## Ranking por ingresos",
+        "",
+    ])
+
+    for item in report["products_by_revenue"]:
+        lines.append(
+            f"- {item['product']}: {money(item['net_sales'])} | unidades: {money(item['units'])} | participación: {item['sales_share_percent']:.1f}%"
+        )
+
+    lines.extend([
+        "",
+        "## Productos de bajo desempeño",
+        "",
+    ])
+
+    for item in report["low_performers"]:
+        lines.append(
+            f"- {item['product']}: {money(item['net_sales'])} | unidades: {money(item['units'])}"
+        )
+
+    lines.extend([
+        "",
+        "## Hallazgos",
+        "",
+    ])
+
+    for finding in report["findings"]:
+        lines.append(f"- {finding}")
+
+    lines.extend([
+        "",
+        "## Recomendaciones",
+        "",
+    ])
+
+    for recommendation in report["recommendations"]:
+        lines.append(f"- {recommendation}")
+
+    return "\n".join(lines) + "\n"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Analyze product performance from a sales CSV file")
+    parser.add_argument("--input", required=True, help="CSV input file")
+    parser.add_argument("--json", action="store_true", help="Print report as JSON")
+    parser.add_argument("--markdown", action="store_true", help="Print report as Markdown")
+    parser.add_argument("--output", help="Optional output file path")
+    parser.add_argument("--version", action="store_true", help="Print version")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    rows = load_sales(Path(args.input))
+    report = build_report(rows)
+
+    if args.json:
+        output = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    else:
+        output = render_markdown(report)
+
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(output, encoding="utf-8")
+    else:
+        print(output, end="")
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

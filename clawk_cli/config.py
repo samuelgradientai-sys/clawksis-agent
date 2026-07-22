@@ -754,7 +754,9 @@ def recommended_update_command_for_method(method: str) -> str:
         return "brew upgrade clawksis-agent"
 
     if method == "docker":
-        return "docker pull nousresearch/clawksis-agent:latest"
+        return (
+            "git pull && docker compose build && docker compose up -d --force-recreate"
+        )
 
     if method == "pip":
         if is_uv_tool_install():
@@ -818,45 +820,41 @@ _DOCKER_UPDATE_MESSAGE = """\
 
 
 
-Clawksis runs as a published image (nousresearch/clawksis-agent), not a
+Clawksis runs from a locally-built image (``clawksis-agent``), not a git
 
-git checkout — the container has no working tree to pull into.  Update by
+checkout — the container has no working tree to pull into, and there is no
 
-pulling a fresh image and restarting your container instead:
+published image to fetch.  Update from the host checkout that built it:
 
 
 
-  docker pull nousresearch/clawksis-agent:latest
+  git pull                       # in your clawksis-agent checkout
 
-  # then restart whatever started the container, e.g.:
+  docker compose build
 
   docker compose up -d --force-recreate clawksis-agent
-
-  # or, for ad-hoc runs, exit the current container and `docker run` again
 
 
 
 Verify the new version after restart:
 
-  docker run --rm nousresearch/clawksis-agent:latest --version
+  docker compose run --rm clawksis-agent --version
 
 
 
 Notes:
-
-  • If you pinned a specific tag (e.g. ``:v0.14.0``) the ``:latest`` tag
-
-    won't move your container — pull the newer tag you actually want, or
-
-    switch to ``:latest`` / ``:main`` for rolling updates.  See available
-
-    tags at https://hub.docker.com/r/nousresearch/clawksis-agent/tags
 
   • Your config and session history live under ``$CLAWK_HOME`` (``/opt/data``
 
     in the container, typically bind-mounted from the host) and persist
 
     across image upgrades — re-pulling doesn't lose any state.
+
+  • Pin the image tag (e.g. ``clawksis-agent:v2026.6.5``) instead of relying
+
+    on ``:latest`` so rebuilds stay reproducible and don't silently drift
+
+    between versions.
 
   • Running a fork?  Build your own image with this repo's ``Dockerfile``
 
@@ -1535,8 +1533,37 @@ DEFAULT_CONFIG = {
     },
     "web": {
         "backend": "",  # shared fallback — applies to both search and extract
-        "search_backend": "",  # per-capability override for web_search (e.g. "searxng")
+        "search_backend": "ddgs",  # default web_search backend: free DuckDuckGo, no key, lazy-installed on first use (search.ddgs in LAZY_DEPS)
         "extract_backend": "",  # per-capability override for web_extract (e.g. "native")
+    },
+    # Capa de robustez OPT-IN ante 429 / rate limits / outages de proveedores.
+    # Todo default OFF ⇒ comportamiento byte-for-byte idéntico (el retry + rotación
+    # de credenciales + failover de proveedor ya existentes siguen siendo el camino base;
+    # esto los aumenta cuando se habilita). Ver agent/resilience/.
+    "resilience": {
+        "circuit_breaker": {
+            "enabled": False,  # corta a fallback tras N fallos transitorios seguidos (no quema todo el retry)
+            "failure_threshold": 3,  # fallos transitorios consecutivos para abrir
+            "cooldown_seconds": 60,  # segundos abierto antes del probe half-open
+        },
+        "rate_limits": {
+            "enabled": False,  # throttle preventivo para no llegar al 429
+            "use_response_headers": True,  # sembrar caps desde los x-ratelimit-* de las respuestas
+            "max_wait_seconds": 60,  # tope duro de espera por throttle (anti-stall)
+            "providers": {},  # caps estáticos, p.ej. {"anthropic": {"rpm": 50, "tpm": 40000}}
+        },
+        "adaptive_cooldown": {
+            "enabled": False,  # cooldown de credencial exhausta crece exponencial (vs fijo 1h)
+            "base_seconds": 60,
+            "max_seconds": 3600,
+        },
+        # NOTA: la reanudación al proveedor primario cuando su cooldown expira NO
+        # es un toggle — ya es built-in y siempre activa (run_conversation llama
+        # _restore_primary_runtime() al inicio de cada turno, respetando el cooldown).
+        "durable_turns": {
+            "enabled": False,  # journal de turnos en vuelo (tui_gateway) para reanudar tras crash
+            "freshness_seconds": 3600,
+        },
     },
     "browser": {
         "inactivity_timeout": 120,
@@ -1861,6 +1888,19 @@ DEFAULT_CONFIG = {
             "timeout": 600,
             "extra_body": {},
         },
+        # Monitor — urgency classifier for cron monitors. Used by
+        # ``cron/scripts/classify_items.py`` (task="monitor") to score
+        # polled items (mail, feeds, etc.) and surface only the urgent
+        # ones. "auto" = use main chat model; route to a cheap/fast model
+        # (e.g. gemini-flash, haiku) for high-frequency polling.
+        "monitor": {
+            "provider": "auto",
+            "model": "",
+            "base_url": "",
+            "api_key": "",
+            "timeout": 120,
+            "extra_body": {},
+        },
     },
     "display": {
         "compact": False,
@@ -1906,6 +1946,10 @@ DEFAULT_CONFIG = {
         # behaves badly with replayed scrollback.
         "persistent_output": True,
         "persistent_output_max_lines": 200,
+        # Print a one-line summary of resolved modal prompts (approval /
+        # clarify) into scrollback so the question and decision survive the
+        # panel repaint. Set false to keep scrollback untouched.
+        "persist_prompts": True,
         "inline_diffs": True,  # Show inline diff previews for write actions (write_file, patch, skill_manage)
         # File-mutation verifier footer.  When true (default), the agent
         # appends a one-line advisory to its final response whenever a
@@ -1981,7 +2025,7 @@ DEFAULT_CONFIG = {
     },
     # Web dashboard settings
     "dashboard": {
-        "theme": "default",  # Dashboard visual theme: "default", "midnight", "ember", "mono", "cyberpunk", "rose"
+        "theme": "midnight",  # Dashboard visual theme: "default", "midnight", "ember", "mono", "cyberpunk", "rose"
         # Hide the token/cost analytics surfaces (Analytics page, token bars and
         # cost figures on the Models page) by default.  The numbers shown there
         # are a local debug estimate: they only count successful main-agent
@@ -2495,6 +2539,10 @@ DEFAULT_CONFIG = {
         # 1 = serial (pre-v0.9 behaviour).
         # Also overridable via CLAWK_CRON_MAX_PARALLEL env var.
         "max_parallel_jobs": None,
+        # Archive each cron run's chat session when the run finishes, so
+        # scheduled jobs don't flood the conversations sidebar. Transcripts
+        # stay accessible (Sessions → archived). Toggleable from the Cron page.
+        "archive_chat_sessions": False,
     },
     # Kanban multi-agent coordination — controls the dispatcher loop that
     # spawns workers for ready tasks. The dispatcher ticks every N seconds
@@ -2754,6 +2802,12 @@ DEFAULT_CONFIG = {
     # never fires again.  Users can wipe the section to re-see all hints.
     "onboarding": {
         "seen": {},
+        # Structured profile-build path offered on the very first gateway
+        # message ever. "ask" (default) -> offer to build a user profile
+        # (opt-in, consent-gated; the agent asks before any lookup and never
+        # reads connected accounts silently). "off" -> plain intro only.
+        # The offer fires at most once (latched under onboarding.seen).
+        "profile_build": "ask",
     },
     # ``clawk update`` behaviour.
     "updates": {
@@ -2905,7 +2959,7 @@ DEFAULT_CONFIG = {
     "paste_collapse_threshold_fallback": 5,
     "paste_collapse_char_threshold": 2000,
     # Config schema version - bump this when adding new required fields
-    "_config_version": 27,
+    "_config_version": 29,
 }
 
 
@@ -5279,6 +5333,32 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 if entry.get("api_mode"):
                     new_entry["transport"] = entry["api_mode"]
 
+                # Carry over the remaining per-provider metadata so a v11
+                # custom_providers entry survives the keyed-schema migration
+                # without losing its auth env var, model map, or tuning knobs.
+                if entry.get("api_key_env"):
+                    new_entry["key_env"] = entry["api_key_env"]
+
+                models_val = entry.get("models")
+
+                if isinstance(models_val, dict):
+                    new_entry["models"] = models_val
+
+                elif isinstance(models_val, list):
+                    new_entry["models"] = {str(m): {} for m in models_val}
+
+                if entry.get("context_length") is not None:
+                    new_entry["context_length"] = entry["context_length"]
+
+                if entry.get("rate_limit_delay") is not None:
+                    new_entry["rate_limit_delay"] = entry["rate_limit_delay"]
+
+                if "discover_models" in entry:
+                    new_entry["discover_models"] = entry["discover_models"]
+
+                if entry.get("extra_body"):
+                    new_entry["extra_body"] = entry["extra_body"]
+
                 providers_dict[key] = new_entry
 
                 migrated_count += 1
@@ -5811,6 +5891,35 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                     "  ✓ Lowered model_catalog.ttl_hours to 1 (hourly picker refresh)"
                 )
 
+    if current_ver < 29:
+        config = read_raw_config()
+
+        renamed = False
+
+        # 28→29: rename memory/skills ``write_mode`` → ``write_approval`` (bool).
+        # Only an explicit ``approve`` carried gating intent → True; ``on``/
+        # ``off`` (string or YAML-1.1 bool) and anything else → False. Only a
+        # persisted key is rewritten — never invented.
+        for section in ("memory", "skills"):
+            sec = config.get(section)
+
+            if isinstance(sec, dict) and "write_mode" in sec:
+                old = sec.pop("write_mode")
+
+                sec["write_approval"] = str(old).strip().lower() == "approve"
+
+                config[section] = sec
+
+                renamed = True
+
+        if renamed:
+            save_config(config)
+
+            results["config_added"].append("write_mode → write_approval")
+
+            if not quiet:
+                print("  ✓ Renamed write_mode → write_approval (boolean gate)")
+
     if current_ver < latest_ver and not quiet:
         print(f"Config version: {current_ver} → {latest_ver}")
 
@@ -6030,6 +6139,52 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
 
         else:
             print("  Set later with: clawk config set <key> <value>")
+
+    # ── Always: disable exfiltration-shaped MCP servers ─────────────────
+
+    # Fail-closed audit of any existing ``mcp_servers`` entries so a config
+    # written before the #45620 hardening (or hand-edited) can't keep a
+    # shell-with-network-egress server enabled.
+
+    try:
+        from clawk_cli.mcp_security import validate_mcp_server_entry
+
+        config = load_config()
+
+        servers = config.get("mcp_servers")
+
+        if isinstance(servers, dict):
+            changed = False
+
+            for srv_name, srv_cfg in servers.items():
+                if not isinstance(srv_cfg, dict):
+                    continue
+
+                if not validate_mcp_server_entry(srv_name, srv_cfg):
+                    continue
+
+                if srv_cfg.get("enabled") is False:
+                    continue
+
+                srv_cfg["enabled"] = False
+
+                changed = True
+
+                results["warnings"].append(
+                    f"Disabled suspicious MCP server '{srv_name}'"
+                )
+
+                if not quiet:
+                    print(
+                        f"  ⚠ Disabled suspicious MCP server '{srv_name}' "
+                        "(shell + network egress)"
+                    )
+
+            if changed:
+                save_config(config)
+
+    except Exception:
+        pass  # best-effort; never block migration on the security audit
 
     return results
 
@@ -7234,7 +7389,11 @@ def save_env_value(key: str, value: str):
 
         raise
 
-    _secure_file(env_path)
+    # Only tighten brand-new files. An existing file's mode was already
+    # restored above and must be preserved (#31518) — re-securing would clobber
+    # an operator-chosen mode (e.g. 0640 on a Docker bind-mount).
+    if original_mode is None:
+        _secure_file(env_path)
 
     os.environ[key] = value
 
@@ -7319,7 +7478,10 @@ def remove_env_value(key: str) -> bool:
 
             raise
 
-        _secure_file(env_path)
+        # The existing file's mode was restored above and must be preserved
+        # (#31518) — only re-secure if we couldn't capture the original mode.
+        if original_mode is None:
+            _secure_file(env_path)
 
     os.environ.pop(key, None)
 
@@ -7830,6 +7992,60 @@ def edit_config():
     subprocess.run([editor, str(config_path)])
 
 
+# Canonical mapping of writable ``terminal.*`` config sub-keys → the
+# ``TERMINAL_*`` environment variables that terminal_tool actually reads.
+#
+# This is the single source of truth for the ``clawk config set terminal.X``
+# → ``.env`` bridge.  cli.py (env_mappings) and gateway/run.py
+# (_terminal_env_map) maintain equivalent maps for their own startup paths;
+# tests/tools/test_terminal_config_env_sync.py asserts all three agree so a
+# config.yaml setting can't silently work in one entry point but not another.
+#
+# Keys are the terminal sub-key WITHOUT the ``terminal.`` prefix (e.g.
+# ``docker_run_as_host_user``).  ``cwd`` is intentionally listed but is NOT
+# persisted to .env by set_config_value — the CLI resolves it at runtime and
+# the gateway bridges it itself; writing a stale value would poison child
+# processes (see the ``key != "terminal.cwd"`` guard below).
+TERMINAL_CONFIG_ENV_MAP = {
+    "backend": "TERMINAL_ENV",
+    "cwd": "TERMINAL_CWD",
+    "timeout": "TERMINAL_TIMEOUT",
+    "lifetime_seconds": "TERMINAL_LIFETIME_SECONDS",
+    "modal_mode": "TERMINAL_MODAL_MODE",
+    "docker_image": "TERMINAL_DOCKER_IMAGE",
+    "docker_forward_env": "TERMINAL_DOCKER_FORWARD_ENV",
+    "singularity_image": "TERMINAL_SINGULARITY_IMAGE",
+    "modal_image": "TERMINAL_MODAL_IMAGE",
+    "daytona_image": "TERMINAL_DAYTONA_IMAGE",
+    "container_cpu": "TERMINAL_CONTAINER_CPU",
+    "container_memory": "TERMINAL_CONTAINER_MEMORY",
+    "container_disk": "TERMINAL_CONTAINER_DISK",
+    "container_persistent": "TERMINAL_CONTAINER_PERSISTENT",
+    "docker_volumes": "TERMINAL_DOCKER_VOLUMES",
+    "docker_env": "TERMINAL_DOCKER_ENV",
+    "docker_mount_cwd_to_workspace": "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE",
+    "docker_run_as_host_user": "TERMINAL_DOCKER_RUN_AS_HOST_USER",
+    "docker_persist_across_processes": "TERMINAL_DOCKER_PERSIST_ACROSS_PROCESSES",
+    "docker_orphan_reaper": "TERMINAL_DOCKER_ORPHAN_REAPER",
+    "sandbox_dir": "TERMINAL_SANDBOX_DIR",
+    "persistent_shell": "TERMINAL_PERSISTENT_SHELL",
+}
+
+
+def terminal_config_env_var_for_key(key: str) -> str | None:
+    """Return the ``TERMINAL_*`` env var that bridges ``terminal.<sub>``.
+
+    ``key`` may be either the full dotted config key (``terminal.docker_env``)
+    or the bare terminal sub-key (``docker_env``).  Returns ``None`` for keys
+    that are not part of the terminal config namespace or have no env-var
+    bridge.
+    """
+
+    sub = key[len("terminal.") :] if key.startswith("terminal.") else key
+
+    return TERMINAL_CONFIG_ENV_MAP.get(sub)
+
+
 def set_config_value(key: str, value: str):
     """Set a configuration value."""
 
@@ -7935,37 +8151,21 @@ def set_config_value(key: str, value: str):
 
     # config.yaml is authoritative, but terminal_tool only reads TERMINAL_ENV etc.
 
-    _config_to_env_sync = {
-        "terminal.backend": "TERMINAL_ENV",
-        "terminal.modal_mode": "TERMINAL_MODAL_MODE",
-        "terminal.docker_image": "TERMINAL_DOCKER_IMAGE",
-        "terminal.singularity_image": "TERMINAL_SINGULARITY_IMAGE",
-        "terminal.modal_image": "TERMINAL_MODAL_IMAGE",
-        "terminal.daytona_image": "TERMINAL_DAYTONA_IMAGE",
-        "terminal.docker_mount_cwd_to_workspace": "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE",
-        "terminal.docker_run_as_host_user": "TERMINAL_DOCKER_RUN_AS_HOST_USER",
-        "terminal.docker_persist_across_processes": "TERMINAL_DOCKER_PERSIST_ACROSS_PROCESSES",
-        "terminal.docker_orphan_reaper": "TERMINAL_DOCKER_ORPHAN_REAPER",
-        "terminal.docker_env": "TERMINAL_DOCKER_ENV",
-        # JSON-valued keys (terminal_tool parses these via json.loads). The user
-        # passes JSON on the CLI, so str(value) below already yields valid JSON —
-        # same as terminal.docker_env. cli.py and gateway/run.py bridge these too.
-        "terminal.docker_volumes": "TERMINAL_DOCKER_VOLUMES",
-        "terminal.docker_forward_env": "TERMINAL_DOCKER_FORWARD_ENV",
-        # terminal.cwd intentionally excluded — CLI resolves at runtime,
-        # gateway bridges it in gateway/run.py. Persisting to .env causes
-        # stale values to poison child processes.
-        "terminal.timeout": "TERMINAL_TIMEOUT",
-        "terminal.sandbox_dir": "TERMINAL_SANDBOX_DIR",
-        "terminal.persistent_shell": "TERMINAL_PERSISTENT_SHELL",
-        "terminal.container_cpu": "TERMINAL_CONTAINER_CPU",
-        "terminal.container_memory": "TERMINAL_CONTAINER_MEMORY",
-        "terminal.container_disk": "TERMINAL_CONTAINER_DISK",
-        "terminal.container_persistent": "TERMINAL_CONTAINER_PERSISTENT",
-    }
+    # Bridge through the canonical TERMINAL_CONFIG_ENV_MAP (the single source of
 
-    if key in _config_to_env_sync:
-        save_env_value(_config_to_env_sync[key], str(value))
+    # truth that cli.py / gateway/run.py mirror) rather than a separate literal.
+
+    # terminal.cwd is intentionally excluded — the CLI resolves it at runtime and
+
+    # the gateway bridges it in gateway/run.py; persisting it to .env causes
+
+    # stale values to poison child processes.
+
+    if key != "terminal.cwd":
+        _env_var = terminal_config_env_var_for_key(key)
+
+        if _env_var is not None:
+            save_env_value(_env_var, str(value))
 
     print(f"✓ Set {key} = {value} in {config_path}")
 

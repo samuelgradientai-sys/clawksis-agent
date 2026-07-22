@@ -17,7 +17,18 @@
  * contract.
  */
 
-import type { GatewayClient } from "@/lib/gatewayClient";
+/**
+ * Minimal gateway surface `executeSlash` needs. Satisfied both by the
+ * `GatewayClient` class and by a thin adapter over `useChatGateway`'s
+ * `sendRpc`, so every client (web Modern chat, Ink TUI, future native apps)
+ * shares this exact dispatch pipeline.
+ */
+export interface SlashGateway {
+  request<T = unknown>(
+    method: string,
+    params?: Record<string, unknown>,
+  ): Promise<T>;
+}
 
 export interface SlashExecResponse {
   output?: string;
@@ -42,7 +53,7 @@ export interface SlashExecOptions {
   command: string;
   /** Session id. If empty the call is still issued — some commands are session-less. */
   sessionId: string;
-  gw: GatewayClient;
+  gw: SlashGateway;
   callbacks: SlashExecCallbacks;
 }
 

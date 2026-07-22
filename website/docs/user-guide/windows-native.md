@@ -17,12 +17,12 @@ If you prefer a real POSIX environment (for the dashboard's embedded terminal, `
 
 ## Quick install
 
-[Download the Clawksis Desktop installer](https://clawksis-agent.nousresearch.com/desktop) from our website and run it.
+[Download the Clawksis Desktop installer](https://github.com/samuelgradientai-sys/clawksis-agent/releases/latest) from our website and run it.
 
 Or, for a command-line only install, open **PowerShell** (or Windows Terminal) and run:
 
 ```powershell
-iex (irm https://clawksis-agent.nousresearch.com/install.ps1)
+iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)
 ```
 
 No admin rights required. The installer goes to `%LOCALAPPDATA%\clawk\` and adds `clawk` to your **User PATH** — open a new terminal after it finishes.
@@ -30,7 +30,7 @@ No admin rights required. The installer goes to `%LOCALAPPDATA%\clawk\` and adds
 **Installer options** (requires the scriptblock form to pass parameters):
 
 ```powershell
-& ([scriptblock]::Create((irm https://clawksis-agent.nousresearch.com/install.ps1))) -NoVenv -SkipSetup -Branch main
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1))) -NoVenv -SkipSetup -Branch main
 ```
 
 | Parameter     | Default                              | Purpose                                                    |
@@ -220,12 +220,12 @@ The browser tool uses `agent-browser` (a Node helper) to drive Chromium. On Wind
 
 ### PATH after install
 
-The installer adds `%LOCALAPPDATA%\clawk\bin` to your **User PATH** via `[Environment]::SetEnvironmentVariable`. Existing terminals don't pick this up — open a new PowerShell window (or Windows Terminal tab) after installation. Close-and-reopen, don't `$env:PATH += …` by hand unless you know what you're doing.
+The installer adds `%LOCALAPPDATA%\clawk\clawksis-agent\venv\Scripts` to your **User PATH** via `[Environment]::SetEnvironmentVariable`. Existing terminals don't pick this up — open a new PowerShell window (or Windows Terminal tab) after installation. Close-and-reopen, don't `$env:PATH += …` by hand unless you know what you're doing.
 
 Verify:
 
 ```powershell
-Get-Command clawk        # should print C:\Users\<you>\AppData\Local\clawk\bin\clawk.cmd
+Get-Command clawk        # should print C:\Users\<you>\AppData\Local\clawk\clawksis-agent\venv\Scripts\clawk.exe
 clawk --version
 ```
 

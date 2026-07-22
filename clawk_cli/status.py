@@ -28,18 +28,9 @@ from clawk_cli.config import get_env_path, get_env_value, get_clawk_home, load_c
 
 from clawk_cli.models import provider_label
 
-from clawk_cli.nous_account import (
-    format_nous_portal_entitlement_message,
-    get_nous_portal_account_info,
-)
-
-from clawk_cli.nous_subscription import get_nous_subscription_features
-
 from clawk_cli.runtime_provider import resolve_requested_provider
 
 from clawk_constants import OPENROUTER_MODELS_URL
-
-from tools.tool_backend_helpers import managed_nous_tools_enabled
 
 
 def check_mark(ok: bool) -> str:
@@ -299,30 +290,9 @@ def show_status(args):
 
         minimax_status = {}
 
-    nous_account_info = None
+    nous_logged_in = bool(nous_status.get("logged_in"))
 
-    if (
-        nous_status.get("logged_in")
-        or nous_status.get("access_token")
-        or nous_status.get("portal_base_url")
-        or nous_status.get("inference_credential_present")
-        or nous_status.get("error_code")
-    ):
-        try:
-            nous_account_info = get_nous_portal_account_info()
-
-        except Exception:
-            nous_account_info = None
-
-    nous_logged_in = bool(
-        nous_status.get("logged_in")
-        or (nous_account_info and nous_account_info.logged_in)
-    )
-
-    nous_inference_present = bool(
-        nous_status.get("inference_credential_present")
-        or (nous_account_info and nous_account_info.inference_credential_present)
-    )
+    nous_inference_present = bool(nous_status.get("inference_credential_present"))
 
     nous_error = nous_status.get("error")
 
@@ -339,9 +309,7 @@ def show_status(args):
 
     portal_url = nous_status.get("portal_base_url") or "(unknown)"
 
-    inference_url = nous_status.get("inference_base_url") or (
-        nous_account_info.inference_base_url if nous_account_info else None
-    )
+    inference_url = nous_status.get("inference_base_url")
 
     access_exp = _format_iso_timestamp(nous_status.get("access_expires_at"))
 
@@ -466,65 +434,6 @@ def show_status(args):
 
     if xai_oauth_status.get("error") and not xai_oauth_logged_in:
         print(f"    Error:      {xai_oauth_status.get('error')}")
-
-    # =========================================================================
-
-    # Nous Subscription Features
-
-    # =========================================================================
-
-    if managed_nous_tools_enabled():
-        features = get_nous_subscription_features(config)
-
-        print()
-
-        print(color("◆ Nous Tool Gateway", Colors.CYAN, Colors.BOLD))
-
-        if not features.nous_auth_present:
-            print("  Nous Portal   ✗ not logged in")
-
-        else:
-            print("  Nous Portal   ✓ managed tools available")
-
-        for feature in features.items():
-            if feature.managed_by_nous:
-                state = "active via Nous subscription"
-
-            elif feature.active:
-                current = feature.current_provider or "configured provider"
-
-                state = f"active via {current}"
-
-            elif feature.included_by_default and features.nous_auth_present:
-                state = "included by subscription, not currently selected"
-
-            elif feature.key == "modal" and features.nous_auth_present:
-                state = "available via subscription (optional)"
-
-            else:
-                state = "not configured"
-
-            print(
-                f"  {feature.label:<15} {check_mark(feature.available or feature.active or feature.managed_by_nous)} {state}"
-            )
-
-    elif nous_logged_in or nous_inference_present:
-        # Nous OAuth without entitlement, or an opaque inference key without
-
-        # Portal account information, cannot enable the Tool Gateway.
-
-        print()
-
-        print(color("◆ Nous Tool Gateway", Colors.CYAN, Colors.BOLD))
-
-        message = format_nous_portal_entitlement_message(
-            nous_account_info,
-            capability="managed web, image, TTS, browser, and Modal tools",
-        )
-
-        if message:
-            for line in message.splitlines():
-                print(f"  {line}")
 
     # =========================================================================
 

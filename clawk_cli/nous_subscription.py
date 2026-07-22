@@ -211,6 +211,29 @@ def _has_agent_browser() -> bool:
     return bool(agent_browser_bin or local_bin.exists())
 
 
+def _local_browser_runnable() -> bool:
+    """Whether a local (non-cloud) browser can actually run.
+
+    Mirrors ``tools.browser_tool.check_browser_requirements`` for local mode:
+    the agent-browser CLI alone is not enough — local Chrome mode needs a
+    Chromium build on disk, while Lightpanda provides text navigation without
+    one. Reuses the runtime probes (lazy import) so the setup/status surface
+    never advertises a local browser the first real call would fail to launch.
+    """
+
+    from tools import browser_tool
+
+    if browser_tool._using_lightpanda_engine():
+        return True
+
+    return bool(browser_tool._chromium_installed())
+
+
+# Backward-compatible alias: clawk_cli/setup.py (and other callers from the
+# parallel rename) import the runtime-readiness probe under this name.
+_local_browser_runtime_ready = _local_browser_runnable
+
+
 def _browser_label(current_provider: str) -> str:
 
     mapping = {
@@ -293,7 +316,7 @@ def _resolve_browser_feature_state(
 
         current_provider = "local"
 
-        available = bool(browser_local_available)
+        available = bool(browser_local_available and _local_browser_runnable())
 
         active = bool(browser_tool_enabled and available)
 
@@ -320,7 +343,7 @@ def _resolve_browser_feature_state(
 
         return "browserbase", available, active, False
 
-    available = bool(browser_local_available)
+    available = bool(browser_local_available and _local_browser_runnable())
 
     active = bool(browser_tool_enabled and available)
 
@@ -342,15 +365,12 @@ def get_nous_subscription_features(
 
     provider_is_nous = str(model_cfg.get("provider") or "").strip().lower() == "nous"
 
-    try:
-        if force_fresh:
-            account_info = get_nous_portal_account_info(force_fresh=True)
-
-        else:
-            account_info = get_nous_portal_account_info()
-
-    except Exception:
-        account_info = None
+    # Pure BYOK: tool availability is driven solely by the user's own
+    # config/keys. Nous Portal was removed as a provider, so the managed
+    # subscription account is never consulted — every Nous-managed branch
+    # below evaluates False and the direct_* (BYOK) flags decide. The
+    # ``force_fresh`` param is kept for signature compatibility (no-op now).
+    account_info = None
 
     # Coarse "entitled to any managed tool" gate: paid access OR a live free
 

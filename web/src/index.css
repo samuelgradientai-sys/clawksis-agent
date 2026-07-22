@@ -223,6 +223,60 @@ code { font-size: 0.875rem; }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* ------------------------------------------------------------------ */
+/* Modern Chat — indicador "pensando", glow del avatar, entrada del    */
+/* pill. transform/opacity solamente (compositor-friendly) y todo se    */
+/* apaga con prefers-reduced-motion abajo.                              */
+/* ------------------------------------------------------------------ */
+
+/* Barrido de gradiente sobre el label "Pensando…". */
+@keyframes clawk-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.clawk-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    var(--color-muted-foreground) 0%,
+    var(--color-foreground) 50%,
+    var(--color-muted-foreground) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: clawk-shimmer 2s linear infinite;
+}
+
+/* Glow suave que pulsa en el avatar del asistente mientras piensa. */
+@keyframes clawk-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(108, 79, 214, 0); }
+  50%      { box-shadow: 0 0 0 5px rgba(108, 79, 214, 0.18); }
+}
+.clawk-glow {
+  animation: clawk-glow-pulse 1.9s ease-in-out infinite;
+}
+
+/* Entrada sutil (subida + fade) — pill "saltar a lo último". */
+@keyframes clawk-msg-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.clawk-msg-in {
+  animation: clawk-msg-in 0.18s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clawk-shimmer-text,
+  .clawk-glow,
+  .clawk-msg-in {
+    animation: none !important;
+  }
+  .clawk-shimmer-text {
+    color: var(--color-muted-foreground);
+  }
+}
+
 /* Hide scrollbar utility — used by the header's overflow-x nav row. */
 .scrollbar-none {
   -ms-overflow-style: none;
@@ -271,3 +325,91 @@ code { font-size: 0.875rem; }
   display: none;
 }
 
+
+/* Terminal glass: en xterm v6 el theme background se aplica inline sobre
+   .xterm-scrollable-element, pero .xterm-viewport conserva el
+   background-color:#000 que trae xterm.css de fábrica y nunca recibe el
+   theme → una capa negra OPACA debajo de las celdas que anula la
+   transparencia (allowTransparency + background rgba(0,0,0,0)). Scoped al
+   host del chat para no afectar otros usos de xterm. */
+.clawk-chat-xterm-host .xterm-viewport {
+  background-color: transparent !important;
+}
+
+/* clawksis-liquid-glass-v1 */
+@layer components {
+  .clawk-liquid-glass {
+    background-image:
+      radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.08), transparent 30%),
+      radial-gradient(circle at 90% 12%, rgba(139, 109, 255, 0.07), transparent 34%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012) 50%, rgba(108, 79, 214, 0.035));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.09),
+      0 12px 28px rgba(0, 0, 0, 0.14);
+    backdrop-filter: blur(16px) saturate(125%);
+    -webkit-backdrop-filter: blur(16px) saturate(125%);
+  }
+
+  .clawk-liquid-glass:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 14px 34px rgba(0, 0, 0, 0.18),
+      0 0 26px rgba(108, 79, 214, 0.045);
+  }
+
+  .clawk-liquid-message {
+    background-image:
+      linear-gradient(145deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.01) 55%, rgba(0, 0, 0, 0.025));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.055),
+      0 10px 24px rgba(0, 0, 0, 0.12);
+    backdrop-filter: blur(10px) saturate(115%);
+    -webkit-backdrop-filter: blur(10px) saturate(115%);
+  }
+
+  .clawk-liquid-composer {
+    background-image:
+      radial-gradient(circle at 8% 0%, rgba(255, 255, 255, 0.11), transparent 30%),
+      radial-gradient(circle at 92% 100%, rgba(108, 79, 214, 0.12), transparent 34%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02) 45%, rgba(0, 0, 0, 0.065));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.035),
+      0 18px 52px rgba(0, 0, 0, 0.26),
+      0 0 34px rgba(108, 79, 214, 0.06);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+  }
+
+  .clawk-liquid-chip {
+    background-image:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(108, 79, 214, 0.08));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      0 8px 22px rgba(0, 0, 0, 0.14);
+    backdrop-filter: blur(14px) saturate(125%);
+    -webkit-backdrop-filter: blur(14px) saturate(125%);
+  }
+
+  .clawk-liquid-sidebar {
+    background-image:
+      radial-gradient(circle at 0% 14%, rgba(139, 109, 255, 0.075), transparent 34%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.008));
+    box-shadow:
+      inset -1px 0 0 rgba(255, 255, 255, 0.04),
+      8px 0 28px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .clawk-liquid-glass,
+    .clawk-liquid-message,
+    .clawk-liquid-composer,
+    .clawk-liquid-chip,
+    .clawk-liquid-sidebar {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+}

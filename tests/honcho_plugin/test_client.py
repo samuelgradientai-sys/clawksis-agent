@@ -1228,13 +1228,13 @@ class TestResetHonchoClient:
 
         import plugins.memory.honcho.client as mod
 
-        mod._honcho_client = MagicMock()
+        mod._honcho_client_slot.get(lambda: MagicMock())
 
-        assert mod._honcho_client is not None
+        assert mod._honcho_client_slot.peek() is not None
 
         reset_honcho_client()
 
-        assert mod._honcho_client is None
+        assert mod._honcho_client_slot.peek() is None
 
 
 class TestDialecticDepthParsing:

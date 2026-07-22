@@ -71,11 +71,16 @@ _GATE_PUBLIC_PREFIXES: tuple[str, ...] = (
     "/auth/login",
     "/auth/callback",
     "/auth/password-login",
+    "/auth/setup",  # first-run: crear el login (se auto-deshabilita al existir uno)
     "/auth/logout",
     "/login",
     "/api/auth/providers",
     "/assets/",
     "/favicon.ico",
+    "/favicon-32.png",
+    "/favicon.svg",
+    "/clawksis-logo-512.png",  # marca en la página de login (pre-auth)
+    "/apple-touch-icon.png",
     "/ds-assets/",
     "/fonts/",
     "/fonts-terminal/",

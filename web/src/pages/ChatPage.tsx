@@ -56,7 +56,14 @@ import { cn } from "@/lib/utils";
 
 import { Copy, PanelRight, X } from "lucide-react";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 
 import { createPortal } from "react-dom";
 
@@ -77,6 +84,49 @@ import { api } from "@/lib/api";
 import { PluginSlot } from "@/plugins";
 
 import { useTheme } from "@/themes";
+
+
+
+// ── Optimistic local echo ────────────────────────────────────────────────
+//
+// The chat is a REMOTE PTY: every keystroke crosses the WebSocket to the VPS,
+// gets rendered by the Ink TUI, and only then comes back — so on a far server
+// each character carries a full network round-trip of typing latency. To make
+// typing feel instant we paint a single printable character locally the moment
+// it's pressed, BEFORE sending it. Ink repaints the whole input frame on its
+// reply, so the authoritative render reconciles the optimistic glyph a moment
+// later (no permanent duplication).
+//
+// This is strictly gated (see the onData handler): only a lone printable ASCII
+// char, never while the terminal is "busy" (model streaming / overlays / large
+// repaints, detected by output-burst size), and only when enabled.
+//
+// OPT-IN (off by default). Over a high-latency PTY the optimistic glyph races
+// Ink's full-frame repaint: every keystroke triggers a small line-repaint that
+// redraws the input line authoritatively and erases optimistic chars typed
+// after it, so fast typing looks like it stutters / re-types and the line can
+// desync on Enter. Reliable typing matters more than shaving per-char latency,
+// so this stays off unless a user on a low-latency link opts in with
+// `localStorage['clawk-local-echo'] = 'on'` or `window.__CLAWK_LOCAL_ECHO__ = true`.
+const LOCAL_ECHO_BUSY_BYTES = 160;
+const LOCAL_ECHO_BUSY_MS = 250;
+
+function localEchoEnabled(): boolean {
+  try {
+    if (typeof window !== "undefined") {
+      const forced = (window as unknown as { __CLAWK_LOCAL_ECHO__?: boolean })
+        .__CLAWK_LOCAL_ECHO__;
+
+      if (forced === true) return true;
+
+      if (forced === false) return false;
+    }
+
+    return localStorage.getItem("clawk-local-echo") === "on";
+  } catch {
+    return false;
+  }
+}
 
 
 
@@ -153,6 +203,36 @@ const TERMINAL_THEME_STATIC = {
   selectionBackground: "#f0e6d244",
 
 };
+
+
+// Glass/acrylic del terminal (estilo Warp/Ghostty/Windows Terminal Acrylic):
+// el CANVAS de xterm se vuelve transparente (allowTransparency + background
+// rgba 0) y el tinte lo pone el wrapper — translúcido + backdrop-blur cuando
+// el navegador lo soporta, y EXACTAMENTE el color sólido del tema cuando no
+// (fallback vía `supports-[backdrop-filter]`, cero costo si no hay soporte).
+// Los colores ANSI, el cursor y la selección no se tocan: solo el fondo de
+// las celdas vacías deja pasar el fondo de la app.
+// Tinte bajo (0.22): con 0.5 + blur fuerte sobre el wallpaper oscuro el
+// resultado se percibía negro sólido — el usuario no veía el fondo.
+const TERMINAL_GLASS_ALPHA = 0.22;
+
+const XTERM_TRANSPARENT_BG = "rgba(0,0,0,0)";
+
+/** #rgb/#rrggbb → rgba(r,g,b,alpha); si no parsea, devuelve el color tal cual
+ *  (el wrapper queda sólido y el glass simplemente no tinta — sin romper). */
+function hexToRgba(color: string, alpha: number): string {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+
+  if (!m) return color;
+
+  let hex = m[1];
+
+  if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+
+  const n = parseInt(hex, 16);
+
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
 
 
 
@@ -324,13 +404,25 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
   const { theme } = useTheme();
 
-  const terminalBg = theme.terminalBackground ?? "#000000";
+  // Bug #23 (Fase 1) - mejora visual: cuando el tema no define terminalBackground
+  // explícito, usamos el background de la paleta del tema (en vez de #000000 negro
+  // puro). Esto integra el chat con el resto del dashboard. Si un tema quiere el
+  // estilo terminal puro, basta con definir terminalBackground: "#000000" en su preset.
+  const terminalBg = theme.terminalBackground
+    ?? (theme.palette?.background?.hex ?? "#000000");
 
+  // Tinte translúcido para el modo glass (el sólido queda como fallback).
+  const terminalGlassBg = useMemo(
+    () => hexToRgba(terminalBg, TERMINAL_GLASS_ALPHA),
+    [terminalBg],
+  );
+
+  // El fondo del canvas es transparente: el color/tinte lo pone el wrapper.
   const terminalTheme = useMemo(
 
-    () => ({ ...TERMINAL_THEME_STATIC, background: terminalBg }),
+    () => ({ ...TERMINAL_THEME_STATIC, background: XTERM_TRANSPARENT_BG }),
 
-    [terminalBg],
+    [],
 
   );
 
@@ -607,6 +699,9 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     const term = new Terminal({
 
       allowProposedApi: true,
+
+      // Fondo de celdas transparente → efecto glass (el wrapper tinta+blur).
+      allowTransparency: true,
 
       cursorBlink: true,
 
@@ -916,7 +1011,18 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
     // hosts.  Wide layouts still get WebGL for crisp box-drawing.
 
-    const useWebgl = terminalTierWidthPx(host) >= 768;
+    // El renderer WebGL de xterm NO soporta transparencia: pinta el fondo
+    // OPACO aunque el theme sea rgba(0,0,0,0) — con él, el glass del wrapper
+    // nunca se ve (terminal negro pleno). Si el navegador soporta
+    // backdrop-filter (= el glass está activo), usamos el renderer DOM, que
+    // sí deja pasar el fondo. WebGL queda para el fallback sólido, donde su
+    // velocidad extra sigue sumando y la transparencia no aplica.
+    const glassActive =
+      typeof CSS !== "undefined" &&
+      (CSS.supports("backdrop-filter", "blur(1px)") ||
+        CSS.supports("-webkit-backdrop-filter", "blur(1px)"));
+
+    const useWebgl = !glassActive && terminalTierWidthPx(host) >= 768;
 
     if (useWebgl) {
 
@@ -1192,15 +1298,39 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
 
 
+    // Local-echo state (shared with the onData handler below, same effect
+    // scope). `echoBusyUntil` suspends optimistic echo for a beat after any
+    // large output burst — model streaming, overlays, or big repaints — since
+    // those mean the terminal is NOT a quiet prompt waiting for input.
+    const localEchoOn = localEchoEnabled();
+
+    let echoBusyUntil = 0;
+
+
+
     ws.onmessage = (ev) => {
 
       if (typeof ev.data === "string") {
+
+        if (localEchoOn && ev.data.length > LOCAL_ECHO_BUSY_BYTES) {
+
+          echoBusyUntil = Date.now() + LOCAL_ECHO_BUSY_MS;
+
+        }
 
         term.write(ev.data);
 
       } else {
 
-        term.write(new Uint8Array(ev.data as ArrayBuffer));
+        const bytes = new Uint8Array(ev.data as ArrayBuffer);
+
+        if (localEchoOn && bytes.length > LOCAL_ECHO_BUSY_BYTES) {
+
+          echoBusyUntil = Date.now() + LOCAL_ECHO_BUSY_MS;
+
+        }
+
+        term.write(bytes);
 
       }
 
@@ -1351,6 +1481,36 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
         if (SGR_MOUSE_RE.test(data)) {
 
           return;
+
+        }
+
+
+
+        // Optimistic local echo (see notes at top of file). Paint a lone
+
+        // printable ASCII char immediately so typing feels instant, BUT only
+
+        // at a quiet prompt: skip control chars, ESC/arrow sequences, paste
+
+        // (length > 1), wide/non-ASCII chars, and any moment right after a big
+
+        // output burst (streaming/overlay). Ink's next frame reconciles it.
+
+        if (
+
+          localEchoOn &&
+
+          data.length === 1 &&
+
+          data >= " " &&
+
+          data <= "~" &&
+
+          Date.now() >= echoBusyUntil
+
+        ) {
+
+          term.write(data);
 
         }
 
@@ -1537,6 +1697,8 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   // Keep the live xterm theme in sync when the active theme's terminal
 
   // background changes (e.g. user switches to a custom YAML theme mid-session).
+  // El canvas sigue transparente: el cambio de tema se refleja en el tinte del
+  // wrapper (CSS var), no en el theme de xterm.
 
   useEffect(() => {
 
@@ -1544,7 +1706,10 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
     if (!term) return;
 
-    term.options.theme = { ...TERMINAL_THEME_STATIC, background: terminalBg };
+    term.options.theme = {
+      ...TERMINAL_THEME_STATIC,
+      background: XTERM_TRANSPARENT_BG,
+    };
 
   }, [terminalBg]);
 
@@ -1750,25 +1915,41 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
 
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2 lg:flex-row lg:gap-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row lg:gap-4">
 
         <div
 
           className={cn(
 
-            "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg",
+            "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl",
 
-            "p-2 sm:p-3",
+            "p-3 sm:p-4",
+
+            // Glass/acrylic: tinte translúcido + blur del fondo de la app,
+            // con fallback automático al color sólido del tema cuando el
+            // navegador no soporta backdrop-filter (misma legibilidad, cero
+            // costo). El canvas de xterm es transparente (allowTransparency).
+            "border border-foreground/10",
+
+            "[background:var(--term-bg)]",
+
+            "supports-[backdrop-filter]:[background:var(--term-bg-glass)]",
+
+            // blur moderado: con blur-xl el wallpaper se licuaba a un tono
+            // plano y el conjunto volvía a leerse como "negro opaco".
+            "supports-[backdrop-filter]:backdrop-blur-sm",
 
           )}
 
           style={{
 
-            backgroundColor: terminalBg,
+            "--term-bg": terminalBg,
 
-            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
+            "--term-bg-glass": terminalGlassBg,
 
-          }}
+            boxShadow: "0 12px 32px -12px rgba(0, 0, 0, 0.5)",
+
+          } as CSSProperties}
 
         >
 
@@ -1844,7 +2025,12 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
             aria-label={modelToolsLabel}
 
-            className="flex min-h-0 shrink-0 flex-col overflow-hidden lg:h-full lg:w-80"
+            className={cn(
+              "flex min-h-0 shrink-0 flex-col overflow-hidden lg:h-full lg:w-80",
+              // Mismo lenguaje glass del terminal para MODEL/TOOLS.
+              "rounded-xl border border-foreground/10 bg-background/40",
+              "supports-[backdrop-filter]:backdrop-blur-xl",
+            )}
 
           >
 

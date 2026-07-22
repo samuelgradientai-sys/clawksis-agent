@@ -96,21 +96,11 @@ class ProviderProfile:
         True  # False → doctor skips /models probe for this provider
     )
 
-    # ── Vision support ────────────────────────────────────────
-
-    # True when the provider's API accepts image content inside
-
-    # tool-result messages natively.  Set on providers that expose
-
-    # multimodal models via tool results (Anthropic Messages API,
-
-    # OpenAI Chat Completions, Gemini, Xiaomi, MiniMax, etc.).
-
-    # Falls back to model-catalog lookup when False and the provider
-
-    # has no registered profile.
-
-    supports_vision: bool = False
+    # supports_vision_tool_messages: some providers accept multimodal user
+    # messages but reject list-type *tool* message content with a 400 (e.g.
+    # Xiaomi MiMo's "text is not set"). False = downgrade tool results to a
+    # text summary proactively instead of waiting for a reactive 400.
+    supports_vision_tool_messages: bool = True
 
     # ── Model catalog ─────────────────────────────────────────
 

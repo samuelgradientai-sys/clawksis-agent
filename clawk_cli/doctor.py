@@ -1227,11 +1227,18 @@ def run_doctor(args):
                 "nous",
             }
 
+            # Named custom providers (``custom:<name>``) define their own model
+            # namespace, so a vendor/model slug under one is legitimate.
+            _accepts_vendor_slugs = (
+                provider_for_policy in providers_accepting_vendor_slugs
+                or str(provider_for_policy or "").startswith("custom:")
+            )
+
             if (
                 default_model
                 and "/" in default_model
                 and provider_for_policy
-                and provider_for_policy not in providers_accepting_vendor_slugs
+                and not _accepts_vendor_slugs
             ):
                 check_warn(
                     f"model.default '{default_model}' uses a vendor/model slug but provider is '{provider_raw}'",
@@ -1576,19 +1583,10 @@ def run_doctor(args):
 
     try:
         from clawk_cli.auth import (
-            get_nous_auth_status,
             get_codex_auth_status,
             get_gemini_oauth_auth_status,
             get_minimax_oauth_auth_status,
         )
-
-        nous_status = get_nous_auth_status()
-
-        if nous_status.get("logged_in"):
-            check_ok("Nous Portal auth", "(logged in)")
-
-        else:
-            check_warn("Nous Portal auth", "(not logged in)")
 
         codex_status = get_codex_auth_status()
 
@@ -1653,7 +1651,7 @@ def run_doctor(args):
 
     # xAI OAuth — separate try/except so an import failure here cannot
 
-    # disrupt the already-printed Nous/Codex/Gemini/MiniMax rows above.
+    # disrupt the already-printed Codex/Gemini/MiniMax rows above.
 
     try:
         from clawk_cli.auth import get_xai_oauth_auth_status
@@ -2354,6 +2352,61 @@ def run_doctor(args):
 
             except Exception:
                 pass
+
+        # Monorepo web workspaces (web, ui-tui) are build-time only. npm's
+        # workspace-filtered `audit fix` (and sometimes the root form) crashes
+        # arborist on this tree, so surface advisories with safe lockfile-bump
+        # guidance rather than a fix command that errors out for the user.
+        if (PROJECT_ROOT / "node_modules").exists():
+            for ws_name in ("web", "ui-tui"):
+                try:
+                    ws_audit = subprocess.run(
+                        [_npm_bin, "audit", "--json", "--workspace", ws_name],
+                        cwd=str(PROJECT_ROOT),
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+
+                    import json as _json
+
+                    ws_data = (
+                        _json.loads(ws_audit.stdout) if ws_audit.stdout.strip() else {}
+                    )
+
+                    ws_vc = ws_data.get("metadata", {}).get("vulnerabilities", {})
+
+                    ws_crit = ws_vc.get("critical", 0)
+
+                    ws_high = ws_vc.get("high", 0)
+
+                    ws_mod = ws_vc.get("moderate", 0)
+
+                    ws_total = ws_crit + ws_high + ws_mod
+
+                    if ws_total == 0:
+                        continue
+
+                    if ws_crit > 0 or ws_high > 0:
+                        check_warn(
+                            f"{ws_name} workspace deps",
+                            f"({ws_crit} critical, {ws_high} high, {ws_mod} moderate)",
+                        )
+
+                        check_info(
+                            f"These {ws_name}-workspace advisories are build-time "
+                            "tooling only. A manual per-workspace audit can trigger a "
+                            "known npm bug (arborist crash) on this monorepo tree; they "
+                            "clear with a lockfile bump when the upstream package updates."
+                        )
+
+                        issues.append(
+                            f"{ws_name} workspace has {ws_total} npm "
+                            f"{'vulnerability' if ws_total == 1 else 'vulnerabilities'}"
+                        )
+
+                except Exception:
+                    pass
 
     if _is_termux():
         check_info("Termux compatibility fallbacks:")
@@ -3170,6 +3223,56 @@ def run_doctor(args):
             "No GITHUB_TOKEN",
             f"(60 req/hr rate limit — set in {_DHH}/.env for better rates)",
         )
+
+    _section("Cron Scheduler")
+
+    # The cron scheduler lives inside the gateway process: jobs only fire
+
+    # while a gateway is running. `clawk doctor` previously verified that
+
+    # croniter was importable and ~/.clawksis/cron/ existed, but never that
+
+    # the scheduler itself was alive — so a fresh install with scheduled
+
+    # jobs and no gateway looked healthy while silently never firing.
+
+    try:
+        from clawk_cli.gateway import find_gateway_pids as _find_gw_pids
+
+        from cron.jobs import list_jobs as _cron_list_jobs
+
+        _gw_pids = _find_gw_pids()
+
+        try:
+            _active_jobs = _cron_list_jobs(include_disabled=False)
+
+        except Exception:
+            _active_jobs = []
+
+        if _gw_pids:
+            check_ok(
+                "Cron scheduler running",
+                f"(gateway PID {', '.join(map(str, _gw_pids))} — "
+                f"{len(_active_jobs)} active job(s))",
+            )
+
+        elif _active_jobs:
+            check_warn(
+                "Cron scheduler not running",
+                f"({len(_active_jobs)} active job(s) will NOT fire)",
+            )
+
+            check_info("Jobs only fire while the gateway is running.")
+
+            check_info("Start it: clawk gateway install   (or: clawk gateway)")
+
+        else:
+            check_ok(
+                "Cron scheduler idle", "(no gateway, no active jobs — nothing to fire)"
+            )
+
+    except Exception as _cron_exc:
+        check_warn("Cron scheduler check skipped", f"({_cron_exc})")
 
     _section("Memory Provider")
 

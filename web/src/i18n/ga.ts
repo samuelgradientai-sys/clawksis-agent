@@ -508,6 +508,10 @@ export const ga: Translations = {
 
       onceAt: "Rith ag",
 
+      onceUseCalendar: "Féilire",
+
+      onceUseManual: "De láimh",
+
       customLabel: "Slonn cron",
 
       customPlaceholder: "0 9 * * *",

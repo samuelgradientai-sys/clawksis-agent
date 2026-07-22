@@ -188,6 +188,13 @@ export const en: Translations = {
 
     webUi: "Web UI",
 
+    managingProfile: "Managing profile",
+
+    currentProfileOption: "this dashboard ({name})",
+
+    managingProfileBanner:
+      "Managing profile “{name}” — config, keys, skills, MCPs, model, and new chats apply to that profile.",
+
   },
 
 
@@ -498,6 +505,10 @@ export const en: Translations = {
 
       onceAt: "Run at",
 
+      onceUseCalendar: "Calendar",
+
+      onceUseManual: "Manual",
+
       customLabel: "Cron expression",
 
       customPlaceholder: "0 9 * * *",
@@ -534,6 +545,26 @@ export const en: Translations = {
 
     deliverTo: "Deliver to",
 
+    silentNotice: "Notify even when there's nothing new",
+
+    useSoul: "Use SOUL.md (assistant identity)",
+
+    useUserMd: "Use USER.md (user profile)",
+
+    useMemory: "Use MEMORY.md (long-term memory)",
+
+    contextToggles: "Context & delivery",
+
+    fallbackModels: "Fallback models (optional)",
+
+    fallbackModelsHint: "If the primary model fails (rate-limit, overload, error), retry with these. Format provider:model, comma-separated.",
+
+    viewLabel: "View",
+
+    listView: "List",
+
+    calendarView: "Calendar",
+
     scheduledJobs: "Scheduled Jobs",
 
     noJobs: "No cron jobs configured. Create one above.",
@@ -547,6 +578,11 @@ export const en: Translations = {
     resume: "Resume",
 
     triggerNow: "Trigger now",
+
+    archiveChats: "Archive cron chats",
+
+    archiveChatsHint:
+      "After each run, archive the conversation the cron created so it doesn't clutter the chat list",
 
     delivery: {
 
@@ -569,6 +605,15 @@ export const en: Translations = {
   profiles: {
 
     newProfile: "New Profile",
+
+    manageSkills: "Manage skills & tools",
+
+    activeSetHint:
+      "Applies to new CLI/gateway runs. This dashboard still manages its own profile — use “Manage skills & tools” to edit {name}.",
+
+    cloneFrom: "Clone config from",
+
+    cloneFromNone: "None (blank)",
 
     name: "Name",
 
@@ -1031,6 +1076,30 @@ export const en: Translations = {
     title: "Theme",
 
     switchTheme: "Switch theme",
+
+    fontTitle: "Font",
+
+    fontDefault: "Theme default",
+
+    fontDefaultHint: "Use the active theme's font",
+
+    fontSans: "Sans",
+
+    fontSerif: "Serif",
+
+    fontMono: "Mono",
+
+    backgroundTitle: "Background",
+
+    backgroundDefault: "Theme default",
+
+    backgroundDefaultHint: "Use the active theme's background",
+
+    motionTitle: "Motion",
+
+    smoothScroll: "Smooth scroll (parallax)",
+
+    smoothScrollHint: "Momentum scrolling, like the landing page",
 
   },
 
@@ -1581,6 +1650,30 @@ export const en: Translations = {
     logTruncated: "(showing last 100 KB — full log at ",
 
     logAt: ")",
+
+    simpleModeLabel: "🟢 Simple mode",
+
+    simpleModeHint: "You're in simple mode: only the essentials are shown. Click to reveal advanced options (boards, tags, lanes and orchestration).",
+
+    advancedModeLabel: "⚙️ Advanced mode",
+
+    advancedModeHint: "You're in advanced mode. Click to go back to simple mode.",
+
+    guideReopenLabel: "How does this work?",
+
+    guideReopenHint: "Show the quick guide again",
+
+    guideHide: "Hide this guide",
+
+    guideTitle: "How does this board work?",
+
+    guideLead: "It's like a task board, but your AI agents do the work. You drop an idea and the card moves on its own.",
+
+    guideStep1: "Write a rough idea, in your own words, in the «Ideas» column (tap the + button). It doesn't have to be perfect.",
+
+    guideStep2: "The system turns it into a clear task and picks which agent does it.",
+
+    guideStep3: "The card moves on its own: Ready → In progress → Done. You just watch, and help if one gets «Stuck».",
 
   },
 

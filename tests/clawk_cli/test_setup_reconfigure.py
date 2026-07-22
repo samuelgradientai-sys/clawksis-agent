@@ -252,64 +252,59 @@ class TestQuickFlag:
 
 
 class TestFreshInstall:
-    """On a fresh install (no active provider), flags are no-ops."""
+    """On a fresh install, every flag falls through to the full BYOK setup.
 
-    def test_bare_setup_runs_first_time_flow(self, fresh_install):
+    The Nous "Quick Setup" first-run shortcut (a quick-vs-full prompt that
+    called ``_run_first_time_quick_setup``) was removed — first run now goes
+    straight to provider selection and runs every section. See commit
+    "sacar el Quick Setup de Nous -> primer arranque es BYOK".
+    """
 
-        args = _make_setup_args()
-
+    def _run_fresh(self, args):
         with ExitStack() as stack:
             m = _enter_fresh_install_patches(
                 stack,
-                prompt=("clawk_cli.setup.prompt_choice", {"return_value": 0}),
                 first="clawk_cli.setup._run_first_time_quick_setup",
+                model="clawk_cli.setup.setup_model_provider",
+                terminal="clawk_cli.setup.setup_terminal_backend",
+                gateway="clawk_cli.setup.setup_gateway",
+                tools="clawk_cli.setup.setup_tools",
+                agent="clawk_cli.setup._apply_default_agent_settings",
+                clis="clawk_cli.setup._install_coding_clis",
+                welcome="clawk_cli.setup._seed_welcome_checkin",
+                summary="clawk_cli.setup._print_setup_summary",
             )
 
             from clawk_cli.setup import run_setup_wizard
 
             run_setup_wizard(args)
 
-        m["prompt"].assert_called_once()  # quick-vs-full prompt
+        return m
 
-        m["first"].assert_called_once()
+    def _assert_full_setup(self, m):
+        # The removed Nous "Quick Setup" first-run shortcut must NOT run.
+        m["first"].assert_not_called()
+
+        # Full setup runs every section exactly once.
+        m["model"].assert_called_once()
+
+        m["terminal"].assert_called_once()
+
+        m["gateway"].assert_called_once()
+
+        m["tools"].assert_called_once()
+
+    def test_bare_setup_runs_full_byok_flow(self, fresh_install):
+
+        self._assert_full_setup(self._run_fresh(_make_setup_args()))
 
     def test_reconfigure_on_fresh_install_falls_through(self, fresh_install):
 
-        args = _make_setup_args(reconfigure=True)
-
-        with ExitStack() as stack:
-            m = _enter_fresh_install_patches(
-                stack,
-                prompt=("clawk_cli.setup.prompt_choice", {"return_value": 0}),
-                first="clawk_cli.setup._run_first_time_quick_setup",
-            )
-
-            from clawk_cli.setup import run_setup_wizard
-
-            run_setup_wizard(args)
-
-        m["prompt"].assert_called_once()
-
-        m["first"].assert_called_once()
+        self._assert_full_setup(self._run_fresh(_make_setup_args(reconfigure=True)))
 
     def test_quick_on_fresh_install_falls_through(self, fresh_install):
 
-        args = _make_setup_args(quick=True)
-
-        with ExitStack() as stack:
-            m = _enter_fresh_install_patches(
-                stack,
-                prompt=("clawk_cli.setup.prompt_choice", {"return_value": 0}),
-                first="clawk_cli.setup._run_first_time_quick_setup",
-            )
-
-            from clawk_cli.setup import run_setup_wizard
-
-            run_setup_wizard(args)
-
-        m["prompt"].assert_called_once()
-
-        m["first"].assert_called_once()
+        self._assert_full_setup(self._run_fresh(_make_setup_args(quick=True)))
 
 
 class TestArgparse:

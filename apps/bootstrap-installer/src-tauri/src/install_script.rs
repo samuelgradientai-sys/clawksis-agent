@@ -380,7 +380,7 @@ async fn download(kind: ScriptKind, commit_or_ref: &str, dest_path: &Path) -> Re
 
     let url = format!(
 
-        "https://raw.githubusercontent.com/NousResearch/clawksis-agent/{}/scripts/{}",
+        "https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/{}/scripts/{}",
 
         commit_or_ref,
 

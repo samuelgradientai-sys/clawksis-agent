@@ -359,6 +359,47 @@ def list_active_subagents() -> List[Dict[str, Any]]:
         ]
 
 
+def _flatten_tool_content(content: Any) -> str:
+    """Flatten a tool-result ``content`` into a plain text string.
+
+
+
+    Tool results may arrive as a multimodal list of content blocks (e.g.
+
+    ``[{"type": "text", "text": "..."}, {"type": "image_url", ...}]``).  We
+
+    concatenate the text of any text blocks so downstream observability
+
+    (error detection, previews, byte counts) sees real text rather than a
+
+    ``"[{'type': 'text'...}]"`` repr blob.
+
+    """
+
+    if content is None:
+        return ""
+
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        parts: List[str] = []
+
+        for block in content:
+            if isinstance(block, dict):
+                text = block.get("text")
+
+                if isinstance(text, str):
+                    parts.append(text)
+
+            elif isinstance(block, str):
+                parts.append(block)
+
+        return "\n".join(parts)
+
+    return str(content)
+
+
 def _extract_output_tail(
     result: Dict[str, Any],
     *,
@@ -414,10 +455,7 @@ def _extract_output_tail(
         if not isinstance(msg, dict) or msg.get("role") != "tool":
             continue
 
-        content = msg.get("content") or ""
-
-        if not isinstance(content, str):
-            content = str(content)
+        content = _flatten_tool_content(msg.get("content"))
 
         is_error = _looks_like_error_output(content)
 
@@ -1020,6 +1058,49 @@ def _strip_blocked_tools(toolsets: List[str]) -> List[str]:
     return [t for t in toolsets if t not in blocked_toolset_names]
 
 
+_SUBAGENT_LOG_EVENTS = frozenset({
+    "subagent.start",
+    "subagent.tool",
+    "subagent.thinking",
+    "subagent.complete",
+})
+
+
+def _log_subagent_event(
+    event_type: str,
+    session_id,
+    payload: Dict[str, Any],
+    tool_name=None,
+    preview=None,
+) -> None:
+    """Mirror a sub-agent lifecycle event to the cross-process agent-events log.
+
+    Best-effort: lets the dashboard office draw the delegation tree (sub-agent
+    characters + parent→child link lines) for EVERY agent, not just the chat
+    (which already receives these over the WS feed). Never raises.
+    """
+
+    if event_type not in _SUBAGENT_LOG_EVENTS:
+        return
+
+    try:
+        import agent_events
+
+        agent_events.emit_subagent_event(
+            event_type=event_type,
+            session_id=session_id,
+            subagent_id=payload.get("subagent_id"),
+            parent_id=payload.get("parent_id"),
+            depth=payload.get("depth"),
+            goal=payload.get("goal"),
+            tool_name=tool_name,
+            text=preview,
+        )
+
+    except Exception:
+        pass
+
+
 def _build_child_progress_callback(
     task_index: int,
     goal: str,
@@ -1065,6 +1146,10 @@ def _build_child_progress_callback(
     spinner = getattr(parent_agent, "_delegate_spinner", None)
 
     parent_cb = getattr(parent_agent, "tool_progress_callback", None)
+
+    # Parent's session id — sub-agent events are logged under it so the office
+    # links the sub-agent character to the parent's desk.
+    _parent_sid = getattr(parent_agent, "session_id", None)
 
     if not spinner and not parent_cb:
         return None  # No display → no callback → zero behavior change
@@ -1114,12 +1199,17 @@ def _build_child_progress_callback(
         event_type: str, tool_name: str = None, preview: str = None, args=None, **kwargs
     ):
 
-        if not parent_cb:
-            return
-
         payload = _identity_kwargs()
 
         payload.update(kwargs)  # caller overrides (e.g. status, duration_seconds)
+
+        # Mirror sub-agent lifecycle to the shared agent-events log (best-effort)
+        # so the dashboard office draws the delegation tree for any agent — done
+        # before the parent_cb guard so it also covers gateway/cron agents.
+        _log_subagent_event(event_type, _parent_sid, payload, tool_name, preview)
+
+        if not parent_cb:
+            return
 
         try:
             parent_cb(event_type, tool_name, preview, args, **payload)
@@ -1704,7 +1794,9 @@ def _build_child_agent(
 
     # rotate credentials on rate limits instead of getting pinned to one key.
 
-    child_pool = _resolve_child_credential_pool(effective_provider, parent_agent)
+    child_pool = _resolve_child_credential_pool(
+        effective_provider, parent_agent, effective_base_url
+    )
 
     if child_pool is not None:
         child._credential_pool = child_pool
@@ -2444,7 +2536,7 @@ def _run_single_child(
                             trace_by_id[tc_id] = entry_t
 
                 elif msg.get("role") == "tool":
-                    content = msg.get("content", "")
+                    content = _flatten_tool_content(msg.get("content"))
 
                     is_error = _looks_like_error_output(content)
 
@@ -3333,7 +3425,11 @@ def delegate_task(
     )
 
 
-def _resolve_child_credential_pool(effective_provider: Optional[str], parent_agent):
+def _resolve_child_credential_pool(
+    effective_provider: Optional[str],
+    parent_agent,
+    child_base_url: Optional[str] = None,
+):
     """Resolve a credential pool for the child agent.
 
 
@@ -3350,6 +3446,20 @@ def _resolve_child_credential_pool(effective_provider: Optional[str], parent_age
 
        fixed credential behavior.
 
+
+
+    For the ``custom`` provider, ``effective_provider`` normalizes to the same
+
+    string for every custom endpoint, so identity must be resolved by the
+
+    endpoint's ``custom:<name>`` pool key instead (issue #7833). A child on a
+
+    different custom endpoint than the parent must NOT inherit the parent's pool,
+
+    and a raw ``base_url`` with no matching ``custom_providers`` entry returns
+
+    None so the child keeps its fixed delegated credential.
+
     """
 
     if not effective_provider:
@@ -3358,6 +3468,39 @@ def _resolve_child_credential_pool(effective_provider: Optional[str], parent_age
     parent_provider = getattr(parent_agent, "provider", None) or ""
 
     parent_pool = getattr(parent_agent, "_credential_pool", None)
+
+    if effective_provider == "custom":
+        try:
+            from agent.credential_pool import (
+                get_custom_provider_pool_key,
+                load_pool,
+            )
+
+            child_key = get_custom_provider_pool_key(child_base_url)
+
+            if child_key is None:
+                return None
+
+            parent_base_url = getattr(parent_agent, "base_url", None)
+
+            parent_key = get_custom_provider_pool_key(parent_base_url)
+
+            if parent_pool is not None and child_key == parent_key:
+                return parent_pool
+
+            pool = load_pool(child_key)
+
+            if pool is not None and pool.has_credentials():
+                return pool
+
+        except Exception as exc:
+            logger.debug(
+                "Could not resolve custom credential pool for child '%s': %s",
+                child_base_url,
+                exc,
+            )
+
+        return None
 
     if parent_pool is not None and effective_provider == parent_provider:
         return parent_pool

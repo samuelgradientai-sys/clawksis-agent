@@ -6,7 +6,7 @@ The old implementation used a naive substring check
 
 (`f"@{bot_username}" in text.lower()`), which incorrectly matched partial
 
-substrings like 'foo@clawk_bot.example'.
+substrings like 'foo@clawksis_bot.example'.
 
 
 
@@ -40,12 +40,12 @@ def _make_adapter():
 
     adapter.config = PlatformConfig(enabled=True, token="***", extra={})
 
-    adapter._bot = SimpleNamespace(id=999, username="clawk_bot")
+    adapter._bot = SimpleNamespace(id=999, username="clawksis_bot")
 
     return adapter
 
 
-def _mention_entity(text, mention="@clawk_bot"):
+def _mention_entity(text, mention="@clawksis_bot"):
     """Build a MENTION entity pointing at a literal `@username` in `text`."""
 
     offset = text.index(mention)
@@ -84,7 +84,7 @@ class TestRealMentionsAreDetected:
 
         adapter = _make_adapter()
 
-        text = "@clawk_bot hello world"
+        text = "@clawksis_bot hello world"
 
         msg = _message(text=text, entities=[_mention_entity(text)])
 
@@ -94,7 +94,7 @@ class TestRealMentionsAreDetected:
 
         adapter = _make_adapter()
 
-        text = "hey @clawk_bot, can you help?"
+        text = "hey @clawksis_bot, can you help?"
 
         msg = _message(text=text, entities=[_mention_entity(text)])
 
@@ -104,7 +104,7 @@ class TestRealMentionsAreDetected:
 
         adapter = _make_adapter()
 
-        text = "thanks for looking @clawk_bot"
+        text = "thanks for looking @clawksis_bot"
 
         msg = _message(text=text, entities=[_mention_entity(text)])
 
@@ -114,7 +114,7 @@ class TestRealMentionsAreDetected:
 
         adapter = _make_adapter()
 
-        caption = "photo for @clawk_bot"
+        caption = "photo for @clawksis_bot"
 
         msg = _message(caption=caption, caption_entities=[_mention_entity(caption)])
 
@@ -148,11 +148,11 @@ class TestSubstringFalsePositivesAreRejected:
     """
 
     def test_email_like_substring(self):
-        """bug #12545 exact repro: 'foo@clawk_bot.example'."""
+        """bug #12545 exact repro: 'foo@clawksis_bot.example'."""
 
         adapter = _make_adapter()
 
-        msg = _message(text="email me at foo@clawk_bot.example")
+        msg = _message(text="email me at foo@clawksis_bot.example")
 
         assert adapter._message_mentions_bot(msg) is False
 
@@ -160,18 +160,18 @@ class TestSubstringFalsePositivesAreRejected:
 
         adapter = _make_adapter()
 
-        msg = _message(text="contact user@clawk_bot.domain.com")
+        msg = _message(text="contact user@clawksis_bot.domain.com")
 
         assert adapter._message_mentions_bot(msg) is False
 
     def test_superstring_username(self):
-        """`@clawk_botx` is a different username; Telegram would emit a mention
+        """`@clawksis_botx` is a different username; Telegram would emit a mention
 
-        entity for `@clawk_botx`, not `@clawk_bot`."""
+        entity for `@clawksis_botx`, not `@clawksis_bot`."""
 
         adapter = _make_adapter()
 
-        msg = _message(text="@clawk_botx hello")
+        msg = _message(text="@clawksis_botx hello")
 
         assert adapter._message_mentions_bot(msg) is False
 
@@ -179,7 +179,7 @@ class TestSubstringFalsePositivesAreRejected:
 
         adapter = _make_adapter()
 
-        msg = _message(text="see @clawk_bot_admin for help")
+        msg = _message(text="see @clawksis_bot_admin for help")
 
         assert adapter._message_mentions_bot(msg) is False
 
@@ -188,7 +188,7 @@ class TestSubstringFalsePositivesAreRejected:
 
         adapter = _make_adapter()
 
-        msg = _message(text="see https://example.com/@clawk_bot for details")
+        msg = _message(text="see https://example.com/@clawksis_bot for details")
 
         assert adapter._message_mentions_bot(msg) is False
 
@@ -197,7 +197,7 @@ class TestSubstringFalsePositivesAreRejected:
 
         adapter = _make_adapter()
 
-        msg = _message(text="use the string `@clawk_bot` in config")
+        msg = _message(text="use the string `@clawksis_bot` in config")
 
         assert adapter._message_mentions_bot(msg) is False
 
@@ -213,7 +213,7 @@ class TestSubstringFalsePositivesAreRejected:
 
         adapter = _make_adapter()
 
-        msg = _message(caption="foo@clawk_bot.example")
+        msg = _message(caption="foo@clawksis_bot.example")
 
         assert adapter._message_mentions_bot(msg) is False
 
@@ -248,7 +248,7 @@ class TestEntityEdgeCases:
         adapter = _make_adapter()
 
         msg = _message(
-            text="@clawk_bot hi",
+            text="@clawksis_bot hi",
             entities=[SimpleNamespace(type="mention", offset=-1, length=11)],
         )
 
@@ -259,7 +259,7 @@ class TestEntityEdgeCases:
         adapter = _make_adapter()
 
         msg = _message(
-            text="@clawk_bot hi",
+            text="@clawksis_bot hi",
             entities=[SimpleNamespace(type="mention", offset=0, length=0)],
         )
 
@@ -273,10 +273,10 @@ class TestCaseInsensitivity:
 
         adapter = _make_adapter()
 
-        text = "hi @CLAWK_BOT"
+        text = "hi @CLAWKSIS_BOT"
 
         msg = _message(
-            text=text, entities=[_mention_entity(text, mention="@CLAWK_BOT")]
+            text=text, entities=[_mention_entity(text, mention="@CLAWKSIS_BOT")]
         )
 
         assert adapter._message_mentions_bot(msg) is True

@@ -116,6 +116,17 @@ _MEMORY_WRITE_TARGET_SUBDIR_MAP = {
 }
 
 
+# When a pseudo summary file (e.g. .overview.md) sits directly under the legacy
+
+# product-named user directory, normalize it to the agent's canonical home dir
+
+# (OPENVIKING_AGENT default = "clawk"). Sub-resources keep their original URI.
+
+_SUMMARY_DIR_ALIASES = {
+    "viking://user/clawksis": "viking://user/clawk",
+}
+
+
 # ---------------------------------------------------------------------------
 
 # Process-level atexit safety net — ensures pending sessions are committed
@@ -1007,7 +1018,9 @@ class OpenVikingMemoryProvider(MemoryProvider):
 
         for suffix in ("/.abstract.md", "/.overview.md", "/.read.md", "/.full.md"):
             if uri.endswith(suffix):
-                return uri[: -len(suffix)] or "viking://"
+                parent = uri[: -len(suffix)] or "viking://"
+
+                return _SUMMARY_DIR_ALIASES.get(parent, parent)
 
         return uri
 

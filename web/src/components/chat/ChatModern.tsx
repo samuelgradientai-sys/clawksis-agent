@@ -1,0 +1,2823 @@
+/**
+ * ChatModern — Modo "moderno" del chat con sidebar de sesiones (Fase 2.7)
+ * + file picker funcional en el composer (Fase 2.8 B1).
+ *
+ * Layout: sidebar 240px + body flex-1.
+ * Composer: textarea + chips de archivos adjuntos arriba + botones (Paperclip
+ * funcional, Mic placeholder).
+ */
+
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Paperclip,
+  Mic,
+  ArrowUp,
+  Copy,
+  RotateCw,
+  Pencil,
+  Quote,
+  Brain,
+  ChevronRight,
+  ChevronDown,
+  CheckCircle2,
+  Loader2,
+  AlertCircle,
+  WifiOff,
+  Square,
+  X,
+  Clock,
+  Wrench,
+  FileText,
+  Zap,
+  Gauge,
+} from "lucide-react";
+
+import { MediaAttachment } from "@/components/MediaAttachment";
+import { Markdown } from "../Markdown";
+import {
+  useChatGateway,
+  type ChatMessage,
+  type ConnectionStatus,
+  type ToolCall,
+} from "./hooks/useChatGateway";
+import { useMessageQueue, type QueuedMessage } from "./hooks/useMessageQueue";
+import { useAutoScroll } from "./hooks/useAutoScroll";
+import { useSessions, deriveTitle, type RpcSender } from "./hooks/useSessions";
+import { useTokenUsage } from "./hooks/useTokenUsage";
+import { TokenUsagePopover } from "./TokenUsagePopover";
+import { useAttachments, type Attachment } from "./hooks/useAttachments";
+import { useCitations, type Citation } from "./hooks/useCitations";
+import { useVoiceInput } from "./hooks/useVoiceInput";
+import { useImageAttachments } from "./hooks/useImageAttachments";
+import { sanitizeSessionLabel } from "./hooks/useSessions";
+import { useCommandHistory } from "./hooks/useCommandHistory";
+import { SessionSidebar } from "./SessionSidebar";
+import { ModelSelectorMenu } from "./ModelSelectorMenu";
+import { ChatSidePanel } from "./ChatSidePanel";
+import { ChatViewTabs } from "./ChatViewTabs";
+import { toggleSidePanel, useSidePanel } from "./sidePanelStore";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { SlashPopover, type SlashPopoverHandle } from "@/components/SlashPopover";
+import { ModelPickerDialog } from "@/components/ModelPickerDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import type { GatewayClient } from "@/lib/gatewayClient";
+
+interface ChatHeaderProps {
+  status: ConnectionStatus;
+  model: string | null;
+  modelProvider: string | null;
+  sessionId: string | null;
+  tokensUsed: number;
+  tokensMax: number;
+  /** Título de la conversación que se está viendo. */
+  title?: string;
+  /** Click handler para abrir el popover de uso de tokens */
+  onTokensClick?: () => void;
+  /** Ref del botón de tokens para anclar el popover */
+  tokensRef?: React.RefObject<HTMLButtonElement | null>;
+}
+
+function ChatHeader({
+  status,
+  model,
+  modelProvider,
+  sessionId,
+  tokensUsed,
+  tokensMax,
+  title,
+  onTokensClick,
+  tokensRef,
+}: ChatHeaderProps) {
+  const statusColor =
+    status === "connected"
+      ? "bg-success"
+      : status === "connecting"
+        ? "bg-warning animate-pulse"
+        : "bg-destructive";
+
+  const shortSession = sessionId ? sessionId.slice(0, 8) : "—";
+  const tokensLabel =
+    tokensMax > 0
+      ? tokensUsed.toLocaleString() + "/" + (tokensMax / 1000).toFixed(1) + "k tokens"
+      : tokensUsed.toLocaleString() + " tokens";
+
+  const tokenPercent =
+    tokensMax > 0
+      ? Math.min(100, Math.round((tokensUsed / tokensMax) * 100))
+      : null;
+
+  return (
+    <div className="flex items-center justify-between border-b border-white/10 bg-background/28 px-4 py-3 backdrop-blur-xl">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className={"size-2 rounded-full shrink-0 " + statusColor} />
+        <span className="truncate text-sm font-semibold text-foreground">
+          {title || (status === "connecting" ? "Conectando..." : "Nueva conversación")}
+        </span>
+        {model && (
+          <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground sm:flex">
+            <span>·</span>
+            <span className="max-w-[180px] truncate">
+              {model}
+              {modelProvider ? " · " + modelProvider : ""}
+            </span>
+          </span>
+        )}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button
+          type="button"
+          ref={tokensRef}
+          onClick={onTokensClick}
+          disabled={!onTokensClick}
+          title={"Ver desglose de uso de tokens · sesión " + shortSession}
+          className="clawk-liquid-chip hidden md:flex items-center gap-2 rounded-2xl border border-[#6C4FD6]/35 bg-[#6C4FD6]/10 px-3.5 py-2 text-xs text-foreground shadow-sm shadow-[#6C4FD6]/10 transition-all hover:border-[#8B6DFF]/70 hover:bg-[#6C4FD6]/20 disabled:cursor-default disabled:opacity-60"
+          aria-label="Abrir menú de uso de tokens"
+        >
+          <Brain className="size-3.5 text-[#6C4FD6]" />
+          <span className="font-medium">Uso de tokens</span>
+          <span className="hidden text-muted-foreground lg:inline">·</span>
+          <span className="font-mono text-foreground/90">{tokensLabel}</span>
+          {tokenPercent !== null && (
+            <span className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+              {tokenPercent}%
+            </span>
+          )}
+          <ChevronRight className="size-3 rotate-90 text-muted-foreground" />
+        </button>
+
+        {/* Pestañas de vista junto a "Uso de tokens": el chat moderno gana la
+            altura de la banda que antes vivía arriba (ChatRouter). */}
+        <ChatViewTabs />
+      </div>
+    </div>
+  );
+}
+
+
+
+type ProjectSettingsProject = {
+  id: string;
+  name: string;
+  description?: string;
+  instructions?: string;
+  session_count?: number;
+};
+
+function ProjectSettingsDialog({
+  project,
+  error,
+  onClose,
+  onSave,
+  onArchive,
+}: {
+  project: ProjectSettingsProject | null;
+  error: string | null;
+  onClose: () => void;
+  onSave: (
+    projectId: string,
+    updates: {
+      name: string;
+      description: string;
+      instructions: string;
+    },
+  ) => Promise<boolean>;
+  onArchive: (projectId: string) => Promise<boolean>;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [archiveConfirm, setArchiveConfirm] = useState(false);
+
+  useEffect(() => {
+    if (!project) return;
+
+    setName(project.name ?? "");
+    setDescription(project.description ?? "");
+    setInstructions(project.instructions ?? "");
+    setSaving(false);
+    setArchiving(false);
+    setArchiveConfirm(false);
+  }, [project]);
+
+  if (!project) return null;
+
+  const cleanName = name.trim();
+  const canSave = Boolean(cleanName) && !saving && !archiving;
+
+  const submit = async () => {
+    if (!canSave) return;
+
+    setSaving(true);
+    const ok = await onSave(project.id, {
+      name: cleanName,
+      description: description.trim(),
+      instructions: instructions.trim(),
+    });
+    setSaving(false);
+
+    if (ok) onClose();
+  };
+
+  const archive = async () => {
+    if (!archiveConfirm) {
+      setArchiveConfirm(true);
+      return;
+    }
+
+    setArchiving(true);
+    const ok = await onArchive(project.id);
+    setArchiving(false);
+
+    if (ok) onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-[#6C4FD6]/40 bg-popover text-popover-foreground shadow-2xl shadow-[#6C4FD6]/20">
+        <div className="border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2">
+            <div className="flex size-8 items-center justify-center rounded-full bg-[#6C4FD6]/20">
+              <img
+                src="/clawksis-logo-512.png"
+                alt="Clawksis"
+                draggable={false}
+                className="size-6 select-none object-contain"
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-foreground">
+                Configurar proyecto
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Define nombre, descripción e instrucciones propias del proyecto.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 px-5 py-4">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-muted-foreground">
+              Nombre del proyecto
+            </label>
+            <input
+              autoFocus
+              value={name}
+              maxLength={80}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void submit();
+                if (e.key === "Escape") onClose();
+              }}
+              className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-[#6C4FD6]"
+              placeholder="Ej. Agencia, PYV, Contenido redes..."
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-muted-foreground">
+              Descripción
+            </label>
+            <textarea
+              value={description}
+              maxLength={500}
+              onChange={(e) => setDescription(e.target.value)}
+              className="min-h-20 w-full resize-y rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-[#6C4FD6]"
+              placeholder="Describe para qué sirve este proyecto."
+            />
+            <div className="text-right text-[10px] text-muted-foreground">
+              {description.length}/500
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-muted-foreground">
+              Instrucciones del proyecto
+            </label>
+            <textarea
+              value={instructions}
+              maxLength={4000}
+              onChange={(e) => setInstructions(e.target.value)}
+              className="min-h-36 w-full resize-y rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-[#6C4FD6]"
+              placeholder={"Ej. Responde como estratega de contenido. Usa tono profesional. Prioriza acciones concretas."}
+            />
+            <div className="flex items-center justify-between gap-3 text-[10px] text-muted-foreground">
+              <span>
+                Estas instrucciones se guardan en el proyecto. La conexión con el modelo se hará en una fase posterior.
+              </span>
+              <span className="shrink-0">{instructions.length}/4000</span>
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {error}
+            </div>
+          )}
+
+          <div className="rounded border border-border bg-muted/10 px-3 py-2 text-[11px] text-muted-foreground">
+            Archivar oculta el proyecto y mueve sus conversaciones a Conversaciones. No borra los chats.
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
+          <button
+            type="button"
+            onClick={archive}
+            disabled={saving || archiving}
+            className="rounded border border-destructive/40 px-3 py-2 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {archiving
+              ? "Archivando..."
+              : archiveConfirm
+                ? "Confirmar archivo"
+                : "Archivar proyecto"}
+          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving || archiving}
+              className="rounded border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={!canSave}
+              className="rounded bg-[#6C4FD6] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#5b3fd0] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProjectCreateDialog({
+  open,
+  error,
+  onClose,
+  onCreate,
+}: {
+  open: boolean;
+  error: string | null;
+  onClose: () => void;
+  onCreate: (name: string) => void;
+}) {
+  const [name, setName] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setName("");
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const submit = () => {
+    const cleanName = name.trim();
+    if (!cleanName) return;
+    onCreate(cleanName);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-[#6C4FD6]/40 bg-popover text-popover-foreground shadow-2xl shadow-[#6C4FD6]/20">
+        <div className="border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2">
+            <div className="flex size-8 items-center justify-center rounded-full bg-[#6C4FD6]/20">
+              <img
+                src="/clawksis-logo-512.png"
+                alt="Clawksis"
+                draggable={false}
+                className="size-6 select-none object-contain"
+              />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-foreground">
+                Nuevo proyecto
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Crea un espacio separado para conversaciones relacionadas.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3 px-5 py-4">
+          <label className="block text-xs font-medium text-muted-foreground">
+            Nombre del proyecto
+          </label>
+
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+              if (e.key === "Escape") onClose();
+            }}
+            placeholder="Ej. Agencia, Inventario, Clientes..."
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-[#6C4FD6] focus:ring-2 focus:ring-[#6C4FD6]/25"
+          />
+
+          {error && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-border bg-muted/10 px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-border bg-background px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!name.trim()}
+            className="rounded-lg bg-[#6C4FD6] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[#5a40c2] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Crear proyecto
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Auto-render de media en resultados de tools (image_generate / video_generate
+// / cualquier tool que devuelva una imagen o video): así "generá una imagen de
+// X" muestra la imagen sola en el chat, sin depender de que el agente la embeba
+// en markdown.
+const _TOOL_IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(?:[?#]|$)/i;
+const _TOOL_VID_RE = /\.(mp4|webm|mov|m4v|ogv|ogg)(?:[?#]|$)/i;
+
+function _toolMediaSrc(raw: string): string | null {
+  const s = raw.trim();
+  // Solo lo definitivamente servible: http(s) y same-origin /artifacts|/api.
+  // Los archivos locales generados llegan ya como /artifacts/download?path=…
+  // (el backend los copia a ~/clawksis_exports); NO intentamos servir paths
+  // locales crudos para no mostrar imágenes rotas (403 fuera de exports).
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith("/artifacts/") || s.startsWith("/api/")) return s;
+  return null;
+}
+
+function extractToolMedia(result: unknown): { src: string; video: boolean }[] {
+  let obj: unknown = result;
+  if (typeof result === "string") {
+    try {
+      obj = JSON.parse(result);
+    } catch {
+      return [];
+    }
+  }
+  if (!obj || typeof obj !== "object") return [];
+  const rec = obj as Record<string, unknown>;
+  if (rec.success === false) return [];
+
+  const candidates: string[] = [];
+  for (const k of ["image", "video", "url", "chat_url", "host_image"]) {
+    if (typeof rec[k] === "string") candidates.push(rec[k] as string);
+  }
+  if (Array.isArray(rec.images)) {
+    for (const im of rec.images) {
+      const u = (im as Record<string, unknown>)?.url;
+      if (typeof u === "string") candidates.push(u);
+    }
+  }
+
+  const out: { src: string; video: boolean }[] = [];
+  const seen = new Set<string>();
+  for (const c of candidates) {
+    const probe = c.includes("path=")
+      ? decodeURIComponent(c.split("path=")[1] ?? "")
+      : c;
+    const isVid = _TOOL_VID_RE.test(c) || _TOOL_VID_RE.test(probe);
+    const isImg = _TOOL_IMG_RE.test(c) || _TOOL_IMG_RE.test(probe);
+    if (!isVid && !isImg) continue;
+    const src = _toolMediaSrc(c);
+    if (!src || seen.has(src)) continue;
+    seen.add(src);
+    out.push({ src, video: isVid });
+  }
+  return out;
+}
+
+// ── Media local del agente (audio TTS + imágenes cacheadas) ─────────────────
+// El agente emite líneas "MEDIA:/root/.clawksis/audio_cache/briefing_x.ogg" y
+// markdown ![](/root/.clawksis/cache/images/x.png) con paths locales del
+// servidor. Sin esto se ven como texto crudo / imagen rota. Aquí: (a) se
+// extraen las líneas MEDIA: del texto y se renderizan como <audio>/<img>/
+// <video> vía GET /media/local?path=… (backend: allowlist audio_cache,
+// cache/images, artifacts), (b) se reescriben los paths locales del markdown
+// hacia ese mismo endpoint.
+const _LOCAL_AUDIO_RE = /\.(ogg|oga|opus|mp3|wav|m4a|aac|flac)(?:[?#]|$)/i;
+
+// Prefijos same-origin que el dashboard ya sirve: no reescribir.
+const _SERVABLE_PREFIXES = [
+  "/artifacts/",
+  "/api/",
+  "/media/",
+  "/assets/",
+  "/ds-assets/",
+  "/fonts",
+];
+
+/** Path de filesystem local del agente (/root/…, ~/…, file://…) — el browser
+ *  no puede cargarlo directo; hay que puentearlo por /media/local. */
+function _isLocalFsPath(p: string): boolean {
+  if (p.startsWith("file://") || p.startsWith("~/")) return true;
+  if (!p.startsWith("/")) return false;
+  if (_SERVABLE_PREFIXES.some((pref) => p.startsWith(pref))) return false;
+  // ≥2 segmentos (/root/x.png sí; /logo.png — asset raíz del dashboard — no).
+  return p.indexOf("/", 1) !== -1;
+}
+
+function _toLocalMediaUrl(p: string): string {
+  let abs = p;
+  if (abs.startsWith("file://")) {
+    abs = abs.slice("file://".length);
+    try {
+      abs = decodeURIComponent(abs);
+    } catch {
+      /* % literal en el path — se usa tal cual */
+    }
+  }
+  return "/media/local?path=" + encodeURIComponent(abs);
+}
+
+type LocalMedia = { src: string; kind: "audio" | "video" | "image"; name: string };
+
+const _MD_LOCAL_REF_RE = /(!?)\[([^\]]*)\]\(([^)]+)\)/g;
+
+/** Separa las líneas "MEDIA:<path>" del texto (van como adjuntos debajo del
+ *  mensaje) y reescribe imágenes/links markdown con paths locales hacia
+ *  /media/local. Respeta bloques de código (no toca su contenido). */
+function extractLocalMedia(content: string): {
+  text: string;
+  media: LocalMedia[];
+} {
+  const media: LocalMedia[] = [];
+  const seen = new Set<string>();
+  const push = (ref: string) => {
+    const src = _toLocalMediaUrl(ref);
+    if (seen.has(src)) return;
+    seen.add(src);
+    // .ogg matchea audio y video: audio gana (caso TTS briefing).
+    const kind = _LOCAL_AUDIO_RE.test(ref)
+      ? "audio"
+      : _TOOL_VID_RE.test(ref)
+        ? "video"
+        : "image";
+    const name = ref.split(/[\\/]/).filter(Boolean).pop() || "media";
+    media.push({ src, kind, name });
+  };
+
+  const rewriteRef = (
+    full: string,
+    bang: string,
+    label: string,
+    rawUrl: string,
+  ): string => {
+    const url = rawUrl.trim();
+    if (!_isLocalFsPath(url)) return full;
+    const isMedia =
+      _TOOL_IMG_RE.test(url) ||
+      _TOOL_VID_RE.test(url) ||
+      _LOCAL_AUDIO_RE.test(url);
+    if (!bang && !isMedia) return full; // link normal no-media: no tocar
+    if (_LOCAL_AUDIO_RE.test(url)) {
+      push(url); // .ogg/.mp3/.wav → <audio controls> debajo del texto
+      return label;
+    }
+    return `${bang}[${label}](${_toLocalMediaUrl(url)})`;
+  };
+
+  const kept: string[] = [];
+  let inFence = false;
+  for (const line of content.split("\n")) {
+    if (/^```/.test(line)) {
+      inFence = !inFence;
+      kept.push(line);
+      continue;
+    }
+    if (inFence) {
+      kept.push(line);
+      continue;
+    }
+    // (a) línea "MEDIA:<path absoluto>" → fuera del texto, como adjunto.
+    const m = line.trim().match(/^MEDIA:\s*(\S+)\s*$/);
+    if (
+      m &&
+      _isLocalFsPath(m[1]) &&
+      (_LOCAL_AUDIO_RE.test(m[1]) ||
+        _TOOL_IMG_RE.test(m[1]) ||
+        _TOOL_VID_RE.test(m[1]))
+    ) {
+      push(m[1]);
+      continue;
+    }
+    // (b) ![alt](/root/…png), ![alt](file:///…), [txt](/root/…mp4) → endpoint.
+    kept.push(line.replace(_MD_LOCAL_REF_RE, rewriteRef));
+  }
+
+  return { text: kept.join("\n"), media };
+}
+
+// ── Modo de respuesta: Rápida / Normal / Pensar ─────────────────────────────
+// Controla agent.reasoning_effort vía config.set (aplica en vivo al agente de
+// la sesión): para preguntas simples no quema razonamiento largo; para tareas
+// difíciles piensa a fondo. Persistido en localStorage.
+const REASONING_MODES = [
+  {
+    value: "minimal",
+    label: "Rápida",
+    icon: Zap,
+    hint: "Respuesta directa, sin razonamiento largo — ideal para preguntas simples",
+  },
+  {
+    value: "medium",
+    label: "Normal",
+    icon: Gauge,
+    hint: "Equilibrado (por defecto)",
+  },
+  {
+    value: "high",
+    label: "Pensar",
+    icon: Brain,
+    hint: "Razonamiento profundo para tareas difíciles",
+  },
+] as const;
+
+const REASONING_STORAGE_KEY = "clawksis-reasoning-mode";
+
+function ReasoningSelector({
+  sendRpc,
+  sessionId,
+  disabled,
+}: {
+  sendRpc: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
+  sessionId: string | null;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<string>(() => {
+    try {
+      return (
+        window.localStorage.getItem(REASONING_STORAGE_KEY) || "medium"
+      );
+    } catch {
+      return "medium";
+    }
+  });
+  const current =
+    REASONING_MODES.find((m) => m.value === mode) ?? REASONING_MODES[1];
+  const CurrentIcon = current.icon;
+
+  const apply = async (value: string) => {
+    setMode(value);
+    setOpen(false);
+    try {
+      window.localStorage.setItem(REASONING_STORAGE_KEY, value);
+    } catch {
+      /* sin persistencia local: igual se aplica al backend */
+    }
+    try {
+      await sendRpc("config.set", {
+        key: "reasoning",
+        value,
+        session_id: sessionId,
+      });
+    } catch (err) {
+      console.warn("[ReasoningSelector] config.set reasoning failed", err);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        title={current.hint}
+        aria-label={"Modo de respuesta: " + current.label}
+        className="flex items-center gap-1 rounded-lg px-1.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <CurrentIcon className="size-4" />
+        <span className="hidden sm:inline">{current.label}</span>
+        <ChevronDown className="size-3 opacity-60" />
+      </button>
+
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label="Cerrar"
+            className="fixed inset-0 z-20 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute bottom-full left-0 z-30 mb-1 w-64 overflow-hidden rounded-md border border-border bg-popover p-1 text-xs text-popover-foreground shadow-lg">
+            {REASONING_MODES.map((m) => {
+              const Icon = m.icon;
+              return (
+                <button
+                  key={m.value}
+                  type="button"
+                  onClick={() => void apply(m.value)}
+                  className={
+                    "flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-muted " +
+                    (m.value === mode ? "bg-[#6C4FD6]/15" : "")
+                  }
+                >
+                  <Icon
+                    className={
+                      "mt-0.5 size-3.5 shrink-0 " +
+                      (m.value === mode
+                        ? "text-[#6C4FD6]"
+                        : "text-muted-foreground")
+                    }
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{m.label}</span>
+                    <span className="block text-[10px] text-muted-foreground">
+                      {m.hint}
+                    </span>
+                  </span>
+                  {m.value === mode && (
+                    <span className="text-[10px] text-[#6C4FD6]">✓</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
+  const [expanded, setExpanded] = useState(false);
+  const isRunning = toolCall.status === "running";
+  const argsPreview = Object.entries(toolCall.args)
+    .map(([k, v]) => k + "=" + (typeof v === "string" ? v : JSON.stringify(v)))
+    .join(" ")
+    .slice(0, 120);
+  const media = useMemo(
+    () => (isRunning ? [] : extractToolMedia(toolCall.result)),
+    [isRunning, toolCall.result],
+  );
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className={
+          "group flex w-full items-center gap-2 rounded border px-3 py-1.5 text-left transition-colors " +
+          (isRunning
+            ? "border-[#6C4FD6]/60 bg-[#6C4FD6]/5"
+            : "border-border bg-muted/20 hover:bg-muted/30")
+        }
+      >
+        <ChevronRight
+          className={
+            "size-3 text-muted-foreground transition-transform " +
+            (expanded ? "rotate-90" : "")
+          }
+        />
+        <span className="font-mono text-xs text-warning">{toolCall.name}</span>
+        <span className="truncate text-xs text-muted-foreground">
+          {argsPreview}
+        </span>
+        <span className="ml-auto flex items-center gap-1 text-xs">
+          {isRunning ? (
+            <>
+              <Loader2 className="size-3 animate-spin text-[#6C4FD6]" />
+              <span className="text-muted-foreground">running</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="size-3 text-success" />
+              <span className="text-success">
+                {toolCall.duration_s
+                  ? toolCall.duration_s.toFixed(1) + "s"
+                  : "done"}
+              </span>
+            </>
+          )}
+        </span>
+      </button>
+
+      {media.length > 0 && (
+        <div className="ml-5 flex flex-wrap gap-2">
+          {media.map((m, idx) => (
+            <MediaAttachment
+              key={idx}
+              src={m.src}
+              video={m.video}
+              alt="resultado generado"
+            />
+          ))}
+        </div>
+      )}
+
+      {expanded && toolCall.result !== undefined && (
+        <pre className="ml-5 max-h-64 overflow-auto rounded border border-border bg-muted/20 p-2 text-xs text-muted-foreground">
+          {typeof toolCall.result === "string"
+            ? toolCall.result
+            : JSON.stringify(toolCall.result, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function MessageActions({
+  content,
+  onRegenerate,
+  canRegenerate,
+  onQuote,
+  onEdit,
+}: {
+  content: string;
+  onRegenerate?: () => void;
+  canRegenerate?: boolean;
+  onQuote?: () => void;
+  onEdit?: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3 opacity-0 transition-opacity group-hover:opacity-100">
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <Copy className="size-3" />
+        {copied ? "Copiado" : "Copiar"}
+      </button>
+      {onQuote && (
+        <button
+          type="button"
+          onClick={onQuote}
+          title="Citar este mensaje como contexto"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Quote className="size-3" />
+          Citar
+        </button>
+      )}
+      {onRegenerate && (
+        <button
+          type="button"
+          onClick={onRegenerate}
+          disabled={!canRegenerate}
+          title={
+            canRegenerate
+              ? "Regenerar respuesta"
+              : "Esperá a que termine la respuesta"
+          }
+          className={
+            "flex items-center gap-1 text-xs transition-colors " +
+            (canRegenerate
+              ? "text-muted-foreground hover:text-foreground"
+              : "text-muted-foreground opacity-40 cursor-not-allowed")
+          }
+        >
+          <RotateCw className="size-3" />
+          Regenerar
+        </button>
+      )}
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          title="Editar y reenviar"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Pencil className="size-3" />
+          Editar
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Panel colapsable con el "pensamiento" de modelos thinking (reasoning.delta).
+function ReasoningPanel({
+  text,
+  streaming,
+  defaultOpen,
+}: {
+  text: string;
+  streaming?: boolean;
+  defaultOpen?: boolean;
+}) {
+  // Abierto mientras piensa (para ver el razonamiento en vivo) o cuando se
+  // re-expande desde el resumen post-turno; colapsable a mano. Los turnos
+  // cargados del historial llegan con streaming=false → colapsados.
+  const [open, setOpen] = useState(!!streaming || !!defaultOpen);
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/15">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ChevronRight
+          className={"size-3 transition-transform " + (open ? "rotate-90" : "")}
+        />
+        <Brain className="size-3 text-[#6C4FD6]" />
+        <span>{streaming ? "Pensando…" : "Razonamiento"}</span>
+      </button>
+      {open && (
+        <div className="max-h-64 overflow-auto whitespace-pre-wrap border-t border-border/60 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Chip compacto al que colapsan tools + razonamiento cuando el turno termina
+// (auto-limpieza: la conversación queda limpia, sólo la respuesta final). No se
+// borran datos: "ver pasos" los re-expande.
+function StepsSummary({
+  toolCount,
+  hasReasoning,
+  onExpand,
+}: {
+  toolCount: number;
+  hasReasoning: boolean;
+  onExpand: () => void;
+}) {
+  const parts: string[] = [];
+  if (toolCount > 0) {
+    parts.push(toolCount + (toolCount === 1 ? " herramienta" : " herramientas"));
+  }
+  if (hasReasoning) parts.push("razonamiento");
+  return (
+    <button
+      type="button"
+      onClick={onExpand}
+      className="flex items-center gap-1.5 self-start rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+    >
+      <Wrench className="size-3 text-[#6C4FD6]/70" />
+      <span>{parts.join(" · ")}</span>
+      <span className="opacity-60">· ver pasos</span>
+      <ChevronRight className="size-3" />
+    </button>
+  );
+}
+
+// Indicador "pensando…" mientras la respuesta del asistente está en streaming
+// pero todavía no llegó el primer token (ni reasoning ni tool calls). Sin esto
+// la burbuja queda vacía (solo el avatar) y el chat "se siente colgado" aunque
+// el time-to-first-token sea igual al del modo Terminal (que sí muestra spinner).
+function TypingDots() {
+  return (
+    <div
+      className="flex items-center gap-2 py-1"
+      role="status"
+      aria-label="Pensando…"
+    >
+      <span className="flex items-end gap-1">
+        <span className="size-1.5 animate-bounce rounded-full bg-[#6C4FD6] [animation-delay:-0.3s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-[#6C4FD6] [animation-delay:-0.15s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-[#6C4FD6]" />
+      </span>
+      <span className="clawk-shimmer-text text-sm font-medium">Pensando…</span>
+    </div>
+  );
+}
+
+function UserImagePreview({
+  image,
+}: {
+  image: { previewUrl: string; name: string };
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed || !image.previewUrl) {
+    return (
+      <div
+        title={image.name}
+        className="flex min-h-20 w-48 max-w-[12rem] flex-col justify-center rounded-lg border border-border bg-muted/25 px-3 py-2 text-left"
+      >
+        <span className="text-xs font-semibold text-foreground">
+          Imagen adjunta
+        </span>
+        <span className="mt-1 truncate text-[11px] text-muted-foreground">
+          {image.name || "imagen"}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={image.previewUrl}
+      alt={image.name}
+      title={image.name}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="max-h-48 max-w-[12rem] rounded-lg border border-border object-cover"
+    />
+  );
+}
+
+// memo: durante el streaming, message.delta crea un nuevo objeto SOLO para el
+// último mensaje (los anteriores conservan su referencia), así que con props
+// estables (onRegenerate/onQuote/canRegenerate) solo re-renderiza el mensaje
+// que está llegando — no toda la conversación.
+const MessageBubble = memo(function MessageBubble({
+  message,
+  onRegenerate,
+  canRegenerate,
+  onQuote,
+  onEdit,
+  canEdit,
+}: {
+  message: ChatMessage;
+  onRegenerate?: () => void;
+  canRegenerate?: boolean;
+  onQuote?: (message: ChatMessage) => void;
+  onEdit?: (messageId: string, newText: string) => void;
+  canEdit?: boolean;
+}) {
+  const isUser = message.role === "user";
+  const isCommand = message.content.trim().startsWith("/");
+  const isSlashOutput =
+    message.role === "assistant" && message.id.startsWith("slash-");
+
+  // Auto-limpieza: al terminar, tools + razonamiento colapsan a un chip
+  // "ver pasos" (la conversación queda limpia). Re-expandible a mano.
+  const [stepsOpen, setStepsOpen] = useState(false);
+
+  // Media generada por tools (image_generate / video_generate): debe seguir
+  // visible aunque los pasos se colapsen al chip "ver pasos" — sin esto, la
+  // imagen/video "desaparecía" al terminar el turno salvo que el modelo
+  // pegara la URL en su texto.
+  const toolMedia = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { src: string; video: boolean }[] = [];
+    for (const tc of message.toolCalls) {
+      for (const m of extractToolMedia(tc.result)) {
+        if (seen.has(m.src)) continue;
+        seen.add(m.src);
+        out.push(m);
+      }
+    }
+    return out;
+  }, [message.toolCalls]);
+
+  // Media local del agente: líneas "MEDIA:<path>" separadas del texto +
+  // markdown con paths locales reescrito hacia GET /media/local?path=….
+  const { text: assistantText, media: localMedia } = useMemo(
+    () => extractLocalMedia(message.content),
+    [message.content],
+  );
+  // Modo edición inline para mensajes del usuario (estilo ChatGPT).
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(message.content);
+
+  // Editar solo en mensajes del usuario que no son slash, fuera de streaming
+  // (canEdit = !busy) y con handler cableado.
+  const canEditThis = isUser && !isCommand && !!onEdit && !!canEdit;
+
+  const actions = !message.streaming ? (
+    <MessageActions
+      content={message.content}
+      onRegenerate={onRegenerate}
+      canRegenerate={canRegenerate}
+      onQuote={onQuote ? () => onQuote(message) : undefined}
+      onEdit={
+        canEditThis
+          ? () => {
+              setDraft(message.content);
+              setEditing(true);
+            }
+          : undefined
+      }
+    />
+  ) : null;
+
+  // Usuario: burbuja a la derecha (estilo Claude).
+  if (isUser) {
+    const cancelEdit = () => {
+      setEditing(false);
+      setDraft(message.content);
+    };
+    const saveEdit = () => {
+      const next = draft.trim();
+      if (!next || next === message.content.trim()) {
+        cancelEdit();
+        return;
+      }
+      onEdit?.(message.id, next);
+      setEditing(false);
+    };
+    return (
+      <div className="group flex flex-col items-end gap-1.5 py-4">
+        {message.images && message.images.length > 0 && (
+          <div className="flex max-w-[85%] flex-wrap justify-end gap-2">
+            {message.images.map((img, i) => (
+              <UserImagePreview key={i} image={img} />
+            ))}
+          </div>
+        )}
+        {editing ? (
+          <div className="flex w-full max-w-[85%] flex-col gap-2">
+            <textarea
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelEdit();
+                } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  saveEdit();
+                }
+              }}
+              rows={Math.min(8, draft.split("\n").length + 1)}
+              className="w-full resize-none rounded-2xl border border-[#6C4FD6]/40 bg-muted/50 px-4 py-2.5 text-sm leading-relaxed text-foreground focus:outline-none focus:ring-1 focus:ring-[#6C4FD6]"
+            />
+            <div className="flex items-center justify-end gap-2 text-xs">
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="rounded px-2 py-1 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={saveEdit}
+                disabled={!draft.trim() || draft.trim() === message.content.trim()}
+                className="rounded bg-[#6C4FD6] px-3 py-1 font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Guardar y reenviar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div
+              className={
+                "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed text-foreground " +
+                (isCommand
+                  ? "border border-[#6C4FD6]/30 bg-[#6C4FD6]/10 font-mono"
+                  : "bg-muted/50")
+              }
+            >
+              {message.content}
+            </div>
+            {actions}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // Asistente: texto flush con avatar mínimo.
+  const hasReasoning = !!(message.reasoning && message.reasoning.trim());
+  const hasTools = message.toolCalls.length > 0;
+  const hasSteps = hasTools || hasReasoning;
+  // Mientras transmite, mostramos tools + razonamiento en vivo (transparencia).
+  // Al terminar, se colapsan a un resumen hasta que el usuario expanda.
+  const showSteps = message.streaming || stepsOpen;
+  const showSummary = !message.streaming && hasSteps && !stepsOpen;
+
+  return (
+    <div className="clawk-liquid-message group my-2 flex gap-3 rounded-3xl border border-white/10 bg-background/22 p-4 shadow-sm shadow-black/10 backdrop-blur-sm transition-colors hover:border-[#6C4FD6]/25 hover:bg-background/30">
+      <div
+        className={
+          "flex size-7 shrink-0 items-center justify-center rounded-full " +
+          (message.streaming ? "clawk-glow" : "")
+        }
+      >
+        <img
+          src="/clawksis-logo-512.png"
+          alt="Clawksis"
+          draggable={false}
+          className="size-7 select-none object-contain"
+        />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        {isSlashOutput ? (
+          <SlashOutput content={message.content} />
+        ) : message.streaming &&
+          !message.content &&
+          message.toolCalls.length === 0 &&
+          !message.reasoning ? (
+          <TypingDots />
+        ) : (
+          <div className="text-[15px] leading-7 text-foreground/95">
+            <Markdown content={assistantText} streaming={message.streaming} />
+          </div>
+        )}
+
+        {/* Audio TTS / media local que el agente referencia (líneas MEDIA:<path>
+            o markdown con paths /root/…): audio como <audio controls>, imagen/
+            video vía MediaAttachment, todo puenteado por GET /media/local. */}
+        {localMedia.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {localMedia.map((m, i) =>
+              m.kind === "audio" ? (
+                <audio
+                  key={m.src + i}
+                  src={m.src}
+                  controls
+                  preload="metadata"
+                  title={m.name}
+                  className="w-full max-w-md"
+                />
+              ) : (
+                <MediaAttachment
+                  key={m.src + i}
+                  src={m.src}
+                  video={m.kind === "video"}
+                  alt={m.name}
+                />
+              ),
+            )}
+          </div>
+        )}
+
+        {showSteps && hasTools && (
+          <div className="mt-1 flex flex-col gap-1.5">
+            {message.toolCalls.map((tc) => (
+              <ToolCallRow key={tc.id} toolCall={tc} />
+            ))}
+          </div>
+        )}
+
+        {showSteps && hasReasoning && (
+          <ReasoningPanel
+            text={message.reasoning ?? ""}
+            streaming={message.streaming}
+            defaultOpen={!message.streaming}
+          />
+        )}
+
+        {showSummary && (
+          <StepsSummary
+            toolCount={message.toolCalls.length}
+            hasReasoning={hasReasoning}
+            onExpand={() => setStepsOpen(true)}
+          />
+        )}
+
+        {/* Con los pasos colapsados, la media generada se muestra igual (los
+            ToolCallRow ya la renderizan cuando los pasos están abiertos). */}
+        {!showSteps && toolMedia.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {toolMedia.map((m, i) => (
+              <MediaAttachment
+                key={m.src + i}
+                src={m.src}
+                video={m.video}
+                alt="media generada"
+              />
+            ))}
+          </div>
+        )}
+
+        {actions}
+      </div>
+    </div>
+  );
+});
+
+const SLASH_OUTPUT_COLLAPSE_CHARS = 1200;
+const SLASH_OUTPUT_COLLAPSE_LINES = 18;
+
+/** Salida de un comando slash: borde de acento + colapso de salidas largas. */
+function SlashOutput({ content }: { content: string }) {
+  const long =
+    content.length > SLASH_OUTPUT_COLLAPSE_CHARS ||
+    content.split("\n").length > SLASH_OUTPUT_COLLAPSE_LINES;
+  const [expanded, setExpanded] = useState(false);
+  const collapsed = long && !expanded;
+  return (
+    <div className="rounded-md border-l-2 border-[#6C4FD6]/40 bg-muted/20 py-1.5 pl-3 pr-2">
+      <div
+        className={
+          "text-[15px] leading-relaxed text-foreground" +
+          (collapsed
+            ? " max-h-72 overflow-hidden [mask-image:linear-gradient(to_bottom,black_70%,transparent)]"
+            : "")
+        }
+      >
+        <Markdown content={content} streaming={false} />
+      </div>
+      {long && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-xs font-medium text-[#6C4FD6] hover:underline"
+        >
+          {expanded ? "Mostrar menos" : "Mostrar más"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function AttachmentChip({
+  attachment,
+  onRemove,
+}: {
+  attachment: Attachment;
+  onRemove: () => void;
+}) {
+  const sizeKb = (attachment.size / 1024).toFixed(1);
+  return (
+    <div className="flex items-center gap-1.5 rounded border border-border bg-muted/30 px-2 py-1 text-xs">
+      <FileText className="size-3 shrink-0 text-[#6C4FD6]" />
+      <span className="max-w-[180px] truncate font-mono text-foreground" title={attachment.name}>
+        {attachment.name}
+      </span>
+      <span className="text-muted-foreground">· {sizeKb}KB</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={"Quitar " + attachment.name}
+        className="ml-0.5 rounded p-0.5 text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-colors"
+      >
+        <X className="size-3" />
+      </button>
+    </div>
+  );
+}
+
+function CitationChip({
+  citation,
+  onRemove,
+}: {
+  citation: Citation;
+  onRemove: () => void;
+}) {
+  const who = citation.role === "user" ? "Tú" : "Clawksis";
+  return (
+    <div className="flex items-center gap-1.5 rounded border border-[#6C4FD6]/40 bg-[#6C4FD6]/10 px-2 py-1 text-xs">
+      <Quote className="size-3 shrink-0 text-[#6C4FD6]" />
+      <span className="shrink-0 text-muted-foreground">{who}:</span>
+      <span
+        className="max-w-[200px] truncate text-foreground"
+        title={citation.excerpt}
+      >
+        {citation.excerpt}
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Quitar cita"
+        className="ml-0.5 rounded p-0.5 text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-colors"
+      >
+        <X className="size-3" />
+      </button>
+    </div>
+  );
+}
+
+function modelLikelyNeedsVisionTool(model: string | null): boolean {
+  const normalized = (model ?? "").trim().toLowerCase();
+  if (!normalized) return false;
+
+  // Modelos conocidos como text-only en el routing actual. No bloqueamos el
+  // envío; solo avisamos que, sin vision/OpenRouter o un modelo multimodal, la
+  // imagen puede quedar adjunta pero no analizada.
+  return [
+    "deepseek",
+    "gpt-oss",
+    "glm-5",
+    "glm-4.7",
+    "qwen3-coder",
+    "qwen3-32b",
+    "qwen3-235b",
+    "minimax-m2",
+  ].some((needle) => normalized.includes(needle));
+}
+
+interface ComposerProps {
+  busy: boolean;
+  disabled: boolean;
+  resuming: boolean;
+  onSend: (text: string, images?: { previewUrl: string; name: string }[]) => void;
+  onInterrupt: () => void;
+  sendRpc: RpcSender;
+  ready: boolean;
+  sessionId: string | null;
+  currentModel: string | null;
+  citations: Citation[];
+  onRemoveCitation: (id: string) => void;
+  onClearCitations: () => void;
+  buildPromptWithQuotes: (text: string) => string;
+}
+
+function Composer({
+  busy,
+  disabled,
+  resuming,
+  onSend,
+  onInterrupt,
+  sendRpc,
+  ready,
+  sessionId,
+  currentModel,
+  citations,
+  onRemoveCitation,
+  onClearCitations,
+  buildPromptWithQuotes,
+}: ComposerProps) {
+  const [value, setValue] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Historial de inputs (↑/↓ tipo terminal) + flag para reposicionar el caret.
+  const history = useCommandHistory();
+  const caretToEndRef = useRef(false);
+  const voice = useVoiceInput();
+  // Slash-command autocomplete (mismo backend que el terminal: complete.slash).
+  const slashRef = useRef<SlashPopoverHandle>(null);
+  const slashGw = useMemo(
+    () =>
+      ({
+        request: (m: string, p?: Record<string, unknown>) => sendRpc(m, p),
+      }) as unknown as GatewayClient,
+    [sendRpc],
+  );
+  const {
+    attachments,
+    addFiles,
+    removeAttachment,
+    clear: clearAttachments,
+    error: attachError,
+    buildPromptWithAttachments,
+  } = useAttachments();
+  const {
+    images,
+    addImage,
+    removeImage,
+    clear: clearImages,
+    uploading: imagesUploading,
+    error: imgError,
+  } = useImageAttachments(sendRpc, sessionId);
+  const [dragging, setDragging] = useState(false);
+  const imageVisionWarning =
+    images.length > 0 && modelLikelyNeedsVisionTool(currentModel);
+
+  // Pegar / soltar: imágenes → adjunto de imagen (upload + image.attach);
+  // documentos de texto → adjunto inline (useAttachments).
+  const handleIncomingFiles = async (files: File[]) => {
+    const textFiles: File[] = [];
+    for (const f of files) {
+      if (f.type.startsWith("image/")) await addImage(f);
+      else textFiles.push(f);
+    }
+    if (textFiles.length) await addFiles(textFiles);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (files.length > 0) {
+      e.preventDefault();
+      void handleIncomingFiles(files);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const files = Array.from(e.dataTransfer?.files ?? []);
+    if (files.length > 0) void handleIncomingFiles(files);
+  };
+
+  const handleMic = () => {
+    if (voice.listening) {
+      voice.stop();
+      return;
+    }
+    // Lo dictado se agrega después de lo ya escrito (en vivo con Web Speech).
+    const base = value.trim().length > 0 ? value.replace(/\s+$/, "") + " " : "";
+    void voice.start((t) => setValue(base + t));
+  };
+
+  // Con imágenes no se puede encolar mientras el agente está ocupado (image.attach
+  // stagea en la sesión viva). En ese caso el envío espera a que el turno termine.
+  const blockedByImagesWhileBusy = busy && images.length > 0;
+  const canSend =
+    (value.trim().length > 0 ||
+      attachments.length > 0 ||
+      citations.length > 0 ||
+      images.length > 0) &&
+    !disabled &&
+    !imagesUploading &&
+    !blockedByImagesWhileBusy;
+
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+  }, [value]);
+
+  // Tras recuperar una entrada del historial, poner el caret al final.
+  useEffect(() => {
+    if (!caretToEndRef.current) return;
+    caretToEndRef.current = false;
+    const ta = textareaRef.current;
+    if (ta) ta.selectionStart = ta.selectionEnd = ta.value.length;
+  }, [value]);
+
+  const handleSubmit = () => {
+    if (!canSend) return;
+    if (voice.listening) voice.stop();
+    let finalPrompt = buildPromptWithAttachments(buildPromptWithQuotes(value));
+    // Solo imágenes (sin texto): el prompt quedaría vacío y el backend
+    // descartaría el turno, dejando la imagen huérfana. Mandamos un prompt mínimo.
+    if (!finalPrompt.trim() && images.length > 0) {
+      finalPrompt = "¿Qué ves en esta imagen?";
+    }
+    if (!finalPrompt.trim()) return;
+    history.push(value);
+    onSend(
+      finalPrompt,
+      images.map((i) => ({ previewUrl: i.previewUrl, name: i.name })),
+    );
+    setValue("");
+    clearAttachments();
+    onClearCitations();
+    // Las imágenes ya están stageadas en la sesión (image.attach); el backend
+    // las consume en este turno. Limpiamos los chips locales.
+    clearImages();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // El popover de comandos consume Arrow/Tab/Escape cuando está visible.
+    if (slashRef.current?.handleKey(e)) return;
+
+    // ↑/↓ navegan el historial de inputs cuando el caret está en la primera/
+    // última línea (no interfiere con edición multilínea ni con el popover).
+    const pos = e.currentTarget.selectionStart ?? 0;
+    if (e.key === "ArrowUp" && !value.slice(0, pos).includes("\n")) {
+      const entry = history.prev(value);
+      if (entry !== null) {
+        e.preventDefault();
+        caretToEndRef.current = true;
+        setValue(entry);
+        return;
+      }
+    }
+    if (e.key === "ArrowDown" && !value.slice(pos).includes("\n")) {
+      const entry = history.next();
+      if (entry !== null) {
+        e.preventDefault();
+        caretToEndRef.current = true;
+        setValue(entry);
+        return;
+      }
+    }
+
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  const handlePaperclipClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      await handleIncomingFiles(Array.from(files));
+    }
+    // Reset input para que se pueda seleccionar el mismo archivo otra vez
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  return (
+    <div className="border-t border-white/10 bg-background/35 px-4 py-4 backdrop-blur-xl">
+      <div
+        className="relative mx-auto w-full max-w-4xl"
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!dragging) setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          // Ignorar el dragleave que cruza hacia un hijo (textarea/botones):
+          // si no, el overlay parpadea al mover el mouse por dentro.
+          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+          setDragging(false);
+        }}
+        onDrop={handleDrop}
+      >
+        {dragging && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-[#6C4FD6] bg-[#6C4FD6]/10 text-sm font-medium text-foreground">
+            Soltá para adjuntar (imágenes o documentos)
+          </div>
+        )}
+      {/* Chips de citas */}
+      {citations.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {citations.map((c) => (
+            <CitationChip
+              key={c.id}
+              citation={c}
+              onRemove={() => onRemoveCitation(c.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Chips de archivos adjuntos */}
+      {attachments.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {attachments.map((att) => (
+            <AttachmentChip
+              key={att.id}
+              attachment={att}
+              onRemove={() => removeAttachment(att.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Chips de imágenes (pegadas / arrastradas) */}
+      {images.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {images.map((img) => (
+            <div key={img.id} className="group relative">
+              <img
+                src={img.previewUrl}
+                alt={img.name}
+                title={img.name}
+                className="size-14 rounded-md border border-border object-cover"
+              />
+              {img.status === "uploading" && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-md bg-background/70 backdrop-blur-sm">
+                  <Loader2 className="size-4 animate-spin text-[#6C4FD6]" />
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => removeImage(img.id)}
+                aria-label={"Quitar " + img.name}
+                className="absolute -right-1.5 -top-1.5 rounded-full bg-destructive p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {imagesUploading && (
+        <div className="mb-2 flex items-center gap-2 rounded border border-[#6C4FD6]/30 bg-[#6C4FD6]/10 px-2 py-1 text-xs text-muted-foreground">
+          <Loader2 className="size-3 shrink-0 animate-spin text-[#6C4FD6]" />
+          <span>Procesando imagen…</span>
+        </div>
+      )}
+
+      {imageVisionWarning && (
+        <div className="mb-2 flex items-start gap-2 rounded border border-amber-400/30 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-100">
+          <AlertCircle className="mt-0.5 size-3 shrink-0" />
+          <span>
+            El modelo actual{currentModel ? ` (${currentModel})` : ""} puede no
+            analizar imágenes en este chat. La imagen quedará adjunta, pero para
+            verla necesitas activar vision/OpenRouter o cambiar a un modelo con
+            entrada de imagen.
+          </span>
+        </div>
+      )}
+
+      {/* Error de adjuntar / voz / imagen */}
+      {(attachError || voice.error || imgError) && (
+        <div className="mb-2 flex items-center gap-2 rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
+          <AlertCircle className="size-3 shrink-0" />
+          <span>{attachError ?? voice.error ?? imgError}</span>
+        </div>
+      )}
+
+      {/* Input file oculto */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".txt,.md,.markdown,.json,.yaml,.yml,.toml,.xml,.py,.ts,.tsx,.js,.jsx,.mjs,.cjs,.rs,.go,.java,.kt,.rb,.php,.swift,.c,.cpp,.h,.hpp,.cs,.sh,.bash,.zsh,.fish,.html,.css,.scss,.sass,.csv,.tsv,.sql,.env,.ini,.conf,.cfg,.log,.vue,.svelte,.graphql,.gql,text/*,image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp"
+        title="Adjuntar archivo de texto o imagen"
+        onChange={handleFileInputChange}
+        className="hidden"
+      />
+
+      {/* Composer principal — layout tipo Claude: textarea arriba, controles abajo */}
+      <div className="clawk-liquid-composer relative rounded-3xl border border-white/10 bg-background/60 px-4 py-3 shadow-2xl shadow-black/25 ring-1 ring-white/5 backdrop-blur-2xl transition-all duration-200 focus-within:border-[#8B6DFF]/70 focus-within:shadow-[#6C4FD6]/20">
+        {/* Autocomplete de slash commands (/) — flota sobre el composer. */}
+        <SlashPopover ref={slashRef} input={value} gw={slashGw} onApply={setValue} />
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            history.resetNav();
+          }}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          placeholder={
+            resuming
+              ? "Preparando conversación…"
+              : disabled
+                ? "Esperando conexión..."
+                : "Mensaje a Clawksis... (Shift+Enter para nueva línea)"
+          }
+          rows={1}
+          disabled={disabled}
+          className="w-full resize-none bg-transparent px-1 text-[15px] leading-7 text-foreground placeholder:text-muted-foreground/70 outline-none disabled:opacity-50"
+        />
+        <div className="mt-2.5 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handlePaperclipClick}
+            disabled={disabled}
+            aria-label="Adjuntar archivo"
+            title="Adjuntar documento o imagen (también podés pegar o arrastrar)"
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+          >
+            <Paperclip className="size-4" />
+          </button>
+          <ModelSelectorMenu
+            sendRpc={sendRpc}
+            ready={ready}
+            sessionId={sessionId}
+            currentModel={currentModel}
+            disabled={disabled || busy}
+          />
+          <ReasoningSelector
+            sendRpc={sendRpc}
+            sessionId={sessionId}
+            disabled={disabled || busy}
+          />
+
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              onClick={handleMic}
+              disabled={disabled || !voice.supported || voice.transcribing}
+              aria-label={
+                voice.listening ? "Detener grabación" : "Dictar por voz"
+              }
+              title={
+                !voice.supported
+                  ? "Tu navegador no soporta dictado por voz"
+                  : voice.transcribing
+                    ? "Transcribiendo…"
+                    : voice.listening
+                      ? "Detener (hablá y se transcribe en vivo)"
+                      : voice.live
+                        ? "Dictar por voz — transcripción en vivo"
+                        : "Dictar por voz — se transcribe al soltar"
+              }
+              className={
+                "rounded-lg p-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent " +
+                (voice.listening
+                  ? "bg-destructive/15 text-destructive animate-pulse"
+                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground")
+              }
+            >
+              {voice.transcribing ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Mic className="size-4" />
+              )}
+            </button>
+
+            {/* Detener el turno actual (la cola se mantiene y drena después). */}
+            {busy && (
+              <button
+                type="button"
+                onClick={onInterrupt}
+                aria-label="Detener respuesta"
+                title="Detener la respuesta actual"
+                className="flex size-8 items-center justify-center rounded-lg bg-destructive text-white hover:bg-destructive/80 transition-colors"
+              >
+                <Square className="size-3.5 fill-current" />
+              </button>
+            )}
+            {/* Enviar / encolar: habilitado aunque el agente esté ocupado. */}
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!canSend}
+              aria-label={busy ? "Agregar a la cola" : "Enviar mensaje"}
+              title={busy ? "Agregar a la cola" : "Enviar mensaje"}
+              className={
+                "flex size-8 items-center justify-center rounded-lg transition-colors " +
+                (canSend
+                  ? "bg-[#6C4FD6] text-white hover:bg-[#5a40c2]"
+                  : "bg-muted/40 text-muted-foreground cursor-not-allowed")
+              }
+            >
+              <ArrowUp className="size-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+      </div>
+    </div>
+  );
+}
+
+function ConnectionBanner({
+  status,
+  errorMessage,
+}: {
+  status: ConnectionStatus;
+  errorMessage: string | null;
+}) {
+  if (status === "connected") return null;
+
+  const isError = status === "error" || (errorMessage && status === "disconnected");
+  const isConnecting = status === "connecting" || status === "idle";
+
+  if (isConnecting) {
+    return (
+      <div className="flex items-center gap-2 border-b border-border bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" />
+        <span>Conectando al gateway...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+      {isError ? <AlertCircle className="size-3" /> : <WifiOff className="size-3" />}
+      <span>
+        {errorMessage ?? "Conexión perdida. Recargá la página para reintentar."}
+      </span>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="flex flex-1 items-center justify-center px-4 py-12">
+      <div className="flex max-w-md flex-col items-center gap-3 text-center">
+        <div className="flex size-12 items-center justify-center rounded-lg bg-[#6C4FD6]/10">
+          <img
+            src="/clawksis-logo-512.png"
+            alt="Clawksis"
+            draggable={false}
+            className="size-9 select-none object-contain"
+          />
+        </div>
+        <h2 className="text-base font-semibold text-foreground">
+          Empezá una conversación
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Escribí un mensaje abajo para empezar a chatear con Clawksis.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Burbuja de un mensaje en cola (estilo Telegram): atenuada, con borde punteado
+// y un botón para cancelarlo antes de que se envíe.
+function QueuedBubble({
+  item,
+  onCancel,
+}: {
+  item: QueuedMessage;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="group flex flex-col items-end gap-1 py-2">
+      <div className="flex max-w-[85%] items-start gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Cancelar mensaje en cola"
+          title="Cancelar"
+          className="mt-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+        >
+          <X className="size-3.5" />
+        </button>
+        <div className="whitespace-pre-wrap rounded-2xl rounded-br-md border border-dashed border-border bg-muted/20 px-4 py-2.5 text-sm leading-relaxed text-muted-foreground">
+          {item.text}
+        </div>
+      </div>
+      <span className="flex items-center gap-1 text-[11px] text-muted-foreground/70">
+        <Clock className="size-2.5" /> En cola
+      </span>
+    </div>
+  );
+}
+
+
+type SidebarActivityOverride = {
+  started_at?: number;
+  preview?: string;
+  message_count?: number;
+  model?: string;
+  model_provider?: string;
+  title?: string;
+};
+
+const SIDEBAR_ACTIVITY_CACHE_KEY = "clawksis.chat.sidebarActivityOverrides.v1";
+
+function readSidebarActivityOverrides(): Record<string, SidebarActivityOverride> {
+  try {
+    if (typeof window === "undefined") return {};
+    const raw = window.localStorage.getItem(SIDEBAR_ACTIVITY_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSidebarActivityOverrides(
+  value: Record<string, SidebarActivityOverride>,
+): void {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SIDEBAR_ACTIVITY_CACHE_KEY, JSON.stringify(value));
+  } catch {
+    // No bloquear el chat si localStorage está lleno o deshabilitado.
+  }
+}
+
+export default function ChatModern() {
+  const {
+    status,
+    session,
+    messages,
+    busy,
+    sendMessage,
+    interrupt,
+    errorMessage,
+    liveStatus,
+    clearError,
+    sendRpc,
+    readyForRpc,
+    switchSession,
+    resuming,
+    regenerateLast,
+    editAndResubmit,
+  } = useChatGateway();
+
+  const {
+    sessions,
+    projects,
+    loading: sessionsLoading,
+    error: sessionsError,
+    createSession,
+    deleteSession,
+    renameSession,
+    createProject,
+    updateProject,
+    archiveProject,
+    moveSessionToProject,
+    refresh: refreshSessions,
+  } = useSessions(sendRpc, readyForRpc);
+
+  const {
+    sessionUsage,
+    usageByModel,
+    loading: tokenUsageLoading,
+    error: tokenUsageError,
+    refresh: refreshTokenUsage,
+  } = useTokenUsage(sendRpc, readyForRpc);
+
+  const tokensButtonRef = useRef<HTMLButtonElement>(null);
+  const [tokensPopoverOpen, setTokensPopoverOpen] = useState(false);
+  // Panel lateral Visualización/Media — estado compartido con la barra de
+  // pestañas unificada del ChatRouter (sidePanelStore, persistido).
+  const sidePanel = useSidePanel();
+  const didAutoOpenSidebarTopRef = useRef(false);
+  // ID solo visual para resaltar el sidebar. No se usa para enviar mensajes.
+  const [visualActiveSessionId, setVisualActiveSessionId] = useState<string | null>(null);
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [projectDialogError, setProjectDialogError] = useState<string | null>(null);
+
+  // Comandos interactivos interceptados: en el worker headless (sin TTY) el
+  // picker de /model y los modales de confirmación destructivos se cuelgan, así
+  // que los resolvemos con UI nativa de React.
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [destructiveConfirm, setDestructiveConfirm] = useState<{
+    command: string;
+    raw: string;
+  } | null>(null);
+  // Adapter mínimo sobre sendRpc para los diálogos que esperan un GatewayClient.
+  const gwForDialogs = useMemo(
+    () =>
+      ({
+        request: (method: string, params?: Record<string, unknown>) =>
+          sendRpc(method, params),
+      }) as unknown as GatewayClient,
+    [sendRpc],
+  );
+
+  // optimistic-new-chat-sidebar-v1
+  // Conversaciones creadas localmente que aún no aparecen en session.list.
+  const [optimisticSessions, setOptimisticSessions] = useState<
+    Array<(typeof sessions)[number]>
+  >([]);
+
+  // sidebar-recency-override-v1
+  // Actividad local reciente: mueve conversaciones viejas arriba inmediatamente
+  // al enviar un mensaje, incluso antes de que session.list persista/ordene.
+  const [sidebarActivityOverrides, setSidebarActivityOverrides] = useState<
+    Record<string, SidebarActivityOverride>
+  >(() => readSidebarActivityOverrides());
+
+  // sidebarSessions incluye filas optimistas y actividad local reciente.
+  // Así "+ Nueva conversación" aparece sin esperar recarga y una conversación
+  // vieja sube arriba inmediatamente al enviar un mensaje.
+  const sidebarSessionMap = new Map<string, (typeof sessions)[number]>();
+
+  for (const real of sessions) {
+    const rawOverride = sidebarActivityOverrides[real.id] ?? {};
+    const { title, model, model_provider, ...safeOverride } = rawOverride;
+
+    sidebarSessionMap.set(real.id, {
+      ...real,
+      ...safeOverride,
+      ...(typeof title === "string" ? { title } : {}),
+      ...(typeof model === "string" ? { model } : {}),
+      ...(typeof model_provider === "string" ? { model_provider } : {}),
+    });
+  }
+
+  for (const optimistic of optimisticSessions) {
+    const existing = sidebarSessionMap.get(optimistic.id);
+    sidebarSessionMap.set(optimistic.id, {
+      ...(existing ?? optimistic),
+      ...optimistic,
+    });
+  }
+
+  const sidebarSessions = Array.from(sidebarSessionMap.values()).sort(
+    (a, b) => (b.started_at || 0) - (a.started_at || 0),
+  );
+
+  useEffect(() => {
+    writeSidebarActivityOverrides(sidebarActivityOverrides);
+  }, [sidebarActivityOverrides]);
+
+  // optimistic-id-prefer-persisted-v1
+  // Las conversaciones nuevas pueden nacer con un sessionKey temporal y luego
+  // quedar persistidas con un sessionId real. Si el real ya existe en la lista
+  // REST, debe ganar sobre el temporal para evitar ghosts 4007 en el sidebar.
+  const liveSessionIdIsPersisted =
+    !!session.sessionId && sessions.some((s) => s.id === session.sessionId);
+
+  const activeSessionKey = liveSessionIdIsPersisted
+    ? session.sessionId
+    : session.sessionKey ?? session.sessionId;
+
+  const sessionIdExistsInSidebar =
+    !!activeSessionKey && sidebarSessions.some((s) => s.id === activeSessionKey);
+
+  const newestListedSessionId = sidebarSessions[0]?.id ?? null;
+
+  // ID visual/persistido para resaltar sidebar y consultar métricas.
+  // session.sessionId sigue siendo el ID operativo vivo para backend.
+  const sidebarActiveSessionId =
+    visualActiveSessionId ?? (sessionIdExistsInSidebar ? activeSessionKey : null);
+
+  // sidebar-auto-open-top-on-boot-v1
+  // Si localStorage reordenó el sidebar por actividad reciente, abrimos esa
+  // conversación de verdad. Esto evita que el header/sidebar muestren una sesión
+  // mientras el body todavía pertenece a otra sesión viva del gateway.
+  useEffect(() => {
+    if (didAutoOpenSidebarTopRef.current) return;
+    if (!readyForRpc || sessionsLoading || resuming || busy) return;
+    if (!newestListedSessionId) return;
+
+    didAutoOpenSidebarTopRef.current = true;
+    setVisualActiveSessionId(newestListedSessionId);
+
+    if (newestListedSessionId !== activeSessionKey) {
+      void switchSession(newestListedSessionId);
+    }
+  }, [
+    readyForRpc,
+    sessionsLoading,
+    resuming,
+    busy,
+    newestListedSessionId,
+    activeSessionKey,
+    switchSession,
+  ]);
+
+  useEffect(() => {
+    if (
+      !visualActiveSessionId &&
+      activeSessionKey &&
+      sessions.some((s) => s.id === activeSessionKey)
+    ) {
+      setVisualActiveSessionId(activeSessionKey);
+    }
+  }, [visualActiveSessionId, activeSessionKey, sessions]);
+
+  // session-key-reconcile-v1
+  // Una conversación nueva nace con un ID vivo/optimista del gateway. Al primer
+  // prompt, el backend puede crear/reanclar una fila persistida con un ID real
+  // distinto. Si dejamos el sidebar apuntando al ID temporal, luego al volver a
+  // esa entrada aparece 4007: session not found.
+  //
+  // Cuando detectamos que activeSessionKey ya existe en la lista persistida y el
+  // visualActiveSessionId todavía apunta a un draft optimista distinto, movemos
+  // el foco visual al ID persistido y migramos el preview/actividad.
+  useEffect(() => {
+    if (!activeSessionKey || !visualActiveSessionId) return;
+    if (visualActiveSessionId === activeSessionKey) return;
+
+    const activeIsPersisted = sessions.some((s) => s.id === activeSessionKey);
+    const visualIsOptimistic = optimisticSessions.some(
+      (s) => s.id === visualActiveSessionId,
+    );
+
+    if (!activeIsPersisted || !visualIsOptimistic) return;
+
+    setVisualActiveSessionId(activeSessionKey);
+
+    setOptimisticSessions((prev) =>
+      prev.filter(
+        (s) => s.id !== visualActiveSessionId && s.id !== activeSessionKey,
+      ),
+    );
+
+    setSidebarActivityOverrides((prev) => {
+      const source = prev[visualActiveSessionId];
+      if (!source) return prev;
+
+      const next = { ...prev };
+      delete next[visualActiveSessionId];
+
+      if (!next[activeSessionKey]) {
+        next[activeSessionKey] = source;
+      }
+
+      return next;
+    });
+  }, [
+    activeSessionKey,
+    visualActiveSessionId,
+    sessions,
+    optimisticSessions,
+  ]);
+
+  // optimistic-ghost-cleanup-v1
+  // Un draft optimista solo debe vivir mientras sea la sesión activa/viva.
+  // Si ya no está activo y tampoco existe como sesión persistida, sacarlo del
+  // sidebar evita que el usuario haga clic en una entrada que termina en 4007.
+  useEffect(() => {
+    if (optimisticSessions.length === 0) return;
+
+    const persistedIds = new Set(sessions.map((s) => s.id));
+    const liveIds = new Set(
+      [session.sessionId, session.sessionKey, visualActiveSessionId]
+        .filter(Boolean)
+        .map(String),
+    );
+
+    setOptimisticSessions((prev) => {
+      const now = Date.now() / 1000;
+      const optimisticGraceSeconds = 90;
+
+      const next = prev.filter((item) => {
+        // Si ya existe persistida en REST, la fila optimista sobra.
+        if (persistedIds.has(item.id)) return false;
+
+        // Si sigue siendo la sesión activa/viva/visual, conservar.
+        if (liveIds.has(item.id)) return true;
+
+        // optimistic-stored-session-grace-v2
+        // En chats nuevos, el sidebar usa storedSessionId desde session.create,
+        // pero /api/sessions puede tardar unos segundos en devolver esa fila
+        // después del primer prompt. Si cambiamos de chat justo en esa ventana,
+        // no debemos ocultarla: parece que "desapareció" hasta recargar.
+        const startedAt =
+          typeof item.started_at === "number" ? item.started_at : now;
+        const ageSeconds = now - startedAt;
+
+        return ageSeconds < optimisticGraceSeconds;
+      });
+
+      return next.length === prev.length ? prev : next;
+    });
+  }, [
+    optimisticSessions.length,
+    sessions,
+    session.sessionId,
+    session.sessionKey,
+    visualActiveSessionId,
+  ]);
+
+  useEffect(() => {
+    if (optimisticSessions.length === 0) return;
+    setOptimisticSessions((prev) =>
+      prev.filter((opt) => !sessions.some((real) => real.id === opt.id)),
+    );
+  }, [sessions, optimisticSessions.length]);
+
+
+  // tokens-refresh-on-active-session-v1
+  // Rehidrata el contador del header al recargar la página o cambiar de sesión.
+  useEffect(() => {
+    if (!readyForRpc || !sidebarActiveSessionId) return;
+    void refreshTokenUsage(sidebarActiveSessionId);
+  }, [readyForRpc, sidebarActiveSessionId, refreshTokenUsage]);
+
+  // tokens-refresh-after-message-v1
+  // Después de una respuesta, session.usage puede tardar un poco en persistir.
+  // Refrescamos para que conversaciones nuevas no se queden en 0 tokens.
+  useEffect(() => {
+    if (!readyForRpc || busy || !sidebarActiveSessionId || messages.length === 0) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void refreshTokenUsage(sidebarActiveSessionId);
+    }, 800);
+
+    return () => window.clearTimeout(timer);
+  }, [readyForRpc, busy, messages.length, sidebarActiveSessionId, refreshTokenUsage]);
+
+
+
+  const handleTokensClick = () => {
+    const willOpen = !tokensPopoverOpen;
+    setTokensPopoverOpen(willOpen);
+    if (willOpen) {
+      void refreshTokenUsage(sidebarActiveSessionId ?? session.sessionId);
+    }
+  };
+
+  const {
+    citations,
+    addCitation,
+    removeCitation,
+    clear: clearCitations,
+    buildPromptWithQuotes,
+  } = useCitations();
+
+  // Estable para que memo(MessageBubble) no re-renderice toda la lista.
+  const handleQuote = useCallback(
+    (m: ChatMessage) => addCitation({ role: m.role, content: m.content }),
+    [addCitation],
+  );
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Autoscroll inteligente: sigue al fondo sólo si ya estás cerca; si subiste a
+  // leer, te deja quieto y muestra el pill "saltar a lo último".
+  const { showJump, scrollToBottom } = useAutoScroll(
+    scrollRef,
+    messages,
+    session.sessionId,
+  );
+
+  // Cola estilo Telegram: enviar si el agente está libre, encolar si está ocupado.
+  const queue = useMessageQueue({
+    busy,
+    ready: readyForRpc,
+    hasSession: !!session.sessionId,
+    send: sendMessage,
+  });
+
+  const isConnecting = status === "connecting" || status === "idle";
+  const composerDisabled =
+    status !== "connected" || !session.sessionId || resuming;
+
+  // Botón rojo = PARAR TODO: interrumpe el turno Y vacía la cola. Sin el
+  // clear, el mensaje encolado se auto-disparaba ~700ms después del interrupt
+  // y el agente "seguía de largo" — el bug de "le di stop y continuó".
+  const handleInterrupt = useCallback(() => {
+    queue.clear();
+    interrupt();
+  }, [queue, interrupt]);
+
+  const handleSelectSession = (targetId: string) => {
+    if (targetId === sidebarActiveSessionId) return;
+    queue.clear();
+    setVisualActiveSessionId(targetId);
+    void switchSession(targetId);
+  };
+
+  const handleSend = (
+    text: string,
+    images?: { previewUrl: string; name: string }[],
+  ) => {
+    const trimmed = text.trim();
+
+    // Comandos interactivos que cuelgan el worker headless (sin TTY): los
+    // resolvemos con UI nativa de React en vez de mandarlos al worker.
+    if (trimmed.startsWith("/")) {
+      const base = trimmed.slice(1).split(/\s+/)[0].toLowerCase();
+      const rest = trimmed.slice(1 + base.length).trim();
+      // /model SIN args → picker React. Con args ("/model opus") va directo al
+      // worker (es un config.set, funciona headless).
+      if (base === "model" && !rest) {
+        setModelPickerOpen(true);
+        return;
+      }
+      // Destructivos → confirmación React; al confirmar añadimos el token de
+      // skip ("now") para que el worker no abra su propio modal y cuelgue.
+      if (
+        (base === "new" || base === "reset" || base === "clear") &&
+        !/(^|\s)(now|--yes|-y)(\s|$)/i.test(rest)
+      ) {
+        setDestructiveConfirm({ command: base, raw: trimmed });
+        return;
+      }
+    }
+
+    // /stop con un turno corriendo = interrupción INMEDIATA (mismo RPC que el
+    // botón rojo). El /stop del backend vía slash.exec no corta un turno en
+    // vuelo — por eso "seguía de largo" tras pedirle parar. La cola se vacía
+    // TAMBIÉN: si quedara un mensaje encolado, el drenado lo dispararía
+    // ~700ms después del interrupt y el agente "seguiría de largo" con él.
+    if (busy && (trimmed === "/stop" || trimmed === "/interrupt")) {
+      queue.clear();
+      interrupt();
+      return;
+    }
+
+    // Cola estilo Telegram: si el agente está ocupado, encolamos el texto en
+    // vez de mandarlo (se dispara solo al terminar el turno). NO se encolan:
+    //  - slash commands: varios (/steer /goal /retry /queue) son "pending-input",
+    //    diseñados para correr A MITAD de turno → van directo, no a la cola.
+    //  - mensajes con imágenes: image.attach stagea en la sesión viva → iría al
+    //    turno equivocado (lo bloquea el composer mientras está ocupado).
+    if (busy && !trimmed.startsWith("/") && !(images && images.length)) {
+      queue.enqueue(text);
+      return;
+    }
+
+    const activeId = sidebarActiveSessionId ?? session.sessionId;
+
+    if (activeId && trimmed) {
+      const current = sidebarSessions.find((s) => s.id === activeId);
+
+      setSidebarActivityOverrides((prev) => ({
+        ...prev,
+        [activeId]: {
+          started_at: Date.now() / 1000,
+          preview: trimmed,
+          message_count: Math.max((current?.message_count ?? 0) + 1, 1),
+          model: session.model ?? current?.model ?? undefined,
+        },
+      }));
+
+      setVisualActiveSessionId(activeId);
+    }
+
+    sendMessage(text, images);
+    scrollToBottom();
+  };
+
+  const creatingChatRef = useRef(false);
+
+  const handleNewChat = async (projectId: string | null = null) => {
+    if (creatingChatRef.current) return;
+    creatingChatRef.current = true;
+
+    try {
+      queue.clear();
+      const created = await createSession(projectId);
+      if (created) {
+        const liveId = created.sessionId;
+        const storedId = created.storedSessionId || liveId;
+
+        const project = projectId
+          ? projects.find((p) => p.id === projectId) ?? null
+          : null;
+
+        setVisualActiveSessionId(storedId);
+        setOptimisticSessions((prev) => [
+          {
+            id: storedId,
+            title: project ? "Nuevo chat en " + project.name : "Nueva conversación",
+            preview: "",
+            source: "dashboard",
+            started_at: Date.now() / 1000,
+            message_count: 0,
+            model: session.model,
+            model_provider: session.modelProvider,
+            project_id: project?.id ?? null,
+            project_name: project?.name ?? null,
+            project_archived: false,
+          } as (typeof sessions)[number],
+          ...prev.filter((s) => s.id !== storedId),
+        ]);
+
+        // projectId is passed to session.create so the gateway can persist it
+        // when the first real prompt creates the DB row. Do not call the REST
+        // move endpoint here: empty live drafts do not have a DB row yet.
+        //
+        // new-chat-stored-session-contract-v1:
+        // liveId es para prompt.submit; storedId es para sidebar/historial.
+        await switchSession(liveId, {
+          assumeLive: true,
+          sessionKey: storedId,
+        });
+
+        // Refresh Slim v1:
+        // La sesión ya aparece por render optimista y createSession() reconcilia
+        // en segundo plano. Un único refresh diferido basta para recoger cambios
+        // posteriores como título/modelo cuando ya exista fila persistida.
+        window.setTimeout(() => {
+          void refreshSessions();
+        }, 1200);
+      }
+    } finally {
+      creatingChatRef.current = false;
+    }
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    if (!window.confirm("¿Borrar esta conversación? No se puede deshacer.")) return;
+    // Si es la conversación activa, el gateway rechaza borrarla mientras está
+    // viva. Soltamos la sesión (cambiando a otra / nueva) ANTES de borrarla.
+    if (id === sidebarActiveSessionId) {
+      queue.clear();
+      const fallback = sessions.find((s) => s.id !== id);
+      if (fallback) {
+          setVisualActiveSessionId(fallback.id);
+          await switchSession(fallback.id);
+        }
+      else await handleNewChat();
+    }
+    setSidebarActivityOverrides((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    await deleteSession(id);
+  };
+
+  const [projectSettingsProject, setProjectSettingsProject] =
+    useState<ProjectSettingsProject | null>(null);
+  const [projectSettingsError, setProjectSettingsError] = useState<string | null>(null);
+
+  const handleConfigureProject = (project: ProjectSettingsProject) => {
+    setProjectSettingsError(null);
+    setProjectSettingsProject(project);
+  };
+
+  const handleSaveProjectSettings = async (
+    projectId: string,
+    updates: {
+      name: string;
+      description: string;
+      instructions: string;
+    },
+  ): Promise<boolean> => {
+    const saved = await updateProject(projectId, updates);
+
+    if (!saved) {
+      setProjectSettingsError("No se pudo guardar el proyecto. Revisa el nombre o intenta de nuevo.");
+      return false;
+    }
+
+    setProjectSettingsError(null);
+    setProjectSettingsProject(saved);
+    await refreshSessions();
+    return true;
+  };
+
+  const handleArchiveProjectSettings = async (projectId: string): Promise<boolean> => {
+    const ok = await archiveProject(projectId);
+
+    if (!ok) {
+      setProjectSettingsError("No se pudo archivar el proyecto. Intenta de nuevo.");
+      return false;
+    }
+
+    setProjectSettingsError(null);
+    setProjectSettingsProject(null);
+    await refreshSessions();
+    return true;
+  };
+
+  const handleCreateProject = () => {
+    setProjectDialogError(null);
+    setProjectDialogOpen(true);
+  };
+
+  const handleSubmitProjectCreate = async (name: string) => {
+    setProjectDialogError(null);
+
+    const project = await createProject(name);
+    if (!project) {
+      setProjectDialogError("No se pudo crear el proyecto. Revisa si el nombre ya existe.");
+      return;
+    }
+
+    setProjectDialogOpen(false);
+    void refreshSessions();
+  };
+
+  const handleMoveSessionToProject = async (
+    sessionId: string,
+    projectId: string | null,
+  ) => {
+    await moveSessionToProject(sessionId, projectId);
+  };
+
+  // Título de la conversación que se está viendo (para el header).
+  // Priorizamos session.title del gateway (en vivo, llega con session.info),
+  // luego deriveTitle del listado (que tiene el title de la DB), y finalmente
+  // null → el header muestra "Nueva conversación" como placeholder.
+  const activeSession = sidebarSessions.find((s) => s.id === sidebarActiveSessionId);
+  const headerTokensUsed =
+    sessionUsage && sessionUsage.total > 0
+      ? sessionUsage.total
+      : session.tokensUsed;
+
+  const headerTokensMax =
+    sessionUsage && sessionUsage.context_max && sessionUsage.context_max > 0
+      ? sessionUsage.context_max
+      : session.tokensMax;
+
+  // popover-token-fallback-v1
+  // El header puede tener tokens restaurados aunque session.usage no tenga
+  // desglose persistido. En ese caso mostramos al menos el total en el popover.
+  const popoverSessionUsage =
+    sessionUsage ??
+    (headerTokensUsed > 0
+      ? {
+          model: session.model,
+          provider: session.modelProvider,
+          calls: 0,
+          input: 0,
+          output: 0,
+          cache_read: 0,
+          cache_write: 0,
+          reasoning: 0,
+          total: headerTokensUsed,
+          cost_usd: null,
+          cost_status: null,
+          context_used: headerTokensUsed,
+          context_max: headerTokensMax > 0 ? headerTokensMax : null,
+          context_percent:
+            headerTokensMax > 0
+              ? Math.min(100, Math.round((headerTokensUsed / headerTokensMax) * 100))
+              : null,
+          compressions: 0,
+        }
+      : null);
+  const activeTitle =
+    session.title ??
+    (activeSession ? deriveTitle(activeSession) : null);
+
+  // Si el último turno fue un slash command, no ofrecer "Regenerar" (re-correría
+  // el comando y session.undo borraría el turno real previo).
+  const lastUserIsSlash = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user")
+        return messages[i].content.trim().startsWith("/");
+    }
+    return false;
+  })();
+
+  return (
+    <>
+      <ProjectCreateDialog
+        open={projectDialogOpen}
+        error={projectDialogError}
+        onClose={() => setProjectDialogOpen(false)}
+        onCreate={handleSubmitProjectCreate}
+      />
+
+      <ProjectSettingsDialog
+        project={projectSettingsProject}
+        error={projectSettingsError}
+        onClose={() => {
+          setProjectSettingsError(null);
+          setProjectSettingsProject(null);
+        }}
+        onSave={handleSaveProjectSettings}
+        onArchive={handleArchiveProjectSettings}
+      />
+
+      {modelPickerOpen && (
+        <ModelPickerDialog
+          gw={gwForDialogs}
+          sessionId={session.sessionId ?? undefined}
+          onSubmit={(slashCommand) => {
+            setModelPickerOpen(false);
+            sendMessage(slashCommand);
+          }}
+          onClose={() => setModelPickerOpen(false)}
+        />
+      )}
+
+      <ConfirmDialog
+        open={!!destructiveConfirm}
+        destructive
+        title={`/${destructiveConfirm?.command ?? ""} — descarta la conversación`}
+        description="Esto borra el estado de la conversación actual. ¿Continuar?"
+        confirmLabel="Continuar"
+        cancelLabel="Cancelar"
+        onCancel={() => setDestructiveConfirm(null)}
+        onConfirm={() => {
+          const c = destructiveConfirm;
+          setDestructiveConfirm(null);
+          if (c) sendMessage(`${c.raw} now`);
+        }}
+      />
+
+      {/* Sin "recuadro": el chat se integra al dashboard y deja ver el fondo
+          (backdrop) a través de un velo translúcido que mantiene legibilidad. */}
+      <div className="relative flex h-full min-h-0 flex-row overflow-hidden bg-background/25">
+      <SessionSidebar
+        sessions={sidebarSessions}
+        projects={projects}
+        activeSessionId={sidebarActiveSessionId}
+        activeBusy={busy}
+        loading={sessionsLoading}
+        error={sessionsError}
+        onSelectSession={handleSelectSession}
+        onNewChat={() => handleNewChat(null)}
+        onNewChatInProject={(projectId) => {
+          void handleNewChat(projectId);
+        }}
+        onCreateProject={handleCreateProject}
+        onConfigureProject={handleConfigureProject}
+        onDeleteSession={handleDeleteSession}
+        onMoveSessionToProject={handleMoveSessionToProject}
+        onRenameSession={renameSession}
+      />
+
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="relative">
+          <ChatHeader
+            status={status}
+            model={session.model}
+            modelProvider={session.modelProvider}
+            sessionId={session.sessionId}
+            tokensUsed={headerTokensUsed}
+            tokensMax={headerTokensMax}
+            title={
+          activeTitle
+            ? sanitizeSessionLabel(activeTitle) || undefined
+            : undefined
+        }
+            onTokensClick={handleTokensClick}
+            tokensRef={tokensButtonRef}
+          />
+          <TokenUsagePopover
+            open={tokensPopoverOpen}
+            onClose={() => setTokensPopoverOpen(false)}
+            loading={tokenUsageLoading}
+            error={tokenUsageError}
+            sessionUsage={popoverSessionUsage}
+            usageByModel={usageByModel}
+            anchorRef={tokensButtonRef}
+          />
+        </div>
+
+        <ConnectionBanner status={status} errorMessage={errorMessage} />
+
+        {/* Error a mitad de turno (conectado): el agente falló — mostralo en
+            vez de quedar colgado en "Pensando...". Descartable. */}
+        {status === "connected" && errorMessage && (
+          <div className="flex items-center gap-2 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+            <AlertCircle className="size-3 shrink-0" />
+            <span className="min-w-0 flex-1 break-words">{errorMessage}</span>
+            <button
+              type="button"
+              onClick={clearError}
+              aria-label="Descartar error"
+              className="shrink-0 rounded p-0.5 transition-colors hover:bg-destructive/20"
+            >
+              <X className="size-3" />
+            </button>
+          </div>
+        )}
+
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto">
+            {resuming && messages.length === 0 ? (
+              <div className="flex h-full items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Cargando conversación…
+              </div>
+            ) : messages.length === 0 &&
+              !isConnecting &&
+              queue.queued.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <div className="mx-auto flex w-full max-w-4xl flex-col px-4 py-5 sm:px-6">
+                {messages.map((msg, idx) => {
+                  const isLast =
+                    idx === messages.length - 1 && msg.role === "assistant";
+                  return (
+                    <ErrorBoundary key={msg.id} resetKey={msg.content}>
+                      <MessageBubble
+                        message={msg}
+                        onRegenerate={
+                          isLast && !lastUserIsSlash ? regenerateLast : undefined
+                        }
+                        canRegenerate={isLast && !busy}
+                        onQuote={handleQuote}
+                        onEdit={editAndResubmit}
+                        canEdit={!busy}
+                      />
+                    </ErrorBoundary>
+                  );
+                })}
+                {liveStatus && busy && (
+                  <div className="flex items-center gap-2 px-1 py-2 text-xs text-muted-foreground">
+                    <Loader2 className="size-3 shrink-0 animate-spin text-[#6C4FD6]" />
+                    <span className="min-w-0 flex-1 break-words">{liveStatus}</span>
+                  </div>
+                )}
+                {queue.queued.map((item) => (
+                  <QueuedBubble
+                    key={item.id}
+                    item={item}
+                    onCancel={() => queue.cancel(item.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {showJump && (
+            <button
+              type="button"
+              onClick={() => scrollToBottom(true)}
+              className="clawk-msg-in absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-[#6C4FD6] px-3 py-1.5 text-xs font-medium text-white shadow-lg transition-colors hover:bg-[#5a40c2]"
+            >
+              <ChevronDown className="size-3.5" />
+              Saltar a lo último
+            </button>
+          )}
+        </div>
+
+        <Composer
+          busy={busy}
+          disabled={composerDisabled}
+          resuming={resuming}
+          onSend={handleSend}
+          onInterrupt={handleInterrupt}
+          sendRpc={sendRpc}
+          ready={readyForRpc}
+          sessionId={session.sessionId}
+          currentModel={session.model}
+          citations={citations}
+          onRemoveCitation={removeCitation}
+          onClearCitations={clearCitations}
+          buildPromptWithQuotes={buildPromptWithQuotes}
+        />
+      </div>
+
+      {sidePanel && (
+        <ChatSidePanel
+          tab={sidePanel}
+          onSelectTab={toggleSidePanel}
+          onClose={() => toggleSidePanel(sidePanel)}
+        />
+      )}
+      </div>
+    </>
+  );
+}

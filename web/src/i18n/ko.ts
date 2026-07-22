@@ -492,6 +492,10 @@ export const ko: Translations = {
 
       onceAt: "실행 시각",
 
+      onceUseCalendar: "달력",
+
+      onceUseManual: "직접 입력",
+
       customLabel: "cron 표현식",
 
       customPlaceholder: "0 9 * * *",

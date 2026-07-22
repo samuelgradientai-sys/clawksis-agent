@@ -4,10 +4,12 @@ import { Label } from "@nous-research/ui/ui/components/label";
 import { Select, SelectOption } from "@nous-research/ui/ui/components/select";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { useI18n } from "@/i18n";
+import { CalendarDayPicker } from "@/components/CalendarDayPicker";
 import {
   buildScheduleString,
   DEFAULT_SCHEDULE_STATE,
   type IntervalUnit,
+  type OncePickerMode,
   type ScheduleBuilderState,
   type ScheduleMode,
   type Weekday,
@@ -192,16 +194,64 @@ export function ScheduleBuilder({ onChange, value }: ScheduleBuilderProps) {
 
       {value.mode === "once" && (
         <div className="grid gap-2">
-          <Label htmlFor="cron-once-at">{modeStrings.onceAt}</Label>
-          {/* Native datetime-local — emits the exact "YYYY-MM-DDTHH:MM"
-              shape ``parse_schedule`` accepts on the backend. */}
-          <input
-            id="cron-once-at"
-            type="datetime-local"
-            className="flex h-9 w-full border border-border bg-background/40 px-3 py-2 text-sm font-courier shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/30 focus-visible:border-foreground/25"
-            value={value.onceAt}
-            onChange={(e) => update({ onceAt: e.target.value })}
-          />
+          <div className="flex items-center justify-between gap-2">
+            <Label
+              htmlFor={
+                value.onceMode === "manual" ? "cron-once-at" : "cron-once-time"
+              }
+            >
+              {modeStrings.onceAt}
+            </Label>
+            {/* Calendar vs manual entry — same toggle pattern as the
+                weekday buttons. Both inputs keep their state across
+                flips, so trying one doesn't lose work in the other. */}
+            <div
+              className="flex gap-1.5"
+              role="group"
+              aria-label={modeStrings.onceAt}
+            >
+              {(["calendar", "manual"] as OncePickerMode[]).map((m) => (
+                <Button
+                  key={m}
+                  type="button"
+                  size="sm"
+                  outlined={value.onceMode !== m}
+                  aria-pressed={value.onceMode === m}
+                  onClick={() => update({ onceMode: m })}
+                  className="font-mono-ui text-xs uppercase"
+                >
+                  {m === "calendar"
+                    ? modeStrings.onceUseCalendar
+                    : modeStrings.onceUseManual}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {value.onceMode === "calendar" ? (
+            <>
+              <CalendarDayPicker
+                value={value.onceDate}
+                onChange={(onceDate) => update({ onceDate })}
+              />
+              <TimeOfDayField
+                id="cron-once-time"
+                label={modeStrings.timeOfDay}
+                value={value.onceTime}
+                onChange={(onceTime) => update({ onceTime })}
+              />
+            </>
+          ) : (
+            /* Native datetime-local — emits the exact "YYYY-MM-DDTHH:MM"
+               shape ``parse_schedule`` accepts on the backend. */
+            <input
+              id="cron-once-at"
+              type="datetime-local"
+              className="flex h-9 w-full border border-border bg-background/40 px-3 py-2 text-sm font-courier shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/30 focus-visible:border-foreground/25"
+              value={value.onceAt}
+              onChange={(e) => update({ onceAt: e.target.value })}
+            />
+          )}
         </div>
       )}
 

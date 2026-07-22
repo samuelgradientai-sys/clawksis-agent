@@ -260,7 +260,9 @@ class TestStreamingConfig:
 
         assert restored.buffer_threshold == 24
 
-        assert restored.fresh_final_after_seconds == 60.0
+        # fresh_final is disabled (0.0) by default — see test_stream_consumer_fresh_final
+        # TestStreamingConfigFreshFinalField, the dedicated contract for this field.
+        assert restored.fresh_final_after_seconds == 0.0
 
 
 class TestGatewayConfigRoundtrip:

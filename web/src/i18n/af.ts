@@ -492,6 +492,10 @@ export const af: Translations = {
 
       onceAt: "Hardloop op",
 
+      onceUseCalendar: "Kalender",
+
+      onceUseManual: "Handmatig",
+
       customLabel: "Cron-uitdrukking",
 
       customPlaceholder: "0 9 * * *",

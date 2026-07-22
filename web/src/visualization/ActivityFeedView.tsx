@@ -9,7 +9,7 @@ import { useMemo } from "react";
 
 import type { GatewayEvent, GatewayFeed } from "./gatewayFeed";
 
-interface Row {
+export interface Row {
   ev: GatewayEvent;
   icon: string;
   title: string;
@@ -21,7 +21,12 @@ function str(v: unknown): string {
   return typeof v === "string" ? v : v == null ? "" : String(v);
 }
 
-function describe(ev: GatewayEvent): Row {
+/**
+ * Turn one gateway event into a renderable row (icon + title + detail + tone).
+ * Exported so the Agent Inspector panel renders an agent's activity with the
+ * exact same labels as the global Activity Feed — one source of truth.
+ */
+export function describe(ev: GatewayEvent): Row {
   const p = ev.payload;
   switch (ev.type) {
     case "tool.start":
@@ -92,7 +97,7 @@ function describe(ev: GatewayEvent): Row {
   }
 }
 
-const TONE_CLASS: Record<Row["tone"], string> = {
+export const TONE_CLASS: Record<Row["tone"], string> = {
   tool: "text-[var(--color-primary)]",
   subagent: "text-amber-400",
   message: "text-muted-foreground",
@@ -107,10 +112,13 @@ interface ActivityFeedViewProps {
 export function ActivityFeedView({ feed }: ActivityFeedViewProps) {
   const rows = useMemo(
     () =>
+      // Render only the newest 80 (slice BEFORE describe/reverse). A busy agent
+      // rebuilds this list on every feed event, so a smaller cap keeps the
+      // per-event reconcile cheap; older events stay in the buffer for export.
       feed.events
+        .slice(-80)
         .map(describe)
-        .reverse()
-        .slice(0, 200),
+        .reverse(),
     [feed.events],
   );
 

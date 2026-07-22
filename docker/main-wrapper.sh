@@ -59,7 +59,6 @@ drop() { [ "$(id -u)" = 0 ] && set -- s6-setuidgid clawk "$@"; exec "$@"; }
 # further down. See stage2-hook.sh for the full rationale.
 
 cur_uid="$(id -u)"
-
 if [ "$cur_uid" != 0 ] && [ "$cur_uid" != "$(id -u clawk)" ]; then
 
     cat >&2 <<EOF

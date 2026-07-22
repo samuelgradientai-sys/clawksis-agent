@@ -183,6 +183,44 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _apply_rate_limit(agent, api_kwargs: dict) -> None:
+    """OPT-IN preemptive throttle before an API call.
+
+    Consults the process-global resilience rate limiter (``resilience.rate_limits``
+    config). No-op when disabled or when the active provider has no configured
+    cap. Never raises — a limiter problem must not break the request.
+    """
+    try:
+        from agent.resilience.runtime import get_rate_limiter
+
+        limiter = get_rate_limiter()
+        if limiter is None:
+            return
+        provider = str(getattr(agent, "provider", "") or "")
+        if not provider:
+            return
+        try:
+            est = estimate_request_context_tokens(api_kwargs)
+        except Exception:
+            est = 0
+
+        def _interrupt() -> bool:
+            return bool(getattr(agent, "_interrupt_requested", False))
+
+        def _on_wait(secs: float) -> None:
+            try:
+                agent._buffer_status(
+                    f"⏳ Rate limit interno: esperando ~{secs:.0f}s antes de llamar a {provider}…"
+                )
+            except Exception:
+                pass
+
+        limiter.acquire(provider, est, should_interrupt=_interrupt, on_wait=_on_wait)
+    except Exception:
+        # The limiter must never break a request.
+        pass
+
+
 def interruptible_api_call(agent, api_kwargs: dict):
     """
 
@@ -211,6 +249,11 @@ def interruptible_api_call(agent, api_kwargs: dict):
     """
 
     result = {"response": None, "error": None}
+
+    # OPT-IN preemptive rate limiting (resilience.rate_limits): throttle before
+    # issuing the call so we stay under the provider's RPM/TPM instead of
+    # learning the limit by hitting a 429. No-op by default.
+    _apply_rate_limit(agent, api_kwargs)
 
     request_client_holder = {"client": None, "owner_tid": None}
 
@@ -2033,8 +2076,6 @@ def handle_max_iterations(agent, messages: list, api_call_count: int) -> str:
 
         _summary_temperature = None if _omit_summary_temperature else _raw_summary_temp
 
-        _is_nous = "nousresearch" in agent._base_url_lower
-
         # LM Studio uses top-level `reasoning_effort` (not extra_body.reasoning).
 
         # Mirror ChatCompletionsTransport.build_kwargs() so the summary path
@@ -2059,11 +2100,6 @@ def handle_max_iterations(agent, messages: list, api_call_count: int) -> str:
 
             else:
                 summary_extra_body["reasoning"] = {"enabled": True, "effort": "medium"}
-
-        if _is_nous:
-            from agent.portal_tags import nous_portal_tags as _portal_tags
-
-            summary_extra_body["tags"] = _portal_tags()
 
         if agent.api_mode == "codex_responses":
             codex_kwargs = agent._build_api_kwargs(api_messages)
@@ -2406,6 +2442,8 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                     _get_bedrock_runtime_client,
                     invalidate_runtime_client,
                     is_stale_connection_error,
+                    is_streaming_access_denied_error,
+                    normalize_converse_response,
                     stream_converse_with_callbacks,
                 )
 
@@ -2419,6 +2457,20 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                     raw_response = client.converse_stream(**api_kwargs)
 
                 except Exception as _bedrock_exc:
+                    # IAM allows bedrock:InvokeModel but not
+                    # InvokeModelWithResponseStream — permanent for this
+                    # session.  Fall back to the non-streaming converse() path
+                    # inline and disable streaming for the rest of the session.
+
+                    if is_streaming_access_denied_error(_bedrock_exc):
+                        agent._disable_streaming = True
+
+                        result["response"] = normalize_converse_response(
+                            client.converse(**api_kwargs)
+                        )
+
+                        return
+
                     # Evict the cached client on stale-connection failures
 
                     # so the outer retry loop builds a fresh client/pool.
@@ -2926,6 +2978,8 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
 
         has_truncated_tool_args = False
 
+        incomplete_tool_names: list = []
+
         if tool_calls_acc:
             mock_tool_calls = []
 
@@ -2941,6 +2995,15 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                         json.loads(arguments)
 
                     except json.JSONDecodeError:
+                        # Args arrived but don't parse as-is — the stream
+                        # almost certainly dropped mid tool-call generation.
+                        # Record the tool name so a clean stream-end (no
+                        # finish_reason) can be routed through the
+                        # partial-stream stub instead of a misleading
+                        # 'output length limit' truncation.
+
+                        incomplete_tool_names.append(tool_name)
+
                         # Attempt repair before flagging as truncated.
 
                         # Models like GLM-5.1 via Ollama produce trailing
@@ -2979,12 +3042,75 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                     )
                 )
 
+        full_reasoning = "".join(reasoning_parts) or None
+
+        # Clean stream-end mid tool-call: the upstream closed the SSE stream
+        # WITHOUT an exception, WITHOUT a finish_reason, and WITHOUT [DONE],
+        # but a tool call had arrived with incomplete (non-parsing) args —
+        # observed live on NVIDIA Nemotron Ultra via the dedicated endpoint,
+        # which silently drops during large tool-arg generation.  Route this
+        # through the partial-stream stub (PARTIAL_STREAM_STUB_ID) so the loop
+        # reports an honest mid-tool-call drop and asks the model to chunk its
+        # output, instead of stamping it finish_reason='length' which produces
+        # the misleading "output length limit" truncation message.  A
+        # provider-reported finish_reason (e.g. 'length') is a genuine cap and
+        # keeps the existing stream-<uuid> path.
+        if finish_reason is None and incomplete_tool_names:
+            _partial_text = (full_content or "").strip() or None
+
+            _names = list(incomplete_tool_names)
+
+            _name_str = ", ".join(_names[:3])
+
+            if len(_names) > 3:
+                _name_str += f", +{len(_names) - 3} more"
+
+            _warn = (
+                f"\n\n⚠ Stream stalled mid tool-call "
+                f"({_name_str}); the action was not executed. "
+                f"Ask me to retry if you want to continue."
+            )
+
+            _partial_text = (_partial_text or "") + _warn
+
+            try:
+                agent._fire_stream_delta(_warn)
+
+            except Exception:
+                pass
+
+            logger.warning(
+                "Clean stream-end mid tool-call (no finish_reason) for %s; "
+                "returning partial-stream stub so the loop continues with "
+                "chunking guidance instead of a false output-length cap.",
+                _names,
+            )
+
+            _stub_msg = SimpleNamespace(
+                role=role,
+                content=_partial_text,
+                tool_calls=None,
+                reasoning_content=full_reasoning,
+            )
+
+            return SimpleNamespace(
+                id=PARTIAL_STREAM_STUB_ID,
+                model=model_name or getattr(agent, "model", "unknown"),
+                choices=[
+                    SimpleNamespace(
+                        index=0,
+                        message=_stub_msg,
+                        finish_reason=FINISH_REASON_LENGTH,
+                    )
+                ],
+                usage=usage_obj,
+                _dropped_tool_names=_names or None,
+            )
+
         effective_finish_reason = finish_reason or "stop"
 
         if has_truncated_tool_args:
             effective_finish_reason = "length"
-
-        full_reasoning = "".join(reasoning_parts) or None
 
         mock_message = SimpleNamespace(
             role=role,

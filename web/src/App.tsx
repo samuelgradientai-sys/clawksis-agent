@@ -1,5 +1,11 @@
 import {
 
+  lazy,
+
+  memo,
+
+  Suspense,
+
   useCallback,
 
   useEffect,
@@ -11,6 +17,8 @@ import {
   useState,
 
   type ComponentType,
+
+  type LazyExoticComponent,
 
   type ReactNode,
 
@@ -41,6 +49,8 @@ import {
   BarChart3,
 
   BookOpen,
+
+  ChevronDown,
 
   Clock,
 
@@ -101,7 +111,7 @@ import {
   X,
 
   Zap,
-
+  Image
 } from "lucide-react";
 
 import { Button } from "@nous-research/ui/ui/components/button";
@@ -114,8 +124,6 @@ import { Typography } from "@nous-research/ui/ui/components/typography/index";
 
 import { cn } from "@/lib/utils";
 
-import { Backdrop } from "@/components/Backdrop";
-
 import { SidebarFooter } from "@/components/SidebarFooter";
 
 import { SidebarStatusStrip, gatewayLine } from "@/components/SidebarStatusStrip";
@@ -125,6 +133,7 @@ import { useBelowBreakpoint } from "@nous-research/ui/hooks/use-below-breakpoint
 import { useSidebarStatus } from "@/hooks/useSidebarStatus";
 
 import { AuthWidget } from "@/components/AuthWidget";
+import { FirstRunOnboarding } from "@/components/onboarding/FirstRunOnboarding";
 
 import { PageHeaderProvider } from "@/contexts/PageHeaderProvider";
 
@@ -132,41 +141,145 @@ import { useSystemActions } from "@/contexts/useSystemActions";
 
 import type { SystemAction } from "@/contexts/system-actions-context";
 
-import ConfigPage from "@/pages/ConfigPage";
+// Route pages are code-split (React.lazy) so each one ships as its own chunk.
+// react-router v7 envuelve la navegación en startTransition: mientras el chunk
+// de la página destino no llega, React SIGUE MOSTRANDO la página anterior — si
+// esa descarga se cuelga o falla (túnel caído, hashes viejos tras un rebuild),
+// la UI queda "pegada" en la sección actual con la URL ya cambiada. Dos
+// defensas:
+//
+//   1. lazyPage(): reintenta el import una vez y, si sigue fallando, recarga
+//      la página (guard compartido con el listener vite:preloadError de
+//      main.tsx para no entrar en loop).
+//   2. prefetchAllPages(): al quedar el navegador idle tras el boot, baja
+//      TODOS los chunks de páginas en segundo plano — navegar deja de
+//      depender de la red en el momento del click.
 
-import DocsPage from "@/pages/DocsPage";
+type PageImporter = () => Promise<{ default: ComponentType }>;
 
-import EnvPage from "@/pages/EnvPage";
+const PAGE_IMPORTERS: PageImporter[] = [];
 
-import SessionsPage from "@/pages/SessionsPage";
+const CHUNK_RELOAD_KEY = "clawk-chunk-reload-at";
 
-import LogsPage from "@/pages/LogsPage";
+function lazyPage<P extends object>(
+  importer: () => Promise<{ default: ComponentType<P> }>,
+) {
+  PAGE_IMPORTERS.push(importer as unknown as PageImporter);
 
-import AnalyticsPage from "@/pages/AnalyticsPage";
+  return lazy(() =>
+    importer().catch(async () => {
+      // Blip de red / deploy a mitad de camino: un reintento corto suele
+      // alcanzar. Si no, el bundle de esta pestaña quedó desactualizado y
+      // solo una recarga trae los hashes nuevos.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
 
-import ModelsPage from "@/pages/ModelsPage";
+      try {
+        return await importer();
+      } catch (err) {
+        let lastReload = 0;
 
-import CronPage from "@/pages/CronPage";
+        try {
+          lastReload = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
+        } catch {
+          /* sessionStorage puede no estar disponible */
+        }
 
-import ProfilesPage from "@/pages/ProfilesPage";
+        if (Date.now() - lastReload > 30_000) {
+          try {
+            sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
+          } catch {
+            /* ídem */
+          }
 
-import SkillsPage from "@/pages/SkillsPage";
+          window.location.reload();
 
-import PluginsPage from "@/pages/PluginsPage";
+          // La recarga toma el control: no resolvemos nunca para que React
+          // no pinte un estado a medias mientras el documento se descarta.
+          await new Promise<never>(() => {});
+        }
 
-import McpPage from "@/pages/McpPage";
+        throw err;
+      }
+    }),
+  );
+}
 
-import PairingPage from "@/pages/PairingPage";
+let pagesPrefetched = false;
 
-import ChannelsPage from "@/pages/ChannelsPage";
+function prefetchAllPages() {
+  if (pagesPrefetched) return;
 
-import WebhooksPage from "@/pages/WebhooksPage";
+  pagesPrefetched = true;
 
-import SystemPage from "@/pages/SystemPage";
+  for (const importer of PAGE_IMPORTERS) {
+    void importer().catch(() => {
+      // Silencioso: si falla acá, lazyPage() lo reintenta al navegar.
+      pagesPrefetched = false;
+    });
+  }
+}
 
-import VisualizationPage from "@/pages/VisualizationPage";
+const ConfigPage = lazyPage(() => import("@/pages/ConfigPage"));
 
-import ChatPage from "@/pages/ChatPage";
+const DocsPage = lazyPage(() => import("@/pages/DocsPage"));
+
+const EnvPage = lazyPage(() => import("@/pages/EnvPage"));
+
+const SessionsPage = lazyPage(() => import("@/pages/SessionsPage"));
+
+const LogsPage = lazyPage(() => import("@/pages/LogsPage"));
+
+const AnalyticsPage = lazyPage(() => import("@/pages/AnalyticsPage"));
+
+const ModelsPage = lazyPage(() => import("@/pages/ModelsPage"));
+
+const CronPage = lazyPage(() => import("@/pages/CronPage"));
+
+const ProfilesPage = lazyPage(() => import("@/pages/ProfilesPage"));
+
+const SkillsPage = lazyPage(() => import("@/pages/SkillsPage"));
+
+const PluginsPage = lazyPage(() => import("@/pages/PluginsPage"));
+
+const McpPage = lazyPage(() => import("@/pages/McpPage"));
+
+const PairingPage = lazyPage(() => import("@/pages/PairingPage"));
+
+const ChannelsPage = lazyPage(() => import("@/pages/ChannelsPage"));
+
+const WebhooksPage = lazyPage(() => import("@/pages/WebhooksPage"));
+
+const SystemPage = lazyPage(() => import("@/pages/SystemPage"));
+
+const VisualizationPage = lazyPage(() => import("@/pages/VisualizationPage"));
+
+const CookbookPage = lazyPage(() => import("@/pages/CookbookPage"));
+
+const MediaPage = lazyPage(() => import("@/pages/MediaPage"));
+
+
+
+// Wrapper que decide entre modo terminal (xterm) y modo moderno (burbujas).
+// Lee preferencia de localStorage vía useChatMode. Fase 2.6.4 del plan visual.
+// Default: terminal (no romper UX existente).
+const ChatRouter = memo(
+  lazyPage(() => import("@/components/chat/ChatRouter")),
+);
+
+// NOTE: ChatPage ya no se importa aquí — el ChatRouter wrapper se encarga
+// de cargarlo lazy cuando el modo es "terminal". Ver components/chat/ChatRouter.tsx
+
+// The decorative WebGL/motion backdrop isn't needed for first paint — defer it
+// (and the `motion` vendor chunk it pulls) so the shell renders immediately and
+// the background fades in. Named export, hence the .then() default-mapping.
+const Backdrop = lazy(() =>
+  import("@/components/Backdrop").then((m) => ({ default: m.Backdrop })),
+);
+
+// Scroll suave opt-in (mini-Lenis casero). Sin peso hasta que se activa.
+const SmoothScroll = lazy(() =>
+  import("@/components/SmoothScroll").then((m) => ({ default: m.SmoothScroll })),
+);
 
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
@@ -193,6 +306,31 @@ import type { StatusResponse } from "@/lib/api";
 function RootRedirect() {
 
   return <Navigate to="/sessions" replace />;
+
+}
+
+
+
+// Suspense fallback while a lazily-loaded page chunk downloads.
+function PageLoading() {
+
+  return (
+
+    <div
+
+      className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-8"
+
+      aria-busy="true"
+
+      aria-live="polite"
+
+    >
+
+      <Spinner />
+
+    </div>
+
+  );
 
 }
 
@@ -246,7 +384,10 @@ const CHAT_NAV_ITEM: NavItem = {
 
  */
 
-const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
+// A route target may be an eagerly-loaded component or a lazily-loaded one.
+type RouteComponent = ComponentType | LazyExoticComponent<ComponentType>;
+
+const BUILTIN_ROUTES_CORE: Record<string, RouteComponent> = {
 
   "/": RootRedirect,
 
@@ -257,6 +398,8 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/analytics": AnalyticsPage,
 
   "/models": ModelsPage,
+
+  "/cookbook": CookbookPage,
 
   "/logs": LogsPage,
 
@@ -269,6 +412,7 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/mcp": McpPage,
 
   "/pairing": PairingPage,
+  "/media": MediaPage,
 
   "/channels": ChannelsPage,
 
@@ -318,15 +462,9 @@ const BUILTIN_NAV_REST: NavItem[] = [
 
   },
 
-  {
-
-    path: "/visualization",
-
-    label: "Visualization",
-
-    icon: Eye,
-
-  },
+  // "/visualization" ya no es sección del sidebar: vive dentro del chat
+  // moderno como panel lateral (ChatSidePanel). La ruta sigue viva para
+  // bookmarks/deep-links viejos.
 
   {
 
@@ -351,6 +489,10 @@ const BUILTIN_NAV_REST: NavItem[] = [
     icon: Cpu,
 
   },
+
+    { path: "/media", label: "Media", icon: Image },
+
+{ path: "/cookbook", label: "Cookbook", icon: Download },
 
   { path: "/logs", labelKey: "logs", label: "Logs", icon: FileText },
 
@@ -554,7 +696,7 @@ function partitionSidebarNav(
 
 function buildRoutes(
 
-  builtinRoutes: Record<string, ComponentType>,
+  builtinRoutes: Record<string, RouteComponent>,
 
   manifests: PluginManifest[],
 
@@ -745,6 +887,48 @@ export default function App() {
   const isChatRoute = normalizedPath === "/chat";
 
   const embeddedChat = isDashboardEmbeddedChatEnabled();
+
+  // The persistent chat host (xterm/PTY/WebSocket) is heavy, so don't mount it
+  // — and don't download its lazy chunk — until the user first opens /chat.
+  // Once mounted it stays mounted (display:none toggle) so the session survives
+  // navigation. The landing route is /sessions, so chat stays deferred on boot.
+  const [chatEverActive, setChatEverActive] = useState(false);
+
+  useEffect(() => {
+
+    if (isChatRoute) setChatEverActive(true);
+
+  }, [isChatRoute]);
+
+
+
+  // Con el navegador idle tras el primer paint, bajamos TODOS los chunks de
+  // páginas en segundo plano: navegar deja de depender de la red en el
+  // momento del click (la causa de la "sección pegada" con router v7 —
+  // startTransition sigue mostrando la página anterior hasta que el chunk
+  // destino llega, y si esa descarga se cuelga no llega nunca).
+
+  useEffect(() => {
+
+    const w = window as Window & {
+      requestIdleCallback?: (
+        cb: () => void,
+        opts?: { timeout: number },
+      ) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(prefetchAllPages, { timeout: 8000 });
+
+      return () => w.cancelIdleCallback?.(id);
+    }
+
+    const t = window.setTimeout(prefetchAllPages, 3000);
+
+    return () => window.clearTimeout(t);
+
+  }, []);
 
 
 
@@ -960,7 +1144,17 @@ export default function App() {
 
       <SelectionSwitcher />
 
-      <Backdrop />
+      <Suspense fallback={null}>
+
+        <Backdrop />
+
+      </Suspense>
+
+      <Suspense fallback={null}>
+
+        <SmoothScroll />
+
+      </Suspense>
 
       <PluginSlot name="backdrop" />
 
@@ -1216,25 +1410,61 @@ export default function App() {
 
               <ul className="flex flex-col">
 
-                {sidebarNav.coreItems.map((item) => (
-
-                  <SidebarNavLink
-
-                    closeMobile={closeMobile}
-
-                    collapsed={isDesktopCollapsed}
-
-                    item={item}
-
-                    key={item.path}
-
-                    t={t}
-
-                    tooltipWarmRef={tooltipWarmRef}
-
-                  />
-
-                ))}
+                {(() => {
+                  // Grupos desplegables: Chat agrupa sus vistas hermanas y
+                  // las integraciones van juntas. En modo colapsado (solo
+                  // íconos) se renderiza plano — los grupos no aportan ahí.
+                  const items = sidebarNav.coreItems;
+                  if (isDesktopCollapsed) {
+                    return items.map((item) => (
+                      <SidebarNavLink
+                        closeMobile={closeMobile}
+                        collapsed={isDesktopCollapsed}
+                        item={item}
+                        key={item.path}
+                        t={t}
+                        tooltipWarmRef={tooltipWarmRef}
+                      />
+                    ));
+                  }
+                  const byPath = new Map(items.map((i) => [i.path, i]));
+                  const groupedPaths = new Set(
+                    NAV_GROUPS.flatMap((g) => g.paths),
+                  );
+                  return items.map((item) => {
+                    if (!groupedPaths.has(item.path)) {
+                      return (
+                        <SidebarNavLink
+                          closeMobile={closeMobile}
+                          collapsed={isDesktopCollapsed}
+                          item={item}
+                          key={item.path}
+                          t={t}
+                          tooltipWarmRef={tooltipWarmRef}
+                        />
+                      );
+                    }
+                    // El grupo se pinta en la posición de su PRIMER miembro
+                    // presente; el resto de miembros se omiten del nivel raíz.
+                    const group = NAV_GROUPS.find(
+                      (g) =>
+                        g.paths.find((p) => byPath.has(p)) === item.path,
+                    );
+                    if (!group) return null;
+                    return (
+                      <SidebarNavGroup
+                        key={"group:" + group.id}
+                        group={group}
+                        items={group.paths
+                          .map((p) => byPath.get(p))
+                          .filter((x): x is NavItem => !!x)}
+                        closeMobile={closeMobile}
+                        t={t}
+                        tooltipWarmRef={tooltipWarmRef}
+                      />
+                    );
+                  });
+                })()}
 
               </ul>
 
@@ -1456,31 +1686,37 @@ export default function App() {
 
               >
 
-                <Routes>
+                <Suspense fallback={<PageLoading />}>
 
-                  {routes.map(({ key, path, element }) => (
+                  <Routes>
 
-                    <Route key={key} path={path} element={element} />
+                    {routes.map(({ key, path, element }) => (
 
-                  ))}
+                      <Route key={key} path={path} element={element} />
 
-                  <Route
+                    ))}
 
-                    path="*"
+                    <Route
 
-                    element={
+                      path="*"
 
-                      <UnknownRouteFallback pluginsLoading={pluginsLoading} />
+                      element={
 
-                    }
+                        <UnknownRouteFallback pluginsLoading={pluginsLoading} />
 
-                  />
+                      }
 
-                </Routes>
+                    />
+
+                  </Routes>
+
+                </Suspense>
 
 
 
                 {embeddedChat &&
+
+                  chatEverActive &&
 
                   !chatOverriddenByPlugin &&
 
@@ -1528,7 +1764,11 @@ export default function App() {
 
                     >
 
-                      <ChatPage isActive={isChatRoute} />
+                      <Suspense fallback={<PageLoading />}>
+
+                        <ChatRouter isActive={isChatRoute} />
+
+                      </Suspense>
 
                     </div>
 
@@ -1540,7 +1780,8 @@ export default function App() {
 
             </div>
 
-          </PageHeaderProvider>
+                    <FirstRunOnboarding />
+</PageHeaderProvider>
 
         </div>
 
@@ -1557,6 +1798,149 @@ export default function App() {
 }
 
 
+
+// ── Grupos desplegables del sidebar ─────────────────────────────────────────
+// Chat contiene sus vistas hermanas (Sesiones/Modelos/Media) y las
+// integraciones van bajo un solo encabezado. `home` = path al que navega el
+// encabezado del grupo (si lo tiene); el chevron despliega/colapsa.
+
+interface NavGroup {
+  id: string;
+  label: string;
+  home?: string;
+  paths: string[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: "chat",
+    label: "Chat",
+    home: "/chat",
+    paths: ["/chat", "/sessions", "/models", "/media"],
+  },
+  {
+    id: "integraciones",
+    label: "Integraciones",
+    paths: ["/skills", "/plugins", "/mcp", "/channels", "/webhooks", "/pairing"],
+  },
+];
+
+const NAV_GROUP_STORAGE_PREFIX = "clawksis-nav-group-";
+
+function SidebarNavGroup({
+  group,
+  items,
+  closeMobile,
+  t,
+  tooltipWarmRef,
+}: {
+  group: NavGroup;
+  items: NavItem[];
+  closeMobile: () => void;
+  t: Translations;
+  tooltipWarmRef: TooltipWarmRef;
+}) {
+  const { pathname } = useLocation();
+  const containsActive = items.some(
+    (i) => pathname === i.path || pathname.startsWith(i.path + "/"),
+  );
+  const [open, setOpen] = useState<boolean>(() => {
+    try {
+      const v = window.localStorage.getItem(NAV_GROUP_STORAGE_PREFIX + group.id);
+      if (v === "1") return true;
+      if (v === "0") return false;
+    } catch {
+      /* sin persistencia */
+    }
+    return true; // desplegado por defecto: nada desaparece de golpe
+  });
+  const toggle = () => {
+    setOpen((prev) => {
+      try {
+        window.localStorage.setItem(
+          NAV_GROUP_STORAGE_PREFIX + group.id,
+          prev ? "0" : "1",
+        );
+      } catch {
+        /* ídem */
+      }
+      return !prev;
+    });
+  };
+
+  const home = group.home ? items.find((i) => i.path === group.home) : null;
+  const HomeIcon = home?.icon;
+  const children = items.filter((i) => i.path !== group.home);
+
+  const headerClasses = cn(
+    "group/nav relative flex w-full items-center gap-3",
+    "px-5 py-2.5",
+    "font-mondwest font-bold text-display uppercase text-sm tracking-[0.12em]",
+    "whitespace-nowrap transition-colors cursor-pointer",
+    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-midground",
+    containsActive && !open
+      ? "text-midground"
+      : "text-text-secondary hover:text-midground",
+  );
+
+  return (
+    <li>
+      <div className="flex items-center">
+        {home && HomeIcon ? (
+          <NavLink
+            to={home.path}
+            onClick={closeMobile}
+            className={({ isActive }) =>
+              cn(headerClasses, "flex-1", isActive && "text-midground")
+            }
+            style={{ clipPath: "var(--component-tab-clip-path)" }}
+          >
+            <HomeIcon className="h-4 w-4 shrink-0" />
+            <span>{group.label}</span>
+          </NavLink>
+        ) : (
+          <button
+            type="button"
+            onClick={toggle}
+            className={cn(headerClasses, "flex-1 text-left")}
+          >
+            <Plug className="h-4 w-4 shrink-0" />
+            <span>{group.label}</span>
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-label={(open ? "Colapsar " : "Desplegar ") + group.label}
+          className="mr-3 rounded p-1 text-text-tertiary transition-colors hover:text-midground"
+        >
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 transition-transform duration-150",
+              !open && "-rotate-90",
+            )}
+          />
+        </button>
+      </div>
+
+      {open && (
+        <ul className="ml-5 flex flex-col border-l border-current/10">
+          {children.map((item) => (
+            <SidebarNavLink
+              closeMobile={closeMobile}
+              collapsed={false}
+              item={item}
+              key={item.path}
+              t={t}
+              tooltipWarmRef={tooltipWarmRef}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
 
 function SidebarNavLink({
 

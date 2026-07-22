@@ -84,6 +84,49 @@ function setSessionHeader(headers: Headers, token: string): void {
 
 
 
+// ── Management-profile scope ──
+// The profiles management UI lets an operator act "as" another profile.
+// setManagementProfile records that choice; withManagementProfile() then
+// auto-appends ?profile= to the endpoint families that honor it on the
+// backend. Calls that already pass an explicit profile= are left untouched.
+let _managementProfile = "";
+
+export function setManagementProfile(name: string): void {
+  _managementProfile = (name || "").trim();
+}
+
+export function getManagementProfile(): string {
+  return _managementProfile;
+}
+
+// Endpoint families that honor ?profile= on the backend (web_server.py
+// _profile_scope or explicit per-profile DB opens). Anything else — ops,
+// pairing, telegram onboarding, cron (which has its own per-job profile
+// params), profiles themselves — is machine-global or self-scoped and must
+// NOT be rewritten.
+const PROFILE_SCOPED_PREFIXES = [
+  "/api/analytics",
+  "/api/skills",
+  "/api/tools/toolsets",
+  "/api/config",
+  "/api/env",
+  "/api/mcp",
+  "/api/messaging/platforms",
+  "/api/model/info",
+  "/api/model/set",
+  "/api/model/auxiliary",
+  "/api/model/options",
+];
+
+function withManagementProfile(url: string): string {
+  if (!_managementProfile) return url;
+  if (url.includes("profile=")) return url; // explicit param wins
+  const path = url.split("?")[0];
+  if (!PROFILE_SCOPED_PREFIXES.some((p) => path.startsWith(p))) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}profile=${encodeURIComponent(_managementProfile)}`;
+}
+
 export async function fetchJSON<T>(
 
   url: string,
@@ -93,6 +136,8 @@ export async function fetchJSON<T>(
   options?: FetchJSONOptions,
 
 ): Promise<T> {
+
+  url = withManagementProfile(url);
 
   // Inject the session token into all /api/ requests.
 
@@ -504,6 +549,104 @@ export const api = {
 
   getStatus: () => fetchJSON<StatusResponse>("/api/status"),
 
+  // ── Managed files (FilesPage) ──
+  listFiles: (path?: string) => {
+    const query = path ? `?path=${encodeURIComponent(path)}` : "";
+    return fetchJSON<ManagedFilesResponse>(`/api/files${query}`);
+  },
+  readFile: (path: string) =>
+    fetchJSON<ManagedFileReadResponse>(
+      `/api/files/read?path=${encodeURIComponent(path)}`,
+    ),
+  uploadFile: (path: string, dataUrl: string, overwrite = true) =>
+    fetchJSON<ManagedFileWriteResponse>("/api/files/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, data_url: dataUrl, overwrite }),
+    }),
+  createDirectory: (path: string) =>
+    fetchJSON<ManagedFileWriteResponse>("/api/files/mkdir", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    }),
+  deleteFile: (path: string, recursive = false) =>
+    fetchJSON<{ ok: boolean; path: string }>("/api/files", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, recursive }),
+    }),
+
+  // ── Automation Blueprints (AutomationBlueprints) ──
+  getAutomationBlueprints: () =>
+    fetchJSON<{ blueprints: AutomationBlueprint[] }>("/api/cron/blueprints"),
+  instantiateAutomationBlueprint: (
+    body: { blueprint: string; values: Record<string, string> },
+    profile = "default",
+  ) =>
+    fetchJSON<CronJob>(
+      `/api/cron/blueprints/instantiate?profile=${encodeURIComponent(profile)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    ),
+
+  // ── Skill editor (SkillEditorDialog) ──
+  getSkillContent: (name: string, profile?: string) =>
+    fetchJSON<SkillContent>(
+      `/api/skills/content?name=${encodeURIComponent(name)}${profile ? `&profile=${encodeURIComponent(profile)}` : ""}`,
+    ),
+  createSkill: (
+    skill: { name: string; content: string; category?: string },
+    profile?: string,
+  ) =>
+    fetchJSON<SkillWriteResult>("/api/skills", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...skill, profile: profile || undefined }),
+    }),
+  updateSkillContent: (name: string, content: string, profile?: string) =>
+    fetchJSON<SkillWriteResult>("/api/skills/content", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, content, profile: profile || undefined }),
+    }),
+
+  // ── Toolset config (ToolsetConfigDrawer) ──
+  getToolsetConfig: (name: string, profile?: string) =>
+    fetchJSON<ToolsetConfig>(
+      `/api/tools/toolsets/${encodeURIComponent(name)}/config${profile ? `?profile=${encodeURIComponent(profile)}` : ""}`,
+    ),
+  selectToolsetProvider: (name: string, provider: string, profile?: string) =>
+    fetchJSON<{ ok: boolean; name: string; provider: string }>(
+      `/api/tools/toolsets/${encodeURIComponent(name)}/provider`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, profile: profile || undefined }),
+      },
+    ),
+  saveToolsetEnv: (name: string, env: Record<string, string>, profile?: string) =>
+    fetchJSON<ToolsetEnvResult>(
+      `/api/tools/toolsets/${encodeURIComponent(name)}/env`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ env, profile: profile || undefined }),
+      },
+    ),
+  runToolsetPostSetup: (name: string, key: string, profile?: string) =>
+    fetchJSON<ActionResponse & { key: string }>(
+      `/api/tools/toolsets/${encodeURIComponent(name)}/post-setup`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, profile: profile || undefined }),
+      },
+    ),
+
   /**
 
    * Identity probe for the dashboard auth gate (Phase 7).
@@ -572,6 +715,10 @@ export const api = {
 
     fetchJSON<PaginatedSessions>(`/api/sessions?limit=${limit}&offset=${offset}`),
 
+  /** DB session_ids with an in-flight turn — for the sidebar running indicator. */
+  getRunningSessions: () =>
+    fetchJSON<{ running: string[] }>("/api/sessions/running"),
+
   getSessionMessages: (id: string) =>
 
     fetchJSON<SessionMessagesResponse>(`/api/sessions/${encodeURIComponent(id)}/messages`),
@@ -615,6 +762,22 @@ export const api = {
       body: JSON.stringify({ ids }),
 
     }),
+
+  cleanupSessions: (filter: {
+    source?: string;
+    model?: string;
+    older_than_days?: number;
+    max_messages?: number;
+    dry_run: boolean;
+  }) =>
+    fetchJSON<{ ok: boolean; matched?: number; messages?: number; deleted?: number }>(
+      "/api/sessions/cleanup",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(filter),
+      },
+    ),
 
   renameSession: (id: string, title: string) =>
 
@@ -686,6 +849,19 @@ export const api = {
 
   getModelOptions: () => fetchJSON<ModelOptionsResponse>("/api/model/options"),
 
+  /** Transcribe audio (base64 data: URL) via the backend Whisper endpoint. Batch. */
+  transcribeAudio: (dataUrl: string, mimeType?: string) =>
+
+    fetchJSON<{ ok: boolean; transcript: string; provider?: string }>("/api/audio/transcribe", {
+
+      method: "POST",
+
+      headers: { "Content-Type": "application/json" },
+
+      body: JSON.stringify({ data_url: dataUrl, mime_type: mimeType }),
+
+    }),
+
   getAuxiliaryModels: () => fetchJSON<AuxiliaryModelsResponse>("/api/model/auxiliary"),
 
   setModelAssignment: (body: ModelAssignmentRequest) =>
@@ -712,7 +888,7 @@ export const api = {
 
     }),
 
-  getConfigRaw: () => fetchJSON<{ yaml: string }>("/api/config/raw"),
+  getConfigRaw: () => fetchJSON<{ yaml: string; path?: string }>("/api/config/raw"),
 
   saveConfigRaw: (yaml_text: string) =>
 
@@ -794,6 +970,12 @@ export const api = {
 
     fetchJSON<CronJob[]>(`/api/cron/jobs?profile=${encodeURIComponent(profile)}`),
 
+  getCronOccurrences: (start: string, end: string, profile = "all") =>
+
+    fetchJSON<{ start: string; end: string; jobs: CronOccurrenceJob[] }>(
+      `/api/cron/occurrences?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&profile=${encodeURIComponent(profile)}`,
+    ),
+
   createCronJob: (
     job: {
       prompt?: string;
@@ -809,6 +991,11 @@ export const api = {
       enabled_toolsets?: string[];
       workdir?: string;
       no_agent?: boolean;
+      silent_notice?: boolean;
+      use_soul?: boolean;
+      use_user_md?: boolean;
+      use_memory?: boolean;
+      fallback_models?: string[];
     },
     profile = "default",
   ) =>
@@ -831,7 +1018,17 @@ export const api = {
 
     id: string,
 
-    updates: { prompt?: string; schedule?: string; name?: string; deliver?: string },
+    updates: {
+      prompt?: string;
+      schedule?: string;
+      name?: string;
+      deliver?: string;
+      silent_notice?: boolean;
+      use_soul?: boolean;
+      use_user_md?: boolean;
+      use_memory?: boolean;
+      fallback_models?: string[];
+    },
 
     profile = "default",
 
@@ -890,24 +1087,28 @@ export const api = {
     }),
 
   createProfile: (body: {
-
     name: string;
-
-    clone_from_default: boolean;
-
+    clone_from?: string | null;
+    clone_from_default?: boolean;
     clone_all?: boolean;
-
     no_skills?: boolean;
-
     description?: string;
-
     provider?: string;
-
     model?: string;
-
+    mcp_servers?: McpServerCreate[];
+    keep_skills?: string[];
+    hub_skills?: string[];
   }) =>
 
-    fetchJSON<{ ok: boolean; name: string; path: string; model_set?: boolean }>("/api/profiles", {
+    fetchJSON<{
+      ok: boolean;
+      name: string;
+      path: string;
+      model_set?: boolean;
+      mcp_written?: number;
+      skills_disabled?: number;
+      hub_installs?: Array<{ identifier: string; pid: number | null }>;
+    }>("/api/profiles", {
 
       method: "POST",
 
@@ -1053,7 +1254,7 @@ export const api = {
 
   getToolsets: () => fetchJSON<ToolsetInfo[]>("/api/tools/toolsets"),
 
-  toggleToolset: (name: string, enabled: boolean) =>
+  toggleToolset: (name: string, enabled: boolean, profile?: string) =>
 
     fetchJSON<{ ok: boolean }>(`/api/tools/toolsets/${encodeURIComponent(name)}`, {
 
@@ -1061,7 +1262,7 @@ export const api = {
 
       headers: { "Content-Type": "application/json" },
 
-      body: JSON.stringify({ enabled }),
+      body: JSON.stringify({ enabled, profile: profile || undefined }),
 
     }),
 
@@ -1661,7 +1862,7 @@ export const api = {
 
     }),
 
-  runImport: (archive: string) =>
+  runImport: (archive: string, force = false) =>
 
     fetchJSON<ActionResponse>("/api/ops/import", {
 
@@ -1669,7 +1870,7 @@ export const api = {
 
       headers: { "Content-Type": "application/json" },
 
-      body: JSON.stringify({ archive }),
+      body: JSON.stringify({ archive, force }),
 
     }),
 
@@ -1817,7 +2018,107 @@ export const api = {
 
     ),
 
+  // ── Media gallery ──────────────────────────────────────────────────
+  //
+  // Consumes /api/gallery/* endpoints (see clawk_cli/web_server.py).
+  // The gallery UI lives at /media in the dashboard (MediaPage.tsx).
+
+  getGalleryMedia: (filters: MediaListFilters = {}) => {
+
+    const params = new URLSearchParams();
+
+    if (filters.limit !== undefined) params.set("limit", String(filters.limit));
+
+    if (filters.offset !== undefined) params.set("offset", String(filters.offset));
+
+    if (filters.media_type) params.set("media_type", filters.media_type);
+
+    if (filters.date_from !== undefined) params.set("date_from", String(filters.date_from));
+
+    if (filters.date_to !== undefined) params.set("date_to", String(filters.date_to));
+
+    if (filters.model) params.set("model", filters.model);
+
+    if (filters.session_id) params.set("session_id", filters.session_id);
+
+    if (filters.search) params.set("search", filters.search);
+
+    if (filters.min_size !== undefined) params.set("min_size", String(filters.min_size));
+
+    if (filters.max_size !== undefined) params.set("max_size", String(filters.max_size));
+
+    const qs = params.toString();
+
+    return fetchJSON<MediaListResponse>(`/api/gallery${qs ? "?" + qs : ""}`);
+
+  },
+
+  getGalleryStats: () =>
+
+    fetchJSON<MediaStats>("/api/gallery/stats"),
+
+  deleteGalleryMedia: (mediaId: string) =>
+
+    fetchJSON<MediaDeleteResponse>(`/api/gallery/${encodeURIComponent(mediaId)}`, {
+      method: "DELETE",
+    }),
+
 };
+
+// ---------------------------------------------------------------------------
+// Media gallery types
+// ---------------------------------------------------------------------------
+
+export interface MediaItem {
+  id: string;
+  session_id: string | null;
+  message_id: string | null;
+  media_type: "image" | "video";
+  status: "ready" | "expired" | "downloading" | "missing";
+  file_path: string;
+  original_url: string | null;
+  file_size_bytes: number | null;
+  width: number | null;
+  height: number | null;
+  prompt: string | null;
+  model: string | null;
+  provider: string | null;
+  created_at: number;
+}
+
+export interface MediaListResponse {
+  items: MediaItem[];
+  total: number;
+  has_more: boolean;
+}
+
+export interface MediaListFilters {
+  limit?: number;
+  offset?: number;
+  media_type?: "image" | "video";
+  date_from?: number;
+  date_to?: number;
+  model?: string;
+  session_id?: string;
+  search?: string;
+  min_size?: number;
+  max_size?: number;
+}
+
+export interface MediaStats {
+  total_images: number;
+  total_videos: number;
+  total_size_bytes: number;
+  last_7_days: number;
+  expired_count: number;
+  ready_count: number;
+}
+
+export interface MediaDeleteResponse {
+  deleted: boolean;
+  freed_bytes: number;
+  file_missing: boolean;
+}
 
 
 
@@ -2923,6 +3224,24 @@ export interface ModelsAnalyticsResponse {
 
 
 
+export interface CronOccurrenceJob {
+
+  id: string;
+
+  name: string;
+
+  profile?: string | null;
+
+  schedule_display?: string | null;
+
+  /** Map of "YYYY-MM-DD" → number of firings that day (in server timezone). */
+
+  days: Record<string, number>;
+
+}
+
+
+
 export interface CronJob {
 
   id: string;
@@ -2955,7 +3274,19 @@ export interface CronJob {
 
   next_run_at?: string | null;
 
+  last_status?: string | null;
+
   last_error?: string | null;
+
+  silent_notice?: boolean;
+
+  use_soul?: boolean;
+
+  use_user_md?: boolean;
+
+  use_memory?: boolean;
+
+  fallback_models?: { provider: string; model: string }[] | null;
 
 }
 
@@ -2970,6 +3301,8 @@ export interface SkillInfo {
   category: string;
 
   enabled: boolean;
+
+  emoji?: string;
 
 }
 
@@ -3119,6 +3452,9 @@ export interface AuxiliaryModelsResponse {
 
 export interface ModelAssignmentRequest {
 
+  /** Set true to confirm assigning a model flagged as expensive. */
+  confirm_expensive_model?: boolean;
+
   scope: "main" | "auxiliary";
 
   provider: string;
@@ -3134,6 +3470,11 @@ export interface ModelAssignmentRequest {
 
 
 export interface ModelAssignmentResponse {
+
+  /** Set when the backend needs the user to confirm an expensive model. */
+  confirm_message?: string;
+
+  confirm_required?: boolean;
 
   ok: boolean;
 
@@ -3453,5 +3794,116 @@ export interface PluginProvidersPutRequest {
 
   context_engine?: string;
 
+}
+
+// ── Managed files (FilesPage) ──
+export interface ManagedFileEntry {
+  name: string;
+  path: string;
+  is_directory: boolean;
+  size: number | null;
+  mtime: number;
+  mime_type: string | null;
+}
+
+export interface ManagedFilesResponse {
+  root: string | null;
+  path: string;
+  parent: string | null;
+  locked_root: string | null;
+  can_change_path: boolean;
+  entries: ManagedFileEntry[];
+}
+
+export interface ManagedFileReadResponse {
+  name: string;
+  path: string;
+  size: number;
+  mime_type: string;
+  data_url: string;
+  root: string | null;
+  locked_root: string | null;
+  can_change_path: boolean;
+}
+
+export interface ManagedFileWriteResponse {
+  ok: boolean;
+  path: string;
+  entry: ManagedFileEntry;
+  root: string | null;
+  locked_root: string | null;
+  can_change_path: boolean;
+}
+
+// ── Automation Blueprints (AutomationBlueprints) ──
+export interface AutomationBlueprintField {
+  name: string;
+  type: "time" | "enum" | "text" | "weekdays";
+  label: string;
+  default: string | null;
+  options: string[];
+  optional: boolean;
+  /** When false, options are suggestions — any value is accepted. */
+  strict?: boolean;
+  help: string;
+}
+
+export interface AutomationBlueprint {
+  key: string;
+  title: string;
+  description: string;
+  category: string;
+  tags: string[];
+  fields: AutomationBlueprintField[];
+  command: string;
+  appUrl: string;
+}
+
+// ── Skill editor (SkillEditorDialog) ──
+export interface SkillContent {
+  name: string;
+  content: string;
+  path: string;
+}
+
+export interface SkillWriteResult {
+  success: boolean;
+  message?: string;
+  path?: string;
+  error?: string;
+}
+
+// ── Toolset config (ToolsetConfigDrawer) ──
+export interface ToolsetProviderEnvVar {
+  key: string;
+  prompt: string;
+  url: string | null;
+  default: string | null;
+  is_set: boolean;
+}
+
+export interface ToolsetProvider {
+  name: string;
+  badge: string;
+  tag: string;
+  env_vars: ToolsetProviderEnvVar[];
+  post_setup: string | null;
+  requires_nous_auth: boolean;
+  is_active: boolean;
+}
+
+export interface ToolsetConfig {
+  name: string;
+  has_category: boolean;
+  providers: ToolsetProvider[];
+  active_provider: string | null;
+}
+
+export interface ToolsetEnvResult {
+  ok: boolean;
+  name: string;
+  saved: string[];
+  skipped: string[];
+  is_set: Record<string, boolean>;
 }
 

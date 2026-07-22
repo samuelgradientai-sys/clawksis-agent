@@ -492,6 +492,10 @@ export const ja: Translations = {
 
       onceAt: "実行日時",
 
+      onceUseCalendar: "カレンダー",
+
+      onceUseManual: "手動",
+
       customLabel: "cron式",
 
       customPlaceholder: "0 9 * * *",

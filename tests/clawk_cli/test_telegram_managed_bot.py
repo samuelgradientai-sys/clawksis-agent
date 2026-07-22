@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import PureWindowsPath
 from unittest.mock import MagicMock, patch
 
 from clawk_cli.telegram_managed_bot import (
@@ -146,18 +147,14 @@ class TestCreatePairing:
     def test_failure_status(self):
         mock_resp = MagicMock()
         mock_resp.status_code = 500
-        with patch(
-            "clawk_cli.telegram_managed_bot.httpx.post", return_value=mock_resp
-        ):
+        with patch("clawk_cli.telegram_managed_bot.httpx.post", return_value=mock_resp):
             assert create_pairing("https://api.example.com") is None
 
     def test_invalid_payload(self):
         mock_resp = MagicMock()
         mock_resp.status_code = 201
         mock_resp.json.return_value = {"pairing_id": "missing-poll-token"}
-        with patch(
-            "clawk_cli.telegram_managed_bot.httpx.post", return_value=mock_resp
-        ):
+        with patch("clawk_cli.telegram_managed_bot.httpx.post", return_value=mock_resp):
             assert create_pairing("https://api.example.com") is None
 
     def test_uses_env_override(self, monkeypatch):
@@ -321,3 +318,36 @@ class TestSetupTelegramAuto:
         from clawk_cli.setup import _setup_telegram_auto
 
         assert callable(_setup_telegram_auto)
+
+    def test_setup_result_passes_profile_name_for_profile_home(
+        self, monkeypatch, tmp_path
+    ):
+        from clawk_cli import setup
+
+        seen = {}
+        profile_home = tmp_path / ".clawk" / "profiles" / "oracle"
+        profile_home.mkdir(parents=True)
+
+        monkeypatch.setattr(setup, "get_clawk_home", lambda: profile_home)
+
+        def fake_auto_setup_telegram_bot_result(*, profile_name=None):
+            seen["profile_name"] = profile_name
+            return None
+
+        monkeypatch.setattr(
+            "clawk_cli.telegram_managed_bot.auto_setup_telegram_bot_result",
+            fake_auto_setup_telegram_bot_result,
+        )
+
+        assert setup._setup_telegram_auto_result() is None
+        assert seen["profile_name"] == "oracle"
+
+    def test_profile_name_from_home_path_handles_windows_separators(self):
+        from clawk_cli.setup import _profile_name_from_clawk_home
+
+        assert (
+            _profile_name_from_clawk_home(
+                PureWindowsPath(r"C:\Users\test\AppData\Local\clawk\profiles\oracle")
+            )
+            == "oracle"
+        )

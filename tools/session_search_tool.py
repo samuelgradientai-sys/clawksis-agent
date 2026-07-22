@@ -275,7 +275,10 @@ def _locate_session_db(session_id: str):
 
         except Exception:
             logging.debug(
-                "get_session probe failed for %s in %s", session_id, name, exc_info=True
+                "get_session probe failed for %s in %s",
+                session_id,
+                name,
+                exc_info=True,
             )
 
         pdb.close()
@@ -912,7 +915,7 @@ SESSION_SEARCH_SCHEMA = {
         "Search past sessions stored in the local session DB, or scroll inside one. "
         "FTS5-backed retrieval over the SQLite message store. No LLM calls — every "
         "shape returns actual messages from the DB.\n\n"
-        "THREE CALLING SHAPES\n\n"
+        "FOUR CALLING SHAPES\n\n"
         "  1) DISCOVERY — pass `query`:\n"
         '     session_search(query="auth refactor", limit=3)\n'
         "     Runs FTS5, dedupes hits by session lineage, returns the top N sessions. "
@@ -938,7 +941,13 @@ SESSION_SEARCH_SCHEMA = {
         "       - The boundary message appears in both windows — orientation marker.\n"
         "       - When messages_before or messages_after is < window, you're at the "
         "start or end of the session.\n\n"
-        "  3) BROWSE — no args:\n"
+        "  3) READ — pass `session_id` only (no around_message_id):\n"
+        '     session_search(session_id="...", profile="work")\n'
+        "     Dumps the whole session by id (first 20 + last 10 messages when "
+        "large). This is how you resolve an `@session:<profile>/<id>` link the "
+        "user dropped into the chat: split the value on `/` into profile + id "
+        "and call session_search(session_id=id, profile=profile).\n\n"
+        "  4) BROWSE — no args:\n"
         "     session_search()\n"
         "     Returns recent sessions chronologically: titles, previews, timestamps. "
         'Use when the user asks "what was I working on" without naming a topic.\n\n'
@@ -1020,6 +1029,15 @@ SESSION_SEARCH_SCHEMA = {
                     "behaviour) or 'tool' to search tool output only."
                 ),
             },
+            "profile": {
+                "type": "string",
+                "description": (
+                    "Optional. Read sessions from another Clawksis profile's database "
+                    "(read-only). Use when resolving an `@session:<profile>/<id>` link: "
+                    "pass the profile segment here with session_id as the id segment. "
+                    "Omit to use the current profile."
+                ),
+            },
         },
         "required": [],
     },
@@ -1043,6 +1061,7 @@ registry.register(
         around_message_id=args.get("around_message_id"),
         window=args.get("window", 5),
         sort=args.get("sort"),
+        profile=args.get("profile"),
         db=kw.get("db"),
         current_session_id=kw.get("current_session_id"),
     ),

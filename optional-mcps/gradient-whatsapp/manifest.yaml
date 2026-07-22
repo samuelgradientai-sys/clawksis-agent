@@ -1,0 +1,74 @@
+# Clawksis-approved MCP catalog entry.
+# Presence in this directory = approval. Merged via PR review.
+#
+# Schema version 1.
+manifest_version: 1
+
+name: gradient-whatsapp
+description: WhatsApp Business (Meta directo) para la plataforma Gradient/Clawksis — enviar mensajes/plantillas/media, gestionar conversaciones, chequear la ventana de 24h y listar/sincronizar plantillas. Lee las credenciales WABA por-usuario desde Supabase.
+source: https://github.com/samuelgradientai-sys/clawksis-agent
+
+# El server vive en este repo (optional-mcps/gradient-whatsapp/mcp_server.py).
+# `uv run` resuelve las dependencias inline del script (PEP 723), así que no hace
+# falta un bootstrap de venv. Requiere `uv` en PATH (https://docs.astral.sh/uv/).
+# stdio, corre local.
+#
+# NOTA: este install clona el repo del fork (grande). Si más adelante el server
+# se mueve a un repo dedicado (p.ej. samuelgradientai-sys/gradient-whatsapp-mcp),
+# apuntar `install.url` a ese repo hace el install mucho más liviano.
+install:
+  type: git
+  url: https://github.com/samuelgradientai-sys/clawksis-agent
+  ref: main
+
+transport:
+  type: stdio
+  command: "uv"
+  args:
+    - "run"
+    - "--quiet"
+    - "${INSTALL_DIR}/optional-mcps/gradient-whatsapp/mcp_server.py"
+
+# Necesita la service-role key de Supabase del proyecto Gradient: con ella lee las
+# credenciales WABA por-usuario (meta_waba_onboardings) y envía por la Graph API.
+# Va a ~/.clawksis/.env. Config opcional adicional (SUPABASE_PROJECT_REF con default
+# del proyecto, META_API_VERSION, WA_TEMPLATE_LANG) también en .env.
+auth:
+  type: api_key
+  env:
+    - name: SUPABASE_SERVICE_ROLE_KEY
+      prompt: "Supabase service-role key del proyecto Gradient (para leer credenciales WABA)"
+      required: true
+      secret: true
+
+# Los tools de ENVÍO gastan cuota/reputación de Meta y llegan a contactos reales,
+# así que — como los entries linkedin/n8n — van OFF por default: aparecen en el
+# checklist de instalación y el operador opta por habilitarlos. Reads on por default.
+tools:
+  default_enabled:
+    - get_waba_status
+    - list_conversations
+    - get_conversation_messages
+    - check_window
+    - get_message_status
+    - list_templates
+
+post_install: |
+  MCP de WhatsApp Business (Meta directo) de la plataforma Gradient/Clawksis.
+
+  Credenciales:
+    - SUPABASE_SERVICE_ROLE_KEY (requerida, va a ~/.clawksis/.env) — con ella el
+      server lee las credenciales WABA por-usuario desde Supabase y envía por la
+      Graph API de Meta.
+    - Opcionales (.env): SUPABASE_PROJECT_REF (default del proyecto Gradient),
+      META_API_VERSION (default v22.0), WA_TEMPLATE_LANG (default es_CO).
+
+  Seguridad de tools:
+    - Los tools de ENVÍO (send_whatsapp, send_template, send_media, mark_as_read)
+      están OFF por default — gastan cuota/reputación de Meta y escriben a contactos
+      reales. Habilitalos en el checklist (o `clawk mcp configure gradient-whatsapp`)
+      cuando estés listo, y revisá el mensaje antes de enviar.
+    - close_conversation está marcado destructivo (el cliente pide confirmación).
+    - Los tools de envío llevan openWorldHint (efecto externo); los reads readOnlyHint.
+
+  Reiniciá una sesión de Clawksis para cargar los tools.

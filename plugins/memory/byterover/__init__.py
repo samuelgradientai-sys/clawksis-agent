@@ -150,6 +150,7 @@ def _run_brv(args: List[str], timeout: int = _QUERY_TIMEOUT, cwd: str = None) ->
             timeout=timeout,
             cwd=effective_cwd,
             env=env,
+            stdin=subprocess.DEVNULL,
         )
 
         stdout = result.stdout.strip()

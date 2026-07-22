@@ -8,6 +8,7 @@ import { H2 } from "@nous-research/ui/ui/components/typography/h2";
 import { api } from "@/lib/api";
 import type { CronJob, ProfileInfo } from "@/lib/api";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { CronCalendar } from "@/components/CronCalendar";
 import {
   DEFAULT_SCHEDULE_STATE,
   ScheduleBuilder,
@@ -26,6 +27,7 @@ import { Toast } from "@nous-research/ui/ui/components/toast";
 import { Card, CardContent } from "@nous-research/ui/ui/components/card";
 import { Input } from "@nous-research/ui/ui/components/input";
 import { Label } from "@nous-research/ui/ui/components/label";
+import { Switch } from "@nous-research/ui/ui/components/switch";
 import { useI18n } from "@/i18n";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { PluginSlot } from "@/plugins";
@@ -119,10 +121,67 @@ export default function CronPage() {
   const [jobs, setJobs] = useState<CronJob[]>([]);
   const [profiles, setProfiles] = useState<ProfileInfo[]>([]);
   const [selectedProfile, setSelectedProfile] = useState("all");
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [loading, setLoading] = useState(true);
   const { toast, showToast } = useToast();
   const { t, locale } = useI18n();
+  // New cron labels are optional in non-eager locales, so fall back to English.
+  const cronExtra = {
+    silentNotice: t.cron.silentNotice ?? "Notify even when there's nothing new",
+    useSoul: t.cron.useSoul ?? "Use SOUL.md (assistant identity)",
+    useUserMd: t.cron.useUserMd ?? "Use USER.md (user profile)",
+    useMemory: t.cron.useMemory ?? "Use MEMORY.md (long-term memory)",
+    contextToggles: t.cron.contextToggles ?? "Context & delivery",
+    fallbackModels: t.cron.fallbackModels ?? "Fallback models (optional)",
+    fallbackModelsHint:
+      t.cron.fallbackModelsHint ??
+      "If the primary model fails, retry with these. Format provider:model, comma-separated.",
+    viewLabel: t.cron.viewLabel ?? "View",
+    listView: t.cron.listView ?? "List",
+    calendarView: t.cron.calendarView ?? "Calendar",
+    archiveChats: t.cron.archiveChats ?? "Archivar chats de cron",
+    archiveChatsHint:
+      t.cron.archiveChatsHint ??
+      "Al terminar cada ejecución, su conversación se archiva (no llena la lista de chats)",
+  };
   const { setEnd } = usePageHeader();
+
+  // Toggle cron.archive_chat_sessions (config backend): when on, each run's
+  // chat session is archived at end-of-run so the conversations sidebar isn't
+  // flooded by scheduled jobs. null = still loading the current value.
+  const [archiveChats, setArchiveChats] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api
+      .getConfig()
+      .then((cfg) => {
+        if (!alive) return;
+        const cron = (cfg.cron ?? {}) as Record<string, unknown>;
+        setArchiveChats(Boolean(cron.archive_chat_sessions));
+      })
+      .catch(() => {
+        if (alive) setArchiveChats(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const toggleArchiveChats = useCallback(
+    async (next: boolean) => {
+      setArchiveChats(next); // optimistic
+      try {
+        // Read-modify-write the full config (the PUT replaces it whole).
+        const cfg = await api.getConfig();
+        const cron = { ...((cfg.cron ?? {}) as Record<string, unknown>) };
+        cron.archive_chat_sessions = next;
+        await api.saveConfig({ ...cfg, cron });
+      } catch {
+        setArchiveChats(!next); // revert on failure
+        showToast("No se pudo guardar la configuración", "error");
+      }
+    },
+    [showToast],
+  );
 
   // Translation surface for the human-readable schedule describer.
   // English ordinals are a special case ("1st", "2nd", "23rd"); every
@@ -169,6 +228,12 @@ export default function CronPage() {
   const [contextFrom, setContextFrom] = useState("");
   const [enabledToolsets, setEnabledToolsets] = useState("");
   const [workdir, setWorkdir] = useState("");
+  // Per-cron behaviour toggles (advanced).
+  const [silentNotice, setSilentNotice] = useState(true);
+  const [useSoul, setUseSoul] = useState(true);
+  const [useUserMd, setUseUserMd] = useState(true);
+  const [useMemory, setUseMemory] = useState(false);
+  const [fallbackModels, setFallbackModels] = useState("");
   const createProfile = selectedProfile === "all" ? "default" : selectedProfile;
 
   // Edit job modal state
@@ -177,6 +242,11 @@ export default function CronPage() {
   const [editSchedule, setEditSchedule] = useState("");
   const [editName, setEditName] = useState("");
   const [editDeliver, setEditDeliver] = useState("local");
+  const [editSilentNotice, setEditSilentNotice] = useState(true);
+  const [editUseSoul, setEditUseSoul] = useState(true);
+  const [editUseUserMd, setEditUseUserMd] = useState(true);
+  const [editUseMemory, setEditUseMemory] = useState(false);
+  const [editFallback, setEditFallback] = useState("");
   const [saving, setSaving] = useState(false);
   const closeEditModal = useCallback(() => setEditJob(null), []);
   const editModalRef = useModalBehavior({
@@ -192,6 +262,15 @@ export default function CronPage() {
     );
     setEditName(getJobName(job));
     setEditDeliver(asText(job.deliver) || "local");
+    setEditSilentNotice(job.silent_notice ?? true);
+    setEditUseSoul(job.use_soul ?? true);
+    setEditUseUserMd(job.use_user_md ?? true);
+    setEditUseMemory(job.use_memory ?? false);
+    setEditFallback(
+      (job.fallback_models ?? [])
+        .map((m) => `${m.provider}:${m.model}`)
+        .join(", "),
+    );
   }, []);
 
   const loadJobs = useCallback(() => {
@@ -260,6 +339,16 @@ export default function CronPage() {
           enabled_toolsets: toolsetsList.length ? toolsetsList : undefined,
           workdir: workdir.trim() || undefined,
           no_agent: noAgent || undefined,
+          silent_notice: silentNotice,
+          use_soul: useSoul,
+          use_user_md: useUserMd,
+          use_memory: useMemory,
+          fallback_models: fallbackModels.trim()
+            ? fallbackModels
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : undefined,
         },
         createProfile,
       );
@@ -277,6 +366,11 @@ export default function CronPage() {
       setContextFrom("");
       setEnabledToolsets("");
       setWorkdir("");
+      setSilentNotice(true);
+      setUseSoul(true);
+      setUseUserMd(true);
+      setUseMemory(false);
+      setFallbackModels("");
       setShowAdvanced(false);
       setCreateModalOpen(false);
       loadJobs();
@@ -302,6 +396,16 @@ export default function CronPage() {
           schedule: editSchedule.trim(),
           name: editName.trim(),
           deliver: editDeliver,
+          silent_notice: editSilentNotice,
+          use_soul: editUseSoul,
+          use_user_md: editUseUserMd,
+          use_memory: editUseMemory,
+          fallback_models: editFallback.trim()
+            ? editFallback
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : [],
         },
         getJobProfile(editJob),
       );
@@ -319,22 +423,25 @@ export default function CronPage() {
     try {
       const isPaused = getJobState(job) === "paused";
       const profile = getJobProfile(job);
-      if (isPaused) {
-        await api.resumeCronJob(job.id, profile);
-        showToast(
-          `${t.cron.resume}: "${truncateText(getJobTitle(job), 30)}"`,
-          "success",
-        );
-      } else {
-        await api.pauseCronJob(job.id, profile);
-        showToast(
-          `${t.cron.pause}: "${truncateText(getJobTitle(job), 30)}"`,
-          "success",
-        );
-      }
-      loadJobs();
+      // Bug #29 fix: usar la respuesta del API para actualizar el estado local.
+      // Antes hacíamos loadJobs() inmediatamente después de pause/resume, lo que
+      // podía leer data stale del backend antes que el cambio se propagara.
+      // Ahora el API devuelve el CronJob actualizado y reemplazamos solo ese.
+      const updatedJob = isPaused
+        ? await api.resumeCronJob(job.id, profile)
+        : await api.pauseCronJob(job.id, profile);
+      showToast(
+        `${isPaused ? t.cron.resume : t.cron.pause}: "${truncateText(getJobTitle(job), 30)}"`,
+        "success",
+      );
+      // Reemplazar solo el job afectado en el estado local — sin race condition
+      setJobs((prev) =>
+        prev.map((j) => (j.id === updatedJob.id ? updatedJob : j)),
+      );
     } catch (e) {
       showToast(`${t.status.error}: ${e}`, "error");
+      // Si falló, sincronizar con el backend para no quedar fuera de sync
+      loadJobs();
     }
   };
 
@@ -430,7 +537,7 @@ export default function CronPage() {
           aria-modal="true"
           aria-labelledby="create-cron-title"
         >
-          <div className={cn(themedBody, "relative w-full max-w-lg border border-border bg-card shadow-2xl flex flex-col")}>
+          <div className={cn(themedBody, "relative w-full max-w-lg max-h-[90vh] border border-border bg-card shadow-2xl flex flex-col")}>
             <Button
               ghost
               size="icon"
@@ -450,7 +557,7 @@ export default function CronPage() {
               </h2>
             </header>
 
-            <div className="p-5 grid gap-4">
+            <div className="p-5 grid gap-4 overflow-y-auto flex-1 min-h-0">
               <div className="grid gap-2">
                 <Label htmlFor="cron-profile">Profile</Label>
                 <Select
@@ -621,22 +728,72 @@ export default function CronPage() {
                         onChange={(e) => setEnabledToolsets(e.target.value)}
                       />
                     </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="cron-fallback">
+                        {cronExtra.fallbackModels}
+                      </Label>
+                      <Input
+                        id="cron-fallback"
+                        placeholder="deepseek:deepseek-chat, openai:gpt-4o-mini"
+                        value={fallbackModels}
+                        onChange={(e) => setFallbackModels(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {cronExtra.fallbackModelsHint}
+                      </p>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>{cronExtra.contextToggles}</Label>
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={silentNotice}
+                          onChange={(e) => setSilentNotice(e.target.checked)}
+                        />
+                        {cronExtra.silentNotice}
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={useSoul}
+                          onChange={(e) => setUseSoul(e.target.checked)}
+                        />
+                        {cronExtra.useSoul}
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={useUserMd}
+                          onChange={(e) => setUseUserMd(e.target.checked)}
+                        />
+                        {cronExtra.useUserMd}
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={useMemory}
+                          onChange={(e) => setUseMemory(e.target.checked)}
+                        />
+                        {cronExtra.useMemory}
+                      </label>
+                    </div>
                   </div>
                 )}
               </div>
 
-              <div className="flex justify-end">
-                <Button
-                  className="uppercase"
-                  size="sm"
-                  onClick={handleCreate}
-                  disabled={creating}
-                  prefix={creating ? <Spinner /> : undefined}
-                >
-                  {creating ? t.common.creating : t.common.create}
-                </Button>
-              </div>
             </div>
+
+            <footer className="flex justify-end p-5 pt-3 border-t border-border shrink-0">
+              <Button
+                className="uppercase"
+                size="sm"
+                onClick={handleCreate}
+                disabled={creating}
+                prefix={creating ? <Spinner /> : undefined}
+              >
+                {creating ? t.common.creating : t.common.create}
+              </Button>
+            </footer>
           </div>
         </div>
       )}
@@ -651,7 +808,7 @@ export default function CronPage() {
           aria-modal="true"
           aria-labelledby="edit-cron-title"
         >
-          <div className={cn(themedBody, "relative w-full max-w-lg border border-border bg-card shadow-2xl flex flex-col")}>
+          <div className={cn(themedBody, "relative w-full max-w-lg max-h-[90vh] border border-border bg-card shadow-2xl flex flex-col")}>
             <Button
               ghost
               size="icon"
@@ -671,7 +828,7 @@ export default function CronPage() {
               </h2>
             </header>
 
-            <div className="p-5 grid gap-4">
+            <div className="p-5 grid gap-4 overflow-y-auto flex-1 min-h-0">
               <div className="grid gap-2">
                 <Label htmlFor="edit-cron-name">{t.cron.nameOptional}</Label>
                 <Input
@@ -730,19 +887,65 @@ export default function CronPage() {
                   </Select>
                 </div>
               </div>
-
-              <div className="flex justify-end">
-                <Button
-                  className="uppercase"
-                  size="sm"
-                  onClick={handleEdit}
-                  disabled={saving}
-                  prefix={saving ? <Spinner /> : undefined}
-                >
-                  {saving ? t.common.loading : "Save changes"}
-                </Button>
+              <div className="grid gap-2 border-t border-border pt-3">
+                <Label>{cronExtra.contextToggles}</Label>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={editSilentNotice}
+                    onChange={(e) => setEditSilentNotice(e.target.checked)}
+                  />
+                  {cronExtra.silentNotice}
+                </label>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={editUseSoul}
+                    onChange={(e) => setEditUseSoul(e.target.checked)}
+                  />
+                  {cronExtra.useSoul}
+                </label>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={editUseUserMd}
+                    onChange={(e) => setEditUseUserMd(e.target.checked)}
+                  />
+                  {cronExtra.useUserMd}
+                </label>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={editUseMemory}
+                    onChange={(e) => setEditUseMemory(e.target.checked)}
+                  />
+                  {cronExtra.useMemory}
+                </label>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="edit-cron-fallback">
+                    {cronExtra.fallbackModels}
+                  </Label>
+                  <Input
+                    id="edit-cron-fallback"
+                    placeholder="deepseek:deepseek-chat, openai:gpt-4o-mini"
+                    value={editFallback}
+                    onChange={(e) => setEditFallback(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
+
+            <footer className="flex justify-end p-5 pt-3 border-t border-border shrink-0">
+              <Button
+                className="uppercase"
+                size="sm"
+                onClick={handleEdit}
+                disabled={saving}
+                prefix={saving ? <Spinner /> : undefined}
+              >
+                {saving ? t.common.loading : "Save changes"}
+              </Button>
+            </footer>
           </div>
         </div>
       )}
@@ -757,24 +960,75 @@ export default function CronPage() {
             {t.cron.scheduledJobs} ({jobs.length})
           </H2>
 
-          <div className="grid gap-1 min-w-[220px]">
-            <Label htmlFor="cron-profile-filter">Profile</Label>
-            <Select
-              id="cron-profile-filter"
-              value={selectedProfile}
-              onValueChange={(v) => setSelectedProfile(v)}
-            >
-              <SelectOption value="all">All profiles</SelectOption>
-              {profiles.map((profile) => (
-                <SelectOption key={profile.name} value={profile.name}>
-                  {profileLabel(profile.name)}
-                </SelectOption>
-              ))}
-            </Select>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid gap-1">
+              <Label>{cronExtra.viewLabel}</Label>
+              <div className="inline-flex border border-border">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  className={cn(
+                    "h-9 px-3 text-xs uppercase tracking-wide transition-colors",
+                    viewMode === "list"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {cronExtra.listView}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("calendar")}
+                  className={cn(
+                    "h-9 border-l border-border px-3 text-xs uppercase tracking-wide transition-colors",
+                    viewMode === "calendar"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {cronExtra.calendarView}
+                </button>
+              </div>
+            </div>
+            <div className="grid gap-1 min-w-[220px]">
+              <Label htmlFor="cron-profile-filter">Profile</Label>
+              <Select
+                id="cron-profile-filter"
+                value={selectedProfile}
+                onValueChange={(v) => setSelectedProfile(v)}
+              >
+                <SelectOption value="all">All profiles</SelectOption>
+                {profiles.map((profile) => (
+                  <SelectOption key={profile.name} value={profile.name}>
+                    {profileLabel(profile.name)}
+                  </SelectOption>
+                ))}
+              </Select>
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor="cron-archive-chats" title={cronExtra.archiveChatsHint}>
+                {cronExtra.archiveChats}
+              </Label>
+              <div
+                className="flex h-9 items-center"
+                title={cronExtra.archiveChatsHint}
+              >
+                <Switch
+                  id="cron-archive-chats"
+                  checked={archiveChats === true}
+                  disabled={archiveChats === null}
+                  onCheckedChange={toggleArchiveChats}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        {jobs.length === 0 && (
+        {viewMode === "calendar" && (
+          <CronCalendar profile={selectedProfile} />
+        )}
+
+        {viewMode === "list" && jobs.length === 0 && (
           <Card>
             <CardContent className="py-8 text-center text-sm text-muted-foreground">
               {t.cron.noJobs}
@@ -782,7 +1036,7 @@ export default function CronPage() {
           </Card>
         )}
 
-        {jobs.map((job) => {
+        {viewMode === "list" && jobs.map((job) => {
           const state = getJobState(job);
           const promptText = getJobPrompt(job);
           const title = getJobTitle(job);
@@ -816,7 +1070,25 @@ export default function CronPage() {
                     <span className="font-mono-ui">
                       {getJobScheduleDisplay(job, scheduleDescribeStrings)}
                     </span>
-                    <span>
+                    <span className="flex items-center gap-1">
+                      {job.last_run_at && job.last_status === "ok" && (
+                        <span
+                          className="inline-block text-success"
+                          title="Última ejecución exitosa"
+                          aria-label="ok"
+                        >
+                          ✓
+                        </span>
+                      )}
+                      {job.last_run_at && job.last_status === "error" && (
+                        <span
+                          className="inline-block text-destructive"
+                          title="Última ejecución falló"
+                          aria-label="error"
+                        >
+                          ✗
+                        </span>
+                      )}
                       {t.cron.last}: {formatTime(job.last_run_at)}
                     </span>
                     <span>

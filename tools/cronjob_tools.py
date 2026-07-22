@@ -550,7 +550,22 @@ def _resolve_model_override(model_obj: Optional[Dict[str, Any]]) -> tuple:
     # provider gets pinned instead.
 
     if provider_name == "custom":
-        provider_name = None
+        # Keep bare "custom" only when it actually resolves to a named
+        # providers/custom_providers entry (e.g. a single ``providers.custom``
+        # cliproxy gateway). Otherwise treat it as "no provider supplied" so the
+        # current main provider gets pinned instead of an unresolvable "custom".
+        # The explicit "custom:<name>" form is not equal to "custom" and so
+        # never reaches this branch — it is preserved as-is.
+        try:
+            from clawk_cli import runtime_provider as _rp
+
+            _has_entry = _rp.has_named_custom_provider(provider_name)
+
+        except Exception:
+            _has_entry = False
+
+        if not _has_entry:
+            provider_name = None
 
     if model_name and not provider_name:
         # Pin to the current main provider so the job is stable
@@ -673,6 +688,83 @@ def _validate_cron_script_path(script: Optional[str]) -> Optional[str]:
     return None
 
 
+def _looks_like_inline_script(value: str) -> bool:
+    """True when ``value`` is script *content* rather than a path.
+
+    A real script path is a single token (e.g. ``check.py`` or ``sub/run.sh``):
+    no newlines, no shebang. Agents sometimes paste a whole script into the
+    path-only ``script`` field, which used to fail at run time with
+    'Script not found'.
+    """
+    s = (value or "").strip()
+    if not s:
+        return False
+    return s.startswith("#!") or ("\n" in s)
+
+
+def _infer_inline_script_ext(value: str) -> str:
+    """Pick ``.py`` or ``.sh`` for inline content — prefer the shebang, then
+    fall back to a light content sniff. The scheduler runs ``.sh``/``.bash``
+    via bash and everything else via Python, so the extension picks the
+    interpreter."""
+    stripped = value.lstrip()
+    first_line = stripped.splitlines()[0] if stripped else ""
+    low = first_line.lower()
+    if first_line.startswith("#!"):
+        if "python" in low:
+            return ".py"
+        if "bash" in low or "sh" in low:
+            return ".sh"
+    body = value.lower()
+    if any(marker in body for marker in ("import ", "def ", "print(", "__name__")):
+        return ".py"
+    return ".sh"
+
+
+def _slug_for_script(text: str) -> str:
+    import re
+
+    slug = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
+    return slug[:40] or "job"
+
+
+def _materialize_inline_script(
+    script: Optional[str], name: Optional[str]
+) -> Optional[str]:
+    """If ``script`` is inline content (shebang / multi-line) instead of a path,
+    save it under ~/.clawksis/scripts/ and return the relative filename;
+    otherwise return ``script`` unchanged.
+
+    Makes the common 'agent pasted a whole script into the path field' case just
+    work instead of failing at run time, while the schema docs still steer the
+    agent to prefer a plain prompt for condition checks.
+    """
+    if not script or not _looks_like_inline_script(script):
+        return script
+
+    import hashlib
+
+    from clawk_constants import get_clawk_home
+
+    scripts_dir = get_clawk_home() / "scripts"
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+
+    ext = _infer_inline_script_ext(script)
+    digest = hashlib.sha1(script.encode("utf-8")).hexdigest()[:8]
+    filename = f"cron_{_slug_for_script(name)}_{digest}{ext}"
+    path = scripts_dir / filename
+
+    content = script if script.endswith("\n") else script + "\n"
+    path.write_text(content, encoding="utf-8")
+    try:
+        path.chmod(0o755)
+    except OSError:
+        pass
+
+    logger.info("cronjob: saved inline script content to %s", path)
+    return filename
+
+
 def _format_job(job: Dict[str, Any]) -> Dict[str, Any]:
 
     prompt = str(job.get("prompt") or "")
@@ -719,6 +811,9 @@ def _format_job(job: Dict[str, Any]) -> Dict[str, Any]:
     if job.get("no_agent"):
         result["no_agent"] = True
 
+    if job.get("stop_after_alert"):
+        result["stop_after_alert"] = True
+
     if job.get("enabled_toolsets"):
         result["enabled_toolsets"] = job["enabled_toolsets"]
 
@@ -752,6 +847,12 @@ def cronjob(
     workdir: Optional[str] = None,
     profile: Optional[str] = None,
     no_agent: Optional[bool] = None,
+    stop_after_alert: Optional[bool] = None,
+    silent_notice: Optional[bool] = None,
+    use_soul: Optional[bool] = None,
+    use_user_md: Optional[bool] = None,
+    use_memory: Optional[bool] = None,
+    fallback_models: Optional[Union[str, list]] = None,
     task_id: str = None,
 ) -> str:
     """Unified cron job management tool."""
@@ -798,9 +899,13 @@ def cronjob(
                 if scan_error:
                     return tool_error(scan_error, success=False)
 
-            # Validate script path before storing
+            # Validate script path before storing. If the caller pasted inline
+            # script *content* into this path-only field, save it to a file
+            # first so it runs instead of failing with 'Script not found'.
 
             if script:
+                script = _materialize_inline_script(script, name)
+
                 script_error = _validate_cron_script_path(script)
 
                 if script_error:
@@ -840,6 +945,12 @@ def cronjob(
                 workdir=_normalize_optional_job_value(workdir),
                 profile=_normalize_optional_job_value(profile),
                 no_agent=_no_agent,
+                stop_after_alert=bool(stop_after_alert),
+                silent_notice=True if silent_notice is None else bool(silent_notice),
+                use_soul=True if use_soul is None else bool(use_soul),
+                use_user_md=True if use_user_md is None else bool(use_user_md),
+                use_memory=False if use_memory is None else bool(use_memory),
+                fallback_models=fallback_models,
             )
 
             return json.dumps(
@@ -980,6 +1091,8 @@ def cronjob(
                 # Pass empty string to clear an existing script
 
                 if script:
+                    script = _materialize_inline_script(script, name or job.get("name"))
+
                     script_error = _validate_cron_script_path(script)
 
                     if script_error:
@@ -1031,6 +1144,24 @@ def cronjob(
                 # otherwise pass raw — update_job() validates / normalizes.
 
                 updates["profile"] = _normalize_optional_job_value(profile) or None
+
+            if stop_after_alert is not None:
+                updates["stop_after_alert"] = bool(stop_after_alert)
+
+            if silent_notice is not None:
+                updates["silent_notice"] = bool(silent_notice)
+
+            if use_soul is not None:
+                updates["use_soul"] = bool(use_soul)
+
+            if use_user_md is not None:
+                updates["use_user_md"] = bool(use_user_md)
+
+            if use_memory is not None:
+                updates["use_memory"] = bool(use_memory)
+
+            if fallback_models is not None:
+                updates["fallback_models"] = fallback_models
 
             if no_agent is not None:
                 # Toggling no_agent on/off at update time. If flipping to True,
@@ -1127,6 +1258,18 @@ present — they cannot ask questions or request clarification.
 
 
 
+GUIDELINES when creating a job (so it behaves well at run time):
+
+- LANGUAGE: the run replies in the user's language (it reads user.md / the configured language). Write the prompt so the user-facing output reads naturally in that language, never as a robotic template.
+
+- A cron can be a real TASK, not just a reminder. If the goal is to get something done, write the prompt to actually DO the work each run (use tools, fetch data, take the action) — not to merely re-announce the reminder.
+
+- CONDITION alerts ("notify me when X happens / when service Y is back up"): use a normal prompt (no_agent=False) that checks the condition and, when it is NOT yet met, replies with exactly "[SILENT]" so nothing is sent. Set stop_after_alert=True so the job auto-stops after it finally delivers the alert — this is the right way to do "tell me when…", instead of spamming every tick or rescheduling forever.
+
+- FREQUENCY: pick a sensible interval. Do NOT poll every minute unless the user explicitly asks; minutes-to-hours fits almost all checks.
+
+
+
 Important safety rule: cron-run sessions should not recursively schedule more cron jobs.""",
     "parameters": {
         "type": "object",
@@ -1178,7 +1321,19 @@ Important safety rule: cron-run sessions should not recursively schedule more cr
             },
             "script": {
                 "type": "string",
-                "description": f"Optional path to a script that runs each tick. In the default mode its stdout is injected into the agent's prompt as context (data-collection / change-detection pattern). With no_agent=True, the script IS the job and its stdout is delivered verbatim (classic watchdog pattern). Relative paths resolve under {display_clawk_home()}/scripts/. ``.sh``/``.bash`` extensions run via bash, everything else via Python. On update, pass empty string to clear.",
+                "description": f"Optional **path** to a script *file* that runs each tick — NOT inline code. Relative paths resolve under {display_clawk_home()}/scripts/; ``.sh``/``.bash`` run via bash, everything else via Python. In default mode its stdout is injected into the agent's prompt as context (data-collection / change-detection pattern); with no_agent=True the script IS the job and its stdout is delivered verbatim (watchdog pattern). PREFER a plain ``prompt`` for anything involving a condition check or reasoning — reach for a script only for fixed-shape data collection. (If you do pass inline script content here — e.g. it starts with '#!' or spans multiple lines — it is auto-saved to a file and run, but a prompt is usually the better tool.) On update, pass empty string to clear.",
+            },
+            "stop_after_alert": {
+                "type": "boolean",
+                "default": False,
+                "description": (
+                    "Default: False. When True, the job auto-pauses after its first real "
+                    "(non-[SILENT]), successfully-delivered message. Use for one-time CONDITION "
+                    "alerts — 'notify me when X happens', 'tell me when service Y is back up' — so "
+                    "the job stops itself once it fires instead of re-running forever. "
+                    "Leave False for recurring reports, briefings, digests, or self-improvement "
+                    "jobs that should keep delivering on every tick."
+                ),
             },
             "no_agent": {
                 "type": "boolean",
@@ -1196,6 +1351,53 @@ Important safety rule: cron-run sessions should not recursively schedule more cr
                     "\n\n"
                     "WHEN TO USE True: recurring script-only pings where the script itself produces the exact message text (memory/disk/GPU watchdogs, threshold alerts, heartbeats, CI notifications, API pollers with a fixed output shape). "
                     "WHEN TO USE False (default): anything that needs reasoning — summarize a feed, draft a daily briefing, pick interesting items, rephrase data for a human, follow conditional logic based on content."
+                ),
+            },
+            "silent_notice": {
+                "type": "boolean",
+                "default": True,
+                "description": (
+                    "Default: True. When the agent returns [SILENT] (a condition is not met / "
+                    "nothing to report), deliver a short 'nothing new this run' notice so the user "
+                    "knows the job ran. Set False to restore pure silence (deliver nothing) for "
+                    "quiet conditional reminders that should only speak when the condition fires."
+                ),
+            },
+            "use_soul": {
+                "type": "boolean",
+                "default": True,
+                "description": (
+                    "Default: True. Load the user's SOUL.md identity into the cron agent's system "
+                    "prompt so it keeps the assistant's persona. Set False for neutral, identity-free runs."
+                ),
+            },
+            "use_user_md": {
+                "type": "boolean",
+                "default": True,
+                "description": (
+                    "Default: True. Inject USER.md (the user profile: language, preferences) into the "
+                    "cron prompt so a scheduled run honours the user's language without a live "
+                    "conversation. Set False to omit it."
+                ),
+            },
+            "use_memory": {
+                "type": "boolean",
+                "default": False,
+                "description": (
+                    "Default: False. Load MEMORY.md (long-term memory) into the cron agent. Off by "
+                    "default because non-interactive cron runs can corrupt long-term user "
+                    "representations; enable only for jobs that genuinely need memory context."
+                ),
+            },
+            "fallback_models": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Optional per-job model fallback chain as 'provider:model' strings "
+                    '(e.g. ["deepseek:deepseek-chat", "openai:gpt-4o-mini"]). If the primary model '
+                    "is exhausted (rate-limit, overload, connection failure), the agent retries down "
+                    "this list. Overrides the config.yaml fallback when set. On update, pass an empty "
+                    "array to clear."
                 ),
             },
             "context_from": {
@@ -1222,7 +1424,7 @@ Important safety rule: cron-run sessions should not recursively schedule more cr
             },
             "profile": {
                 "type": "string",
-                "description": "Optional Clawksis profile name to run the job under. When set, the scheduler resolves that profile, applies a context-local Clawksis home override, loads that profile's config/.env for the run, and bridges CLAWK_HOME into subprocesses. Any temporary process-environment changes from profile .env loading are restored after the job exits. Use 'default' for the root Clawksis profile. Named profiles must already exist. When unset (default), preserves the scheduler's existing profile. On update, pass an empty string to clear. Jobs with profile run sequentially (not parallel) to keep profile-scoped runtime state isolated.",
+                "description": "Optional Clawksis profile name to run the job under. When set, the scheduler resolves that profile, applies a context-local Clawksis home override, loads that profile's config/.env for the run, and bridges CLAWK_HOME into subprocesses. Any temporary process-environment changes from profile .env loading are restored after the job exits. Use 'default' for the root Clawksis profile. Named profiles must already exist (managed via `clawk profile`). When unset (default), preserves the scheduler's existing profile. On update, pass an empty string to clear. Jobs with profile run sequentially (not parallel) to keep profile-scoped runtime state isolated.",
             },
         },
         "required": ["action"],
@@ -1295,6 +1497,12 @@ registry.register(
             workdir=args.get("workdir"),
             profile=args.get("profile"),
             no_agent=args.get("no_agent"),
+            stop_after_alert=args.get("stop_after_alert"),
+            silent_notice=args.get("silent_notice"),
+            use_soul=args.get("use_soul"),
+            use_user_md=args.get("use_user_md"),
+            use_memory=args.get("use_memory"),
+            fallback_models=args.get("fallback_models"),
             task_id=kw.get("task_id"),
         )
     )(),

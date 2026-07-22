@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+
+VERSION = "0.1.0"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+MANIFEST_PATH = REPO_ROOT / "local_ops" / "capabilities.json"
+
+
+def load_manifest() -> dict:
+    data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+
+    if not isinstance(data, dict):
+        raise ValueError("capabilities manifest must be a JSON object")
+
+    if "capabilities" not in data or not isinstance(data["capabilities"], list):
+        raise ValueError("capabilities manifest must contain a capabilities list")
+
+    for item in data["capabilities"]:
+        if not isinstance(item, dict):
+            raise ValueError("each capability must be a JSON object")
+        for key in ("name", "status", "risk", "mode", "description"):
+            if key not in item:
+                raise ValueError(f"capability is missing required key: {key}")
+
+    return data
+
+
+def print_human(data: dict, *, status_filter: str | None) -> None:
+    print("CLAWKSIS_CAPABILITIES")
+    print(f"schema_version={data.get('schema_version')}")
+    print(f"module={data.get('module')}")
+    print()
+
+    for item in data["capabilities"]:
+        if status_filter and item.get("status") != status_filter:
+            continue
+
+        print(f"- {item['name']}")
+        print(f"  status: {item['status']}")
+        print(f"  risk: {item['risk']}")
+        print(f"  mode: {item['mode']}")
+        print(f"  entrypoint: {item.get('entrypoint')}")
+        print(f"  description: {item['description']}")
+        print()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="List Clawksis local capabilities")
+    parser.add_argument("--json", action="store_true", help="Print full manifest as JSON")
+    parser.add_argument("--names", action="store_true", help="Print capability names only")
+    parser.add_argument("--status", choices=["available", "planned"], help="Filter by status")
+    parser.add_argument("--version", action="store_true", help="Print command version")
+
+    args = parser.parse_args()
+
+    if args.version:
+        print(VERSION)
+        return 0
+
+    try:
+        data = load_manifest()
+    except Exception as exc:
+        print(f"STATUS=error\nMESSAGE={type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+
+    capabilities = data["capabilities"]
+
+    if args.status:
+        capabilities = [item for item in capabilities if item.get("status") == args.status]
+
+    if args.json:
+        output = dict(data)
+        output["capabilities"] = capabilities
+        print(json.dumps(output, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.names:
+        for item in capabilities:
+            print(item["name"])
+        return 0
+
+    output = dict(data)
+    output["capabilities"] = capabilities
+    print_human(output, status_filter=None)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

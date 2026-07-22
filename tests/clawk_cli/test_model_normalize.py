@@ -202,14 +202,17 @@ class TestIssue6211NativeProviderPrefixNormalization:
         "model,target_provider,expected",
         [
             ("zai/glm-5.1", "zai", "glm-5.1"),
-            ("google/gemini-2.5-pro", "gemini", "google/gemini-2.5-pro"),
+            ("google/gemini-2.5-pro", "gemini", "gemini-2.5-pro"),
+            ("gemini/gemini-2.5-pro", "gemini", "gemini-2.5-pro"),
             ("moonshot/kimi-k2.5", "kimi-coding", "kimi-k2.5"),
             (
                 "anthropic/claude-sonnet-4.6",
                 "openrouter",
                 "anthropic/claude-sonnet-4.6",
             ),
+            ("x-ai/grok-4-fast-reasoning", "xai", "grok-4-fast-reasoning"),
             ("Qwen/Qwen3.5-397B-A17B", "huggingface", "Qwen/Qwen3.5-397B-A17B"),
+            ("openai/gpt-5.4", "xai", "openai/gpt-5.4"),
             ("modal/zai-org/GLM-5-FP8", "custom", "modal/zai-org/GLM-5-FP8"),
         ],
     )

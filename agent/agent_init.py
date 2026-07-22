@@ -103,6 +103,37 @@ from utils import base_url_host_matches
 logger = logging.getLogger("run_agent")
 
 
+def _model_is_local_endpoint(provider: str, base_url: str) -> bool:
+    """True for local model backends (Ollama / LM Studio / localhost endpoints).
+
+    Used to relax the 64K minimum-context guard: local models routinely ship a
+    smaller context window, and hard-failing them would make the cookbook /
+    local-model flow unusable. Cloud providers stay subject to the strict
+    minimum.
+    """
+
+    p = (provider or "").strip().lower()
+
+    if p in {
+        "ollama",
+        "lmstudio",
+        "lm-studio",
+        "lm_studio",
+        "local",
+        "vllm",
+        "llamacpp",
+        "llama.cpp",
+        "llama-cpp",
+    }:
+        return True
+
+    host = (base_url or "").strip().lower()
+
+    return any(
+        marker in host for marker in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]")
+    )
+
+
 def _ra():
     """Lazy reference to ``run_agent`` so callers can patch
 
@@ -205,6 +236,23 @@ def _merge_custom_provider_extra_body(
     agent.request_overrides = overrides
 
 
+def emit_agent_event(
+    agent, event_name: str, payload: Optional[Dict[str, Any]] = None
+) -> None:
+    """Fire the agent's generic observability callback, if one is registered.
+
+    Safe to call from anywhere: a no-op when no callback is set, and never
+    propagates a listener's exception into the agent loop.
+    """
+    cb = getattr(agent, "event_callback", None)
+    if cb is None:
+        return
+    try:
+        cb(event_name, payload or {})
+    except Exception:
+        logger.debug("event_callback failed for event %r", event_name, exc_info=True)
+
+
 def init_agent(
     agent,
     base_url: str = None,
@@ -223,6 +271,7 @@ def init_agent(
     save_trajectories: bool = False,
     verbose_logging: bool = False,
     quiet_mode: bool = False,
+    tool_progress_mode: str = "all",
     ephemeral_system_prompt: str = None,
     log_prefix_chars: int = 100,
     log_prefix: str = "",
@@ -240,11 +289,15 @@ def init_agent(
     thinking_callback: callable = None,
     reasoning_callback: callable = None,
     clarify_callback: callable = None,
+    read_terminal_callback: callable = None,
     step_callback: callable = None,
     stream_delta_callback: callable = None,
     interim_assistant_callback: callable = None,
     tool_gen_callback: callable = None,
     status_callback: callable = None,
+    notice_callback: callable = None,
+    notice_clear_callback: callable = None,
+    event_callback: callable = None,
     max_tokens: int = None,
     reasoning_config: Dict[str, Any] = None,
     service_tier: str = None,
@@ -375,6 +428,10 @@ def init_agent(
 
     agent.max_iterations = max_iterations
 
+    # Per-tool progress verbosity ("off"/"new"/"all"/"verbose"); read defensively
+    # elsewhere via getattr(agent, "tool_progress_mode", "all").
+    agent.tool_progress_mode = tool_progress_mode
+
     # Shared iteration budget — parent creates, children inherit.
 
     # Consumed by every LLM turn across parent + all subagents.
@@ -425,6 +482,12 @@ def init_agent(
         None  # Optional sync callback for gateway delivery
     )
 
+    # Generic observability hook: callers pass a callable(event_name, payload)
+    # to receive agent lifecycle events (memory writes, skill runs, delegations,
+    # …) without coupling telemetry to the core loop. None disables it. Emit
+    # defensively via emit_agent_event(agent, name, payload).
+    agent.event_callback = event_callback
+
     agent.skip_context_files = skip_context_files
 
     agent.load_soul_identity = load_soul_identity
@@ -432,6 +495,16 @@ def init_agent(
     agent.pass_session_id = pass_session_id
 
     agent._credential_pool = credential_pool
+
+    # Activate the OPT-IN resilience runtime (rate limiter / circuit breaker /
+    # adaptive 429 cooldown) from the `resilience` config block. Idempotent and
+    # process-global; a no-op when every resilience flag is off (the default).
+    try:
+        from agent.resilience.runtime import install_resilience_runtime
+
+        install_resilience_runtime()
+    except Exception:
+        pass
 
     agent.log_prefix_chars = log_prefix_chars
 
@@ -619,6 +692,8 @@ def init_agent(
 
     agent.clarify_callback = clarify_callback
 
+    agent.read_terminal_callback = read_terminal_callback
+
     agent.step_callback = step_callback
 
     agent.stream_delta_callback = stream_delta_callback
@@ -626,6 +701,10 @@ def init_agent(
     agent.interim_assistant_callback = interim_assistant_callback
 
     agent.status_callback = status_callback
+
+    agent.notice_callback = notice_callback
+
+    agent.notice_clear_callback = notice_clear_callback
 
     agent.tool_gen_callback = tool_gen_callback
 
@@ -2377,20 +2456,38 @@ def init_agent(
 
     agent.compression_enabled = compression_enabled
 
-    # Reject models whose context window is below the minimum required
-
-    # for reliable tool-calling workflows (64K tokens).
+    # Reject models whose context window is below the minimum required for
+    # reliable tool-calling workflows (64K tokens) — EXCEPT local models
+    # (Ollama / LM Studio / localhost endpoints), which routinely ship a
+    # smaller window. Hard-failing those would brick the cookbook/local-model
+    # flow, so we warn and run with the model's real window instead. Cloud
+    # models keep the strict guard.
 
     _ctx = getattr(agent.context_compressor, "context_length", 0)
 
     if _ctx and _ctx < MINIMUM_CONTEXT_LENGTH:
-        raise ValueError(
-            f"Model {agent.model} has a context window of {_ctx:,} tokens, "
-            f"which is below the minimum {MINIMUM_CONTEXT_LENGTH:,} required "
-            f"by Clawksis.  Choose a model with at least "
-            f"{MINIMUM_CONTEXT_LENGTH // 1000}K context, or set "
-            f"model.context_length in config.yaml to override."
-        )
+        if _model_is_local_endpoint(
+            getattr(agent, "provider", "") or "",
+            getattr(agent, "base_url", "") or "",
+        ):
+            logger.warning(
+                "Model %s has a %s-token context window, below the %s minimum, "
+                "but it is a LOCAL model — running with its real (reduced) "
+                "window instead of refusing. Long tool-calling workflows may "
+                "degrade; raise it with model.context_length in config.yaml.",
+                agent.model,
+                f"{_ctx:,}",
+                f"{MINIMUM_CONTEXT_LENGTH:,}",
+            )
+
+        else:
+            raise ValueError(
+                f"Model {agent.model} has a context window of {_ctx:,} tokens, "
+                f"which is below the minimum {MINIMUM_CONTEXT_LENGTH:,} required "
+                f"by Clawksis.  Choose a model with at least "
+                f"{MINIMUM_CONTEXT_LENGTH // 1000}K context, or set "
+                f"model.context_length in config.yaml to override."
+            )
 
     # Inject context engine tool schemas (e.g. lcm_grep, lcm_describe, lcm_expand).
 

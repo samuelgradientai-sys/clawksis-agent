@@ -123,6 +123,10 @@ class NousPortalAccountInfo:
 
     org_id: Optional[str] = None
 
+    org_slug: Optional[str] = None
+
+    org_name: Optional[str] = None
+
     client_id: Optional[str] = None
 
     product_id: Optional[str] = None
@@ -215,6 +219,44 @@ def nous_portal_billing_url(
         base = DEFAULT_NOUS_PORTAL_URL
 
     return f"{base.rstrip('/')}/billing"
+
+
+def nous_portal_topup_url(
+    account_info: Optional[NousPortalAccountInfo] = None,
+) -> str:
+    """Return the top-up (add-credits) URL for a Nous account snapshot.
+
+    The Portal opens its billing page with the top-up modal already up via the
+    ``?topup=open`` query param. When the snapshot carries an ``org_slug`` the
+    URL is *org-pinned* (``/orgs/<slug>/billing``) so the modal lands on the
+    right organisation's wallet; without a slug it falls back to the legacy
+    account-level ``/billing`` path.
+    """
+
+    try:
+        from clawk_cli.auth import DEFAULT_NOUS_PORTAL_URL
+
+    except Exception:
+        DEFAULT_NOUS_PORTAL_URL = "https://portal.nousresearch.com"
+
+    base = None
+
+    org_slug = None
+
+    if account_info is not None:
+        base = account_info.portal_base_url
+
+        org_slug = account_info.org_slug
+
+    if not isinstance(base, str) or not base.strip():
+        base = DEFAULT_NOUS_PORTAL_URL
+
+    root = base.rstrip("/")
+
+    if isinstance(org_slug, str) and org_slug.strip():
+        return f"{root}/orgs/{org_slug.strip()}/billing?topup=open"
+
+    return f"{root}/billing?topup=open"
 
 
 def format_nous_portal_entitlement_message(
@@ -827,6 +869,9 @@ def _info_from_account_payload(
         fresh=True,
         org_id=_coerce_str(organisation.get("id"))
         or (access.organisation_id if access else None),
+        org_slug=_coerce_str(organisation.get("slug")),
+        org_name=_coerce_str(organisation.get("name"))
+        or _coerce_str(organisation.get("display_name")),
         client_id=_coerce_str(state.get("client_id")),
         portal_base_url=portal_base_url,
         inference_base_url=_coerce_str(state.get("inference_base_url")),

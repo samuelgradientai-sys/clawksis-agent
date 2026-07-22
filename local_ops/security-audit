@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$REPO_ROOT"
+
+echo "== Clawksis Local Ops Security Audit =="
+echo "Repo: $REPO_ROOT"
+echo
+
+FILES_TO_SCAN=(
+  "hermes_lite/hermes_lite.py"
+  "hermes_lite/README.md"
+  "local_ops/clawk-safe-ops"
+  "local_ops/clawk_safe_ops.py"
+  "local_ops/bootstrap"
+  "local_ops/doctor"
+  "local_ops/tests/test_clawk_safe_ops.py"
+)
+
+echo "[1/5] Checking expected files..."
+for file in "${FILES_TO_SCAN[@]}"; do
+  test -f "$file"
+done
+echo "OK"
+echo
+
+echo "[2/5] Checking for unsafe shell execution..."
+python3 - <<'PY_AUDIT'
+import ast
+from pathlib import Path
+
+files = [
+    Path("hermes_lite/hermes_lite.py"),
+    Path("local_ops/clawk_safe_ops.py"),
+    Path("local_ops/repo-status"),
+    Path("local_ops/system-health"),
+    Path("local_ops/service-status"),
+    Path("local_ops/client-report"),
+    Path("business_ops/weekly-sales-report"),
+    Path("business_ops/customer-insights"),
+    Path("business_ops/product-performance"),
+    Path("business_ops/sales-rep-performance"),
+    Path("business_ops/executive-summary"),
+    Path("business_ops/ventas"),
+    Path("local_ops/tests/test_clawk_safe_ops.py"),
+]
+
+bad = []
+
+for file in files:
+    tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            for keyword in node.keywords:
+                if keyword.arg == "shell" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True:
+                    bad.append((file, node.lineno))
+
+if bad:
+    for file, line in bad:
+        print(f"{file}:{line}: shell=True")
+    raise SystemExit(1)
+PY_AUDIT
+echo "OK"
+echo
+
+echo "[3/5] Checking for accidentally committed private keys..."
+if grep -RInE "BEGIN (OPENSSH|RSA|DSA|EC|PRIVATE) KEY" hermes_lite local_ops; then
+  echo "SECURITY_AUDIT_STATUS=FAILED"
+  echo "Reason: private key material found."
+  exit 1
+fi
+echo "OK"
+echo
+
+echo "[4/5] Checking for common token patterns..."
+if grep -RInE "ghp_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{20,}" hermes_lite local_ops; then
+  echo "SECURITY_AUDIT_STATUS=FAILED"
+  echo "Reason: possible token found."
+  exit 1
+fi
+echo "OK"
+echo
+
+echo "[5/5] Checking executable scripts..."
+test -x "local_ops/clawk-safe-ops"
+test -x "local_ops/bootstrap"
+test -x "local_ops/doctor"
+echo "OK"
+echo
+
+echo "SECURITY_AUDIT_STATUS=OK"

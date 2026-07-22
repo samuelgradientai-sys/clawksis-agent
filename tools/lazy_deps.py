@@ -153,9 +153,21 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
     # users never pay this import.
     "provider.azure_identity": ("azure-identity==1.25.3",),
     # ─── Web search backends ───────────────────────────────────────────────
+    # DuckDuckGo (default search backend) — free, no API key. Unpinned to
+    # match the `clawk tools` post_setup install (`pip install -U ddgs`);
+    # ddgs ships frequent scraper fixes and has no stable extract surface to
+    # break, so we track latest rather than freezing a pin.
+    "search.ddgs": ("ddgs",),
     "search.exa": ("exa-py==2.10.2",),
     "search.firecrawl": ("firecrawl-py==4.17.0",),
     "search.parallel": ("parallel-web==0.4.2",),
+    # ─── Structured scraping (own-infra default) ───────────────────────────
+    # ScrapeGraphAI — local, LLM-powered structured extraction. Heavy (langchain
+    # stack + playwright), so lazy-installed on first use of the `scrapegraph`
+    # tool / extract backend. Unpinned like ddgs: it iterates fast and we always
+    # want the latest scraper/loader fixes. Note: JavaScript pages also need a
+    # one-time `python -m playwright install chromium`.
+    "scrape.scrapegraph": ("scrapegraphai",),
     # ─── TTS providers ─────────────────────────────────────────────────────
     # Pinned to exact versions to match pyproject.toml's no-ranges policy
     # (see comment at top of [project.dependencies]). When bumping, update
@@ -231,11 +243,11 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
         "uvicorn[standard]==0.41.0",
         "starlette==1.0.1",  # CVE-2026-48710 (BadHost) — keep lazy-install in sync with pyproject [web]
     ),
-    # Vision image-resize recovery (Pillow). Soft dependency: vision_tools and
-    # conversation_compression degrade gracefully without it, but the byte AND
-    # pixel-dimension shrink paths no-op when it's absent, so an oversized
-    # image can brick a session on Anthropic's non-retryable 400. Keep in sync
-    # with pyproject [vision].
+    # Vision image-resize recovery (Pillow). Pillow is now a CORE dependency
+    # (pyproject `dependencies`), so this entry is a belt-and-suspenders fallback
+    # for stripped/source-build installs that somehow dropped it. The vision
+    # call site uses prompt=False so it can never raise a blocking input()
+    # prompt mid-session (#40490).
     "tool.vision": ("Pillow==12.2.0",),
 }
 
@@ -516,6 +528,7 @@ def _venv_pip_install(specs: tuple[str, ...], *, timeout: int = 300) -> _Install
                 text=True,
                 timeout=timeout,
                 env=uv_env,
+                stdin=subprocess.DEVNULL,
             )
 
             if r.returncode == 0:
@@ -536,6 +549,7 @@ def _venv_pip_install(specs: tuple[str, ...], *, timeout: int = 300) -> _Install
             capture_output=True,
             text=True,
             timeout=15,
+            stdin=subprocess.DEVNULL,
         )
 
         if probe.returncode != 0:
@@ -549,6 +563,7 @@ def _venv_pip_install(specs: tuple[str, ...], *, timeout: int = 300) -> _Install
                 text=True,
                 timeout=120,
                 check=True,
+                stdin=subprocess.DEVNULL,
             )
 
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
@@ -562,6 +577,7 @@ def _venv_pip_install(specs: tuple[str, ...], *, timeout: int = 300) -> _Install
             capture_output=True,
             text=True,
             timeout=timeout,
+            stdin=subprocess.DEVNULL,
         )
 
         return _InstallResult(r.returncode == 0, r.stdout or "", r.stderr or "")
@@ -645,7 +661,24 @@ def ensure(feature: str, *, prompt: bool = True) -> None:
             "lazy installs disabled (security.allow_lazy_installs=false)",
         )
 
-    if prompt and sys.stdin.isatty() and sys.stdout.isatty():
+    # Only show the interactive confirmation when we own a TTY and
+    # prompt_toolkit isn't running.  A bare input() deadlocks when a
+    # prompt_toolkit app owns the terminal because keystrokes route to
+    # its event loop rather than stdin, so the prompt blocks forever.
+    # Under the TUI we skip the prompt and proceed — lazy installs are
+    # gated by security.allow_lazy_installs, so reaching here is
+    # already user opt-in.
+    _pt_active = False
+    if "prompt_toolkit.application.current" in sys.modules:
+        try:
+            from prompt_toolkit.application.current import get_app_or_none
+
+            _app = get_app_or_none()
+            _pt_active = _app is not None and getattr(_app, "is_running", False)
+        except Exception:
+            _pt_active = False
+
+    if prompt and not _pt_active and sys.stdin.isatty() and sys.stdout.isatty():
         spec_list = ", ".join(missing)
 
         try:

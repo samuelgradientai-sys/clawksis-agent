@@ -54,6 +54,7 @@ Refresh-token handling:
    live RT → rotate server-side, else 401 → /login") lives in
    ``middleware._attempt_refresh``.
 """
+
 from __future__ import annotations
 
 from typing import Optional, Tuple
@@ -179,17 +180,29 @@ def clear_session_cookies(response: Response, *, prefix: str = "") -> None:
     path = _cookie_path(prefix)
     for variant in _NAME_VARIANTS:
         response.set_cookie(
-            f"{variant}{SESSION_AT_COOKIE}", "", max_age=0,
-            path=path, httponly=True, samesite="lax",
+            f"{variant}{SESSION_AT_COOKIE}",
+            "",
+            max_age=0,
+            path=path,
+            httponly=True,
+            samesite="lax",
         )
         response.set_cookie(
-            f"{variant}{SESSION_RT_COOKIE}", "", max_age=0,
-            path=path, httponly=True, samesite="lax",
+            f"{variant}{SESSION_RT_COOKIE}",
+            "",
+            max_age=0,
+            path=path,
+            httponly=True,
+            samesite="lax",
         )
 
 
 def set_pkce_cookie(
-    response: Response, *, payload: str, use_https: bool, prefix: str = "",
+    response: Response,
+    *,
+    payload: str,
+    use_https: bool,
+    prefix: str = "",
 ) -> None:
     response.set_cookie(
         _resolved_name(PKCE_COOKIE, use_https=use_https, prefix=prefix),
@@ -203,13 +216,18 @@ def clear_pkce_cookie(response: Response, *, prefix: str = "") -> None:
     path = _cookie_path(prefix)
     for variant in _NAME_VARIANTS:
         response.set_cookie(
-            f"{variant}{PKCE_COOKIE}", "", max_age=0,
-            path=path, httponly=True, samesite="lax",
+            f"{variant}{PKCE_COOKIE}",
+            "",
+            max_age=0,
+            path=path,
+            httponly=True,
+            samesite="lax",
         )
 
 
 def _read_with_fallback(
-    request: Request, bare_name: str,
+    request: Request,
+    bare_name: str,
 ) -> Optional[str]:
     """Read a cookie by checking every prefix variant in order.
 

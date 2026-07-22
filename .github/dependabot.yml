@@ -36,9 +36,14 @@ updates:
       prefix: "chore(actions)"
       include: "scope"
     groups:
-      # Batch routine action bumps into one PR per week to reduce noise.
-      # Security updates still open individually and bypass grouping.
-      actions-minor-patch:
+      # Batch ALL routine action bumps (minor, patch AND major) into one PR per
+      # week to reduce noise. Without "major" here, each major bump opened its
+      # own PR (that's how we got 5 separate PRs #54-#58). Security updates still
+      # open individually and bypass grouping.
+      github-actions:
+        patterns:
+          - "*"
         update-types:
           - "minor"
           - "patch"
+          - "major"

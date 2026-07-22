@@ -181,7 +181,11 @@ class TestGeminiModelNormalization:
     def test_strip_vendor_prefix(self):
         assert (
             normalize_model_for_provider("google/gemini-2.5-flash", "gemini")
-            == "google/gemini-2.5-flash"
+            == "gemini-2.5-flash"
+        )
+        assert (
+            normalize_model_for_provider("gemini/gemini-2.5-flash", "gemini")
+            == "gemini-2.5-flash"
         )
 
     def test_gemma_vendor_detection(self):

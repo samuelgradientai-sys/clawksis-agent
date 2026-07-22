@@ -61,7 +61,7 @@ T = TypeVar("T")
 DEFAULT_DB_PATH = get_clawk_home() / "state.db"
 
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 17  # 17: pending_turns (durable in-flight turn journal)
 
 
 # ---------------------------------------------------------------------------
@@ -527,6 +527,136 @@ CREATE TABLE IF NOT EXISTS compression_locks (
     expires_at REAL NOT NULL
 
 );
+
+
+
+CREATE TABLE IF NOT EXISTS business_profiles (
+
+    -- Identidad (6 campos)
+
+    id TEXT PRIMARY KEY,
+
+    user_id TEXT NOT NULL,
+
+    name TEXT NOT NULL,
+
+    description TEXT,
+
+    created_at REAL NOT NULL,
+
+    updated_at REAL NOT NULL,
+
+    -- Tono y voz (4 campos)
+
+    tone TEXT,
+
+    voice_traits TEXT,
+
+    emoji_style TEXT,
+
+    target_audience TEXT,
+
+    -- Contexto del negocio (5 campos)
+
+    destinations TEXT,
+
+    hashtags_core TEXT,
+
+    networks TEXT,
+
+    website_url TEXT,
+
+    contact_info TEXT,
+
+    -- Aprendizaje de posts existentes (4 campos)
+
+    style_examples TEXT,
+
+    style_summary TEXT,
+
+    style_embeddings BLOB,
+
+    style_analyzed_at REAL,
+
+    -- API keys del usuario (4 campos)
+
+    openai_key_enc TEXT,
+
+    fal_key_enc TEXT,
+
+    use_fallback_keys INTEGER DEFAULT 1,
+
+    fallback_uses INTEGER DEFAULT 0
+
+);
+
+
+
+CREATE TABLE IF NOT EXISTS media_generations (
+
+    -- Identidad (3 campos)
+
+    id TEXT PRIMARY KEY,
+
+    session_id TEXT,
+
+    message_id TEXT,
+
+    -- Clasificación (2 campos)
+
+    media_type TEXT NOT NULL,
+
+    status TEXT NOT NULL DEFAULT 'ready',
+
+    -- Storage local (4 campos)
+
+    file_path TEXT NOT NULL,
+
+    original_url TEXT,
+
+    file_size_bytes INTEGER,
+
+    width INTEGER,
+
+    height INTEGER,
+
+    -- Metadata de generación (3 campos)
+
+    prompt TEXT,
+
+    model TEXT,
+
+    provider TEXT,
+
+    -- Timestamp
+
+    created_at REAL NOT NULL
+
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_created_at ON media_generations(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_media_type ON media_generations(media_type);
+
+CREATE INDEX IF NOT EXISTS idx_media_session_id ON media_generations(session_id);
+
+CREATE TABLE IF NOT EXISTS pending_turns (
+
+    session_id TEXT PRIMARY KEY,
+
+    prompt TEXT NOT NULL,
+
+    history_version INTEGER,
+
+    started_at REAL NOT NULL,
+
+    status TEXT NOT NULL DEFAULT 'pending'
+
+);
+
+
+
+CREATE INDEX IF NOT EXISTS idx_pending_turns_started ON pending_turns(started_at);
 
 
 
@@ -1471,6 +1601,53 @@ class SessionDB:
                 except sqlite3.OperationalError:
                     pass
 
+            if current_version < 16:
+                # v16: backfill the stable ``_delegate_from`` marker on
+                # pre-marker delegate subagent rows so they stay hidden from
+                # session pickers (list_sessions_rich) and cascade-delete with
+                # their parent — matching how the delegate tool tags new rows.
+                #
+                # Two shapes are tagged:
+                #   1. Linked delegates — a child row still pointing at an
+                #      existing parent and not flagged as a /branch. The marker
+                #      records the parent id so deletion can cascade.
+                #   2. Orphaned delegates — a parentless transcript that has tool
+                #      activity but never produced an assistant turn (the
+                #      signature of a subagent run whose parent link was lost
+                #      mid-flight). These are tagged with the ``__orphaned__``
+                #      sentinel since their original parent id is unrecoverable.
+                #
+                # Both updates skip rows that already carry the marker so the
+                # migration is idempotent and never clobbers a real value.
+                try:
+                    cursor.execute(
+                        "UPDATE sessions SET model_config = "
+                        "json_set(COALESCE(model_config, '{}'), "
+                        "'$._delegate_from', parent_session_id) "
+                        "WHERE parent_session_id IS NOT NULL "
+                        "AND json_extract(model_config, '$._branched_from') IS NULL "
+                        "AND json_extract(model_config, '$._delegate_from') IS NULL "
+                        "AND EXISTS (SELECT 1 FROM sessions p "
+                        "            WHERE p.id = sessions.parent_session_id)"
+                    )
+
+                    cursor.execute(
+                        "UPDATE sessions SET model_config = "
+                        "json_set(COALESCE(model_config, '{}'), "
+                        "'$._delegate_from', '__orphaned__') "
+                        "WHERE parent_session_id IS NULL "
+                        "AND json_extract(model_config, '$._delegate_from') IS NULL "
+                        "AND EXISTS (SELECT 1 FROM messages m "
+                        "            WHERE m.session_id = sessions.id "
+                        "            AND m.role = 'tool') "
+                        "AND NOT EXISTS (SELECT 1 FROM messages m "
+                        "                WHERE m.session_id = sessions.id "
+                        "                AND m.role = 'assistant')"
+                    )
+
+                except sqlite3.OperationalError:
+                    pass
+
             if current_version < SCHEMA_VERSION and fts_migrations_complete:
                 cursor.execute(
                     "UPDATE schema_version SET version = ?",
@@ -2279,6 +2456,26 @@ class SessionDB:
 
         return cleaned
 
+    def update_session_meta(
+        self, session_id: str, model_config: str, model: Optional[str] = None
+    ) -> None:
+        """Update a session's ``model_config`` JSON and (optionally) its model.
+
+        Routes through :meth:`_execute_write` — the shared locked/retried write
+        path — instead of touching ``_conn``/``_lock`` directly. ``model=None``
+        preserves the stored model (SQL ``COALESCE``). No-op if the session id
+        doesn't exist (the UPDATE simply matches no rows).
+        """
+
+        def _do(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE sessions SET model_config = ?, model = COALESCE(?, model) "
+                "WHERE id = ?",
+                (model_config, model, session_id),
+            )
+
+        self._execute_write(_do)
+
     def set_session_title(self, session_id: str, title: str) -> bool:
         """Set or update a session's title.
 
@@ -2343,20 +2540,63 @@ class SessionDB:
 
         Archived sessions are hidden from the default session list but keep all
 
-        their messages — this is a soft hide, not a delete. Returns True when a
+        their messages — this is a soft hide, not a delete. For compression
 
-        row was updated.
+        chains, archive the whole logical conversation. The dashboard lists
+
+        compression roots projected forward to their latest continuation;
+
+        updating only the displayed tip lets the still-unarchived root
+
+        resurrect it on refresh. Returns True when at least one row was
+
+        updated.
 
         """
 
         def _do(conn):
 
             cursor = conn.execute(
-                "UPDATE sessions SET archived = ? WHERE id = ?",
-                (1 if archived else 0, session_id),
+                """
+                WITH RECURSIVE
+                  ancestors(id) AS (
+                    SELECT ?
+                    UNION
+                    SELECT parent.id
+                    FROM ancestors a
+                    JOIN sessions child ON child.id = a.id
+                    JOIN sessions parent ON parent.id = child.parent_session_id
+                    WHERE parent.end_reason = 'compression'
+                      AND child.started_at >= parent.ended_at
+                  ),
+                  descendants(id) AS (
+                    SELECT ?
+                    UNION
+                    SELECT child.id
+                    FROM descendants d
+                    JOIN sessions parent ON parent.id = d.id
+                    JOIN sessions child ON child.parent_session_id = parent.id
+                    WHERE parent.end_reason = 'compression'
+                      AND child.started_at >= parent.ended_at
+                  ),
+                  lineage(id) AS (
+                    SELECT id FROM ancestors
+                    UNION
+                    SELECT id FROM descendants
+                  )
+                UPDATE sessions
+                SET archived = ?
+                WHERE id IN (SELECT id FROM lineage)
+                """,
+                (session_id, session_id, 1 if archived else 0),
             )
 
-            return cursor.rowcount
+            rowcount = cursor.rowcount
+
+            if rowcount is None or rowcount < 0:
+                rowcount = conn.execute("SELECT changes()").fetchone()[0]
+
+            return rowcount
 
         rowcount = self._execute_write(_do)
 
@@ -2626,6 +2866,12 @@ class SessionDB:
 
             #      marker existed.
 
+            #   3. Delegate subagent rows carry a stable ``_delegate_from``
+            #      marker in model_config. They must stay hidden even after
+            #      being orphaned (parent_session_id set to NULL), which the
+            #      legacy ``parent_session_id IS NULL`` branch would otherwise
+            #      re-surface. The trailing AND clause vetoes any row carrying
+            #      the marker regardless of how it qualified above.
             where_clauses.append(
                 "(s.parent_session_id IS NULL"
                 " OR json_extract(s.model_config, '$._branched_from') IS NOT NULL"
@@ -2633,6 +2879,7 @@ class SessionDB:
                 "            WHERE p.id = s.parent_session_id"
                 "            AND p.end_reason = 'branched'"
                 "            AND s.started_at >= p.ended_at))"
+                " AND json_extract(s.model_config, '$._delegate_from') IS NULL"
             )
 
         if source:
@@ -3020,6 +3267,92 @@ class SessionDB:
 
         return s
 
+    def list_cron_job_runs(
+        self, job_id: str, *, limit: int = 50, offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """Return one cron job's run sessions, newest-first and enriched.
+
+        Powers the desktop cron run-history endpoint. Each cron run is a
+        session whose id is ``cron_<job_id>_<run_index>`` and whose source is
+        ``cron``. We scope to exactly one job via an id *prefix range*
+        (``cron_<job_id>_`` ≤ id < the next prefix) rather than a
+        ``LIKE %...%`` substring — the latter would also match a different
+        job whose id merely *contains* this one (e.g. ``cron_xalpha_...``)
+        and can't use the ``(source)`` index. The range bounds bind to the
+        true prefix so SQLite range-scans ``idx_sessions_source``.
+
+        Rows are ordered newest-``started_at`` first and enriched with the
+        same ``preview`` / ``last_active`` columns as
+        :meth:`list_sessions_rich`.
+        """
+
+        prefix = f"cron_{job_id}_"
+
+        # Upper bound = prefix with its last byte incremented, so the range
+        # ``[prefix, prefix_hi)`` captures exactly the ids that start with
+        # ``prefix`` without a trailing wildcard.
+        prefix_hi = prefix[:-1] + chr(ord(prefix[-1]) + 1)
+
+        query = """
+
+            SELECT s.*,
+
+                COALESCE(
+
+                    (SELECT SUBSTR(REPLACE(REPLACE(m.content, X'0A', ' '), X'0D', ' '), 1, 63)
+
+                     FROM messages m
+
+                     WHERE m.session_id = s.id AND m.role = 'user' AND m.content IS NOT NULL
+
+                     ORDER BY m.timestamp, m.id LIMIT 1),
+
+                    ''
+
+                ) AS _preview_raw,
+
+                COALESCE(
+
+                    (SELECT MAX(m2.timestamp) FROM messages m2 WHERE m2.session_id = s.id),
+
+                    s.started_at
+
+                ) AS last_active
+
+            FROM sessions s
+
+            WHERE s.source = 'cron' AND s.id >= ? AND s.id < ?
+
+            ORDER BY s.started_at DESC, s.id DESC
+
+            LIMIT ? OFFSET ?
+
+        """
+
+        with self._lock:
+            cursor = self._conn.execute(query, (prefix, prefix_hi, limit, offset))
+
+            rows = cursor.fetchall()
+
+        runs = []
+
+        for row in rows:
+            s = dict(row)
+
+            raw = s.pop("_preview_raw", "").strip()
+
+            if raw:
+                text = raw[:60]
+
+                s["preview"] = text + ("..." if len(raw) > 60 else "")
+
+            else:
+                s["preview"] = ""
+
+            runs.append(s)
+
+        return runs
+
     # =========================================================================
 
     # Message storage
@@ -3215,6 +3548,74 @@ class SessionDB:
             return msg_id
 
         return self._execute_write(_do)
+
+    # ── Durable pending-turn journal (resilience.durable_turns) ──────────
+    # Lets tui_gateway resume a heavy in-flight turn after a process crash.
+    # The durable twin of the in-memory ``inflight_turn`` marker.
+
+    def record_pending_turn(
+        self,
+        session_id: str,
+        prompt: str,
+        history_version: Optional[int] = None,
+        started_at: Optional[float] = None,
+    ) -> None:
+        """Durably record an in-flight turn so it can resume after a crash.
+
+        Written when a turn starts, cleared on clean completion. On startup,
+        surviving rows are candidate turns to auto-resume. Only the prompt +
+        bookkeeping are stored; the transcript itself is already persisted at
+        message boundaries by the agent.
+        """
+        ts = float(started_at if started_at is not None else time.time())
+
+        def _do(conn):
+            conn.execute(
+                "INSERT OR REPLACE INTO pending_turns "
+                "(session_id, prompt, history_version, started_at, status) "
+                "VALUES (?, ?, ?, ?, 'pending')",
+                (session_id, prompt, history_version, ts),
+            )
+
+        self._execute_write(_do)
+
+    def clear_pending_turn(self, session_id: str) -> None:
+        """Clear the pending-turn marker for a session (clean completion)."""
+
+        def _do(conn):
+            conn.execute(
+                "DELETE FROM pending_turns WHERE session_id = ?", (session_id,)
+            )
+
+        self._execute_write(_do)
+
+    def list_pending_turns(
+        self, max_age_seconds: Optional[float] = None
+    ) -> List[Dict[str, Any]]:
+        """List durable pending turns, newest first.
+
+        When ``max_age_seconds`` is given, only turns started within that window
+        are returned (stale crashed turns are skipped — mirrors the gateway's
+        auto-continue freshness window).
+        """
+        cutoff = None
+        if max_age_seconds is not None:
+            cutoff = time.time() - float(max_age_seconds)
+
+        with self._lock:
+            if cutoff is not None:
+                cursor = self._conn.execute(
+                    "SELECT * FROM pending_turns WHERE started_at >= ? "
+                    "ORDER BY started_at DESC",
+                    (cutoff,),
+                )
+            else:
+                cursor = self._conn.execute(
+                    "SELECT * FROM pending_turns ORDER BY started_at DESC"
+                )
+            rows = cursor.fetchall()
+
+        return [dict(r) for r in rows]
 
     def replace_messages(self, session_id: str, messages: List[Dict[str, Any]]) -> None:
         """Atomically replace every message for a session.
@@ -4267,9 +4668,12 @@ class SessionDB:
 
         sanitized = re.sub(r'"[^"]*"', _preserve_quoted, query)
 
-        # Step 2: Strip remaining (unmatched) FTS5-special characters
+        # Step 2: Strip remaining (unmatched) FTS5-special characters.
+        # ``:`` is FTS5's column-filter operator; on a single-column FTS table
+        # an unquoted ``TODO: fix`` parses as ``column:term`` and raises
+        # "no such column: TODO", silently returning zero results.
 
-        sanitized = re.sub(r"[+{}()\"^]", " ", sanitized)
+        sanitized = re.sub(r"[+{}()\":^]", " ", sanitized)
 
         # Step 3: Collapse repeated * (e.g. "***") into a single one,
 
@@ -5175,6 +5579,86 @@ class SessionDB:
         except OSError:
             pass
 
+    def delete_session_if_empty(
+        self,
+        session_id: str,
+        sessions_dir: Optional[Path] = None,
+    ) -> bool:
+        """Delete a just-ended session only if it has no resumable content.
+
+        Port of google-gemini/gemini-cli#27770: starting the CLI and
+        immediately quitting (or rotating with ``/new``) used to leave empty
+        untitled rows that clutter ``/resume`` and ``clawk sessions list``.
+
+        A session is "empty" — and therefore safe to prune — only when it has
+        all of:
+
+        * no messages (``message_count = 0`` and no ``messages`` rows),
+        * no user-assigned title (``title IS NULL``), and
+        * no child sessions (nothing references it via
+          ``parent_session_id``) — a parent that spawned delegate/subagent
+          runs is resumable content even with an empty transcript.
+
+        Unknown session IDs return ``False`` (nothing to delete). When the
+        row qualifies it is removed via the same atomic delete path as
+        :meth:`delete_session`, and on-disk transcript files are swept when
+        *sessions_dir* is provided. Returns ``True`` only when a row was
+        actually deleted.
+        """
+
+        removed = False
+
+        def _do(conn):
+
+            nonlocal removed
+
+            row = conn.execute(
+                "SELECT title, message_count FROM sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+
+            if row is None:
+                return False
+
+            title = row["title"]
+
+            if title is not None:
+                return False
+
+            if (row["message_count"] or 0) > 0:
+                return False
+
+            has_messages = conn.execute(
+                "SELECT 1 FROM messages WHERE session_id = ? LIMIT 1",
+                (session_id,),
+            ).fetchone()
+
+            if has_messages is not None:
+                return False
+
+            has_children = conn.execute(
+                "SELECT 1 FROM sessions WHERE parent_session_id = ? LIMIT 1",
+                (session_id,),
+            ).fetchone()
+
+            if has_children is not None:
+                return False
+
+            conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+
+            conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+
+            removed = True
+
+            return True
+
+        self._execute_write(_do)
+
+        if removed:
+            self._remove_session_files(sessions_dir, session_id)
+
+        return removed
+
     def delete_session(
         self,
         session_id: str,
@@ -5184,9 +5668,15 @@ class SessionDB:
 
 
 
-        Child sessions are orphaned (parent_session_id set to NULL) rather
+        Most child sessions (branches, plain continuations) are orphaned
 
-        than cascade-deleted, so they remain accessible independently.
+        (parent_session_id set to NULL) rather than cascade-deleted, so they
+
+        remain accessible independently. Delegate subagent children — tagged
+
+        with a ``_delegate_from`` marker in model_config — are cascade-deleted
+
+        instead: they have no standalone value once their parent is gone.
 
         When *sessions_dir* is provided, also removes on-disk transcript
 
@@ -5205,7 +5695,25 @@ class SessionDB:
             if cursor.fetchone()[0] == 0:
                 return False
 
-            # Orphan child sessions so FK constraint is satisfied
+            # Cascade-delete delegate subagent children (they carry a
+            # ``_delegate_from`` marker and have no standalone value).
+
+            delegate_rows = conn.execute(
+                "SELECT id FROM sessions "
+                "WHERE parent_session_id = ? "
+                "AND json_extract(model_config, '$._delegate_from') IS NOT NULL",
+                (session_id,),
+            ).fetchall()
+
+            for row in delegate_rows:
+                child_id = row["id"]
+
+                conn.execute("DELETE FROM messages WHERE session_id = ?", (child_id,))
+
+                conn.execute("DELETE FROM sessions WHERE id = ?", (child_id,))
+
+            # Orphan the remaining child sessions so the FK constraint is
+            # satisfied.
 
             conn.execute(
                 "UPDATE sessions SET parent_session_id = NULL "

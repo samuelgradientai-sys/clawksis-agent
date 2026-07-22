@@ -116,6 +116,7 @@ def _termux_api_app_installed() -> bool:
             text=True,
             timeout=5,
             check=False,
+            stdin=subprocess.DEVNULL,
         )
 
         return "package:com.termux.api" in (result.stdout or "")
@@ -589,7 +590,12 @@ class TermuxAudioRecorder:
 
         try:
             subprocess.run(
-                command, capture_output=True, text=True, timeout=15, check=True
+                command,
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=True,
+                stdin=subprocess.DEVNULL,
             )
 
         except subprocess.CalledProcessError as e:
@@ -617,7 +623,12 @@ class TermuxAudioRecorder:
             return
 
         subprocess.run(
-            [mic_cmd, "-q"], capture_output=True, text=True, timeout=15, check=False
+            [mic_cmd, "-q"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+            stdin=subprocess.DEVNULL,
         )
 
     def stop(self) -> Optional[str]:
@@ -1687,7 +1698,10 @@ def play_audio_file(file_path: str) -> bool:
         if exe:
             try:
                 proc = subprocess.Popen(
-                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
                 )
 
                 with _playback_lock:

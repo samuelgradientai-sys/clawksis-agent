@@ -696,7 +696,7 @@ class SessionManager:
                 # Update model_config (contains cwd) if changed.
 
                 try:
-                    db.update_session_meta(state.session_id, cwd_json, model_str)
+                    db.update_session_meta(state.session_id, cwd_json, model=model_str)
 
                 except Exception:
                     logger.debug("Failed to update ACP session metadata", exc_info=True)

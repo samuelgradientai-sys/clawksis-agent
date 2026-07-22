@@ -86,6 +86,10 @@ from pathlib import Path as _Path
 
 sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
 
+# The plugin's own directory holds sibling modules (voice_mixer, …) that are
+# imported by bare name — keep it importable the same way the test harness does.
+sys.path.insert(0, str(_Path(__file__).resolve().parent))
+
 
 from gateway.config import Platform, PlatformConfig
 
@@ -876,6 +880,49 @@ def _read_dm_role_auth_guild() -> Optional[int]:
     return guild_id if guild_id > 0 else None
 
 
+async def _wait_for_ready_or_bot_exit(
+    ready_event: "asyncio.Event",
+    bot_task: "Optional[asyncio.Task]",
+    timeout: float,
+) -> None:
+    """Block until the Discord client signals ready, the bot task exits, or
+    ``timeout`` elapses.
+
+    Racing the ready event against the bot task means a login that fails during
+    the WebSocket handshake (bad token, intents error) surfaces immediately
+    instead of stalling for the full timeout. Raises ``asyncio.TimeoutError``
+    when neither completes in time; re-raises the bot task's exception when it
+    dies before becoming ready.
+    """
+
+    ready_wait = asyncio.ensure_future(ready_event.wait())
+
+    waiters: set = {ready_wait}
+
+    if bot_task is not None:
+        waiters.add(bot_task)
+
+    try:
+        done, _pending = await asyncio.wait(
+            waiters, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
+        )
+
+    finally:
+        if not ready_wait.done():
+            ready_wait.cancel()
+
+    if not done:
+        raise asyncio.TimeoutError()
+
+    # The bot task finished before ready — surface a startup crash so connect()
+    # treats it as a failure instead of a (never-arriving) success.
+    if bot_task is not None and bot_task in done and not ready_event.is_set():
+        exc = bot_task.exception()
+
+        if exc is not None:
+            raise exc
+
+
 class DiscordAdapter(BasePlatformAdapter):
     """
 
@@ -971,6 +1018,8 @@ class DiscordAdapter(BasePlatformAdapter):
 
         self._on_voice_disconnect: Optional[Callable] = None  # set by run.py
 
+        self._voice_mode_getter: Optional[Callable] = None  # set by run.py
+
         # Phase 3: continuous voice mixer (ambient idle bed + ducked speech).
 
         # Installed once per guild on join; lets acks / TTS / the "thinking"
@@ -998,6 +1047,10 @@ class DiscordAdapter(BasePlatformAdapter):
         self._typing_tasks: Dict[str, asyncio.Task] = {}
 
         self._bot_task: Optional[asyncio.Task] = None
+
+        # True while disconnect() is intentionally tearing the client down, so a
+        # bot-task completion during shutdown is not misread as a runtime crash.
+        self._disconnecting = False
 
         self._post_connect_task: Optional[asyncio.Task] = None
 
@@ -1445,9 +1498,16 @@ class DiscordAdapter(BasePlatformAdapter):
 
             self._bot_task = asyncio.create_task(self._client.start(self.config.token))
 
+            # If the discord.py websocket task exits after we go live (e.g. a
+            # runtime ClientOSError/ConnectionResetError tearing the connection
+            # down), surface it as a retryable fatal error so the gateway
+            # supervisor can replace this dead adapter instead of staying
+            # split-brained (active in systemd, silent on Discord).
+            self._bot_task.add_done_callback(self._handle_bot_task_done)
+
             # Wait for ready
 
-            await asyncio.wait_for(self._ready_event.wait(), timeout=30)
+            await _wait_for_ready_or_bot_exit(self._ready_event, self._bot_task, 30)
 
             self._running = True
 
@@ -1460,6 +1520,11 @@ class DiscordAdapter(BasePlatformAdapter):
                 exc_info=True,
             )
 
+            # Cancel the orphaned bot task so a slow handshake can't complete
+            # later and leave a zombie client firing on_message (duplicate
+            # threads on the next reconnect).
+            await self._cancel_bot_task()
+
             self._release_platform_lock()
 
             return False
@@ -1469,12 +1534,89 @@ class DiscordAdapter(BasePlatformAdapter):
                 "[%s] Failed to connect to Discord: %s", self.name, e, exc_info=True
             )
 
+            await self._cancel_bot_task()
+
             self._release_platform_lock()
 
             return False
 
+    def _handle_bot_task_done(self, task: asyncio.Task) -> None:
+        """Done-callback for the background discord.py client task.
+
+        A post-ready exit of the websocket task means Discord stopped
+        responding even though this adapter is still ``_running``. Mark it as
+        a retryable fatal platform error and notify the gateway supervisor so
+        the reconnect watcher can replace the dead adapter. Completions during
+        an intentional ``disconnect()`` are ignored.
+        """
+
+        # Intentional shutdown: nothing to recover from.
+        if self._disconnecting:
+            return
+
+        # Cancellation is an orderly teardown, not a crash.
+        if task.cancelled():
+            return
+
+        try:
+            exc = task.exception()
+        except asyncio.CancelledError:
+            return
+
+        message = (
+            f"Discord gateway task exited: {exc}"
+            if exc is not None
+            else "Discord gateway task exited unexpectedly"
+        )
+
+        logger.error("[%s] %s", self.name, message, exc_info=exc)
+
+        self._set_fatal_error(
+            "discord_gateway_task_exited",
+            message,
+            retryable=True,
+        )
+
+        # _notify_fatal_error is async but this is a sync done-callback, so
+        # schedule the supervisor notification on the running loop.
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            loop.create_task(self._notify_fatal_error())
+
+    async def _cancel_bot_task(self) -> None:
+        """Cancel and clear the background bot task, awaiting its teardown.
+
+        Safe to call when no task is running. Always leaves ``_bot_task`` None so
+        a timed-out / discarded adapter never leaves a live Discord client behind.
+        """
+
+        task = self._bot_task
+
+        self._bot_task = None
+
+        if task is None or task.done():
+            return
+
+        task.cancel()
+
+        try:
+            await task
+
+        except asyncio.CancelledError:
+            pass
+
+        except Exception:  # pragma: no cover - defensive teardown
+            pass
+
     async def disconnect(self) -> None:
         """Disconnect from Discord."""
+
+        # Mark intentional teardown so the bot-task done callback does not
+        # mistake the resulting completion for a runtime crash.
+        self._disconnecting = True
 
         # Clean up all active voice connections before closing the client
 
@@ -1504,6 +1646,11 @@ class DiscordAdapter(BasePlatformAdapter):
 
             except asyncio.CancelledError:
                 pass
+
+        # Cancel any still-running bot task (e.g. a connect() that timed out and
+        # left a zombie client mid-handshake). _dispose_unused_adapter relies on
+        # disconnect() to fully tear these down.
+        await self._cancel_bot_task()
 
         self._running = False
 
@@ -3454,6 +3601,34 @@ class DiscordAdapter(BasePlatformAdapter):
             receiver.pause()
 
         try:
+            # Continuous-mixer path: when a mixer is installed for this guild,
+            # decode the clip to PCM and duck it into the ambient bed instead of
+            # spawning a one-shot FFmpeg source (which would fight the mixer for
+            # the voice sink). Falls back to the legacy path if decoding fails.
+            mixer = getattr(self, "_voice_mixers", {}).get(guild_id)
+
+            if mixer is not None:
+                import voice_mixer as _vm
+
+                pcm = _vm.decode_to_pcm(audio_path)
+
+                if pcm is not None:
+                    mixer.play_speech(pcm)
+
+                    self._reset_voice_timeout(guild_id)
+
+                    wait_start = time.monotonic()
+
+                    while mixer.speech_active:
+                        if time.monotonic() - wait_start > self.PLAYBACK_TIMEOUT:
+                            break
+
+                        await asyncio.sleep(0.05)
+
+                    return True
+
+                # decode failed — fall through to the legacy one-shot path.
+
             # Wait for current playback to finish (with timeout)
 
             wait_start = time.monotonic()
@@ -3503,6 +3678,67 @@ class DiscordAdapter(BasePlatformAdapter):
             if receiver:
                 receiver.resume()
 
+    def voice_mixer_active(self, guild_id: int) -> bool:
+        """Whether a continuous voice mixer is installed for this guild."""
+
+        return guild_id in getattr(self, "_voice_mixers", {})
+
+    async def play_ack_in_voice(
+        self, guild_id: int, phrase: Optional[str] = None
+    ) -> bool:
+        """Speak a short verbal acknowledgement through the guild's voice mixer.
+
+        Used to fill the silence before a long tool call so the channel doesn't
+        go quiet. No-op (returns False) when acks are disabled in the voice-fx
+        config or when no mixer is installed for the guild.
+        """
+
+        fx_cfg = getattr(self, "_voice_fx_cfg", {}) or {}
+
+        if not fx_cfg.get("ack_enabled"):
+            return False
+
+        mixer = getattr(self, "_voice_mixers", {}).get(guild_id)
+
+        if mixer is None:
+            return False
+
+        if not phrase:
+            phrases = fx_cfg.get("ack_phrases") or []
+
+            phrase = phrases[0] if phrases else "One moment."
+
+        try:
+            from tools.tts_tool import text_to_speech_tool
+
+            raw = text_to_speech_tool(phrase)
+
+            payload = json.loads(raw) if isinstance(raw, str) else (raw or {})
+
+        except Exception:
+            return False
+
+        if not payload.get("success"):
+            return False
+
+        file_path = payload.get("file_path")
+
+        if not file_path:
+            return False
+
+        import voice_mixer as _vm
+
+        pcm = _vm.decode_to_pcm(file_path)
+
+        if pcm is None:
+            return False
+
+        mixer.play_speech(pcm)
+
+        self._reset_voice_timeout(guild_id)
+
+        return True
+
     async def get_user_voice_channel(self, guild_id: int, user_id: str):
         """Return the voice channel the user is currently in, or None."""
 
@@ -3543,6 +3779,20 @@ class DiscordAdapter(BasePlatformAdapter):
             return
 
         text_ch_id = self._voice_text_channels.get(guild_id)
+
+        # Voice-off is a deliberate text-only mode, not idle neglect.  If the
+        # runner exposes a voice-mode getter and it reports "off" for this
+        # channel, leave the connection alone — disconnecting (and spamming an
+        # "inactivity timeout" notice) would fight the user's explicit choice.
+        voice_mode_getter = getattr(self, "_voice_mode_getter", None)
+
+        if voice_mode_getter and text_ch_id:
+            try:
+                if voice_mode_getter(str(text_ch_id)) == "off":
+                    return
+
+            except Exception:
+                pass
 
         await self.leave_voice_channel(guild_id)
 
@@ -8119,6 +8369,25 @@ class DiscordAdapter(BasePlatformAdapter):
 # ---------------------------------------------------------------------------
 
 
+def _component_allow_all_enabled() -> bool:
+    """Whether open access to component buttons was explicitly opted into.
+
+    Mirrors the slash/on_message gates: ``DISCORD_ALLOW_ALL_USERS`` (the
+    per-platform opt-in) or ``GATEWAY_ALLOW_ALL_USERS`` (the gateway-wide
+    opt-in) must be truthy for an unconfigured deployment to allow any
+    user to click a component button. Absent these, the component surface
+    fails closed.
+    """
+
+    truthy = {"true", "1", "yes", "on"}
+
+    for env_name in ("DISCORD_ALLOW_ALL_USERS", "GATEWAY_ALLOW_ALL_USERS"):
+        if os.getenv(env_name, "").strip().lower() in truthy:
+            return True
+
+    return False
+
+
 def _component_check_auth(
     interaction,
     allowed_user_ids: Optional[set],
@@ -8170,16 +8439,30 @@ def _component_check_auth(
 
     """
 
-    user_set = allowed_user_ids or set()
+    user_set = set(allowed_user_ids or set())
 
-    role_set = allowed_role_ids or set()
+    role_set = set(allowed_role_ids or set())
+
+    # Fold the gateway-wide user allowlist into the per-view user set so a
+    # ``GATEWAY_ALLOWED_USERS`` policy authorizes component clicks even when
+    # the view was constructed without explicit ``allowed_user_ids``.
+    global_allowlist = os.getenv("GATEWAY_ALLOWED_USERS", "").strip()
+
+    if global_allowlist:
+        user_set |= {
+            entry.strip() for entry in global_allowlist.split(",") if entry.strip()
+        }
 
     has_users = bool(user_set)
 
     has_roles = bool(role_set)
 
     if not has_users and not has_roles:
-        return True
+        # No allowlist policy is configured. Fail closed unless an operator
+        # has explicitly opted into open access via an allow-all env var.
+        # This mirrors the slash/on_message gates so role-only deployments
+        # (and unconfigured ones) cannot leave the component surface open.
+        return _component_allow_all_enabled()
 
     user = getattr(interaction, "user", None)
 
@@ -8192,6 +8475,10 @@ def _component_check_auth(
 
         except AttributeError:
             uid = ""
+
+        # Explicit wildcard entry authorizes any user.
+        if "*" in user_set:
+            return True
 
         if uid and uid in user_set:
             return True
@@ -8787,6 +9074,8 @@ def _define_discord_view_classes() -> None:
 
             self._selected_provider: str = ""
 
+            self._pending_expensive_model: str = ""
+
             self._build_provider_select()
 
         def _check_auth(self, interaction: discord.Interaction) -> bool:
@@ -8951,9 +9240,47 @@ def _define_discord_view_classes() -> None:
 
                 return
 
-            self.resolved = True
-
             model_id = interaction.data["values"][0]
+
+            # Expensive-model guard: when known pricing exceeds the safety
+            # threshold, require an explicit confirmation click before switching
+            # instead of silently committing to a costly model.
+            warning = None
+
+            try:
+                from clawk_cli.model_cost_guard import expensive_model_warning
+
+                warning = expensive_model_warning(
+                    model_id, provider=self._selected_provider
+                )
+
+            except Exception:
+                warning = None
+
+            if warning is not None:
+                self._pending_expensive_model = model_id
+
+                self._build_expensive_confirm()
+
+                await interaction.response.edit_message(
+                    embed=discord.Embed(
+                        title="⚠ Expensive Model Warning",
+                        description=warning.message,
+                        color=discord.Color.orange(),
+                    ),
+                    view=self,
+                )
+
+                return
+
+            await self._perform_model_switch(interaction, model_id)
+
+        async def _perform_model_switch(
+            self, interaction: discord.Interaction, model_id: str
+        ):
+            """Commit the model switch and report the result in-place."""
+
+            self.resolved = True
 
             self.clear_items()
 
@@ -8984,6 +9311,50 @@ def _define_discord_view_classes() -> None:
                 ),
                 view=None,
             )
+
+        def _build_expensive_confirm(self):
+            """Replace the picker controls with a confirm/cancel pair for the
+            expensive-model warning."""
+
+            self.clear_items()
+
+            confirm_btn = discord.ui.Button(
+                label="Switch anyway",
+                style=discord.ButtonStyle.red,
+                custom_id="model_expensive_confirm",
+            )
+
+            confirm_btn.callback = self._on_expensive_confirm
+
+            self.add_item(confirm_btn)
+
+            cancel_btn = discord.ui.Button(
+                label="Cancel",
+                style=discord.ButtonStyle.grey,
+                custom_id="model_expensive_cancel",
+            )
+
+            cancel_btn.callback = self._on_cancel
+
+            self.add_item(cancel_btn)
+
+        async def _on_expensive_confirm(self, interaction: discord.Interaction):
+
+            if self.resolved:
+                await interaction.response.send_message(
+                    "Already resolved~", ephemeral=True
+                )
+
+                return
+
+            if not self._check_auth(interaction):
+                await interaction.response.send_message(
+                    "You're not authorized~", ephemeral=True
+                )
+
+                return
+
+            await self._perform_model_switch(interaction, self._pending_expensive_model)
 
         async def _on_back(self, interaction: discord.Interaction):
 

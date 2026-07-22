@@ -758,6 +758,123 @@ def _uninstall_profile(profile) -> None:
         log_warn(f"  Could not remove {profile_home}: {e}")
 
 
+def run_gui_uninstall(args):
+    """GUI-only uninstall: remove the Chat GUI, leave the agent + data intact.
+
+    Mirrors ``clawk uninstall --gui``. Removes the desktop app's built
+    artifacts, the packaged app bundle (best-effort), and the Electron
+    userData dir — nothing under ``$CLAWK_HOME`` config/sessions/.env, and
+    never the Python agent or its venv.
+    """
+    from clawk_cli.gui_uninstall import (
+        agent_is_installed,
+        gui_install_summary,
+        uninstall_gui,
+    )
+
+    clawk_home = get_clawk_home()
+    summary = gui_install_summary(clawk_home)
+    skip_confirm = bool(getattr(args, "yes", False))
+
+    print()
+    print(
+        color(
+            "┌─────────────────────────────────────────────────────────┐",
+            Colors.MAGENTA,
+            Colors.BOLD,
+        )
+    )
+    print(
+        color(
+            "│         ⚕ Clawksis Chat GUI Uninstaller                  │",
+            Colors.MAGENTA,
+            Colors.BOLD,
+        )
+    )
+    print(
+        color(
+            "└─────────────────────────────────────────────────────────┘",
+            Colors.MAGENTA,
+            Colors.BOLD,
+        )
+    )
+    print()
+
+    if not summary["gui_installed"]:
+        print("No Clawksis Chat GUI installation was found.")
+        print(f"  Checked: {clawk_home}, and the standard app locations for this OS.")
+        return
+
+    print(
+        color(
+            "This removes the Chat GUI only. The Clawksis agent stays installed.",
+            Colors.CYAN,
+        )
+    )
+    print()
+    print(color("Will remove:", Colors.YELLOW, Colors.BOLD))
+    for p in summary["source_built_artifacts"]:
+        print(f"  • {p}")
+    for p in summary["packaged_app_paths"]:
+        print(f"  • {p}")
+    if summary["userdata_exists"]:
+        print(f"  • {summary['userdata_dir']}  (desktop app data)")
+    print()
+    if agent_is_installed(clawk_home):
+        print(color("Kept intact:", Colors.GREEN, Colors.BOLD))
+        print(f"  • The Clawksis agent at {clawk_home / 'clawksis-agent'}")
+        print(f"  • Your config, sessions, and secrets under {clawk_home}")
+        print()
+
+    if not skip_confirm:
+        try:
+            confirm = (
+                input(f"Type '{color('yes', Colors.YELLOW)}' to remove the Chat GUI: ")
+                .strip()
+                .lower()
+            )
+        except (KeyboardInterrupt, EOFError):
+            print()
+            print("Cancelled.")
+            return
+        if confirm != "yes":
+            print()
+            print("Uninstall cancelled.")
+            return
+
+    print()
+    print(color("Uninstalling Chat GUI...", Colors.CYAN, Colors.BOLD))
+    print()
+    uninstall_gui(clawk_home)
+
+    print()
+    print(
+        color(
+            "┌─────────────────────────────────────────────────────────┐",
+            Colors.GREEN,
+            Colors.BOLD,
+        )
+    )
+    print(
+        color(
+            "│            ✓ Chat GUI Uninstalled!                      │",
+            Colors.GREEN,
+            Colors.BOLD,
+        )
+    )
+    print(
+        color(
+            "└─────────────────────────────────────────────────────────┘",
+            Colors.GREEN,
+            Colors.BOLD,
+        )
+    )
+    print()
+    print("The Clawksis agent is still installed. Run 'clawk' to use the CLI,")
+    print("or 'clawk uninstall' to remove the agent too.")
+    print()
+
+
 def run_uninstall(args):
     """
 
@@ -786,6 +903,24 @@ def run_uninstall(args):
     is_default_profile = _is_default_clawk_home(clawk_home)
 
     named_profiles = _discover_named_profiles() if is_default_profile else []
+
+    # Non-interactive fast path (``--yes``): no prompts. ``--full`` selects a
+    # full wipe (code + ~/.clawksis data); otherwise keep-data. Named profiles
+    # are NOT auto-removed here — that's a destructive, surprising default for
+    # an unattended run, so it stays opt-in to the interactive flow. This is
+    # the path the desktop app's detached cleanup script uses for its
+    # lite/full modes.
+    skip_confirm = bool(getattr(args, "yes", False))
+    if skip_confirm:
+        full_uninstall = bool(getattr(args, "full", False))
+        _perform_uninstall(
+            project_root=project_root,
+            clawk_home=clawk_home,
+            full_uninstall=full_uninstall,
+            remove_profiles=False,
+            named_profiles=named_profiles,
+        )
+        return
 
     print()
 
@@ -991,6 +1126,31 @@ def run_uninstall(args):
 
         return
 
+    _perform_uninstall(
+        project_root=project_root,
+        clawk_home=clawk_home,
+        full_uninstall=full_uninstall,
+        remove_profiles=remove_profiles,
+        named_profiles=named_profiles,
+    )
+
+
+def _perform_uninstall(
+    *,
+    project_root: Path,
+    clawk_home: Path,
+    full_uninstall: bool,
+    remove_profiles: bool,
+    named_profiles: list,
+) -> None:
+    """Execute the uninstall steps. Shared by the interactive and ``--yes``
+    paths so the destructive sequence lives in exactly one place.
+
+    Steps: stop gateway → strip PATH (rc files + Windows registry) → remove the
+    ``clawk`` wrapper + node symlinks → remove the desktop Chat GUI artifacts →
+    delete the code checkout → (Windows) remove PortableGit/Node → optionally
+    wipe ``$CLAWK_HOME`` data and named profiles on full uninstall.
+    """
     print()
 
     print(color("Uninstalling...", Colors.CYAN, Colors.BOLD))
@@ -1081,6 +1241,25 @@ def run_uninstall(args):
 
     else:
         log_info("No Clawksis-managed node/npm/npx symlinks found")
+
+    # 3c. Remove the desktop Chat GUI's artifacts too (built renderer/release,
+    #     node_modules, the packaged app bundle, and the Electron userData
+    #     dir). Both the "keep data" and "full" CLI flows remove the agent
+    #     code, so the GUI — which is just another consumer of the same
+    #     checkout — should go with it. uninstall_gui() never touches config /
+    #     sessions / .env, so it's safe in keep-data mode; on full uninstall the
+    #     step-5 rmtree(clawk_home) would sweep the in-tree artifacts anyway,
+    #     but the packaged app + Electron userData live OUTSIDE CLAWK_HOME and
+    #     must be cleaned explicitly here.
+    log_info("Removing desktop Chat GUI artifacts...")
+    try:
+        from clawk_cli.gui_uninstall import uninstall_gui
+
+        gui_removed = uninstall_gui(clawk_home)
+        if not gui_removed:
+            log_info("No desktop GUI artifacts found")
+    except Exception as e:
+        log_warn(f"Could not remove desktop GUI artifacts: {e}")
 
     # 4. Remove installation directory (code)
 
@@ -1247,3 +1426,50 @@ def run_uninstall(args):
     print("Thank you for using Clawksis! ∇")
 
     print()
+
+
+class _UninstallArgs:
+    """Lightweight args namespace for the module entrypoint below."""
+
+    def __init__(self, *, mode: str):
+        self.gui = mode == "gui"
+        self.gui_summary = False
+        self.full = mode == "full"
+        self.yes = True  # the module entrypoint is always non-interactive
+
+
+def main(argv=None) -> int:
+    """Module entrypoint: ``python -m clawk_cli.uninstall --mode <gui|lite|full>``.
+
+    Exists so the desktop app can run the uninstall under a Python interpreter
+    OUTSIDE the venv being deleted. On Windows, ``lite``/``full`` rmtree the
+    venv that contains the running ``python.exe`` — and a running .exe is
+    mandatory-locked, so doing that from the venv's own interpreter half-fails.
+    The desktop launches this with the system Python + ``PYTHONPATH=<agentRoot>``
+    so ``import clawk_cli`` resolves from source while the venv is torn down.
+
+    This module imports only stdlib + ``clawk_constants`` + ``clawk_cli.colors``
+    (and lazily ``clawk_cli.gui_uninstall``), so it runs fine under a bare
+    system Python with no site-packages from the venv.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="python -m clawk_cli.uninstall")
+    parser.add_argument(
+        "--mode",
+        choices=["gui", "lite", "full"],
+        required=True,
+        help="gui = Chat GUI only; lite = GUI + agent, keep data; full = everything",
+    )
+    ns = parser.parse_args(argv)
+    args = _UninstallArgs(mode=ns.mode)
+
+    if args.gui:
+        run_gui_uninstall(args)
+    else:
+        run_uninstall(args)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

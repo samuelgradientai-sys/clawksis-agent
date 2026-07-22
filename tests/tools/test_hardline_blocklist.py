@@ -97,6 +97,25 @@ _HARDLINE_BLOCK = [
     "exec shutdown",
     "nohup reboot",
     "setsid poweroff",
+    # Self-DoS: restarting/stopping the agent's own gateway unit or a sibling
+    # clawk/clawksis service (real incident 2026-07-07). Must be hardline so
+    # --yolo / approvals.mode=off cannot let the agent kill its own host.
+    "systemctl restart clawk-gateway",
+    "systemctl stop clawk-gateway",
+    "systemctl kill clawk-gateway",
+    "systemctl disable clawk-gateway",
+    "systemctl mask clawk-gateway",
+    "systemctl restart clawk-gateway.service",
+    "sudo systemctl restart clawk-gateway",
+    "systemctl --user restart clawk-gateway",
+    "systemctl restart clawksis-bridge",
+    "systemctl stop clawk-dashboard",
+    "systemctl restart clawk-gateway 2>&1 &",
+    "service clawk-gateway restart",
+    "clawk gateway restart",
+    "clawk gateway stop",
+    "clawk update",
+    "/usr/local/bin/clawk update",
 ]
 
 
@@ -137,6 +156,17 @@ _HARDLINE_ALLOW = [
     "systemctl restart nginx",
     "systemctl stop nginx",
     "systemctl start nginx",
+    # Read-only / non-fatal ops against the agent's OWN gateway must stay
+    # allowed — the agent needs to inspect and (re)start, just never stop/kill
+    # its own unit. `start` is safe (no-op if up, recovery if down).
+    "systemctl status clawk-gateway",
+    "systemctl is-active clawk-gateway",
+    "systemctl show clawk-gateway",
+    "systemctl start clawk-gateway",
+    "journalctl -u clawk-gateway --no-pager -n 50",
+    # A different unit that merely mentions clawk downstream of a separator is
+    # not a clawk-unit restart — must not false-positive.
+    "systemctl restart nginx && echo clawk done",
     # targeted kill
     "kill -9 12345",
     "kill -HUP 1234",
@@ -369,6 +399,70 @@ def test_recoverable_dangerous_commands_still_pass_yolo(clean_session, monkeypat
         result = check_dangerous_command(cmd, "local")
 
         assert result["approved"] is True, f"yolo should have bypassed {cmd!r}"
+
+
+def test_gateway_self_restart_is_hardline_even_under_yolo(clean_session, monkeypatch):
+    """The exact 2026-07-07 incident command must be hardline, not merely
+    dangerous — an autonomous gateway running yolo/approvals.mode=off is
+    precisely the config where the old DANGEROUS_PATTERNS tier let it through
+    and the agent killed its own host.
+    """
+
+    incident = "systemctl restart clawk-gateway 2>&1 &"
+
+    # Sanity: it is also a plain dangerous pattern (generic systemctl stop/
+    # restart), so hardline must be what wins.
+    is_dangerous, _, _ = detect_dangerous_command(incident)
+
+    assert is_dangerous, "precondition: systemctl restart is in DANGEROUS_PATTERNS"
+
+    is_hl, desc = detect_hardline_command(incident)
+
+    assert is_hl, "gateway self-restart must be hardline"
+
+    assert "self-termination" in desc
+
+    # Under CLAWK_YOLO_MODE it must STILL be blocked.
+    monkeypatch.setenv("CLAWK_YOLO_MODE", "1")
+
+    for cmd in (
+        incident,
+        "clawk gateway restart",
+        "clawk update",
+        "service clawk-gateway restart",
+    ):
+        r = check_all_command_guards(cmd, "local")
+
+        assert r["approved"] is False, f"yolo leaked self-DoS guard on {cmd!r}"
+
+        assert r.get("hardline") is True
+
+        assert "BLOCKED (hardline)" in r["message"]
+
+
+def test_gateway_self_restart_hardline_under_mode_off(clean_session, monkeypatch):
+    """approvals.mode=off (yolo-equivalent) must not bypass the self-DoS guard."""
+
+    import tools.approval as approval_mod
+
+    monkeypatch.setattr(approval_mod, "_get_approval_mode", lambda: "off")
+
+    r = check_all_command_guards("systemctl restart clawk-gateway", "local")
+
+    assert r["approved"] is False
+
+    assert r.get("hardline") is True
+
+
+def test_restarting_other_services_still_reaches_normal_flow(clean_session):
+    """Only clawk/clawksis units are hardline — restarting nginx is untouched
+    by the self-DoS guard (it remains an ordinary dangerous-pattern approval).
+    """
+
+    for cmd in ("systemctl restart nginx", "systemctl stop postgresql"):
+        is_hl, _ = detect_hardline_command(cmd)
+
+        assert not is_hl, f"{cmd!r} must not be hardline (not a clawk unit)"
 
 
 def test_hardline_list_is_small():

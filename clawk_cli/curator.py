@@ -269,6 +269,10 @@ def _cmd_run(args) -> int:
         on_summary=_on_summary,
         synchronous=synchronous,
         dry_run=dry,
+        # Explicit `clawk curator run` consolidates by default (preserves prior
+        # behaviour); `--no-consolidate` opts out. The cost gate (default off)
+        # only applies to scheduled/background ticks.
+        consolidate=getattr(args, "consolidate", True),
     )
 
     auto = result.get("auto_transitions", {})
@@ -742,7 +746,15 @@ def register_cli(parent: argparse.ArgumentParser) -> None:
         "(use this to preview what curator would do)",
     )
 
-    p_run.set_defaults(func=_cmd_run)
+    p_run.add_argument(
+        "--no-consolidate",
+        dest="consolidate",
+        action="store_false",
+        help="Skip the aux-model umbrella-consolidation pass; run only the free "
+        "deterministic stale/archive prune (cheaper). Background ticks skip it "
+        "by default — enable everywhere with curator.consolidate: true in config.",
+    )
+    p_run.set_defaults(func=_cmd_run, consolidate=True)
 
     p_pause = subs.add_parser("pause", help="Pause the curator until resumed")
 

@@ -46,7 +46,7 @@ That does not stop Clawksis from working well as a phone-native CLI agent — it
 Clawksis now ships a Termux-aware installer path:
 
 ```bash
-curl -fsSL https://clawksis-agent.nousresearch.com/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash
 ```
 
 On Termux, the installer automatically:

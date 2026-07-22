@@ -244,6 +244,7 @@ _HOME_TARGET_ENV_VARS = {
     "bluebubbles": "BLUEBUBBLES_HOME_CHANNEL",
     "qqbot": "QQBOT_HOME_CHANNEL",
     "whatsapp": "WHATSAPP_HOME_CHANNEL",
+    "whatsapp_cloud": "WHATSAPP_CLOUD_HOME_CHANNEL",
 }
 
 
@@ -737,6 +738,53 @@ def _iter_home_target_platforms():
         pass
 
 
+def cron_delivery_targets() -> list:
+    """List configured + cron-deliverable platforms for the dashboard dropdown.
+
+    For every platform the gateway reports as connected that also exposes a
+    cron home channel (built-in via ``_HOME_TARGET_ENV_VARS`` or a plugin via
+    the platform registry), return a descriptor:
+
+        {"id": <platform>, "home_env_var": <ENV>, "home_target_set": <bool>}
+
+    ``home_target_set`` reflects whether the home channel env var is actually
+    populated, so the UI can flag platforms that are connected but not yet
+    pointed at a delivery target. Platforms whose gateway isn't configured are
+    never included. Returns ``[]`` if the gateway config can't be loaded.
+    """
+
+    try:
+        from gateway.config import load_gateway_config
+
+        gateway_config = load_gateway_config()
+
+        connected = gateway_config.get_connected_platforms()
+
+    except Exception:
+        return []
+
+    targets = []
+
+    for platform in connected:
+        name = getattr(platform, "value", platform)
+
+        if not isinstance(name, str):
+            name = str(name)
+
+        env_var = _resolve_home_env_var(name)
+
+        if not env_var:
+            continue
+
+        targets.append({
+            "id": name,
+            "home_env_var": env_var,
+            "home_target_set": bool(_get_home_target_chat_id(name)),
+        })
+
+    return targets
+
+
 def _resolve_single_delivery_target(job: dict, deliver_value: str) -> Optional[dict]:
     """Resolve one concrete auto-delivery target for a cron job."""
 
@@ -1143,15 +1191,12 @@ def _deliver_result(job: dict, content: str, adapters=None, loop=None) -> Option
     if wrap_response:
         task_name = job.get("name", job["id"])
 
-        job_id = job.get("id", "")
-
-        delivery_content = (
-            f"Cronjob Response: {task_name}\n"
-            f"(job_id: {job_id})\n"
-            f"-------------\n\n"
-            f"{content}\n\n"
-            f'To stop or manage this job, send me a new message (e.g. "stop reminder {task_name}").'
-        )
+        # Minimal, natural header: a small "⏰ <name>" tag so a cron message is
+        # recognizable in a chat without reading like an automated system. No
+        # job_id, divider, or management footer — those felt robotic, and the
+        # user manages jobs from the dashboard / by replying. Set
+        # cron.wrap_response: false to deliver the raw content with no tag.
+        delivery_content = f"⏰ {task_name}\n\n{content}"
 
     else:
         delivery_content = content
@@ -1705,6 +1750,72 @@ def _parse_wake_gate(script_output: str) -> bool:
     return gate.get("wakeAgent", True) is not False
 
 
+_USER_PROFILE_MAX_CHARS = 2000
+
+
+def _load_user_profile_block() -> str:
+    """Read ``~/.clawksis/user.md`` and return a labeled, length-bounded block
+    for injection into cron prompts (or ``""`` if absent/empty/unreadable).
+
+    Scheduled runs have no live conversation, so the agent would otherwise have
+    no signal for the user's language or preferences and tends to default to
+    English. Surfacing the user profile here lets a cron honour rule 1 (always
+    reply in the user's language) without a user present.
+    """
+    try:
+        home = _get_clawk_home()
+    except Exception:
+        return ""
+
+    for name in ("user.md", "USER.md"):
+        path = home / name
+        try:
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace").strip()
+        except (OSError, PermissionError):
+            continue
+        if not text:
+            continue
+        if len(text) > _USER_PROFILE_MAX_CHARS:
+            text = text[:_USER_PROFILE_MAX_CHARS] + "\n[... truncated ...]"
+        return (
+            "## USER PROFILE (from user.md)\n"
+            "Honour the user's language and preferences stated here:\n\n"
+            f"{text}"
+        )
+
+    return ""
+
+
+def _cron_configured_language() -> str:
+    """Best-effort configured language code (e.g. ``es``) as a fallback for the
+    cron language rule when no ``user.md`` is present. Resolves env >
+    ``display.language`` config > default via the shared i18n resolver."""
+    try:
+        from agent.i18n import get_language
+
+        return get_language() or ""
+    except Exception:
+        return ""
+
+
+def _silent_notice_text(job: dict) -> str:
+    """Short 'nothing new this run' heartbeat.
+
+    Delivered when a job would otherwise return ``[SILENT]`` and the per-job
+    ``silent_notice`` flag is on (the default). Lets the user confirm the job
+    ran even when there was nothing to report, instead of total silence.
+    Localized to the configured language (es/pt, English fallback)."""
+    name = str(job.get("name") or job.get("id") or "cron").strip()
+    lang = (_cron_configured_language() or "").lower()
+    if lang.startswith("es"):
+        return f"✅ {name}: sin novedades en esta corrida."
+    if lang.startswith("pt"):
+        return f"✅ {name}: sem novidades nesta execução."
+    return f"✅ {name}: nothing new to report this run."
+
+
 def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
     """Build the effective prompt for a cron job, optionally loading one or more skills first.
 
@@ -1728,6 +1839,16 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
 
     prompt = str(job.get("prompt") or "")
 
+    # The user-authored prompt is the real injection surface and always keeps
+    # the STRICT scan. Runtime DATA blobs (script stdout/stderr, context_from
+    # output) are operator-authored — same trust class as install-vetted skill
+    # markdown — so when any of them are present the assembled prompt is scanned
+    # with the LOOSER tier (command-shapes allowed, invisible unicode
+    # sanitized) and the raw user prompt is strict-scanned separately below.
+    raw_user_prompt = prompt
+
+    has_runtime_data = False
+
     skills = job.get("skills")
 
     # Run data-collection script if configured, inject output as context.
@@ -1743,6 +1864,8 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
 
         if success:
             if script_output:
+                has_runtime_data = True
+
                 prompt = (
                     "## Script Output\n"
                     "The following data was collected by a pre-run script. "
@@ -1757,6 +1880,8 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
                 return None
 
         else:
+            has_runtime_data = True
+
             prompt = (
                 "## Script Error\n"
                 "The data-collection script failed. Report this to the user.\n\n"
@@ -1818,6 +1943,8 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
                     )
 
                 if latest_output:
+                    has_runtime_data = True
+
                     prompt = (
                         f"## Output from job '{source_job_id}'\n"
                         "The following is the most recent output from a preceding "
@@ -1839,20 +1966,52 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
                 # silent skip — do not pollute the prompt with error messages
 
     # Always prepend cron execution guidance so the agent knows how
+    # delivery works, which language to use, and when to stay silent.
+    # The substrings "automatically delivered", "do NOT use send_message"
+    # and "[SILENT]" are asserted by tests — keep them verbatim.
 
-    # delivery works and can suppress delivery when appropriate.
+    configured_lang = _cron_configured_language()
+    lang_clause = (
+        "LANGUAGE: Reply in the user's language — see the USER PROFILE below "
+        "(user.md) when present"
+        + (
+            f", otherwise use the configured language '{configured_lang}'. "
+            if configured_lang
+            else ", otherwise match the language the user normally writes in. "
+        )
+        + "Never default to English unless that is the user's language. "
+    )
 
     cron_hint = (
-        "[IMPORTANT: You are running as a scheduled cron job. "
+        "[IMPORTANT: You are running as a scheduled cron job. There is no user "
+        "present to answer questions or clarify — act autonomously. "
         "DELIVERY: Your final response will be automatically delivered "
         "to the user — do NOT use send_message or try to deliver "
         "the output yourself. Just produce your report/output as your "
         "final response and the system handles the rest. "
-        "SILENT: If there is genuinely nothing new to report, respond "
-        'with exactly "[SILENT]" (nothing else) to suppress delivery. '
-        "Never combine [SILENT] with content — either report your "
-        "findings normally, or say [SILENT] and nothing more.]\n\n"
+        + lang_clause
+        + "TONE: Write naturally, the way a person would — same tone and shape "
+        "as the messages that already land well with this user. Do not sound "
+        "like an automated system or a templated alert. "
+        "REAL TASK: A cron can be a task, not just a reminder. If the job "
+        "implies getting something done, actually do the work this run using "
+        "your tools — do not merely restate the task and bail. Firing and "
+        "rescheduling without completing the work is a failure. "
+        "CONDITION: If this job waits for a condition to become true, check it "
+        "silently each run. While the condition is NOT met, respond with "
+        'exactly "[SILENT]" (nothing else) to suppress delivery — never send '
+        "useless 'still waiting' pings. Notify only when the condition is "
+        "actually met or there is a real problem to report. Never combine "
+        "[SILENT] with content — either report normally, or say [SILENT] and "
+        "nothing more.]\n\n"
     )
+
+    # USER.md is injected by default so cron honours the user's language and
+    # preferences; per-job ``use_user_md=False`` opts out.
+    if job.get("use_user_md", True):
+        profile_block = _load_user_profile_block()
+        if profile_block:
+            cron_hint += profile_block + "\n\n"
 
     prompt = cron_hint + prompt
 
@@ -1867,7 +2026,14 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
     skill_names = [str(name).strip() for name in skills if str(name).strip()]
 
     if not skill_names:
-        return _scan_assembled_cron_prompt(prompt, job, has_skills=False)
+        # Runtime DATA (script output / context_from) gets the looser tier, but
+        # the raw user prompt keeps the strict guarantee (scanned separately).
+        return _scan_assembled_cron_prompt(
+            prompt,
+            job,
+            has_skills=has_runtime_data,
+            strict_user_prompt=raw_user_prompt if has_runtime_data else None,
+        )
 
     from tools.skills_tool import skill_view
 
@@ -1988,11 +2154,20 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
             f"The user has provided the following instruction alongside the skill invocation: {prompt}",
         ])
 
-    return _scan_assembled_cron_prompt("\n".join(parts), job, has_skills=True)
+    return _scan_assembled_cron_prompt(
+        "\n".join(parts),
+        job,
+        has_skills=True,
+        strict_user_prompt=raw_user_prompt if has_runtime_data else None,
+    )
 
 
 def _scan_assembled_cron_prompt(
-    assembled: str, job: dict, *, has_skills: bool = False
+    assembled: str,
+    job: dict,
+    *,
+    has_skills: bool = False,
+    strict_user_prompt: Optional[str] = None,
 ) -> str:
     """Scan the fully-assembled cron prompt for injection patterns. Raises
 
@@ -2040,9 +2215,31 @@ def _scan_assembled_cron_prompt(
 
       vetted at install time by ``skills_guard.py``.
 
+    ``strict_user_prompt`` carries the raw user-authored prompt when the
+    looser tier was selected only because runtime DATA (script output /
+    context_from output) was injected. The user prompt is the real
+    injection surface, so it keeps the STRICT scan regardless of the tier
+    chosen for the surrounding data blobs.
+
     """
 
     from tools.cronjob_tools import _scan_cron_prompt, _scan_cron_skill_assembled
+
+    # The user-authored prompt always keeps the strict guarantee, even when the
+    # surrounding runtime data forced the looser assembled tier.
+    if strict_user_prompt:
+        user_scan_error = _scan_cron_prompt(strict_user_prompt)
+
+        if user_scan_error:
+            job_label = job.get("name") or job.get("id") or "<unknown>"
+
+            logger.warning(
+                "Cron job '%s': user prompt blocked by injection scanner — %s",
+                job_label,
+                user_scan_error,
+            )
+
+            raise CronPromptInjectionBlocked(user_scan_error)
 
     if has_skills:
         # Skill content is install-time vetted by skills_guard.py. Invisible
@@ -2351,6 +2548,25 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
     origin = _resolve_origin(job)
 
     _cron_session_id = f"cron_{job_id}_{_clawk_now().strftime('%Y%m%d_%H%M%S')}"
+
+    # Title the session from the job itself (name → short prompt → id) so the
+    # sidebar/history row reads sensibly. Without this, the row label defaults
+    # to the cron session's first message — the injected "[IMPORTANT: …]" hint
+    # — which is noise. ``job_name`` already encodes the name→prompt→id
+    # fallback. Truncate to stay within the title length limit and never let a
+    # titling failure abort the job.
+    if _session_db is not None:
+        try:
+            _cron_session_title = (job_name or "")[:80].strip() or job_id
+
+            _session_db.set_session_title(_cron_session_id, _cron_session_title)
+
+        except Exception as _title_exc:
+            logger.debug(
+                "Job '%s': could not set cron session title: %s",
+                job_id,
+                _title_exc,
+            )
 
     logger.info("Running job '%s' (ID: %s)", job_name, job_id)
 
@@ -2692,8 +2908,20 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
 
             raise RuntimeError(message) from exc
 
+        # Per-job fallback chain takes precedence over the config-level one.
+        # Each entry is a {provider, model} dict (normalized by cron.jobs); the
+        # AIAgent retries down this chain when the primary model is exhausted
+        # (rate-limit, overload, connection failure). Falls back to config.yaml
+        # fallback_providers / fallback_model when the job pins none.
+        _job_fallback = job.get("fallback_models")
+        if not isinstance(_job_fallback, list) or not _job_fallback:
+            _job_fallback = None
+
         fallback_model = (
-            _cfg.get("fallback_providers") or _cfg.get("fallback_model") or None
+            _job_fallback
+            or _cfg.get("fallback_providers")
+            or _cfg.get("fallback_model")
+            or None
         )
 
         credential_pool = None
@@ -2785,8 +3013,11 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
             # context files (AGENTS.md / CLAUDE.md / .cursorrules) from there.
             # Without a workdir, keep cwd context discovery disabled.
             skip_context_files=not bool(_job_workdir),
-            load_soul_identity=True,
-            skip_memory=True,  # Cron system prompts would corrupt user representations
+            # Per-job context toggles. Defaults preserve prior behaviour:
+            # SOUL.md identity on, MEMORY.md off (cron system prompts would
+            # otherwise corrupt the user's long-term memory representations).
+            load_soul_identity=bool(job.get("use_soul", True)),
+            skip_memory=not bool(job.get("use_memory", False)),
             platform="cron",
             session_id=_cron_session_id,
             session_db=_session_db,
@@ -3078,6 +3309,21 @@ def _run_job_impl(job: dict) -> tuple[bool, str, str, Optional[str]]:
             except (Exception, KeyboardInterrupt) as e:
                 logger.debug("Job '%s': failed to end session: %s", job_id, e)
 
+            # Opt-in (cron.archive_chat_sessions): archive the run's chat
+            # session so scheduled jobs don't flood the conversations sidebar.
+            # The transcript stays accessible (Sessions → archived). Done at
+            # end-of-run because the DB row is created lazily during the run.
+            try:
+                from clawk_cli.config import load_config as _load_cron_cfg
+
+                if bool(
+                    (_load_cron_cfg().get("cron") or {}).get("archive_chat_sessions")
+                ):
+                    _session_db.set_session_archived(_cron_session_id, True)
+
+            except (Exception, KeyboardInterrupt) as e:
+                logger.debug("Job '%s': failed to archive cron session: %s", job_id, e)
+
             try:
                 _session_db.close()
 
@@ -3269,18 +3515,38 @@ def tick(verbose: bool = True, adapters=None, loop=None, sync: bool = True) -> i
 
                 should_deliver = bool(deliver_content.strip())
 
+                # When the agent returns [SILENT] (condition not met / nothing
+                # to report), the default is to deliver a short "nothing new"
+                # heartbeat so the user knows the job ran (silent_notice, on by
+                # default). Set silent_notice=False on a job to restore pure
+                # silence for quiet conditional reminders.
+                delivered_silent_notice = False
+
                 if (
                     should_deliver
                     and success
                     and SILENT_MARKER in deliver_content.strip().upper()
                 ):
-                    logger.info(
-                        "Job '%s': agent returned %s — skipping delivery",
-                        job["id"],
-                        SILENT_MARKER,
-                    )
+                    if job.get("silent_notice", True):
+                        deliver_content = _silent_notice_text(job)
 
-                    should_deliver = False
+                        delivered_silent_notice = True
+
+                        logger.info(
+                            "Job '%s': agent returned %s — delivering short "
+                            "'no news' notice (silent_notice on)",
+                            job["id"],
+                            SILENT_MARKER,
+                        )
+
+                    else:
+                        logger.info(
+                            "Job '%s': agent returned %s — skipping delivery",
+                            job["id"],
+                            SILENT_MARKER,
+                        )
+
+                        should_deliver = False
 
                 delivery_error = None
 
@@ -3307,6 +3573,36 @@ def tick(verbose: bool = True, adapters=None, loop=None, sync: bool = True) -> i
                     error = "Agent completed but produced empty response (model error, timeout, or misconfiguration)"
 
                 mark_job_run(job["id"], success, error, delivery_error=delivery_error)
+
+                # Rule 5 (self-terminate): a one-time condition alert created
+                # with stop_after_alert pauses itself once it has delivered a
+                # real (non-[SILENT]), error-free message — so "notify me when X
+                # happens" stops instead of re-running forever. Recurring jobs
+                # leave the flag False and keep delivering every tick.
+                if (
+                    should_deliver
+                    and success
+                    and not delivery_error
+                    and not delivered_silent_notice
+                    and job.get("stop_after_alert")
+                ):
+                    try:
+                        from cron.jobs import pause_job
+
+                        pause_job(
+                            job["id"],
+                            reason="stop_after_alert: condition met and alert delivered",
+                        )
+                        logger.info(
+                            "Job '%s': stop_after_alert — paused after first delivery",
+                            job["id"],
+                        )
+                    except Exception as _e:
+                        logger.warning(
+                            "stop_after_alert pause failed for job %s: %s",
+                            job["id"],
+                            _e,
+                        )
 
                 return True
 

@@ -2539,7 +2539,7 @@ def test_config_set_model_waits_for_lazy_agent_before_switch(monkeypatch):
 
         agent_ready.set()
 
-    def fake_apply(sid, target, raw):
+    def fake_apply(sid, target, raw, **kwargs):
 
         calls.append(("apply", sid, target.get("agent"), raw))
 
@@ -2573,7 +2573,7 @@ def test_config_set_model_uses_live_switch_path(monkeypatch):
 
     seen = {}
 
-    def _fake_apply(sid, session, raw):
+    def _fake_apply(sid, session, raw, **kwargs):
 
         seen["args"] = (sid, session["session_key"], raw)
 
@@ -4290,7 +4290,7 @@ def test_config_set_model_rejects_while_running(monkeypatch):
 
     seen = {"called": False}
 
-    def _fake_apply(sid, session, raw):
+    def _fake_apply(sid, session, raw, **kwargs):
 
         seen["called"] = True
 
@@ -4331,7 +4331,7 @@ def test_config_set_model_allowed_when_idle(monkeypatch):
 
     seen = {"called": False}
 
-    def _fake_apply(sid, session, raw):
+    def _fake_apply(sid, session, raw, **kwargs):
 
         seen["called"] = True
 
@@ -4371,7 +4371,7 @@ def test_mirror_slash_side_effects_rejects_mutating_commands_while_running(monke
 
     applied = {"model": False, "compress": False}
 
-    def _fake_apply_model(sid, session, arg):
+    def _fake_apply_model(sid, session, arg, **kwargs):
 
         applied["model"] = True
 
@@ -4419,7 +4419,7 @@ def test_mirror_slash_side_effects_allowed_when_idle(monkeypatch):
 
     applied = {"model": False}
 
-    def _fake_apply_model(sid, session, arg):
+    def _fake_apply_model(sid, session, arg, **kwargs):
 
         applied["model"] = True
 
@@ -4962,8 +4962,64 @@ def test_session_delete_returns_db_unavailable_when_no_db(monkeypatch):
     assert "state.db unavailable" in resp["error"]["message"]
 
 
-def test_session_delete_refuses_active_session(monkeypatch):
-    """Cannot delete a session currently bound to a live TUI session."""
+def test_session_delete_finalizes_idle_live_session(monkeypatch):
+    """A live-but-IDLE session no longer blocks the delete: the handler
+
+    finalizes it (end_reason=deleted_by_user), drops it from ``_sessions``
+
+    and proceeds with the DB delete. The user is deleting the conversation
+
+    on purpose — a stale registration in this process must not 4023 them."""
+
+    called: list[str] = []
+
+    finalized: list[tuple[str, str]] = []
+
+    class _DB:
+        def delete_session(self, sid, sessions_dir=None):
+
+            called.append(sid)
+
+            return True
+
+    monkeypatch.setattr(server, "_get_db", lambda: _DB())
+
+    monkeypatch.setattr(
+        server,
+        "_finalize_session",
+        lambda session, end_reason="tui_close": finalized.append((
+            session.get("session_key"),
+            end_reason,
+        )),
+    )
+
+    monkeypatch.setitem(server._sessions, "live", {"session_key": "key-live"})
+
+    try:
+        resp = server.handle_request({
+            "id": "1",
+            "method": "session.delete",
+            "params": {"session_id": "key-live"},
+        })
+
+    finally:
+        server._sessions.pop("live", None)
+
+    assert resp.get("result") == {"deleted": "key-live"}
+
+    assert called == ["key-live"]
+
+    assert finalized == [("key-live", "deleted_by_user")]
+
+    assert "live" not in server._sessions
+
+
+def test_session_delete_refuses_session_with_running_turn(monkeypatch):
+    """Deleting under a WORKING agent stays blocked: a running/inflight turn
+
+    keeps the 4023 (removing the row mid-turn corrupts message ordering and
+
+    trips FK constraints on the next append)."""
 
     called: list[str] = []
 
@@ -4976,7 +5032,9 @@ def test_session_delete_refuses_active_session(monkeypatch):
 
     monkeypatch.setattr(server, "_get_db", lambda: _DB())
 
-    monkeypatch.setitem(server._sessions, "live", {"session_key": "key-live"})
+    monkeypatch.setitem(
+        server._sessions, "live", {"session_key": "key-live", "running": True}
+    )
 
     try:
         resp = server.handle_request({
@@ -4992,9 +5050,9 @@ def test_session_delete_refuses_active_session(monkeypatch):
 
     assert resp["error"]["code"] == 4023
 
-    assert "active session" in resp["error"]["message"]
+    assert "turn is still running" in resp["error"]["message"]
 
-    assert called == [], "delete_session must not be called for active sessions"
+    assert called == [], "delete_session must not run while a turn is active"
 
 
 def test_session_delete_fails_closed_when_active_snapshot_raises(monkeypatch):

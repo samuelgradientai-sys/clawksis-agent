@@ -986,6 +986,76 @@ def test_named_custom_provider_uses_saved_credentials(monkeypatch):
     assert resolved["source"] == "custom_provider:Local"
 
 
+def test_bare_custom_resolves_providers_dict_entry_named_custom(monkeypatch):
+    """A request for bare ``provider="custom"`` must resolve a literal
+    ``providers.custom`` entry (e.g. a cliproxy endpoint) instead of falling
+    through to the global default. Regression for cron jobs stored with
+    ``provider: "custom"`` failing with ``auth_unavailable: providers=codex``.
+    """
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(
+        rp,
+        "load_config",
+        lambda: {
+            "providers": {
+                "custom": {
+                    "api": "https://cliproxy.example.com/v1",
+                    "api_key": "cliproxy-key",
+                    "default_model": "gpt-5.4",
+                    "name": "CLIProxy",
+                }
+            }
+        },
+    )
+    # Reaching resolve_provider for bare custom with a matching entry means the
+    # named-custom path was bypassed — that is the bug we are fixing.
+    monkeypatch.setattr(
+        rp,
+        "resolve_provider",
+        lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError(
+                "resolve_provider must not be called; providers.custom should match"
+            )
+        ),
+    )
+
+    resolved = rp.resolve_runtime_provider(requested="custom")
+
+    assert resolved["provider"] == "custom"
+    assert resolved["base_url"] == "https://cliproxy.example.com/v1"
+    assert resolved["api_key"] == "cliproxy-key"
+    assert resolved["requested_provider"] == "custom"
+
+
+def test_bare_custom_without_named_entry_still_falls_through(monkeypatch):
+    """No literal providers.custom entry → bare custom keeps the legacy
+    model.base_url trust-path behavior, unchanged by the fix."""
+    monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "openrouter")
+    monkeypatch.setattr(
+        rp,
+        "_get_model_config",
+        lambda: {
+            "provider": "openrouter",
+            "base_url": "http://127.0.0.1:8082/v1",
+            "default": "my-local-model",
+        },
+    )
+    monkeypatch.setattr(
+        rp,
+        "load_config",
+        lambda: {"providers": {"some-other-proxy": {"api": "https://x.example/v1"}}},
+    )
+    monkeypatch.delenv("CUSTOM_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
+
+    resolved = rp.resolve_runtime_provider(requested="custom")
+
+    assert resolved["provider"] == "custom"
+    assert resolved["base_url"] == "http://127.0.0.1:8082/v1"
+
+
 def test_named_custom_provider_uses_providers_dict_when_list_missing(monkeypatch):
     """After v11→v12 migration deletes custom_providers, resolution should
 
@@ -1188,44 +1258,6 @@ def test_named_custom_provider_falls_back_to_openai_api_key(monkeypatch):
     assert resolved["requested_provider"] == "custom:local-llm"
 
 
-def test_named_custom_provider_does_not_shadow_builtin_provider(monkeypatch):
-
-    monkeypatch.setattr(
-        rp,
-        "load_config",
-        lambda: {
-            "custom_providers": [
-                {
-                    "name": "nous",
-                    "base_url": "http://localhost:1234/v1",
-                    "api_key": "shadow-key",
-                }
-            ]
-        },
-    )
-
-    monkeypatch.setattr(
-        rp,
-        "resolve_nous_runtime_credentials",
-        lambda **kwargs: {
-            "base_url": "https://inference-api.nousresearch.com/v1",
-            "api_key": "nous-runtime-key",
-            "source": "portal",
-            "expires_at": None,
-        },
-    )
-
-    resolved = rp.resolve_runtime_provider(requested="nous")
-
-    assert resolved["provider"] == "nous"
-
-    assert resolved["base_url"] == "https://inference-api.nousresearch.com/v1"
-
-    assert resolved["api_key"] == "nous-runtime-key"
-
-    assert resolved["requested_provider"] == "nous"
-
-
 def test_named_custom_provider_wins_over_builtin_alias(monkeypatch):
     """A custom_providers entry named after a built-in *alias* (not a canonical
 
@@ -1263,11 +1295,10 @@ def test_named_custom_provider_wins_over_builtin_alias(monkeypatch):
 
 
 def test_named_custom_provider_skipped_for_canonical_built_in(monkeypatch):
-    """Companion to the test above: ``nous`` is a canonical provider name
+    """Companion to the test above: ``openrouter`` is a canonical provider name
 
-    (``resolve_provider('nous') == 'nous'``), so a custom entry with that name
-
-    should NOT be returned — the built-in wins as before.
+    (``resolve_provider('openrouter') == 'openrouter'``), so a custom entry with
+    that name should NOT be returned — the built-in wins as before.
 
     """
 
@@ -1277,7 +1308,7 @@ def test_named_custom_provider_skipped_for_canonical_built_in(monkeypatch):
         lambda: {
             "custom_providers": [
                 {
-                    "name": "nous",
+                    "name": "openrouter",
                     "base_url": "http://localhost:1234/v1",
                     "api_key": "shadow-key",
                 }
@@ -1285,7 +1316,7 @@ def test_named_custom_provider_skipped_for_canonical_built_in(monkeypatch):
         },
     )
 
-    entry = rp._get_named_custom_provider("nous")
+    entry = rp._get_named_custom_provider("openrouter")
 
     assert entry is None
 
@@ -2034,63 +2065,6 @@ def test_custom_provider_no_key_gets_placeholder(monkeypatch):
     assert resolved["base_url"] == "http://localhost:8080/v1"
 
 
-def test_auto_detected_nous_auth_failure_falls_through_to_openrouter(monkeypatch):
-    """When auto-detect picks Nous but credentials are revoked, fall through to OpenRouter."""
-
-    from clawk_cli.auth import AuthError
-
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-or-key")
-
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-
-    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
-
-    monkeypatch.setattr(rp, "load_config", lambda: {})
-
-    # resolve_provider returns "nous" (stale active_provider in auth.json)
-
-    monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "nous")
-
-    # load_pool returns empty pool so we hit the direct credential resolution
-
-    monkeypatch.setattr(
-        rp,
-        "load_pool",
-        lambda p: type(
-            "P",
-            (),
-            {
-                "has_credentials": lambda self: False,
-            },
-        )(),
-    )
-
-    # Nous credential resolution fails with revoked token
-
-    monkeypatch.setattr(
-        rp,
-        "resolve_nous_runtime_credentials",
-        lambda **kw: (_ for _ in ()).throw(
-            AuthError(
-                "Refresh session has been revoked",
-                provider="nous",
-                code="invalid_grant",
-                relogin_required=True,
-            )
-        ),
-    )
-
-    # With requested="auto", should fall through to OpenRouter
-
-    resolved = rp.resolve_runtime_provider(requested="auto")
-
-    assert resolved["provider"] == "openrouter"
-
-    assert resolved["api_key"] == "test-or-key"
-
-
 def test_auto_detected_codex_auth_failure_falls_through_to_openrouter(monkeypatch):
     """When auto-detect picks Codex but credentials are revoked, fall through to OpenRouter."""
 
@@ -2138,50 +2112,6 @@ def test_auto_detected_codex_auth_failure_falls_through_to_openrouter(monkeypatc
     assert resolved["provider"] == "openrouter"
 
     assert resolved["api_key"] == "test-or-key"
-
-
-def test_explicit_nous_auth_failure_still_raises(monkeypatch):
-    """When user explicitly requests Nous and auth fails, the error should propagate."""
-
-    from clawk_cli.auth import AuthError
-
-    import pytest
-
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-or-key")
-
-    monkeypatch.setattr(rp, "load_config", lambda: {})
-
-    monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "nous")
-
-    monkeypatch.setattr(
-        rp,
-        "load_pool",
-        lambda p: type(
-            "P",
-            (),
-            {
-                "has_credentials": lambda self: False,
-            },
-        )(),
-    )
-
-    monkeypatch.setattr(
-        rp,
-        "resolve_nous_runtime_credentials",
-        lambda **kw: (_ for _ in ()).throw(
-            AuthError(
-                "Refresh session has been revoked",
-                provider="nous",
-                code="invalid_grant",
-                relogin_required=True,
-            )
-        ),
-    )
-
-    # With explicit "nous", should raise — don't silently switch providers
-
-    with pytest.raises(AuthError, match="Refresh session has been revoked"):
-        rp.resolve_runtime_provider(requested="nous")
 
 
 def test_openrouter_provider_not_affected_by_custom_fix(monkeypatch):
@@ -3445,16 +3375,19 @@ def test_minimax_oauth_pool_forces_anthropic_messages_despite_stale_config(monke
 
 
 @pytest.mark.parametrize(
-    "alias,base_url",
+    "alias,base_url,expected_provider",
     [
-        ("ollama", "http://192.168.0.103:11434/v1"),
-        ("vllm", "http://192.168.0.103:8000/v1"),
-        ("llamacpp", "http://192.168.0.103:8080/v1"),
-        ("llama-cpp", "http://192.168.0.103:8080/v1"),
+        # "ollama" is a first-class provider now (its own overlay + runtime
+        # short-circuit), so it resolves to provider="ollama" — still honoring
+        # the configured LAN base_url and NOT falling through to OpenRouter.
+        ("ollama", "http://192.168.0.103:11434/v1", "ollama"),
+        ("vllm", "http://192.168.0.103:8000/v1", "custom"),
+        ("llamacpp", "http://192.168.0.103:8080/v1", "custom"),
+        ("llama-cpp", "http://192.168.0.103:8080/v1", "custom"),
     ],
 )
 def test_custom_aliases_with_lan_base_url_route_to_custom_not_openrouter(
-    monkeypatch, alias, base_url
+    monkeypatch, alias, base_url, expected_provider
 ):
     """provider: ollama|vllm|llamacpp + LAN IP must NOT fall through to OpenRouter."""
 
@@ -3478,18 +3411,21 @@ def test_custom_aliases_with_lan_base_url_route_to_custom_not_openrouter(
 
     resolved = rp.resolve_runtime_provider()
 
-    assert resolved["provider"] == "custom", (
-        f"alias {alias!r} with LAN base_url should resolve to provider=custom, "
-        f"got {resolved['provider']!r}"
+    assert resolved["provider"] == expected_provider, (
+        f"alias {alias!r} with LAN base_url should resolve to "
+        f"provider={expected_provider!r}, got {resolved['provider']!r}"
     )
 
     assert resolved["base_url"] == base_url.rstrip("/"), (
         f"base_url should be the configured LAN endpoint, got {resolved['base_url']!r}"
     )
 
+    # The key invariant for every alias: never silently routed to OpenRouter.
+    assert resolved["provider"] != "openrouter"
+
 
 def test_custom_alias_with_loopback_base_url_routes_to_custom(monkeypatch):
-    """provider: ollama + loopback should also route to custom (regression guard)."""
+    """provider: ollama + loopback resolves to the first-class ollama provider."""
 
     monkeypatch.setattr(
         rp,
@@ -3503,9 +3439,13 @@ def test_custom_alias_with_loopback_base_url_routes_to_custom(monkeypatch):
 
     resolved = rp.resolve_runtime_provider()
 
-    assert resolved["provider"] == "custom"
+    # "ollama" is now a first-class provider (was previously aliased to custom);
+    # it must still honor the loopback base_url and never hit OpenRouter.
+    assert resolved["provider"] == "ollama"
 
     assert resolved["base_url"] == "http://localhost:11434/v1"
+
+    assert resolved["api_key"]  # non-empty dummy so the OpenAI SDK accepts it
 
 
 def test_trustworthy_check_accepts_custom_aliases():

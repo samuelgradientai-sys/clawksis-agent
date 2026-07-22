@@ -472,6 +472,142 @@ PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(PROJECT_ROOT))
 
 
+# Top-level subcommands that argparse knows about WITHOUT running plugin
+
+# discovery.  Used to short-circuit eager plugin imports (which can take
+
+# 500ms+ pulling in google.cloud.pubsub_v1, aiohttp, grpc, etc.) when the
+
+# user's invocation clearly doesn't need any plugin-registered subcommand.
+
+# Also used by ``_apply_profile_override`` to know where the top-level flag
+
+# region ends so a subcommand's own ``--profile`` isn't hijacked.
+
+#
+
+# Keep this in sync with the ``subparsers.add_parser("NAME", ...)`` calls
+
+# in ``main()``. Missing an entry here only costs a one-time
+
+# discovery; extra entries here would let a plugin command silently fail
+
+# to parse.
+
+_BUILTIN_SUBCOMMANDS = frozenset({
+    "acp",
+    "auth",
+    "backup",
+    "bundles",
+    "checkpoints",
+    "claw",
+    "completion",
+    "computer-use",
+    "config",
+    "cron",
+    "curator",
+    "dashboard",
+    "debug",
+    "doctor",
+    "dump",
+    "fallback",
+    "gateway",
+    "hooks",
+    "import",
+    "insights",
+    "gui",
+    "desktop",
+    "kanban",
+    "login",
+    "logout",
+    "logs",
+    "lsp",
+    "mcp",
+    "memory",
+    "migrate",
+    "model",
+    "pairing",
+    "plugins",
+    "portal",
+    "postinstall",
+    "profile",
+    "proxy",
+    "prompt-size",
+    "send",
+    "sessions",
+    "setup",
+    "skills",
+    "slack",
+    "status",
+    "tools",
+    "uninstall",
+    "update",
+    "version",
+    "webhook",
+    "whatsapp",
+    "chat",
+    "secrets",
+    "security",
+    "soul",
+    "user",
+    "connect",
+    "disconnect",
+    "cookbook",
+    # Help-ish invocations — plugin commands not being listed in
+    # top-level --help is an acceptable trade-off for skipping an
+    # expensive eager import of every bundled plugin module.
+    "help",
+})
+
+
+# Top-level flags that take a value. Needed by ``_first_positional_argv``
+
+# so that in ``clawk -m gpt5 chat``, ``gpt5`` is correctly skipped as a
+
+# flag value rather than misclassified as a subcommand. Kept in sync with
+
+# the top-level flags declared in ``clawk_cli/_parser.py``.
+
+#
+
+# Correctness-safe either way: missing an entry here only makes the
+
+# fast-path bail out too eagerly (we run plugin discovery when we didn't
+
+# need to); extra entries would make us skip a real positional.
+
+_TOP_LEVEL_VALUE_FLAGS = frozenset({
+    "-z",
+    "--oneshot",
+    "-m",
+    "--model",
+    "--provider",
+    "-t",
+    "--toolsets",
+    "-r",
+    "--resume",
+    "-s",
+    "--skills",
+    # ``-c / --continue`` is nargs='?' (optional value). Treat it as
+    # value-taking: if the next token is a subcommand-looking word
+    # the user almost certainly meant it as the session name, and
+    # either interpretation keeps us on the safe side.
+    "-c",
+    "--continue",
+})
+
+
+# Flags whose value is optional (argparse ``nargs='?'``).  Unlike the rest of
+
+# ``_TOP_LEVEL_VALUE_FLAGS`` these only swallow the next token when it is NOT
+
+# itself a flag, so ``clawk --continue --profile coder`` reads ``--profile`` as
+
+# a flag rather than as ``--continue``'s session name.
+
+_OPTIONAL_VALUE_FLAGS = frozenset({"-c", "--continue"})
+
+
 # ---------------------------------------------------------------------------
 
 # Profile override — MUST happen before any clawk module import.
@@ -491,31 +627,118 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # ---------------------------------------------------------------------------
 
 
+def _find_top_level_profile_flag(argv: list[str]) -> tuple[str | None, int, int]:
+    """Locate a top-level ``--profile`` / ``-p`` in ``argv`` (``sys.argv[1:]``).
+
+    Returns ``(profile_name, flag_index, consume)`` where ``flag_index`` is the
+    offset into ``argv`` of the flag token and ``consume`` is how many tokens it
+    occupies (2 for ``-p coder``, 1 for ``--profile=coder``).  When no profile
+    flag applies, returns ``(None, -1, 0)``.
+
+    Scanning stops at the first subcommand so a subcommand's own ``--profile``
+    (e.g. Docker's ``mcp gateway run --profile`` carried via ``clawk mcp add
+    --args``) is left untouched.  ``chat`` is the historical exception: it
+    accepts a profile flag, so scanning continues into its arguments.
+    """
+
+    i = 0
+
+    while i < len(argv):
+        tok = argv[i]
+
+        if tok == "--":
+            break
+
+        if tok in {"--profile", "-p"} and i + 1 < len(argv):
+            return argv[i + 1], i, 2
+
+        if tok.startswith("--profile="):
+            return tok.split("=", 1)[1], i, 1
+
+        if tok.startswith("-"):
+            if "=" in tok:
+                i += 1
+
+                continue
+
+            if tok in _OPTIONAL_VALUE_FLAGS:
+                # Optional value: only the next token is the value, and only
+                # when it is not itself a flag.
+                if i + 1 < len(argv) and not argv[i + 1].startswith("-"):
+                    i += 2
+
+                else:
+                    i += 1
+
+                continue
+
+            if tok in _TOP_LEVEL_VALUE_FLAGS and i + 1 < len(argv):
+                i += 2
+
+                continue
+
+            i += 1
+
+            continue
+
+        # First positional token: a subcommand boundary.
+        if tok == "chat":
+            # ``chat`` accepts the profile flag — keep scanning its args.
+            i += 1
+
+            continue
+
+        # Any other subcommand owns the rest of argv; stop.
+        break
+
+    return None, -1, 0
+
+
+def _invoking_user_clawk_root() -> Path | None:
+    """Return the invoking user's clawk root when running under ``sudo``.
+
+    When ``clawk`` is launched via ``sudo`` (effective uid 0 with ``SUDO_USER``
+    set), ``Path.home()`` resolves to root's home, so an explicit ``--profile``
+    would be looked up under ``/root`` instead of the real user's profile dir.
+    Resolve the invoking user's home via ``pwd`` and return its clawk root so
+    the profile can be found where the user actually created it.
+
+    Returns ``None`` on non-POSIX platforms, when not running under sudo, or
+    when the invoking user can't be resolved.
+    """
+
+    geteuid = getattr(os, "geteuid", None)
+
+    if geteuid is None or geteuid() != 0:
+        return None
+
+    sudo_user = os.environ.get("SUDO_USER", "").strip()
+
+    if not sudo_user or sudo_user == "root":
+        return None
+
+    try:
+        import pwd
+
+        home = pwd.getpwnam(sudo_user).pw_dir
+
+    except (ImportError, KeyError):
+        return None
+
+    if not home:
+        return None
+
+    return Path(home) / ".clawk"
+
+
 def _apply_profile_override() -> None:
     """Pre-parse --profile/-p and set CLAWK_HOME before module imports."""
 
     argv = sys.argv[1:]
 
-    profile_name = None
+    # 1. Check for an explicit top-level -p / --profile flag.
 
-    consume = 0
-
-    # 1. Check for explicit -p / --profile flag
-
-    for i, arg in enumerate(argv):
-        if arg in {"--profile", "-p"} and i + 1 < len(argv):
-            profile_name = argv[i + 1]
-
-            consume = 2
-
-            break
-
-        elif arg.startswith("--profile="):
-            profile_name = arg.split("=", 1)[1]
-
-            consume = 1
-
-            break
+    profile_name, flag_index, consume = _find_top_level_profile_flag(argv)
 
     # 1b. Reject values that can't be valid profile names (e.g. pytest's
 
@@ -530,6 +753,8 @@ def _apply_profile_override() -> None:
 
         if not _re.match(r"^[a-z0-9][a-z0-9_-]{0,63}$", profile_name):
             profile_name = None
+
+            flag_index = -1
 
             consume = 0
 
@@ -571,6 +796,8 @@ def _apply_profile_override() -> None:
                 if name and name != "default":
                     profile_name = name
 
+                    flag_index = -1
+
                     consume = 0  # don't strip anything from argv
 
         except (UnicodeDecodeError, OSError):
@@ -580,9 +807,7 @@ def _apply_profile_override() -> None:
 
     if profile_name is not None:
         try:
-            from clawk_cli.profiles import resolve_profile_env
-
-            clawk_home = resolve_profile_env(profile_name)
+            clawk_home = _resolve_profile_home(profile_name)
 
         except (ValueError, FileNotFoundError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -603,21 +828,47 @@ def _apply_profile_override() -> None:
 
         # Strip the flag from argv so argparse doesn't choke
 
-        if consume > 0:
-            for i, arg in enumerate(argv):
-                if arg in {"--profile", "-p"}:
-                    start = i + 1  # +1 because argv is sys.argv[1:]
+        if consume > 0 and flag_index >= 0:
+            start = flag_index + 1  # +1 because argv is sys.argv[1:]
 
-                    sys.argv = sys.argv[:start] + sys.argv[start + consume :]
+            sys.argv = sys.argv[:start] + sys.argv[start + consume :]
 
-                    break
 
-                elif arg.startswith("--profile="):
-                    start = i + 1
+def _resolve_profile_home(profile_name: str) -> str:
+    """Resolve *profile_name* to a CLAWK_HOME path string.
 
-                    sys.argv = sys.argv[:start] + sys.argv[start + 1 :]
+    Under ``sudo`` an explicit profile is resolved against the *invoking*
+    user's clawk root (see :func:`_invoking_user_clawk_root`) so that, e.g.,
+    ``sudo clawk -p elias gateway install --system`` finds ``elias`` in the
+    real user's home rather than root's.  Falls back to the normal
+    :func:`clawk_cli.profiles.resolve_profile_env` resolution otherwise.
+    """
 
-                    break
+    from clawk_cli.profiles import (
+        normalize_profile_name,
+        resolve_profile_env,
+        validate_profile_name,
+    )
+
+    user_root = _invoking_user_clawk_root()
+
+    if user_root is not None:
+        canon = normalize_profile_name(profile_name)
+
+        validate_profile_name(canon)
+
+        if canon == "default":
+            return str(user_root)
+
+        profile_dir = user_root / "profiles" / canon
+
+        if profile_dir.is_dir():
+            return str(profile_dir)
+
+        # Fall through to the default resolution, which raises a helpful
+        # FileNotFoundError if the profile is missing everywhere.
+
+    return resolve_profile_env(profile_name)
 
 
 _apply_profile_override()
@@ -736,6 +987,11 @@ from datetime import datetime
 
 
 from clawk_cli import __version__, __release_date__
+
+# Re-imported from the extracted model-setup-flows module so existing call sites
+# and test monkeypatches that target ``clawk_cli.main._prompt_auth_credentials_choice``
+# keep resolving against main.py's namespace (god-file decomposition Phase 2).
+from clawk_cli.model_setup_flows import _prompt_auth_credentials_choice
 
 logger = logging.getLogger(__name__)
 
@@ -2194,7 +2450,9 @@ def _ensure_tui_node() -> None:
     if not helper.is_file():
         return
 
-    clawk_home = os.environ.get("CLAWK_HOME") or str(Path.home() / ".clawksis")
+    from clawk_constants import get_clawk_home
+
+    clawk_home = str(get_clawk_home())
 
     try:
         # Helper writes logs to stderr; we ask bash to print `command -v node`
@@ -2427,11 +2685,11 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
         return [npm, "start"], tui_dir
 
     # Desktop/dev launches retain the historical "always rebuild" behaviour.
-
     # Termux cold starts use the freshness check because esbuild startup is
-
-    # expensive on old mobile CPUs.
-
+    # expensive on old mobile CPUs. The dashboard's Terminal-chat PTY avoids the
+    # rebuild-on-every-connection a different (cleaner) way: it sets
+    # CLAWK_TUI_DIR and takes the prebuilt-bundle shortcut above, so it never
+    # reaches this branch — keeping desktop/dev's always-build contract intact.
     should_build = True
 
     if termux_startup:
@@ -2457,7 +2715,12 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
             if preview:
                 print(preview)
 
-            sys.exit(1)
+            # Carry the real cause in the SystemExit message so callers that
+            # surface str(exc) (e.g. the dashboard PTY → "Chat unavailable: …")
+            # show something actionable instead of an opaque "1".
+            last = preview.splitlines()[-1].strip() if preview else ""
+
+            sys.exit("TUI build failed" + (f": {last}" if last else ""))
 
     node = _node_bin("node")
 
@@ -2612,6 +2875,60 @@ def _resolve_tui_heap_mb(default_mb: int = 8192) -> int:
     return max(1536, sized) if limit_mb > 2048 else sized
 
 
+def _apply_terminal_backend_env(env: dict) -> None:
+    """Seed a subprocess env with the persisted terminal backend config.
+
+    config.yaml is the source of truth, but ``terminal_tool`` (and the Node TUI)
+    read the backend selection from ``TERMINAL_*`` env vars. A fresh
+    ``clawk --tui`` may run with an empty/stale shell env, so fill these from
+    config.yaml. An explicit env value already present wins (env-first, matching
+    ``status``/``doctor``), so deliberate shell overrides are respected.
+    """
+
+    try:
+        from clawk_cli.config import load_config
+
+        terminal = load_config().get("terminal")
+
+    except Exception:
+        return
+
+    if not isinstance(terminal, dict):
+        return
+
+    import json
+
+    # config.yaml terminal.<key> -> TERMINAL_<ENV>. Scalars are stringified;
+    # list/dict values are JSON-encoded so the Node side can parse them.
+    _key_map = {
+        "backend": "TERMINAL_ENV",
+        "modal_mode": "TERMINAL_MODAL_MODE",
+        "docker_image": "TERMINAL_DOCKER_IMAGE",
+        "singularity_image": "TERMINAL_SINGULARITY_IMAGE",
+        "modal_image": "TERMINAL_MODAL_IMAGE",
+        "daytona_image": "TERMINAL_DAYTONA_IMAGE",
+        "docker_extra_args": "TERMINAL_DOCKER_EXTRA_ARGS",
+        "docker_env": "TERMINAL_DOCKER_ENV",
+        "timeout": "TERMINAL_TIMEOUT",
+        "sandbox_dir": "TERMINAL_SANDBOX_DIR",
+    }
+
+    for cfg_key, env_key in _key_map.items():
+        if env.get(env_key):
+            continue  # explicit env override wins
+
+        value = terminal.get(cfg_key)
+
+        if value is None:
+            continue
+
+        if isinstance(value, (list, dict)):
+            env[env_key] = json.dumps(value)
+
+        else:
+            env[env_key] = str(value)
+
+
 def _launch_tui(
     resume_session_id: Optional[str] = None,
     tui_dev: bool = False,
@@ -2654,6 +2971,10 @@ def _launch_tui(
     env.setdefault("CLAWK_CWD", os.getcwd())
 
     env.setdefault("NODE_ENV", "development" if tui_dev else "production")
+
+    # Seed the terminal backend selection from config.yaml so the TUI honors a
+    # configured Docker/SSH/Modal backend even when the shell env is empty.
+    _apply_terminal_backend_env(env)
 
     wt_info = None
 
@@ -3613,6 +3934,136 @@ def cmd_postinstall(args):
         print("✓ Post-install complete.")
 
 
+def _cookbook_resolve(target: str):
+    """Match a catalog entry by id or ollama tag (returns the entry or None)."""
+
+    from clawk_cli import cookbook
+
+    t = (target or "").strip().lower()
+
+    for m in cookbook.CATALOG:
+        if t in (m["id"].lower(), m["ollama"].lower()):
+            return m
+
+    return None
+
+
+def cmd_cookbook(args):
+    """Local-models Cookbook: see what runs on this machine, pull it, use it."""
+
+    from clawk_cli import cookbook
+
+    _TIER_ICON = {"perfect": "✅", "good": "✅", "marginal": "⚠️", "no_fit": "❌"}
+
+    hw = cookbook.detect_hardware()
+
+    print()
+
+    print("🍳 Cookbook — local models")
+
+    gpu = (
+        f"{hw['gpu_name']} ({hw['vram_gb']:g}GB VRAM)"
+        if hw.get("gpu_name")
+        else "no GPU"
+    )
+
+    print(f"   Hardware: {hw['ram_gb']:g}GB RAM · {hw['cpu_cores']} cores · {gpu}")
+
+    status = cookbook.ollama_status()
+
+    if not status["installed"]:
+        print("   Ollama: not installed → get it at https://ollama.com to run models.")
+
+    elif not status["running"]:
+        print("   Ollama: installed but not running → start it with `ollama serve`.")
+
+    else:
+        print(f"   Ollama: running · {len(status['models'])} model(s) pulled")
+
+    print()
+
+    # Actions: pull+use (--run) or just use (--use).
+    target = getattr(args, "run", None) or getattr(args, "use", None)
+
+    if target:
+        entry = _cookbook_resolve(target)
+
+        tag = entry["ollama"] if entry else target
+
+        if getattr(args, "run", None):
+            print(f"Pulling {tag} (this can take a while)...")
+
+            res = cookbook.pull_blocking(tag)
+
+            if not res.get("ok"):
+                print(f"  ✗ {res.get('error', 'pull failed')}")
+
+                return
+
+            print(f"  ✓ pulled {tag}")
+
+        used = cookbook.use_model(tag)
+
+        if used.get("ok"):
+            print(f"✓ Active model → {tag}  (via {used['base_url']})")
+
+        else:
+            print(f"✗ {used.get('error', 'failed to set model')}")
+
+        return
+
+    if getattr(args, "hardware", False):
+        return  # hardware already printed above
+
+    # Listing: catalog with fit, grouped best-first.
+    rows = cookbook.catalog_with_fit(hw, status.get("models"))
+
+    installed_set = set(status.get("models") or [])
+
+    query = (getattr(args, "query", None) or "").strip().lower()
+
+    if query:
+        rows = [
+            r
+            for r in rows
+            if query
+            in f"{r['name']} {r['family']} {r['ollama']} {r['use_case']}".lower()
+        ]
+
+    print("  Models that fit your machine (✅ fits · ⚠️ tight/slow · ❌ too big):")
+
+    print("  The agent needs function-calling — prefer models marked 'tools'.")
+
+    print()
+
+    if not rows:
+        print(f"  No models match '{query}'.")
+        print("  Browse the full library at https://ollama.com/library —")
+        print("  then run any tag with:   clawk cookbook --run <tag>")
+        print()
+        return
+
+    for r in rows:
+        icon = _TIER_ICON.get(r["fit"]["tier"], "•")
+
+        mark = " [installed]" if r["ollama"] in installed_set else ""
+
+        tools = "tools" if r["tool_use"] else "no-tools"
+
+        print(
+            f"  {icon} {r['name']:<22} {r['ollama']:<22} "
+            f"{r['fit']['mode']:<4} {tools:<8} ~{r['size_gb']:g}GB{mark}"
+        )
+
+    print()
+
+    print("  Run + use one:   clawk cookbook --run qwen2.5:7b")
+
+    print("  Use an installed one without pulling:   clawk cookbook --use llama3.1:8b")
+
+    print()
+
+
 def cmd_model(args):
     """Select default model — starts with provider selection, then model picker."""
 
@@ -4044,6 +4495,20 @@ def select_provider_and_model(args=None):
 
         else:
             ordered.append((key, label, members))
+
+    # The active provider may be a recognized-but-unlisted provider whose code
+    # still ships (e.g. "nous", hidden from the default BYOK picker). It won't
+    # match any canonical row or group member above, so surface it explicitly
+    # as the pre-selected entry — otherwise the picker would silently drop the
+    # user's configured provider and dispatch to the wrong flow.
+    if active and not any(
+        active == key or active in members for key, _label, members in ordered
+    ):
+        active_extra_label = provider_labels.get(active, active)
+
+        ordered.insert(0, (active, f"{active_extra_label}  ← currently active", []))
+
+        default_idx = 0
 
     for key, provider_info in _custom_provider_map.items():
         name = provider_info["name"]
@@ -5452,21 +5917,11 @@ def _model_flow_xai_oauth(_config, current_model="", *, args=None):
 
         print()
 
-        print("    1. Use existing credentials")
+        choice = _prompt_auth_credentials_choice(
+            "xAI Grok OAuth (SuperGrok / Premium+) credentials:"
+        )
 
-        print("    2. Reauthenticate (new OAuth login)")
-
-        print("    3. Cancel")
-
-        print()
-
-        try:
-            choice = input("  Choice [1/2/3]: ").strip()
-
-        except (KeyboardInterrupt, EOFError):
-            choice = "1"
-
-        if choice == "2":
+        if choice == "reauth":
             print("Starting a fresh xAI OAuth login...")
 
             print()
@@ -5502,7 +5957,7 @@ def _model_flow_xai_oauth(_config, current_model="", *, args=None):
 
                 return
 
-        elif choice == "3":
+        elif choice == "cancel":
             return
 
     else:
@@ -7916,7 +8371,6 @@ def _model_flow_copilot_acp(config, current_model=""):
 
 
 def _persist_env_only_key(key_env: str, value: str) -> None:
-
     """Write a kept API key to ``.env`` when it only lives in the process env.
 
 
@@ -10301,12 +10755,14 @@ def _web_ui_build_needed(web_dir: Path) -> bool:
         if mp.exists() and mp.stat().st_mtime > dist_mtime:
             return True
 
-    # Workspace root lockfile (single package-lock.json covers all workspaces).
-
-    root_lock = project_root / "package-lock.json"
-
-    if root_lock.exists() and root_lock.stat().st_mtime > dist_mtime:
-        return True
+    # NOTE: deliberately NOT gating a Vite rebuild on package-lock.json mtime.
+    # `git pull` / `clawk update` / `git checkout` bump the (tracked) workspace
+    # lockfile's mtime on every deploy without changing the built output, which
+    # made this return True forever after an update — so `clawk dashboard` ran a
+    # full (~200s) npm-install + vite-build on EVERY launch. A lockfile change
+    # only justifies `npm install` (done at build time), not a source rebuild;
+    # the source-mtime + package.json/vite.config checks above already catch
+    # real changes to the bundle's inputs.
 
     return False
 
@@ -10612,6 +11068,7 @@ def _run_npm_install_deterministic(
     *,
     extra_args: tuple[str, ...] = (),
     capture_output: bool = True,
+    env: Optional[dict] = None,
 ) -> subprocess.CompletedProcess:
     """Run a deterministic npm install that does not mutate ``package-lock.json``.
 
@@ -10636,7 +11093,11 @@ def _run_npm_install_deterministic(
     # Those scripts self-skip when a CI env var is set — see
     # node_modules/unicode-animations/scripts/postinstall.cjs (exits early on
     # CI / CONTINUOUS_INTEGRATION / GITHUB_ACTIONS).
-    npm_env = {**os.environ, "CI": "1"}
+    #
+    # An explicit *env* (e.g. carrying an ELECTRON_MIRROR override) takes
+    # precedence over the inherited process environment so the npm child sees
+    # exactly the same overrides the packaged build will use.
+    npm_env = {**os.environ, **(env or {}), "CI": "1"}
 
     lockfile = cwd / "package-lock.json"
 
@@ -10805,10 +11266,10 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False, quiet: bool = False) ->
     # surrounding _quiet_step spinner proves liveness, and on failure the
     # captured tail is surfaced below exactly like the streamed path.
 
-    def _run_build():
+    def _run_build(script: str = "build"):
         if quiet:
             return subprocess.run(
-                [npm, "run", "build"],
+                [npm, "run", script],
                 cwd=web_dir,
                 capture_output=True,
                 text=True,
@@ -10817,20 +11278,91 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False, quiet: bool = False) ->
                 env={**os.environ, "CI": "1"},
             )
 
-        return _run_with_idle_timeout([npm, "run", "build"], cwd=web_dir)
+        return _run_with_idle_timeout([npm, "run", script], cwd=web_dir)
 
     r2 = _run_build()
 
     if r2.returncode != 0:
-        # Retry once after a short delay — covers boot-time races on Windows
-
+        # Single typecheck-resilient retry after a short delay. `npm run build`
+        # is `tsc -b && vite build`, so a TypeScript error anywhere aborts the
+        # build before Vite ever runs — even when the app itself bundles fine (a
+        # stale or mid-sync checkout where the chronically-red `tsc -b` is the
+        # only blocker). The delay also covers boot-time races on Windows
         # (antivirus scanning Node.js binaries, npm cache not ready, transient
-
-        # I/O when launched via Scheduled Task at logon). See issue #23817.
+        # I/O when launched via Scheduled Task at logon). Retry as a Vite-only
+        # build (esbuild transpile, no typecheck) so the dashboard can still
+        # come up instead of hard-failing. `npm run build` stays the primary
+        # path so dev/CI keep their typecheck gate; a genuinely broken bundle
+        # still fails this Vite step too. See issue #23817.
 
         _time.sleep(3)
 
-        r2 = _run_build()
+        _say("  ⚠ build failed (likely tsc) — retrying Vite-only (skipping typecheck)")
+
+        r2 = _run_build("build:vite")
+
+    if r2.returncode != 0:
+        # npm bug #4828: optional native deps (@rollup/rollup-*, lightningcss-*,
+        # @tailwindcss/oxide-*) are listed in package-lock.json but `npm ci`
+        # doesn't materialize the platform binary, so Vite aborts and the build
+        # silently falls through to the stale dist below — the reason `clawk
+        # update` kept serving an old dashboard. A plain reinstall doesn't fix it
+        # (npm keeps skipping the optional dep while lockfile+node_modules
+        # disagree); removing BOTH node_modules and the lockfile forces a clean
+        # re-resolve that installs the binary. The committed lockfile already
+        # lists every platform, so restore it after the repair to keep the
+        # working tree clean for the next update autostash.
+        #
+        # Detect via the issue-4828 marker every culprit prints: rollup says
+        # "Cannot find module @rollup/rollup-linux-x64-gnu. npm has a bug related
+        # to optional dependencies (https://github.com/npm/cli/issues/4828)",
+        # while lightningcss/oxide say "Cannot find native binding ...4828". The
+        # earlier "native binding"-only check missed rollup (which fails first).
+        _build_out_lc = ((r2.stderr or "") + (r2.stdout or "")).lower()
+        _native_binding_err = (
+            "4828" in _build_out_lc or "cannot find native binding" in _build_out_lc
+        )
+
+        if _native_binding_err:
+            _say(
+                "  ⚠ native binding missing (npm bug #4828) — "
+                "repairing node_modules and retrying"
+            )
+
+            _ws_root = _workspace_root(web_dir)
+
+            shutil.rmtree(_ws_root / "node_modules", ignore_errors=True)
+
+            _lock = _ws_root / "package-lock.json"
+            _lock_existed = _lock.exists()
+
+            try:
+                _lock.unlink()
+            except OSError:
+                pass
+
+            _rr = subprocess.run(
+                [npm, "install", "--silent"],
+                cwd=_ws_root,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env={**os.environ, "CI": "1"},
+            )
+
+            if _rr.returncode == 0:
+                r2 = _run_build("build:vite")
+            else:
+                _relay(_rr)
+
+            if _lock_existed:
+                subprocess.run(
+                    ["git", "checkout", "--", "package-lock.json"],
+                    cwd=_ws_root,
+                    capture_output=True,
+                    text=True,
+                )
 
     if r2.returncode != 0:
         # _run_with_idle_timeout merges stderr into stdout; older callers
@@ -11138,6 +11670,13 @@ def _desktop_packaged_executable(desktop_dir: Path) -> Optional[Path]:
     return max(existing, key=lambda p: p.stat().st_mtime)
 
 
+# Public Electron release mirror used as a last-resort fallback when the
+# default GitHub-hosted download is blocked/throttled (a common cause of an
+# otherwise-unexplained packaged-build failure). @electron/get honours
+# ELECTRON_MIRROR; the npmmirror CDN tracks upstream releases 1:1.
+_DEFAULT_ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
+
+
 def _electron_download_cache_dirs() -> list[Path]:
     """Return the per-user Electron download cache directories for this OS.
 
@@ -11424,6 +11963,109 @@ def _desktop_linux_sandbox_fixup(packaged_executable: Path) -> bool:
     return True
 
 
+def _stop_desktop_processes_locking_build(desktop_dir: Path) -> list[int]:
+    """Terminate running packaged-desktop processes that lock the build output.
+
+    On Windows a running ``Clawksis.exe`` (or any process whose executable
+    lives under ``apps/desktop/release/``) holds an exclusive file lock on the
+    unpacked binary, so ``npm run pack`` fails to overwrite it. POSIX lets you
+    unlink a running binary, so this is a no-op off Windows.
+
+    Only processes whose executable resolves to a path *inside* the desktop
+    ``release`` tree are touched — never our own PID, never an unrelated
+    ``Clawksis.exe`` somewhere else on disk. Returns the PIDs that were
+    signalled. Best-effort: never raises (missing psutil / enumeration errors
+    yield an empty list).
+    """
+
+    if sys.platform != "win32":
+        return []
+
+    release_dir = desktop_dir / "release"
+
+    if not release_dir.is_dir():
+        return []
+
+    try:
+        import psutil
+
+    except Exception:
+        return []
+
+    try:
+        release_norm = str(release_dir.resolve()).lower()
+
+    except OSError:
+        release_norm = str(release_dir).lower()
+
+    own_pid = os.getpid()
+
+    victims = []
+
+    try:
+        proc_iter = psutil.process_iter(["pid", "exe"])
+
+    except Exception:
+        return []
+
+    for proc in proc_iter:
+        try:
+            info = proc.info
+
+        except Exception:
+            continue
+
+        pid = info.get("pid")
+
+        exe = info.get("exe")
+
+        if not exe or pid == own_pid:
+            continue
+
+        try:
+            exe_norm = str(Path(exe).resolve()).lower()
+
+        except (OSError, ValueError):
+            exe_norm = str(exe).lower()
+
+        if exe_norm == release_norm or exe_norm.startswith(release_norm + os.sep):
+            victims.append(proc)
+
+    if not victims:
+        return []
+
+    for proc in victims:
+        try:
+            proc.terminate()
+
+        except Exception:
+            pass
+
+    try:
+        _gone, alive = psutil.wait_procs(victims, timeout=5)
+
+    except Exception:
+        alive = []
+
+    for proc in alive:
+        try:
+            proc.kill()
+
+        except Exception:
+            pass
+
+    stopped = []
+
+    for proc in victims:
+        try:
+            stopped.append(int(proc.pid))
+
+        except Exception:
+            continue
+
+    return stopped
+
+
 def cmd_gui(args: argparse.Namespace):
     """Build and launch the native Electron desktop GUI."""
 
@@ -11551,7 +12193,7 @@ def cmd_gui(args: argparse.Namespace):
             print("→ Installing desktop workspace dependencies...")
 
             install_result = _run_npm_install_deterministic(
-                npm, PROJECT_ROOT, capture_output=False
+                npm, PROJECT_ROOT, capture_output=False, env=None
             )
 
             if install_result.returncode != 0:
@@ -11612,6 +12254,29 @@ def cmd_gui(args: argparse.Namespace):
                         [npm, "run", build_script],
                         cwd=desktop_dir,
                         env=env,
+                        check=False,
+                    )
+
+                elif not env.get("ELECTRON_MIRROR"):
+                    # Purge cleared nothing → not a corrupt-cache problem. The
+                    # most common remaining cause is a blocked/throttled GitHub
+                    # release download (@electron/get pulls the distribution zip
+                    # from github.com by default). Retry once against a public
+                    # Electron mirror so a GitHub-blocked download self-heals.
+                    # Only do this when the user hasn't pinned their own
+                    # ELECTRON_MIRROR — their choice wins and we never override it.
+                    mirror_env = dict(env)
+
+                    mirror_env["ELECTRON_MIRROR"] = _DEFAULT_ELECTRON_MIRROR
+
+                    print(
+                        f"  ⚠ Desktop build failed; retrying once via Electron mirror {_DEFAULT_ELECTRON_MIRROR} ..."
+                    )
+
+                    build_result = subprocess.run(
+                        [npm, "run", build_script],
+                        cwd=desktop_dir,
+                        env=mirror_env,
                         check=False,
                     )
 
@@ -13435,7 +14100,193 @@ def _clawk_exe_shims(scripts_dir: Path) -> list[Path]:
     return [
         scripts_dir / "clawk.exe",
         scripts_dir / "clawk-gateway.exe",
+        # Legacy pre-rebrand shims: a user who upgraded from Hermes may still
+        # have a running hermes.exe / hermes-gateway.exe holding the same venv
+        # file locks, which would break the Windows quarantine rename. Detect
+        # (and, if present, quarantine) them too. Non-existent entries are
+        # skipped by every caller, so listing them unconditionally is safe.
+        scripts_dir / "hermes.exe",
+        scripts_dir / "hermes-gateway.exe",
     ]
+
+
+def _wait_for_windows_update_gateway_exit(pids, *, timeout: float) -> set:
+    """Wait up to ``timeout`` seconds for the given gateway PIDs to exit.
+
+    Returns the set of PIDs still alive after the deadline (best-effort; an
+    empty set means every gateway exited cleanly). Used while pausing Windows
+    gateways for an update so the venv's locked ``.exe`` shims can be replaced.
+    """
+
+    remaining = {int(p) for p in pids}
+
+    if not remaining:
+        return set()
+
+    try:
+        import psutil
+
+    except Exception:
+        return remaining
+
+    deadline = _time.monotonic() + max(float(timeout), 0.0)
+
+    while remaining and _time.monotonic() < deadline:
+        for pid in list(remaining):
+            try:
+                if not psutil.pid_exists(pid):
+                    remaining.discard(pid)
+
+            except Exception:
+                remaining.discard(pid)
+
+        if remaining:
+            _time.sleep(0.1)
+
+    return remaining
+
+
+def _pause_windows_gateways_for_update() -> dict:
+    """Stop running gateways before a Windows update so the locked ``.exe``
+    shims can be quarantined, recording enough state to relaunch them after.
+
+    Profile-mapped gateways get a planted planned-stop marker (so they exit
+    cleanly and can be relaunched detached afterwards). Gateways with no
+    resolvable profile are force-terminated — there is nothing to relaunch them
+    against. Returns a resume token for
+    :func:`_resume_windows_gateways_after_update`.
+    """
+
+    token = {"resume_needed": False, "profiles": {}, "unmapped_pids": []}
+
+    if not _is_windows():
+        return token
+
+    try:
+        from clawk_cli.gateway import (
+            find_gateway_pids,
+            find_profile_gateway_processes,
+            _get_restart_drain_timeout,
+        )
+
+    except Exception:
+        return token
+
+    try:
+        all_pids = [int(p) for p in find_gateway_pids(all_profiles=True)]
+
+    except Exception:
+        all_pids = []
+
+    if not all_pids:
+        return token
+
+    try:
+        profile_procs = list(find_profile_gateway_processes())
+
+    except Exception:
+        profile_procs = []
+
+    from gateway.status import write_planned_stop_marker
+
+    profiles: dict = {}
+
+    mapped_pids: set = set()
+
+    for proc in profile_procs:
+        pid = getattr(proc, "pid", None)
+
+        if pid is None or int(pid) not in all_pids:
+            continue
+
+        pid = int(pid)
+
+        profiles[proc.profile] = pid
+
+        mapped_pids.add(pid)
+
+        try:
+            write_planned_stop_marker(pid, home=getattr(proc, "path", None))
+
+        except Exception:
+            pass
+
+    unmapped_pids = [p for p in all_pids if p not in mapped_pids]
+
+    # Give the profile gateways a chance to exit cleanly after the marker.
+    if profiles:
+        try:
+            drain_timeout = _get_restart_drain_timeout()
+
+        except Exception:
+            drain_timeout = 5.0
+
+        _wait_for_windows_update_gateway_exit(
+            list(profiles.values()), timeout=drain_timeout
+        )
+
+    # Unmapped gateways have no profile to relaunch them — force them down.
+    if unmapped_pids:
+        from gateway.status import terminate_pid
+
+        for pid in unmapped_pids:
+            try:
+                terminate_pid(pid, force=True)
+
+            except Exception:
+                pass
+
+    token["resume_needed"] = bool(profiles)
+
+    token["profiles"] = profiles
+
+    token["unmapped_pids"] = unmapped_pids
+
+    if profiles:
+        print(f"  Paused gateway profile(s): {', '.join(profiles)}")
+
+    if unmapped_pids:
+        print(
+            f"  Terminated {len(unmapped_pids)} gateway process(es) "
+            "without profile mapping: " + ", ".join(str(p) for p in unmapped_pids)
+        )
+
+    return token
+
+
+def _resume_windows_gateways_after_update(token: dict) -> None:
+    """Relaunch the profile gateways paused by
+    :func:`_pause_windows_gateways_for_update`.
+
+    Idempotent: clears the token's ``resume_needed`` flag so a repeat call is a
+    no-op. Unmapped (force-killed) gateways are intentionally not relaunched.
+    """
+
+    if not token or not token.get("resume_needed"):
+        return
+
+    profiles = token.get("profiles") or {}
+
+    if profiles:
+        try:
+            from clawk_cli.gateway import launch_detached_profile_gateway_restart
+
+        except Exception:
+            launch_detached_profile_gateway_restart = None
+
+        print("  Restarting Windows gateway profile(s): " + ", ".join(profiles))
+
+        for profile, old_pid in profiles.items():
+            if launch_detached_profile_gateway_restart is None:
+                continue
+
+            try:
+                launch_detached_profile_gateway_restart(profile, old_pid)
+
+            except Exception:
+                pass
+
+    token["resume_needed"] = False
 
 
 def _detect_concurrent_clawk_instances(
@@ -14035,6 +14886,157 @@ def _refresh_active_lazy_features() -> None:
         print("  `clawk update` once the upstream issue is resolved.")
 
 
+def _update_marker_path() -> Path:
+    """Path of the ``.update-incomplete`` breadcrumb in the source checkout."""
+
+    return PROJECT_ROOT / ".update-incomplete"
+
+
+def _write_update_incomplete_marker() -> None:
+    """Drop a breadcrumb so an update killed mid-install can self-heal later."""
+
+    try:
+        _update_marker_path().write_text(f"started={_time.time()}\npid={os.getpid()}\n")
+
+    except OSError:
+        pass
+
+
+def _clear_update_incomplete_marker() -> None:
+    """Remove the interrupted-install breadcrumb. No-op when absent."""
+
+    try:
+        _update_marker_path().unlink(missing_ok=True)
+
+    except OSError:
+        pass
+
+
+def _recover_from_interrupted_install() -> None:
+    """Finish a dependency install that a previous ``clawk update`` left half-done.
+
+    A ``clawk update`` killed mid-install (Ctrl-C, terminal close, WSL OOM)
+    leaves a ``.update-incomplete`` breadcrumb and a possibly half-built venv.
+    On the next launch we finish the dep install so the user isn't stranded.
+
+    Best-effort and never raises: on any failure the marker is preserved so the
+    next launch retries. A short-lived ``.update-incomplete.lock`` serialises
+    concurrent launches — a fresh lock means another launch is already
+    recovering (skip); a stale one (>1h) is from a crashed holder (break it, but
+    still skip this launch). All output goes to stderr so ACP's JSON-RPC stdout
+    stays clean.
+    """
+
+    marker = _update_marker_path()
+
+    if not marker.exists():
+        return
+
+    # Only source-tree installs can re-run the dep install. A stray marker on a
+    # PyPI/Docker install isn't ours to act on — just clear it.
+    if not (PROJECT_ROOT / "pyproject.toml").exists():
+        _clear_update_incomplete_marker()
+
+        return
+
+    lock = marker.with_name(".update-incomplete.lock")
+
+    if lock.exists():
+        try:
+            age = _time.time() - lock.stat().st_mtime
+
+        except OSError:
+            age = 0.0
+
+        # Stale lock from a crashed holder — break it so a later launch can
+        # recover. This launch still skips (the break + recover never race in
+        # the same pass).
+        if age > 3600:
+            try:
+                lock.unlink()
+
+            except OSError:
+                pass
+
+        return
+
+    try:
+        lock.write_text(f"{os.getpid()}\n")
+
+    except OSError:
+        pass
+
+    print(
+        "→ Clawksis was interrupted mid-install; finishing dependency setup now...",
+        file=sys.stderr,
+    )
+
+    try:
+        # ensurepip unconditionally first: a half-built venv may have lost pip,
+        # which the fallback install path relies on.
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "ensurepip", "--upgrade", "--default-pip"],
+                cwd=str(PROJECT_ROOT),
+            )
+
+        except Exception:
+            pass
+
+        from clawk_cli.managed_uv import ensure_uv
+
+        try:
+            uv_result = ensure_uv()
+
+        except Exception:
+            uv_result = None
+
+        uv_bin = None
+
+        if isinstance(uv_result, (list, tuple)):
+            uv_bin = uv_result[0] if uv_result else None
+
+        elif isinstance(uv_result, str):
+            uv_bin = uv_result
+
+        if uv_bin:
+            uv_env = {**os.environ, "VIRTUAL_ENV": str(PROJECT_ROOT / "venv")}
+
+            if _is_termux_env(uv_env):
+                uv_env.pop("PYTHONPATH", None)
+
+                uv_env.pop("PYTHONHOME", None)
+
+            _install_python_dependencies_with_optional_fallback(
+                [uv_bin, "pip"], env=uv_env
+            )
+
+        else:
+            _install_python_dependencies_with_optional_fallback([
+                sys.executable,
+                "-m",
+                "pip",
+            ])
+
+        _clear_update_incomplete_marker()
+
+        print("✓ Clawksis dependencies recovered.", file=sys.stderr)
+
+    except Exception as exc:
+        # Keep the marker so the next launch retries; never abort startup.
+        print(
+            f"⚠ Clawksis dependency recovery failed ({exc}); will retry next launch.",
+            file=sys.stderr,
+        )
+
+    finally:
+        try:
+            lock.unlink(missing_ok=True)
+
+        except OSError:
+            pass
+
+
 def _install_python_dependencies_with_optional_fallback(
     install_cmd_prefix: list[str],
     *,
@@ -14322,10 +15324,25 @@ def _verify_core_dependencies_installed(
 
     repair_args = ["install", "--reinstall", "-e", "."]
 
+    # On Windows, the editable ``--reinstall`` rewrites the entry-point .exe
+    # shims, which pip can't overwrite while ``clawk.exe`` is running.
+    # Quarantine the live shims first (and restore them if the install fails) —
+    # mirrors the primary install path; without it the shim is left missing and
+    # ``clawk`` drops off PATH.
+    repair_scripts_dir = _venv_scripts_dir() if _is_windows() else None
+
+    repair_moved: list[tuple[Path, Path]] = []
+
+    if repair_scripts_dir is not None:
+        repair_moved = _quarantine_running_clawk_exe(repair_scripts_dir)
+
     try:
         _run_install_with_heartbeat(install_cmd_prefix + repair_args, env=env)
 
     except subprocess.CalledProcessError as e:
+        if repair_scripts_dir is not None:
+            _restore_quarantined_exes(repair_moved)
+
         logger.warning("dep verification: repair install failed: %s", e)
 
         print("  ⚠ Repair install failed; check `clawk update` output above.")
@@ -18882,6 +19899,23 @@ def _report_dashboard_status() -> int:
     return len(pids)
 
 
+def _dashboard_listening(host: str, port: int) -> bool:
+    """Return True if something already accepts TCP connections on host:port.
+
+    Used by the unified-dashboard router to choose between attaching to a
+    running dashboard and re-launching one.
+    """
+
+    import socket
+
+    try:
+        with socket.create_connection((host, int(port)), timeout=0.5):
+            return True
+
+    except OSError:
+        return False
+
+
 def cmd_dashboard(args):
     """Start the web UI server, or (with --stop/--status) manage running ones."""
 
@@ -18943,6 +19977,73 @@ def cmd_dashboard(args):
     ):
         _run_dashboard_detached(args)
         return
+
+    # ── Unified dashboard routing ──────────────────────────────────────────
+    # A named-profile `clawk dashboard` rides the single machine (default-
+    # profile) dashboard instead of starting its own, so every profile shares
+    # one UI with a profile switcher. Either attach to a dashboard that's
+    # already up (open it scoped to this profile) or re-exec as the default
+    # profile with the launching profile preselected.
+    #
+    # Opt-outs (skip routing entirely, before any probe):
+    #   • --isolated            — explicit "I want my own dashboard"
+    #   • --open-profile <name> — we ARE the re-exec'd child; never re-route
+    #   • CLAWK_DESKTOP=1       — desktop spawns per-profile pool backends
+    #   • active profile default — already the machine dashboard
+    from clawk_cli.profiles import get_active_profile_name
+
+    _profile = get_active_profile_name()
+
+    if (
+        _profile
+        and _profile != "default"
+        and not getattr(args, "isolated", False)
+        and not getattr(args, "open_profile", "")
+        and not os.environ.get("CLAWK_DESKTOP")
+    ):
+        if _dashboard_listening(args.host, args.port):
+            # A dashboard is already up — attach to it, scoped to this profile.
+            scoped_url = f"http://{args.host}:{args.port}/?profile={_profile}"
+
+            if not getattr(args, "no_open", False):
+                import webbrowser
+
+                webbrowser.open(scoped_url)
+
+            print(f"Dashboard already running — attached at {scoped_url}")
+
+            sys.exit(0)
+
+        # Nothing listening — re-exec as the machine (default-profile) dashboard
+        # with this profile preselected. Drop CLAWK_HOME so the child binds the
+        # machine root rather than this profile's directory.
+        child_argv = [
+            sys.executable,
+            sys.argv[0],
+            "-p",
+            "default",
+            "dashboard",
+            "--host",
+            str(args.host),
+            "--port",
+            str(args.port),
+            "--open-profile",
+            _profile,
+        ]
+
+        if getattr(args, "no_open", False):
+            child_argv.append("--no-open")
+
+        if getattr(args, "insecure", False):
+            child_argv.append("--insecure")
+
+        if getattr(args, "skip_build", False):
+            child_argv.append("--skip-build")
+
+        child_env = dict(os.environ)
+        child_env.pop("CLAWK_HOME", None)
+
+        os.execvpe(sys.executable, child_argv, child_env)
 
     # Attach gui.log early so dashboard startup/build failures are captured in
 
@@ -19040,6 +20141,20 @@ def cmd_dashboard(args):
         # the missing-provider state if it matters.
 
         print(f"⚠ Plugin discovery failed: {exc}", file=sys.stderr)
+
+    # The dashboard process serves the /api/ws gateway directly but never runs
+    # tui_gateway/entry.py, so it must kick off MCP discovery itself — otherwise
+    # desktop/web sessions never see the active profile's MCP tools.
+    try:
+        from clawk_cli.mcp_startup import start_background_mcp_discovery
+
+        start_background_mcp_discovery(
+            logger=logger,
+            thread_name="dashboard-mcp-discovery",
+        )
+
+    except Exception:
+        logger.debug("dashboard MCP discovery failed to start", exc_info=True)
 
     from clawk_cli.web_server import start_server
 
@@ -19234,6 +20349,12 @@ def _run_dashboard_detached(args):
         f"sobrevive al cierre de SSH.{_x}\n"
         f"  Pará el dashboard con:  {_b}clawk dashboard --stop{_x}   ·   log: {log_path}"
     )
+    try:
+        from clawk_cli.dashboard_service import print_dashboard_command_list
+
+        print_dashboard_command_list()
+    except Exception:
+        pass
 
 
 def _run_dashboard_remote(args):
@@ -19328,6 +20449,111 @@ def cmd_dashboard_register(args):
     _impl(args)
 
 
+def cmd_dashboard_service(args):
+    """Install/manage the dashboard as a systemd service (one command)."""
+
+    from clawk_cli.dashboard_service import cmd_dashboard_service as _impl
+
+    _impl(args)
+
+
+def cmd_dashboard_domain(args):
+    """Publish the dashboard at https://<domain> (systemd + Caddy, one command)."""
+
+    from clawk_cli.dashboard_service import cmd_dashboard_domain as _impl
+
+    _impl(args)
+
+
+def cmd_dashboard_password(args):
+    """Set, change, or remove the dashboard login (dashboard.basic_auth).
+
+    Same credentials the first-run setup page creates. Forgot the
+    password? Run this again — it simply overwrites the stored hash.
+    """
+
+    from clawk_cli.dashboard_auth.first_run import (
+        MIN_PASSWORD_LEN,
+        clear_basic_auth_credentials,
+        configured_username,
+        env_credentials_present,
+        save_basic_auth_credentials,
+    )
+
+    if getattr(args, "clear", False):
+        removed = clear_basic_auth_credentials()
+
+        if removed:
+            print("✓ Dashboard login removed from config.yaml.")
+
+        else:
+            print("No dashboard login was configured in config.yaml.")
+
+        if env_credentials_present():
+            print(
+                "⚠ CLAWK_DASHBOARD_BASIC_AUTH_* environment variables are "
+                "still set and take precedence — unset them too."
+            )
+
+        return
+
+    current = configured_username()
+
+    username = (getattr(args, "username", None) or "").strip()
+
+    if not username:
+        try:
+            prompt = f"Username [{current}]: " if current else "Username: "
+
+            username = input(prompt).strip() or current
+
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelled.")
+
+            sys.exit(1)
+
+    password = getattr(args, "password", None) or ""
+
+    if not password:
+        import getpass
+
+        try:
+            password = getpass.getpass(f"New password (min {MIN_PASSWORD_LEN} chars): ")
+
+            confirm = getpass.getpass("Repeat password: ")
+
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelled.")
+
+            sys.exit(1)
+
+        if password != confirm:
+            print("✗ Passwords do not match.")
+
+            sys.exit(1)
+
+    try:
+        save_basic_auth_credentials(username, password)
+
+    except ValueError as e:
+        print(f"✗ {e}")
+
+        sys.exit(1)
+
+    print(
+        f"✓ Dashboard login saved for {username!r} "
+        "(scrypt hash in ~/.clawksis/config.yaml — no plaintext at rest)."
+    )
+
+    print("  Restart the dashboard (or its service) to apply the change.")
+
+    if env_credentials_present():
+        print(
+            "⚠ CLAWK_DASHBOARD_BASIC_AUTH_* environment variables are set "
+            "and take precedence over config.yaml — update or unset them."
+        )
+
+
 def cmd_completion(args, parser=None):
     """Print shell completion script."""
 
@@ -19374,122 +20600,6 @@ def cmd_logs(args):
         since=getattr(args, "since", None),
         component=getattr(args, "component", None),
     )
-
-
-# Top-level subcommands that argparse knows about WITHOUT running plugin
-
-# discovery.  Used to short-circuit eager plugin imports (which can take
-
-# 500ms+ pulling in google.cloud.pubsub_v1, aiohttp, grpc, etc.) when the
-
-# user's invocation clearly doesn't need any plugin-registered subcommand.
-
-#
-
-# Keep this in sync with the ``subparsers.add_parser("NAME", ...)`` calls
-
-# below in ``main()``. Missing an entry here only costs a one-time
-
-# discovery; extra entries here would let a plugin command silently fail
-
-# to parse.
-
-_BUILTIN_SUBCOMMANDS = frozenset({
-    "acp",
-    "auth",
-    "backup",
-    "bundles",
-    "checkpoints",
-    "claw",
-    "completion",
-    "computer-use",
-    "config",
-    "cron",
-    "curator",
-    "dashboard",
-    "debug",
-    "doctor",
-    "dump",
-    "fallback",
-    "gateway",
-    "hooks",
-    "import",
-    "insights",
-    "gui",
-    "desktop",
-    "kanban",
-    "login",
-    "logout",
-    "logs",
-    "lsp",
-    "mcp",
-    "memory",
-    "migrate",
-    "model",
-    "pairing",
-    "plugins",
-    "portal",
-    "postinstall",
-    "profile",
-    "proxy",
-    "prompt-size",
-    "send",
-    "sessions",
-    "setup",
-    "skills",
-    "slack",
-    "status",
-    "tools",
-    "uninstall",
-    "update",
-    "version",
-    "webhook",
-    "whatsapp",
-    "chat",
-    "secrets",
-    "security",
-    # Help-ish invocations — plugin commands not being listed in
-    # top-level --help is an acceptable trade-off for skipping an
-    # expensive eager import of every bundled plugin module.
-    "help",
-})
-
-
-# Top-level flags that take a value. Needed by ``_first_positional_argv``
-
-# so that in ``clawk -m gpt5 chat``, ``gpt5`` is correctly skipped as a
-
-# flag value rather than misclassified as a subcommand. Kept in sync with
-
-# the top-level flags declared in ``clawk_cli/_parser.py``.
-
-#
-
-# Correctness-safe either way: missing an entry here only makes the
-
-# fast-path bail out too eagerly (we run plugin discovery when we didn't
-
-# need to); extra entries would make us skip a real positional.
-
-_TOP_LEVEL_VALUE_FLAGS = frozenset({
-    "-z",
-    "--oneshot",
-    "-m",
-    "--model",
-    "--provider",
-    "-t",
-    "--toolsets",
-    "-r",
-    "--resume",
-    "-s",
-    "--skills",
-    # ``-c / --continue`` is nargs='?' (optional value). Treat it as
-    # value-taking: if the next token is a subcommand-looking word
-    # the user almost certainly meant it as the session name, and
-    # either interpretation keeps us on the safe side.
-    "-c",
-    "--continue",
-})
 
 
 def _first_positional_argv() -> str | None:
@@ -20004,6 +21114,48 @@ def main():
     )
 
     model_parser.set_defaults(func=cmd_model)
+
+    # =========================================================================
+
+    # cookbook command — discover/run local models (Ollama)
+
+    # =========================================================================
+
+    cookbook_parser = subparsers.add_parser(
+        "cookbook",
+        help="Discover and run local LLMs that fit your machine (via Ollama)",
+        description=(
+            "Detects your hardware, lists open models that fit, and can pull one "
+            "with Ollama and set it as the agent's model."
+        ),
+    )
+
+    cookbook_parser.add_argument(
+        "query",
+        nargs="?",
+        metavar="SEARCH",
+        help="Filter the model list by name/family/tag/use-case (e.g. qwen, coding, 7b).",
+    )
+
+    cookbook_parser.add_argument(
+        "--hardware",
+        action="store_true",
+        help="Only show detected hardware (RAM/CPU/GPU/VRAM) and exit.",
+    )
+
+    cookbook_parser.add_argument(
+        "--run",
+        metavar="MODEL",
+        help="Pull (ollama) the given catalog id or tag, then set it as the model.",
+    )
+
+    cookbook_parser.add_argument(
+        "--use",
+        metavar="MODEL",
+        help="Set an already-pulled local model (id or tag) as the agent's model.",
+    )
+
+    cookbook_parser.set_defaults(func=cmd_cookbook)
 
     # =========================================================================
 
@@ -20891,7 +22043,19 @@ def main():
 
     cron_list = cron_subparsers.add_parser("list", help="List scheduled jobs")
 
-    cron_list.add_argument("--all", action="store_true", help="Include disabled jobs")
+    # Bug #28 fix: --all es ahora redundante (default es mostrar todos),
+    # se mantiene por retrocompatibilidad con scripts existentes.
+    cron_list.add_argument(
+        "--all",
+        action="store_true",
+        help="(deprecated, ya es default) Incluir jobs pausados",
+    )
+    cron_list.add_argument(
+        "--active-only",
+        action="store_true",
+        dest="active_only",
+        help="Filtrar para mostrar solo jobs activos (no pausados)",
+    )
 
     # cron create/add
 
@@ -23684,6 +24848,24 @@ Examples:
         ),
     )
 
+    # Deprecated back-compat shim: the `--tui` flag was removed (cae6b5486) but
+    # older desktop-app builds still pass it. Accept and ignore it so their argv
+    # parses without an argparse error; hidden from --help.
+    dashboard_parser.add_argument(
+        "--tui",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+
+    # Internal: set by the unified-dashboard re-exec so the machine dashboard
+    # preselects the launching profile and the child skips re-routing.
+    dashboard_parser.add_argument(
+        "--open-profile",
+        default="",
+        metavar="NAME",
+        help=argparse.SUPPRESS,
+    )
+
     # Lifecycle flags — mutually exclusive with each other and with the
 
     # start-a-server flags above (if both are passed, --stop / --status win
@@ -23800,6 +24982,124 @@ Examples:
     )
 
     dashboard_register_parser.set_defaults(func=cmd_dashboard_register)
+
+    # `clawk dashboard password` — set/change/remove the built-in login
+    # (dashboard.basic_auth). Same credentials the first-run setup page
+    # creates; forgot the password → run this again to overwrite it.
+
+    dashboard_password_parser = dashboard_subparsers.add_parser(
+        "password",
+        help="Set or change the dashboard login (username + password)",
+        description=(
+            "Set, change, or remove the dashboard's built-in login "
+            "(dashboard.basic_auth in ~/.clawksis/config.yaml). The password "
+            "is stored as a scrypt hash — never plaintext. Forgot it? Run "
+            "this command again to overwrite it."
+        ),
+    )
+
+    dashboard_password_parser.add_argument(
+        "--username",
+        default=None,
+        help="Login username (prompted interactively if omitted)",
+    )
+
+    dashboard_password_parser.add_argument(
+        "--password",
+        default=None,
+        help=(
+            "New password (prompted interactively — recommended — if omitted, "
+            "so it doesn't land in your shell history)"
+        ),
+    )
+
+    dashboard_password_parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Remove the configured login (the first-run setup page returns)",
+    )
+
+    dashboard_password_parser.set_defaults(func=cmd_dashboard_password)
+
+    # `clawk dashboard service` — instala/actualiza la unit systemd en un
+    # comando (reemplaza la sección manual del README: unit + chmod +
+    # daemon-reload + enable).
+
+    dashboard_service_parser = dashboard_subparsers.add_parser(
+        "service",
+        help="Install the dashboard as a systemd service (starts on boot, one command)",
+        description=(
+            "Write/refresh /etc/systemd/system/clawk-dashboard.service pointing "
+            "at this install, reload systemd, enable + start it, and verify it "
+            "answers HTTP. Linux + root. --uninstall removes it; --status shows it."
+        ),
+    )
+
+    dashboard_service_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help=(
+            "Bind host for the service (default 127.0.0.1 — local/SSH-tunnel "
+            "only; 0.0.0.0 exposes it with the login gate active)"
+        ),
+    )
+
+    dashboard_service_parser.add_argument(
+        "--port", type=int, default=9119, help="Port (default 9119)"
+    )
+
+    dashboard_service_parser.add_argument(
+        "--plain",
+        action="store_true",
+        help=(
+            "Write a clean unit, discarding any domain-mode env preserved from "
+            "a previous `clawk dashboard domain` (use to leave domain mode)"
+        ),
+    )
+
+    dashboard_service_parser.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="Disable and remove the systemd service",
+    )
+
+    dashboard_service_parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Show the systemd service status and exit",
+    )
+
+    dashboard_service_parser.set_defaults(func=cmd_dashboard_service)
+
+    # `clawk dashboard domain <dominio>` — publica el dashboard en
+    # https://<dominio>: unit en modo reverse-proxy (loopback + login gate
+    # forzado) + Caddy con HTTPS automático. Solo falta el registro DNS.
+
+    dashboard_domain_parser = dashboard_subparsers.add_parser(
+        "domain",
+        help="Publish the dashboard at https://<domain> (reverse proxy + HTTPS, one command)",
+        description=(
+            "One-command public deploy: installs the systemd service bound to "
+            "loopback with the login gate FORCED on, installs Caddy if missing, "
+            "writes the reverse-proxy block and reloads it. HTTPS is automatic "
+            "(Let's Encrypt) once the domain's DNS A record points at this "
+            "server — the command prints the exact record to create."
+        ),
+    )
+
+    dashboard_domain_parser.add_argument(
+        "domain",
+        help="Domain to serve the dashboard at, e.g. panel.tudominio.com",
+    )
+
+    dashboard_domain_parser.add_argument(
+        "--port",
+        type=int,
+        default=9119,
+        help="Dashboard port to proxy to (default 9119)",
+    )
+
+    dashboard_domain_parser.set_defaults(func=cmd_dashboard_domain)
 
     # =========================================================================
 

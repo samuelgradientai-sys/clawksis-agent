@@ -486,6 +486,10 @@ export const zh: Translations = {
 
       onceAt: "执行时间",
 
+      onceUseCalendar: "日历",
+
+      onceUseManual: "手动",
+
       customLabel: "cron 表达式",
 
       customPlaceholder: "0 9 * * *",

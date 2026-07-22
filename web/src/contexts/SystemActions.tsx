@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/lib/api";
 
@@ -228,31 +228,34 @@ export function SystemActionsProvider({
 
   const isBusy = pendingAction !== null || isRunning;
 
+  // Memoize the context value so consumers don't re-render on every provider
+  // render — only when one of these actually changes.
+  const value = useMemo(
+    () => ({
+      actionStatus,
+      activeAction,
+      dismissLog,
+      isBusy,
+      isRunning,
+      pendingAction,
+      runAction,
+    }),
+    [
+      actionStatus,
+      activeAction,
+      dismissLog,
+      isBusy,
+      isRunning,
+      pendingAction,
+      runAction,
+    ],
+  );
+
 
 
   return (
 
-    <SystemActionsContext.Provider
-
-      value={{
-
-        actionStatus,
-
-        activeAction,
-
-        dismissLog,
-
-        isBusy,
-
-        isRunning,
-
-        pendingAction,
-
-        runAction,
-
-      }}
-
-    >
+    <SystemActionsContext.Provider value={value}>
 
       {children}
 

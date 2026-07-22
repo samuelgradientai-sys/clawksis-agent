@@ -15,8 +15,6 @@ from typing import Dict, Type
 
 from clawk_cli.proxy.adapters.base import UpstreamAdapter
 
-from clawk_cli.proxy.adapters.nous_portal import NousPortalAdapter
-
 from clawk_cli.proxy.adapters.xai import XAIGrokAdapter
 
 
@@ -25,7 +23,6 @@ from clawk_cli.proxy.adapters.xai import XAIGrokAdapter
 # the ``clawk proxy start --provider <name>`` CLI flag.
 
 ADAPTERS: Dict[str, Type[UpstreamAdapter]] = {
-    "nous": NousPortalAdapter,
     "xai": XAIGrokAdapter,
 }
 

@@ -19,7 +19,9 @@ from agent.transports.base import ProviderTransport
 from agent.transports.types import NormalizedResponse, ToolCall, Usage
 
 
-def _build_gemini_thinking_config(model: str, reasoning_config: dict | None) -> dict | None:
+def _build_gemini_thinking_config(
+    model: str, reasoning_config: dict | None
+) -> dict | None:
     """Translate Clawksis/OpenRouter-style reasoning config to Gemini thinkingConfig."""
     if reasoning_config is None or not isinstance(reasoning_config, dict):
         return None
@@ -161,9 +163,7 @@ class ChatCompletionsTransport(ProviderTransport):
           ``Extra inputs are not permitted, field: 'messages[N]._empty_recovery_synthetic'``,
           which then poisons every subsequent request in the session.
         """
-        strip_extra_content = not _model_consumes_thought_signature(
-            kwargs.get("model")
-        )
+        strip_extra_content = not _model_consumes_thought_signature(kwargs.get("model"))
         needs_sanitize = False
         for msg in messages:
             if not isinstance(msg, dict):
@@ -415,7 +415,9 @@ class ChatCompletionsTransport(ProviderTransport):
 
         # Reasoning. LM Studio is handled above via top-level reasoning_effort,
         # so skip emitting extra_body.reasoning for it.
-        if params.get("supports_reasoning", False) and not params.get("is_lmstudio", False):
+        if params.get("supports_reasoning", False) and not params.get(
+            "is_lmstudio", False
+        ):
             if is_github_models:
                 gh_reasoning = params.get("github_reasoning_extra")
                 if gh_reasoning is not None:
@@ -426,7 +428,9 @@ class ChatCompletionsTransport(ProviderTransport):
         if provider_name == "gemini":
             raw_thinking_config = _build_gemini_thinking_config(model, reasoning_config)
             if _is_gemini_openai_compat_base_url(base_url):
-                thinking_config = _snake_case_gemini_thinking_config(raw_thinking_config)
+                thinking_config = _snake_case_gemini_thinking_config(
+                    raw_thinking_config
+                )
                 if thinking_config:
                     openai_compat_extra = extra_body.get("extra_body", {})
                     google_extra = openai_compat_extra.get("google", {})
@@ -583,12 +587,14 @@ class ChatCompletionsTransport(ProviderTransport):
             # thinking_config from extra_body, so drop everything else here.
             try:
                 from agent.gemini_native_adapter import is_native_gemini_base_url
+
                 _native_gemini = is_native_gemini_base_url(params.get("base_url"))
             except Exception:
                 _native_gemini = False
             if _native_gemini:
                 extra_body = {
-                    k: v for k, v in extra_body.items()
+                    k: v
+                    for k, v in extra_body.items()
                     if k in ("thinking_config", "thinkingConfig")
                 }
             if extra_body:
@@ -664,8 +670,34 @@ class ChatCompletionsTransport(ProviderTransport):
         if rd:
             provider_data["reasoning_details"] = rd
 
+        content = msg.content
+
+        # OpenAI-compatible refusals.  Some proxies (e.g. Nous Portal fronting
+        # Anthropic) surface a Claude refusal via ``message.refusal`` while
+        # leaving ``content`` empty and ``finish_reason="stop"``.  Left alone,
+        # the agent loop sees an empty response and retries it three times
+        # before giving up.  Promote a *standalone* refusal to a terminal
+        # ``content_filter`` so the loop's refusal handler surfaces it.
+        #
+        # A refusal alongside real content or tool calls is NOT terminal — the
+        # turn is a usable response and promoting it would discard the model's
+        # actual work.  In that case record the refusal in provider_data only
+        # and leave content / finish_reason untouched.
+        refusal = getattr(msg, "refusal", None)
+        if refusal is None and hasattr(msg, "model_extra"):
+            model_extra = getattr(msg, "model_extra", None) or {}
+            if isinstance(model_extra, dict) and model_extra.get("refusal") is not None:
+                refusal = model_extra["refusal"]
+        if refusal is not None:
+            provider_data["refusal"] = refusal
+            standalone = not tool_calls and content in (None, "")
+            if standalone:
+                content = refusal
+                if finish_reason != "content_filter":
+                    finish_reason = "content_filter"
+
         return NormalizedResponse(
-            content=msg.content,
+            content=content,
             tool_calls=tool_calls,
             finish_reason=finish_reason,
             reasoning=reasoning,

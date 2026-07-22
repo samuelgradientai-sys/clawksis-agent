@@ -184,6 +184,74 @@ function toolsetIcon(
 
 
 
+/* Minimalist emoji per skill: prefer the skill's own metadata emoji, else derive
+
+   one from keywords in its name/category, else a neutral default. Keeps the
+
+   skills list visual and on-brand without curating all ~80 by hand. */
+
+const SKILL_EMOJI_KEYWORDS: [RegExp, string][] = [
+
+  [/news|blog|feed|rss|watcher/, "📰"],
+
+  [/token|cost|budget/, "🪙"],
+
+  [/design|landing|\bui\b|\bux\b|\bcss\b|animation|paint|figma/, "🎨"],
+
+  [/diagram|architecture|infra/, "📐"],
+
+  [/infographic|chart|\bdata\b|airtable|sheet|notion|table|polymarket/, "📊"],
+
+  [/arxiv|paper|research|wiki|\bsearch\b|scholar/, "🔬"],
+
+  [/ascii|\bart\b/, "🔤"],
+
+  [/video|movie|film|ffmpeg/, "🎬"],
+
+  [/audio|music|sound|voice|\btts\b|speech/, "🎵"],
+
+  [/image|photo|vision|\bocr\b|comfyui|diffus/, "🖼️"],
+
+  [/security|red.?team|godmode|obliterat|pentest|exploit/, "🛡️"],
+
+  [/github|\bgit\b|repo|\bcode\b|review|p5js|pretext/, "💻"],
+
+  [/\bmcp\b|integration|\bapi\b|webhook|fastmcp/, "🔌"],
+
+  [/agent|orchestrat|kanban|delegat|swarm/, "🤖"],
+
+  [/email|gmail|\bmail\b/, "✉️"],
+
+  [/linkedin|outreach|social|twitter|\bx\b/, "🔗"],
+
+  [/calendar|cron|schedule|remind/, "📅"],
+
+  [/\bdoc\b|note|write|markdown|humaniz|comic|story/, "📝"],
+
+  [/browser|playwright|puppeteer|scrape|crawl/, "🌐"],
+
+];
+
+
+
+function skillEmoji(skill: SkillInfo): string {
+
+  if (skill.emoji) return skill.emoji;
+
+  const hay = `${skill.name} ${skill.category ?? ""}`.toLowerCase();
+
+  for (const [re, emoji] of SKILL_EMOJI_KEYWORDS) {
+
+    if (re.test(hay)) return emoji;
+
+  }
+
+  return "🧩";
+
+}
+
+
+
 /* ------------------------------------------------------------------ */
 
 /*  Component                                                          */
@@ -1109,6 +1177,18 @@ function SkillRow({
       <div className="flex-1 min-w-0">
 
         <div className="flex items-center gap-2 mb-0.5">
+
+          <span
+
+            aria-hidden
+
+            className={`text-sm leading-none ${skill.enabled ? "" : "opacity-50 grayscale"}`}
+
+          >
+
+            {skillEmoji(skill)}
+
+          </span>
 
           <span
 

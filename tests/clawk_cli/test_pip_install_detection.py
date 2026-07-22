@@ -126,7 +126,9 @@ def test_recommended_update_command_docker():
 
     from clawk_cli.config import recommended_update_command_for_method
 
-    assert "docker pull" in recommended_update_command_for_method("docker")
+    # The fork builds the image locally (no published image to ``docker pull``),
+    # so the recommended update is a host-side rebuild + recreate.
+    assert "docker compose build" in recommended_update_command_for_method("docker")
 
 
 def test_banner_warns_on_pip_install(tmp_path):

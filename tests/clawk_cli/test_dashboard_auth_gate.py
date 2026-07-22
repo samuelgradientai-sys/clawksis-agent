@@ -158,23 +158,54 @@ def test_should_require_auth_truth_table(host, allow_public, expected):
 
 
 def _stub_uvicorn_run(monkeypatch):
-    """Replace uvicorn.run with a no-op recorder so start_server returns
+    """Neutralize the real server start so start_server returns immediately.
 
-    immediately (rather than blocking on the event loop).  Returns the dict
+    start_server drives uvicorn.Server directly (uvicorn.Config + asyncio.run)
 
-    that will capture the keyword args."""
+    instead of uvicorn.run, so stub all three: capture the uvicorn.Config
+
+    kwargs (which carry host/port/proxy_headers), make Server() a no-op whose
+
+    capture_signals() is a no-op context manager, and turn asyncio.run into a
+
+    no-op so we never bind a socket or block on the event loop.  Returns the
+
+    dict that captures the Config keyword args."""
+
+    import asyncio
+
+    import contextlib
 
     import uvicorn
 
     captured: dict = {}
 
-    def _fake_run(*args, **kwargs):
+    def _fake_config(*args, **kwargs):
 
         captured["args"] = args
 
         captured["kwargs"] = kwargs
 
-    monkeypatch.setattr(uvicorn, "run", _fake_run)
+        return object()
+
+    class _FakeServer:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        @contextlib.contextmanager
+        def capture_signals(self):
+            yield
+
+    def _fake_run(coro, *args, **kwargs):
+
+        if hasattr(coro, "close"):
+            coro.close()
+
+    monkeypatch.setattr(uvicorn, "Config", _fake_config)
+
+    monkeypatch.setattr(uvicorn, "Server", _FakeServer)
+
+    monkeypatch.setattr(asyncio, "run", _fake_run)
 
     return captured
 
@@ -220,11 +251,13 @@ def test_start_server_public_without_insecure_records_auth_required(monkeypatch)
 
 
 
-    With no providers registered, this fails closed with SystemExit. The
+    With no providers registered but first-run setup available, the server
 
-    flag-stashing happens BEFORE the exit so the rest of the system can
+    boots ANYWAY — the public /auth/setup page bootstraps the admin login on
 
-    branch on it. (See task 3.5 tests below for the with-provider path.)
+    first visit (the documented `clawk dashboard domain` flow). The gate flag
+
+    is still stashed so the rest of the system can branch on it.
 
     """
 
@@ -236,13 +269,12 @@ def test_start_server_public_without_insecure_records_auth_required(monkeypatch)
 
     web_server.app.state.auth_required = None
 
-    with pytest.raises(SystemExit):
-        web_server.start_server(
-            host="0.0.0.0",
-            port=9119,
-            open_browser=False,
-            allow_public=False,
-        )
+    web_server.start_server(
+        host="0.0.0.0",
+        port=9119,
+        open_browser=False,
+        allow_public=False,
+    )
 
     assert web_server.app.state.auth_required is True
 
@@ -300,73 +332,38 @@ def test_start_server_gate_with_provider_proceeds_and_sets_proxy_headers(monkeyp
 
 
 def test_start_server_gate_without_provider_fails_closed(monkeypatch):
-    """No providers + gate would activate → SystemExit with a clear message."""
+    """No providers + first-run setup unavailable → SystemExit, clear message.
+
+
+
+    When setup IS available the server boots with the /auth/setup page (see
+
+    the with-setup test above); the fail-closed path only survives for the
+
+    half-configured case where no provider registered AND the first-run page
+
+    can't bootstrap a login.
+
+    """
 
     from clawk_cli.dashboard_auth import clear_providers
+    from clawk_cli.dashboard_auth import first_run
 
     clear_providers()
+
+    monkeypatch.setattr(first_run, "setup_available", lambda: False)
 
     _stub_uvicorn_run(monkeypatch)
 
     web_server.app.state.auth_required = None
 
-    with pytest.raises(SystemExit, match=r"no auth providers"):
+    with pytest.raises(SystemExit, match=r"setup page is unavailable"):
         web_server.start_server(
             host="0.0.0.0",
             port=9119,
             open_browser=False,
             allow_public=False,
         )
-
-
-def test_start_server_surfaces_nous_skip_reason_when_unconfigured(monkeypatch):
-    """When the bundled Nous plugin loaded but skipped registration (no
-
-    env vars set), the gate's fail-closed message should surface the
-
-    plugin's LAST_SKIP_REASON so the operator knows the config fix is
-
-    'set CLAWK_DASHBOARD_OAUTH_CLIENT_ID', not 'install a plugin'."""
-
-    from clawk_cli.dashboard_auth import clear_providers
-
-    from plugins.dashboard_auth import nous as nous_plugin
-
-    # Simulate the plugin running and skipping for "no client_id".
-
-    clear_providers()
-
-    _stub_uvicorn_run(monkeypatch)
-
-    monkeypatch.delenv("CLAWK_DASHBOARD_OAUTH_CLIENT_ID", raising=False)
-
-    monkeypatch.delenv("CLAWK_DASHBOARD_PORTAL_URL", raising=False)
-
-    from unittest.mock import MagicMock
-
-    nous_plugin.register(MagicMock())  # populates LAST_SKIP_REASON
-
-    assert "CLAWK_DASHBOARD_OAUTH_CLIENT_ID" in nous_plugin.LAST_SKIP_REASON
-
-    web_server.app.state.auth_required = None
-
-    with pytest.raises(SystemExit) as exc_info:
-        web_server.start_server(
-            host="0.0.0.0",
-            port=9119,
-            open_browser=False,
-            allow_public=False,
-        )
-
-    # The error message embeds the plugin's specific skip reason rather
-
-    # than the generic "Install the default Nous provider" boilerplate.
-
-    msg = str(exc_info.value)
-
-    assert "CLAWK_DASHBOARD_OAUTH_CLIENT_ID" in msg
-
-    assert "nous:" in msg
 
 
 def test_start_server_loopback_keeps_proxy_headers_off(monkeypatch):

@@ -1,8 +1,14 @@
+# Vendored models.dev snapshot (offline-first floor for model-capability
+# lookups). package-data ships it in the wheel; this ships it in the sdist.
+include agent/models_dev_snapshot.json
+
 graft skills
 
 graft optional-skills
 
 graft locales
+
+graft optional-mcps
 
 # Bundled plugin manifests (plugin.yaml / plugin.yml). Without these the
 

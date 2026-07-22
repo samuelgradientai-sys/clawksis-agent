@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def money(value):
+    try:
+        return f"{float(value):,.0f}"
+    except Exception:
+        return "0"
+
+
+def main() -> int:
+    result = subprocess.run(
+        [
+            "./business_ops/ventas",
+            "--tipo",
+            "ejecutivo",
+            "--input",
+            "business_ops/examples/sample_sales.csv",
+            "--json",
+        ],
+        cwd=REPO_ROOT,
+        shell=False,
+        capture_output=True,
+        text=True,
+        timeout=90,
+    )
+
+    if result.returncode != 0:
+        print("VENTAS_RESUMEN_STATUS=error")
+        print(result.stderr or result.stdout)
+        return result.returncode
+
+    data = json.loads(result.stdout)
+
+    summary = data.get("summary", {})
+    leaders = data.get("leaders", {})
+    risks = data.get("risk_summary", [])
+    recommendations = data.get("executive_recommendations", [])
+
+    period = data.get("period") or {}
+
+    print("VENTAS_RESUMEN_STATUS=ok")
+    print(f"periodo={period.get('start')} a {period.get('end')}")
+    print(f"ventas_netas={money(summary.get('net_sales'))}")
+    print(f"ordenes={summary.get('orders')}")
+    print(f"clientes={summary.get('customers')}")
+    print(f"ticket_promedio={money(summary.get('average_ticket'))}")
+    print(f"producto_lider={leaders.get('product', {}).get('name')} ({money(leaders.get('product', {}).get('value'))})")
+    print(f"region_lider={leaders.get('region', {}).get('name')} ({money(leaders.get('region', {}).get('value'))})")
+    print(f"vendedor_lider={leaders.get('sales_rep', {}).get('name')} ({money(leaders.get('sales_rep', {}).get('value'))})")
+    print(f"cliente_principal={leaders.get('customer', {}).get('customer')} ({money(leaders.get('customer', {}).get('net_sales'))})")
+
+    print("riesgos=" + "; ".join(
+        f"{item.get('level')} {item.get('area')}: {item.get('message')}"
+        for item in risks[:3]
+    ))
+
+    print("acciones_recomendadas=" + "; ".join(recommendations[:3]))
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

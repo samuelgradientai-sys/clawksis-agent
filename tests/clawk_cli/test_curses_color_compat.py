@@ -18,6 +18,14 @@ clamps with ``min(8, curses.COLORS - 1)``.
 
 """
 
+import sys
+
+import pytest
+
+# curses (and its _curses C extension) is Unix-only; skip the whole module on Windows.
+if sys.platform == "win32":
+    pytest.skip("curses is not available on Windows", allow_module_level=True)
+
 import curses
 
 import re

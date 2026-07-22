@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$REPO_ROOT"
+
+echo "== Clawksis Local Ops Quality Gate =="
+echo "Repo: $REPO_ROOT"
+echo
+
+echo "[1/5] Checking Git diff formatting..."
+git diff --check
+echo "OK"
+echo
+
+echo "[2/5] Running bootstrap..."
+./local_ops/bootstrap
+echo "OK"
+echo
+
+echo "[3/5] Running security audit directly..."
+./local_ops/security-audit
+echo "OK"
+echo
+
+echo "[4/5] Running unit tests directly..."
+python3 -m unittest -v local_ops.tests.test_clawk_safe_ops
+echo "OK"
+echo
+
+echo "[5/5] Showing local Git status..."
+git status --short --untracked-files=all
+echo
+
+echo "QUALITY_GATE_STATUS=OK"

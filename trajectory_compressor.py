@@ -856,6 +856,45 @@ class TrajectoryCompressor:
 
         return protected, compressible_start, compressible_end
 
+    @staticmethod
+    def _is_boundary_clean(trajectory: List[Dict[str, str]], idx: int) -> bool:
+        """Return True if a region boundary at ``idx`` does not split a turn pair.
+
+        In the from/value trajectory format a ``tool`` turn (carrying
+        ``<tool_response>`` markers) is always emitted immediately after the
+        ``gpt`` turn whose ``<tool_call>`` it answers. A compression boundary
+        that lands *on* a ``tool`` turn therefore cuts between a tool call and
+        its response. A boundary is only clean when it sits at the very end of
+        the trajectory or on a non-``tool`` turn.
+        """
+        return idx >= len(trajectory) or trajectory[idx].get("from") != "tool"
+
+    @classmethod
+    def _snap_boundary(
+        cls,
+        trajectory: List[Dict[str, str]],
+        idx: int,
+        min_idx: int,
+        max_idx: int,
+    ) -> int:
+        """Move a compression boundary onto the nearest clean turn boundary.
+
+        Moving forward is preferred so that an orphaned ``tool`` turn is folded
+        into the region that already holds its ``gpt`` turn; if no clean
+        boundary exists ahead (for example the protected tail itself begins on a
+        ``tool`` turn) the boundary is moved backward instead. The result is
+        clamped to ``[min_idx, max_idx]``.
+        """
+        forward = idx
+        while forward < max_idx and not cls._is_boundary_clean(trajectory, forward):
+            forward += 1
+        if cls._is_boundary_clean(trajectory, forward):
+            return forward
+        backward = idx
+        while backward > min_idx and not cls._is_boundary_clean(trajectory, backward):
+            backward -= 1
+        return backward
+
     def _extract_turn_content_for_summary(
         self, trajectory: List[Dict[str, str]], start: int, end: int
     ) -> str:
@@ -1215,6 +1254,12 @@ Write only the summary, starting with "[CONTEXT SUMMARY]:" prefix."""
             trajectory
         )
 
+        # Snap the head boundary so the compressible region never *starts* on an
+        # orphaned <tool_response> whose <tool_call> lives in the protected head.
+        compress_start = self._snap_boundary(
+            trajectory, compress_start, compress_start, compress_end
+        )
+
         # Check if there's anything to compress
 
         if compress_start >= compress_end:
@@ -1267,6 +1312,20 @@ Write only the summary, starting with "[CONTEXT SUMMARY]:" prefix."""
             compress_until = compress_end
 
             accumulated_tokens = sum(turn_tokens[compress_start:compress_end])
+
+        # Snap the tail boundary so we never cut between a <tool_call> and its
+        # <tool_response>: the summary replaces [compress_start, compress_until)
+        # and the remainder is kept verbatim, so a boundary on a tool turn would
+        # leave an orphaned marker and corrupt the training trajectory.
+        compress_until = self._snap_boundary(
+            trajectory, compress_until, compress_start, compress_end
+        )
+        if compress_until <= compress_start:
+            # Snapping collapsed the region; nothing can be safely compressed.
+            metrics.compressed_tokens = total_tokens
+            metrics.compressed_turns = len(trajectory)
+            metrics.still_over_limit = total_tokens > self.config.target_max_tokens
+            return trajectory, metrics
 
         # Record compression region
 
@@ -1377,6 +1436,12 @@ Write only the summary, starting with "[CONTEXT SUMMARY]:" prefix."""
             trajectory
         )
 
+        # Snap the head boundary so the compressible region never *starts* on an
+        # orphaned <tool_response> whose <tool_call> lives in the protected head.
+        compress_start = self._snap_boundary(
+            trajectory, compress_start, compress_start, compress_end
+        )
+
         # Check if there's anything to compress
 
         if compress_start >= compress_end:
@@ -1417,6 +1482,20 @@ Write only the summary, starting with "[CONTEXT SUMMARY]:" prefix."""
             compress_until = compress_end
 
             accumulated_tokens = sum(turn_tokens[compress_start:compress_end])
+
+        # Snap the tail boundary so we never cut between a <tool_call> and its
+        # <tool_response>: the summary replaces [compress_start, compress_until)
+        # and the remainder is kept verbatim, so a boundary on a tool turn would
+        # leave an orphaned marker and corrupt the training trajectory.
+        compress_until = self._snap_boundary(
+            trajectory, compress_until, compress_start, compress_end
+        )
+        if compress_until <= compress_start:
+            # Snapping collapsed the region; nothing can be safely compressed.
+            metrics.compressed_tokens = total_tokens
+            metrics.compressed_turns = len(trajectory)
+            metrics.still_over_limit = total_tokens > self.config.target_max_tokens
+            return trajectory, metrics
 
         # Record compression region
 

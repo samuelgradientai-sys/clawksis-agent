@@ -941,7 +941,10 @@ def launch_detached_profile_gateway_restart(profile: str, old_pid: int) -> bool:
 
     # host platform and is a no-op on POSIX (just ``start_new_session=True``).
 
-    from clawk_cli._subprocess_compat import windows_detach_popen_kwargs
+    from clawk_cli._subprocess_compat import (
+        windows_detach_flags_without_breakaway,
+        windows_detach_popen_kwargs,
+    )
 
     watcher = textwrap.dedent(
         """
@@ -1000,9 +1003,17 @@ def launch_detached_profile_gateway_restart(profile: str, old_pid: int) -> bool:
 
             _CREATE_NO_WINDOW = 0x08000000
 
+            # CREATE_BREAKAWAY_FROM_JOB — escape any job object the watcher
+
+            # inherited so the respawned gateway isn't reaped when the parent
+
+            # job is torn down (Windows Terminal wraps children in a job).
+
+            _CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+
             _popen_kwargs["creationflags"] = (
 
-                _CREATE_NEW_PROCESS_GROUP | _DETACHED_PROCESS | _CREATE_NO_WINDOW
+                _CREATE_NEW_PROCESS_GROUP | _DETACHED_PROCESS | _CREATE_NO_WINDOW | _CREATE_BREAKAWAY_FROM_JOB
 
             )
 
@@ -1010,7 +1021,23 @@ def launch_detached_profile_gateway_restart(profile: str, old_pid: int) -> bool:
 
             _popen_kwargs["start_new_session"] = True
 
-        subprocess.Popen(cmd, **_popen_kwargs)
+        try:
+
+            subprocess.Popen(cmd, **_popen_kwargs)
+
+        except OSError:
+
+            # Breakaway denied by a restrictive parent job object surfaces as
+
+            # ERROR_ACCESS_DENIED → OSError. Retry without the breakaway bit
+
+            # rather than leaving the gateway un-respawned.
+
+            if sys.platform == "win32":
+
+                _popen_kwargs["creationflags"] &= ~_CREATE_BREAKAWAY_FROM_JOB
+
+            subprocess.Popen(cmd, **_popen_kwargs)
 
         """
     ).strip()
@@ -1020,18 +1047,33 @@ def launch_detached_profile_gateway_restart(profile: str, old_pid: int) -> bool:
 
         # closing the user's terminal doesn't kill the watcher.
 
-        subprocess.Popen(
-            [
-                sys.executable,
-                "-c",
-                watcher,
-                str(old_pid),
-                *_gateway_run_args_for_profile(profile),
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            **windows_detach_popen_kwargs(),
-        )
+        _watcher_argv = [
+            sys.executable,
+            "-c",
+            watcher,
+            str(old_pid),
+            *_gateway_run_args_for_profile(profile),
+        ]
+
+        try:
+            subprocess.Popen(
+                _watcher_argv,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                **windows_detach_popen_kwargs(),
+            )
+
+        except OSError:
+            # Breakaway denied by the parent job object (restrictive Windows
+            # Terminal / container / kiosk-mode shells) surfaces as
+            # ERROR_ACCESS_DENIED → OSError. Retry the watcher launch without
+            # the breakaway bit instead of giving up on the respawn.
+            subprocess.Popen(
+                _watcher_argv,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=windows_detach_flags_without_breakaway(),
+            )
 
     except OSError:
         return False
@@ -1514,8 +1556,29 @@ def get_gateway_runtime_snapshot(system: bool = False) -> GatewayRuntimeSnapshot
             from clawk_cli.service_manager import detect_service_manager
 
             if detect_service_manager() == "s6":
+                from clawk_cli.service_manager import get_service_manager
+
+                service_name = f"gateway-{_profile_suffix() or 'default'}"
+
+                installed = False
+
+                running = False
+
+                try:
+                    mgr = get_service_manager()
+
+                    installed = (mgr.scandir / service_name).exists()
+
+                    running = bool(mgr.is_running(service_name))
+
+                except Exception:
+                    pass
+
                 return GatewayRuntimeSnapshot(
                     manager="s6 (container supervisor)",
+                    service_installed=installed,
+                    service_running=running,
+                    service_scope="s6",
                     gateway_pids=gateway_pids,
                 )
 
@@ -3561,6 +3624,42 @@ def _normalize_service_definition(text: str) -> str:
     return "\n".join(line.rstrip() for line in text.strip().splitlines())
 
 
+# Directives that newer clawk units emit but that older systemd versions
+# silently drop when they are not supported.  Comparing raw text would then
+# perpetually flag the installed unit as stale, so strip these before the
+# staleness comparison.
+_OPTIONAL_SYSTEMD_DIRECTIVES = (
+    "RestartMaxDelaySec",
+    "RestartSteps",
+)
+
+
+def _strip_optional_systemd_directives(text: str) -> str:
+    """Remove optional systemd directives that older systemd silently drops.
+
+    Only assignment lines (``Directive=...``) are removed; comments that
+    merely mention the directive name are preserved.
+    """
+
+    kept: list[str] = []
+
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if any(
+            stripped.startswith(directive + "=")
+            for directive in _OPTIONAL_SYSTEMD_DIRECTIVES
+        ):
+            continue
+        kept.append(line)
+
+    result = "\n".join(kept)
+
+    if text.endswith("\n") and result:
+        result += "\n"
+
+    return result
+
+
 def _normalize_launchd_plist_for_comparison(text: str) -> str:
     """Normalize launchd plist text for staleness checks.
 
@@ -3601,9 +3700,14 @@ def systemd_unit_is_current(system: bool = False) -> bool:
 
     expected = generate_systemd_unit(system=system, run_as_user=expected_user)
 
-    return _normalize_service_definition(installed) == _normalize_service_definition(
-        expected
+    norm_installed = _normalize_service_definition(
+        _strip_optional_systemd_directives(installed)
     )
+    norm_expected = _normalize_service_definition(
+        _strip_optional_systemd_directives(expected)
+    )
+
+    return norm_installed == norm_expected
 
 
 def refresh_systemd_unit_if_needed(system: bool = False) -> bool:
@@ -4506,10 +4610,9 @@ def generate_launchd_plist() -> str:
     
 
     <key>KeepAlive</key>
-
     <true/>
 
-    
+
 
     <key>StandardOutPath</key>
 
@@ -4998,7 +5101,31 @@ def _guard_official_docker_root_gateway() -> None:
     sys.exit(1)
 
 
-def run_gateway(verbose: int = 0, quiet: bool = False, replace: bool = False):
+def _running_under_gateway_supervisor() -> bool:
+    """True when THIS process was started by a service supervisor (systemd /
+    s6 / launchd) — i.e. we ARE the managed gateway, not a stray shell
+    ``gateway run`` competing with it.
+    """
+
+    if os.environ.get("INVOCATION_ID"):
+        return True
+
+    if os.environ.get("CLAWK_S6_SUPERVISED_CHILD"):
+        return True
+
+    # launchd sets XPC_SERVICE_NAME to the job label; interactive shells
+    # inherit the "0" sentinel.
+    xpc = os.environ.get("XPC_SERVICE_NAME", "0")
+
+    if xpc and xpc != "0":
+        return True
+
+    return False
+
+
+def run_gateway(
+    verbose: int = 0, quiet: bool = False, replace: bool = False, force: bool = False
+):
     """Run the gateway in foreground.
 
 
@@ -5018,6 +5145,36 @@ def run_gateway(verbose: int = 0, quiet: bool = False, replace: bool = False):
     """
 
     _guard_official_docker_root_gateway()
+
+    # Refuse to become a second writer when a service supervisor already owns
+    # the gateway for this profile. ``--force`` overrides; and if WE are the
+    # supervised process (systemd/s6/launchd), this IS the legitimate start.
+    if not force and not _running_under_gateway_supervisor():
+        _snap = get_gateway_runtime_snapshot()
+
+        if _snap.service_installed and _snap.service_running:
+            print(f"Gateway already running under {_snap.manager}.")
+
+            print("  Restart the managed service with:  clawk gateway restart")
+
+            print("  Or run a foreground instance anyway with:  --force")
+
+            sys.exit(1)
+
+    # Cheap preflight: refuse before importing the heavy gateway_run module when
+    # another live process already owns this profile. ``--replace`` skips it (it
+    # kills the incumbent itself).
+    if not replace:
+        from gateway.status import get_running_pid
+
+        _existing_pid = get_running_pid()
+
+        if _existing_pid:
+            print(f"Another gateway instance is already running (PID {_existing_pid}).")
+
+            print("  Start with:  clawk gateway run --replace")
+
+            sys.exit(1)
 
     sys.path.insert(0, str(PROJECT_ROOT))
 

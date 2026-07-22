@@ -182,6 +182,13 @@ export const es: Translations = {
 
     webUi: "Web UI",
 
+    managingProfile: "Gestionando el perfil",
+
+    currentProfileOption: "este panel ({name})",
+
+    managingProfileBanner:
+      "Gestionando el perfil “{name}” — la configuración, las claves, las skills, los MCP, el modelo y los chats nuevos se aplican a ese perfil.",
+
   },
 
 
@@ -492,6 +499,10 @@ export const es: Translations = {
 
       onceAt: "Ejecutar el",
 
+      onceUseCalendar: "Calendario",
+
+      onceUseManual: "Manual",
+
       customLabel: "Expresión cron",
 
       customPlaceholder: "0 9 * * *",
@@ -528,6 +539,26 @@ export const es: Translations = {
 
     deliverTo: "Entregar a",
 
+    silentNotice: "Avisar aunque no haya novedad",
+
+    useSoul: "Usar SOUL.md (identidad del asistente)",
+
+    useUserMd: "Usar USER.md (perfil del usuario)",
+
+    useMemory: "Usar MEMORY.md (memoria de largo plazo)",
+
+    contextToggles: "Contexto y entrega",
+
+    fallbackModels: "Modelos de respaldo (opcional)",
+
+    fallbackModelsHint: "Si el modelo principal falla (límite, sobrecarga o error), reintenta con estos. Formato provider:model, separados por coma.",
+
+    viewLabel: "Vista",
+
+    listView: "Lista",
+
+    calendarView: "Calendario",
+
     scheduledJobs: "Tareas programadas",
 
     noJobs: "No hay tareas cron configuradas. Crea una arriba.",
@@ -541,6 +572,11 @@ export const es: Translations = {
     resume: "Reanudar",
 
     triggerNow: "Ejecutar ahora",
+
+    archiveChats: "Archivar chats de cron",
+
+    archiveChatsHint:
+      "Al terminar cada ejecución, archiva la conversación que creó el cron para que no llene la lista de chats",
 
     delivery: {
 
@@ -563,6 +599,15 @@ export const es: Translations = {
   profiles: {
 
     newProfile: "Nuevo perfil",
+
+    manageSkills: "Gestionar skills y herramientas",
+
+    activeSetHint:
+      "Se aplica a las nuevas ejecuciones de CLI/gateway. Este panel sigue gestionando su propio perfil — usá “Gestionar skills y herramientas” para editar {name}.",
+
+    cloneFrom: "Clonar configuración de",
+
+    cloneFromNone: "Ninguno (en blanco)",
 
     name: "Nombre",
 
@@ -962,6 +1007,30 @@ export const es: Translations = {
 
     switchTheme: "Cambiar tema",
 
+    fontTitle: "Fuente",
+
+    fontDefault: "Predeterminada del tema",
+
+    fontDefaultHint: "Usar la fuente del tema activo",
+
+    fontSans: "Sans",
+
+    fontSerif: "Serif",
+
+    fontMono: "Mono",
+
+    backgroundTitle: "Fondo",
+
+    backgroundDefault: "Del tema",
+
+    backgroundDefaultHint: "Usar el fondo del tema activo",
+
+    motionTitle: "Movimiento",
+
+    smoothScroll: "Scroll suave (parallax)",
+
+    smoothScrollHint: "Momentum al scrollear, como la landing",
+
   },
 
   achievements: {
@@ -1230,13 +1299,13 @@ export const es: Translations = {
 
     assignee: "Asignado a",
 
-    allProfiles: "Todos los perfiles",
+    allProfiles: "Todos los agentes",
 
     showArchived: "Mostrar archivados",
 
-    lanesByProfile: "Carriles por perfil",
+    lanesByProfile: "Agrupar por agente",
 
-    nudgeDispatcher: "Avisar al dispatcher",
+    nudgeDispatcher: "Buscar tareas ahora",
 
     refresh: "Actualizar",
 
@@ -1272,7 +1341,7 @@ export const es: Translations = {
 
     createdBy: "Creado por",
 
-    result: "Result",
+    result: "Resultado",
 
     comments: "Comentarios",
 
@@ -1414,41 +1483,41 @@ export const es: Translations = {
 
     columnLabels: {
 
-      triage: "Clasificación",
+      triage: "Ideas",
 
       todo: "Por hacer",
 
-      scheduled: "Programado",
+      scheduled: "Programadas",
 
-      ready: "Listo",
+      ready: "Listas",
 
       running: "En curso",
 
-      blocked: "Bloqueado",
+      blocked: "Trabadas",
 
-      done: "Hecho",
+      done: "Hechas",
 
-      archived: "Archivado",
+      archived: "Archivadas",
 
     },
 
     columnHelp: {
 
-      triage: "Ideas en bruto — un specifier desarrollará la especificación",
+      triage: "Tirá una idea suelta, en tus palabras. La convertimos en una tarea lista y elegimos el agente.",
 
-      todo: "Esperando dependencias o sin asignar",
+      todo: "Esperando que termine otra tarea o que le asignes un agente.",
 
-      scheduled: "Esperando un retraso conocido o un seguimiento programado",
+      scheduled: "Con fecha u hora: arrancan solas cuando llega el momento.",
 
-      ready: "Dependencias satisfechas; asigna un perfil para despachar",
+      ready: "Listas para arrancar. Un agente las toma solo.",
 
-      running: "Reclamado por un worker — en ejecución",
+      running: "Un agente la está haciendo ahora mismo.",
 
-      blocked: "El worker pidió intervención humana",
+      blocked: "El agente se trabó y necesita tu ayuda.",
 
-      done: "Completado",
+      done: "Terminada.",
 
-      archived: "Archivado",
+      archived: "Archivada.",
 
     },
 
@@ -1497,6 +1566,84 @@ export const es: Translations = {
     logTruncated: "(mostrando los últimos 100 KB — registro completo en ",
 
     logAt: ")",
+
+    simpleModeLabel: "🟢 Modo simple",
+
+    simpleModeHint: "Estás en modo simple: ves solo lo esencial. Tocá para mostrar las opciones avanzadas (tableros, etiquetas, carriles y orquestación).",
+
+    advancedModeLabel: "⚙️ Modo avanzado",
+
+    advancedModeHint: "Estás en modo avanzado. Tocá para volver al modo simple.",
+
+    guideReopenLabel: "¿Cómo funciona?",
+
+    guideReopenHint: "Volver a mostrar la guía rápida",
+
+    guideHide: "Ocultar esta guía",
+
+    guideTitle: "¿Cómo funciona este tablero?",
+
+    guideLead: "Es como un pizarrón de tareas, pero las hacen tus agentes de IA. Vos tirás la idea y la tarjeta avanza sola.",
+
+    guideStep1: "Escribí una idea suelta, en tus palabras, en la columna «Ideas» (tocá el botón +). No tiene que estar perfecta.",
+
+    guideStep2: "El sistema la convierte en una tarea clara y elige qué agente la hace.",
+
+    guideStep3: "La tarjeta avanza sola: Listas → En curso → Hecho. Vos solo mirás, y ayudás si alguna queda «Trabada».",
+
+    fieldIdeaLabel: "Tu idea",
+
+    fieldIdeaHelp: "Escribí tu idea en pocas palabras — la IA la convierte en una tarea con objetivo, pasos y criterios de listo. Enter para crear, Shift+Enter para una línea nueva.",
+
+    fieldTitleLabel: "Título de la tarea",
+
+    fieldTitleHelp: "Un título corto para la tarea. Enter para crear, Shift+Enter para una línea nueva.",
+
+    fieldSpecifierLabel: "¿Qué agente la especifica?",
+
+    fieldSpecifierHelp: "El agente (perfil de Clawksis) que redacta la spec de esta idea. Dejalo en automático y el sistema elige uno.",
+
+    fieldAssigneeLabel: "¿Qué agente la hace?",
+
+    fieldAssigneeHelp: "El agente (perfil de Clawksis) que ejecuta la tarea. En automático, el sistema elige uno disponible cuando la tarea esté lista.",
+
+    assigneeAuto: "— automático —",
+
+    fieldPriorityLabel: "Prioridad",
+
+    fieldPriorityHelp: "Las tareas con más prioridad se toman primero. 0 = normal.",
+
+    fieldSkillsLabel: "Habilidades (opcional)",
+
+    fieldSkillsHelp: "Skills extra que querés que el agente cargue, separadas por coma. Ej: translation, github-code-review.",
+
+    skillAdd: "+ agregar habilidad…",
+
+    skillNone: "(sin habilidades disponibles)",
+
+    skillRemove: "quitar",
+
+    goalMode: "Modo objetivo",
+
+    goalModeHelp: "El agente insiste en la misma sesión hasta que un juez la da por terminada (o se agota el presupuesto de turnos y la deja para revisión). Ideal para tareas abiertas que un solo intento no termina.",
+
+    goalMaxTurns: "máximo de turnos (por defecto 20)",
+
+    fieldWorkspaceLabel: "¿Dónde trabaja?",
+
+    fieldWorkspaceHelp: "aislado: una carpeta temporal (lo normal). worktree: una copia git del proyecto del agente. carpeta: una ruta exacta.",
+
+    workspaceScratch: "aislado",
+
+    workspaceWorktree: "worktree (git)",
+
+    workspaceDir: "carpeta exacta",
+
+    fieldParentLabel: "Tarea padre (opcional)",
+
+    fieldParentHelp: "Si elegís una, esta tarjeta queda bloqueada hasta que la tarea padre se marque como terminada.",
+
+    create: "Crear",
 
   },
 

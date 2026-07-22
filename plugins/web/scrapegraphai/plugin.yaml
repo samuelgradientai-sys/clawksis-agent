@@ -1,0 +1,7 @@
+name: web-scrapegraph
+version: 1.0.0
+description: "ScrapeGraphAI — local LLM-powered web extraction on our own infrastructure (no paid scraping API). Lazy-installs `scrapegraphai` on first use; renders JavaScript pages with a local headless browser."
+author: Gradient AI
+kind: backend
+provides_web_providers:
+  - scrapegraph

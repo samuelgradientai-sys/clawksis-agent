@@ -162,6 +162,12 @@ The status page auto-refreshes every 5 seconds.
 
 The **Chat** tab embeds the full Clawksis TUI (the same interface you get from `clawk --tui`) directly in the browser. Everything you can do in the terminal TUI — slash commands, model picker, tool-call cards, markdown streaming, clarify/sudo/approval prompts, skin theming — works identically here, because the dashboard is running the real TUI binary and rendering its ANSI output through [xterm.js](https://xtermjs.org/) with its WebGL renderer for pixel-perfect cell layout.
 
+:::note Modern (React) chat
+
+The dashboard also ships a **Modern** chat — a native React client (not the PTY/xterm.js TUI above) that talks to the gateway over WebSocket JSON-RPC. It runs the **same slash-command set** (built-ins, skills, bundles, and pending-input commands like `/queue` and `/retry`) through the shared `slash.exec` → `command.dispatch` pipeline, opens native dialogs for interactive commands (`/model`, and the destructive `/clear` · `/new` · `/reset`), and adds composer niceties: `↑`/`↓` input history, `/` autocomplete with category labels, and collapsible command output. See the [Slash Commands Reference](../../reference/slash-commands.md#modern-web-chat-dashboard).
+
+:::
+
 
 
 **How it works:**

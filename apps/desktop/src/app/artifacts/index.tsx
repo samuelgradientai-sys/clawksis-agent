@@ -388,7 +388,7 @@ export function ArtifactsView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
     setRefreshing(true)
 
     try {
-      const sessions = (await listSessions(30, 1)).sessions
+      const sessions = (await listSessions(30)).sessions
       const results = await Promise.allSettled(sessions.map(session => getSessionMessages(session.id)))
       const nextArtifacts: ArtifactRecord[] = []
 

@@ -492,6 +492,10 @@ export const hu: Translations = {
 
       onceAt: "Futtatás ekkor",
 
+      onceUseCalendar: "Naptár",
+
+      onceUseManual: "Kézi",
+
       customLabel: "Cron kifejezés",
 
       customPlaceholder: "0 9 * * *",
