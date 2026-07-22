@@ -27,6 +27,10 @@ import base64
 
 import binascii
 
+from dataclasses import dataclass
+
+from datetime import datetime, timezone
+
 import hmac
 
 import importlib.util
@@ -36,6 +40,8 @@ import json
 import logging
 
 import os
+
+import re
 
 import secrets
 
@@ -50,6 +56,8 @@ import tempfile
 import threading
 
 import time
+
+import urllib.error
 
 import urllib.parse
 
@@ -657,6 +665,16 @@ _SCHEMA_OVERRIDES: Dict[str, Dict[str, Any]] = {
         "description": "Reasoning effort for delegated subagents",
         "options": ["", "low", "medium", "high"],
     },
+    "updates.non_interactive_local_changes": {
+        "type": "select",
+        "description": (
+            "When the chat app / gateway updates Clawksis (no terminal prompt), "
+            "what to do with uncommitted local source edits. 'stash' keeps them "
+            "and re-applies them after the update; 'discard' throws them away. "
+            "Terminal updates always ask, regardless of this setting."
+        ),
+        "options": ["stash", "discard"],
+    },
 }
 
 
@@ -675,6 +693,7 @@ _CATEGORY_MERGE: Dict[str, str] = {
     "code_execution": "agent",
     "prompt_caching": "agent",
     "goals": "agent",
+    "updates": "general",
     # Only `telegram.reactions` currently lives under telegram — fold it in
     # with the other messaging-platform config (discord) so it isn't an
     # orphan tab of one field.
@@ -829,6 +848,14 @@ class MessagingPlatformUpdate(BaseModel):
     env: Dict[str, str] = {}
 
     clear_env: List[str] = []
+
+
+class TelegramOnboardingStart(BaseModel):
+    bot_name: Optional[str] = None
+
+
+class TelegramOnboardingApply(BaseModel):
+    allowed_user_ids: List[str]
 
 
 class AudioTranscriptionRequest(BaseModel):
@@ -2276,6 +2303,7 @@ async def get_sessions(
                 min_message_count=min_message_count,
                 include_archived=include_archived,
                 archived_only=archived_only,
+                exclude_children=True,
             )
 
             now = time.time()
@@ -2304,6 +2332,114 @@ async def get_sessions(
         _log.exception("GET /api/sessions failed")
 
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/profiles/sessions")
+async def get_profiles_sessions(
+    limit: int = 20,
+    offset: int = 0,
+    min_messages: int = 0,
+    archived: str = "exclude",
+    order: str = "recent",
+    profile: str = "all",
+):
+    """Unified, read-only session list aggregated across ALL profiles.
+
+    Intentionally process-light: this opens each profile's ``state.db`` directly
+    from disk — it does NOT spawn a dashboard backend per profile. Each returned
+    session is tagged with its owning ``profile`` so the desktop renders one
+    browsable list and only spins up a profile's backend when the user actually
+    interacts (sends a message). A user with a single (default) profile gets the
+    same rows as ``/api/sessions``, just tagged ``profile="default"``.
+    """
+    if archived not in ("exclude", "only", "include"):
+        raise HTTPException(status_code=400, detail="archived must be one of: exclude, only, include")
+    if order not in ("created", "recent"):
+        raise HTTPException(status_code=400, detail="order must be one of: created, recent")
+
+    from clawk_state import SessionDB
+    from clawk_cli import profiles as profiles_mod
+
+    targets: List[Tuple[str, Path]] = []
+    if profile and profile != "all":
+        name, home = _cron_profile_home(profile)
+        targets.append((name, home))
+    else:
+        try:
+            infos = profiles_mod.list_profiles()
+            targets = [(info.name, info.path) for info in infos]
+        except Exception:
+            _log.exception("GET /api/profiles/sessions: list_profiles failed")
+            targets = []
+        if not targets:
+            targets.append(("default", profiles_mod.get_profile_dir("default")))
+
+    min_message_count = max(0, min_messages)
+    archived_only = archived == "only"
+    include_archived = archived == "include"
+    # Over-fetch per profile so the merged+sorted window is correct for the
+    # requested page. Capped so a huge profile can't blow up the response.
+    per_profile = min(max(limit + offset, limit), 500)
+
+    merged: List[Dict[str, Any]] = []
+    total = 0
+    profile_totals: Dict[str, int] = {}
+    errors: List[Dict[str, str]] = []
+    now = time.time()
+    for name, home in targets:
+        db_path = Path(home) / "state.db"
+        if not db_path.exists():
+            continue
+        try:
+            # Read-only: this loop runs on every sidebar refresh, so it must
+            # never DDL/write-lock another profile's live DB (see SessionDB
+            # read_only docstring).
+            db = SessionDB(db_path=db_path, read_only=True)
+        except Exception as exc:
+            errors.append({"profile": name, "error": str(exc)})
+            continue
+        try:
+            rows = db.list_sessions_rich(
+                limit=per_profile,
+                offset=0,
+                min_message_count=min_message_count,
+                include_archived=include_archived,
+                archived_only=archived_only,
+                order_by_last_active=order == "recent",
+            )
+            profile_total = db.session_count(
+                min_message_count=min_message_count,
+                include_archived=include_archived,
+                archived_only=archived_only,
+                exclude_children=True,
+            )
+            total += profile_total
+            profile_totals[name] = profile_total
+            for s in rows:
+                s["profile"] = name
+                s["is_default_profile"] = name == "default"
+                s["is_active"] = (
+                    s.get("ended_at") is None
+                    and (now - s.get("last_active", s.get("started_at", 0))) < 300
+                )
+                s["archived"] = bool(s.get("archived"))
+                merged.append(s)
+        except Exception as exc:
+            errors.append({"profile": name, "error": str(exc)})
+        finally:
+            db.close()
+
+    sort_key = "last_active" if order == "recent" else "started_at"
+    merged.sort(key=lambda s: s.get(sort_key) or s.get("started_at") or 0, reverse=True)
+    window = merged[offset:offset + limit]
+    return {
+        "sessions": window,
+        "total": total,
+        "profile_totals": profile_totals,
+        "limit": limit,
+        "offset": offset,
+        "errors": errors,
+    }
 
 
 @app.get("/api/sessions/search")

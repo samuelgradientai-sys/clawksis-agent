@@ -33,7 +33,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 
-from clawk_constants import get_clawk_home
+from clawk_constants import (
+    get_clawk_home,
+    get_clawk_home_override,
+    reset_clawk_home_override,
+    set_clawk_home_override,
+)
 
 from clawk_cli.env_loader import load_clawk_dotenv
 
@@ -190,6 +195,10 @@ _stdout_lock = threading.Lock()
 
 _cfg_lock = threading.Lock()
 
+_sessions_lock = threading.Lock()
+
+_prompt_lock = threading.Lock()
+
 _cfg_cache: dict | None = None
 
 _cfg_mtime: float | None = None
@@ -205,6 +214,37 @@ except (ValueError, TypeError):
     _slash_timeout = 45.0
 
 _SLASH_WORKER_TIMEOUT_S = max(5.0, _slash_timeout)
+
+
+# When a WebSocket client (the dashboard's embedded-chat tab / desktop app)
+
+# disconnects, ``tui_gateway.ws`` detaches the transport but intentionally
+
+# leaves the session parked so a quick reconnect can reattach it (see ws.py).
+
+# That park is unbounded, though: a browser refresh spins up a brand-new
+
+# ``session.create`` (new sid + a fresh _SlashWorker via _deferred_build) and
+
+# never reattaches the OLD sid, so the old session's slash-worker subprocess
+
+# lingers forever — one leaked python process per refresh (#38591 fallout).
+
+# After this grace window, an orphaned (transport-detached, not-running) WS
+
+# session is reaped: its _SlashWorker is closed and the session finalized.
+
+# Set to 0 to disable (park forever, pre-fix behaviour).
+
+try:
+    _ws_orphan_reap_grace = float(
+        os.environ.get("CLAWK_TUI_WS_ORPHAN_REAP_GRACE_S") or "20"
+    )
+
+except (ValueError, TypeError):
+    _ws_orphan_reap_grace = 20.0
+
+_WS_ORPHAN_REAP_GRACE_S = max(0.0, _ws_orphan_reap_grace)
 
 _DETAIL_SECTION_NAMES = ("thinking", "tools", "subagents", "activity")
 
@@ -463,9 +503,122 @@ def _finalize_session(session: dict | None, end_reason: str = "tui_close") -> No
             pass
 
 
+def _teardown_session(session: dict | None) -> None:
+    """Fully tear down a session: finalize, unregister, close agent + worker.
+
+
+
+    Shared by ``session.close`` and the orphaned-WS-session reaper so the
+
+    slash-worker subprocess is always closed exactly once via the same path.
+
+    Idempotent: the ``_finalized`` guard in ``_finalize_session`` and the
+
+    ``poll()`` guard in ``_SlashWorker.close`` make repeat calls harmless.
+
+    """
+
+    if not session:
+        return
+
+    _finalize_session(session)
+
+    try:
+        from tools.approval import unregister_gateway_notify
+
+        unregister_gateway_notify(session["session_key"])
+
+    except Exception:
+        pass
+
+    try:
+        agent = session.get("agent")
+
+        if agent and hasattr(agent, "close"):
+            agent.close()
+
+    except Exception:
+        pass
+
+    try:
+        worker = session.get("slash_worker")
+
+        if worker:
+            worker.close()
+
+    except Exception:
+        pass
+
+
+def _ws_session_is_orphaned(session: dict | None) -> bool:
+    """True if a WS session has no live transport and no in-flight turn.
+
+
+
+    After ``handle_ws`` detaches a disconnected client it points the session
+
+    at ``_stdio_transport``. In the dashboard's in-process gateway there is no
+
+    real stdio peer reading those frames, so a session left on the stdio
+
+    transport (and not mid-turn) is genuinely orphaned and safe to reap.
+
+    """
+
+    if not session or session.get("_finalized"):
+        return False
+
+    if session.get("running"):
+        return False
+
+    return session.get("transport") is _stdio_transport
+
+
+def _schedule_ws_orphan_reap(sid: str) -> None:
+    """After a grace window, reap session ``sid`` iff it's still orphaned.
+
+
+
+    Called from the WS-disconnect path. The grace window lets a transient
+
+    reconnect (or a ``session.resume`` that reattaches the transport) cancel
+
+    the reap by re-binding a live transport. Disabled when the grace is 0.
+
+    """
+
+    if _WS_ORPHAN_REAP_GRACE_S <= 0:
+        return
+
+    def _reap() -> None:
+
+        with _session_resume_lock:
+            session = _sessions.get(sid)
+
+            if not _ws_session_is_orphaned(session):
+                return
+
+            _sessions.pop(sid, None)
+
+        try:
+            _teardown_session(session)
+
+        except Exception:
+            pass
+
+    timer = threading.Timer(_WS_ORPHAN_REAP_GRACE_S, _reap)
+
+    timer.daemon = True
+
+    timer.start()
+
+
 def _shutdown_sessions() -> None:
 
-    for session in list(_sessions.values()):
+    with _sessions_lock:
+        snapshot = list(_sessions.values())
+
+    for session in snapshot:
         _finalize_session(session, end_reason="tui_shutdown")
 
         try:
@@ -514,6 +667,47 @@ def _db_unavailable_error(rid, *, code: int):
     detail = _db_error or "state.db unavailable"
 
     return _err(rid, code, f"state.db unavailable: {detail}")
+
+
+# ── per-session profile scoping (global remote mode) ───────────────────────────
+
+# One dashboard normally serves its launch profile. But the desktop's app-global
+
+# remote mode points every profile at this single backend, so resume/prompt must
+
+# be able to act on ANOTHER local profile's state.db + home. The desktop passes
+
+# ``profile`` on those calls; we open that profile's db and bind its CLAWK_HOME
+
+# (a ContextVar override) for the duration of the call so config/skills/model and
+
+# message persistence all resolve to the right profile. Omitted/own profile → the
+
+# launch profile (unchanged for single-profile and per-profile-remote setups).
+
+
+def _profile_home(profile: str | None) -> Path | None:
+    """Resolve a named profile's home on THIS host, or None for the launch profile."""
+
+    name = (profile or "").strip()
+
+    if not name:
+        return None
+
+    try:
+        from clawk_cli import profiles as profiles_mod
+
+        home = Path(profiles_mod.get_profile_dir(name))
+
+    except Exception:
+        return None
+
+    # Already the launch profile? No override needed.
+
+    if home.resolve() == Path(_clawk_home).resolve():
+        return None
+
+    return home if (home / "state.db").exists() or home.exists() else None
 
 
 def write_json(obj: dict) -> bool:
@@ -784,7 +978,8 @@ def _start_agent_build(sid: str, session: dict) -> None:
 
     def _build() -> None:
 
-        current = _sessions.get(sid)
+        with _sessions_lock:
+            current = _sessions.get(sid)
 
         if current is None:
             ready.set()
@@ -795,11 +990,34 @@ def _start_agent_build(sid: str, session: dict) -> None:
 
         notify_registered = False
 
+        home_token = None
+
+        profile_home = current.get("profile_home")
+
         try:
             tokens = _set_session_context(key)
 
+            # Build against the session's profile (global-remote): bind its
+
+            # CLAWK_HOME so config/skills/model resolve to it, and hand the
+
+            # agent that profile's db so turns persist to the right state.db.
+
+            session_db = None
+
+            if profile_home:
+                home_token = set_clawk_home_override(profile_home)
+
+                try:
+                    from clawk_state import SessionDB
+
+                    session_db = SessionDB(db_path=Path(profile_home) / "state.db")
+
+                except Exception:
+                    session_db = None
+
             try:
-                agent = _make_agent(sid, key)
+                agent = _make_agent(sid, key, session_db=session_db)
 
             finally:
                 _clear_session_context(tokens)
@@ -837,9 +1055,11 @@ def _start_agent_build(sid: str, session: dict) -> None:
 
             _wire_callbacks(sid)
 
-            _sessions[sid]["_notif_stop"] = _start_notification_poller(
-                sid, _sessions[sid]
-            )
+            with _sessions_lock:
+                if sid in _sessions:
+                    _sessions[sid]["_notif_stop"] = _start_notification_poller(
+                        sid, _sessions[sid]
+                    )
 
             _notify_session_boundary("on_session_reset", key)
 
@@ -860,7 +1080,13 @@ def _start_agent_build(sid: str, session: dict) -> None:
             _emit("error", sid, {"message": f"agent init failed: {e}"})
 
         finally:
-            if _sessions.get(sid) is not current:
+            if home_token is not None:
+                reset_clawk_home_override(home_token)
+
+            with _sessions_lock:
+                replaced = _sessions.get(sid) is not current
+
+            if replaced:
                 if worker is not None:
                     try:
                         worker.close()

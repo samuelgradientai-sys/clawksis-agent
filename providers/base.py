@@ -96,6 +96,22 @@ class ProviderProfile:
         True  # False → doctor skips /models probe for this provider
     )
 
+    # ── Vision support ────────────────────────────────────────
+
+    # True when the provider's API accepts image content inside
+
+    # tool-result messages natively.  Set on providers that expose
+
+    # multimodal models via tool results (Anthropic Messages API,
+
+    # OpenAI Chat Completions, Gemini, Xiaomi, MiniMax, etc.).
+
+    # Falls back to model-catalog lookup when False and the provider
+
+    # has no registered profile.
+
+    supports_vision: bool = False
+
     # ── Model catalog ─────────────────────────────────────────
 
     # fallback_models: curated list shown in /model picker when live fetch fails.

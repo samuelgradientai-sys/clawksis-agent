@@ -1908,6 +1908,39 @@ def _workspace_root(dir: Path) -> Path:
     return dir
 
 
+def _termux_workspace_install_context(
+    dir: Path, *, include_child_workspaces: bool = False
+) -> tuple[Path, tuple[str, ...]]:
+    """Return Termux-only ``(cwd, npm_args)`` for installing deps for *dir* only."""
+
+    ws_root = _workspace_root(dir)
+
+    if ws_root == dir:
+        return dir, ()
+
+    try:
+        workspace = dir.relative_to(ws_root).as_posix()
+
+    except ValueError:
+        return ws_root, ()
+
+    workspace_args: list[str] = ["--workspace", workspace]
+
+    if include_child_workspaces:
+        packages_dir = dir / "packages"
+
+        if packages_dir.is_dir():
+            for child in sorted(packages_dir.iterdir()):
+                if child.is_dir() and (child / "package.json").is_file():
+                    workspace_args.extend(
+                        ["--workspace", child.relative_to(ws_root).as_posix()]
+                    )
+
+    workspace_args.append("--include-workspace-root=false")
+
+    return ws_root, tuple(workspace_args)
+
+
 def _tui_need_npm_install(root: Path) -> bool:
     """True when @clawk/ink is missing or node_modules is behind package-lock.json.
 
@@ -2286,21 +2319,52 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
 
     #    --dev flow: npm install if needed, then tsx src/entry.tsx.
 
-    #    npm install runs from the workspace root (where package-lock.json lives);
+    #    Existing desktop behaviour runs npm from the workspace root.  Termux
 
-    #    npm workspaces resolves ui-tui deps automatically.
+    #    scopes the install to ui-tui so launch does not pull desktop/web
+
+    #    dependencies into the hot path.
 
     did_install = False
 
-    if _tui_need_npm_install(tui_dir):
+    termux_startup = _is_termux_startup_environment()
+
+    termux_need_rebuild = False
+
+    if termux_startup and not tui_dev:
+        termux_need_rebuild = _tui_need_rebuild(tui_dir)
+
+    skip_install_for_fresh_termux_bundle = (
+        termux_startup and not tui_dev and not termux_need_rebuild
+    )
+
+    if not skip_install_for_fresh_termux_bundle and _tui_need_npm_install(tui_dir):
         npm = _node_bin("npm")
 
         if not os.environ.get("CLAWK_QUIET"):
             print("Installing TUI dependencies…")
 
+        npm_cwd = _workspace_root(tui_dir)
+
+        npm_workspace_args: tuple[str, ...] = ()
+
+        if termux_startup:
+            npm_cwd, npm_workspace_args = _termux_workspace_install_context(
+                tui_dir,
+                include_child_workspaces=True,
+            )
+
         result = subprocess.run(
-            [npm, "install", "--silent", "--no-fund", "--no-audit", "--progress=false"],
-            cwd=str(_workspace_root(tui_dir)),
+            [
+                npm,
+                "install",
+                *npm_workspace_args,
+                "--silent",
+                "--no-fund",
+                "--no-audit",
+                "--progress=false",
+            ],
+            cwd=str(npm_cwd),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -2370,8 +2434,8 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
 
     should_build = True
 
-    if _is_termux_startup_environment():
-        should_build = did_install or _tui_need_rebuild(tui_dir)
+    if termux_startup:
+        should_build = did_install or termux_need_rebuild
 
     if should_build:
         npm = _node_bin("npm")
@@ -3806,6 +3870,8 @@ def select_provider_and_model(args=None):
                 "api_key": entry.get("api_key", ""),
                 "key_env": entry.get("key_env", ""),
                 "model": entry.get("model", ""),
+                "models": entry.get("models", {}),
+                "discover_models": entry.get("discover_models", True),
                 "api_mode": entry.get("api_mode", ""),
                 "provider_key": provider_key,
                 "api_key_ref": _lookup_ref(
@@ -6992,6 +7058,37 @@ def _model_flow_named_custom(config, provider_info):
 
     config_api_key = _custom_provider_api_key_config_value(provider_info, api_key)
 
+    # Honor ``discover_models: false`` (default True) — when discovery is
+
+    # disabled, use the configured ``models:`` list verbatim and skip the
+
+    # live /models probe. This lets operators restrict the picker to the
+
+    # subset their plan actually serves instead of the endpoint's full
+
+    # catalog (#18726: Baidu Qianfan returns 100+ models for a 2-3 model
+
+    # plan). Same semantics as the slash-command picker (model_switch.py
+
+    # sections 3 & 4): default discovers, false keeps the explicit list.
+
+    discover = provider_info.get("discover_models", True)
+
+    if isinstance(discover, str):
+        discover = discover.lower() not in {"false", "no", "0"}
+
+    configured_models: list[str] = []
+
+    cfg_models = provider_info.get("models", {})
+
+    if isinstance(cfg_models, dict):
+        configured_models = [str(m) for m in cfg_models if str(m).strip()]
+
+    elif isinstance(cfg_models, list):
+        configured_models = [
+            str(m) for m in cfg_models if isinstance(m, str) and m.strip()
+        ]
+
     print(f"  Provider: {name}")
 
     print(f"  URL:      {base_url}")
@@ -7001,14 +7098,31 @@ def _model_flow_named_custom(config, provider_info):
 
     print()
 
-    print("Fetching available models...")
+    if not discover and configured_models:
+        # Discovery disabled with an explicit list — use it verbatim, no probe.
 
-    fetch_kwargs = {"timeout": 8.0}
+        print(
+            f"Using configured models (discover_models: false): {len(configured_models)}"
+        )
 
-    if api_mode:
-        fetch_kwargs["api_mode"] = api_mode
+        models = configured_models
 
-    models = fetch_api_models(api_key, base_url, **fetch_kwargs)
+    else:
+        print("Fetching available models...")
+
+        fetch_kwargs = {"timeout": 8.0}
+
+        if api_mode:
+            fetch_kwargs["api_mode"] = api_mode
+
+        models = fetch_api_models(api_key, base_url, **fetch_kwargs)
+
+        # If the probe came back empty but the operator configured an explicit
+
+        # list, fall back to it rather than forcing manual entry.
+
+        if not models and configured_models:
+            models = configured_models
 
     if models:
         default_idx = 0
@@ -10650,10 +10764,17 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False, quiet: bool = False) ->
             if text:
                 _say(text)
 
+    npm_cwd = _workspace_root(web_dir)
+
+    npm_workspace_args: tuple[str, ...] = ()
+
+    if _is_termux_startup_environment():
+        npm_cwd, npm_workspace_args = _termux_workspace_install_context(web_dir)
+
     r1 = _run_npm_install_deterministic(
         npm,
-        _workspace_root(web_dir),
-        extra_args=("--silent",),
+        npm_cwd,
+        extra_args=(*npm_workspace_args, "--silent"),
     )
 
     if r1.returncode != 0:
@@ -11994,11 +12115,26 @@ def _kill_stale_dashboard_processes(
     raw_pid = os.environ.get("CLAWK_DESKTOP_CHILD_PID")
 
     if raw_pid:
-        try:
-            exclude = {int(raw_pid)}
+        # The desktop may manage several backends (one per active profile) and
 
-        except (ValueError, TypeError):
-            pass
+        # passes them comma-separated; a lone int still parses for back-compat.
+
+        parsed: set[int] = set()
+
+        for part in raw_pid.split(","):
+            part = part.strip()
+
+            if not part:
+                continue
+
+            try:
+                parsed.add(int(part))
+
+            except (ValueError, TypeError):
+                pass
+
+        if parsed:
+            exclude = parsed
 
     pids = _find_stale_dashboard_pids(exclude_pids=exclude)
 
@@ -12279,25 +12415,13 @@ def _update_via_zip(args):
 
     print("→ Updating Python dependencies...")
 
-    from clawk_cli.managed_uv import ensure_uv, rebuild_venv, update_managed_uv
+    from clawk_cli.managed_uv import ensure_uv, update_managed_uv
 
     # Keep managed uv current — runs `uv self update` if we already have one.
 
     update_managed_uv()
 
-    uv_bin, fresh_bootstrap = ensure_uv()
-
-    # First-time managed uv install on an existing checkout: the old venv
-
-    # may point to a Python without FTS5.  Rebuild it so the new managed
-
-    # uv provides a fresh interpreter with FTS5 guaranteed.
-
-    if fresh_bootstrap and uv_bin:
-        if not rebuild_venv(uv_bin, PROJECT_ROOT / "venv"):
-            raise RuntimeError(
-                "venv rebuild failed; aborting update before dependency install"
-            )
+    uv_bin = ensure_uv()
 
     pip_cmd = [sys.executable, "-m", "pip"]
 
@@ -16262,25 +16386,13 @@ def _cmd_update_impl(args, gateway_mode: bool):
 
         print("→ Updating Python dependencies...")
 
-        from clawk_cli.managed_uv import ensure_uv, rebuild_venv, update_managed_uv
+        from clawk_cli.managed_uv import ensure_uv, update_managed_uv
 
         # Keep managed uv current — runs `uv self update` if we already have one.
 
         update_managed_uv()
 
-        uv_bin, fresh_bootstrap = ensure_uv()
-
-        # First-time managed uv install on an existing checkout: the old venv
-
-        # may point to a Python without FTS5.  Rebuild it so the new managed
-
-        # uv provides a fresh interpreter with FTS5 guaranteed.
-
-        if fresh_bootstrap and uv_bin:
-            if not rebuild_venv(uv_bin, PROJECT_ROOT / "venv"):
-                raise RuntimeError(
-                    "venv rebuild failed; aborting update before dependency install"
-                )
+        uv_bin = ensure_uv()
 
         pip_cmd = [sys.executable, "-m", "pip"]
 

@@ -1636,6 +1636,93 @@ def switch_model(
 # ---------------------------------------------------------------------------
 
 
+# Process-level guard so the picker prewarm thread is spawned at most once per
+
+# process — mirrors run_agent's _openrouter_prewarm_done. Without a guard a
+
+# long-lived process (or repeated triggers) would leak one OS thread per call.
+
+import threading as _threading  # noqa: E402
+
+
+_picker_prewarm_done = _threading.Event()
+
+
+def prewarm_picker_cache_async() -> Optional["_threading.Thread"]:
+    """Warm the provider-models disk cache in a background daemon thread.
+
+
+
+    The no-args ``/model`` picker calls ``list_authenticated_providers()``,
+
+    which fetches each authenticated provider's live ``/v1/models`` list on a
+
+    cold/stale cache. Those fetches are independent HTTP round-trips but run
+
+    serially, so the first ``/model`` open in a session (or any open after the
+
+    1h cache TTL expires) blocks ~1-2s on the user's critical path.
+
+
+
+    This pre-warms that exact path off-thread during idle session time: it
+
+    runs ``list_authenticated_providers()`` once, which populates
+
+    ``provider_models_cache.json`` for every authed provider. By the time the
+
+    user types ``/model``, the picker hits the warm disk cache and renders in
+
+    ~100ms.
+
+
+
+    Fire-and-forget. Process-level Event guard ensures it runs at most once.
+
+    Fully exception-isolated — a slow or offline provider can never affect the
+
+    session. Returns the spawned thread (for tests) or None if already warmed.
+
+    """
+
+    if _picker_prewarm_done.is_set():
+        return None
+
+    _picker_prewarm_done.set()
+
+    def _warm() -> None:
+        try:
+            from clawk_cli.inventory import load_picker_context
+
+            ctx = load_picker_context()
+
+            # Calling this is what populates cached_provider_model_ids() ->
+
+            # provider_models_cache.json for each authed provider. We discard
+
+            # the result; the side effect (warm disk cache) is the point.
+
+            list_authenticated_providers(
+                current_provider=ctx.current_provider,
+                current_base_url=ctx.current_base_url,
+                current_model=ctx.current_model,
+                user_providers=ctx.user_providers,
+                custom_providers=ctx.custom_providers,
+                max_models=50,
+            )
+
+        except Exception:
+            # Best-effort warmup — never surface errors into the session.
+
+            logger.debug("picker cache prewarm failed", exc_info=True)
+
+    t = _threading.Thread(target=_warm, daemon=True, name="picker-cache-prewarm")
+
+    t.start()
+
+    return t
+
+
 def list_authenticated_providers(
     current_provider: str = "",
     current_base_url: str = "",
@@ -2596,6 +2683,17 @@ def list_authenticated_providers(
                 else (f"env:{key_env}" if key_env else "")
             )
 
+            # Read discover_models from the entry (same semantics as
+
+            # section 3: true by default, set false to keep the explicit
+
+            # ``models:`` list instead of replacing it with live /models).
+
+            discover = entry.get("discover_models", True)
+
+            if isinstance(discover, str):
+                discover = discover.lower() not in {"false", "no", "0"}
+
             group_key = (api_url, credential_identity, api_mode)
 
             if group_key not in groups:
@@ -2626,10 +2724,19 @@ def list_authenticated_providers(
                     "api_url": api_url,
                     "api_key": api_key,
                     "models": [],
+                    "discover_models": discover,
                 }
 
-            elif api_key and not groups[group_key].get("api_key"):
-                groups[group_key]["api_key"] = api_key
+            else:
+                if api_key and not groups[group_key].get("api_key"):
+                    groups[group_key]["api_key"] = api_key
+
+                # If any entry in this group opts out of discovery,
+
+                # honour that for the whole grouped row.
+
+                if not discover:
+                    groups[group_key]["discover_models"] = False
 
             # The singular ``model:`` field only holds the currently
 
@@ -2784,7 +2891,21 @@ def list_authenticated_providers(
 
             #   llama.cpp / Ollama servers) still appear populated.
 
-            should_probe = bool(api_url) and (bool(api_key) or not grp["models"])
+            # - When discover_models: false is set, skip live discovery and
+
+            #   keep the explicit ``models:`` list regardless of whether an
+
+            #   api_key is present. This supports endpoints that expose a
+
+            #   full aggregator catalog via /models but only serve a subset
+
+            #   (parity with section 3's user ``providers:`` behaviour).
+
+            should_probe = (
+                bool(api_url)
+                and (bool(api_key) or not grp["models"])
+                and grp.get("discover_models", True)
+            )
 
             if should_probe:
                 try:

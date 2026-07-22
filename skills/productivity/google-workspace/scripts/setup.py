@@ -51,6 +51,8 @@ import json
 
 import os
 
+import shutil
+
 import subprocess
 
 import sys
@@ -167,6 +169,8 @@ def install_deps():
 
     print("Installing Google API dependencies...")
 
+    # First choice: pip in the current interpreter. Works for most installs.
+
     try:
         subprocess.check_call(
             [sys.executable, "-m", "pip", "install", "--quiet"] + REQUIRED_PACKAGES,
@@ -178,19 +182,55 @@ def install_deps():
         return True
 
     except subprocess.CalledProcessError as e:
-        print(f"ERROR: Failed to install dependencies: {e}")
+        pip_error = e
 
-        print(
-            "On environments without pip (e.g. Nix), install the optional extra instead:"
-        )
+    # Fallback: the interpreter has no pip (the Clawksis Docker image's venv is
 
-        print("  pip install 'clawksis-agent[google]'")
+    # built with `uv sync`, which does not bootstrap pip). `uv pip install
 
-        print(
-            f"Or manually: {sys.executable} -m pip install {' '.join(REQUIRED_PACKAGES)}"
-        )
+    # --python <interpreter>` installs into that exact interpreter without
 
-        return False
+    # needing pip present. Targeting sys.executable keeps us on the venv the
+
+    # script is actually running under, rather than guessing.
+
+    uv = shutil.which("uv")
+
+    if uv:
+        try:
+            subprocess.check_call(
+                [uv, "pip", "install", "--python", sys.executable, "--quiet"]
+                + REQUIRED_PACKAGES,
+                stdout=subprocess.DEVNULL,
+            )
+
+            print("Dependencies installed.")
+
+            return True
+
+        except subprocess.CalledProcessError as e:
+            print(f"ERROR: Failed to install dependencies via uv: {e}")
+
+            print(
+                f"Manually: {uv} pip install --python {sys.executable} {' '.join(REQUIRED_PACKAGES)}"
+            )
+
+            return False
+
+    print(f"ERROR: Failed to install dependencies: {pip_error}")
+
+    print(
+        "On environments without pip (e.g. Nix, or the Clawksis Docker image's "
+        "uv-managed venv), install the optional extra instead:"
+    )
+
+    print("  pip install 'clawksis-agent[google]'")
+
+    print(
+        f"Or manually: {sys.executable} -m pip install {' '.join(REQUIRED_PACKAGES)}"
+    )
+
+    return False
 
 
 def _ensure_deps():

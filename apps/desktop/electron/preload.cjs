@@ -4,13 +4,15 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 contextBridge.exposeInMainWorld('clawkDesktop', {
 
-  getConnection: () => ipcRenderer.invoke('clawk:connection'),
+  getConnection: profile => ipcRenderer.invoke('clawk:connection', profile),
 
-  getGatewayWsUrl: () => ipcRenderer.invoke('clawk:gateway:ws-url'),
+  touchBackend: profile => ipcRenderer.invoke('clawk:backend:touch', profile),
+
+  getGatewayWsUrl: profile => ipcRenderer.invoke('clawk:gateway:ws-url', profile),
 
   getBootProgress: () => ipcRenderer.invoke('clawk:boot-progress:get'),
 
-  getConnectionConfig: () => ipcRenderer.invoke('clawk:connection-config:get'),
+  getConnectionConfig: profile => ipcRenderer.invoke('clawk:connection-config:get', profile),
 
   saveConnectionConfig: payload => ipcRenderer.invoke('clawk:connection-config:save', payload),
 
@@ -23,6 +25,14 @@ contextBridge.exposeInMainWorld('clawkDesktop', {
   oauthLoginConnectionConfig: remoteUrl => ipcRenderer.invoke('clawk:connection-config:oauth-login', remoteUrl),
 
   oauthLogoutConnectionConfig: remoteUrl => ipcRenderer.invoke('clawk:connection-config:oauth-logout', remoteUrl),
+
+  profile: {
+
+    get: () => ipcRenderer.invoke('clawk:profile:get'),
+
+    set: name => ipcRenderer.invoke('clawk:profile:set', name)
+
+  },
 
   api: request => ipcRenderer.invoke('clawk:api', request),
 

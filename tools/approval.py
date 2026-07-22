@@ -2384,6 +2384,15 @@ def check_execute_code_guard(code: str, env_type: str) -> dict:
 
     command = f"execute_code <<'PY'\n{code}\nPY"
 
+    # Check session/permanent approval — same gate as check_all_command_guards.
+
+    # Without this, "Approve session" / "Always" choices are stored but never
+
+    # consulted, so every execute_code call re-prompts the user (#39275).
+
+    if is_approved(session_key, pattern_key):
+        return {"approved": True, "message": None}
+
     # Smart mode: ask the aux LLM about the whole script. An APPROVE here only
 
     # suppresses the redundant whole-script prompt; the per-call terminal()
@@ -2502,11 +2511,19 @@ def check_execute_code_guard(code: str, env_type: str) -> dict:
             "user_consent": False,
         }
 
-    # Approved — one-shot only. Deliberately NO approve_session/approve_permanent:
+    # Approved — persist based on scope (same logic as check_all_command_guards).
 
-    # each execute_code script is distinct arbitrary code, so approval never
+    if choice == "session":
+        approve_session(session_key, pattern_key)
 
-    # persists to future scripts.
+    elif choice == "always":
+        approve_session(session_key, pattern_key)
+
+        approve_permanent(pattern_key)
+
+        save_permanent_allowlist(_permanent_approved)
+
+    # choice == "once": no persistence — approval lasts this single call only.
 
     return {
         "approved": True,

@@ -77,6 +77,7 @@ OPENROUTER_MODELS: list[tuple[str, str]] = [
     ("deepseek/deepseek-v4-flash", ""),
     # Qwen
     ("qwen/qwen3.7-max", ""),
+    ("qwen/qwen3.7-plus", ""),
     ("qwen/qwen3.6-35b-a3b", ""),
     # MoonshotAI
     ("moonshotai/kimi-k2.6", "recommended"),
@@ -234,6 +235,7 @@ _PROVIDER_MODELS: dict[str, list[str]] = {
         "deepseek/deepseek-v4-flash",
         # Qwen
         "qwen/qwen3.7-max",
+        "qwen/qwen3.7-plus",
         "qwen/qwen3.6-35b-a3b",
         # MoonshotAI
         "moonshotai/kimi-k2.6",
@@ -707,7 +709,9 @@ def union_with_portal_free_recommendations(
 
     * Portal free recommendations missing from ``curated_ids`` are
 
-      appended at the front (so the picker shows them first).
+      appended after the curated list (so the in-repo curated models
+
+      show first and Portal-only picks follow).
 
     * ``pricing`` gets a synthetic ``{"prompt": "0", "completion": "0"}``
 
@@ -761,14 +765,14 @@ def union_with_portal_free_recommendations(
 
     seen = set(augmented_ids)
 
-    # Prepend Portal free recommendations that aren't already curated, so
+    # Append Portal free recommendations that aren't already curated, so the
 
-    # they appear first in the picker.
+    # in-repo curated ("HA") models show first and Portal-only picks follow.
 
     new_ones = [mid for mid in portal_free_ids if mid not in seen]
 
     if new_ones:
-        augmented_ids = new_ones + augmented_ids
+        augmented_ids = augmented_ids + new_ones
 
     return (augmented_ids, augmented_pricing)
 
@@ -808,7 +812,9 @@ def union_with_portal_paid_recommendations(
 
     * Portal paid recommendations missing from ``curated_ids`` are
 
-      appended at the front (so the picker shows them first).
+      appended after the curated list (so the in-repo curated models
+
+      show first and Portal-only picks follow).
 
     * ``pricing`` is left untouched — we deliberately do NOT synthesize
 
@@ -866,14 +872,14 @@ def union_with_portal_paid_recommendations(
 
     seen = set(augmented_ids)
 
-    # Prepend Portal paid recommendations that aren't already curated, so
+    # Append Portal paid recommendations that aren't already curated, so the
 
-    # the Portal-blessed picks surface first in the picker.
+    # in-repo curated ("HA") models show first and Portal-only picks follow.
 
     new_ones = [mid for mid in portal_paid_ids if mid not in seen]
 
     if new_ones:
-        augmented_ids = new_ones + augmented_ids
+        augmented_ids = augmented_ids + new_ones
 
     return (augmented_ids, dict(pricing))
 
@@ -1655,26 +1661,78 @@ _PROVIDER_ALIASES = {
 }
 
 
+# Cost-safe overrides for the *silent* auto-default
+
+# (``get_default_model_for_provider``). Most providers' curated lists lead with a
+
+# sensible default, but Nous Portal is a per-token *metered aggregator* whose
+
+# list is ordered best-/most-capable-first — entry [0] is the priciest flagship
+
+# (``anthropic/claude-opus-4.8``, $5/$25 per Mtok). Using that as the
+
+# non-interactive fallback when a profile sets ``provider: nous`` with no model
+
+# silently bills the most expensive model for traffic the user never opted into
+
+# (a missing default escalated to Opus and billed 863 requests before the user
+
+# noticed). Pin the silent default to a low-cost curated model instead so a
+
+# missing model can never escalate to the flagship.
+
+#
+
+# This is deliberately a fixed, side-effect-free default for the hot resolution
+
+# path. The *interactive* default (GUI onboarding / ``clawk model``) uses the
+
+# richer free/paid-tier-aware resolver — see ``get_recommended_default_model``
+
+# in clawk_cli/web_server.py and ``partition_nous_models_by_tier`` — which can
+
+# hit the Portal; this fallback must stay cheap and network-free.
+
+_PROVIDER_SILENT_DEFAULT_OVERRIDES: dict[str, str] = {
+    "nous": "deepseek/deepseek-v4-flash",
+}
+
+
 def get_default_model_for_provider(provider: str) -> str:
-    """Return the default model for a provider, or empty string if unknown.
+    """Return a cost-safe default model for a provider, or "" if unknown.
 
 
 
-    Uses the first entry in _PROVIDER_MODELS as the default.  This is the
+    Used as a NON-INTERACTIVE fallback when a provider is configured but no
 
-    model a user would be offered first in the ``clawk model`` picker.
+    model was ever selected (e.g. ``clawk auth add openai-codex`` without
+
+    ``clawk model``, or a profile that sets ``provider`` with no ``model``).
 
 
 
-    Used as a fallback when the user has configured a provider but never
+    For most providers this is the first entry in ``_PROVIDER_MODELS`` — the
 
-    selected a model (e.g. ``clawk auth add openai-codex`` without
+    same model the ``clawk model`` picker offers first. For metered aggregators
 
-    ``clawk model``).
+    whose curated list is ordered most-capable-first, that entry is also the
+
+    most EXPENSIVE one, so silently defaulting to it is a billing footgun. Such
+
+    providers carry an explicit low-cost override in
+
+    ``_PROVIDER_SILENT_DEFAULT_OVERRIDES``; a missing model must never
+
+    auto-escalate to the flagship.
 
     """
 
     models = _PROVIDER_MODELS.get(provider, [])
+
+    override = _PROVIDER_SILENT_DEFAULT_OVERRIDES.get(provider)
+
+    if override and override in models:
+        return override
 
     return models[0] if models else ""
 

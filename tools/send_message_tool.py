@@ -1118,7 +1118,7 @@ async def _send_to_platform(
 
     for chunk in chunks:
         if platform == Platform.SLACK:
-            result = await _send_slack(pconfig.token, chat_id, chunk)
+            result = await _send_slack(pconfig.token, chat_id, chunk, thread_ts=thread_id)
 
         elif platform == Platform.WHATSAPP:
             result = await _send_whatsapp(pconfig.extra, chat_id, chunk)
@@ -1553,7 +1553,7 @@ async def _send_telegram(
         return _error(f"Telegram send failed: {e}")
 
 
-async def _send_slack(token, chat_id, message):
+async def _send_slack(token, chat_id, message, thread_ts=None):
     """Send via Slack Web API."""
 
     try:
@@ -1580,6 +1580,9 @@ async def _send_slack(token, chat_id, message):
             timeout=aiohttp.ClientTimeout(total=30), **_sess_kw
         ) as session:
             payload = {"channel": chat_id, "text": message, "mrkdwn": True}
+
+            if thread_ts:
+                payload["thread_ts"] = thread_ts
 
             async with session.post(
                 url, headers=headers, json=payload, **_req_kw

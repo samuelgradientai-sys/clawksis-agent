@@ -224,6 +224,38 @@ export class ClawksisGateway extends JsonRpcGatewayClient {
 
 
 
+// Profile that profile-scoped REST settings (config/env/skills/tools/model/…)
+
+// should target. Mirrors $activeGatewayProfile, pushed in from the store via
+
+// setApiRequestProfile so this module needs no store import (avoids a cycle).
+
+// Electron main consumes request.profile to pick which backend *process* serves
+
+// the call; each pooled backend already has its own CLAWK_HOME, so no backend
+
+// change is needed. Null → primary, so single-profile users are unaffected.
+
+let _apiProfile: null | string = null
+
+
+
+export function setApiRequestProfile(profile: null | string): void {
+
+  _apiProfile = profile || null
+
+}
+
+
+
+function profileScoped(): { profile?: string } {
+
+  return _apiProfile ? { profile: _apiProfile } : {}
+
+}
+
+
+
 export async function listSessions(
 
   limit = 40,
@@ -258,9 +290,67 @@ export async function listSessions(
 
 
 
-export function setSessionArchived(id: string, archived: boolean): Promise<{ ok: boolean }> {
+// Unified, read-only session list aggregated across ALL profiles. Served by the
+
+// primary backend straight off each profile's state.db — no per-profile backend
+
+// is spawned. Single-profile users get the same rows as listSessions(), tagged
+
+// profile="default".
+
+export async function listAllProfileSessions(
+
+  limit = 40,
+
+  minMessages = 0,
+
+  archived: 'exclude' | 'include' | 'only' = 'exclude',
+
+  order: 'created' | 'recent' = 'recent',
+
+  profile: 'all' | (string & {}) = 'all'
+
+): Promise<PaginatedSessions> {
+
+  const result = await window.clawkDesktop.api<PaginatedSessions>({
+
+    path:
+
+      `/api/profiles/sessions?limit=${limit}&offset=0&min_messages=${Math.max(0, minMessages)}` +
+
+      `&archived=${archived}&order=${order}&profile=${encodeURIComponent(profile)}`
+
+  })
+
+
+
+  return {
+
+    ...result,
+
+    sessions: result.sessions.slice(0, limit),
+
+    offset: 0
+
+  }
+
+}
+
+
+
+// Mutations take the owning `profile` so Electron routes them to that profile's
+
+// backend (remote pool or local primary) via request.profile — matching the
+
+// read path. A remote session's row lives only on its remote host, so a mutation
+
+// that hit the local primary would no-op or 404. Omit for the current/default.
+
+export function setSessionArchived(id: string, archived: boolean, profile?: string | null): Promise<{ ok: boolean }> {
 
   return window.clawkDesktop.api<{ ok: boolean }>({
+
+    ...(profile ? { profile } : {}),
 
     path: `/api/sessions/${encodeURIComponent(id)}`,
 
@@ -286,11 +376,23 @@ export function searchSessions(query: string): Promise<SessionSearchResponse> {
 
 
 
-export function getSessionMessages(id: string): Promise<SessionMessagesResponse> {
+// Reads another profile's transcript. For a remote profile Electron reroutes
+
+// this GET to the remote backend (which serves its own state.db); for a local
+
+// profile the primary opens that profile's state.db via ?profile=. Omit for
+
+// the current/default profile.
+
+export function getSessionMessages(id: string, profile?: string | null): Promise<SessionMessagesResponse> {
+
+  const suffix = profile ? `?profile=${encodeURIComponent(profile)}` : ''
+
+
 
   return window.clawkDesktop.api<SessionMessagesResponse>({
 
-    path: `/api/sessions/${encodeURIComponent(id)}/messages`
+    path: `/api/sessions/${encodeURIComponent(id)}/messages${suffix}`
 
   })
 
@@ -298,9 +400,11 @@ export function getSessionMessages(id: string): Promise<SessionMessagesResponse>
 
 
 
-export function deleteSession(id: string): Promise<{ ok: boolean }> {
+export function deleteSession(id: string, profile?: string | null): Promise<{ ok: boolean }> {
 
   return window.clawkDesktop.api<{ ok: boolean }>({
+
+    ...(profile ? { profile } : {}),
 
     path: `/api/sessions/${encodeURIComponent(id)}`,
 
@@ -312,15 +416,25 @@ export function deleteSession(id: string): Promise<{ ok: boolean }> {
 
 
 
-export function renameSession(id: string, title: string): Promise<{ ok: boolean; title: string }> {
+export function renameSession(
+
+  id: string,
+
+  title: string,
+
+  profile?: string | null
+
+): Promise<{ ok: boolean; title: string }> {
 
   return window.clawkDesktop.api<{ ok: boolean; title: string }>({
+
+    ...(profile ? { profile } : {}),
 
     path: `/api/sessions/${encodeURIComponent(id)}`,
 
     method: 'PATCH',
 
-    body: { title }
+    body: { title, ...(profile ? { profile } : {}) }
 
   })
 
@@ -331,6 +445,8 @@ export function renameSession(id: string, title: string): Promise<{ ok: boolean;
 export function getGlobalModelInfo(): Promise<ModelInfoResponse> {
 
   return window.clawkDesktop.api<ModelInfoResponse>({
+
+    ...profileScoped(),
 
     path: '/api/model/info'
 
@@ -406,6 +522,8 @@ export function getLogs(params: {
 
   return window.clawkDesktop.api<LogsResponse>({
 
+    ...profileScoped(),
+
     path: suffix ? `/api/logs?${suffix}` : '/api/logs'
 
   })
@@ -417,6 +535,8 @@ export function getLogs(params: {
 export function getClawksisConfig(): Promise<ClawksisConfig> {
 
   return window.clawkDesktop.api<ClawksisConfig>({
+
+    ...profileScoped(),
 
     path: '/api/config'
 
@@ -430,6 +550,8 @@ export function getClawksisConfigRecord(): Promise<ClawksisConfigRecord> {
 
   return window.clawkDesktop.api<ClawksisConfigRecord>({
 
+    ...profileScoped(),
+
     path: '/api/config'
 
   })
@@ -441,6 +563,8 @@ export function getClawksisConfigRecord(): Promise<ClawksisConfigRecord> {
 export function getClawksisConfigDefaults(): Promise<ClawksisConfigRecord> {
 
   return window.clawkDesktop.api<ClawksisConfigRecord>({
+
+    ...profileScoped(),
 
     path: '/api/config/defaults'
 
@@ -454,6 +578,8 @@ export function getClawksisConfigSchema(): Promise<ConfigSchemaResponse> {
 
   return window.clawkDesktop.api<ConfigSchemaResponse>({
 
+    ...profileScoped(),
+
     path: '/api/config/schema'
 
   })
@@ -465,6 +591,8 @@ export function getClawksisConfigSchema(): Promise<ConfigSchemaResponse> {
 export function saveClawksisConfig(config: ClawksisConfigRecord): Promise<{ ok: boolean }> {
 
   return window.clawkDesktop.api<{ ok: boolean }>({
+
+    ...profileScoped(),
 
     path: '/api/config',
 
@@ -482,6 +610,8 @@ export function getEnvVars(): Promise<Record<string, EnvVarInfo>> {
 
   return window.clawkDesktop.api<Record<string, EnvVarInfo>>({
 
+    ...profileScoped(),
+
     path: '/api/env'
 
   })
@@ -493,6 +623,8 @@ export function getEnvVars(): Promise<Record<string, EnvVarInfo>> {
 export function setEnvVar(key: string, value: string): Promise<{ ok: boolean }> {
 
   return window.clawkDesktop.api<{ ok: boolean }>({
+
+    ...profileScoped(),
 
     path: '/api/env',
 
@@ -516,6 +648,8 @@ export function validateProviderCredential(
 
   return window.clawkDesktop.api<{ ok: boolean; reachable: boolean; message: string; models?: string[] }>({
 
+    ...profileScoped(),
+
     path: '/api/providers/validate',
 
     method: 'POST',
@@ -531,6 +665,8 @@ export function validateProviderCredential(
 export function deleteEnvVar(key: string): Promise<{ ok: boolean }> {
 
   return window.clawkDesktop.api<{ ok: boolean }>({
+
+    ...profileScoped(),
 
     path: '/api/env',
 
@@ -548,6 +684,8 @@ export function revealEnvVar(key: string): Promise<{ key: string; value: string 
 
   return window.clawkDesktop.api<{ key: string; value: string }>({
 
+    ...profileScoped(),
+
     path: '/api/env/reveal',
 
     method: 'POST',
@@ -564,6 +702,8 @@ export function listOAuthProviders(): Promise<OAuthProvidersResponse> {
 
   return window.clawkDesktop.api<OAuthProvidersResponse>({
 
+    ...profileScoped(),
+
     path: '/api/providers/oauth'
 
   })
@@ -575,6 +715,8 @@ export function listOAuthProviders(): Promise<OAuthProvidersResponse> {
 export function startOAuthLogin(providerId: string): Promise<OAuthStartResponse> {
 
   return window.clawkDesktop.api<OAuthStartResponse>({
+
+    ...profileScoped(),
 
     path: `/api/providers/oauth/${encodeURIComponent(providerId)}/start`,
 
@@ -592,6 +734,8 @@ export function submitOAuthCode(providerId: string, sessionId: string, code: str
 
   return window.clawkDesktop.api<OAuthSubmitResponse>({
 
+    ...profileScoped(),
+
     path: `/api/providers/oauth/${encodeURIComponent(providerId)}/submit`,
 
     method: 'POST',
@@ -608,6 +752,8 @@ export function pollOAuthSession(providerId: string, sessionId: string): Promise
 
   return window.clawkDesktop.api<OAuthPollResponse>({
 
+    ...profileScoped(),
+
     path: `/api/providers/oauth/${encodeURIComponent(providerId)}/poll/${encodeURIComponent(sessionId)}`
 
   })
@@ -619,6 +765,8 @@ export function pollOAuthSession(providerId: string, sessionId: string): Promise
 export function cancelOAuthSession(sessionId: string): Promise<{ ok: boolean }> {
 
   return window.clawkDesktop.api<{ ok: boolean }>({
+
+    ...profileScoped(),
 
     path: `/api/providers/oauth/sessions/${encodeURIComponent(sessionId)}`,
 
@@ -634,6 +782,8 @@ export function getSkills(): Promise<SkillInfo[]> {
 
   return window.clawkDesktop.api<SkillInfo[]>({
 
+    ...profileScoped(),
+
     path: '/api/skills'
 
   })
@@ -645,6 +795,8 @@ export function getSkills(): Promise<SkillInfo[]> {
 export function toggleSkill(name: string, enabled: boolean): Promise<{ ok: boolean; name: string; enabled: boolean }> {
 
   return window.clawkDesktop.api<{ ok: boolean; name: string; enabled: boolean }>({
+
+    ...profileScoped(),
 
     path: '/api/skills/toggle',
 
@@ -661,6 +813,8 @@ export function toggleSkill(name: string, enabled: boolean): Promise<{ ok: boole
 export function getToolsets(): Promise<ToolsetInfo[]> {
 
   return window.clawkDesktop.api<ToolsetInfo[]>({
+
+    ...profileScoped(),
 
     path: '/api/tools/toolsets'
 
@@ -680,6 +834,8 @@ export function toggleToolset(
 
   return window.clawkDesktop.api<{ ok: boolean; name: string; enabled: boolean }>({
 
+    ...profileScoped(),
+
     path: `/api/tools/toolsets/${encodeURIComponent(name)}`,
 
     method: 'PUT',
@@ -695,6 +851,8 @@ export function toggleToolset(
 export function getToolsetConfig(name: string): Promise<ToolsetConfig> {
 
   return window.clawkDesktop.api<ToolsetConfig>({
+
+    ...profileScoped(),
 
     path: `/api/tools/toolsets/${encodeURIComponent(name)}/config`
 
@@ -713,6 +871,8 @@ export function selectToolsetProvider(
 ): Promise<{ ok: boolean; name: string; provider: string }> {
 
   return window.clawkDesktop.api<{ ok: boolean; name: string; provider: string }>({
+
+    ...profileScoped(),
 
     path: `/api/tools/toolsets/${encodeURIComponent(name)}/provider`,
 
@@ -988,6 +1148,8 @@ export function getUsageAnalytics(days = 30): Promise<AnalyticsResponse> {
 
   return window.clawkDesktop.api<AnalyticsResponse>({
 
+    ...profileScoped(),
+
     path: `/api/analytics/usage?days=${Math.max(1, Math.floor(days))}`
 
   })
@@ -999,6 +1161,8 @@ export function getUsageAnalytics(days = 30): Promise<AnalyticsResponse> {
 export function getGlobalModelOptions(): Promise<ModelOptionsResponse> {
 
   return window.clawkDesktop.api<ModelOptionsResponse>({
+
+    ...profileScoped(),
 
     path: '/api/model/options'
 
@@ -1032,6 +1196,8 @@ export function getRecommendedDefaultModel(provider: string): Promise<Recommende
 
   return window.clawkDesktop.api<RecommendedDefaultModel>({
 
+    ...profileScoped(),
+
     path: `/api/model/recommended-default?provider=${encodeURIComponent(provider)}`
 
   })
@@ -1049,6 +1215,8 @@ export function setGlobalModel(
 ): Promise<{ ok: boolean; provider: string; model: string }> {
 
   return window.clawkDesktop.api<{ ok: boolean; provider: string; model: string }>({
+
+    ...profileScoped(),
 
     path: '/api/model/set',
 
@@ -1074,6 +1242,8 @@ export function getAuxiliaryModels(): Promise<AuxiliaryModelsResponse> {
 
   return window.clawkDesktop.api<AuxiliaryModelsResponse>({
 
+    ...profileScoped(),
+
     path: '/api/model/auxiliary'
 
   })
@@ -1085,6 +1255,8 @@ export function getAuxiliaryModels(): Promise<AuxiliaryModelsResponse> {
 export function setModelAssignment(body: ModelAssignmentRequest): Promise<ModelAssignmentResponse> {
 
   return window.clawkDesktop.api<ModelAssignmentResponse>({
+
+    ...profileScoped(),
 
     path: '/api/model/set',
 

@@ -180,6 +180,175 @@ def _shape_message(
     return {k: v for k, v in entry.items() if v is not None or k in ("content",)}
 
 
+def _resolve_profile_db(profile: str):
+    """Open another profile's ``state.db`` read-only, or None for the current one.
+
+
+
+    The desktop's ``@session:<profile>/<id>`` links always carry the source
+
+    profile, so a linked session from profile B can be read while the agent
+
+    runs in profile A. ``read_only=True`` (mode=ro) takes no write lock — safe
+
+    to point at a live profile's DB, including our own. Returns None when no
+
+    profile is given (use the caller's default db).
+
+    """
+
+    if profile is None or not str(profile).strip():
+        return None
+
+    from clawk_cli import profiles as profiles_mod
+
+    from clawk_state import SessionDB
+
+    canon = profiles_mod.normalize_profile_name(profile)
+
+    profiles_mod.validate_profile_name(canon)
+
+    if not profiles_mod.profile_exists(canon):
+        raise ValueError(f"profile '{canon}' does not exist")
+
+    return SessionDB(
+        db_path=profiles_mod.get_profile_dir(canon) / "state.db", read_only=True
+    )
+
+
+def _locate_session_db(session_id: str):
+    """Scan every profile's ``state.db`` (read-only) for a session id.
+
+
+
+    Returns ``(db, profile_name)`` for the first profile that owns the id, or
+
+    ``(None, None)``. Session ids are globally unique (timestamp + random hex),
+
+    so the first hit is authoritative. This is the safety net for linked-session
+
+    reads where the model dropped the owning profile from the link and passed a
+
+    bare id — we find it wherever it actually lives instead of failing.
+
+    """
+
+    from pathlib import Path
+
+    try:
+        from clawk_cli import profiles as profiles_mod
+
+        from clawk_state import SessionDB
+
+    except Exception:
+        return None, None
+
+    targets = [("default", profiles_mod.get_profile_dir("default"))]
+
+    try:
+        targets += [(info.name, info.path) for info in profiles_mod.list_profiles()]
+
+    except Exception:
+        logging.debug("list_profiles failed during session locate", exc_info=True)
+
+    seen: set = set()
+
+    for name, home in targets:
+        db_path = Path(home) / "state.db"
+
+        key = str(db_path)
+
+        if key in seen or not db_path.exists():
+            continue
+
+        seen.add(key)
+
+        try:
+            pdb = SessionDB(db_path=db_path, read_only=True)
+
+        except Exception:
+            continue
+
+        try:
+            if pdb.get_session(session_id):
+                return pdb, name
+
+        except Exception:
+            logging.debug(
+                "get_session probe failed for %s in %s", session_id, name, exc_info=True
+            )
+
+        pdb.close()
+
+    return None, None
+
+
+def _read_session(db, session_id: str, head: int = 20, tail: int = 10) -> str:
+    """Read shape: dump a whole session by id (head + tail when large).
+
+
+
+    Serves the linked-session case — the user dropped an @session reference and
+
+    the agent wants the transcript. Bounded payload: small sessions return in
+
+    full, large ones return the first ``head`` and last ``tail`` messages with a
+
+    pointer to scroll the middle.
+
+    """
+
+    try:
+        meta = db.get_session(session_id) or {}
+
+    except Exception as e:
+        logging.debug("get_session failed for %s: %s", session_id, e, exc_info=True)
+
+        meta = {}
+
+    if not meta:
+        return tool_error(f"session_id not found: {session_id}", success=False)
+
+    try:
+        rows = db.get_messages(session_id)
+
+    except Exception as e:
+        logging.error("get_messages failed for %s: %s", session_id, e, exc_info=True)
+
+        return tool_error(f"failed to load session: {e}", success=False)
+
+    shaped = [_shape_message(m) for m in rows]
+
+    total = len(shaped)
+
+    truncated = total > head + tail
+
+    window = shaped[:head] + shaped[-tail:] if truncated else shaped
+
+    response = {
+        "success": True,
+        "mode": "read",
+        "session_id": session_id,
+        "session_meta": {
+            "when": _format_timestamp(meta.get("started_at")),
+            "source": meta.get("source"),
+            "model": meta.get("model"),
+            "title": meta.get("title"),
+        },
+        "message_count": total,
+        "truncated": truncated,
+        "messages": window,
+    }
+
+    if truncated:
+        response["message"] = (
+            f"Session has {total} messages; showing first {head} + last {tail}. "
+            "Pass around_message_id (any id above) to scroll the middle."
+        )
+
+    return json.dumps(response, ensure_ascii=False)
+
+
 def _list_recent_sessions(db, limit: int, current_session_id: str = None) -> str:
     """Return metadata for the most recent sessions (no LLM calls, no FTS5)."""
 
@@ -562,6 +731,8 @@ def session_search(
     window: int = 5,
     # Discovery shape
     sort: str = None,
+    # Cross-profile (any shape)
+    profile: str = None,
 ) -> str:
     """Single-shape tool. Mode inferred from which args are set.
 
@@ -571,13 +742,17 @@ def session_search(
 
     Scroll:    pass ``session_id`` + ``around_message_id``.
 
+    Read:      pass ``session_id`` (no anchor) — dumps the whole session.
+
     Browse:    pass nothing.
 
 
 
-    Scroll wins over discovery when both are set — the agent has explicitly
+    Pass ``profile`` to read another profile's sessions (e.g. resolving an
 
-    asked for a slice of a known session.
+    ``@session:<profile>/<id>`` link). Scroll wins over read/discovery when an
+
+    anchor is set — the agent has asked for a specific slice.
 
     """
 
@@ -594,6 +769,43 @@ def session_search(
 
             return tool_error(format_session_db_unavailable(), success=False)
 
+    # Normalise a raw `@session:<profile>/<id>` link value passed as session_id.
+
+    # Session ids never contain "/", so a slash unambiguously means profile/id —
+
+    # always strip the prefix off the id, and adopt the embedded profile only
+
+    # when one wasn't passed explicitly. Handles every permutation the model
+
+    # might send (full value as id, with or without a separate profile=).
+
+    if isinstance(session_id, str) and "/" in session_id:
+        emb_profile, _, emb_id = session_id.partition("/")
+
+        if emb_id:
+            session_id = emb_id
+
+            if emb_profile and (profile is None or not str(profile).strip()):
+                profile = emb_profile
+
+    # Cross-profile read: swap in the named profile's DB (read-only) for every
+
+    # shape below. The current-session-lineage guards no longer apply across
+
+    # profiles, but they key off ids that won't collide, so they stay inert.
+
+    if profile is not None and str(profile).strip():
+        try:
+            profile_db = _resolve_profile_db(profile)
+
+        except Exception as e:
+            return tool_error(f"profile '{profile}': {e}", success=False)
+
+        if profile_db is not None:
+            db = profile_db
+
+            current_session_id = None
+
     # Scroll shape takes precedence — explicit anchor beats any query.
 
     if (
@@ -606,6 +818,38 @@ def session_search(
             window=window,
             current_session_id=current_session_id,
         )
+
+    # Read shape: a session_id with no anchor → dump the whole session.
+
+    if isinstance(session_id, str) and session_id.strip():
+        sid = session_id.strip()
+
+        result = _read_session(db, sid)
+
+        if json.loads(result).get("success"):
+            return result
+
+        # Miss in the target profile — the model may have dropped the owning
+
+        # profile from the link. Scan every profile and read it from wherever
+
+        # it lives, tagging the profile it was found in.
+
+        located, owner = _locate_session_db(sid)
+
+        if located is not None:
+            try:
+                found = json.loads(_read_session(located, sid))
+
+            finally:
+                located.close()
+
+            if found.get("success"):
+                found["profile"] = owner
+
+                return json.dumps(found, ensure_ascii=False)
+
+        return result
 
     # Limit clamp [1, 10]
 

@@ -50,18 +50,6 @@
 
 
 
-Add `--include-desktop` to the [one-line installer](../../README.md#quick-install) and it sets up the agent and builds the desktop app in one go:
-
-
-
-```bash
-
-curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash -s -- --include-desktop
-
-```
-
-
-
 Already have the Clawksis CLI? Just run:
 
 
@@ -114,13 +102,7 @@ clawk update
 
 
 
-The installer handles everything for you (Python 3.11+, a portable Git, ripgrep). The only thing worth knowing:
-
-
-
-- **Windows** — the installer bundles its own Git and Python; no admin rights or system changes required.
-
-- **macOS / Linux** — uses your system Python 3.11+ (installed automatically if missing).
+The installer handles everything for you (Python 3.11+, a portable Git, ripgrep).
 
 
 

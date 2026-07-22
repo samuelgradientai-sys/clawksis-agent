@@ -2128,6 +2128,8 @@ function Install-Repository {
 
             $ErrorActionPreference = "Continue"
 
+            $autostashRef = ""
+
             try {
 
                 # This is a MANAGED checkout, not a repo the user edits. Git for
@@ -2144,17 +2146,39 @@ function Install-Repository {
 
                 # be overwritten by checkout", which is exactly the failure GUI
 
-                # users hit on update. Two-part fix: (1) stop creating the dirt
+                # users hit on update. Pin autocrlf=false so the dirt is never
 
-                # by pinning autocrlf=false on this clone, (2) discard any
-
-                # pre-existing dirt with a hard reset before the checkout. Safe
-
-                # because nothing here is user-authored.
+                # created in the first place.
 
                 git -c windows.appendAtomically=false config core.autocrlf false 2>$null
 
-                git -c windows.appendAtomically=false reset --hard HEAD 2>$null
+                # Preserve any real local changes before the checkout instead of
+
+                # discarding them with `reset --hard HEAD`. The old hard reset
+
+                # silently destroyed agent-edited source on managed clones (the
+
+                # #38542 data-loss class). Stash + restore mirrors install.sh:
+
+                # nothing is lost, and a failed restore leaves the work in a
+
+                # git stash for manual recovery. Untracked files are included so
+
+                # agent-created dirs (e.g. tinker-atropos/) survive too.
+
+                $statusOut = git -c windows.appendAtomically=false status --porcelain 2>$null
+
+                if (-not [string]::IsNullOrWhiteSpace(($statusOut -join "`n"))) {
+
+                    $stashName = "clawk-install-autostash-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+
+                    Write-Info "Local changes detected, stashing before update..."
+
+                    git -c windows.appendAtomically=false stash push --include-untracked -m "$stashName"
+
+                    if ($LASTEXITCODE -eq 0) { $autostashRef = "stash@{0}" }
+
+                }
 
                 git -c windows.appendAtomically=false fetch origin
 
@@ -2192,13 +2216,103 @@ function Install-Repository {
 
                     if ($LASTEXITCODE -ne 0) { throw "git checkout $Branch failed (exit $LASTEXITCODE)" }
 
-                    git -c windows.appendAtomically=false pull origin $Branch
+                    git -c windows.appendAtomically=false pull --ff-only origin $Branch
 
                     if ($LASTEXITCODE -ne 0) { throw "git pull failed (exit $LASTEXITCODE)" }
 
                 }
 
+                if ($autostashRef) {
+
+                    # Default to restoring so work is never silently dropped.
+
+                    # Only prompt when we're certain a human can answer: an
+
+                    # interactive session AND a real, non-redirected console on
+
+                    # both stdin and stdout. The desktop "Update" button and
+
+                    # bootstrap run the installer without a usable console -- in
+
+                    # those cases Read-Host would hang or return empty, so we
+
+                    # skip the prompt and just restore (the safe default).
+
+                    $restoreNow = $true
+
+                    $hasConsole = $false
+
+                    try {
+
+                        $hasConsole = ([Environment]::UserInteractive -and (-not [Console]::IsInputRedirected) -and (-not [Console]::IsOutputRedirected) -and ($Host.Name -eq "ConsoleHost"))
+
+                    } catch { $hasConsole = $false }
+
+                    if ($hasConsole) {
+
+                        Write-Warn "Local changes were stashed before updating."
+
+                        Write-Warn "Restoring them may reapply local customizations onto the updated codebase."
+
+                        $restoreAnswer = Read-Host "Restore local changes now? [Y/n]"
+
+                        if ($restoreAnswer -match '^(n|no)$') { $restoreNow = $false }
+
+                    }
+
+                    if ($restoreNow) {
+
+                        Write-Info "Restoring local changes..."
+
+                        git -c windows.appendAtomically=false stash apply $autostashRef
+
+                        if ($LASTEXITCODE -eq 0) {
+
+                            git -c windows.appendAtomically=false stash drop $autostashRef 2>$null
+
+                            Write-Warn "Local changes were restored on top of the updated codebase."
+
+                            Write-Warn "Review git diff / git status if Clawksis behaves unexpectedly."
+
+                        } else {
+
+                            Write-Err "Update succeeded, but restoring local changes failed. Your changes are still preserved in git stash."
+
+                            Write-Info "Resolve manually with: git stash apply $autostashRef"
+
+                            throw "git stash apply failed after update"
+
+                        }
+
+                    } else {
+
+                        Write-Info "Skipped restoring local changes."
+
+                        Write-Info "Your changes are still preserved in git stash."
+
+                        Write-Info "Restore manually with: git stash apply $autostashRef"
+
+                    }
+
+                    $autostashRef = ""
+
+                }
+
             } finally {
+
+                if ($autostashRef) {
+
+                    # We stashed but never reached the restore block (a fetch/
+
+                    # checkout/pull failure threw). Leave the stash in place and
+
+                    # tell the user how to recover it -- never silently drop it.
+
+                    Write-Warn "Update did not complete. Your local changes are preserved in git stash."
+
+                    Write-Info "Restore manually with: git stash apply $autostashRef"
+
+                }
 
                 $ErrorActionPreference = $prevEAP
 
@@ -2278,7 +2392,7 @@ function Install-Repository {
 
         try {
 
-            git -c windows.appendAtomically=false clone --branch $Branch $RepoUrlSsh $InstallDir
+            git -c windows.appendAtomically=false clone --depth 1 --branch $Branch $RepoUrlSsh $InstallDir
 
             if ($LASTEXITCODE -eq 0) { $cloneSuccess = $true }
 
@@ -2296,7 +2410,7 @@ function Install-Repository {
 
             try {
 
-                git -c windows.appendAtomically=false clone --branch $Branch $RepoUrlHttps $InstallDir
+                git -c windows.appendAtomically=false clone --depth 1 --branch $Branch $RepoUrlHttps $InstallDir
 
                 if ($LASTEXITCODE -eq 0) { $cloneSuccess = $true }
 
@@ -3870,6 +3984,96 @@ function Install-NodeDeps {
 
 
 
+# Clear the cached Electron download + any half-written unpacked output so the
+
+# next `npm run pack` re-downloads and re-stages from scratch. A corrupt zip in
+
+# the per-user Electron download cache - most often a partial download resumed
+
+# into the same file, leaving concatenated junk - makes electron-builder's
+
+# `app-builder unpack-electron` extract a tree MISSING the electron binary, so
+
+# the final `electron` -> `Clawksis` rename dies with ENOENT and every re-run
+
+# repeats the broken extraction forever.
+
+#
+
+# We deliberately do not validate the zip ourselves: the common
+
+# prepended/concatenated-junk corruption slips past naive checks, so a
+
+# self-rolled gate would skip the real-world case. We unconditionally drop the
+
+# cached electron-*.zip (loose copy and any @electron/get hash-subdir copy) plus
+
+# the stale unpacked dir, then let the caller retry once - @electron/get
+
+# re-downloads with its own SHASUM verification, the real source of truth.
+
+#
+
+# Returns the removed paths. Best-effort: never throws.
+
+function Clear-ElectronBuildCache {
+
+    param([string]$DesktopDir)
+
+    $removed = @()
+
+    # Per-user Electron download cache dirs, honoring the overrides @electron/get
+
+    # respects, then the Windows default (%LOCALAPPDATA%\electron\Cache).
+
+    $cacheDirs = @()
+
+    if ($env:electron_config_cache) { $cacheDirs += $env:electron_config_cache }
+
+    if ($env:ELECTRON_CACHE)        { $cacheDirs += $env:ELECTRON_CACHE }
+
+    if ($env:LOCALAPPDATA)          { $cacheDirs += (Join-Path $env:LOCALAPPDATA 'electron\Cache') }
+
+    $cacheDirs += (Join-Path $HOME 'AppData\Local\electron\Cache')
+
+    foreach ($dir in $cacheDirs) {
+
+        if (-not (Test-Path -LiteralPath $dir)) { continue }
+
+        # Recurse: the bad copy may be the top-level zip OR a copy inside an
+
+        # @electron/get hash subdir.
+
+        $removed += @(Get-ChildItem -LiteralPath $dir -Recurse -Filter 'electron-*.zip' -File -ErrorAction SilentlyContinue | ForEach-Object {
+
+            try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop; $_.FullName } catch { }
+
+        })
+
+    }
+
+    # A half-written unpacked dir from an interrupted prior pack poisons the
+
+    # rename even after the zip is fixed (win-unpacked / win-arm64-unpacked).
+
+    $releaseDir = Join-Path $DesktopDir 'release'
+
+    if (Test-Path -LiteralPath $releaseDir) {
+
+        $removed += @(Get-ChildItem -LiteralPath $releaseDir -Directory -Filter '*-unpacked' -ErrorAction SilentlyContinue | ForEach-Object {
+
+            try { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction Stop; $_.FullName } catch { }
+
+        })
+
+    }
+
+    return $removed
+
+}
+
+
+
 function Install-Desktop {
 
     # Build apps/desktop into a launchable Clawksis.exe. Only called from
@@ -4135,6 +4339,38 @@ function Install-Desktop {
         & $npmExe run pack 2>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $buildLog
 
         $code = $LASTEXITCODE
+
+        if ($code -ne 0) {
+
+            # A corrupt cached Electron zip makes `pack` fail with an opaque
+
+            # ENOENT on the final `electron` -> `Clawksis` rename: app-builder's
+
+            # unpack-electron extracted a partial tree (missing the binary) from
+
+            # the bad zip, and re-running reuses the poisoned cache forever.
+
+            # Purge the cached download + any stale unpacked output and retry
+
+            # once; @electron/get re-downloads with its own SHASUM check. Without
+
+            # this a corrupt download hard-fails the whole installer.
+
+            $purged = @(Clear-ElectronBuildCache -DesktopDir $desktopDir)
+
+            if ($purged.Count -gt 0) {
+
+                Write-Warn "Desktop build failed - cleared cached Electron download, retrying once:"
+
+                foreach ($p in $purged) { Write-Info "  - $p" }
+
+                & $npmExe run pack 2>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $buildLog
+
+                $code = $LASTEXITCODE
+
+            }
+
+        }
 
         $ErrorActionPreference = $prevEAP
 

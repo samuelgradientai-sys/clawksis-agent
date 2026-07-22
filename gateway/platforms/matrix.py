@@ -3873,15 +3873,15 @@ class MatrixAdapter(BasePlatformAdapter):
 
 
 
-        Uses the ``markdown`` library when available (installed with the
+        Uses the ``markdown`` library (a core dependency) when available.
 
-        ``matrix`` extra).  Falls back to a comprehensive regex converter
+        Falls back to a comprehensive regex converter that handles fenced
 
-        that handles fenced code blocks, inline code, headers, bold,
+        code blocks, inline code, headers, bold, italic, strikethrough,
 
-        italic, strikethrough, links, blockquotes, lists, and horizontal
+        links, blockquotes, lists, and horizontal rules — everything the
 
-        rules — everything the Matrix HTML spec allows.
+        Matrix HTML spec allows.
 
         """
 

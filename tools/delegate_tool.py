@@ -224,7 +224,11 @@ MAX_DEPTH = 1  # flat by default: parent (0) -> child (1); grandchild rejected u
 
 _MIN_SPAWN_DEPTH = 1
 
-_MAX_SPAWN_DEPTH_CAP = 3
+# No upper ceiling on spawn depth — like max_concurrent_children, depth has a
+
+# floor of 1 and no ceiling. Deeper trees multiply API cost, so the default
+
+# stays flat (MAX_DEPTH = 1); raising the config knob is an explicit opt-in.
 
 
 # ---------------------------------------------------------------------------
@@ -608,7 +612,7 @@ def _get_child_timeout() -> float:
 
 
 def _get_max_spawn_depth() -> int:
-    """Read delegation.max_spawn_depth from config, clamped to [1, 3].
+    """Read delegation.max_spawn_depth from config, floored at 1 (no ceiling).
 
 
 
@@ -624,11 +628,15 @@ def _get_max_spawn_depth() -> int:
 
 
 
-    Raise to 2 or 3 to unlock nested orchestration. role="orchestrator"
+    Raise to 2+ to unlock nested orchestration. role="orchestrator"
 
-    removes the toolset strip for depth-1 children when
+    removes the toolset strip for spawning children when
 
     max_spawn_depth >= 2, enabling them to spawn their own workers.
+
+    Like max_concurrent_children, there is no upper ceiling — but each
+
+    extra level multiplies API cost, so raise it deliberately.
 
     """
 
@@ -651,18 +659,17 @@ def _get_max_spawn_depth() -> int:
 
         return MAX_DEPTH
 
-    clamped = max(_MIN_SPAWN_DEPTH, min(_MAX_SPAWN_DEPTH_CAP, ival))
+    floored = max(_MIN_SPAWN_DEPTH, ival)
 
-    if clamped != ival:
+    if floored != ival:
         logger.warning(
-            "delegation.max_spawn_depth=%d out of range [%d, %d]; clamping to %d",
+            "delegation.max_spawn_depth=%d below floor %d; using %d",
             ival,
             _MIN_SPAWN_DEPTH,
-            _MAX_SPAWN_DEPTH_CAP,
-            clamped,
+            floored,
         )
 
-    return clamped
+    return floored
 
 
 def _get_orchestrator_enabled() -> bool:
@@ -2839,7 +2846,8 @@ def delegate_task(
                 f"Delegation depth limit reached (depth={depth}, "
                 f"max_spawn_depth={max_spawn}). Raise "
                 f"delegation.max_spawn_depth in config.yaml if deeper "
-                f"nesting is required (cap: {_MAX_SPAWN_DEPTH_CAP})."
+                f"nesting is required (no hard ceiling, but each level "
+                f"multiplies API cost)."
             )
         })
 

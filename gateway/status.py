@@ -320,7 +320,11 @@ def _read_json_file(path: Path) -> Optional[dict[str, Any]]:
     try:
         raw = path.read_text(encoding="utf-8").strip()
 
-    except OSError:
+    except (OSError, UnicodeDecodeError):
+        # OSError: file vanished or permission flipped between exists() and
+        # read. UnicodeDecodeError: file holds non-UTF-8 / binary garbage
+        # (a truncated or clobbered status file). Either way it's unusable.
+
         return None
 
     if not raw:
@@ -350,8 +354,9 @@ def _read_pid_record(pid_path: Optional[Path] = None) -> Optional[dict]:
     try:
         raw = pid_path.read_text().strip()
 
-    except OSError:
-        # File was deleted between exists() and read_text(), or permission flipped.
+    except (OSError, UnicodeDecodeError):
+        # File was deleted between exists() and read_text(), permission
+        # flipped, or it holds non-UTF-8 / binary garbage.
 
         return None
 

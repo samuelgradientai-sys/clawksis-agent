@@ -1640,6 +1640,28 @@ def _parse_env_var(name: str, default: str, converter=int, type_label: str = "in
         )
 
 
+def _safe_getcwd() -> str:
+    """Return the current working directory, tolerating a deleted CWD.
+
+
+
+    ``os.getcwd()`` raises FileNotFoundError when the process's working
+
+    directory has been removed out from under it (e.g. a scratch workspace
+
+    that was cleaned up mid-session). Fall back to TERMINAL_CWD, then the
+
+    user's home directory, so terminal setup never crashes on a stale CWD.
+
+    """
+
+    try:
+        return os.getcwd()
+
+    except FileNotFoundError:
+        return os.getenv("TERMINAL_CWD") or os.path.expanduser("~")
+
+
 def _get_env_config() -> Dict[str, Any]:
     """Get terminal environment configuration from environment variables."""
 
@@ -1660,7 +1682,7 @@ def _get_env_config() -> Dict[str, Any]:
     # root-like cwd.
 
     if env_type == "local":
-        default_cwd = os.getcwd()
+        default_cwd = _safe_getcwd()
 
     elif env_type == "ssh":
         default_cwd = "~"
@@ -1686,7 +1708,7 @@ def _get_env_config() -> Dict[str, Any]:
     host_prefixes = ("/Users/", "/home/", "C:\\", "C:/")
 
     if env_type == "docker" and mount_docker_cwd:
-        docker_cwd_source = os.getenv("TERMINAL_CWD") or os.getcwd()
+        docker_cwd_source = os.getenv("TERMINAL_CWD") or _safe_getcwd()
 
         candidate = os.path.abspath(os.path.expanduser(docker_cwd_source))
 
@@ -3833,7 +3855,7 @@ if __name__ == "__main__":
         f"  TERMINAL_DAYTONA_IMAGE: {os.getenv('TERMINAL_DAYTONA_IMAGE', default_img)}"
     )
 
-    print(f"  TERMINAL_CWD: {os.getenv('TERMINAL_CWD', os.getcwd())}")
+    print(f"  TERMINAL_CWD: {os.getenv('TERMINAL_CWD', _safe_getcwd())}")
 
     from clawk_constants import display_clawk_home as _dhh
 

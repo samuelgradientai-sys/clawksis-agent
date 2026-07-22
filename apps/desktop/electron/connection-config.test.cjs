@@ -32,21 +32,153 @@ const {
 
   AT_COOKIE_VARIANTS,
 
+  RT_COOKIE_VARIANTS,
+
   authModeFromStatus,
 
   buildGatewayWsUrl,
 
   buildGatewayWsUrlWithTicket,
 
+  connectionScopeKey,
+
   cookiesHaveSession,
+
+  cookiesHaveLiveSession,
+
+  normAuthMode,
 
   normalizeRemoteBaseUrl,
 
+  profileRemoteOverride,
+
   resolveAuthMode,
+
+  resolveTestWsUrl,
 
   tokenPreview
 
 } = require('./connection-config.cjs')
+
+
+
+// --- connectionScopeKey / normAuthMode ---
+
+
+
+test('connectionScopeKey trims to a name or null for the global scope', () => {
+
+  assert.equal(connectionScopeKey('  coder '), 'coder')
+
+  assert.equal(connectionScopeKey(''), null)
+
+  assert.equal(connectionScopeKey(null), null)
+
+  assert.equal(connectionScopeKey(undefined), null)
+
+})
+
+
+
+test('normAuthMode coerces to token unless explicitly oauth', () => {
+
+  assert.equal(normAuthMode('oauth'), 'oauth')
+
+  assert.equal(normAuthMode('token'), 'token')
+
+  assert.equal(normAuthMode(undefined), 'token')
+
+  assert.equal(normAuthMode('weird'), 'token')
+
+})
+
+
+
+// --- profileRemoteOverride ---
+
+
+
+test('profileRemoteOverride returns null when no profile is given', () => {
+
+  const config = { profiles: { coder: { mode: 'remote', url: 'https://x' } } }
+
+  assert.equal(profileRemoteOverride(config, ''), null)
+
+  assert.equal(profileRemoteOverride(config, null), null)
+
+  assert.equal(profileRemoteOverride(config, undefined), null)
+
+})
+
+
+
+test('profileRemoteOverride returns null when the profile has no entry', () => {
+
+  const config = { profiles: { coder: { mode: 'remote', url: 'https://x' } } }
+
+  assert.equal(profileRemoteOverride(config, 'writer'), null)
+
+})
+
+
+
+test('profileRemoteOverride ignores local or url-less profile entries', () => {
+
+  assert.equal(profileRemoteOverride({ profiles: { p: { mode: 'local', url: 'https://x' } } }, 'p'), null)
+
+  assert.equal(profileRemoteOverride({ profiles: { p: { mode: 'remote', url: '' } } }, 'p'), null)
+
+  assert.equal(profileRemoteOverride({ profiles: { p: { mode: 'remote' } } }, 'p'), null)
+
+})
+
+
+
+test('profileRemoteOverride returns the per-profile remote with defaulted auth mode', () => {
+
+  const config = {
+
+    profiles: {
+
+      coder: { mode: 'remote', url: '  https://coder.example.com/clawk  ', token: { value: 'sek' } }
+
+    }
+
+  }
+
+  assert.deepEqual(profileRemoteOverride(config, 'coder'), {
+
+    url: 'https://coder.example.com/clawk',
+
+    authMode: 'token',
+
+    token: { value: 'sek' }
+
+  })
+
+})
+
+
+
+test('profileRemoteOverride preserves an explicit oauth auth mode', () => {
+
+  const config = { profiles: { coder: { mode: 'remote', url: 'https://x', authMode: 'oauth' } } }
+
+  assert.equal(profileRemoteOverride(config, 'coder').authMode, 'oauth')
+
+})
+
+
+
+test('profileRemoteOverride tolerates a missing/!object profiles map', () => {
+
+  assert.equal(profileRemoteOverride({}, 'coder'), null)
+
+  assert.equal(profileRemoteOverride({ profiles: null }, 'coder'), null)
+
+  assert.equal(profileRemoteOverride(null, 'coder'), null)
+
+})
 
 
 
@@ -58,7 +190,7 @@ test('normalizeRemoteBaseUrl strips trailing slashes, hash, and query', () => {
 
   assert.equal(normalizeRemoteBaseUrl('https://gw.example.com/'), 'https://gw.example.com')
 
-  assert.equal(normalizeRemoteBaseUrl('https://gw.example.com/clawksis/'), 'https://gw.example.com/clawk')
+  assert.equal(normalizeRemoteBaseUrl('https://gw.example.com/clawk/'), 'https://gw.example.com/clawk')
 
   assert.equal(normalizeRemoteBaseUrl('https://gw.example.com/clawk?x=1#frag'), 'https://gw.example.com/clawk')
 
@@ -124,7 +256,7 @@ test('buildGatewayWsUrl uses ws for http', () => {
 
 test('buildGatewayWsUrl honors a path prefix', () => {
 
-  assert.equal(buildGatewayWsUrl('https://host/clawk', 't'), 'wss://host/clawksis/api/ws?token=t')
+  assert.equal(buildGatewayWsUrl('https://host/clawk', 't'), 'wss://host/clawk/api/ws?token=t')
 
 })
 
@@ -146,7 +278,7 @@ test('buildGatewayWsUrlWithTicket uses ?ticket= not ?token=', () => {
 
   const url = buildGatewayWsUrlWithTicket('https://gw.example.com/clawk', 'tkt-9')
 
-  assert.equal(url, 'wss://gw.example.com/clawksis/api/ws?ticket=tkt-9')
+  assert.equal(url, 'wss://gw.example.com/clawk/api/ws?ticket=tkt-9')
 
   assert.ok(!url.includes('token='))
 
@@ -262,7 +394,13 @@ test('cookiesHaveSession is false for an empty value', () => {
 
 
 
-test('cookiesHaveSession ignores unrelated cookies', () => {
+test('cookiesHaveSession ignores unrelated cookies (AT-only by design)', () => {
+
+  // cookiesHaveSession is deliberately access-token-only — a lone RT cookie
+
+  // is NOT an access token, so this returns false. Connectivity callers must
+
+  // use cookiesHaveLiveSession instead (see below).
 
   assert.equal(cookiesHaveSession([{ name: 'clawk_session_rt', value: 'x' }]), false)
 
@@ -287,6 +425,106 @@ test('cookiesHaveSession handles non-arrays', () => {
 test('AT_COOKIE_VARIANTS covers all three deploy shapes', () => {
 
   assert.deepEqual(AT_COOKIE_VARIANTS, ['__Host-clawk_session_at', '__Secure-clawk_session_at', 'clawk_session_at'])
+
+})
+
+
+
+test('RT_COOKIE_VARIANTS covers all three deploy shapes', () => {
+
+  assert.deepEqual(RT_COOKIE_VARIANTS, ['__Host-clawk_session_rt', '__Secure-clawk_session_rt', 'clawk_session_rt'])
+
+})
+
+
+
+// --- cookiesHaveLiveSession (AT or RT — the connectivity check) ---
+
+
+
+test('cookiesHaveLiveSession is true for a live access-token cookie', () => {
+
+  assert.equal(cookiesHaveLiveSession([{ name: 'clawk_session_at', value: 'x' }]), true)
+
+  assert.equal(cookiesHaveLiveSession([{ name: '__Host-clawk_session_at', value: 'x' }]), true)
+
+  assert.equal(cookiesHaveLiveSession([{ name: '__Secure-clawk_session_at', value: 'x' }]), true)
+
+})
+
+
+
+test('cookiesHaveLiveSession is true for an RT cookie even with NO access-token cookie', () => {
+
+  // This is the bug-fix case: the AT cookie has lapsed (dropped from the jar)
+
+  // but the 24h RT cookie is still alive. The session is still connectable —
+
+  // the gateway rotates a fresh AT from the RT on the next request.
+
+  assert.equal(cookiesHaveLiveSession([{ name: 'clawk_session_rt', value: 'x' }]), true)
+
+  assert.equal(cookiesHaveLiveSession([{ name: '__Host-clawk_session_rt', value: 'x' }]), true)
+
+  assert.equal(cookiesHaveLiveSession([{ name: '__Secure-clawk_session_rt', value: 'x' }]), true)
+
+})
+
+
+
+test('cookiesHaveLiveSession is true when both AT and RT are present', () => {
+
+  assert.equal(
+
+    cookiesHaveLiveSession([
+
+      { name: 'clawk_session_at', value: 'a' },
+
+      { name: 'clawk_session_rt', value: 'r' }
+
+    ]),
+
+    true
+
+  )
+
+})
+
+
+
+test('cookiesHaveLiveSession is false for empty values', () => {
+
+  assert.equal(cookiesHaveLiveSession([{ name: 'clawk_session_at', value: '' }]), false)
+
+  assert.equal(cookiesHaveLiveSession([{ name: 'clawk_session_rt', value: '' }]), false)
+
+  assert.equal(
+
+    cookiesHaveLiveSession([
+
+      { name: 'clawk_session_at', value: '' },
+
+      { name: 'clawk_session_rt', value: '' }
+
+    ]),
+
+    false
+
+  )
+
+})
+
+
+
+test('cookiesHaveLiveSession is false for unrelated cookies and non-arrays', () => {
+
+  assert.equal(cookiesHaveLiveSession([{ name: 'other', value: 'x' }]), false)
+
+  assert.equal(cookiesHaveLiveSession(null), false)
+
+  assert.equal(cookiesHaveLiveSession(undefined), false)
+
+  assert.equal(cookiesHaveLiveSession([]), false)
 
 })
 
@@ -317,6 +555,104 @@ test('tokenPreview returns set for short tokens', () => {
 test('tokenPreview returns a masked suffix for long tokens', () => {
 
   assert.equal(tokenPreview('abcdefghijklmnop'), '...klmnop')
+
+})
+
+
+
+// --- resolveTestWsUrl ---
+
+//
+
+// The "Test remote" button must exercise the same WS transport the app uses,
+
+// and must FAIL (not skip) when an OAuth session can't mint a ws-ticket — that
+
+// is the exact false-positive upstream PR #39098 set out to eliminate.
+
+
+
+test('resolveTestWsUrl (token mode) builds a ?token= URL the WS probe can use', async () => {
+
+  const url = await resolveTestWsUrl('https://gw.example.com', 'token', 'tok123')
+
+  assert.equal(url, 'wss://gw.example.com/api/ws?token=tok123')
+
+})
+
+
+
+test('resolveTestWsUrl (token mode, no token) returns null — genuine skip', async () => {
+
+  assert.equal(await resolveTestWsUrl('https://gw.example.com', 'token', null), null)
+
+})
+
+
+
+test('resolveTestWsUrl (oauth, mint ok) builds a ?ticket= URL', async () => {
+
+  const url = await resolveTestWsUrl('https://gw.example.com', 'oauth', null, {
+
+    mintTicket: async () => 'tkt-9'
+
+  })
+
+  assert.equal(url, 'wss://gw.example.com/api/ws?ticket=tkt-9')
+
+})
+
+
+
+test('resolveTestWsUrl (oauth, mint FAILS) throws — must NOT skip WS validation', async () => {
+
+  await assert.rejects(
+
+    () =>
+
+      resolveTestWsUrl('https://gw.example.com', 'oauth', null, {
+
+        mintTicket: async () => {
+
+          throw new Error('401 ticket mint failed')
+
+        }
+
+      }),
+
+    err => {
+
+      // Actionable, points the user at re-auth, and preserves the cause + flag
+
+      // the boot overlay uses to offer a sign-in prompt.
+
+      assert.match(err.message, /WebSocket ticket/i)
+
+      assert.match(err.message, /sign in again/i)
+
+      assert.equal(err.needsOauthLogin, true)
+
+      assert.ok(err.cause instanceof Error)
+
+      return true
+
+    }
+
+  )
+
+})
+
+
+
+test('resolveTestWsUrl (oauth) requires a mintTicket function', async () => {
+
+  await assert.rejects(
+
+    () => resolveTestWsUrl('https://gw.example.com', 'oauth', null),
+
+    /mintTicket function is required/
+
+  )
 
 })
 

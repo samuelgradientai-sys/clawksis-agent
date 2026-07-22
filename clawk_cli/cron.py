@@ -142,7 +142,13 @@ def cron_list(show_all: bool = False):
 
         next_run = job.get("next_run_at", "?")
 
-        repeat_info = job.get("repeat", {})
+        # `repeat` may be present-but-null in the job record (e.g. a one-shot
+
+        # job persisted with "repeat": null), so coalesce to {} rather than
+
+        # relying on the dict-default, which only applies to a missing key.
+
+        repeat_info = job.get("repeat") or {}
 
         repeat_times = repeat_info.get("times")
 
