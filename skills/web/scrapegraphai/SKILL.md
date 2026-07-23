@@ -1,7 +1,7 @@
 ---
 name: scrapegraphai
 description: "Extract structured data from web pages using ScrapeGraphAI + the agent's own LLM — no paid scraping API. Use when you need structured JSON from a page (tables, prices, listings, contacts, specs) described in plain language, and prefer local infra over Firecrawl/Browserbase. ES: extraer datos estructurados de una página web, convertir HTML a JSON, scraping con IA sin API paga."
-version: "1.5"
+version: "1.7"
 metadata:
   openclaw:
     emoji: "🧩"
@@ -48,8 +48,8 @@ python -m playwright install chromium  # only needed for JS-heavy pages
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `url` | string | **required** | The page URL |
-| `urls` | array | optional | Multiple URLs (returns combined result) |
+| `url` | string | **required** | The page URL. Either this or `urls` is required. |
+| `urls` | array | optional | Multiple URLs (returns combined result). Either this or `url` is required. |
 | `prompt` | string | "Extract main content" | What to extract in plain language |
 | `output_schema` | object | optional | JSON Schema for forcing the output shape |
 | `render_js` | boolean | `true` | Render JavaScript with headless browser. ⚠️ On headless servers, NEVER set `false` — crashes (headed mode needs X server). Omit or set `true`. |
@@ -94,7 +94,6 @@ def _patch_langchain_community() -> None:
     except ImportError:
         return
     import langchain_community.chat_models as _lm
-
     if not hasattr(_lm, "ChatOllama") or _lm.ChatOllama is not _ChatOllama_:
         _lm.ChatOllama = _ChatOllama_
 ```
@@ -190,6 +189,28 @@ to their specific exception types (v1.2):
 The only remaining broad catch in `extract()` (per-URL error isolation) is
 intentional — it prevents a single URL failure from aborting the whole batch.
 
+### 8. 🔄 DRY: shared `clamp_timeout()` helper (v1.6)
+
+The timeout clamping logic (`max(10, min(300, int(raw)))`) was previously
+duplicated verbatim in both ``scrapegraph_tool.py`` and ``provider.py``. It
+now lives in a single ``clamp_timeout()`` function in
+``scrapegraph_common.py``, imported and used by both consumers.
+
+```python
+def clamp_timeout(raw_timeout: Any) -> int | None:
+    \"\"\"Clamp a raw timeout value to the valid range [10, 300] or return None.\"\"\"
+    if raw_timeout is None:
+        return None
+    try:
+        return max(10, min(300, int(raw_timeout)))
+    except (ValueError, TypeError):
+        return None
+```
+
+This eliminates the code duplication, keeps the two surfaces in sync, and
+makes the clamping behaviour testable independently (7 dedicated tests in
+``test_scrapegraph_tool.py``, up from 4 indirect tests via the handler).
+
 ## Verifying it works
 
 ```python
@@ -198,14 +219,12 @@ import asyncio
 
 ensure_installed()  # Triggers the ChatOllama patch
 
-result = asyncio.run(
-    extract_structured(
-        "https://example.com",
-        "Extract the main heading and description",
-        headless=True,  # ← MUST be True on headless servers
-        timeout=120,  # ← optional, cancels after 120s
-    )
-)
+result = asyncio.run(extract_structured(
+    "https://example.com",
+    "Extract the main heading and description",
+    headless=True,  # ← MUST be True on headless servers
+    timeout=120,    # ← optional, cancels after 120s
+))
 print(result)
 ```
 
@@ -234,4 +253,4 @@ Expected output (with `render_js` omitted or `true`):
 | `tools/scrapegraph_common.py` | Shared helpers: install, patch, LLM config, graph runners, error classifier |
 | `tools/scrapegraph_tool.py` | Agent tool registration + handler (uses shared classifier) |
 | `plugins/web/scrapegraphai/provider.py` | `web_extract` backend (shared classifier + timeout passthrough) |
-| `tests/tools/test_scrapegraph_tool.py` | Tests (44 tests, all pass) |
+| `tests/tools/test_scrapegraph_tool.py` | Tests (51 tests, all pass) |
