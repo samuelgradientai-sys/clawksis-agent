@@ -4970,7 +4970,7 @@ class TelegramAdapter(BasePlatformAdapter):
             return SendResult(success=False, error="Not connected")
         try:
             default_hint = f" (default: {default})" if default else ""
-            text = self.format_message(f"⚕ *Update needs your input:*\n\n{prompt}{default_hint}")
+            text = self.format_message(f"∇ *Update needs your input:*\n\n{prompt}{default_hint}")
             keyboard = InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton("✓ Yes", callback_data="update_prompt:y"),
@@ -6224,7 +6224,7 @@ class TelegramAdapter(BasePlatformAdapter):
         label = "Yes" if answer == "y" else "No"
         try:
             await query.edit_message_text(
-                text=self.format_message(f"⚕ Update prompt answered: *{label}*"),
+                text=self.format_message(f"∇ Update prompt answered: *{label}*"),
                 parse_mode=ParseMode.MARKDOWN_V2,
                 reply_markup=None,
             )
@@ -6297,7 +6297,9 @@ class TelegramAdapter(BasePlatformAdapter):
             return
         script_name, extra_args, success_label, is_state_verb = entry
 
-        script_path = _Path.home() / ".clawk" / "scripts" / "gmail-triage" / script_name
+        from clawk_constants import get_clawk_home
+
+        script_path = get_clawk_home() / "scripts" / "gmail-triage" / script_name
         if not script_path.exists():
             await query.answer(text=f"❌ {script_name} missing")
             logger.error("[%s] gmail-triage script missing: %s", self.name, script_path)
@@ -6594,8 +6596,12 @@ class TelegramAdapter(BasePlatformAdapter):
                     reply_to_mode=self._reply_to_mode
                 )
 
-                def _reset_opened_files() -> None:
-                    for fh in opened_files:
+                def _reset_opened_files(_files=opened_files) -> None:
+                    # Default-arg binding: capture THIS chunk's list now.
+                    # `opened_files` is rebound each loop iteration, so a
+                    # late-bound closure could seek(0) the wrong chunk's
+                    # file handles if the retry fires after rebinding.
+                    for fh in _files:
                         try:
                             fh.seek(0)
                         except Exception:

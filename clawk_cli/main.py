@@ -125,6 +125,123 @@ import os
 import sys
 
 
+def _exit_after_oneshot(rc: object) -> None:
+    """Exit one-shot mode without letting late native finalizers change rc.
+
+    The SIGABRT this guards against (#30387, #43055) fires in a
+    native-extension finalizer during CPython's ``Py_FinalizeEx``, *after*
+    the response has printed. Flush streams, shut down file logging, then
+    ``os._exit`` past interpreter finalization. The ``atexit`` chain is
+    deliberately skipped — several handlers re-enter native code that may
+    be the abort source. Stateful cleanup is handled in ``_run_agent`` and
+    ``_cleanup_oneshot_runtime``.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except Exception:
+            pass
+    try:
+        logging.shutdown()
+    except Exception:
+        pass
+    if rc is None:
+        exit_code = 0
+    elif isinstance(rc, int):
+        exit_code = rc
+    else:
+        exit_code = 1
+    os._exit(exit_code)
+
+
+_oneshot_cleanup_done = False
+
+
+def _cleanup_oneshot_runtime() -> None:
+    """Best-effort process-global cleanup before one-shot hard exit.
+
+    ``run_oneshot`` owns the agent-local cleanup (memory provider, agent.close,
+    session_db.close — all in ``_run_agent``'s finally block). This mirrors the
+    process-global pieces from ``cli.py:_run_cleanup()`` that would otherwise
+    be skipped by ``os._exit``.
+    """
+    global _oneshot_cleanup_done
+    if _oneshot_cleanup_done:
+        return
+    _oneshot_cleanup_done = True
+    try:
+        from tools.terminal_tool import cleanup_all_environments
+        cleanup_all_environments()
+    except Exception:
+        pass
+    try:
+        from tools.async_delegation import interrupt_all
+        interrupt_all(reason="oneshot shutdown")
+    except Exception:
+        pass
+    try:
+        from tools.browser_tool import _emergency_cleanup_all_sessions
+        _emergency_cleanup_all_sessions()
+    except Exception:
+        pass
+    try:
+        from tools.mcp_tool import shutdown_mcp_servers
+        shutdown_mcp_servers()
+    except BaseException:
+        pass
+    try:
+        from agent.auxiliary_client import shutdown_cached_clients
+        shutdown_cached_clients()
+    except Exception:
+        pass
+
+
+def _run_and_exit_oneshot(
+    prompt: str,
+    *,
+    model: object = None,
+    provider: object = None,
+    toolsets: object = None,
+) -> None:
+    try:
+        from clawk_cli.oneshot import run_oneshot
+
+        rc = run_oneshot(
+            prompt,
+            model=model,
+            provider=provider,
+            toolsets=toolsets,
+        )
+    except KeyboardInterrupt:
+        rc = 130
+    except SystemExit as exc:
+        if exc.code is not None and not isinstance(exc.code, int):
+            print(exc.code, file=sys.stderr)
+            rc = 1
+        else:
+            rc = exc.code
+    except BaseException:
+        # Defense-in-depth. ``run_oneshot`` already converts agent failures
+        # into an int return code and only re-raises KeyboardInterrupt /
+        # SystemExit (handled above). Anything still escaping here means
+        # ``run_oneshot`` itself malfunctioned — surface it on stderr but never
+        # fall through to normal interpreter teardown, which is the exact path
+        # that aborts with SIGABRT on AL2023 (the bug this routine fixes).
+        import traceback
+        try:
+            traceback.print_exc()
+        except Exception:
+            pass
+        rc = 1
+    try:
+        _cleanup_oneshot_runtime()
+    finally:
+        # The hard exit is the safety boundary for #43055. Even an interrupt
+        # during best-effort cleanup must not fall back into interpreter
+        # finalization, where the reported native SIGABRT occurs.
+        _exit_after_oneshot(rc)
+
+
 def _set_process_title() -> None:
     """Set the process title to 'clawk' so tools like 'ps', 'top', and
 
@@ -227,7 +344,9 @@ def _config_default_interface_early() -> str:
             import yaml as _yaml_iface
 
             with open(cfg_path, encoding="utf-8") as _f:
-                raw = _yaml_iface.safe_load(_f) or {}
+                raw = _yaml_iface.load(
+                    _f, Loader=getattr(_yaml_iface, "CSafeLoader", None) or _yaml_iface.SafeLoader
+                ) or {}
 
             disp = raw.get("display", {})
 
@@ -264,6 +383,12 @@ def _wants_tui_early(argv: "list[str] | None" = None) -> bool:
 
     if os.environ.get("CLAWK_TUI") == "1" or "--tui" in argv:
         return True
+
+    try:
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            return False
+    except Exception:
+        return False
 
     return _config_default_interface_early() == "tui"
 
@@ -370,11 +495,9 @@ def _print_fast_version_info() -> None:
 
     from clawk_cli import __release_date__, __version__
 
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-
     print(f"Clawksis v{__version__} ({__release_date__})")
 
-    print(f"Project: {project_root}")
+    print(f"Install directory: {PROJECT_ROOT}")
 
     print(f"Python: {sys.version.split()[0]}")
 
@@ -504,6 +627,7 @@ _BUILTIN_SUBCOMMANDS = frozenset({
     "completion",
     "computer-use",
     "config",
+    "console",
     "cron",
     "curator",
     "dashboard",
@@ -531,6 +655,7 @@ _BUILTIN_SUBCOMMANDS = frozenset({
     "portal",
     "postinstall",
     "profile",
+    "project",
     "proxy",
     "prompt-size",
     "send",
@@ -913,7 +1038,19 @@ try:
 
     if _cfg_path.exists():
         with open(_cfg_path, encoding="utf-8") as _f:
-            _early_cfg_raw = _yaml_early.safe_load(_f) or {}
+            _early_cfg_raw = _yaml_early.load(
+                _f, Loader=getattr(_yaml_early, "CSafeLoader", None) or _yaml_early.SafeLoader
+            ) or {}
+        # Managed scope: overlay administrator-pinned values so a managed
+        # security.redact_secrets / network.force_ipv4 wins here too. This early
+        # bridge reads config.yaml directly (before load_config is usable), so
+        # without the overlay a managed redact_secrets toggle would be ignored.
+        # Fail-open via the shared helper.
+        try:
+            from clawk_cli import managed_scope
+            _early_cfg_raw = managed_scope.apply_managed_overlay(_early_cfg_raw)
+        except Exception:
+            pass
 
         if "CLAWK_REDACT_SECRETS" not in os.environ:
             _early_sec_cfg = _early_cfg_raw.get("security", {})
@@ -1309,6 +1446,9 @@ def _has_any_provider_configured() -> bool:
 
                 if line.startswith("#") or "=" not in line:
                     continue
+
+                if line.startswith("export "):
+                    line = line[7:]
 
                 key, _, val = line.partition("=")
 
@@ -2507,6 +2647,64 @@ def _find_bundled_tui(clawk_cli_dir: Path | None = None) -> Path | None:
     return bundled if bundled.is_file() else None
 
 
+def _restore_tui_workspace(tui_dir: Path) -> bool:
+    """Try to restore a missing ``ui-tui/`` from git, returning True on success.
+
+    On Windows an antivirus / NTFS filter driver can leave tracked ``ui-tui/``
+    files deleted in the working tree after ``clawk update`` (HEAD stays
+    intact; the files just vanish — see issue #49145). Those files are tracked,
+    so ``git restore`` puts them back deterministically. Best-effort: returns
+    False (rather than raising) when git is unavailable, this isn't a checkout,
+    or the restore leaves the directory still missing — the caller then prints
+    the manual-recovery message.
+    """
+    git = shutil.which("git")
+    if not git or not (tui_dir.parent / ".git").exists():
+        return False
+    try:
+        subprocess.run(
+            [git, "restore", "--", tui_dir.name],
+            cwd=str(tui_dir.parent),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return tui_dir.is_dir()
+
+
+def _ensure_tui_workspace(tui_dir: Path) -> None:
+    """Ensure ``ui-tui/`` exists before any npm/node subprocess uses it as cwd.
+
+    Without this, a missing workspace falls through to ``subprocess.run(...,
+    cwd=<missing ui-tui>)``, which crashes with ``NotADirectoryError``
+    (``WinError 267`` on Windows) instead of a usable message (#49145). We
+    first try to self-heal via ``git restore``; only if that can't recover the
+    directory do we abort with concrete manual-recovery steps.
+    """
+    if tui_dir.is_dir():
+        return
+
+    if _restore_tui_workspace(tui_dir):
+        if not os.environ.get("CLAWK_QUIET"):
+            print(f"Restored missing TUI workspace: {tui_dir}")
+        return
+
+    print(
+        "Error: the TUI workspace is missing from this Clawksis checkout.\n"
+        f"Expected directory: {tui_dir}\n"
+        "This usually means `clawk update` left tracked ui-tui files deleted.\n"
+        "Recovery:\n"
+        "  1. From the Clawksis checkout, run `git restore -- ui-tui`\n"
+        "  2. Run `npm install --silent --no-fund --no-audit --progress=false`\n"
+        "  3. Retry `clawk --tui`\n"
+        "If the checkout is still inconsistent, run `clawk update --force`.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
 def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
     """TUI: --dev → tsx src; else node dist (CLAWK_TUI_DIR prebuilt or esbuild)."""
 
@@ -2573,6 +2771,11 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
 
             return [node, "--expose-gc", str(bundled)], bundled.parent
 
+    # No prebuilt bundle available (or --dev, which never uses one) — we're
+    # about to npm install/build from source, so the workspace must exist.
+    if not ext_dir:
+        _ensure_tui_workspace(tui_dir)
+
     # 2. Normal flow: npm install if needed, always esbuild, then node dist/entry.js.
 
     #    --dev flow: npm install if needed, then tsx src/entry.tsx.
@@ -2617,6 +2820,12 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
                 npm,
                 "install",
                 *npm_workspace_args,
+                # --include=dev: ui-tui's build toolchain (esbuild, typescript)
+                # lives in devDependencies. An inherited NODE_ENV=production
+                # (e.g. from a container shell or a parent TUI launch) or an
+                # npm `omit=dev` config would silently skip them and the TUI
+                # build would fail. See _run_npm_install_deterministic.
+                "--include=dev",
                 "--silent",
                 "--no-fund",
                 "--no-audit",
@@ -3258,7 +3467,16 @@ def _resolve_use_tui(args) -> bool:
     if getattr(args, "cli", False):
         return False
 
-    if getattr(args, "tui", False) or os.environ.get("CLAWK_TUI") == "1":
+    if getattr(args, "tui", False):
+        return True
+
+    try:
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            return False
+    except Exception:
+        return False
+
+    if os.environ.get("CLAWK_TUI") == "1":
         return True
 
     try:
@@ -3330,6 +3548,27 @@ def cmd_chat(args):
         # If resolution fails, keep the original value — _init_agent will
 
         # report "Session not found" with the original input
+
+    # Session<->workspace binding: cd back into a resumed session's recorded cwd
+    # so it resumes in the repo it belonged to. Opt out with --no-restore-cwd;
+    # skipped under --worktree (that path owns its own dir). Best-effort — a
+    # missing dir warns and stays put rather than failing the resume.
+    if (
+        getattr(args, "resume", None)
+        and not getattr(args, "no_restore_cwd", False)
+        and not getattr(args, "worktree", False)
+    ):
+        try:
+            from clawk_state import SessionDB
+
+            _saved_cwd = ((SessionDB().get_session(args.resume) or {}).get("cwd") or "").strip()
+            if _saved_cwd and not os.path.isdir(_saved_cwd):
+                print(f"⚠ session's recorded dir is gone ({_saved_cwd}); staying in {os.getcwd()}")
+            elif _saved_cwd and os.path.realpath(_saved_cwd) != os.path.realpath(os.getcwd()):
+                os.chdir(_saved_cwd)
+                print(f"↪ restored workspace dir: {_saved_cwd}")
+        except Exception:
+            pass  # never let cwd-restore break a resume
 
     # xAI retirement warning — one-shot, non-blocking, never fails startup
 
@@ -4405,6 +4644,7 @@ def select_provider_and_model(args=None):
     from clawk_cli.models import (
         CANONICAL_PROVIDERS,
         _PROVIDER_LABELS,
+        _PROVIDER_ALIASES,
         group_providers,
         provider_group_for_slug,
     )
@@ -4441,7 +4681,31 @@ def select_provider_and_model(args=None):
 
     canonical_descs = {p.slug: p.tui_desc for p in CANONICAL_PROVIDERS}
 
-    grouped_rows = group_providers([p.slug for p in CANONICAL_PROVIDERS])
+    # Honor ``model_catalog.excluded_providers`` so the CLI ``clawk model``
+    # picker hides the same providers the gateway/TUI pickers do. A canonical
+    # provider is hidden if its slug OR any of its aliases appears in the
+    # exclusion list (case-insensitive), matching list_authenticated_providers'
+    # matching against clawk_id / alias / canonical slug.
+    _cli_excluded = {
+        str(p).strip().lower()
+        for p in (config.get("model_catalog", {}) or {}).get("excluded_providers") or []
+        if p
+    }
+    if _cli_excluded:
+        _alias_to_canon = _PROVIDER_ALIASES
+        _names_for: dict[str, set[str]] = {}
+        for _p in CANONICAL_PROVIDERS:
+            _names_for[_p.slug] = {_p.slug.lower()}
+        for _alias, _canon in _alias_to_canon.items():
+            _names_for.setdefault(_canon, {_canon.lower()}).add(_alias.lower())
+        _visible_slugs = [
+            p.slug for p in CANONICAL_PROVIDERS
+            if not _names_for.get(p.slug, {p.slug.lower()}) & _cli_excluded
+        ]
+    else:
+        _visible_slugs = [p.slug for p in CANONICAL_PROVIDERS]
+
+    grouped_rows = group_providers(_visible_slugs)
 
     # The group/slug that should be pre-selected: the active provider's group
 
@@ -4771,6 +5035,7 @@ _AUX_TASKS: list[tuple[str, str, str]] = [
     ("approval", "Approval", "smart command approval"),
     ("mcp", "MCP", "MCP tool reasoning"),
     ("title_generation", "Title generation", "session titles"),
+    ("memory_query_rewrite", "Memory query rewrite", "memory retrieval queries"),
     ("skills_hub", "Skills hub", "skills search/install"),
     ("triage_specifier", "Triage specifier", "kanban spec fleshing"),
     ("kanban_decomposer", "Kanban decomposer", "task decomposition"),
@@ -7844,7 +8109,7 @@ def _prompt_reasoning_effort_selection(efforts, current_effort=""):
         )
     )
 
-    canonical_order = ("minimal", "low", "medium", "high", "xhigh")
+    canonical_order = ("minimal", "low", "medium", "high", "xhigh", "max", "ultra")
 
     ordered = [effort for effort in canonical_order if effort in deduped]
 
@@ -10197,6 +10462,22 @@ def cmd_kanban(args):
     return kanban_command(args)
 
 
+def cmd_project(args):
+    """Manage projects (named, multi-folder workspaces)."""
+
+    from clawk_cli.projects_cmd import projects_command
+
+    return projects_command(args)
+
+
+def cmd_console(args):
+    """Open the safe Clawksis command console."""
+
+    from clawk_cli.console_engine import run_console_repl
+
+    return run_console_repl()
+
+
 def cmd_hooks(args):
     """Shell-hook inspection and management."""
 
@@ -10397,7 +10678,11 @@ def _print_version_info(*, check_updates: bool = True) -> None:
 
     print(f"Clawksis v{__version__} ({__release_date__})")
 
-    print(f"Project: {PROJECT_ROOT}")
+    from clawk_cli.config import detect_install_method
+
+    print(f"Install directory: {PROJECT_ROOT}")
+
+    print(f"Install method: {detect_install_method(PROJECT_ROOT)}")
 
     # Show Python version
 
@@ -10520,6 +10805,7 @@ _UPDATE_CRITICAL_FILES = (
     "clawk_cli/main.py",
     "clawk_cli/config.py",
     "clawk_cli/__init__.py",
+    "clawk_cli/web_server.py",
     "cli.py",
     "run_agent.py",
     "model_tools.py",
@@ -11102,7 +11388,7 @@ def _run_npm_install_deterministic(
     lockfile = cwd / "package-lock.json"
 
     if lockfile.exists():
-        ci_cmd = [npm, "ci", *extra_args]
+        ci_cmd = [npm, "ci", "--include=dev", *extra_args]
 
         ci_result = subprocess.run(
             ci_cmd,
@@ -11122,7 +11408,7 @@ def _run_npm_install_deterministic(
 
         # WIP fork/branch, or `npm ci` may not be available on very old npm.
 
-    install_cmd = [npm, "install", *extra_args]
+    install_cmd = [npm, "install", "--no-save", "--include=dev", *extra_args]
 
     return subprocess.run(
         install_cmd,
@@ -20740,6 +21026,16 @@ def _should_background_mcp_startup(args) -> bool:
 def _prepare_agent_startup(args) -> None:
     """Discover plugins/MCP/hooks for commands that can run an agent turn."""
 
+    # --yolo: chokepoint guarantee that CLAWK_YOLO_MODE is set before ANY
+    # plugin/tool discovery below imports tools.approval, which freezes
+    # _YOLO_MODE_FROZEN at import time (PR #7994 security design).  main()'s
+    # dispatch path also sets this earlier, but _prepare_agent_startup() is
+    # reachable from other launchers too (e.g. the Termux fast-CLI path),
+    # so the guarantee lives here where the import is actually triggered
+    # (#60328).
+    if getattr(args, "yolo", False):
+        os.environ["CLAWK_YOLO_MODE"] = "1"
+
     _sub_attr, _sub_set = _AGENT_SUBCOMMANDS.get(args.command, (None, None))
 
     if not (
@@ -20896,15 +21192,11 @@ def _try_termux_fast_cli_launch() -> bool:
     if getattr(args, "oneshot", None):
         _prepare_agent_startup(args)
 
-        from clawk_cli.oneshot import run_oneshot
-
-        sys.exit(
-            run_oneshot(
-                args.oneshot,
-                model=getattr(args, "model", None),
-                provider=getattr(args, "provider", None),
-                toolsets=getattr(args, "toolsets", None),
-            )
+        _run_and_exit_oneshot(
+            args.oneshot,
+            model=getattr(args, "model", None),
+            provider=getattr(args, "provider", None),
+            toolsets=getattr(args, "toolsets", None),
         )
 
     if (args.resume or args.continue_last) and args.command is None:
@@ -22346,6 +22638,18 @@ def main():
 
     # =========================================================================
 
+    # project command — named, multi-folder workspaces
+
+    # =========================================================================
+
+    from clawk_cli.projects_cmd import build_parser as _build_project_parser
+
+    project_parser = _build_project_parser(subparsers)
+
+    project_parser.set_defaults(func=cmd_project)
+
+    # =========================================================================
+
     # hooks command — shell-hook inspection and management
 
     # =========================================================================
@@ -22741,6 +23045,13 @@ Examples:
     config_subparsers.add_parser("migrate", help="Update config with new options")
 
     config_parser.set_defaults(func=cmd_config)
+
+    # =========================================================================
+    # console command  (parser built in clawk_cli/subcommands/console.py)
+    # =========================================================================
+    from clawk_cli.subcommands.console import build_console_parser
+
+    build_console_parser(subparsers, cmd_console=cmd_console)
 
     # =========================================================================
     # soul -- view/edit the agent persona file (SOUL.md)
@@ -25425,15 +25736,11 @@ Examples:
     # response only, nothing else. Bypasses cli.py entirely.
 
     if getattr(args, "oneshot", None):
-        from clawk_cli.oneshot import run_oneshot
-
-        sys.exit(
-            run_oneshot(
-                args.oneshot,
-                model=getattr(args, "model", None),
-                provider=getattr(args, "provider", None),
-                toolsets=getattr(args, "toolsets", None),
-            )
+        _run_and_exit_oneshot(
+            args.oneshot,
+            model=getattr(args, "model", None),
+            provider=getattr(args, "provider", None),
+            toolsets=getattr(args, "toolsets", None),
         )
 
     # Handle top-level --resume / --continue as shortcut to chat

@@ -60,6 +60,8 @@ import concurrent.futures
 
 import base64
 
+import copy
+
 import atexit
 
 import errno
@@ -537,14 +539,20 @@ def _resolve_prefill_messages_file(config: Dict[str, Any]) -> str:
     return ""
 
 
-def _parse_reasoning_config(effort: str) -> dict | None:
-    """Parse a reasoning effort level into an OpenRouter reasoning config dict."""
+def _parse_reasoning_config(effort) -> dict | None:
+    """Parse a reasoning effort level into an OpenRouter reasoning config dict.
+
+    ``effort`` may be a plain effort string, a numeric token budget, or a
+    pre-built config dict (e.g. a per-model override that already resolved to a
+    reasoning dict); non-empty non-parseable values warn (an empty value/None
+    parses as thinking disabled, see parse_reasoning_effort).
+    """
 
     from clawk_constants import parse_reasoning_effort
 
     result = parse_reasoning_effort(effort)
 
-    if effort and effort.strip() and result is None:
+    if effort and str(effort).strip() and result is None:
         logger.warning("Unknown reasoning_effort '%s', using default (medium)", effort)
 
     return result
@@ -5139,9 +5147,12 @@ class ClawksisCLI(CLICommandsMixin):
 
         # Reasoning config (OpenRouter reasoning effort level)
 
-        self.reasoning_config = _parse_reasoning_config(
-            CLI_CONFIG["agent"].get("reasoning_effort", "")
-        )
+        # Per-model override > global reasoning_effort — resolved through the
+        # shared chokepoint in clawk_constants (Closes #21256).
+
+        from clawk_constants import resolve_reasoning_config
+
+        self.reasoning_config = resolve_reasoning_config(CLI_CONFIG, self.model)
 
         self.service_tier = _parse_service_tier_config(
             CLI_CONFIG["agent"].get("service_tier", "")
@@ -5379,6 +5390,10 @@ class ClawksisCLI(CLICommandsMixin):
         )
 
         self._pending_tool_info: dict = {}  # function_name -> list of (preview, args) for stacked scrollback
+
+        # Snapshot captured by a `/model <name> --once` switch; restored at the
+        # end of the next turn so the override applies to exactly one response.
+        self._pending_one_turn_model_restore = None
 
         self._last_scrollback_tool: str = (
             ""  # last tool name printed to scrollback (for "new" dedup)
@@ -12458,6 +12473,67 @@ class ClawksisCLI(CLICommandsMixin):
 
         return scroll_offset, visible
 
+    def _snapshot_model_runtime(self) -> dict:
+        """Capture current CLI and agent model runtime for one-turn restore."""
+        agent = getattr(self, "agent", None)
+        return {
+            "model": self.model,
+            "provider": self.provider,
+            "requested_provider": self.requested_provider,
+            "_explicit_api_key": getattr(self, "_explicit_api_key", None),
+            "_explicit_base_url": getattr(self, "_explicit_base_url", None),
+            "api_key": self.api_key,
+            "base_url": self.base_url,
+            "api_mode": self.api_mode,
+            "agent_primary_runtime": copy.deepcopy(
+                getattr(agent, "_primary_runtime", None)
+            ) if agent is not None else None,
+        }
+
+    def _restore_model_runtime_snapshot(self, snapshot: dict | None) -> None:
+        """Restore a model runtime captured before a one-turn override."""
+        if not snapshot:
+            return
+        for key in (
+            "model",
+            "provider",
+            "requested_provider",
+            "_explicit_api_key",
+            "_explicit_base_url",
+            "api_key",
+            "base_url",
+            "api_mode",
+        ):
+            if key in snapshot:
+                setattr(self, key, snapshot.get(key))
+
+        agent = getattr(self, "agent", None)
+        if agent is None:
+            return
+
+        primary = snapshot.get("agent_primary_runtime")
+        if primary and hasattr(agent, "_restore_primary_runtime"):
+            try:
+                agent._primary_runtime = copy.deepcopy(primary)
+                agent._fallback_activated = True
+                agent._rate_limited_until = 0
+                if agent._restore_primary_runtime():
+                    return
+            except Exception:
+                logger.debug("CLI one-turn model restore via primary runtime failed", exc_info=True)
+
+        if hasattr(agent, "switch_model"):
+            try:
+                agent.switch_model(
+                    new_model=snapshot.get("model", ""),
+                    new_provider=snapshot.get("provider", ""),
+                    api_key=snapshot.get("api_key", ""),
+                    base_url=snapshot.get("base_url", ""),
+                    api_mode=snapshot.get("api_mode", ""),
+                )
+            except Exception as exc:
+                logger.warning("CLI one-turn model restore failed: %s", exc)
+
     def _apply_model_switch_result(self, result, persist_global: bool) -> None:
 
         if not result.success:
@@ -12541,6 +12617,9 @@ class ClawksisCLI(CLICommandsMixin):
                 )
                 if self.agent
                 else None,
+                custom_providers=getattr(self.agent, "_custom_providers", None)
+                if self.agent
+                else None,
             )
 
             if ctx:
@@ -12552,9 +12631,6 @@ class ClawksisCLI(CLICommandsMixin):
         if mi:
             if mi.max_output:
                 _cprint(f"    Max output: {mi.max_output:,} tokens")
-
-            if mi.has_cost_data():
-                _cprint(f"    Cost: {mi.format_cost()}")
 
             _cprint(f"    Capabilities: {mi.format_capabilities()}")
 
@@ -12574,6 +12650,15 @@ class ClawksisCLI(CLICommandsMixin):
 
             if result.provider_changed:
                 save_config_value("model.provider", result.target_provider)
+
+            # base_url/api_mode were previously never persisted here, so a
+            # global switch left the OLD provider's endpoint/wire-protocol in
+            # config.yaml. result.base_url/api_mode are always freshly resolved
+            # for the target provider (see model_switch.py), so sync them every
+            # time; None clears a value the new provider doesn't need (#25106).
+            save_config_value("model.base_url", result.base_url or None)
+
+            save_config_value("model.api_mode", result.api_mode or None)
 
             _cprint("    Saved to config.yaml (--global)")
 
@@ -12699,65 +12784,70 @@ class ClawksisCLI(CLICommandsMixin):
             self._close_model_picker()
 
     def _handle_model_switch(self, cmd_original: str):
-        """Handle /model command — switch model for this session.
-
-
+        """Handle /model command — switch model.
 
         Supports:
-
           /model                              — show current model + usage hints
-
-          /model <name>                       — switch for this session only
-
+          /model <name>                       — switch model (this session only)
+          /model <name> --once                — switch for the next turn only
+          /model <name> --session             — switch for this session only (explicit)
           /model <name> --global              — switch and persist to config.yaml
-
           /model <name> --provider <provider> — switch provider + model
-
           /model --provider <provider>        — switch to provider, auto-detect model
 
+        Persistence defaults to off (``model.persist_switch_by_default`` in
+        config.yaml, default False — switches are session-scoped). Use
+        ``--global`` to persist, or ``--once`` for the next turn only.
         """
-
-        from clawk_cli.model_switch import switch_model, parse_model_flags
-
+        from clawk_cli.model_switch import (
+            switch_model,
+            parse_model_flags_detailed,
+            resolve_persist_behavior,
+        )
         from clawk_cli.providers import get_label
 
         # Parse args from the original command
-
         parts = cmd_original.split(None, 1)  # split off '/model'
-
         raw_args = parts[1].strip() if len(parts) > 1 else ""
 
-        # Parse --provider, --global, and --refresh flags
-
-        model_input, explicit_provider, persist_global, force_refresh = (
-            parse_model_flags(raw_args)
+        # Parse --provider, --global, --session, --once, and --refresh flags
+        parsed_flags = parse_model_flags_detailed(raw_args)
+        model_input = parsed_flags.model_input
+        explicit_provider = parsed_flags.explicit_provider
+        is_global_flag = parsed_flags.is_global
+        force_refresh = parsed_flags.force_refresh
+        is_session = parsed_flags.is_session
+        one_turn = parsed_flags.is_once
+        if is_global_flag and one_turn:
+            _cprint("  ✗ /model --once cannot be combined with --global")
+            return
+        if one_turn and not model_input and not explicit_provider:
+            _cprint("  ✗ /model --once requires a model or provider.")
+            return
+        # Resolve the effective persistence once: --global forces persist,
+        # --session/--once force session-scope, otherwise defer to
+        # model.persist_switch_by_default (defaults to False so /model is
+        # session-scoped unless the user opts in).
+        persist_global = resolve_persist_behavior(
+            is_global_flag, is_session, is_once=one_turn,
+            explicit_provider=explicit_provider,
         )
 
         # --refresh: wipe the on-disk picker cache before building the
-
         # provider list. Forces a live re-fetch of every authed provider's
-
         # /v1/models endpoint on this open.
-
         if force_refresh:
             try:
                 from clawk_cli.models import clear_provider_models_cache
-
                 clear_provider_models_cache()
-
                 _cprint("  Cleared model picker cache. Refreshing...")
-
             except Exception:
                 pass
 
         # Single inventory context — replaces the inline config-slice the
-
         # dashboard / TUI used to duplicate. Overlay live session state
-
         # via with_overrides (truthy-only) so empty self.* attrs don't
-
         # clobber disk config.
-
         from clawk_cli.inventory import build_models_payload, load_picker_context
 
         try:
@@ -12766,47 +12856,38 @@ class ClawksisCLI(CLICommandsMixin):
                 current_model=self.model or "",
                 current_base_url=self.base_url or "",
             )
-
         except Exception:
             ctx = None
 
         # switch_model() + _open_model_picker still need the raw provider
-
         # dicts; ConfigContext is the canonical source for both.
-
         user_provs = ctx.user_providers if ctx is not None else None
-
         custom_provs = ctx.custom_providers if ctx is not None else None
 
         # No args at all: open prompt_toolkit-native picker modal
-
         if not model_input and not explicit_provider:
             model_display = self.model or "unknown"
-
             provider_display = get_label(self.provider) if self.provider else "unknown"
 
             try:
                 if ctx is None:
                     raise RuntimeError("inventory context unavailable")
-
-                providers = build_models_payload(ctx, max_models=50)["providers"]
-
+                providers = build_models_payload(
+                    ctx,
+                    probe_custom_providers=force_refresh,
+                    probe_current_custom_provider=not force_refresh,
+                )["providers"]
             except Exception:
                 providers = []
 
             if not providers:
                 _cprint("  No authenticated providers found.")
-
                 _cprint("")
-
-                _cprint("  /model <name>                        switch model")
-
+                _cprint("  /model <name>                        switch model (persists)")
+                _cprint("  /model <name> --once                 switch for the next turn only")
+                _cprint("  /model <name> --session              switch for this session only")
                 _cprint("  /model --provider <slug>             switch provider")
-
-                _cprint(
-                    "  /model --refresh                     re-fetch live model lists"
-                )
-
+                _cprint("  /model --refresh                     re-fetch live model lists")
                 return
 
             self._open_model_picker(
@@ -12816,11 +12897,9 @@ class ClawksisCLI(CLICommandsMixin):
                 user_provs=user_provs,
                 custom_provs=custom_provs,
             )
-
             return
 
         # Perform the switch
-
         result = switch_model(
             raw_input=model_input,
             current_provider=self.provider or "",
@@ -12835,49 +12914,58 @@ class ClawksisCLI(CLICommandsMixin):
 
         if not result.success:
             _cprint(f"  ✗ {result.error_message}")
-
             return
+
+        if self.agent is not None:
+            try:
+                from clawk_cli.context_switch_guard import merge_preflight_compression_warning
+
+                merge_preflight_compression_warning(
+                    result,
+                    agent=self.agent,
+                    messages=list(self.conversation_history or []),
+                    config_context_length=getattr(self.agent, "_config_context_length", None),
+                )
+            except Exception as exc:
+                logger.debug("preflight-compression switch warning failed: %s", exc)
 
         if not self._confirm_expensive_model_switch(result):
             _cprint("  Model switch cancelled.")
-
             return
 
         # Apply to CLI state.
-
         # Update requested_provider so _ensure_runtime_credentials() doesn't
-
         # overwrite the switch on the next turn (it re-resolves from this).
-
         old_model = self.model
-
+        _one_turn_restore_snapshot = self._snapshot_model_runtime() if one_turn else None
+        # Snapshot CLI-level fields before mutation so a failed in-place swap
+        # rolls the whole CLI back to the old working model (#50163).
+        _cli_snapshot = {
+            "model": self.model,
+            "provider": self.provider,
+            "requested_provider": self.requested_provider,
+            "_explicit_api_key": getattr(self, "_explicit_api_key", None),
+            "_explicit_base_url": getattr(self, "_explicit_base_url", None),
+            "api_key": self.api_key,
+            "base_url": self.base_url,
+            "api_mode": self.api_mode,
+        }
         self.model = result.new_model
-
         self.provider = result.target_provider
-
         self.requested_provider = result.target_provider
-
         # Always overwrite explicit overrides so stale credentials from the
-
         # previous provider (e.g. Ollama api_key/base_url) don't leak into
-
         # the new provider's credential resolution on the next turn.
-
         self._explicit_api_key = result.api_key
-
         self._explicit_base_url = result.base_url
-
         if result.api_key:
             self.api_key = result.api_key
-
         if result.base_url:
             self.base_url = result.base_url
-
         if result.api_mode:
             self.api_mode = result.api_mode
 
         # Apply to running agent (in-place swap)
-
         if self.agent is not None:
             try:
                 self.agent.switch_model(
@@ -12887,90 +12975,85 @@ class ClawksisCLI(CLICommandsMixin):
                     base_url=result.base_url,
                     api_mode=result.api_mode,
                 )
-
             except Exception as exc:
+                # Agent rolled itself back; roll the CLI back too and abort so a
+                # failed switch is a no-op rather than a dead session (#50163).
+                for _k, _v in _cli_snapshot.items():
+                    setattr(self, _k, _v)
                 _cprint(
-                    f"  ⚠ Agent swap failed ({exc}); change applied to next session."
+                    f"  ⚠ Model switch to {result.new_model} failed ({exc}); "
+                    f"staying on {old_model}."
                 )
+                return
 
         # Store a note to prepend to the next user message so the model
-
         # knows a switch occurred (avoids injecting system messages mid-history
-
         # which breaks providers and prompt caching).
+        from clawk_cli.model_switch import format_model_for_display
+        _display_old = format_model_for_display(old_model)
+        _display_new = format_model_for_display(result.new_model)
 
         self._pending_model_switch_note = (
-            f"[Note: model was just switched from {old_model} to {result.new_model} "
+            f"[Note: model was just switched from {_display_old} to {_display_new} "
             f"via {result.provider_label or result.target_provider}. "
+            f"{'This override applies to the next turn only. ' if one_turn else ''}"
             f"Adjust your self-identification accordingly.]"
         )
+        if one_turn:
+            self._pending_one_turn_model_restore = _one_turn_restore_snapshot
+        else:
+            self._pending_one_turn_model_restore = None
 
         # Display confirmation with full metadata
-
         provider_label = result.provider_label or result.target_provider
-
-        _cprint(f"  ✓ Model switched: {result.new_model}")
-
+        _cprint(f"  ✓ Model switched: {_display_new}")
         _cprint(f"    Provider: {provider_label}")
 
         # Context: always resolve via the provider-aware chain so Codex OAuth,
-
         # Copilot, and Nous-enforced caps win over the raw models.dev entry
-
         # (e.g. gpt-5.5 is 1.05M on openai but 272K on Codex OAuth).
-
         mi = result.model_info
-
         from clawk_cli.model_switch import resolve_display_context_length
-
         ctx = resolve_display_context_length(
             result.new_model,
             result.target_provider,
             base_url=result.base_url or self.base_url or "",
             api_key=result.api_key or self.api_key or "",
             model_info=mi,
-            config_context_length=getattr(self.agent, "_config_context_length", None)
-            if self.agent
-            else None,
+            config_context_length=getattr(self.agent, "_config_context_length", None) if self.agent else None,
+            custom_providers=getattr(self.agent, "_custom_providers", None) if self.agent else None,
         )
-
         if ctx:
             _cprint(f"    Context: {ctx:,} tokens")
-
         if mi:
             if mi.max_output:
                 _cprint(f"    Max output: {mi.max_output:,} tokens")
-
-            if mi.has_cost_data():
-                _cprint(f"    Cost: {mi.format_cost()}")
-
             _cprint(f"    Capabilities: {mi.format_capabilities()}")
 
         # Cache notice
-
         cache_enabled = (
-            base_url_host_matches(result.base_url or "", "openrouter.ai")
-            and "claude" in result.new_model.lower()
-        ) or result.api_mode == "anthropic_messages"
-
+            (base_url_host_matches(result.base_url or "", "openrouter.ai") and "claude" in result.new_model.lower())
+            or result.api_mode == "anthropic_messages"
+        )
         if cache_enabled:
             _cprint("    Prompt caching: enabled")
 
         # Warning from validation
-
         if result.warning_message:
             _cprint(f"    ⚠ {result.warning_message}")
 
         # Persistence
-
         if persist_global:
             save_config_value("model.default", result.new_model)
-
             if result.provider_changed:
                 save_config_value("model.provider", result.target_provider)
-
-            _cprint("    Saved to config.yaml (--global)")
-
+            # See _apply_model_switch_result above for why base_url/api_mode
+            # must be synced on every global switch (#25106).
+            save_config_value("model.base_url", result.base_url or None)
+            save_config_value("model.api_mode", result.api_mode or None)
+            _cprint("    Saved to config.yaml")
+        elif one_turn:
+            _cprint("    (next turn only — restores after one response)")
         else:
             _cprint("    (session only — add --global to persist)")
 
@@ -19565,6 +19648,15 @@ class ClawksisCLI(CLICommandsMixin):
 
                     self._pending_skills_reload_note = None
 
+                # A `/model <name> --once` switch stashed the prior runtime here;
+                # grab it now and clear the slot so it restores exactly once at
+                # the end of this turn (see the finally block below).
+                _one_turn_model_restore = getattr(
+                    self, "_pending_one_turn_model_restore", None
+                )
+
+                self._pending_one_turn_model_restore = None
+
                 try:
                     result = self.agent.run_conversation(
                         user_message=agent_message,
@@ -19593,6 +19685,12 @@ class ClawksisCLI(CLICommandsMixin):
                     }
 
                 finally:
+                    # Restore the pre-switch model runtime after a one-turn
+                    # (`/model --once`) override so it applied to exactly this
+                    # response and nothing further.
+                    if _one_turn_model_restore:
+                        self._restore_model_runtime_snapshot(_one_turn_model_restore)
+
                     # Clear thread-local callbacks so a reused thread doesn't
 
                     # hold stale references to a disposed CLI instance.

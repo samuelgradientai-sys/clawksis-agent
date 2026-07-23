@@ -1450,6 +1450,12 @@ DEFAULT_CONFIG = {
         # only controls how inbound user images are presented.
         "image_input_mode": "auto",
         "disabled_toolsets": [],
+        # Per-model reasoning effort overrides (spelling-tolerant).
+        # Dict mapping model names (any reasonable spelling) to effort levels.
+        # Takes precedence over agent.reasoning_effort when the current model
+        # matches a key in this dict.
+        # Edit directly in config.yaml (no CLI support due to dots in keys).
+        "reasoning_overrides": {},
     },
     "terminal": {
         "backend": "local",
@@ -4190,6 +4196,148 @@ def _set_nested(config, dotted_key: str, value):
         current[last] = value
 
 
+_MISSING = object()
+
+
+def _get_nested(config, dotted_key: str):
+    """Return a dotted-path value from nested dict/list config data."""
+    current = config
+    for part in dotted_key.split("."):
+        if isinstance(current, list):
+            try:
+                current = current[int(part)]
+            except (TypeError, ValueError, IndexError):
+                return _MISSING
+        elif isinstance(current, dict):
+            if part not in current:
+                return _MISSING
+            current = current[part]
+        else:
+            return _MISSING
+    return current
+
+
+def _unset_nested(config, dotted_key: str) -> bool:
+    """Remove a dotted-path value from nested dict/list config data."""
+    parts = dotted_key.split(".")
+    if not parts:
+        return False
+
+    parents = []
+    current = config
+    for part in parts[:-1]:
+        parents.append((current, part))
+        if isinstance(current, list):
+            try:
+                current = current[int(part)]
+            except (TypeError, ValueError, IndexError):
+                return False
+        elif isinstance(current, dict):
+            if part not in current:
+                return False
+            current = current[part]
+        else:
+            return False
+
+    last = parts[-1]
+    removed = False
+    if isinstance(current, list):
+        try:
+            current.pop(int(last))
+            removed = True
+        except (TypeError, ValueError, IndexError):
+            return False
+    elif isinstance(current, dict):
+        if last not in current:
+            return False
+        del current[last]
+        removed = True
+    else:
+        return False
+
+    # Drop empty dict containers left behind by the deletion while preserving
+    # user-authored empty lists and non-empty sibling branches.
+    for parent, part in reversed(parents):
+        if current != {}:
+            break
+        if isinstance(parent, list):
+            try:
+                idx = int(part)
+            except (TypeError, ValueError):
+                break
+            if 0 <= idx < len(parent) and parent[idx] == {}:
+                parent.pop(idx)
+                current = parent
+                continue
+        elif isinstance(parent, dict) and parent.get(part) == {}:
+            del parent[part]
+            current = parent
+            continue
+        break
+
+    return removed
+
+
+def _is_env_config_key(key: str) -> bool:
+    """Return whether ``clawk config set`` routes this key to .env.
+
+    Single source of truth for the env-key routing so ``config set`` /
+    ``config get`` / ``config unset`` all resolve the same keys to ``.env``.
+    """
+    if "." in key:
+        return False
+    key_upper = key.upper()
+    api_keys = [
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "VOICE_TOOLS_OPENAI_KEY",
+        "EXA_API_KEY",
+        "PARALLEL_API_KEY",
+        "FIRECRAWL_API_KEY",
+        "FIRECRAWL_API_URL",
+        "FIRECRAWL_GATEWAY_URL",
+        "TOOL_GATEWAY_DOMAIN",
+        "TOOL_GATEWAY_SCHEME",
+        "TOOL_GATEWAY_USER_TOKEN",
+        "TAVILY_API_KEY",
+        "BROWSERBASE_API_KEY",
+        "BROWSERBASE_PROJECT_ID",
+        "BROWSER_USE_API_KEY",
+        "FAL_KEY",
+        "TELEGRAM_BOT_TOKEN",
+        "DISCORD_BOT_TOKEN",
+        "TERMINAL_SSH_HOST",
+        "TERMINAL_SSH_USER",
+        "TERMINAL_SSH_KEY",
+        "SUDO_PASSWORD",
+        "SLACK_BOT_TOKEN",
+        "SLACK_APP_TOKEN",
+        "GITHUB_TOKEN",
+        "HONCHO_API_KEY",
+    ]
+    return (
+        key_upper in api_keys
+        or key_upper.endswith(("_API_KEY", "_TOKEN"))
+        or key_upper.startswith("TERMINAL_SSH")
+    )
+
+
+def _format_config_get_value(value, *, as_json: bool) -> str:
+    """Format a config value for command-line output."""
+    if as_json:
+        import json
+
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "null"
+    if isinstance(value, (dict, list)):
+        return yaml.safe_dump(value, sort_keys=False).rstrip()
+    return str(value)
+
+
 def get_missing_config_fields() -> List[Dict[str, Any]]:
     """
 
@@ -4755,30 +4903,39 @@ def check_config_version() -> Tuple[int, int]:
 # =============================================================================
 
 
-# Fields that are valid at root level of config.yaml
+# Fields that are valid at root level of config.yaml.
+# DEFAULT_CONFIG is the single source of truth for documented roots; keep this
+# set derived so new defaults (skills, security, browser, …) are accepted
+# automatically. A few optional/legacy roots are valid on disk but intentionally
+# absent from DEFAULT_CONFIG (omitted when unused / alternate schema forms).
 
-_KNOWN_ROOT_KEYS = {
-    "_config_version",
-    "model",
-    "providers",
-    "fallback_model",
-    "fallback_providers",
-    "credential_pool_strategies",
-    "toolsets",
-    "agent",
-    "terminal",
-    "display",
-    "compression",
-    "delegation",
-    "auxiliary",
-    "custom_providers",
-    "context",
-    "memory",
-    "gateway",
-    "sessions",
-    "streaming",
-    "updates",
+_EXTRA_KNOWN_ROOT_KEYS = {
+    "custom_providers",  # legacy list form; modern equivalent is providers: {}
+    "fallback_model",    # optional single dict or chain list; omitted when disabled
+    "mcp_servers",       # MCP server definitions written by setup/tools flows
+    # Roots read from the raw user YAML (or written by our own flows) that are
+    # intentionally absent from DEFAULT_CONFIG:
+    "image_gen",         # image-generation provider config (agent/image_gen_registry.py)
+    "video_gen",         # video-generation provider config (agent/video_gen_registry.py)
+    "plugins",           # plugin enable/disable lists (clawk_cli/plugins_cmd.py)
+    "smart_model_routing",   # written by the setup wizard (clawk_cli/setup.py)
+    "platform_toolsets",     # written by the setup wizard (clawk_cli/setup.py)
+    "known_plugin_toolsets", # written/read by clawk_cli/tools_config.py toolset-save flow
+    "session_reset",         # top-level form read by gateway/config.py + setup
+    "group_sessions_per_user",   # top-level form bridged by gateway/config.py
+    "thread_sessions_per_user",  # top-level form bridged by gateway/config.py
+    "stt_echo_transcripts",      # top-level form bridged by gateway/config.py
+    "reset_triggers",            # top-level form bridged by gateway/config.py
+    "always_log_local",          # top-level form bridged by gateway/config.py
+    "filter_silence_narration",  # top-level form bridged by gateway/config.py
+    "multiplex_profiles",    # top-level form accepted alongside gateway.multiplex_profiles
+    "profile_routes",        # top-level form accepted alongside gateway.profile_routes
+    "platforms",             # top-level per-platform map merged by gateway/config.py
+    "require_mention",       # top-level convenience form honored by the gateway (#3979)
+    "unauthorized_dm_behavior",  # top-level form read by gateway/config.py
+    "signal",            # Signal settings bridged to env vars by gateway/config.py
 }
+_KNOWN_ROOT_KEYS = frozenset(DEFAULT_CONFIG.keys()) | _EXTRA_KNOWN_ROOT_KEYS
 
 
 # Valid fields inside a custom_providers list entry
@@ -8046,8 +8203,169 @@ def terminal_config_env_var_for_key(key: str) -> str | None:
     return TERMINAL_CONFIG_ENV_MAP.get(sub)
 
 
-def set_config_value(key: str, value: str):
-    """Set a configuration value."""
+def _default_value_for_key(dotted_key: str):
+    """Return the leaf value declared for *dotted_key* in ``DEFAULT_CONFIG``.
+
+    Unknown keys and non-leaf paths return ``None`` so they retain the legacy
+    best-effort coercion used by ``config set``.
+    """
+    node = DEFAULT_CONFIG
+    for part in dotted_key.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node if not isinstance(node, dict) else None
+
+
+# Known top-level config keys that intentionally accept arbitrary user-supplied
+# child keys ("dictionary-shaped" config: the schema declares the dict but the
+# user populates its keys). Schema validation accepts ANY path below these
+# without deep checking, so users can set e.g. ``mcp_servers.my-server.command``
+# or ``providers.openrouter.api_key`` without us needing to know server names.
+_OPEN_DICT_TOP_LEVEL_KEYS = frozenset({
+    "providers",
+    "credential_pool_strategies",
+    "mcp_servers",
+    "hooks",
+    "quick_commands",
+    "personalities",
+    "command_allowlist",
+    "model_catalog",
+    "channel_prompts",
+    "server_actions",
+    "secrets",
+    "goals",
+})
+
+# Top-level keys whose sub-keys are partially schema-defined (e.g. on a
+# PlatformConfig dataclass) but where users may legitimately add fields
+# that DEFAULT_CONFIG doesn't enumerate (extras, per-channel overrides,
+# etc.). For these we validate the FIRST segment but accept anything below.
+_SCHEMA_DEFINED_DICT_KEYS = frozenset({
+    # Platform configs — PlatformConfig dataclass + dynamic extras
+    "discord", "telegram", "slack", "whatsapp", "signal", "mattermost",
+    "matrix", "feishu", "wecom", "weixin", "bluebubbles", "qqbot", "yuanbao",
+    "email", "sms", "dingtalk",
+    # MCP server template / dynamic auth dicts
+    "sessions", "checkpoints",
+})
+
+# Top-level keys that can be ANY user-supplied name (platform/provider dict
+# shapes where the outer key IS user-defined).
+_DYNAMIC_TOP_LEVEL_KEYS = frozenset({
+    "custom_providers",  # list-shaped, but indexed by position
+})
+
+# Container keys whose immediate child IS a user-supplied platform name
+# (``platforms.<name>.<field>``).  These appear both at the top level and
+# nested under ``gateway``.  Anything below the platform-name segment is
+# accepted because ``PlatformConfig`` carries an open ``extra`` mapping.
+_PLATFORM_CONTAINER_KEYS = frozenset({"platforms"})
+
+
+def _known_top_level_keys() -> set:
+    """Return the union of known top-level config keys for validation."""
+    keys = set(DEFAULT_CONFIG.keys())
+    keys.update(_OPEN_DICT_TOP_LEVEL_KEYS)
+    keys.update(_DYNAMIC_TOP_LEVEL_KEYS)
+    keys.update(_SCHEMA_DEFINED_DICT_KEYS)
+    return keys
+
+
+def _suggest_closest_key(
+    key: str, candidates: set, cutoff: float = 0.6
+) -> Optional[str]:
+    """Return the closest valid key name from ``candidates`` if any are
+    similar enough to ``key``, else None.  Used by ``clawk config set``
+    to point users at the right path when they've typo'd a top-level key.
+    """
+    import difflib
+
+    matches = difflib.get_close_matches(key, sorted(candidates), n=1, cutoff=cutoff)
+    return matches[0] if matches else None
+
+
+def _validate_config_key(key: str) -> tuple:
+    """Validate a dotted config-key path against the known schema.
+
+    Returns ``(is_known, suggested_alternative_or_None)``.  Known keys
+    return ``(True, None)``.  Unknown keys return ``(False, <suggestion>)``
+    where ``<suggestion>`` may be ``None`` if no close match was found.
+
+    Validates as deep as DEFAULT_CONFIG can be safely walked, then stops
+    at any segment that hits an open-dict container (mcp_servers,
+    providers, hooks, etc.) where users define the inner keys themselves.
+    """
+    if not key:
+        return False, None
+
+    segments = key.split(".")
+    top = segments[0]
+
+    # Underscore-prefixed keys are internal/test markers — accept them so
+    # schema validation never blocks deliberately-internal keys. Only the
+    # FIRST segment is checked, so a real typo like ``agent._max_turns``
+    # still gets caught at the sub-key level.
+    if top.startswith("_"):
+        return True, None
+
+    known = _known_top_level_keys()
+
+    # Top-level ``platforms.<name>.<field>`` is a valid current shape — accept
+    # anything below it.
+    if top in _PLATFORM_CONTAINER_KEYS:
+        return True, None
+
+    if top not in known:
+        suggestion = _suggest_closest_key(top, known)
+        if suggestion is not None:
+            rest = ".".join(segments[1:])
+            suggested_full = f"{suggestion}.{rest}" if rest else suggestion
+            return False, suggested_full
+
+        return False, None
+
+    # Walk DEFAULT_CONFIG along the user's segments. Stop at open/dynamic/
+    # schema-defined dicts (user-defined inner keys), a scalar leaf (path
+    # fully consumed), or an unknown sub-key (return a same-level suggestion).
+    if (
+        top in _OPEN_DICT_TOP_LEVEL_KEYS
+        or top in _DYNAMIC_TOP_LEVEL_KEYS
+        or top in _SCHEMA_DEFINED_DICT_KEYS
+    ):
+        return True, None
+
+    node = DEFAULT_CONFIG.get(top)
+    consumed = [top]
+    for seg in segments[1:]:
+        if seg in _PLATFORM_CONTAINER_KEYS:
+            return True, None
+        if not isinstance(node, dict):
+            # We hit a scalar leaf before consuming the full path — accept it
+            # (set_config_value's coercion replaces the leaf with a dict).
+            return True, None
+        if seg not in node:
+            sibling_suggestion = _suggest_closest_key(seg, set(node.keys()))
+            if sibling_suggestion is not None:
+                fixed_path = ".".join(consumed + [sibling_suggestion])
+                return False, fixed_path
+            return False, None
+        consumed.append(seg)
+        node = node[seg]
+
+    return True, None
+
+
+def set_config_value(key: str, value: str, force: bool = False):
+    """Set a configuration value.
+
+    Args:
+        key: Dotted config path (e.g. ``terminal.backend``).
+        value: String value (auto-coerced to bool/int/float when the schema
+            default is non-string; string-typed defaults keep the raw text).
+        force: When True, skip the unknown-key notice — useful for scripted
+            writes of keys the running version doesn't recognize yet.
+    """
 
     if is_managed():
         managed_error("set configuration values")
@@ -8056,41 +8374,7 @@ def set_config_value(key: str, value: str):
 
     # Check if it's an API key (goes to .env)
 
-    api_keys = [
-        "OPENROUTER_API_KEY",
-        "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "VOICE_TOOLS_OPENAI_KEY",
-        "EXA_API_KEY",
-        "PARALLEL_API_KEY",
-        "FIRECRAWL_API_KEY",
-        "FIRECRAWL_API_URL",
-        "FIRECRAWL_GATEWAY_URL",
-        "TOOL_GATEWAY_DOMAIN",
-        "TOOL_GATEWAY_SCHEME",
-        "TOOL_GATEWAY_USER_TOKEN",
-        "TAVILY_API_KEY",
-        "BROWSERBASE_API_KEY",
-        "BROWSERBASE_PROJECT_ID",
-        "BROWSER_USE_API_KEY",
-        "FAL_KEY",
-        "TELEGRAM_BOT_TOKEN",
-        "DISCORD_BOT_TOKEN",
-        "TERMINAL_SSH_HOST",
-        "TERMINAL_SSH_USER",
-        "TERMINAL_SSH_KEY",
-        "SUDO_PASSWORD",
-        "SLACK_BOT_TOKEN",
-        "SLACK_APP_TOKEN",
-        "GITHUB_TOKEN",
-        "HONCHO_API_KEY",
-    ]
-
-    if (
-        key.upper() in api_keys
-        or key.upper().endswith(("_API_KEY", "_TOKEN"))
-        or key.upper().startswith("TERMINAL_SSH")
-    ):
+    if _is_env_config_key(key):
         save_env_value(key.upper(), value)
 
         print(f"✓ Set {key} in {get_env_path()}")
@@ -8123,19 +8407,28 @@ def set_config_value(key: str, value: str):
 
     # inline navigation here silently overwrote lists with dicts.
 
-    # Convert value to appropriate type
+    # Validate the dotted key against the known schema BEFORE writing so we can
+    # surface a post-write "did you mean" notice for typo'd paths.  The value is
+    # still saved either way — arbitrary top-level keys are supported.
 
-    if value.lower() in {"true", "yes", "on"}:
-        value = True
+    is_known, suggestion = _validate_config_key(key)
 
-    elif value.lower() in {"false", "no", "off"}:
-        value = False
+    # Convert value to appropriate type.  String-typed schema defaults (e.g.
+    # approvals.mode="off") keep the raw text so enum members don't become YAML
+    # booleans; everything else retains best-effort bool/int/float coercion.
 
-    elif value.isdigit():
-        value = int(value)
+    if not isinstance(_default_value_for_key(key), str):
+        if value.lower() in {"true", "yes", "on"}:
+            value = True
 
-    elif value.replace(".", "", 1).isdigit():
-        value = float(value)
+        elif value.lower() in {"false", "no", "off"}:
+            value = False
+
+        elif value.isdigit():
+            value = int(value)
+
+        elif value.replace(".", "", 1).isdigit():
+            value = float(value)
 
     _set_nested(user_config, key, value)
 
@@ -8169,6 +8462,104 @@ def set_config_value(key: str, value: str):
 
     print(f"✓ Set {key} = {value} in {config_path}")
 
+    # Post-write unknown-key notice: the value IS saved, but tell the user the
+    # runtime may never read a plausible-but-wrong dotted path and suggest the
+    # likely-intended key.
+
+    if not is_known and not force:
+        print(
+            color(
+                f"⚠ '{key}' is not a recognized config key — it was saved anyway, "
+                "but Clawksis may not read it.",
+                Colors.YELLOW,
+            )
+        )
+
+        if suggestion:
+            print(color(f"  Did you mean: {suggestion}", Colors.YELLOW))
+
+        print(
+            color(
+                "  (Custom top-level keys are supported and bridged to the "
+                "environment for skills/external tools. Use --force to skip "
+                "this notice.)",
+                Colors.DIM,
+            )
+        )
+
+
+def get_config_value(key: str, *, as_json: bool = False):
+    """Print a resolved configuration value."""
+
+    if _is_env_config_key(key):
+        env_value = get_env_value(key.upper())
+
+        value = _MISSING if env_value is None else env_value
+
+    else:
+        value = _get_nested(load_config(), key)
+
+    if value is _MISSING:
+        print(f"Config key not set: {key}", file=sys.stderr)
+
+        sys.exit(1)
+
+    print(_format_config_get_value(value, as_json=as_json))
+
+
+def unset_config_value(key: str):
+    """Remove a user-set configuration or .env value."""
+
+    if is_managed():
+        managed_error("unset configuration values")
+
+        return
+
+    if _is_env_config_key(key):
+        if not remove_env_value(key.upper()):
+            print(f"Config key not set: {key}", file=sys.stderr)
+
+            sys.exit(1)
+
+        print(f"✓ Unset {key} from {get_env_path()}")
+
+        return
+
+    config_path = get_config_path()
+
+    user_config = {}
+
+    if config_path.exists():
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                user_config = yaml.safe_load(f) or {}
+
+        except Exception:
+            user_config = {}
+
+    removed = _unset_nested(user_config, key)
+
+    # Keep .env in sync for keys that terminal_tool reads directly from env vars.
+
+    if key != "terminal.cwd":
+        _env_var = terminal_config_env_var_for_key(key)
+
+        if _env_var is not None:
+            removed = remove_env_value(_env_var) or removed
+
+    if not removed:
+        print(f"Config key not set: {key}", file=sys.stderr)
+
+        sys.exit(1)
+
+    ensure_clawk_home()
+
+    from utils import atomic_yaml_write
+
+    atomic_yaml_write(config_path, user_config, sort_keys=False)
+
+    print(f"✓ Unset {key} from {config_path}")
+
 
 # =============================================================================
 
@@ -8188,6 +8579,26 @@ def config_command(args):
     elif subcmd == "edit":
         edit_config()
 
+    elif subcmd == "get":
+        key = getattr(args, "key", None)
+
+        if not key:
+            print("Usage: clawk config get <key> [--json]")
+
+            print()
+
+            print("Examples:")
+
+            print("  clawk config get model")
+
+            print("  clawk config get terminal.backend")
+
+            print("  clawk config get skills.config --json")
+
+            sys.exit(1)
+
+        get_config_value(key, as_json=getattr(args, "json", False))
+
     elif subcmd == "set":
         key = getattr(args, "key", None)
 
@@ -8206,9 +8617,33 @@ def config_command(args):
 
             print("  clawk config set OPENROUTER_API_KEY sk-or-...")
 
+            print()
+
+            print("  --force: skip the unknown-key notice for unrecognized keys")
+
             sys.exit(1)
 
-        set_config_value(key, value)
+        set_config_value(key, value, force=bool(getattr(args, "force", False)))
+
+    elif subcmd == "unset":
+        key = getattr(args, "key", None)
+
+        if not key:
+            print("Usage: clawk config unset <key>")
+
+            print()
+
+            print("Examples:")
+
+            print("  clawk config unset model")
+
+            print("  clawk config unset terminal.backend")
+
+            print("  clawk config unset OPENROUTER_API_KEY")
+
+            sys.exit(1)
+
+        unset_config_value(key)
 
     elif subcmd == "path":
         print(get_config_path())
@@ -8366,7 +8801,11 @@ def config_command(args):
 
         print("  clawk config edit      Open config in editor")
 
+        print("  clawk config get <key>           Get a config value")
+
         print("  clawk config set <key> <value>   Set a config value")
+
+        print("  clawk config unset <key>         Remove a config value")
 
         print("  clawk config check     Check for missing/outdated config")
 

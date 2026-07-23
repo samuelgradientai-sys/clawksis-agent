@@ -1545,6 +1545,24 @@ class EnvVarUpdate(BaseModel):
 
     profile: Optional[str] = None
 
+    # Optional bearer key for the connectivity probe of a custom/local endpoint
+    # (``key == "OPENAI_BASE_URL"``). Self-hosted endpoints that gate
+    # ``/v1/models`` behind auth otherwise look "reachable but empty"; sending
+    # the key lets the probe enumerate the served models. Ignored for the
+    # regular PUT /api/env path (which only reads key/value).
+    api_key: str = ""
+
+
+class CustomEndpointUpdate(BaseModel):
+    id: str = ""
+    name: str
+    base_url: str
+    model: str
+    api_key: Optional[str] = None
+    context_length: Optional[int] = None
+    discover_models: bool = True
+    make_default: bool = False
+
 
 class EnvVarDelete(BaseModel):
     key: str
@@ -1657,17 +1675,21 @@ def _apply_main_model_assignment(
 
 
 
-    Sets ``provider``/``default``, then reconciles ``base_url``: custom/local
+    Sets ``provider``/``default``, then reconciles ``base_url``: an explicitly
 
-    providers persist the supplied endpoint URL (the runtime resolver reads
+    supplied endpoint URL is always persisted (the runtime resolver reads
 
-    ``model.base_url`` from config and ignores ``OPENAI_BASE_URL``), while every
+    ``model.base_url`` from config and ignores ``OPENAI_BASE_URL``); otherwise a
 
-    other provider clears any stale URL so the resolver picks that provider's
+    stale URL is cleared ONLY when switching to a *different* provider — a
 
-    own default endpoint. The hardcoded ``context_length`` override is always
+    same-provider re-pick preserves the user's configured endpoint so choosing a
 
-    dropped since the new model may have a different context window.
+    model no longer wipes a custom/token-plan host. The hardcoded
+
+    ``context_length`` override is always dropped since the new model may have a
+
+    different context window.
 
 
 
@@ -1680,16 +1702,17 @@ def _apply_main_model_assignment(
     if not isinstance(model_cfg, dict):
         model_cfg = {}
 
+    # Capture the previous provider BEFORE overwriting it so the base_url
+    # lifecycle below can tell a provider switch from a same-provider re-pick.
+    prev_provider = str(model_cfg.get("provider") or "").strip().lower()
+
     provider_norm = provider.strip().lower()
 
     model_cfg["provider"] = provider
 
     model_cfg["default"] = model
 
-    if provider_norm == "custom" and base_url.strip():
-        model_cfg["base_url"] = base_url.strip()
-
-    elif provider_norm == "ollama":
+    if provider_norm == "ollama":
         # Local Ollama daemon: persist the OpenAI-compatible /v1 endpoint and a
         # dummy api_key so the runtime resolver wires the local server without an
         # auth prompt (Ollama ignores the key). Honor a caller-supplied base_url
@@ -1701,7 +1724,17 @@ def _apply_main_model_assignment(
         if not str(model_cfg.get("api_key") or "").strip():
             model_cfg["api_key"] = "ollama"
 
-    elif model_cfg.get("base_url"):
+    elif base_url.strip():
+        # An explicitly supplied endpoint (custom/local, or any provider whose
+        # key is bound to a non-default host) is always persisted.
+        model_cfg["base_url"] = base_url.strip()
+
+    elif model_cfg.get("base_url") and provider_norm != prev_provider:
+        # Switching providers: the old URL belonged to the old provider — drop it
+        # so the new provider's default endpoint is used. A same-provider
+        # re-assignment keeps the user's configured base_url intact (#62269):
+        # re-picking a model previously wiped it and broke custom endpoints /
+        # token-plan hosts.
         model_cfg["base_url"] = ""
 
     model_cfg.pop("context_length", None)
@@ -4760,6 +4793,280 @@ def _parse_model_ids(resp: "Any") -> List[str]:
     return ids
 
 
+def _custom_endpoint_id(raw: str, fallback: str = "custom") -> str:
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", (raw or "").strip()).strip("-_").lower()
+    return slug or fallback
+
+
+def _models_from_custom_endpoint_entry(entry: Dict[str, Any]) -> List[str]:
+    models: List[str] = []
+    raw_models = entry.get("models")
+    if isinstance(raw_models, dict):
+        models.extend(str(model).strip() for model in raw_models.keys())
+    elif isinstance(raw_models, list):
+        models.extend(str(model).strip() for model in raw_models)
+
+    default_model = str(entry.get("model") or entry.get("default_model") or "").strip()
+    if default_model:
+        models.insert(0, default_model)
+
+    seen: set[str] = set()
+    return [model for model in models if model and not (model in seen or seen.add(model))]
+
+
+def _custom_endpoint_response(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    model_cfg = cfg.get("model", {}) if isinstance(cfg.get("model"), dict) else {}
+    current_provider = str(model_cfg.get("provider", "") or "")
+    current_model = str(model_cfg.get("default", model_cfg.get("name", "")) or "")
+    current_base_url = str(model_cfg.get("base_url", "") or "")
+
+    endpoints: List[Dict[str, Any]] = []
+    providers = cfg.get("providers")
+    if isinstance(providers, dict):
+        for provider_id, raw_entry in providers.items():
+            if not isinstance(raw_entry, dict):
+                continue
+            base_url = str(raw_entry.get("base_url") or raw_entry.get("url") or raw_entry.get("api") or "").strip()
+            if not base_url:
+                continue
+            endpoint_id = str(provider_id)
+            models = _models_from_custom_endpoint_entry(raw_entry)
+            endpoint_model = str(raw_entry.get("model") or raw_entry.get("default_model") or (models[0] if models else ""))
+            endpoints.append({
+                "id": endpoint_id,
+                "name": str(raw_entry.get("name") or endpoint_id),
+                "base_url": base_url,
+                "model": endpoint_model,
+                "models": models,
+                "context_length": raw_entry.get("context_length"),
+                "discover_models": bool(raw_entry.get("discover_models", True)),
+                "has_api_key": bool(str(raw_entry.get("api_key", "") or "").strip()),
+                "api_key_preview": redact_key(str(raw_entry.get("api_key", "") or "")) if raw_entry.get("api_key") else None,
+                "is_current": endpoint_id == current_provider,
+                "source": "providers",
+            })
+
+    if current_provider.lower() == "custom" and current_base_url and not any(e["id"] == "custom" for e in endpoints):
+        endpoints.insert(0, {
+            "id": "custom",
+            "name": "Custom",
+            "base_url": current_base_url,
+            "model": current_model,
+            "models": [current_model] if current_model else [],
+            "context_length": model_cfg.get("context_length"),
+            "discover_models": True,
+            "has_api_key": bool(str(model_cfg.get("api_key", "") or "").strip()),
+            "api_key_preview": redact_key(str(model_cfg.get("api_key", "") or "")) if model_cfg.get("api_key") else None,
+            "is_current": True,
+            "source": "direct-config",
+        })
+
+    return {
+        "endpoints": endpoints,
+        "current": {
+            "provider": current_provider,
+            "model": current_model,
+            "base_url": current_base_url,
+        },
+    }
+
+
+def _detach_main_model_from_provider(cfg: Dict[str, Any], provider_key: str) -> None:
+    """Drop the main-slot mirror of a provider that no longer exists.
+
+    ``activate_custom_endpoint`` copies the endpoint's ``base_url`` and
+    ``api_key`` onto ``model``. That mirror outranks the environment at client
+    construction, so deleting the endpoint without clearing it leaves the agent
+    still authenticating to the deleted host with the deleted key — and leaves
+    that key sitting in config.yaml after the operator believes the dashboard
+    removed it.
+
+    Only touches ``model`` when it actually names the deleted provider, so an
+    endpoint deleted while a *different* provider is active is left alone.
+    """
+    model_cfg = cfg.get("model")
+    if not isinstance(model_cfg, dict):
+        return
+    if str(model_cfg.get("provider") or "").strip().lower() != provider_key:
+        return
+    for field in ("provider", "base_url", "api_key"):
+        model_cfg.pop(field, None)
+    cfg["model"] = model_cfg
+
+
+def _write_custom_endpoint(cfg: Dict[str, Any], body: CustomEndpointUpdate) -> Tuple[str, Dict[str, Any]]:
+    endpoint_id = _custom_endpoint_id(body.id or body.name)
+    name = (body.name or "").strip()
+    base_url = (body.base_url or "").strip().rstrip("/")
+    model = (body.model or "").strip()
+
+    if not name:
+        raise HTTPException(status_code=400, detail="name required")
+    if not base_url:
+        raise HTTPException(status_code=400, detail="base_url required")
+    parsed = urllib.parse.urlparse(base_url)
+    if not parsed.scheme or not parsed.netloc:
+        raise HTTPException(status_code=400, detail="base_url must include scheme and host")
+    if not model:
+        raise HTTPException(status_code=400, detail="model required")
+
+    providers = cfg.get("providers")
+    if not isinstance(providers, dict):
+        providers = {}
+    existing = providers.get(endpoint_id)
+    if not isinstance(existing, dict):
+        existing = {}
+
+    # Merge onto the existing entry rather than replacing it. A providers.<name>
+    # block is not owned by this panel: it can carry hand-written keys the
+    # dashboard has no field for — ``api_mode``, ``key_env``/``api_key_env``,
+    # ``extra_headers`` (which may themselves carry credentials),
+    # ``request_overrides`` — and rebuilding from scratch silently dropped every
+    # one of them on an unrelated edit, leaving a provider that no longer
+    # authenticates or speaks the right protocol.
+    entry: Dict[str, Any] = dict(existing)
+    entry.update({
+        "name": name,
+        "base_url": base_url,
+        "model": model,
+        "discover_models": bool(body.discover_models),
+    })
+    # Same for the model map: the panel names one default model, it does not
+    # enumerate the provider's catalogue. Keep the other models (and their
+    # context lengths) and just ensure this one is present.
+    existing_models = entry.get("models")
+    models_map: Dict[str, Any] = dict(existing_models) if isinstance(existing_models, dict) else {}
+    current_model_entry = models_map.get(model)
+    models_map[model] = dict(current_model_entry) if isinstance(current_model_entry, dict) else {}
+    entry["models"] = models_map
+    if body.context_length and body.context_length > 0:
+        entry["context_length"] = int(body.context_length)
+        entry["models"][model]["context_length"] = int(body.context_length)
+    if body.api_key is not None and body.api_key.strip():
+        entry["api_key"] = body.api_key.strip()
+
+    providers[endpoint_id] = entry
+    cfg["providers"] = providers
+
+    if body.make_default:
+        cfg["model"] = _apply_main_model_assignment(
+            cfg.get("model", {}), endpoint_id, model, base_url
+        )
+        if entry.get("api_key") and isinstance(cfg["model"], dict):
+            cfg["model"]["api_key"] = entry["api_key"]
+
+    return endpoint_id, entry
+
+
+@app.get("/api/providers/custom-endpoints")
+def list_custom_endpoints():
+    """Return configured OpenAI-compatible custom endpoints for Desktop."""
+    try:
+        return _custom_endpoint_response(load_config())
+    except Exception:
+        _log.exception("GET /api/providers/custom-endpoints failed")
+        raise HTTPException(status_code=500, detail="Failed to list custom endpoints")
+
+
+@app.post("/api/providers/custom-endpoints")
+def upsert_custom_endpoint(body: CustomEndpointUpdate):
+    """Create or update a v12+ ``providers`` custom endpoint entry."""
+    try:
+        cfg = load_config()
+        endpoint_id, _entry = _write_custom_endpoint(cfg, body)
+        save_config(cfg)
+        response = _custom_endpoint_response(cfg)
+        response["ok"] = True
+        response["id"] = endpoint_id
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        _log.exception("POST /api/providers/custom-endpoints failed")
+        raise HTTPException(status_code=500, detail="Failed to save custom endpoint")
+
+
+@app.post("/api/providers/custom-endpoints/{endpoint_id}/activate")
+def activate_custom_endpoint(endpoint_id: str):
+    """Set a configured custom endpoint as the default model provider."""
+    try:
+        cfg = load_config()
+        provider_key = _custom_endpoint_id(endpoint_id)
+        providers = cfg.get("providers")
+        entry = providers.get(provider_key) if isinstance(providers, dict) else None
+        if not isinstance(entry, dict):
+            raise HTTPException(status_code=404, detail="custom endpoint not found")
+
+        models = _models_from_custom_endpoint_entry(entry)
+        model = str(entry.get("model") or (models[0] if models else "")).strip()
+        base_url = str(entry.get("base_url") or "").strip()
+        if not model or not base_url:
+            raise HTTPException(status_code=400, detail="custom endpoint is incomplete")
+
+        model_cfg = _apply_main_model_assignment(cfg.get("model", {}), provider_key, model, base_url)
+        if entry.get("api_key"):
+            model_cfg["api_key"] = entry["api_key"]
+        cfg["model"] = model_cfg
+        save_config(cfg)
+        return {"ok": True, "provider": provider_key, "model": model}
+    except HTTPException:
+        raise
+    except Exception:
+        _log.exception("POST /api/providers/custom-endpoints/%s/activate failed", endpoint_id)
+        raise HTTPException(status_code=500, detail="Failed to activate custom endpoint")
+
+
+@app.delete("/api/providers/custom-endpoints/{endpoint_id}")
+def delete_custom_endpoint(endpoint_id: str):
+    """Remove a configured custom endpoint from ``providers``."""
+    try:
+        cfg = load_config()
+        provider_key = _custom_endpoint_id(endpoint_id)
+        providers = cfg.get("providers")
+        if not isinstance(providers, dict) or provider_key not in providers:
+            raise HTTPException(status_code=404, detail="custom endpoint not found")
+        providers.pop(provider_key, None)
+        cfg["providers"] = providers
+        _detach_main_model_from_provider(cfg, provider_key)
+        save_config(cfg)
+        response = _custom_endpoint_response(cfg)
+        response["ok"] = True
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        _log.exception("DELETE /api/providers/custom-endpoints/%s failed", endpoint_id)
+        raise HTTPException(status_code=500, detail="Failed to delete custom endpoint")
+
+
+@app.post("/api/providers/custom-endpoints/validate")
+async def validate_custom_endpoint(body: CustomEndpointUpdate):
+    """Probe a custom endpoint by calling its OpenAI-compatible /models URL."""
+    import httpx
+
+    base_url = (body.base_url or "").strip().rstrip("/")
+    if not base_url:
+        return {"ok": False, "reachable": True, "message": "Enter an endpoint URL first.", "models": []}
+
+    url = base_url + "/models"
+    headers = {"Accept": "application/json"}
+    if body.api_key and body.api_key.strip():
+        headers["Authorization"] = f"Bearer {body.api_key.strip()}"
+
+    try:
+        with httpx.Client(timeout=httpx.Timeout(8.0)) as client:
+            resp = client.get(url, headers=headers)
+    except Exception:
+        return {"ok": False, "reachable": False, "message": f"Could not reach {url}.", "models": []}
+
+    if resp.status_code in (401, 403):
+        return {"ok": False, "reachable": True, "message": "The endpoint rejected the API key.", "models": []}
+    if not resp.is_success:
+        return {"ok": False, "reachable": True, "message": f"Endpoint returned HTTP {resp.status_code}.", "models": []}
+
+    return {"ok": True, "reachable": True, "message": "", "models": _parse_model_ids(resp)}
+
+
 @app.post("/api/providers/validate")
 async def validate_provider_credential(body: EnvVarUpdate, request: Request):
     """Live-probe a provider credential before it's saved.
@@ -4798,9 +5105,16 @@ async def validate_provider_credential(body: EnvVarUpdate, request: Request):
     if key == "OPENAI_BASE_URL":
         url = value.rstrip("/") + "/models"
 
+        # Send the optional API key so endpoints that require auth on
+        # ``/v1/models`` (many hosted OpenAI-compatible servers) still enumerate
+        # their models instead of returning an empty list behind a 401.
+        api_key = (body.api_key or "").strip()
+
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
+
         try:
             with httpx.Client(timeout=httpx.Timeout(8.0)) as client:
-                resp = client.get(url)
+                resp = client.get(url, headers=headers)
 
             return {
                 "ok": True,
@@ -11676,7 +11990,7 @@ async def toggle_toolset(name: str, body: ToolsetToggle, profile: Optional[str] 
 
 
 @app.get("/api/tools/toolsets/{name}/config")
-async def get_toolset_config(name: str):
+async def get_toolset_config(name: str, profile: Optional[str] = None):
     """Return the provider matrix + key status for a toolset's config panel.
 
 
@@ -11698,110 +12012,430 @@ async def get_toolset_config(name: str):
         _get_effective_configurable_toolsets,
         _is_provider_active,
         _visible_providers,
+        provider_readiness_status,
+        web_provider_capabilities,
     )
 
     from clawk_cli.config import get_env_value
+
+    from clawk_cli.nous_subscription import get_nous_subscription_features
 
     valid = {ts_key for ts_key, _, _ in _get_effective_configurable_toolsets()}
 
     if name not in valid:
         raise HTTPException(status_code=400, detail=f"Unknown toolset: {name}")
 
-    config = load_config()
-
-    cat = TOOL_CATEGORIES.get(name)
-
-    providers = []
-
-    active_provider = None
-
-    if cat:
-        for prov in _visible_providers(cat, config, force_fresh=True):
-            env_vars = [
-                {
-                    "key": e["key"],
-                    "prompt": e.get("prompt", e["key"]),
-                    "url": e.get("url"),
-                    "default": e.get("default"),
-                    "is_set": bool(get_env_value(e["key"])),
+    with _profile_scope(profile):
+        config = load_config()
+        cat = TOOL_CATEGORIES.get(name)
+        providers = []
+        active_provider = None
+        active_search_backend = None
+        active_extract_backend = None
+        if cat:
+            # Fetch portal/entitlement state once for the whole matrix — the
+            # per-provider readiness computation below reuses it instead of
+            # re-probing per row.
+            features = get_nous_subscription_features(config, force_fresh=True)
+            for prov in _visible_providers(cat, config, force_fresh=True):
+                env_vars = [
+                    {
+                        "key": e["key"],
+                        "prompt": e.get("prompt", e["key"]),
+                        "url": e.get("url"),
+                        "default": e.get("default"),
+                        "is_set": bool(get_env_value(e["key"])),
+                    }
+                    for e in prov.get("env_vars", [])
+                ]
+                # Surface the same active-provider determination the CLI picker
+                # uses (``_is_provider_active``) so the GUI highlights the provider
+                # actually written to config (e.g. web.backend), not just the first
+                # keyless one in the list.
+                is_active = _is_provider_active(prov, config, force_fresh=True)
+                if is_active and active_provider is None:
+                    active_provider = prov["name"]
+                row = {
+                    "name": prov["name"],
+                    "badge": prov.get("badge", ""),
+                    "tag": prov.get("tag", ""),
+                    "env_vars": env_vars,
+                    "post_setup": prov.get("post_setup"),
+                    "requires_nous_auth": bool(prov.get("requires_nous_auth")),
+                    "is_active": is_active,
+                    # Honest server-side readiness. The GUI's old client-side
+                    # heuristic showed "Ready" for every zero-env-var row —
+                    # including logged-out Nous Subscription rows and never-run
+                    # post_setup installs (see provider_readiness_status).
+                    "status": provider_readiness_status(
+                        prov, config, features=features, is_active=is_active
+                    ),
                 }
-                for e in prov.get("env_vars", [])
-            ]
+                if name == "web" and prov.get("web_backend"):
+                    # The runtime split web into two capabilities long ago
+                    # (web.search_backend / web.extract_backend); surface each
+                    # row's backend key and which capabilities it can serve so
+                    # the GUI can offer per-capability selection.
+                    row["web_backend"] = prov["web_backend"]
+                    row["capabilities"] = web_provider_capabilities(prov["web_backend"])
+                if name == "tts" and prov.get("tts_provider"):
+                    # The provider key written to tts.provider on selection.
+                    # Doubles as the config section holding the provider's
+                    # voice/model settings (tts.<key>.*) so the GUI can render
+                    # those fields inline in the Capabilities panel.
+                    row["tts_provider"] = prov["tts_provider"]
+                providers.append(row)
+        if name == "web":
+            # Resolve the per-capability active backends exactly the way the
+            # web_search / web_extract dispatchers do (per-capability key →
+            # shared web.backend → credential auto-detect), so the GUI badges
+            # reflect what a tool call would actually hit right now.
+            try:
+                from tools.web_tools import _get_extract_backend, _get_search_backend
 
-            # Surface the same active-provider determination the CLI picker
+                active_search_backend = _get_search_backend()
+                active_extract_backend = _get_extract_backend()
+            except Exception:
+                active_search_backend = None
+                active_extract_backend = None
 
-            # uses (``_is_provider_active``) so the GUI highlights the provider
-
-            # actually written to config (e.g. web.backend), not just the first
-
-            # keyless one in the list.
-
-            is_active = _is_provider_active(prov, config, force_fresh=True)
-
-            if is_active and active_provider is None:
-                active_provider = prov["name"]
-
-            providers.append({
-                "name": prov["name"],
-                "badge": prov.get("badge", ""),
-                "tag": prov.get("tag", ""),
-                "env_vars": env_vars,
-                "post_setup": prov.get("post_setup"),
-                "requires_nous_auth": bool(prov.get("requires_nous_auth")),
-                "is_active": is_active,
-            })
-
-    return {
+    payload = {
         "name": name,
         "has_category": cat is not None,
         "providers": providers,
         "active_provider": active_provider,
     }
+    if name == "web":
+        payload["active_search_backend"] = active_search_backend
+        payload["active_extract_backend"] = active_extract_backend
+    return payload
 
 
 class ToolsetProviderSelect(BaseModel):
     provider: str
+    # Web-only capability scope: 'search' | 'extract'. Omitted → whole-provider
+    # selection through the legacy apply_provider_selection path (web.backend).
+    capability: Optional[str] = None
+    profile: Optional[str] = None
+
+
+# Toolsets whose backends carry a selectable model catalog, mapped to the
+# config.yaml section their `model` key lives in. Mirrors the CLI's
+# post-selection model pickers (`_configure_imagegen_model_for_plugin` /
+# `_configure_videogen_model_for_plugin` in tools_config.py).
+_MODEL_CATALOG_TOOLSETS = {
+    "image_gen": "image_gen",
+    "video_gen": "video_gen",
+}
+
+
+def _resolve_toolset_model_plugin(ts_key: str, provider_row: dict) -> Optional[str]:
+    """Map a provider picker row to its model-catalog plugin name.
+
+    Plugin-backed rows carry ``image_gen_plugin_name`` / ``video_gen_plugin_name``;
+    the managed "Nous Subscription" image row instead carries the legacy
+    ``imagegen_backend: "fal"`` marker (same underlying FAL catalog).
+    """
+    if ts_key == "image_gen":
+        return provider_row.get("image_gen_plugin_name") or (
+            "fal" if provider_row.get("imagegen_backend") else None
+        )
+    if ts_key == "video_gen":
+        return provider_row.get("video_gen_plugin_name")
+    return None
+
+
+def _toolset_model_catalog(ts_key: str, plugin_name: str):
+    """Return ``(catalog_dict, default_model)`` for a toolset's plugin backend."""
+    from clawk_cli.tools_config import (
+        _plugin_image_gen_catalog,
+        _plugin_video_gen_catalog,
+    )
+
+    if ts_key == "image_gen":
+        return _plugin_image_gen_catalog(plugin_name)
+    return _plugin_video_gen_catalog(plugin_name)
+
+
+def _find_toolset_provider_row(ts_key: str, config: dict, provider: Optional[str]) -> Optional[dict]:
+    """Resolve a provider picker row by name, or the active row when omitted."""
+    from clawk_cli.tools_config import (
+        TOOL_CATEGORIES,
+        _is_provider_active,
+        _visible_providers,
+    )
+
+    cat = TOOL_CATEGORIES.get(ts_key)
+    if cat is None:
+        return None
+    rows = _visible_providers(cat, config, force_fresh=True)
+    if provider:
+        return next((p for p in rows if p.get("name") == provider), None)
+    return next(
+        (p for p in rows if _is_provider_active(p, config, force_fresh=True)), None
+    )
+
+
+@app.get("/api/tools/toolsets/{name}/models")
+async def get_toolset_models(
+    name: str, provider: Optional[str] = None, profile: Optional[str] = None
+):
+    """Return the model catalog for a toolset backend (image/video gen).
+
+    The GUI counterpart of the model picker `clawk tools` runs after a
+    backend is selected — e.g. FAL's multi-model catalog (speed / strengths /
+    price per model). ``provider`` names a picker row; omitted, the currently
+    active provider is used. Toolsets without model catalogs return
+    ``has_models: false``.
+    """
+    section = _MODEL_CATALOG_TOOLSETS.get(name)
+    if section is None:
+        return {"name": name, "has_models": False, "models": [], "current": None, "default": None}
+
+    with _profile_scope(profile):
+        config = load_config()
+        row = _find_toolset_provider_row(name, config, provider)
+        plugin = _resolve_toolset_model_plugin(name, row) if row else None
+        if not plugin:
+            return {
+                "name": name,
+                "has_models": False,
+                "models": [],
+                "current": None,
+                "default": None,
+            }
+
+        catalog, default_model = _toolset_model_catalog(name, plugin)
+        section_cfg = config.get(section)
+        current = None
+        if isinstance(section_cfg, dict):
+            raw = section_cfg.get("model")
+            if isinstance(raw, str) and raw.strip():
+                current = raw.strip()
+        if current not in catalog:
+            current = default_model if default_model in catalog else None
+
+    models = [
+        {
+            "id": model_id,
+            "display": meta.get("display", model_id),
+            "speed": meta.get("speed", ""),
+            "strengths": meta.get("strengths", ""),
+            "price": meta.get("price", ""),
+        }
+        for model_id, meta in catalog.items()
+    ]
+    return {
+        "name": name,
+        "has_models": bool(models),
+        "provider": row.get("name") if row else None,
+        "plugin": plugin,
+        "models": models,
+        "current": current,
+        "default": default_model,
+    }
+
+
+class ToolsetModelSelect(BaseModel):
+    model: str
+    provider: Optional[str] = None
+    profile: Optional[str] = None
+
+
+@app.put("/api/tools/toolsets/{name}/model")
+async def select_toolset_model(
+    name: str, body: ToolsetModelSelect, profile: Optional[str] = None
+):
+    """Persist a backend model selection (``image_gen.model`` / ``video_gen.model``).
+
+    Validates the model against the resolved backend's catalog — the same
+    write the CLI's post-selection model picker performs. Returns 400 for
+    toolsets without model catalogs or unknown model ids.
+    """
+    section = _MODEL_CATALOG_TOOLSETS.get(name)
+    if section is None:
+        raise HTTPException(
+            status_code=400, detail=f"Toolset has no model catalog: {name}"
+        )
+
+    model_id = (body.model or "").strip()
+    if not model_id:
+        raise HTTPException(status_code=400, detail="model is required")
+
+    with _profile_scope(body.profile or profile):
+        config = load_config()
+        row = _find_toolset_provider_row(name, config, body.provider)
+        plugin = _resolve_toolset_model_plugin(name, row) if row else None
+        if not plugin:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No model-capable backend is active for {name}",
+            )
+
+        catalog, _default = _toolset_model_catalog(name, plugin)
+        if model_id not in catalog:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown model {model_id!r} for backend {plugin!r}",
+            )
+
+        section_cfg = config.setdefault(section, {})
+        if not isinstance(section_cfg, dict):
+            section_cfg = {}
+            config[section] = section_cfg
+        section_cfg["model"] = model_id
+        save_config(config)
+
+    return {"ok": True, "name": name, "model": model_id, "plugin": plugin}
 
 
 @app.put("/api/tools/toolsets/{name}/provider")
-async def select_toolset_provider(name: str, body: ToolsetProviderSelect):
+async def select_toolset_provider(
+    name: str, body: ToolsetProviderSelect, profile: Optional[str] = None
+):
     """Persist a provider selection for a toolset (no key prompting).
 
-
-
     Delegates to ``apply_provider_selection`` — the shared, non-interactive
-
     core extracted from the CLI configurator — so the GUI and ``clawk tools``
-
     write identical config keys (``web.backend``, ``tts.provider``, etc.).
-
     API keys and post-setup flows are handled by separate endpoints. Returns
-
     400 for unknown toolset or provider names.
 
+    For the ``web`` toolset only, an optional ``capability`` ('search' |
+    'extract') scopes the selection to ``web.search_backend`` /
+    ``web.extract_backend`` — the same per-capability overrides the runtime
+    dispatchers (``tools.web_tools._get_search_backend`` /
+    ``_get_extract_backend``) resolve first. The provider must actually
+    support the requested capability (a search-only backend can't be the
+    extract backend). Omitting ``capability`` keeps the legacy whole-provider
+    behavior (writes ``web.backend``).
     """
-
     from clawk_cli.tools_config import (
+        TOOL_CATEGORIES,
         apply_provider_selection,
+        web_provider_capabilities,
         _get_effective_configurable_toolsets,
+        _visible_providers,
     )
 
     valid = {ts_key for ts_key, _, _ in _get_effective_configurable_toolsets()}
-
     if name not in valid:
         raise HTTPException(status_code=400, detail=f"Unknown toolset: {name}")
 
-    config = load_config()
+    if body.capability is not None:
+        if name != "web":
+            raise HTTPException(
+                status_code=400,
+                detail="capability selection is only supported for the web toolset",
+            )
+        if body.capability not in ("search", "extract"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown capability: {body.capability!r} (expected 'search' or 'extract')",
+            )
 
-    try:
-        apply_provider_selection(name, body.provider, config)
+    with _profile_scope(body.profile or profile):
+        config = load_config()
+        if body.capability is not None:
+            # Per-capability path: resolve the picker row to its backend key
+            # and write web.<capability>_backend. Does NOT touch web.backend,
+            # so the other capability keeps resolving through the shared
+            # fallback chain.
+            cat = TOOL_CATEGORIES.get(name)
+            providers = _visible_providers(cat, config, force_fresh=True) if cat else []
+            prov = next((p for p in providers if p.get("name") == body.provider), None)
+            if prov is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unknown provider {body.provider!r} for toolset {name!r}",
+                )
+            backend = prov.get("web_backend")
+            if not backend:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Provider {body.provider!r} has no web backend key",
+                )
+            if body.capability not in web_provider_capabilities(backend):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{body.provider} does not support {body.capability}",
+                )
+            web_cfg = config.setdefault("web", {})
+            if not isinstance(web_cfg, dict):
+                web_cfg = {}
+                config["web"] = web_cfg
+            web_cfg[f"{body.capability}_backend"] = backend
+        else:
+            try:
+                apply_provider_selection(name, body.provider, config)
+            except KeyError as exc:
+                raise HTTPException(status_code=400, detail=str(exc).strip('"'))
+        save_config(config)
 
-    except KeyError as exc:
-        raise HTTPException(status_code=400, detail=str(exc).strip('"'))
+    response: Dict[str, Any] = {"ok": True, "name": name, "provider": body.provider}
+    if body.capability is not None:
+        response["capability"] = body.capability
+    return response
 
-    save_config(config)
 
-    return {"ok": True, "name": name, "provider": body.provider}
+class ToolsetEnvUpdate(BaseModel):
+    env: Dict[str, str]
+    profile: Optional[str] = None
+
+
+@app.put("/api/tools/toolsets/{name}/env")
+async def save_toolset_env(name: str, body: ToolsetEnvUpdate, profile: Optional[str] = None):
+    """Persist API keys for a toolset's provider env vars.
+
+    Writes each ``key: value`` to ``~/.clawksis/.env`` via ``save_env_value`` —
+    the same store ``clawk tools`` writes when it prompts for keys. Keys are
+    validated against the env-var allowlist for the toolset's category (the
+    union of every visible provider's ``env_vars``), so the GUI can't write an
+    arbitrary env var through this endpoint. A blank value is treated as
+    "leave unchanged" and skipped. Returns the saved/skipped key lists and the
+    refreshed ``is_set`` status. Returns 400 for unknown toolset or env keys.
+    """
+    from clawk_cli.tools_config import (
+        TOOL_CATEGORIES,
+        _get_effective_configurable_toolsets,
+        _visible_providers,
+    )
+    from clawk_cli.config import get_env_value, save_env_value
+
+    valid_ts = {ts_key for ts_key, _, _ in _get_effective_configurable_toolsets()}
+    if name not in valid_ts:
+        raise HTTPException(status_code=400, detail=f"Unknown toolset: {name}")
+
+    with _profile_scope(body.profile or profile):
+        config = load_config()
+        cat = TOOL_CATEGORIES.get(name)
+        allowed: set[str] = set()
+        if cat:
+            for prov in _visible_providers(cat, config, force_fresh=True):
+                for e in prov.get("env_vars", []):
+                    allowed.add(e["key"])
+
+        unknown = [k for k in body.env if k not in allowed]
+        if unknown:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown env var(s) for toolset {name}: {', '.join(sorted(unknown))}",
+            )
+
+        saved: List[str] = []
+        skipped: List[str] = []
+        for key, value in body.env.items():
+            if value and value.strip():
+                try:
+                    save_env_value(key, value.strip())
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc))
+                saved.append(key)
+            else:
+                skipped.append(key)
+
+        status = {k: bool(get_env_value(k)) for k in allowed}
+    return {"ok": True, "name": name, "saved": saved, "skipped": skipped, "is_set": status}
 
 
 class ToolsetPostSetup(BaseModel):
