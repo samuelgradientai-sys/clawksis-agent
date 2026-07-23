@@ -4338,11 +4338,11 @@ class MatrixAdapter(BasePlatformAdapter):
     def _markdown_to_html(self, text: str) -> str:
         """Convert Markdown to Matrix-compatible HTML (org.matrix.custom.html).
 
-        Uses the ``markdown`` library (a core dependency) when available.
-        Falls back to a comprehensive regex converter that handles fenced
-        code blocks, inline code, headers, bold, italic, strikethrough,
-        links, blockquotes, lists, and horizontal rules — everything the
-        Matrix HTML spec allows.
+        Uses the ``markdown`` library when available (installed with the
+        ``matrix`` extra).  Falls back to a comprehensive regex converter
+        that handles fenced code blocks, inline code, headers, bold,
+        italic, strikethrough, links, blockquotes, lists, tables, and
+        horizontal rules — everything the Matrix HTML spec allows.
         """
         text = _pre_sanitize_matrix_markdown(text)
         try:
@@ -4433,6 +4433,39 @@ class MatrixAdapter(BasePlatformAdapter):
         i = 0
         while i < len(lines):
             line = lines[i]
+
+            # Tables: a header row followed by a ``| --- | --- |`` separator,
+            # then zero or more body rows. The ``markdown`` library handles this
+            # via its "tables" extension; mirror it here so the dependency-free
+            # fallback (used when the ``matrix`` extra isn't installed) doesn't
+            # drop tables to flat text.
+            if (
+                "|" in line
+                and i + 1 < len(lines)
+                and "-" in lines[i + 1]
+                and re.match(r"^\s*\|?[\s:\-|]+\|[\s:\-|]*$", lines[i + 1])
+            ):
+
+                def _cells(row: str) -> list:
+                    return [c.strip() for c in row.strip().strip("|").split("|")]
+
+                header = _cells(line)
+                i += 2  # consume the header and separator rows
+                body_rows = []
+                while i < len(lines) and "|" in lines[i] and lines[i].strip():
+                    body_rows.append(_cells(lines[i]))
+                    i += 1
+
+                head_html = "".join(f"<th>{c}</th>" for c in header)
+                body_html = "".join(
+                    "<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>"
+                    for r in body_rows
+                )
+                out_lines.append(
+                    f"<table><thead><tr>{head_html}</tr></thead>"
+                    f"<tbody>{body_html}</tbody></table>"
+                )
+                continue
 
             # Horizontal rule
             if re.match(r"^[\s]*([-*_])\s*\1\s*\1[\s\-*_]*$", line):
