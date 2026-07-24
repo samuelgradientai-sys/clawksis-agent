@@ -218,43 +218,6 @@ clawk status [--all]       Show component status
 
 
 
-### Web Dashboard
-
-Clawksis ships an **incorporated web dashboard** — a built-in local web UI for
-managing config, API keys, models, sessions, skills, tools, profiles, and
-files. It is not a separate app; it is part of the CLI and is launched with
-`clawk dashboard`. (Users often call it "the Clawksis dashboard"; the command
-is `clawk dashboard`.)
-
-```
-
-clawk dashboard                  Build (if needed) + serve the web UI, opens the browser
-
-clawk dashboard --port 9119      Port (default 9119)
-
-clawk dashboard --host HOST      Bind host (default 127.0.0.1)
-
-clawk dashboard --no-open        Don't open the browser automatically
-
-clawk dashboard --skip-build     Serve the existing prebuilt dist without rebuilding
-
-clawk dashboard --stop           Stop all running dashboard processes
-
-clawk dashboard --status         List running dashboard processes
-
-clawk dashboard --remote U@HOST  Open a dashboard running on another host over an SSH tunnel
-
-clawk dashboard register         Register a self-hosted dashboard with Nous Portal (OAuth)
-
-```
-
-Default URL: http://127.0.0.1:9119. On first launch it builds the web UI
-(Node.js + npm required). For non-interactive contexts (Scheduled Tasks, CI),
-pre-build with `cd web && npm run build` and start with `clawk dashboard
---skip-build`.
-
-
-
 ### Tools & Skills
 
 
@@ -1351,6 +1314,23 @@ the `cronjob` tool, the `clawk cron` CLI (`list`, `add`, `edit`,
 
   multi-platform delivery.
 
+- **Branch-scoped maintenance:** for recurring repo self-maintenance, keep
+
+  the job pinned to a non-main branch, verify the current branch before any
+
+  edit, require reproducible evidence before patching, rerun the relevant
+
+  tests after the fix, and create only local commits. The reusable prompt
+
+  pattern lives in `references/cron-maintenance-branch.md`.
+
+- **External-data audits (e.g. Supabase chat QA):** when the job inspects a
+  database-backed conversation stream, filter to the target tenant/user first,
+  group by conversation/thread key, pair inbound/outbound messages, ignore
+  system/control noise, and report only high-confidence mismatches. Keep a
+  checkpoint so each run evaluates only new material. See
+  `references/supabase-audit-monitor.md`.
+
 - **Invariants:** 3-minute hard interrupt per run, `.tick.lock` file
 
   prevents duplicate ticks across processes, cron sessions pass
@@ -1756,6 +1736,24 @@ clawk config set auxiliary.vision.model <model_name>
 ---
 
 
+
+## Sub-skills (absorbed into this umbrella)
+
+These narrower skills have been consolidated into `clawksis-agent` as reference docs:
+
+| Former skill | Now at | What it covers |
+|-------------|--------|----------------|
+| `clawksis-agent-skill-authoring` | `references/skill-authoring.md` | Authoring in-repo SKILL.md: frontmatter, validator, structure, conventions |
+| `clawksis-dashboard` | `references/dashboard.md` | Build, launch, and expose the web management dashboard via Cloudflare tunnel |
+| `clawksis-provider-management` | `references/provider-management.md` | Provider config, credential types (API key + OAuth), billing checks, auth troubleshooting |
+
+Additional reference files:
+- `references/billing-report-patterns.md` — Billing report script structure, OpenAI key limitations, COP conversion notes.
+- `references/billing-report-script.md` — Script source for the daily billing report.
+
+Each reference file opens with its original frontmatter (triggers, tags) so the agent can still identify when to load it.
+
+---
 
 ## Where to Find Things
 

@@ -101,6 +101,75 @@ Agregá un router HTTP y uno HTTPS + un service:
 Traefik recarga la config dinámica solo (watch). `passHostHeader: true` es
 importante para que el dashboard reciba el `Host` correcto.
 
+### Hacerlo PERMANENTE (evitar que Easypanel sobreescriba)
+
+Easypanel sobreescribe `main.yaml` cada vez que se reinicia, borrando tu config del dashboard. Solucion: crear un **archivo separado** + **watchdog cron**.
+
+**Paso 1: Archivo separado** — Traefik de Easypanel monta `/etc/easypanel/traefik -> /data` y lee todos los `.yaml` de `/data/config/`. Crea un archivo aparte que Easypanel NO toca:
+
+```bash
+cat > /etc/easypanel/traefik/config/clawksis-dashboard.yaml << 'EOF'
+http:
+  routers:
+    http-clawksis-dashboard:
+      rule: Host(`tu-dominio.com`)
+      entryPoints: ["http"]
+      service: clawksis-dashboard
+    https-clawksis-dashboard:
+      rule: Host(`tu-dominio.com`)
+      entryPoints: ["https"]
+      service: clawksis-dashboard
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: tu-dominio.com
+  services:
+    clawksis-dashboard:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: http://172.17.0.1:9119
+EOF
+```
+
+Luego elimina los routers/service del dashboard de `main.yaml` para evitar duplicados:
+
+```bash
+python3 -c "
+import json
+with open('/etc/easypanel/traefik/config/main.yaml') as f:
+    c = json.load(f)
+for k in ['http-clawksis-dashboard', 'https-clawksis-dashboard']:
+    c['http']['routers'].pop(k, None)
+c['http']['services'].pop('clawksis-dashboard', None)
+with open('/etc/easypanel/traefik/config/main.yaml', 'w') as f:
+    json.dump(c, f, indent=2)
+"
+```
+
+Luego reinicia Traefik:
+
+```bash
+docker restart <traefik-container-id>
+```
+
+**Paso 2: Watchdog cron** — Por si el archivo se pierde (Easypanel/Swarm recrea el contenedor), agrega un cron que lo verifique cada 6h:
+
+```python
+cronjob(
+    action="create",
+    name="Watchdog: config Traefik dashboard",
+    schedule="0 */6 * * *",
+    deliver="origin",
+    prompt=\"\"\"
+Revisa si el archivo /etc/easypanel/traefik/config/clawksis-dashboard.yaml existe.
+Si NO existe, CREALO con el contenido del Paso 1.
+Ademas verifica que https://tu-dominio.com/ responda 302.
+Responde [SILENT] si todo esta bien.
+\"\"\"
+)
+```
+
 ### nginx (en el host)
 
 ```nginx
@@ -142,6 +211,10 @@ nginx sirvan HTTP plano y que Cloudflare ponga el HTTPS al cliente.
 Registro `A` de `tu-dominio.com` → IP del server (o el tunnel). Con Cloudflare:
 - **Naranja (proxied):** Cloudflare pone el HTTPS; seguí el pitfall #2.
 - **Gris (DNS only):** tu proxy tiene que emitir el certificado (Let's Encrypt).
+
+## Archivos de referencia
+
+- `references/traefik-config-example.json` — Config JSON funcional para agregar un router + service del dashboard al archivo `main.yaml` de Easypanel/Traefik.
 
 ## Verificación final
 

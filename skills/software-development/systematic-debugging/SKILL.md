@@ -264,6 +264,22 @@ THEN investigate that specific component.
 
 
 
+### 6. Inspect Persisted Shapes for Stored-State Bugs
+
+
+
+When the bug involves a list/report/render path over saved jobs, messages, or records, inspect the on-disk or API-persisted shape directly. In-memory code often assumes containers are dict/list-shaped, but storage may contain `null` from older versions or partial edits.
+
+
+
+**Good probe:** mutate a saved record to `null` and rerun the command to confirm the failure mode before fixing.
+
+
+
+See `references/cron-null-persisted-fields.md` for a concrete example.
+
+
+
 **Action:** Use `search_files` to trace references:
 
 
@@ -721,3 +737,19 @@ From debugging sessions:
 
 **No shortcuts. No guessing. Systematic always wins.**
 
+
+---
+
+## Absorbed Sub-Skills
+
+This skill has absorbed the following narrow skills as reference docs:
+
+| Former Skill | Reference | What It Covers |
+|-------------|-----------|----------------|
+| `node-inspect-debugger` | `references/node-debugging.md` | Node.js --inspect + CDP debugging |
+| `python-debugpy` | `references/python-debugging.md` | pdb + debugpy Python debugging |
+| `requesting-code-review` | `references/code-review.md` | Pre-commit code review workflow |
+| `simplify-code` | `references/simplify-code.md` | Parallel 3-agent code cleanup |
+| `spike` | `references/spike.md` | Throwaway experiments to validate ideas |
+| `test-driven-development` | `references/TDD.md` | RED-GREEN-REFACTOR cycle |
+| `codebase-inspection` | `references/codebase-inspection.md` | pygount LOC analysis |

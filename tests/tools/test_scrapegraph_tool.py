@@ -56,6 +56,11 @@ def test_schema_shape():
         props
     )
     assert SCRAPEGRAPH_SCHEMA["parameters"]["required"] == []
+    # timeout has min/max constraints
+    t = props["timeout"]
+    assert t["type"] == "integer"
+    assert t["minimum"] == 10
+    assert t["maximum"] == 300
 
 
 def test_coerce_schema():

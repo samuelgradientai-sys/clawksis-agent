@@ -86,20 +86,54 @@ OpenCode is provider-agnostic. The most common setup is via **OpenRouter** (no s
 ```bash
 # OpenCode auto-detects OPENROUTER_API_KEY from the environment
 export OPENROUTER_API_KEY="sk-or-..."
+```
 
-# Create config with desired model
-mkdir -p ~/.opencode && cat > ~/.opencode/config.json << 'JSON'
+⚠️ **OpenCode v1.17+ uses the NEW config format** at `~/.config/opencode/opencode.json`. The old flat format at `~/.opencode/config.json` is deprecated:
+
+```json
 {
+  "$schema": "https://opencode.ai/config.json",
   "provider": "openrouter",
   "model": "anthropic/claude-sonnet-4-5",
   "base_url": "https://openrouter.ai/api/v1"
 }
-JSON
 ```
 
-This avoids needing separate Anthropic/OpenAI API keys — you reuse your existing OpenRouter credits. The auth JSON lives at `~/.local/share/opencode/auth.json` (manageable via `opencode providers list`).
+**Config precedence:** `~/.config/opencode/opencode.json` wins over `~/.opencode/config.json`. If OpenCode ignores your OpenRouter config and uses Ollama instead, delete or rename the old `~/.opencode/config.json`.
+
+The auth JSON lives at `~/.local/share/opencode/auth.json` (manageable via `opencode providers list`).
 
 For other providers, use `opencode providers login -p <provider> -m <method>` (interactive).
+
+### Provider Setup: Direct OpenAI-Compatible API (DeepSeek, Together, etc.)
+
+For providers with an OpenAI-compatible endpoint and an API key set as an env var:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "deepseek": {
+      "name": "DeepSeek",
+      "apiKey": "DEEPSEEK_API_KEY",
+      "options": {
+        "baseURL": "https://api.deepseek.com/v1"
+      },
+      "models": {
+        "deepseek-v4-flash": {
+          "name": "deepseek-v4-flash",
+          "tool_call": true,
+          "structured_output": true
+        }
+      }
+    }
+  }
+}
+```
+
+The `apiKey` field references an env var name (not the literal key). Model keys under `models` define what `--model` argument to pass (format: `provider/model-key`).
+
+**⚠️ Config format strictness:** Unrecognized top-level keys cause OpenCode to reject the entire file with `"Configuration is invalid"`. Do NOT add `base_url`, `systemPrompt`, or other flat keys at the top level — they belong inside the provider's `options` object.
 
 ## Using `opencode_run` (Built-in Tool)
 
@@ -128,7 +162,7 @@ Example pattern:
 opencode_run(
     prompt="""Crea un sitio estático... [spec detallada: secciones, paleta, animaciones, responsive]""",
     workdir="/root/project-landing",
-    timeout=300,  # generous for full-page generation
+    timeout=300  # generous for full-page generation
 )
 ```
 

@@ -136,3 +136,5 @@ Do NOT use `apply_migration` to change a local database schema — it writes a m
 
 - **Skill Feedback** → [references/skill-feedback.md](references/skill-feedback.md)
   **MUST read when** the user reports that this skill gave incorrect guidance or is missing information.
+- **Project Exploration** → [references/exploration.md](references/exploration.md)
+  Use when the user shares Supabase credentials and wants to understand the project's data model, schema, or current state. Covers: extracting credentials, getting the full schema via OpenAPI, counting rows per table, sampling data, SPA credential discovery from JS bundles, password recovery via Auth Admin API, write operations (PATCH/POST/DELETE), and Edge Functions management (PAT-based).

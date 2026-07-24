@@ -180,6 +180,8 @@ SCRAPEGRAPH_SCHEMA = {
             },
             "timeout": {
                 "type": "integer",
+                "minimum": 10,
+                "maximum": 300,
                 "description": (
                     "Max seconds for the LLM extraction (default: no timeout, "
                     "min 10, max 300). Increase for large pages with many "
