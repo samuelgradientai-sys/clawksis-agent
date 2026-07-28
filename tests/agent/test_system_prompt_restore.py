@@ -29,6 +29,7 @@ def _make_agent(session_db=None, prebuilt_prompt: str = "BUILT_PROMPT"):
     agent._cached_system_prompt = None
     agent.session_id = "test-session-id"
     agent.model = "test-model"
+    agent.provider = "openrouter"
     agent.platform = "cli"
     agent._session_db = session_db
     agent._build_system_prompt = MagicMock(return_value=prebuilt_prompt)
@@ -49,9 +50,7 @@ class TestStoredPromptReuse:
         agent = _make_agent(session_db=db)
 
         with caplog.at_level(logging.WARNING, logger="agent.conversation_loop"):
-            _restore_or_build_system_prompt(
-                agent, None, [{"role": "user", "content": "hi"}]
-            )
+            _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
 
         assert agent._cached_system_prompt == stored
         agent._build_system_prompt.assert_not_called()
@@ -66,10 +65,49 @@ class TestStoredPromptReuse:
         db.get_session.return_value = {"system_prompt": stored}
         agent = _make_agent(session_db=db)
 
-        _restore_or_build_system_prompt(
-            agent, None, [{"role": "user", "content": "hi"}]
-        )
+        _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
         assert agent._cached_system_prompt == stored
+
+    def test_present_row_with_stale_runtime_identity_rebuilds(self, caplog):
+        """Stored prompts are cache gold unless their runtime identity is stale.
+
+        A live /model switch updates the agent and DB model_config immediately.
+        If the old system_prompt snapshot still says the previous model,
+        blindly restoring it makes the next turn call the new model while the
+        model reads old `Model:` metadata ("what model are you?" lies).
+        """
+        stored = (
+            "You are Clawksis.\n\n"
+            "Conversation started: Tuesday, June 16, 2026\n"
+            "Session ID: test-session-id\n"
+            "Model: anthropic/claude-opus-4.8-fast\n"
+            "Provider: openrouter"
+        )
+        db = MagicMock()
+        db.get_session.return_value = {"system_prompt": stored}
+        agent = _make_agent(
+            session_db=db,
+            prebuilt_prompt=(
+                "You are Clawksis.\n\n"
+                "Conversation started: Tuesday, June 16, 2026\n"
+                "Session ID: test-session-id\n"
+                "Model: openai/gpt-5.5\n"
+                "Provider: openrouter"
+            ),
+        )
+        agent.model = "openai/gpt-5.5"
+
+        with caplog.at_level(logging.INFO, logger="agent.conversation_loop"):
+            _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
+
+        assert agent._cached_system_prompt.endswith(
+            "Model: openai/gpt-5.5\nProvider: openrouter"
+        )
+        agent._build_system_prompt.assert_called_once_with(None)
+        db.update_system_prompt.assert_called_once_with(
+            agent.session_id, agent._cached_system_prompt
+        )
+        assert any("stale runtime identity" in r.getMessage() for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------
@@ -91,9 +129,7 @@ class TestLegitimateFreshBuild:
         agent._build_system_prompt.assert_called_once_with(None)
         assert agent._cached_system_prompt == "BUILT_PROMPT"
         # Persisted to DB
-        db.update_system_prompt.assert_called_once_with(
-            agent.session_id, "BUILT_PROMPT"
-        )
+        db.update_system_prompt.assert_called_once_with(agent.session_id, "BUILT_PROMPT")
         assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
     def test_no_db_skips_persistence(self):
@@ -117,18 +153,15 @@ class TestSilentFailureWarnings:
         agent = _make_agent(session_db=db)
 
         with caplog.at_level(logging.WARNING, logger="agent.conversation_loop"):
-            _restore_or_build_system_prompt(
-                agent, None, [{"role": "user", "content": "hi"}]
-            )
+            _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
 
         # Built fresh
         agent._build_system_prompt.assert_called_once()
         assert agent._cached_system_prompt == "BUILT_PROMPT"
         # Loud warning about the read failure
         warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
-        assert any("get_session failed" in r.getMessage() for r in warnings), (
+        assert any("get_session failed" in r.getMessage() for r in warnings), \
             f"Expected a get_session warning, got: {[r.getMessage() for r in warnings]}"
-        )
         assert any("disk full" in r.getMessage() for r in warnings)
 
     def test_null_system_prompt_warns_about_unusable_stored_state(self, caplog):
@@ -138,17 +171,12 @@ class TestSilentFailureWarnings:
         agent = _make_agent(session_db=db)
 
         with caplog.at_level(logging.WARNING, logger="agent.conversation_loop"):
-            _restore_or_build_system_prompt(
-                agent, None, [{"role": "user", "content": "hi"}]
-            )
+            _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
 
         agent._build_system_prompt.assert_called_once()
-        warnings = [
-            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
-        ]
-        assert any("is null" in m and "rebuilding" in m for m in warnings), (
+        warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+        assert any("is null" in m and "rebuilding" in m for m in warnings), \
             f"Expected null-stored-prompt warning, got: {warnings}"
-        )
 
     def test_empty_system_prompt_warns_about_silent_persistence_bug(self, caplog):
         """Row exists but system_prompt is '' → WARNING about silent write bug."""
@@ -157,17 +185,12 @@ class TestSilentFailureWarnings:
         agent = _make_agent(session_db=db)
 
         with caplog.at_level(logging.WARNING, logger="agent.conversation_loop"):
-            _restore_or_build_system_prompt(
-                agent, None, [{"role": "user", "content": "hi"}]
-            )
+            _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
 
         agent._build_system_prompt.assert_called_once()
-        warnings = [
-            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
-        ]
-        assert any("is empty" in m and "rebuilding" in m for m in warnings), (
+        warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+        assert any("is empty" in m and "rebuilding" in m for m in warnings), \
             f"Expected empty-stored-prompt warning, got: {warnings}"
-        )
 
     def test_db_write_failure_warns_loudly(self, caplog):
         """update_system_prompt raising → WARNING (was DEBUG before)."""
@@ -184,9 +207,7 @@ class TestSilentFailureWarnings:
         agent._build_system_prompt.assert_called_once()
         assert agent._cached_system_prompt == "BUILT_PROMPT"
         # Warning surfaced
-        warnings = [
-            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
-        ]
+        warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
         assert any(
             "update_system_prompt failed" in m and "database is locked" in m
             for m in warnings
@@ -204,9 +225,7 @@ class TestSilentFailureWarnings:
 
         db.get_session.assert_not_called()
         # No "rebuilding from scratch" warning because history is empty
-        warnings = [
-            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
-        ]
+        warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
         assert not any("rebuilding" in m for m in warnings)
 
 
@@ -233,9 +252,7 @@ class TestPromptStabilityInvariant:
         db.get_session.return_value = {"system_prompt": stored}
         agent = _make_agent(session_db=db)
 
-        _restore_or_build_system_prompt(
-            agent, None, [{"role": "user", "content": "hi"}]
-        )
+        _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
 
         # Identity check — must be the same object reference for maximum
         # confidence we're not slicing/copying/normalizing.

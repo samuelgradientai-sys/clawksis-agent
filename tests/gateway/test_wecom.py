@@ -15,35 +15,35 @@ from gateway.platforms.base import SendResult
 
 class TestWeComRequirements:
     def test_returns_false_without_aiohttp(self, monkeypatch):
-        monkeypatch.setattr("gateway.platforms.wecom.AIOHTTP_AVAILABLE", False)
-        monkeypatch.setattr("gateway.platforms.wecom.HTTPX_AVAILABLE", True)
-        from gateway.platforms.wecom import check_wecom_requirements
+        monkeypatch.setattr("plugins.platforms.wecom.adapter.AIOHTTP_AVAILABLE", False)
+        monkeypatch.setattr("plugins.platforms.wecom.adapter.HTTPX_AVAILABLE", True)
+        from plugins.platforms.wecom.adapter import check_wecom_requirements
 
         assert check_wecom_requirements() is False
 
     def test_returns_false_without_httpx(self, monkeypatch):
-        monkeypatch.setattr("gateway.platforms.wecom.AIOHTTP_AVAILABLE", True)
-        monkeypatch.setattr("gateway.platforms.wecom.HTTPX_AVAILABLE", False)
-        from gateway.platforms.wecom import check_wecom_requirements
+        monkeypatch.setattr("plugins.platforms.wecom.adapter.AIOHTTP_AVAILABLE", True)
+        monkeypatch.setattr("plugins.platforms.wecom.adapter.HTTPX_AVAILABLE", False)
+        from plugins.platforms.wecom.adapter import check_wecom_requirements
 
         assert check_wecom_requirements() is False
 
     def test_returns_true_when_available(self, monkeypatch):
-        monkeypatch.setattr("gateway.platforms.wecom.AIOHTTP_AVAILABLE", True)
-        monkeypatch.setattr("gateway.platforms.wecom.HTTPX_AVAILABLE", True)
-        from gateway.platforms.wecom import check_wecom_requirements
+        monkeypatch.setattr("plugins.platforms.wecom.adapter.AIOHTTP_AVAILABLE", True)
+        monkeypatch.setattr("plugins.platforms.wecom.adapter.HTTPX_AVAILABLE", True)
+        from plugins.platforms.wecom.adapter import check_wecom_requirements
 
         assert check_wecom_requirements() is True
 
 
 class TestWeComAdapterInit:
     def test_declares_non_editable_message_capability(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         assert WeComAdapter.SUPPORTS_MESSAGE_EDITING is False
 
     def test_reads_config_from_extra(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         config = PlatformConfig(
             enabled=True,
@@ -67,7 +67,7 @@ class TestWeComAdapterInit:
         monkeypatch.setenv("WECOM_BOT_ID", "env-bot")
         monkeypatch.setenv("WECOM_SECRET", "env-secret")
         monkeypatch.setenv("WECOM_WEBSOCKET_URL", "wss://env.example/ws")
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         assert adapter._bot_id == "env-bot"
@@ -78,8 +78,8 @@ class TestWeComAdapterInit:
 class TestWeComConnect:
     @pytest.mark.asyncio
     async def test_connect_records_missing_credentials(self, monkeypatch):
-        import gateway.platforms.wecom as wecom_module
-        from gateway.platforms.wecom import WeComAdapter
+        import plugins.platforms.wecom.adapter as wecom_module
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         monkeypatch.setattr(wecom_module, "AIOHTTP_AVAILABLE", True)
         monkeypatch.setattr(wecom_module, "HTTPX_AVAILABLE", True)
@@ -95,8 +95,8 @@ class TestWeComConnect:
 
     @pytest.mark.asyncio
     async def test_connect_records_handshake_failure_details(self, monkeypatch):
-        import gateway.platforms.wecom as wecom_module
-        from gateway.platforms.wecom import WeComAdapter
+        import plugins.platforms.wecom.adapter as wecom_module
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         class DummyClient:
             async def aclose(self):
@@ -111,13 +111,9 @@ class TestWeComConnect:
         )
 
         adapter = WeComAdapter(
-            PlatformConfig(
-                enabled=True, extra={"bot_id": "bot-1", "secret": "secret-1"}
-            )
+            PlatformConfig(enabled=True, extra={"bot_id": "bot-1", "secret": "secret-1"})
         )
-        adapter._open_connection = AsyncMock(
-            side_effect=RuntimeError("invalid secret (errcode=40013)")
-        )
+        adapter._open_connection = AsyncMock(side_effect=RuntimeError("invalid secret (errcode=40013)"))
 
         success = await adapter.connect()
 
@@ -128,9 +124,9 @@ class TestWeComConnect:
 
 
 class TestWeComQrScan:
-    @patch("gateway.platforms.wecom.time")
-    @patch("gateway.platforms.wecom.json.loads")
-    @patch("gateway.platforms.wecom.logger")
+    @patch("plugins.platforms.wecom.adapter.time")
+    @patch("plugins.platforms.wecom.adapter.json.loads")
+    @patch("plugins.platforms.wecom.adapter.logger")
     @patch("urllib.request.urlopen")
     @patch("urllib.request.Request")
     def test_qr_scan_timeout_uses_monotonic_clock(
@@ -141,12 +137,10 @@ class TestWeComQrScan:
         mock_json_loads,
         mock_time,
     ):
-        from gateway.platforms.wecom import qr_scan_for_bot_info
+        from plugins.platforms.wecom.adapter import qr_scan_for_bot_info
 
         generate_resp = MagicMock()
-        generate_resp.read.return_value = (
-            b'{"data":{"scode":"abc","auth_url":"https://example.com/qr"}}'
-        )
+        generate_resp.read.return_value = b'{"data":{"scode":"abc","auth_url":"https://example.com/qr"}}'
         generate_resp.__enter__.return_value = generate_resp
         generate_resp.__exit__.return_value = False
 
@@ -174,7 +168,7 @@ class TestWeComQrScan:
 class TestWeComReplyMode:
     @pytest.mark.asyncio
     async def test_send_uses_passive_reply_markdown_when_reply_context_exists(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         adapter._reply_req_ids["msg-1"] = "req-1"
@@ -194,10 +188,8 @@ class TestWeComReplyMode:
         assert args[1]["markdown"]["content"] == "hello from reply"
 
     @pytest.mark.asyncio
-    async def test_send_image_file_uses_passive_reply_media_when_reply_context_exists(
-        self,
-    ):
-        from gateway.platforms.wecom import WeComAdapter
+    async def test_send_image_file_uses_passive_reply_media_when_reply_context_exists(self):
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         adapter._reply_req_ids["msg-1"] = "req-1"
@@ -214,16 +206,12 @@ class TestWeComReplyMode:
                 "downgrade_note": None,
             }
         )
-        adapter._upload_media_bytes = AsyncMock(
-            return_value={"media_id": "media-1", "type": "image"}
-        )
+        adapter._upload_media_bytes = AsyncMock(return_value={"media_id": "media-1", "type": "image"})
         adapter._send_reply_request = AsyncMock(
             return_value={"headers": {"req_id": "req-1"}, "errcode": 0}
         )
 
-        result = await adapter.send_image_file(
-            "chat-123", "/tmp/demo.png", reply_to="msg-1"
-        )
+        result = await adapter.send_image_file("chat-123", "/tmp/demo.png", reply_to="msg-1")
 
         assert result.success is True
         adapter._send_reply_request.assert_awaited_once()
@@ -234,7 +222,7 @@ class TestWeComReplyMode:
 
 class TestExtractText:
     def test_extracts_plain_text(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         body = {
             "msgtype": "text",
@@ -245,7 +233,7 @@ class TestExtractText:
         assert reply_text is None
 
     def test_extracts_mixed_text(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         body = {
             "msgtype": "mixed",
@@ -261,7 +249,7 @@ class TestExtractText:
         assert text == "part1\npart2"
 
     def test_extracts_voice_and_quote(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         body = {
             "msgtype": "voice",
@@ -277,28 +265,22 @@ class TestCallbackDispatch:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("cmd", ["aibot_msg_callback", "aibot_callback"])
     async def test_dispatch_accepts_new_and_legacy_callback_cmds(self, cmd):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         adapter._on_message = AsyncMock()
 
-        await adapter._dispatch_payload({
-            "cmd": cmd,
-            "headers": {"req_id": "req-1"},
-            "body": {},
-        })
+        await adapter._dispatch_payload({"cmd": cmd, "headers": {"req_id": "req-1"}, "body": {}})
 
         adapter._on_message.assert_awaited_once()
 
 
 class TestPolicyHelpers:
     def test_dm_allowlist(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(
-            PlatformConfig(
-                enabled=True, extra={"dm_policy": "allowlist", "allow_from": ["user-1"]}
-            )
+            PlatformConfig(enabled=True, extra={"dm_policy": "allowlist", "allow_from": ["user-1"]})
         )
         assert adapter._is_dm_allowed("user-1") is True
         assert adapter._is_dm_allowed("user-2") is False
@@ -308,7 +290,7 @@ class TestPolicyHelpers:
         ``extra``) must populate the DM allowlist. Otherwise ``dm_policy:
         allowlist`` runs with an empty allowlist and drops every listed user
         at intake — the documented env vars become no-ops."""
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         monkeypatch.setenv("WECOM_DM_POLICY", "allowlist")
         monkeypatch.setenv("WECOM_ALLOWED_USERS", "user-1, user-2")
@@ -324,15 +306,12 @@ class TestPolicyHelpers:
     def test_dm_allowlist_extra_takes_precedence_over_env(self, monkeypatch):
         """Config ``extra`` wins over the env fallback, so an explicit
         allowlist is never silently widened by a stray WECOM_ALLOWED_USERS."""
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         monkeypatch.setenv("WECOM_ALLOWED_USERS", "env-user")
 
         adapter = WeComAdapter(
-            PlatformConfig(
-                enabled=True,
-                extra={"dm_policy": "allowlist", "allow_from": ["cfg-user"]},
-            )
+            PlatformConfig(enabled=True, extra={"dm_policy": "allowlist", "allow_from": ["cfg-user"]})
         )
 
         assert adapter._allow_from == ["cfg-user"]
@@ -340,7 +319,7 @@ class TestPolicyHelpers:
         assert adapter._is_dm_allowed("env-user") is False
 
     def test_group_allowlist_and_per_group_sender_allowlist(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(
             PlatformConfig(
@@ -357,10 +336,25 @@ class TestPolicyHelpers:
         assert adapter._is_group_allowed("group-1", "user-2") is False
         assert adapter._is_group_allowed("group-2", "user-1") is False
 
+    def test_pairing_group_policy_blocks_without_explicit_group_allow_from(self):
+        from plugins.platforms.wecom.adapter import WeComAdapter
+
+        adapter = WeComAdapter(
+            PlatformConfig(enabled=True, extra={"group_policy": "pairing"})
+        )
+
+        assert adapter._is_group_allowed("group-1", "user-1") is False
+
+    def test_pairing_dm_policy_strict_auth_denies_unknown(self):
+        from plugins.platforms.wecom.adapter import WeComAdapter
+
+        adapter = WeComAdapter(PlatformConfig(enabled=True, extra={"dm_policy": "pairing"}))
+        assert adapter._is_dm_allowed("user-1") is False
+        assert adapter._is_dm_intake_allowed("user-1") is True
 
 class TestMediaHelpers:
     def test_detect_wecom_media_type(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         assert WeComAdapter._detect_wecom_media_type("image/png") == "image"
         assert WeComAdapter._detect_wecom_media_type("video/mp4") == "video"
@@ -368,7 +362,7 @@ class TestMediaHelpers:
         assert WeComAdapter._detect_wecom_media_type("application/pdf") == "file"
 
     def test_voice_non_amr_downgrades_to_file(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         result = WeComAdapter._apply_file_size_limits(128, "voice", "audio/mpeg")
 
@@ -377,18 +371,16 @@ class TestMediaHelpers:
         assert "AMR" in (result["downgrade_note"] or "")
 
     def test_oversized_file_is_rejected(self):
-        from gateway.platforms.wecom import ABSOLUTE_MAX_BYTES, WeComAdapter
+        from plugins.platforms.wecom.adapter import ABSOLUTE_MAX_BYTES, WeComAdapter
 
-        result = WeComAdapter._apply_file_size_limits(
-            ABSOLUTE_MAX_BYTES + 1, "file", "application/pdf"
-        )
+        result = WeComAdapter._apply_file_size_limits(ABSOLUTE_MAX_BYTES + 1, "file", "application/pdf")
 
         assert result["rejected"] is True
         assert "20MB" in (result["reject_reason"] or "")
 
     def test_decrypt_file_bytes_round_trip(self):
         from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         plaintext = b"wecom-secret"
         key = os.urandom(32)
@@ -397,15 +389,13 @@ class TestMediaHelpers:
         encryptor = Cipher(algorithms.AES(key), modes.CBC(key[:16])).encryptor()
         encrypted = encryptor.update(padded) + encryptor.finalize()
 
-        decrypted = WeComAdapter._decrypt_file_bytes(
-            encrypted, base64.b64encode(key).decode("ascii")
-        )
+        decrypted = WeComAdapter._decrypt_file_bytes(encrypted, base64.b64encode(key).decode("ascii"))
 
         assert decrypted == plaintext
 
     @pytest.mark.asyncio
     async def test_load_outbound_media_rejects_placeholder_path(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
 
@@ -416,8 +406,8 @@ class TestMediaHelpers:
 class TestMediaUpload:
     @pytest.mark.asyncio
     async def test_upload_media_bytes_uses_sdk_sequence(self, monkeypatch):
-        import gateway.platforms.wecom as wecom_module
-        from gateway.platforms.wecom import (
+        import plugins.platforms.wecom.adapter as wecom_module
+        from plugins.platforms.wecom.adapter import (
             APP_CMD_UPLOAD_MEDIA_CHUNK,
             APP_CMD_UPLOAD_MEDIA_FINISH,
             APP_CMD_UPLOAD_MEDIA_INIT,
@@ -464,7 +454,7 @@ class TestMediaUpload:
     @pytest.mark.asyncio
     @patch("tools.url_safety.is_safe_url", return_value=True)
     async def test_download_remote_bytes_rejects_large_content_length(self, _mock_safe):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         class FakeResponse:
             headers = {"content-length": "10"}
@@ -489,13 +479,11 @@ class TestMediaUpload:
         adapter._http_client = FakeClient()
 
         with pytest.raises(ValueError, match="exceeds WeCom limit"):
-            await adapter._download_remote_bytes(
-                "https://example.com/file.bin", max_bytes=4
-            )
+            await adapter._download_remote_bytes("https://example.com/file.bin", max_bytes=4)
 
     @pytest.mark.asyncio
     async def test_cache_media_decrypts_url_payload_before_writing(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         plaintext = b"secret document bytes"
@@ -534,12 +522,10 @@ class TestMediaUpload:
 class TestSend:
     @pytest.mark.asyncio
     async def test_send_uses_proactive_payload(self):
-        from gateway.platforms.wecom import APP_CMD_SEND, WeComAdapter
+        from plugins.platforms.wecom.adapter import APP_CMD_SEND, WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
-        adapter._send_request = AsyncMock(
-            return_value={"headers": {"req_id": "req-1"}, "errcode": 0}
-        )
+        adapter._send_request = AsyncMock(return_value={"headers": {"req_id": "req-1"}, "errcode": 0})
 
         result = await adapter.send("chat-123", "Hello WeCom")
 
@@ -555,12 +541,10 @@ class TestSend:
 
     @pytest.mark.asyncio
     async def test_send_reports_wecom_errors(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
-        adapter._send_request = AsyncMock(
-            return_value={"errcode": 40001, "errmsg": "bad request"}
-        )
+        adapter._send_request = AsyncMock(return_value={"errcode": 40001, "errmsg": "bad request"})
 
         result = await adapter.send("chat-123", "Hello WeCom")
 
@@ -569,30 +553,20 @@ class TestSend:
 
     @pytest.mark.asyncio
     async def test_send_image_falls_back_to_text_for_remote_url(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
-        adapter._send_media_source = AsyncMock(
-            return_value=SendResult(success=False, error="upload failed")
-        )
-        adapter.send = AsyncMock(
-            return_value=SendResult(success=True, message_id="msg-1")
-        )
+        adapter._send_media_source = AsyncMock(return_value=SendResult(success=False, error="upload failed"))
+        adapter.send = AsyncMock(return_value=SendResult(success=True, message_id="msg-1"))
 
-        result = await adapter.send_image(
-            "chat-123", "https://example.com/demo.png", caption="demo"
-        )
+        result = await adapter.send_image("chat-123", "https://example.com/demo.png", caption="demo")
 
         assert result.success is True
-        adapter.send.assert_awaited_once_with(
-            chat_id="chat-123",
-            content="demo\nhttps://example.com/demo.png",
-            reply_to=None,
-        )
+        adapter.send.assert_awaited_once_with(chat_id="chat-123", content="demo\nhttps://example.com/demo.png", reply_to=None)
 
     @pytest.mark.asyncio
     async def test_send_voice_sends_caption_and_downgrade_note(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         adapter._prepare_outbound_media = AsyncMock(
@@ -608,28 +582,16 @@ class TestSend:
                 "downgrade_note": "语音格式 audio/mpeg 不支持，企微仅支持 AMR 格式，已转为文件格式发送",
             }
         )
-        adapter._upload_media_bytes = AsyncMock(
-            return_value={"media_id": "media-1", "type": "file"}
-        )
-        adapter._send_media_message = AsyncMock(
-            return_value={"headers": {"req_id": "req-media"}, "errcode": 0}
-        )
-        adapter.send = AsyncMock(
-            return_value=SendResult(success=True, message_id="msg-1")
-        )
+        adapter._upload_media_bytes = AsyncMock(return_value={"media_id": "media-1", "type": "file"})
+        adapter._send_media_message = AsyncMock(return_value={"headers": {"req_id": "req-media"}, "errcode": 0})
+        adapter.send = AsyncMock(return_value=SendResult(success=True, message_id="msg-1"))
 
-        result = await adapter.send_voice(
-            "chat-123", "/tmp/voice.mp3", caption="listen"
-        )
+        result = await adapter.send_voice("chat-123", "/tmp/voice.mp3", caption="listen")
 
         assert result.success is True
-        adapter._send_media_message.assert_awaited_once_with(
-            "chat-123", "file", "media-1"
-        )
+        adapter._send_media_message.assert_awaited_once_with("chat-123", "file", "media-1")
         assert adapter.send.await_count == 2
-        adapter.send.assert_any_await(
-            chat_id="chat-123", content="listen", reply_to=None
-        )
+        adapter.send.assert_any_await(chat_id="chat-123", content="listen", reply_to=None)
         adapter.send.assert_any_await(
             chat_id="chat-123",
             content="ℹ️ 语音格式 audio/mpeg 不支持，企微仅支持 AMR 格式，已转为文件格式发送",
@@ -640,14 +602,17 @@ class TestSend:
 class TestInboundMessages:
     @pytest.mark.asyncio
     async def test_on_message_builds_event(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
-        adapter = WeComAdapter(PlatformConfig(enabled=True))
+        adapter = WeComAdapter(
+            PlatformConfig(
+                enabled=True,
+                extra={"group_policy": "allowlist", "group_allow_from": ["group-1"]},
+            )
+        )
         adapter._text_batch_delay_seconds = 0  # disable batching for tests
         adapter.handle_message = AsyncMock()
-        adapter._extract_media = AsyncMock(
-            return_value=(["/tmp/test.png"], ["image/png"])
-        )
+        adapter._extract_media = AsyncMock(return_value=(["/tmp/test.png"], ["image/png"]))
 
         payload = {
             "cmd": "aibot_msg_callback",
@@ -674,9 +639,14 @@ class TestInboundMessages:
 
     @pytest.mark.asyncio
     async def test_on_message_preserves_quote_context(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
-        adapter = WeComAdapter(PlatformConfig(enabled=True))
+        adapter = WeComAdapter(
+            PlatformConfig(
+                enabled=True,
+                extra={"group_policy": "allowlist", "group_allow_from": ["group-1"]},
+            )
+        )
         adapter._text_batch_delay_seconds = 0  # disable batching for tests
         adapter.handle_message = AsyncMock()
         adapter._extract_media = AsyncMock(return_value=([], []))
@@ -703,15 +673,12 @@ class TestInboundMessages:
 
     @pytest.mark.asyncio
     async def test_on_message_respects_group_policy(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(
             PlatformConfig(
                 enabled=True,
-                extra={
-                    "group_policy": "allowlist",
-                    "group_allow_from": ["group-allowed"],
-                },
+                extra={"group_policy": "allowlist", "group_allow_from": ["group-allowed"]},
             )
         )
         adapter.handle_message = AsyncMock()
@@ -738,7 +705,7 @@ class TestWeComZombieSessionFix:
     """Tests for PR #11572 — device_id, markdown reply, group req_id fallback."""
 
     def test_adapter_generates_stable_device_id_per_instance(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         assert isinstance(adapter._device_id, str)
@@ -749,7 +716,7 @@ class TestWeComZombieSessionFix:
         assert adapter._device_id == adapter._device_id
 
     def test_different_adapter_instances_get_distinct_device_ids(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         a = WeComAdapter(PlatformConfig(enabled=True))
         b = WeComAdapter(PlatformConfig(enabled=True))
@@ -757,7 +724,7 @@ class TestWeComZombieSessionFix:
 
     @pytest.mark.asyncio
     async def test_open_connection_includes_device_id_in_subscribe(self):
-        from gateway.platforms.wecom import APP_CMD_SUBSCRIBE, WeComAdapter
+        from plugins.platforms.wecom.adapter import APP_CMD_SUBSCRIBE, WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         adapter._bot_id = "test-bot"
@@ -793,7 +760,7 @@ class TestWeComZombieSessionFix:
         adapter._cleanup_ws = _fake_cleanup
         adapter._wait_for_handshake = _fake_handshake
 
-        with patch("gateway.platforms.wecom.aiohttp.ClientSession", _FakeSession):
+        with patch("plugins.platforms.wecom.adapter.aiohttp.ClientSession", _FakeSession):
             await adapter._open_connection()
 
         assert len(sent_payloads) == 1
@@ -805,9 +772,14 @@ class TestWeComZombieSessionFix:
 
     @pytest.mark.asyncio
     async def test_on_message_caches_last_req_id_per_chat(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
-        adapter = WeComAdapter(PlatformConfig(enabled=True))
+        adapter = WeComAdapter(
+            PlatformConfig(
+                enabled=True,
+                extra={"group_policy": "allowlist", "group_allow_from": ["group-1"]},
+            )
+        )
         adapter._text_batch_delay_seconds = 0
         adapter.handle_message = AsyncMock()
         adapter._extract_media = AsyncMock(return_value=([], []))
@@ -831,7 +803,7 @@ class TestWeComZombieSessionFix:
     @pytest.mark.asyncio
     async def test_on_message_does_not_cache_blocked_sender_req_id(self):
         """Blocked chats shouldn't populate the proactive-send fallback cache."""
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(
             PlatformConfig(
@@ -860,7 +832,7 @@ class TestWeComZombieSessionFix:
         assert "group-blocked" not in adapter._last_chat_req_ids
 
     def test_remember_chat_req_id_is_bounded(self):
-        from gateway.platforms.wecom import DEDUP_MAX_SIZE, WeComAdapter
+        from plugins.platforms.wecom.adapter import DEDUP_MAX_SIZE, WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         for i in range(DEDUP_MAX_SIZE + 50):
@@ -871,7 +843,7 @@ class TestWeComZombieSessionFix:
         assert adapter._last_chat_req_ids[latest] == f"req-{DEDUP_MAX_SIZE + 49}"
 
     def test_remember_chat_req_id_ignores_empty_values(self):
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         adapter._remember_chat_req_id("", "req-1")
@@ -884,7 +856,7 @@ class TestWeComZombieSessionFix:
         """Sending into a group without reply_to should use the last cached
         req_id via APP_CMD_RESPONSE — WeCom AI Bots cannot initiate APP_CMD_SEND
         in group chats (errcode 600039)."""
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         adapter._last_chat_req_ids["group-1"] = "inbound-req-42"
@@ -909,7 +881,7 @@ class TestWeComZombieSessionFix:
     @pytest.mark.asyncio
     async def test_proactive_send_without_cached_req_id_uses_app_cmd_send(self):
         """When we have no prior req_id (fresh DM target), APP_CMD_SEND is used."""
-        from gateway.platforms.wecom import APP_CMD_SEND, WeComAdapter
+        from plugins.platforms.wecom.adapter import APP_CMD_SEND, WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         adapter._send_request = AsyncMock(
@@ -922,6 +894,7 @@ class TestWeComZombieSessionFix:
         adapter._send_request.assert_awaited_once()
         cmd = adapter._send_request.await_args.args[0]
         assert cmd == APP_CMD_SEND
+
 
 
 class TestTextBatchFlushRace:
@@ -941,7 +914,7 @@ class TestTextBatchFlushRace:
         """A flush task that has been superseded must leave the event in the
         batch dict for the new task to handle."""
         from gateway.platforms.base import MessageEvent, MessageType
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         adapter._text_batch_delay_seconds = 0
@@ -984,7 +957,7 @@ class TestTextBatchFlushRace:
     async def test_active_task_processes_event_normally(self):
         """When the task is not superseded it must still process the event."""
         from gateway.platforms.base import MessageEvent, MessageType
-        from gateway.platforms.wecom import WeComAdapter
+        from plugins.platforms.wecom.adapter import WeComAdapter
 
         adapter = WeComAdapter(PlatformConfig(enabled=True))
         adapter._text_batch_delay_seconds = 0

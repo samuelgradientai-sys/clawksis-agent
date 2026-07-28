@@ -100,23 +100,25 @@ def handle_suggestions_command(
         job = store.accept_suggestion(rest, origin=origin)
         if job is None:
             return f"No pending suggestion matches '{rest}'. Run /suggestions to list them."
-        sched = job.get("schedule_display") or (job.get("job_spec", {}) or {}).get(
-            "schedule", ""
-        )
+        sched = job.get("schedule_display") or (job.get("job_spec", {}) or {}).get("schedule", "")
         name = job.get("name", "automation")
         manage = (
             "Manage it with /cron."
             if surface == "cli"
             else "Ask me to list, pause, or remove it any time."
         )
-        return f"Scheduled '{name}'" + (f" ({sched})" if sched else "") + f". {manage}"
+        return (
+            f"Scheduled '{name}'"
+            + (f" ({sched})" if sched else "")
+            + f". {manage}"
+        )
 
     if sub in ("dismiss", "no", "reject"):
         if not rest:
             return "Usage: /suggestions dismiss <number|id>"
         ok = store.dismiss_suggestion(rest)
         return (
-            f"Dismissed. Won't suggest that again."
+            "Dismissed. Won't suggest that again."
             if ok
             else f"No pending suggestion matches '{rest}'."
         )
@@ -135,9 +137,7 @@ def handle_suggestions_command(
                 "or your suggestion list is full). Run /suggestions to see pending."
             )
         added = ", ".join(c.get("title", "?") for c in created)
-        return (
-            f"Added {len(created)} suggestion(s): {added}.\nRun /suggestions to review."
-        )
+        return f"Added {len(created)} suggestion(s): {added}.\nRun /suggestions to review."
 
     if sub == "clear":
         removed = store.clear_resolved()

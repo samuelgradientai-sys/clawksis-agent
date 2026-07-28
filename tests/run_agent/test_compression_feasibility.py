@@ -67,9 +67,7 @@ def _make_agent(
 
 @patch("agent.model_metadata.get_model_context_length", return_value=80_000)
 @patch("agent.auxiliary_client.get_text_auxiliary_client")
-def test_auto_corrects_threshold_when_aux_context_below_threshold(
-    mock_get_client, mock_ctx_len
-):
+def test_auto_corrects_threshold_when_aux_context_below_threshold(mock_get_client, mock_ctx_len):
     """Auto-correction: aux >= 64K floor but < threshold → lower threshold
     to aux_context so compression still works this session."""
     agent = _make_agent(main_context=200_000, threshold_percent=0.50)
@@ -86,8 +84,8 @@ def test_auto_corrects_threshold_when_aux_context_below_threshold(
 
     assert len(messages) == 1
     assert "Compression model" in messages[0]
-    assert "80,000" in messages[0]  # aux context
-    assert "100,000" in messages[0]  # old threshold
+    assert "80,000" in messages[0]        # aux context
+    assert "100,000" in messages[0]       # old threshold
     assert "Auto-lowered" in messages[0]
     # Actionable persistence guidance included
     assert "config.yaml" in messages[0]
@@ -156,13 +154,8 @@ def test_feasibility_check_passes_live_main_runtime():
     mock_client.base_url = "https://chatgpt.com/backend-api/codex"
     mock_client.api_key = "codex-token"
 
-    with (
-        patch(
-            "agent.auxiliary_client.get_text_auxiliary_client",
-            return_value=(mock_client, "gpt-5.4"),
-        ) as mock_get_client,
-        patch("agent.model_metadata.get_model_context_length", return_value=200_000),
-    ):
+    with patch("agent.auxiliary_client.get_text_auxiliary_client", return_value=(mock_client, "gpt-5.4")) as mock_get_client, \
+         patch("agent.model_metadata.get_model_context_length", return_value=200_000):
         agent._emit_status = lambda msg: None
         agent._check_compression_model_feasibility()
 
@@ -174,6 +167,7 @@ def test_feasibility_check_passes_live_main_runtime():
             "base_url": "https://chatgpt.com/backend-api/codex",
             "api_key": "codex-token",
             "api_mode": "codex_responses",
+            "auth_mode": "",
         },
     )
 
@@ -206,9 +200,7 @@ def test_feasibility_check_passes_config_context_length(mock_get_client, mock_ct
 
 @patch("agent.model_metadata.get_model_context_length", return_value=128_000)
 @patch("agent.auxiliary_client.get_text_auxiliary_client")
-def test_feasibility_check_ignores_invalid_context_length(
-    mock_get_client, mock_ctx_len
-):
+def test_feasibility_check_ignores_invalid_context_length(mock_get_client, mock_ctx_len):
     """Non-integer context_length in config is silently ignored."""
     agent = _make_agent(main_context=200_000, threshold_percent=0.50)
     agent._aux_compression_context_length_config = None
@@ -269,13 +261,8 @@ def test_init_feasibility_check_uses_aux_context_override_from_config():
         patch("run_agent.check_toolset_requirements", return_value={}),
         patch("run_agent.OpenAI"),
         patch("run_agent.ContextCompressor", new=_StubCompressor),
-        patch(
-            "agent.auxiliary_client.get_text_auxiliary_client",
-            return_value=(mock_client, "custom/big-model"),
-        ),
-        patch(
-            "agent.model_metadata.get_model_context_length", return_value=1_000_000
-        ) as mock_ctx_len,
+        patch("agent.auxiliary_client.get_text_auxiliary_client", return_value=(mock_client, "custom/big-model")),
+        patch("agent.model_metadata.get_model_context_length", return_value=1_000_000) as mock_ctx_len,
     ):
         agent = AIAgent(
             api_key="test-key-1234567890",
@@ -318,6 +305,39 @@ def test_warns_when_no_auxiliary_provider(mock_get_client):
     assert len(messages) == 1
     assert "No auxiliary LLM provider" in messages[0]
     assert agent._compression_warning is not None
+
+
+def test_no_unavailable_warning_when_configured_fallback_chain_resolves():
+    """Primary compression provider can be down if configured fallback works."""
+    agent = _make_agent(main_context=200_000, threshold_percent=0.50)
+    fallback_client = MagicMock()
+    fallback_client.base_url = "https://chatgpt.com/backend-api/codex"
+    fallback_client.api_key = "codex-oauth-token"
+
+    messages = []
+    agent._emit_status = lambda msg: messages.append(msg)
+
+    with patch(
+        "agent.auxiliary_client._resolve_task_provider_model",
+        return_value=("ollama-cloud", "deepseek-v4-flash:cloud", None, None, None),
+    ), patch(
+        "agent.auxiliary_client.get_text_auxiliary_client",
+        return_value=(None, None),
+    ), patch(
+        "agent.auxiliary_client._try_configured_fallback_for_unavailable_client",
+        return_value=(fallback_client, "gpt-5.4-mini", "fallback_chain[0](openai-codex)"),
+    ) as mock_fallback, patch(
+        "agent.model_metadata.get_model_context_length",
+        return_value=200_000,
+    ) as mock_ctx_len:
+        agent._check_compression_model_feasibility()
+
+    assert messages == []
+    assert agent._compression_warning is None
+    mock_fallback.assert_called_once_with("compression", "ollama-cloud")
+    mock_ctx_len.assert_called_once()
+    assert mock_ctx_len.call_args.args == ("gpt-5.4-mini",)
+    assert mock_ctx_len.call_args.kwargs["provider"] == "openai-codex"
 
 
 def test_skips_check_when_compression_disabled():
@@ -416,7 +436,8 @@ def test_warning_stored_for_gateway_replay(mock_get_client, mock_ctx_len):
     agent._replay_compression_warning()
 
     assert any(
-        ev == "lifecycle" and "Auto-lowered" in msg for ev, msg in callback_events
+        ev == "lifecycle" and "Auto-lowered" in msg
+        for ev, msg in callback_events
     )
 
 

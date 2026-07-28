@@ -39,7 +39,7 @@ from gateway.session import SessionSource
 class _NoDeleteAdapter(BasePlatformAdapter):
     """Adapter that does NOT override delete_message (silent degrade)."""
 
-    async def connect(self):
+    async def connect(self, *, is_reconnect: bool = False):
         pass
 
     async def disconnect(self):
@@ -59,7 +59,7 @@ class _DeleteCapableAdapter(BasePlatformAdapter):
         super().__init__(*a, **kw)
         self.deleted: list[tuple[str, str]] = []
 
-    async def connect(self):
+    async def connect(self, *, is_reconnect: bool = False):
         pass
 
     async def disconnect(self):
@@ -77,7 +77,9 @@ class _DeleteCapableAdapter(BasePlatformAdapter):
 
 
 def _no_delete_adapter():
-    return _NoDeleteAdapter(PlatformConfig(enabled=True, token="t"), Platform.TELEGRAM)
+    return _NoDeleteAdapter(
+        PlatformConfig(enabled=True, token="t"), Platform.TELEGRAM
+    )
 
 
 def _delete_adapter():
@@ -219,7 +221,9 @@ def test_schedule_ephemeral_delete_outside_event_loop_is_noop():
     """No running loop → no crash, silently drops the request."""
     adapter = _delete_adapter()
     # No pytest.mark.asyncio → no loop.  Must not raise.
-    adapter._schedule_ephemeral_delete(chat_id="42", message_id="m-2", ttl_seconds=1)
+    adapter._schedule_ephemeral_delete(
+        chat_id="42", message_id="m-2", ttl_seconds=1
+    )
     assert adapter.deleted == []
 
 
@@ -248,9 +252,8 @@ async def test_process_message_unwraps_ephemeral_before_send():
 
     event = _make_event()
     session_key = "agent:main:telegram:private:42"
-    with (
-        patch("gateway.platforms.base.asyncio.sleep", _fake_sleep),
-        patch.object(adapter, "_keep_typing", new=AsyncMock()),
+    with patch("gateway.platforms.base.asyncio.sleep", _fake_sleep), patch.object(
+        adapter, "_keep_typing", new=AsyncMock()
     ):
         await adapter._process_message_background(event, session_key)
         # Pump until the detached delete task completes.
@@ -266,9 +269,7 @@ async def test_process_message_unwraps_ephemeral_before_send():
 
 
 @pytest.mark.asyncio
-async def test_process_message_ephemeral_reply_does_not_auto_upload_bare_paths(
-    tmp_path,
-):
+async def test_process_message_ephemeral_reply_does_not_auto_upload_bare_paths(tmp_path):
     """Tips/system notices may mention local paths; they must remain text."""
     adapter = _delete_adapter()
     adapter._send_with_retry = AsyncMock(
@@ -288,9 +289,8 @@ async def test_process_message_ephemeral_reply_does_not_auto_upload_bare_paths(
 
     event = _make_event(text="/new")
     session_key = "agent:main:telegram:private:42"
-    with (
-        patch("gateway.platforms.base.asyncio.sleep", AsyncMock()),
-        patch.object(adapter, "_keep_typing", new=AsyncMock()),
+    with patch("gateway.platforms.base.asyncio.sleep", AsyncMock()), patch.object(
+        adapter, "_keep_typing", new=AsyncMock()
     ):
         await adapter._process_message_background(event, session_key)
 
@@ -322,9 +322,8 @@ async def test_process_message_incapable_platform_does_not_schedule_delete():
 
     event = _make_event()
     session_key = "agent:main:telegram:private:42"
-    with (
-        patch("gateway.platforms.base.asyncio.sleep", AsyncMock()),
-        patch.object(adapter, "_keep_typing", new=AsyncMock()),
+    with patch("gateway.platforms.base.asyncio.sleep", AsyncMock()), patch.object(
+        adapter, "_keep_typing", new=AsyncMock()
     ):
         await adapter._process_message_background(event, session_key)
         for _ in range(10):
@@ -356,9 +355,8 @@ async def test_process_message_plain_string_behaves_unchanged():
 
     event = _make_event()
     session_key = "agent:main:telegram:private:42"
-    with (
-        patch("gateway.platforms.base.asyncio.sleep", AsyncMock()),
-        patch.object(adapter, "_keep_typing", new=AsyncMock()),
+    with patch("gateway.platforms.base.asyncio.sleep", AsyncMock()), patch.object(
+        adapter, "_keep_typing", new=AsyncMock()
     ):
         await adapter._process_message_background(event, session_key)
         for _ in range(5):

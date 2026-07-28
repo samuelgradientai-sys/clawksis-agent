@@ -32,7 +32,7 @@ def _ensure_telegram_mock():
 _ensure_telegram_mock()
 
 from gateway.config import PlatformConfig
-from gateway.platforms.telegram import TelegramAdapter
+from plugins.platforms.telegram.adapter import TelegramAdapter
 
 
 def _make_adapter():
@@ -57,12 +57,7 @@ class TestTelegramModelPicker:
         result = await adapter.send_model_picker(
             chat_id="12345",
             providers=[
-                {
-                    "slug": "provider_one",
-                    "name": "Provider One",
-                    "total_models": 1,
-                    "is_current": True,
-                }
+                {"slug": "provider_one", "name": "Provider One", "total_models": 1, "is_current": True}
             ],
             current_model="model_1",
             current_provider="provider_one",
@@ -80,14 +75,7 @@ class TestTelegramModelPicker:
     async def test_back_button_escapes_dynamic_provider_label(self):
         adapter = _make_adapter()
         adapter._model_picker_state["12345"] = {
-            "providers": [
-                {
-                    "slug": "provider_one",
-                    "name": "Provider One",
-                    "total_models": 1,
-                    "is_current": True,
-                }
-            ],
+            "providers": [{"slug": "provider_one", "name": "Provider One", "total_models": 1, "is_current": True}],
             "current_model": "model_1",
             "current_provider": "provider_one",
             "session_key": "s",
@@ -121,12 +109,7 @@ class TestTelegramModelPicker:
         callback = AsyncMock(return_value="Switched to `gpt-5`")
         adapter._model_picker_state["12345"] = {
             "providers": [
-                {
-                    "slug": "openai",
-                    "name": "OpenAI",
-                    "total_models": 1,
-                    "is_current": True,
-                }
+                {"slug": "openai", "name": "OpenAI", "total_models": 1, "is_current": True}
             ],
             "current_model": "model_1",
             "current_provider": "openai",
@@ -164,7 +147,7 @@ class TestTelegramModelPicker:
         which is robust to whether `telegram` is the real SDK or the module
         mock (the SDK markup objects don't expose a plain iterable under the
         mock)."""
-        import gateway.platforms.telegram as tg
+        import plugins.platforms.telegram.adapter as tg
 
         built: list = []
 
@@ -223,17 +206,88 @@ class TestTelegramModelPicker:
         assert "mb" in built
 
     @pytest.mark.asyncio
+    async def test_provider_picker_paginates_past_first_ten(self, monkeypatch):
+        import plugins.platforms.telegram.adapter as tg
+
+        class _RecordingButton:
+            def __init__(self, text, callback_data=None, **kw):
+                self.text = text
+                self.callback_data = callback_data
+
+        class _RecordingMarkup:
+            def __init__(self, rows):
+                self.inline_keyboard = rows
+
+        monkeypatch.setattr(tg, "InlineKeyboardButton", _RecordingButton)
+        monkeypatch.setattr(tg, "InlineKeyboardMarkup", _RecordingMarkup)
+
+        adapter = _make_adapter()
+        sent = {}
+
+        async def mock_send_message(**kwargs):
+            sent.update(kwargs)
+            return SimpleNamespace(message_id=101)
+
+        adapter._bot.send_message = AsyncMock(side_effect=mock_send_message)
+
+        providers = [
+            {"slug": f"provider-{i}", "name": f"Provider {i}", "total_models": 1}
+            for i in range(10)
+        ]
+        providers.append({
+            "slug": "zai",
+            "name": "Z.AI / GLM",
+            "models": ["glm-5.2"],
+            "total_models": 1,
+        })
+
+        await adapter.send_model_picker(
+            chat_id="12345",
+            providers=providers,
+            current_model="model_1",
+            current_provider="provider-0",
+            session_key="s",
+            on_model_selected=AsyncMock(),
+            metadata=None,
+        )
+
+        def _callbacks(markup):
+            return [
+                button.callback_data
+                for row in markup.inline_keyboard
+                for button in row
+            ]
+
+        first_page = _callbacks(sent["reply_markup"])
+        assert "mp:zai" not in first_page
+        assert "mpv:1" in first_page
+
+        query = AsyncMock()
+        query.message = MagicMock()
+        query.message.chat_id = 12345
+        query.answer = AsyncMock()
+        query.edit_message_text = AsyncMock()
+
+        await adapter._handle_model_picker_callback(query, "mpv:1", "12345")
+
+        second_page = _callbacks(query.edit_message_text.call_args[1]["reply_markup"])
+        assert "mp:zai" in second_page
+        assert "mpv:0" in second_page
+
+        await adapter._handle_model_picker_callback(query, "mp:zai", "12345")
+        assert adapter._model_picker_state["12345"]["selected_provider"] == "zai"
+
+        await adapter._handle_model_picker_callback(query, "mb", "12345")
+        back_page = _callbacks(query.edit_message_text.call_args[1]["reply_markup"])
+        assert "mp:zai" in back_page
+
+    @pytest.mark.asyncio
     async def test_expensive_model_requires_confirmation(self, monkeypatch):
         adapter = _make_adapter()
         callback = AsyncMock(return_value="Switched to `openai/gpt-5.5-pro`")
         adapter._model_picker_state["12345"] = {
             "providers": [
-                {
-                    "slug": "openrouter",
-                    "name": "OpenRouter",
-                    "total_models": 1,
-                    "is_current": True,
-                }
+                {"slug": "openrouter", "name": "OpenRouter", "total_models": 1, "is_current": True}
             ],
             "current_model": "model_1",
             "current_provider": "openrouter",
@@ -272,9 +326,7 @@ class TestTelegramModelPicker:
     @pytest.mark.asyncio
     async def test_retries_without_thread_when_thread_not_found(self):
         adapter = _make_adapter()
-        providers = [
-            {"slug": "openai", "name": "OpenAI", "total_models": 2, "is_current": True}
-        ]
+        providers = [{"slug": "openai", "name": "OpenAI", "total_models": 2, "is_current": True}]
         call_log = []
 
         class FakeBadRequest(Exception):
@@ -301,7 +353,4 @@ class TestTelegramModelPicker:
         assert result.success is True
         assert len(call_log) == 2
         assert call_log[0]["message_thread_id"] == 99999
-        assert (
-            "message_thread_id" not in call_log[1]
-            or call_log[1]["message_thread_id"] is None
-        )
+        assert "message_thread_id" not in call_log[1] or call_log[1]["message_thread_id"] is None

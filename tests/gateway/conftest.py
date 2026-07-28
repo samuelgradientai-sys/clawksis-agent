@@ -2,7 +2,7 @@
 
 The ``_ensure_telegram_mock`` helper guarantees that a minimal mock of
 the ``telegram`` package is registered in :data:`sys.modules` **before**
-any test file triggers ``from gateway.platforms.telegram import ...``.
+any test file triggers ``from plugins.platforms.telegram.adapter import ...``.
 
 Without this, ``pytest-xdist`` workers that happen to collect
 ``test_telegram_caption_merge.py`` (bare top-level import, no per-file
@@ -39,6 +39,15 @@ from unittest.mock import MagicMock
 import pytest
 
 
+def make_async_session_db(sync_mock=None):
+    """Wrap a sync mock SessionDB in AsyncSessionDB so gateway code that awaits
+    the facade works in tests. Returns (facade, sync_mock); configure return
+    values and assert calls on sync_mock."""
+    from clawk_state import AsyncSessionDB
+    sync_mock = sync_mock if sync_mock is not None else MagicMock()
+    return AsyncSessionDB(sync_mock), sync_mock
+
+
 def _ensure_telegram_mock() -> None:
     """Install a comprehensive telegram mock in sys.modules.
 
@@ -60,15 +69,21 @@ def _ensure_telegram_mock() -> None:
     mod.constants.ChatType.SUPERGROUP = "supergroup"
     mod.constants.ChatType.CHANNEL = "channel"
 
-    # Real exception classes so ``except (NetworkError, ...)`` clauses
-    # in production code don't blow up with TypeError.
-    mod.error.NetworkError = type("NetworkError", (OSError,), {})
-    mod.error.TimedOut = type("TimedOut", (OSError,), {})
-    mod.error.BadRequest = type("BadRequest", (Exception,), {})
-    mod.error.Forbidden = type("Forbidden", (Exception,), {})
-    mod.error.InvalidToken = type("InvalidToken", (Exception,), {})
-    mod.error.RetryAfter = type("RetryAfter", (Exception,), {"retry_after": 1})
-    mod.error.Conflict = type("Conflict", (Exception,), {})
+    # Mirror PTB's exception hierarchy: BadRequest is a semantic API error,
+    # but inherits from NetworkError in python-telegram-bot 22.x.
+    mod.error.TelegramError = type("TelegramError", (Exception,), {})
+    mod.error.NetworkError = type("NetworkError", (mod.error.TelegramError,), {})
+    mod.error.TimedOut = type("TimedOut", (mod.error.NetworkError,), {})
+    mod.error.BadRequest = type("BadRequest", (mod.error.NetworkError,), {})
+    mod.error.Forbidden = type("Forbidden", (mod.error.TelegramError,), {})
+    mod.error.InvalidToken = type("InvalidToken", (mod.error.TelegramError,), {})
+
+    class RetryAfter(mod.error.TelegramError):
+        def __init__(self, retry_after=1):
+            self.retry_after = retry_after
+
+    mod.error.RetryAfter = RetryAfter
+    mod.error.Conflict = type("Conflict", (mod.error.TelegramError,), {})
 
     # Update.ALL_TYPES used in start_polling()
     mod.Update.ALL_TYPES = []
@@ -121,15 +136,12 @@ def _ensure_discord_mock() -> None:
             self.color = color
             self.fields = []
             self.footer = None
-
         def add_field(self, *, name=None, value=None, inline=False, **_):
             self.fields.append({"name": name, "value": value, "inline": inline})
             return self
-
         def set_footer(self, *, text=None, icon_url=None, **_):
             self.footer = {"text": text, "icon_url": icon_url}
             return self
-
     discord_mod.Embed = _FakeEmbed
 
     # ui.View / ui.Select / ui.Button: real classes (not MagicMock) so
@@ -139,10 +151,8 @@ def _ensure_discord_mock() -> None:
         def __init__(self, timeout=None):
             self.timeout = timeout
             self.children = []
-
         def add_item(self, item):
             self.children.append(item)
-
         def clear_items(self):
             self.children.clear()
 
@@ -155,19 +165,8 @@ def _ensure_discord_mock() -> None:
             self.disabled = False
 
     class _FakeButton:
-        def __init__(
-            self,
-            *,
-            label=None,
-            style=None,
-            custom_id=None,
-            emoji=None,
-            url=None,
-            disabled=False,
-            row=None,
-            sku_id=None,
-            **_,
-        ):
+        def __init__(self, *, label=None, style=None, custom_id=None, emoji=None,
+                     url=None, disabled=False, row=None, sku_id=None, **_):
             self.label = label
             self.style = style
             self.custom_id = custom_id
@@ -183,32 +182,22 @@ def _ensure_discord_mock() -> None:
             self.label = label
             self.value = value
             self.description = description
-
     discord_mod.SelectOption = _FakeSelectOption
 
     discord_mod.ui = SimpleNamespace(
         View=_FakeView,
         Select=_FakeSelect,
         Button=_FakeButton,
-        button=lambda *a, **k: lambda fn: fn,
+        button=lambda *a, **k: (lambda fn: fn),
     )
     discord_mod.ButtonStyle = SimpleNamespace(
-        success=1,
-        primary=2,
-        secondary=2,
-        danger=3,
-        green=1,
-        grey=2,
-        blurple=2,
-        red=3,
+        success=1, primary=2, secondary=2, danger=3,
+        green=1, grey=2, blurple=2, red=3,
     )
     discord_mod.Color = SimpleNamespace(
-        orange=lambda: 1,
-        green=lambda: 2,
-        blue=lambda: 3,
-        red=lambda: 4,
-        purple=lambda: 5,
-        greyple=lambda: 6,
+        orange=lambda: 1, green=lambda: 2, blue=lambda: 3,
+        red=lambda: 4, purple=lambda: 5, greyple=lambda: 6,
+        gold=lambda: 7,
     )
 
     # app_commands — needed by _register_slash_commands auto-registration
@@ -232,8 +221,8 @@ def _ensure_discord_mock() -> None:
             self.parent = parent
 
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: lambda fn: fn,
-        choices=lambda **kwargs: lambda fn: fn,
+        describe=lambda **kwargs: (lambda fn: fn),
+        choices=lambda **kwargs: (lambda fn: fn),
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
         Group=_FakeGroup,
         Command=_FakeCommand,
@@ -443,7 +432,6 @@ def pytest_configure(config):
     # without a lock they'd all find no cache and all run the scan.
     try:
         from filelock import FileLock
-
         lock = FileLock(str(lock_file), timeout=120)
     except ImportError:
         # Fallback: no locking (still correct, just slower under contention).
@@ -451,10 +439,8 @@ def pytest_configure(config):
         class _NoLock:
             def __enter__(self):
                 return self
-
             def __exit__(self, *a):
                 pass
-
         lock = _NoLock()
 
     with lock:
@@ -478,3 +464,4 @@ def pytest_configure(config):
             raise pytest.UsageError(msg)
         else:
             cache_file.write_text("clean", encoding="utf-8")
+

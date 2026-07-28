@@ -29,7 +29,6 @@ from gateway.platforms.base import (
 # Mock the telegram package if it's not installed
 # ---------------------------------------------------------------------------
 
-
 def _ensure_telegram_mock():
     """Install mock telegram modules so TelegramAdapter can be imported."""
     if "telegram" in sys.modules and hasattr(sys.modules["telegram"], "__file__"):
@@ -52,13 +51,12 @@ def _ensure_telegram_mock():
 _ensure_telegram_mock()
 
 # Now we can safely import
-from gateway.platforms.telegram import TelegramAdapter  # noqa: E402
+from plugins.platforms.telegram.adapter import TelegramAdapter  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
 # Helpers to build mock Telegram objects
 # ---------------------------------------------------------------------------
-
 
 def _make_file_obj(data: bytes = b"hello"):
     """Create a mock Telegram File with download_as_bytearray."""
@@ -108,6 +106,7 @@ def _make_message(document=None, caption=None, media_group_id=None, photo=None):
     msg.from_user.id = 1
     msg.from_user.full_name = "Test User"
     msg.message_thread_id = None
+    msg.reply_text = AsyncMock()
     return msg
 
 
@@ -127,7 +126,6 @@ def _make_video(file_obj=None):
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
 
 @pytest.fixture()
 def adapter():
@@ -158,7 +156,6 @@ def _redirect_cache(tmp_path, monkeypatch):
 # TestDocumentTypeDetection
 # ---------------------------------------------------------------------------
 
-
 class TestDocumentTypeDetection:
     @pytest.mark.asyncio
     async def test_document_detected_explicitly(self, adapter):
@@ -183,7 +180,6 @@ class TestDocumentTypeDetection:
 # ---------------------------------------------------------------------------
 # TestDocumentDownloadBlock
 # ---------------------------------------------------------------------------
-
 
 def _make_photo(file_obj=None):
     photo = MagicMock()
@@ -211,10 +207,8 @@ class TestDocumentDownloadBlock:
         content = b"Hello from a text file"
         file_obj = _make_file_obj(content)
         doc = _make_document(
-            file_name="notes.txt",
-            mime_type="text/plain",
-            file_size=len(content),
-            file_obj=file_obj,
+            file_name="notes.txt", mime_type="text/plain",
+            file_size=len(content), file_obj=file_obj,
         )
         msg = _make_message(document=doc)
         update = _make_update(msg)
@@ -229,10 +223,8 @@ class TestDocumentDownloadBlock:
         content = b"# Title\nSome markdown"
         file_obj = _make_file_obj(content)
         doc = _make_document(
-            file_name="readme.md",
-            mime_type="text/markdown",
-            file_size=len(content),
-            file_obj=file_obj,
+            file_name="readme.md", mime_type="text/markdown",
+            file_size=len(content), file_obj=file_obj,
         )
         msg = _make_message(document=doc)
         update = _make_update(msg)
@@ -246,10 +238,8 @@ class TestDocumentDownloadBlock:
         content = b"file text"
         file_obj = _make_file_obj(content)
         doc = _make_document(
-            file_name="doc.txt",
-            mime_type="text/plain",
-            file_size=len(content),
-            file_obj=file_obj,
+            file_name="doc.txt", mime_type="text/plain",
+            file_size=len(content), file_obj=file_obj,
         )
         msg = _make_message(document=doc, caption="Please summarize")
         update = _make_update(msg)
@@ -262,9 +252,7 @@ class TestDocumentDownloadBlock:
     @pytest.mark.asyncio
     async def test_zip_document_cached(self, adapter):
         """A .zip upload should be cached as a supported document."""
-        doc = _make_document(
-            file_name="archive.zip", mime_type="application/zip", file_size=100
-        )
+        doc = _make_document(file_name="archive.zip", mime_type="application/zip", file_size=100)
         msg = _make_message(document=doc)
         update = _make_update(msg)
 
@@ -277,19 +265,13 @@ class TestDocumentDownloadBlock:
     async def test_png_document_is_routed_as_image(self, adapter):
         """Telegram documents that are really PNGs should use the image path."""
         file_obj = _make_file_obj(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
-        doc = _make_document(
-            file_name="screenshot.png",
-            mime_type="image/png",
-            file_size=9,
-            file_obj=file_obj,
-        )
+        doc = _make_document(file_name="screenshot.png", mime_type="image/png", file_size=9, file_obj=file_obj)
         msg = _make_message(document=doc)
         update = _make_update(msg)
 
-        with (
-            patch.object(adapter, "_photo_batch_key", return_value="batch-1"),
-            patch.object(adapter, "_enqueue_photo_event") as enqueue_mock,
-        ):
+        with patch.object(adapter, "_photo_batch_key", return_value="batch-1"), patch.object(
+            adapter, "_enqueue_photo_event"
+        ) as enqueue_mock:
             await adapter._handle_media_message(update, MagicMock())
 
         enqueue_mock.assert_called_once()
@@ -303,19 +285,13 @@ class TestDocumentDownloadBlock:
     async def test_spoofed_png_document_falls_back_with_error(self, adapter):
         """A .png filename with non-image bytes should fail clearly, not disappear."""
         file_obj = _make_file_obj(b"not-a-real-image")
-        doc = _make_document(
-            file_name="spoofed.png",
-            mime_type="image/png",
-            file_size=16,
-            file_obj=file_obj,
-        )
+        doc = _make_document(file_name="spoofed.png", mime_type="image/png", file_size=16, file_obj=file_obj)
         msg = _make_message(document=doc)
         update = _make_update(msg)
 
-        with (
-            patch.object(adapter, "_photo_batch_key", return_value="batch-2"),
-            patch.object(adapter, "_enqueue_photo_event") as enqueue_mock,
-        ):
+        with patch.object(adapter, "_photo_batch_key", return_value="batch-2"), patch.object(
+            adapter, "_enqueue_photo_event"
+        ) as enqueue_mock:
             await adapter._handle_media_message(update, MagicMock())
 
         enqueue_mock.assert_not_called()
@@ -349,10 +325,8 @@ class TestDocumentDownloadBlock:
         content = b"some pdf bytes"
         file_obj = _make_file_obj(content)
         doc = _make_document(
-            file_name=None,
-            mime_type="application/pdf",
-            file_size=len(content),
-            file_obj=file_obj,
+            file_name=None, mime_type="application/pdf",
+            file_size=len(content), file_obj=file_obj,
         )
         msg = _make_message(document=doc)
         update = _make_update(msg)
@@ -363,14 +337,25 @@ class TestDocumentDownloadBlock:
         assert event.media_types == ["application/pdf"]
 
     @pytest.mark.asyncio
-    async def test_missing_filename_and_mime_rejected(self, adapter):
-        doc = _make_document(file_name=None, mime_type=None, file_size=100)
+    async def test_missing_filename_and_mime_cached_as_octet_stream(self, adapter):
+        """No filename and no mime: cached anyway as application/octet-stream.
+
+        Authorization to message the agent is the gate, not the file type — an
+        untyped upload is still surfaced to the agent as a cached path.
+        """
+        content = b"\x00\x01\x02 untyped payload"
+        file_obj = _make_file_obj(content)
+        doc = _make_document(
+            file_name=None, mime_type=None, file_size=len(content), file_obj=file_obj,
+        )
         msg = _make_message(document=doc)
         update = _make_update(msg)
 
         await adapter._handle_media_message(update, MagicMock())
         event = adapter.handle_message.call_args[0][0]
-        assert "Unsupported" in event.text
+        assert len(event.media_urls) == 1
+        assert event.media_types == ["application/octet-stream"]
+        assert "Unsupported" not in (event.text or "")
 
     @pytest.mark.asyncio
     async def test_unicode_decode_error_handled(self, adapter):
@@ -378,10 +363,8 @@ class TestDocumentDownloadBlock:
         binary = bytes(range(128, 256))  # not valid UTF-8
         file_obj = _make_file_obj(binary)
         doc = _make_document(
-            file_name="binary.txt",
-            mime_type="text/plain",
-            file_size=len(binary),
-            file_obj=file_obj,
+            file_name="binary.txt", mime_type="text/plain",
+            file_size=len(binary), file_obj=file_obj,
         )
         msg = _make_message(document=doc)
         update = _make_update(msg)
@@ -400,10 +383,8 @@ class TestDocumentDownloadBlock:
         large = b"x" * (200 * 1024)  # 200 KB
         file_obj = _make_file_obj(large)
         doc = _make_document(
-            file_name="big.txt",
-            mime_type="text/plain",
-            file_size=len(large),
-            file_obj=file_obj,
+            file_name="big.txt", mime_type="text/plain",
+            file_size=len(large), file_obj=file_obj,
         )
         msg = _make_message(document=doc)
         update = _make_update(msg)
@@ -417,7 +398,7 @@ class TestDocumentDownloadBlock:
 
     @pytest.mark.asyncio
     async def test_download_exception_handled(self, adapter):
-        """If get_file() raises, the handler logs the error without crashing."""
+        """If get_file() raises, the handler surfaces the failure without crashing."""
         doc = _make_document(file_name="crash.pdf", file_size=100)
         doc.get_file = AsyncMock(side_effect=RuntimeError("Telegram API down"))
         msg = _make_message(document=doc)
@@ -426,7 +407,72 @@ class TestDocumentDownloadBlock:
         # Should not raise
         await adapter._handle_media_message(update, MagicMock())
         # handle_message should still be called (the handler catches the exception)
+        # so the agent gets a turn — but now that turn carries a notice instead
+        # of being an empty/content-less event.
         adapter.handle_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_document_cache_failure_replies_and_signals_agent(self, adapter):
+        """A failed document download must surface on BOTH ends, not silently.
+
+        Regression for #23045 Bug 2: a CDN download/cache failure used to log a
+        warning and fall through to an empty agent turn — user thinks the file
+        arrived, agent sees nothing. Now the user gets a Telegram reply AND the
+        agent's event.text carries an attempted-attachment notice.
+        """
+        doc = _make_document(file_name="notes.md", mime_type="text/markdown", file_size=100)
+        doc.get_file = AsyncMock(side_effect=RuntimeError("Telegram CDN down"))
+        msg = _make_message(document=doc)
+        update = _make_update(msg)
+
+        await adapter._handle_media_message(update, MagicMock())
+
+        # 1. User is told the download failed, with the filename + exception type.
+        msg.reply_text.assert_awaited_once()
+        reply = msg.reply_text.await_args.args[0]
+        assert "Couldn't download" in reply
+        assert "notes.md" in reply
+        assert "RuntimeError" in reply
+
+        # 2. The agent still gets a turn, but event.text now carries a notice so
+        #    it knows an attachment was attempted and failed (not a silent empty turn).
+        adapter.handle_message.assert_called_once()
+        event = adapter.handle_message.call_args[0][0]
+        assert event.media_urls == []  # nothing cached
+        assert "could not be downloaded" in (event.text or "")
+        assert "notes.md" in (event.text or "")
+
+    @pytest.mark.asyncio
+    async def test_document_cache_failure_reply_error_is_nonfatal(self, adapter):
+        """If even the user-reply fails, the agent notice is still appended."""
+        doc = _make_document(file_name="x.bin", mime_type="application/octet-stream", file_size=100)
+        doc.get_file = AsyncMock(side_effect=RuntimeError("CDN down"))
+        msg = _make_message(document=doc)
+        msg.reply_text = AsyncMock(side_effect=RuntimeError("reply failed too"))
+        update = _make_update(msg)
+
+        # Must not raise despite reply_text blowing up
+        await adapter._handle_media_message(update, MagicMock())
+        adapter.handle_message.assert_called_once()
+        event = adapter.handle_message.call_args[0][0]
+        assert "could not be downloaded" in (event.text or "")
+
+    @pytest.mark.asyncio
+    async def test_voice_cache_failure_replies_and_signals_agent(self, adapter):
+        """Same fail-closed contract applies to the voice site (#23045 Bug 2 class)."""
+        msg = _make_message()
+        msg.voice = MagicMock()
+        msg.voice.file_size = 100
+        msg.voice.get_file = AsyncMock(side_effect=RuntimeError("CDN down"))
+        update = _make_update(msg)
+
+        await adapter._handle_media_message(update, MagicMock())
+
+        msg.reply_text.assert_awaited_once()
+        assert "voice message" in msg.reply_text.await_args.args[0]
+        adapter.handle_message.assert_called_once()
+        event = adapter.handle_message.call_args[0][0]
+        assert "could not be downloaded" in (event.text or "")
 
 
 class TestVideoDownloadBlock:
@@ -448,12 +494,7 @@ class TestVideoDownloadBlock:
     @pytest.mark.asyncio
     async def test_mp4_document_is_treated_as_video(self, adapter):
         file_obj = _make_file_obj(b"fake-mp4-doc")
-        doc = _make_document(
-            file_name="good.mp4",
-            mime_type="video/mp4",
-            file_size=1024,
-            file_obj=file_obj,
-        )
+        doc = _make_document(file_name="good.mp4", mime_type="video/mp4", file_size=1024, file_obj=file_obj)
         msg = _make_message(document=doc)
         update = _make_update(msg)
 
@@ -469,7 +510,6 @@ class TestVideoDownloadBlock:
 # TestMediaGroups — media group (album) buffering
 # ---------------------------------------------------------------------------
 
-
 class TestMediaGroups:
     @pytest.mark.asyncio
     async def test_non_album_photo_burst_is_buffered_and_combined(self, adapter):
@@ -479,10 +519,7 @@ class TestMediaGroups:
         msg1 = _make_message(caption="two images", photo=[first_photo])
         msg2 = _make_message(photo=[second_photo])
 
-        with patch(
-            "gateway.platforms.telegram.cache_image_from_bytes",
-            side_effect=["/tmp/burst-one.jpg", "/tmp/burst-two.jpg"],
-        ):
+        with patch("plugins.platforms.telegram.adapter.cache_image_from_bytes", side_effect=["/tmp/burst-one.jpg", "/tmp/burst-two.jpg"]):
             await adapter._handle_media_message(_make_update(msg1), MagicMock())
             await adapter._handle_media_message(_make_update(msg2), MagicMock())
             assert adapter.handle_message.await_count == 0
@@ -499,15 +536,10 @@ class TestMediaGroups:
         first_photo = _make_photo(_make_file_obj(b"first"))
         second_photo = _make_photo(_make_file_obj(b"second"))
 
-        msg1 = _make_message(
-            caption="two images", media_group_id="album-1", photo=[first_photo]
-        )
+        msg1 = _make_message(caption="two images", media_group_id="album-1", photo=[first_photo])
         msg2 = _make_message(media_group_id="album-1", photo=[second_photo])
 
-        with patch(
-            "gateway.platforms.telegram.cache_image_from_bytes",
-            side_effect=["/tmp/one.jpg", "/tmp/two.jpg"],
-        ):
+        with patch("plugins.platforms.telegram.adapter.cache_image_from_bytes", side_effect=["/tmp/one.jpg", "/tmp/two.jpg"]):
             await adapter._handle_media_message(_make_update(msg1), MagicMock())
             await adapter._handle_media_message(_make_update(msg2), MagicMock())
             assert adapter.handle_message.await_count == 0
@@ -522,14 +554,9 @@ class TestMediaGroups:
     @pytest.mark.asyncio
     async def test_disconnect_cancels_pending_media_group_flush(self, adapter):
         first_photo = _make_photo(_make_file_obj(b"first"))
-        msg = _make_message(
-            caption="two images", media_group_id="album-2", photo=[first_photo]
-        )
+        msg = _make_message(caption="two images", media_group_id="album-2", photo=[first_photo])
 
-        with patch(
-            "gateway.platforms.telegram.cache_image_from_bytes",
-            return_value="/tmp/one.jpg",
-        ):
+        with patch("plugins.platforms.telegram.adapter.cache_image_from_bytes", return_value="/tmp/one.jpg"):
             await adapter._handle_media_message(_make_update(msg), MagicMock())
 
         assert "album-2" in adapter._media_group_events
@@ -546,7 +573,6 @@ class TestMediaGroups:
 # ---------------------------------------------------------------------------
 # TestSendVoice — outbound audio delivery
 # ---------------------------------------------------------------------------
-
 
 class TestSendVoice:
     """Tests for TelegramAdapter.send_voice() routing across audio formats."""
@@ -629,7 +655,6 @@ class TestSendVoice:
 # TestSendDocument — outbound file attachment delivery
 # ---------------------------------------------------------------------------
 
-
 class TestSendDocument:
     """Tests for TelegramAdapter.send_document() — sending files to users."""
 
@@ -698,9 +723,7 @@ class TestSendDocument:
         connected_adapter._bot.send_document.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_send_document_workspace_path_has_docker_hint(
-        self, connected_adapter
-    ):
+    async def test_send_document_workspace_path_has_docker_hint(self, connected_adapter):
         """Container-local-looking paths get a more actionable Docker hint."""
         result = await connected_adapter.send_document(
             chat_id="12345",
@@ -757,9 +780,7 @@ class TestSendDocument:
         assert len(call_kwargs["caption"]) == 1024
 
     @pytest.mark.asyncio
-    async def test_send_document_api_error_falls_back(
-        self, connected_adapter, tmp_path
-    ):
+    async def test_send_document_api_error_falls_back(self, connected_adapter, tmp_path):
         """If Telegram API raises, falls back to base class text message."""
         test_file = tmp_path / "file.pdf"
         test_file.write_bytes(b"data")
@@ -838,10 +859,8 @@ class TestTelegramPhotoBatching:
         )
 
         with (
-            patch(
-                "gateway.platforms.telegram.asyncio.current_task", return_value=old_task
-            ),
-            patch("gateway.platforms.telegram.asyncio.sleep", new=AsyncMock()),
+            patch("plugins.platforms.telegram.adapter.asyncio.current_task", return_value=old_task),
+            patch("plugins.platforms.telegram.adapter.asyncio.sleep", new=AsyncMock()),
         ):
             await adapter._flush_photo_batch(batch_key)
 
@@ -872,7 +891,6 @@ class TestTelegramPhotoBatching:
 # ---------------------------------------------------------------------------
 # TestSendVideo — outbound video delivery
 # ---------------------------------------------------------------------------
-
 
 class TestSendVideo:
     """Tests for TelegramAdapter.send_video() — sending videos to users."""

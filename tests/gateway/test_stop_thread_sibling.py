@@ -82,19 +82,11 @@ def test_sibling_returns_empty_for_non_thread_source():
     )
     grp_b = build_session_key(
         SessionSource(
-            platform=Platform.DISCORD,
-            chat_type="group",
-            chat_id="chan1",
-            user_id="userB",
+            platform=Platform.DISCORD, chat_type="group", chat_id="chan1", user_id="userB"
         )
     )
     runner._running_agents = {grp_b: _FakeAgent()}
-    assert (
-        runner._sibling_thread_run_keys(
-            nonthread, "agent:main:discord:group:chan1:userA"
-        )
-        == []
-    )
+    assert runner._sibling_thread_run_keys(nonthread, "agent:main:discord:group:chan1:userA") == []
 
 
 # ---------------------------------------------------------------------------
@@ -125,9 +117,7 @@ async def test_stop_interrupts_sibling_thread_run_when_authorized(monkeypatch):
 
     interrupted = []
 
-    async def _fake_interrupt(
-        session_key, source, *, interrupt_reason, invalidation_reason
-    ):
+    async def _fake_interrupt(session_key, source, *, interrupt_reason, invalidation_reason):
         interrupted.append((session_key, interrupt_reason, invalidation_reason))
 
     runner._interrupt_and_clear_session = _fake_interrupt
@@ -138,9 +128,7 @@ async def test_stop_interrupts_sibling_thread_run_when_authorized(monkeypatch):
     )
     result = await runner._handle_stop_command(event)
 
-    assert interrupted == [
-        (key_b, _INTERRUPT_REASON_STOP, "stop_command_thread_sibling")
-    ]
+    assert interrupted == [(key_b, _INTERRUPT_REASON_STOP, "stop_command_thread_sibling")]
     # EphemeralReply or str — both carry the "stopped" message, not "no_active".
     assert "no active" not in str(getattr(result, "text", result)).lower()
 
@@ -155,9 +143,7 @@ async def test_stop_does_not_interrupt_sibling_when_unauthorized(monkeypatch):
 
     interrupted = []
 
-    async def _fake_interrupt(
-        session_key, source, *, interrupt_reason, invalidation_reason
-    ):
+    async def _fake_interrupt(session_key, source, *, interrupt_reason, invalidation_reason):
         interrupted.append(session_key)
 
     runner._interrupt_and_clear_session = _fake_interrupt
@@ -169,4 +155,68 @@ async def test_stop_does_not_interrupt_sibling_when_unauthorized(monkeypatch):
     result = await runner._handle_stop_command(event)
 
     assert interrupted == []
+    assert "no active" in str(getattr(result, "text", result)).lower()
+
+
+# ---------------------------------------------------------------------------
+# /stop with no active agent still clears a stuck platform status (#32295)
+# ---------------------------------------------------------------------------
+
+
+class _FakeStatusAdapter:
+    def __init__(self):
+        self.cleared = []
+
+    async def _stop_typing_with_metadata(self, chat_id, metadata=None):
+        self.cleared.append((chat_id, metadata))
+
+
+@pytest.mark.asyncio
+async def test_stop_no_active_agent_clears_stuck_status():
+    runner = object.__new__(GatewayRunner)
+    runner._running_agents = {}
+    key = _per_user_key("userA")
+    runner.session_store = _FakeStore(key)
+    runner._is_user_authorized = lambda source: True
+
+    adapter = _FakeStatusAdapter()
+    runner.adapters = {Platform.DISCORD: adapter}
+    runner._thread_metadata_for_source = (
+        lambda source, reply_to_message_id=None: {"thread_id": source.thread_id}
+    )
+    runner._reply_anchor_for_event = lambda event: None
+
+    event = MessageEvent(
+        text="/stop", message_type=MessageType.TEXT, source=_thread_source("userA")
+    )
+    result = await runner._handle_stop_command(event)
+
+    assert "no active" in str(getattr(result, "text", result)).lower()
+    assert adapter.cleared == [("chan1", {"thread_id": "thr1"})]
+
+
+@pytest.mark.asyncio
+async def test_stop_no_active_agent_survives_status_clear_failure():
+    """A failing adapter clear must not break the /stop reply."""
+    runner = object.__new__(GatewayRunner)
+    runner._running_agents = {}
+    key = _per_user_key("userA")
+    runner.session_store = _FakeStore(key)
+    runner._is_user_authorized = lambda source: True
+
+    class _BoomAdapter:
+        async def _stop_typing_with_metadata(self, chat_id, metadata=None):
+            raise RuntimeError("boom")
+
+    runner.adapters = {Platform.DISCORD: _BoomAdapter()}
+    runner._thread_metadata_for_source = (
+        lambda source, reply_to_message_id=None: None
+    )
+    runner._reply_anchor_for_event = lambda event: None
+
+    event = MessageEvent(
+        text="/stop", message_type=MessageType.TEXT, source=_thread_source("userA")
+    )
+    result = await runner._handle_stop_command(event)
+
     assert "no active" in str(getattr(result, "text", result)).lower()

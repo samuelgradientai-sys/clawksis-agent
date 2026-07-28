@@ -36,21 +36,11 @@ def _make_desktop_tree(tmp_path: Path) -> Path:
     return root
 
 
-def _make_packaged_executable(
-    root: Path, monkeypatch, platform: str = "darwin"
-) -> Path:
+def _make_packaged_executable(root: Path, monkeypatch, platform: str = "darwin") -> Path:
     monkeypatch.setattr(cli_main.sys, "platform", platform)
     desktop_dir = root / "apps" / "desktop"
     if platform == "darwin":
-        exe = (
-            desktop_dir
-            / "release"
-            / "mac-arm64"
-            / "Clawksis.app"
-            / "Contents"
-            / "MacOS"
-            / "Clawksis"
-        )
+        exe = desktop_dir / "release" / "mac-arm64" / "Clawksis.app" / "Contents" / "MacOS" / "Clawksis"
     elif platform == "win32":
         exe = desktop_dir / "release" / "win-unpacked" / "Clawksis.exe"
     else:
@@ -70,29 +60,67 @@ def test_gui_installs_packages_and_launches_desktop_app(tmp_path, monkeypatch):
     pack_ok = subprocess.CompletedProcess(["npm", "run", "pack"], 0)
     launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
 
-    with (
-        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
-        patch(
-            "clawk_cli.main._run_npm_install_deterministic", return_value=install_ok
-        ) as mock_install,
-        patch("clawk_cli.main._desktop_build_needed", return_value=True),
-        patch("clawk_cli.main._write_desktop_build_stamp"),
-        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
-        patch(
-            "clawk_cli.main.subprocess.run", side_effect=[pack_ok, launch_ok]
-        ) as mock_run,
-        pytest.raises(SystemExit) as exc,
-    ):
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok) as mock_install, \
+         patch("clawk_cli.main._desktop_build_needed", return_value=True), \
+         patch("clawk_cli.main._write_desktop_build_stamp"), \
+         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
+         patch("clawk_cli.main.subprocess.run", side_effect=[pack_ok, launch_ok]) as mock_run, \
+         pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 0
-    mock_install.assert_called_once_with(
-        "/usr/bin/npm", root, capture_output=False, env=None
-    )
+    # The install now runs with a resolved env (managed-Node PATH), never a bare
+    # ``env=None`` that would leave npm's child scripts unable to find ``node``.
+    mock_install.assert_called_once()
+    assert mock_install.call_args.args == ("/usr/bin/npm", root)
+    assert mock_install.call_args.kwargs["capture_output"] is False
+    install_env = mock_install.call_args.kwargs["env"]
+    assert install_env is not None and "PATH" in install_env
     assert mock_run.call_args_list[0].args[0] == ["/usr/bin/npm", "run", "pack"]
     assert mock_run.call_args_list[0].kwargs["cwd"] == desktop_dir
     assert mock_run.call_args_list[1].args[0] == [str(packaged_exe)]
     assert mock_run.call_args_list[1].kwargs["cwd"] == desktop_dir
+
+
+def test_gui_install_env_prepends_managed_node_on_bare_path(tmp_path, monkeypatch):
+    """Regression: npm's child scripts (electron-winstaller's select-7z-arch.js)
+    shell out to bare ``node``. When Desktop is launched from the updater chain
+    the parent PATH is stripped, so the install env MUST carry the Clawksis-managed
+    Node ahead of that bare PATH or the install dies with ``node: not found``.
+    """
+    import os
+
+    from clawk_constants import iter_clawk_node_dirs
+
+    root = _make_desktop_tree(tmp_path)
+    monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
+    _make_packaged_executable(root, monkeypatch, platform="win32")
+
+    # A managed Node tree on disk so with_clawk_node_path() actually prepends it.
+    home = tmp_path / "clawk-home"
+    (home / "node" / "bin").mkdir(parents=True)
+    monkeypatch.setenv("CLAWK_HOME", str(home))
+    # Simulate the stripped PATH the desktop updater chain hands us.
+    monkeypatch.setenv("PATH", os.pathsep.join(["/usr/bin", "/bin"]))
+
+    install_ok = subprocess.CompletedProcess(["npm", "ci"], 0)
+    launch_ok = subprocess.CompletedProcess(["clawk"], 0)
+
+    with patch("clawk_cli.main._resolve_node_runtime_npm", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok) as mock_install, \
+         patch("clawk_cli.main._desktop_build_needed", return_value=True), \
+         patch("clawk_cli.main._write_desktop_build_stamp"), \
+         patch("clawk_cli.main.subprocess.run", side_effect=[subprocess.CompletedProcess([], 0), launch_ok]), \
+         pytest.raises(SystemExit):
+        cli_main.cmd_gui(_ns(skip_build=False))
+
+    managed_dirs = [str(p) for p in iter_clawk_node_dirs() if p.is_dir()]
+    assert managed_dirs, "managed node tree not discovered"
+    install_env = mock_install.call_args.kwargs["env"]
+    path_parts = install_env["PATH"].split(os.pathsep)
+    assert path_parts[: len(managed_dirs)] == managed_dirs
+    assert "/usr/bin" in path_parts  # the bare updater PATH is preserved, just after managed Node
 
 
 def test_gui_forwards_desktop_environment_overrides(tmp_path, monkeypatch):
@@ -106,23 +134,19 @@ def test_gui_forwards_desktop_environment_overrides(tmp_path, monkeypatch):
 
     ok = subprocess.CompletedProcess([], 0)
 
-    with (
-        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
-        patch("clawk_cli.main._run_npm_install_deterministic", return_value=ok),
-        patch("clawk_cli.main._desktop_build_needed", return_value=True),
-        patch("clawk_cli.main._write_desktop_build_stamp"),
-        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
-        patch("clawk_cli.main.subprocess.run", side_effect=[ok, ok]) as mock_run,
-        pytest.raises(SystemExit),
-    ):
-        cli_main.cmd_gui(
-            _ns(
-                fake_boot=True,
-                ignore_existing=True,
-                clawk_root=str(clawk_root),
-                cwd=str(cwd),
-            )
-        )
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=ok), \
+         patch("clawk_cli.main._desktop_build_needed", return_value=True), \
+         patch("clawk_cli.main._write_desktop_build_stamp"), \
+         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
+         patch("clawk_cli.main.subprocess.run", side_effect=[ok, ok]) as mock_run, \
+         pytest.raises(SystemExit):
+        cli_main.cmd_gui(_ns(
+            fake_boot=True,
+            ignore_existing=True,
+            clawk_root=str(clawk_root),
+            cwd=str(cwd),
+        ))
 
     launch_env = mock_run.call_args_list[1].kwargs["env"]
     assert launch_env["CLAWK_DESKTOP_BOOT_FAKE"] == "1"
@@ -135,10 +159,8 @@ def test_gui_exits_when_npm_missing(tmp_path, monkeypatch, capsys):
     root = _make_desktop_tree(tmp_path)
     monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
 
-    with (
-        patch("clawk_cli.main.shutil.which", return_value=None),
-        pytest.raises(SystemExit) as exc,
-    ):
+    with patch("clawk_cli.main.shutil.which", return_value=None), \
+         pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 1
@@ -157,9 +179,7 @@ def test_gui_skip_build_requires_existing_packaged_app(tmp_path, monkeypatch, ca
     assert "no packaged desktop app" in capsys.readouterr().out
 
 
-def test_gui_skip_build_launches_existing_packaged_app_without_npm(
-    tmp_path, monkeypatch
-):
+def test_gui_skip_build_launches_existing_packaged_app_without_npm(tmp_path, monkeypatch):
     root = _make_desktop_tree(tmp_path)
     desktop_dir = root / "apps" / "desktop"
     monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
@@ -167,12 +187,10 @@ def test_gui_skip_build_launches_existing_packaged_app_without_npm(
 
     launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
 
-    with (
-        patch("clawk_cli.main.shutil.which", return_value=None),
-        patch("clawk_cli.main._run_npm_install_deterministic") as mock_install,
-        patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run,
-        pytest.raises(SystemExit) as exc,
-    ):
+    with patch("clawk_cli.main.shutil.which", return_value=None), \
+         patch("clawk_cli.main._run_npm_install_deterministic") as mock_install, \
+         patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run, \
+         pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns(skip_build=True))
 
     assert exc.value.code == 0
@@ -190,26 +208,14 @@ def test_gui_linux_configures_sandbox_before_launch(tmp_path, monkeypatch):
     sandbox.chmod(0o755)
     ok = subprocess.CompletedProcess([], 0)
 
-    with (
-        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/sudo"),
-        patch("clawk_cli.main.subprocess.run", return_value=ok) as mock_run,
-        pytest.raises(SystemExit) as exc,
-    ):
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/sudo"), \
+         patch("clawk_cli.main.subprocess.run", return_value=ok) as mock_run, \
+         pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns(skip_build=True))
 
     assert exc.value.code == 0
-    assert mock_run.call_args_list[0].args[0] == [
-        "/usr/bin/sudo",
-        "chown",
-        "root:root",
-        str(sandbox),
-    ]
-    assert mock_run.call_args_list[1].args[0] == [
-        "/usr/bin/sudo",
-        "chmod",
-        "4755",
-        str(sandbox),
-    ]
+    assert mock_run.call_args_list[0].args[0] == ["/usr/bin/sudo", "chown", "root:root", str(sandbox)]
+    assert mock_run.call_args_list[1].args[0] == ["/usr/bin/sudo", "chmod", "4755", str(sandbox)]
     assert mock_run.call_args_list[2].args[0] == [str(packaged_exe)]
 
 
@@ -223,11 +229,9 @@ def test_gui_linux_rejects_symlink_sandbox(tmp_path, monkeypatch):
     sandbox = packaged_exe.parent / "chrome-sandbox"
     sandbox.symlink_to(target)
 
-    with (
-        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/sudo"),
-        patch("clawk_cli.main.subprocess.run") as mock_run,
-        pytest.raises(SystemExit) as exc,
-    ):
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/sudo"), \
+         patch("clawk_cli.main.subprocess.run") as mock_run, \
+         pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns(skip_build=True))
 
     assert exc.value.code == 1
@@ -247,24 +251,56 @@ def test_gui_linux_skips_fixup_when_already_configured(tmp_path, monkeypatch):
     # We can't actually chown to root in tests, so mock lstat to return
     # the expected values directly.
     import stat as stat_mod
-
     fake_stat = type("s", (), {"st_uid": 0, "st_mode": 0o4755 | stat_mod.S_IFREG})()
     sandbox_lstat_orig = type(sandbox).lstat
     monkeypatch.setattr(type(sandbox), "lstat", lambda self: fake_stat)
 
     launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
 
-    with (
-        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/sudo"),
-        patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run,
-        pytest.raises(SystemExit) as exc,
-    ):
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/sudo"), \
+         patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run, \
+         pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns(skip_build=True))
 
     assert exc.value.code == 0
     # Only the launch call — no sudo chown/chmod
     mock_run.assert_called_once()
     assert mock_run.call_args.args[0] == [str(packaged_exe)]
+
+
+def test_gui_linux_falls_back_to_no_sandbox_when_userns_is_restricted(tmp_path, monkeypatch):
+    root = _make_desktop_tree(tmp_path)
+    monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
+    packaged_exe = _make_packaged_executable(root, monkeypatch, platform="linux")
+    sandbox = packaged_exe.parent / "chrome-sandbox"
+    sandbox.write_text("", encoding="utf-8")
+
+    launch_ok = subprocess.CompletedProcess([str(packaged_exe), "--no-sandbox"], 0)
+
+    with patch("clawk_cli.main._desktop_linux_sandbox_fixup", return_value=False), \
+         patch("clawk_cli.main._desktop_linux_needs_no_sandbox", return_value=True), \
+         patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run, \
+         pytest.raises(SystemExit) as exc:
+        cli_main.cmd_gui(_ns(skip_build=True))
+
+    assert exc.value.code == 0
+    mock_run.assert_called_once()
+    assert mock_run.call_args.args[0] == [str(packaged_exe), "--no-sandbox"]
+
+
+def test_gui_linux_exits_when_sandbox_fixup_fails_without_safe_fallback(tmp_path, monkeypatch):
+    root = _make_desktop_tree(tmp_path)
+    monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
+    _make_packaged_executable(root, monkeypatch, platform="linux")
+
+    with patch("clawk_cli.main._desktop_linux_sandbox_fixup", return_value=False), \
+         patch("clawk_cli.main._desktop_linux_needs_no_sandbox", return_value=False), \
+         patch("clawk_cli.main.subprocess.run") as mock_run, \
+         pytest.raises(SystemExit) as exc:
+        cli_main.cmd_gui(_ns(skip_build=True))
+
+    assert exc.value.code == 1
+    mock_run.assert_not_called()
 
 
 def test_gui_source_mode_uses_renderer_build_and_electron(tmp_path, monkeypatch):
@@ -276,28 +312,18 @@ def test_gui_source_mode_uses_renderer_build_and_electron(tmp_path, monkeypatch)
     build_ok = subprocess.CompletedProcess(["npm", "run", "build"], 0)
     launch_ok = subprocess.CompletedProcess(["npm", "exec", "--", "electron", "."], 0)
 
-    with (
-        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
-        patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok),
-        patch("clawk_cli.main._desktop_build_needed", return_value=True),
-        patch("clawk_cli.main._write_desktop_build_stamp"),
-        patch(
-            "clawk_cli.main.subprocess.run", side_effect=[build_ok, launch_ok]
-        ) as mock_run,
-        pytest.raises(SystemExit) as exc,
-    ):
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok), \
+         patch("clawk_cli.main._desktop_build_needed", return_value=True), \
+         patch("clawk_cli.main._write_desktop_build_stamp"), \
+         patch("clawk_cli.main.subprocess.run", side_effect=[build_ok, launch_ok]) as mock_run, \
+         pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns(source=True))
 
     assert exc.value.code == 0
     assert mock_run.call_args_list[0].args[0] == ["/usr/bin/npm", "run", "build"]
     assert mock_run.call_args_list[0].kwargs["cwd"] == desktop_dir
-    assert mock_run.call_args_list[1].args[0] == [
-        "/usr/bin/npm",
-        "exec",
-        "--",
-        "electron",
-        ".",
-    ]
+    assert mock_run.call_args_list[1].args[0] == ["/usr/bin/npm", "exec", "--", "electron", "."]
     assert mock_run.call_args_list[1].kwargs["cwd"] == desktop_dir
 
 
@@ -325,13 +351,11 @@ def test_desktop_build_stamp_skips_build_when_up_to_date(tmp_path, monkeypatch):
 
     launch_ok = subprocess.CompletedProcess([], 0)
 
-    with (
-        patch("clawk_cli.main._desktop_build_needed", return_value=False),
-        patch("clawk_cli.main._run_npm_install_deterministic") as mock_install,
-        patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run,
-        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
-        pytest.raises(SystemExit) as exc,
-    ):
+    with patch("clawk_cli.main._desktop_build_needed", return_value=False), \
+         patch("clawk_cli.main._run_npm_install_deterministic") as mock_install, \
+         patch("clawk_cli.main.subprocess.run", return_value=launch_ok) as mock_run, \
+         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
+         pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 0
@@ -350,19 +374,13 @@ def test_desktop_force_build_overrides_stamp(tmp_path, monkeypatch):
     pack_ok = subprocess.CompletedProcess(["npm", "run", "pack"], 0)
     launch_ok = subprocess.CompletedProcess([], 0)
 
-    with (
-        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
-        patch(
-            "clawk_cli.main._run_npm_install_deterministic", return_value=install_ok
-        ) as mock_install,
-        patch("clawk_cli.main._desktop_build_needed", return_value=False),
-        patch("clawk_cli.main._write_desktop_build_stamp") as mock_stamp,
-        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
-        patch(
-            "clawk_cli.main.subprocess.run", side_effect=[pack_ok, launch_ok]
-        ) as mock_run,
-        pytest.raises(SystemExit) as exc,
-    ):
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok) as mock_install, \
+         patch("clawk_cli.main._desktop_build_needed", return_value=False), \
+         patch("clawk_cli.main._write_desktop_build_stamp") as mock_stamp, \
+         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
+         patch("clawk_cli.main.subprocess.run", side_effect=[pack_ok, launch_ok]) as mock_run, \
+         pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns(force_build=True))
 
     assert exc.value.code == 0
@@ -375,11 +393,9 @@ def test_desktop_force_build_overrides_stamp(tmp_path, monkeypatch):
 def test_compute_desktop_content_hash_stable(tmp_path, monkeypatch):
     """_compute_desktop_content_hash returns the same digest for identical trees."""
     root = _make_desktop_tree(tmp_path)
-    (root / "apps" / "desktop" / "main.js").write_text(
-        "console.log('hi')", encoding="utf-8"
-    )
+    (root / "apps" / "desktop" / "main.js").write_text("console.log('hi')", encoding="utf-8")
     (root / "package.json").write_text('{"name":"clawk"}', encoding="utf-8")
-    (root / "package-lock.json").write_text("{}", encoding="utf-8")
+    (root / "package-lock.json").write_text('{}', encoding="utf-8")
     monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
 
     h1 = cli_main._compute_desktop_content_hash(root)
@@ -411,12 +427,9 @@ def test_desktop_build_needed_detects_missing_artifact(tmp_path, monkeypatch):
     # Write a stamp that matches current content
     cli_main._write_desktop_build_stamp(root, source_mode=False)
     # No packaged executable exists → build needed
-    assert (
-        cli_main._desktop_build_needed(
-            root / "apps" / "desktop", root, source_mode=False
-        )
-        is True
-    )
+    assert cli_main._desktop_build_needed(
+        root / "apps" / "desktop", root, source_mode=False
+    ) is True
 
 
 def test_desktop_build_stamp_round_trip(tmp_path, monkeypatch):
@@ -430,12 +443,9 @@ def test_desktop_build_stamp_round_trip(tmp_path, monkeypatch):
     # Write stamp
     cli_main._write_desktop_build_stamp(root, source_mode=False)
     # Build should NOT be needed
-    assert (
-        cli_main._desktop_build_needed(
-            root / "apps" / "desktop", root, source_mode=False
-        )
-        is False
-    )
+    assert cli_main._desktop_build_needed(
+        root / "apps" / "desktop", root, source_mode=False
+    ) is False
 
 
 def test_compute_desktop_content_hash_works_without_gitignore(tmp_path, monkeypatch):
@@ -460,9 +470,7 @@ def test_compute_desktop_content_hash_respects_gitignore(tmp_path, monkeypatch):
     """Files matched by .gitignore are excluded from the hash."""
     root = _make_desktop_tree(tmp_path)
     (root / "apps" / "desktop" / "main.js").write_text("hello", encoding="utf-8")
-    (root / "apps" / "desktop" / "secrets.env").write_text(
-        "API_KEY=xxx", encoding="utf-8"
-    )
+    (root / "apps" / "desktop" / "secrets.env").write_text("API_KEY=xxx", encoding="utf-8")
     (root / "package.json").write_text("{}", encoding="utf-8")
     (root / "package-lock.json").write_text("{}", encoding="utf-8")
     (root / ".gitignore").write_text("*.env\n", encoding="utf-8")
@@ -474,9 +482,7 @@ def test_compute_desktop_content_hash_respects_gitignore(tmp_path, monkeypatch):
     h1 = cli_main._compute_desktop_content_hash(root)
 
     # Change the .env file (ignored) — hash should NOT change
-    (root / "apps" / "desktop" / "secrets.env").write_text(
-        "API_KEY=yyy", encoding="utf-8"
-    )
+    (root / "apps" / "desktop" / "secrets.env").write_text("API_KEY=yyy", encoding="utf-8")
     cli_main._DESKTOP_STAMP_SPEC = None  # reset since gitignore hasn't changed
     h2 = cli_main._compute_desktop_content_hash(root)
     assert h1 == h2, "changing an ignored file should not change the hash"
@@ -499,9 +505,7 @@ def _write_zip(path: Path) -> None:
         zf.writestr("electron", "fake binary payload")
 
 
-def test_purge_electron_build_cache_clears_all_zips_and_unpacked_dir(
-    tmp_path, monkeypatch
-):
+def test_purge_electron_build_cache_clears_all_zips_and_unpacked_dir(tmp_path, monkeypatch):
     """Purge is unconditional: it removes every electron-*.zip (regardless of
     whether stdlib zipfile thinks it's corrupt) plus the half-written unpacked
     dir, because @electron/get's own SHASUM check on re-download is the real
@@ -546,76 +550,238 @@ def test_purge_electron_build_cache_empty_when_nothing_present(tmp_path, monkeyp
 
 
 def test_gui_retries_pack_once_after_purging_build_cache(tmp_path, monkeypatch):
-    """First pack fails, purge clears the cache, second pack succeeds, launch."""
+    """First pack fails with NO packaged executable (corrupt-download shape),
+    purge clears the cache, second pack succeeds and produces the exe, launch."""
     root = _make_desktop_tree(tmp_path)
     monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
-    packaged_exe = _make_packaged_executable(root, monkeypatch, platform="linux")
+    # Executable is ABSENT at build-failure time — that is the corrupt-download
+    # signature the cache purge + retry exist for (#40187). Only the successful
+    # retry produces it (via the side_effect below).
+    monkeypatch.setattr(cli_main.sys, "platform", "linux")
+    packaged_exe = root / "apps" / "desktop" / "release" / "linux-unpacked" / "clawk"
 
     install_ok = subprocess.CompletedProcess(["npm", "ci"], 0)
     pack_fail = subprocess.CompletedProcess(["npm", "run", "pack"], 1)
     pack_ok = subprocess.CompletedProcess(["npm", "run", "pack"], 0)
     launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
 
-    with (
-        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
-        patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok),
-        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
-        patch("clawk_cli.main._desktop_linux_sandbox_fixup", return_value=True),
-        patch("clawk_cli.main._write_desktop_build_stamp"),
-        patch(
-            "clawk_cli.main._purge_electron_build_cache",
-            return_value=[Path("/c/electron.zip")],
-        ) as mock_purge,
-        patch(
-            "clawk_cli.main.subprocess.run", side_effect=[pack_fail, pack_ok, launch_ok]
-        ) as mock_run,
-        pytest.raises(SystemExit) as exc,
-    ):
+    _calls = {"n": 0}
+
+    def run_side_effect(*args, **kwargs):
+        _calls["n"] += 1
+        if _calls["n"] == 1:
+            return pack_fail
+        if _calls["n"] == 2:
+            # Successful retry materializes the packaged executable.
+            packaged_exe.parent.mkdir(parents=True, exist_ok=True)
+            packaged_exe.write_text("", encoding="utf-8")
+            return pack_ok
+        return launch_ok
+
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok), \
+         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
+         patch("clawk_cli.main._desktop_linux_sandbox_fixup", return_value=True), \
+         patch("clawk_cli.main._write_desktop_build_stamp"), \
+         patch("clawk_cli.main._purge_electron_build_cache", return_value=[Path("/c/electron.zip")]) as mock_purge, \
+         patch("clawk_cli.main._electron_dist_ok", return_value=False), \
+         patch("clawk_cli.main._redownload_electron_dist", return_value=True), \
+         patch("clawk_cli.main.subprocess.run", side_effect=run_side_effect) as mock_run, \
+         pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 0
     mock_purge.assert_called_once()
-    # pack(fail) → purge → pack(ok) → launch = 3 subprocess.run calls
+    # pack(fail) → repair succeeds → pack(ok) → launch = 3 subprocess.run calls
     assert mock_run.call_count == 3
     assert mock_run.call_args_list[0].args[0] == ["/usr/bin/npm", "run", "pack"]
     assert mock_run.call_args_list[1].args[0] == ["/usr/bin/npm", "run", "pack"]
     assert mock_run.call_args_list[2].args[0] == [str(packaged_exe)]
 
 
-def test_gui_falls_back_to_mirror_when_purge_finds_nothing(
-    tmp_path, monkeypatch, capsys
-):
-    """Purge clears nothing (not a cache problem) → fall back to an Electron
-    mirror once before failing, so a GitHub-blocked download self-heals."""
+def test_gui_redownloads_electron_via_mirror_then_repacks(tmp_path, monkeypatch, capsys):
+    """Purge clears nothing and the pinned electronDist (#38673) is missing →
+    the mirror fallback must drive electron's own downloader (NOT another pack,
+    which never downloads Electron) and only then retry pack (#47266)."""
     root = _make_desktop_tree(tmp_path)
     monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
-    _make_packaged_executable(root, monkeypatch, platform="linux")
+    # No packaged executable: the corrupt-download recovery must run.
+    monkeypatch.setattr(cli_main.sys, "platform", "linux")
     monkeypatch.delenv("ELECTRON_MIRROR", raising=False)
 
     install_ok = subprocess.CompletedProcess(["npm", "ci"], 0)
     pack_fail = subprocess.CompletedProcess(["npm", "run", "pack"], 1)
 
-    with (
-        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
-        patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok),
-        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
-        patch(
-            "clawk_cli.main._purge_electron_build_cache", return_value=[]
-        ) as mock_purge,
-        patch(
-            "clawk_cli.main.subprocess.run", side_effect=[pack_fail, pack_fail]
-        ) as mock_run,
-        pytest.raises(SystemExit) as exc,
-    ):
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok), \
+         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
+         patch("clawk_cli.main._purge_electron_build_cache", return_value=[]), \
+         patch("clawk_cli.main._electron_dist_ok", return_value=False), \
+         patch("clawk_cli.main._redownload_electron_dist", side_effect=[False, True]) as mock_dl, \
+         patch("clawk_cli.main.subprocess.run", side_effect=[pack_fail, pack_fail]) as mock_run, \
+         pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 1
-    mock_purge.assert_called_once()
-    # pack(fail) → purge(nothing) → pack via mirror(fail) = 2 subprocess.run calls
+    # initial pack + mirror pack = 2 npm calls. The first-retry pack is skipped
+    # because the canonical-source re-download (no mirror) failed, so there was
+    # never a binary to build against.
     assert mock_run.call_count == 2
-    # The retry runs the same build but with ELECTRON_MIRROR injected.
+    # First re-download attempt is canonical (no mirror); the second drives the
+    # public mirror.
+    assert mock_dl.call_args_list[0].kwargs.get("mirror") is None
+    assert mock_dl.call_args_list[1].kwargs["mirror"]
+    # Only the mirror-driven pack carries ELECTRON_MIRROR.
     assert "ELECTRON_MIRROR" not in (mock_run.call_args_list[0].kwargs.get("env") or {})
     assert mock_run.call_args_list[1].kwargs["env"]["ELECTRON_MIRROR"]
+    assert "Desktop GUI build failed" in capsys.readouterr().out
+
+
+def test_gui_retries_pack_under_mirror_even_when_prefetch_blocked(tmp_path, monkeypatch, capsys):
+    """When electron's own downloader can't fetch the binary (even via the
+    mirror), still retry pack under ELECTRON_MIRROR: the build resolves
+    electronDist dynamically and lets electron-builder fetch Electron itself
+    via @electron/get, which honors the mirror. That retry is no longer
+    pointless (it was, back when electronDist was a static path)."""
+    root = _make_desktop_tree(tmp_path)
+    monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
+    # No packaged executable: the corrupt-download recovery must run.
+    monkeypatch.setattr(cli_main.sys, "platform", "linux")
+    monkeypatch.delenv("ELECTRON_MIRROR", raising=False)
+
+    install_ok = subprocess.CompletedProcess(["npm", "ci"], 0)
+    pack_fail = subprocess.CompletedProcess(["npm", "run", "pack"], 1)
+
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok), \
+         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
+         patch("clawk_cli.main._purge_electron_build_cache", return_value=[]), \
+         patch("clawk_cli.main._electron_dist_ok", return_value=False), \
+         patch("clawk_cli.main._redownload_electron_dist", return_value=False), \
+         patch("clawk_cli.main.subprocess.run", side_effect=[pack_fail, pack_fail]) as mock_run, \
+         pytest.raises(SystemExit) as exc:
+        cli_main.cmd_gui(_ns())
+
+    assert exc.value.code == 1
+    # Initial pack + mirror-driven pack = 2; the mirror retry runs even though
+    # the pre-fetch failed, so electron-builder gets a shot at downloading.
+    assert mock_run.call_count == 2
+    assert "ELECTRON_MIRROR" not in (mock_run.call_args_list[0].kwargs.get("env") or {})
+    assert mock_run.call_args_list[1].kwargs["env"]["ELECTRON_MIRROR"]
+    assert "Desktop GUI build failed" in capsys.readouterr().out
+
+
+def test_gui_install_failure_self_heals_electron_and_continues(tmp_path, monkeypatch, capsys):
+    """npm ci failing on electron's blocked binary download must NOT abort the
+    install: with the electron package staged, repopulate its dist and continue
+    to the build instead of sys.exit-ing before pack ever runs (#47266/#48021)."""
+    root = _make_desktop_tree(tmp_path)
+    monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
+    packaged_exe = _make_packaged_executable(root, monkeypatch, platform="linux")
+    # electron package staged on disk (postinstall download was the casualty).
+    (root / "apps" / "desktop" / "node_modules" / "electron").mkdir(parents=True)
+    (root / "apps" / "desktop" / "node_modules" / "electron" / "package.json").write_text("{}", encoding="utf-8")
+    (root / "apps" / "desktop" / "node_modules" / "electron" / "install.js").write_text("", encoding="utf-8")
+
+    install_fail = subprocess.CompletedProcess(["npm", "ci"], 1)
+    pack_ok = subprocess.CompletedProcess(["npm", "run", "pack"], 0)
+    launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
+
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_fail), \
+         patch("clawk_cli.main._desktop_linux_sandbox_fixup", return_value=True), \
+         patch("clawk_cli.main._write_desktop_build_stamp"), \
+         patch("clawk_cli.main._electron_dist_ok", return_value=False), \
+         patch("clawk_cli.main._try_redownload_electron_dist", return_value=True) as mock_dl, \
+         patch("clawk_cli.main.subprocess.run", side_effect=[pack_ok, launch_ok]) as mock_run, \
+         pytest.raises(SystemExit) as exc:
+        cli_main.cmd_gui(_ns())
+
+    assert exc.value.code == 0
+    mock_dl.assert_called()  # tried to repopulate the dist
+    # pack + launch ran — the install failure did NOT abort the build.
+    assert mock_run.call_count == 2
+    assert "repopulated" in capsys.readouterr().out.lower()
+
+
+def test_gui_install_failure_hard_fails_when_electron_not_staged(tmp_path, monkeypatch, capsys):
+    """A dependency-install failure where electron never even staged is a genuine
+    error (not a blocked binary download) — hard-fail with guidance, don't try to
+    self-heal a tree that isn't there."""
+    root = _make_desktop_tree(tmp_path)
+    monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
+    _make_packaged_executable(root, monkeypatch, platform="linux")
+
+    install_fail = subprocess.CompletedProcess(["npm", "ci"], 1)
+
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_fail), \
+         patch("clawk_cli.main.subprocess.run") as mock_run, \
+         pytest.raises(SystemExit) as exc:
+        cli_main.cmd_gui(_ns())
+
+    assert exc.value.code == 1
+    mock_run.assert_not_called()  # build never started
+    assert "Desktop dependency install failed" in capsys.readouterr().out
+
+
+def test_gui_install_failure_hard_fails_when_electron_dist_exists(tmp_path, monkeypatch, capsys):
+    """If npm install fails but Electron dist is already present, don't classify
+    it as the blocked-download shape; fail fast as a generic install error."""
+    root = _make_desktop_tree(tmp_path)
+    monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
+    _make_packaged_executable(root, monkeypatch, platform="linux")
+    electron_dir = root / "apps" / "desktop" / "node_modules" / "electron"
+    electron_dir.mkdir(parents=True)
+    (electron_dir / "package.json").write_text("{}", encoding="utf-8")
+    (electron_dir / "install.js").write_text("", encoding="utf-8")
+
+    install_fail = subprocess.CompletedProcess(["npm", "ci"], 1)
+
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_fail), \
+         patch("clawk_cli.main._electron_dist_ok", return_value=True), \
+         patch("clawk_cli.main.subprocess.run") as mock_run, \
+         pytest.raises(SystemExit) as exc:
+        cli_main.cmd_gui(_ns())
+
+    assert exc.value.code == 1
+    mock_run.assert_not_called()
+    assert "Desktop dependency install failed" in capsys.readouterr().out
+
+
+def test_gui_does_not_retry_after_packaged_executable_exists(tmp_path, monkeypatch, capsys):
+    """A build that already produced a packaged executable did NOT fail from the
+    Electron-download problem the cache purge + mirror retries exist to repair.
+
+    Regression for #40187: a late failure such as macOS code signing leaves
+    Clawksis.app/Contents/MacOS/Clawksis in place. Re-downloading Electron can't
+    repair a signing failure, so the destructive purge + slow mirror retry must
+    be skipped — we fail directly instead of grinding through an identical retry.
+    """
+    root = _make_desktop_tree(tmp_path)
+    monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
+    # Executable EXISTS at failure time → late failure, not a corrupt download.
+    _make_packaged_executable(root, monkeypatch, platform="darwin")
+    monkeypatch.delenv("ELECTRON_MIRROR", raising=False)
+
+    install_ok = subprocess.CompletedProcess(["npm", "ci"], 0)
+    pack_fail = subprocess.CompletedProcess(["npm", "run", "pack"], 1)
+
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok), \
+         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
+         patch("clawk_cli.main._purge_electron_build_cache", return_value=[Path("/c/electron.zip")]) as mock_purge, \
+         patch("clawk_cli.main._redownload_electron_dist", return_value=True) as mock_dl, \
+         patch("clawk_cli.main.subprocess.run", return_value=pack_fail) as mock_run, \
+         pytest.raises(SystemExit) as exc:
+        cli_main.cmd_gui(_ns())
+
+    assert exc.value.code == 1
+    # Neither destructive recovery runs, and there is exactly ONE pack attempt.
+    mock_purge.assert_not_called()
+    mock_dl.assert_not_called()
+    assert mock_run.call_count == 1
     assert "Desktop GUI build failed" in capsys.readouterr().out
 
 
@@ -624,32 +790,156 @@ def test_gui_does_not_override_user_electron_mirror(tmp_path, monkeypatch, capsy
     attempt (and we never swap in our default mirror)."""
     root = _make_desktop_tree(tmp_path)
     monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
-    _make_packaged_executable(root, monkeypatch, platform="linux")
+    # No packaged executable: the build failure is the download-class the
+    # mirror fallback handles (and we assert the user's pin is respected).
+    monkeypatch.setattr(cli_main.sys, "platform", "linux")
     monkeypatch.setenv("ELECTRON_MIRROR", "https://mirror.example/electron/")
 
     install_ok = subprocess.CompletedProcess(["npm", "ci"], 0)
     pack_fail = subprocess.CompletedProcess(["npm", "run", "pack"], 1)
 
-    with (
-        patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"),
-        patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok),
-        patch("clawk_cli.main._desktop_macos_relaunchable_fixup"),
-        patch(
-            "clawk_cli.main._purge_electron_build_cache", return_value=[]
-        ) as mock_purge,
-        patch("clawk_cli.main.subprocess.run", side_effect=[pack_fail]) as mock_run,
-        pytest.raises(SystemExit) as exc,
-    ):
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+         patch("clawk_cli.main._run_npm_install_deterministic", return_value=install_ok), \
+         patch("clawk_cli.main._desktop_macos_relaunchable_fixup"), \
+         patch("clawk_cli.main._purge_electron_build_cache", return_value=[]) as mock_purge, \
+         patch("clawk_cli.main.subprocess.run", side_effect=[pack_fail]) as mock_run, \
+         pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 1
     mock_purge.assert_called_once()
     assert mock_run.call_count == 1
-    assert (
-        mock_run.call_args_list[0].kwargs["env"]["ELECTRON_MIRROR"]
-        == "https://mirror.example/electron/"
-    )
+    assert mock_run.call_args_list[0].kwargs["env"]["ELECTRON_MIRROR"] == "https://mirror.example/electron/"
     assert "Desktop GUI build failed" in capsys.readouterr().out
+
+
+# ── electronDist (re)download helper tests (#47266) ───────────────────
+
+
+@pytest.mark.parametrize(
+    "platform,rel",
+    [
+        ("linux", "dist/electron"),
+        ("win32", "dist/electron.exe"),
+        ("darwin", "dist/Electron.app/Contents/MacOS/Electron"),
+    ],
+)
+def test_electron_dist_ok_per_platform(tmp_path, monkeypatch, platform, rel):
+    monkeypatch.setattr(cli_main.sys, "platform", platform)
+    electron = tmp_path / "node_modules" / "electron"
+    # A dist dir that exists but lacks the binary is NOT ok (partial extraction).
+    (electron / "dist").mkdir(parents=True)
+    assert cli_main._electron_dist_ok(tmp_path) is False
+
+    binp = electron / rel
+    binp.parent.mkdir(parents=True, exist_ok=True)
+    binp.write_text("", encoding="utf-8")
+    assert cli_main._electron_dist_ok(tmp_path) is True
+
+
+def test_electron_dir_prefers_workspace_local_package(tmp_path):
+    """npm may nest electron under apps/desktop; resolve there over the root hoist."""
+    root_electron = tmp_path / "node_modules" / "electron"
+    local_electron = tmp_path / "apps" / "desktop" / "node_modules" / "electron"
+    root_electron.mkdir(parents=True)
+    local_electron.mkdir(parents=True)
+
+    assert cli_main._electron_dir(tmp_path) == local_electron
+
+
+def test_electron_dir_falls_back_to_root_hoist(tmp_path):
+    """When npm hoists electron to the repo root, resolve there."""
+    root_electron = tmp_path / "node_modules" / "electron"
+    root_electron.mkdir(parents=True)
+
+    assert cli_main._electron_dir(tmp_path) == root_electron
+
+
+def test_electron_dist_ok_finds_workspace_local_binary(tmp_path, monkeypatch):
+    """A nested apps/desktop electron with a valid binary counts as ok."""
+    monkeypatch.setattr(cli_main.sys, "platform", "linux")
+    binp = tmp_path / "apps" / "desktop" / "node_modules" / "electron" / "dist" / "electron"
+    binp.parent.mkdir(parents=True)
+    binp.write_text("", encoding="utf-8")
+    assert cli_main._electron_dist_ok(tmp_path) is True
+
+
+def test_redownload_electron_dist_noop_when_present(tmp_path, monkeypatch):
+    """Already-healthy dist → no download, so an unrelated build failure can't
+    trigger a needless ~200 MB refetch."""
+    monkeypatch.setattr(cli_main.sys, "platform", "linux")
+    binp = tmp_path / "node_modules" / "electron" / "dist" / "electron"
+    binp.parent.mkdir(parents=True)
+    binp.write_text("", encoding="utf-8")
+
+    with patch("clawk_cli.main.subprocess.run") as mock_run:
+        assert cli_main._redownload_electron_dist(tmp_path, {}) is True
+    mock_run.assert_not_called()
+
+
+def test_redownload_electron_dist_missing_installer(tmp_path, monkeypatch):
+    """No electron/install.js (deps never installed) → nothing to run."""
+    monkeypatch.setattr(cli_main.sys, "platform", "linux")
+    (tmp_path / "node_modules" / "electron").mkdir(parents=True)
+
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/node"), \
+         patch("clawk_cli.main.subprocess.run") as mock_run:
+        assert cli_main._redownload_electron_dist(tmp_path, {}) is False
+    mock_run.assert_not_called()
+
+
+def test_redownload_electron_dist_runs_installer_with_mirror(tmp_path, monkeypatch):
+    """Missing dist → wipe any partial dist + version marker, run electron's own
+    install.js with ELECTRON_MIRROR injected, and report success on the binary."""
+    monkeypatch.setattr(cli_main.sys, "platform", "linux")
+    electron = tmp_path / "node_modules" / "electron"
+    electron.mkdir(parents=True)
+    (electron / "install.js").write_text("// stub", encoding="utf-8")
+    # A stale partial dist + version marker that MUST be cleared first, otherwise
+    # electron's install.js short-circuits on path.txt and never re-downloads.
+    (electron / "dist").mkdir()
+    (electron / "dist" / "leftover").write_text("junk", encoding="utf-8")
+    (electron / "path.txt").write_text("electron", encoding="utf-8")
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["env"] = kwargs.get("env")
+        captured["cwd"] = kwargs.get("cwd")
+        # simulate electron's install.js producing the dist binary
+        binp = electron / "dist" / "electron"
+        binp.parent.mkdir(parents=True, exist_ok=True)
+        binp.write_text("", encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/node"), \
+         patch("clawk_cli.main.subprocess.run", side_effect=fake_run):
+        ok = cli_main._redownload_electron_dist(
+            tmp_path, {"PATH": "/x"}, mirror="https://mirror.example/electron/"
+        )
+
+    assert ok is True
+    assert captured["cmd"] == ["/usr/bin/node", str(electron / "install.js")]
+    assert captured["cwd"] == str(electron)
+    assert captured["env"]["ELECTRON_MIRROR"] == "https://mirror.example/electron/"
+    # The partial dir + marker were dropped before the re-download.
+    assert not (electron / "dist" / "leftover").exists()
+    assert not (electron / "path.txt").exists()
+
+
+def test_redownload_electron_dist_returns_false_when_download_fails(tmp_path, monkeypatch):
+    """install.js ran but produced no binary (still blocked) → False, so the
+    caller skips a doomed pack."""
+    monkeypatch.setattr(cli_main.sys, "platform", "linux")
+    electron = tmp_path / "node_modules" / "electron"
+    electron.mkdir(parents=True)
+    (electron / "install.js").write_text("// stub", encoding="utf-8")
+
+    with patch("clawk_cli.main.shutil.which", return_value="/usr/bin/node"), \
+         patch("clawk_cli.main.subprocess.run",
+               return_value=subprocess.CompletedProcess(["node"], 1)):
+        assert cli_main._redownload_electron_dist(tmp_path, {}) is False
 
 
 class _FakeProc:
@@ -707,10 +997,8 @@ def test_stop_desktop_build_lock_terminates_only_release_procs(tmp_path, monkeyp
         captured["waited"] = list(procs)
         return procs, []
 
-    with (
-        patch("psutil.process_iter", return_value=[locker, unrelated, selfish, no_exe]),
-        patch("psutil.wait_procs", side_effect=_wait),
-    ):
+    with patch("psutil.process_iter", return_value=[locker, unrelated, selfish, no_exe]), \
+         patch("psutil.wait_procs", side_effect=_wait):
         stopped = cli_main._stop_desktop_processes_locking_build(desktop_dir)
 
     assert stopped == [101]
@@ -727,3 +1015,90 @@ def test_stop_desktop_build_lock_no_release_dir(tmp_path, monkeypatch):
     with patch("psutil.process_iter") as it:
         assert cli_main._stop_desktop_processes_locking_build(desktop_dir) == []
     it.assert_not_called()
+
+
+def test_force_adhoc_signing_disables_discovery_on_local_packaged_rebuild(monkeypatch):
+    monkeypatch.setattr(cli_main.sys, "platform", "darwin")
+    env = {}
+    assert cli_main._force_adhoc_macos_signing(env, source_mode=False) is True
+    assert env["CSC_IDENTITY_AUTO_DISCOVERY"] == "false"
+
+
+@pytest.mark.parametrize("platform", ["linux", "win32"])
+def test_force_adhoc_signing_noop_off_macos(monkeypatch, platform):
+    monkeypatch.setattr(cli_main.sys, "platform", platform)
+    env = {}
+    assert cli_main._force_adhoc_macos_signing(env, source_mode=False) is False
+    assert "CSC_IDENTITY_AUTO_DISCOVERY" not in env
+
+
+def test_force_adhoc_signing_noop_for_source_mode(monkeypatch):
+    monkeypatch.setattr(cli_main.sys, "platform", "darwin")
+    env = {}
+    assert cli_main._force_adhoc_macos_signing(env, source_mode=True) is False
+    assert "CSC_IDENTITY_AUTO_DISCOVERY" not in env
+
+
+@pytest.mark.parametrize("key", ["CSC_LINK", "APPLE_SIGNING_IDENTITY"])
+def test_force_adhoc_signing_preserves_real_identity(monkeypatch, key):
+    monkeypatch.setattr(cli_main.sys, "platform", "darwin")
+    env = {key: "secret"}
+    assert cli_main._force_adhoc_macos_signing(env, source_mode=False) is False
+    assert "CSC_IDENTITY_AUTO_DISCOVERY" not in env
+
+
+def test_force_adhoc_signing_respects_explicit_caller_flag(monkeypatch):
+    monkeypatch.setattr(cli_main.sys, "platform", "darwin")
+    env = {"CSC_IDENTITY_AUTO_DISCOVERY": "true"}
+    assert cli_main._force_adhoc_macos_signing(env, source_mode=False) is False
+    assert env["CSC_IDENTITY_AUTO_DISCOVERY"] == "true"
+
+
+# --- desktop.* launch options (config.yaml) -------------------------------
+
+
+def test_desktop_launch_options_defaults_when_no_config():
+    with patch("clawk_cli.config.load_config", return_value={}):
+        flags, gpu = cli_main._desktop_launch_options()
+    assert flags == []
+    assert gpu == "auto"
+
+
+def test_desktop_launch_options_reads_flags_list():
+    cfg = {"desktop": {"electron_flags": ["--ozone-platform=x11", "--disable-gpu"]}}
+    with patch("clawk_cli.config.load_config", return_value=cfg):
+        flags, gpu = cli_main._desktop_launch_options()
+    assert flags == ["--ozone-platform=x11", "--disable-gpu"]
+    assert gpu == "auto"
+
+
+def test_desktop_launch_options_splits_flag_string():
+    cfg = {"desktop": {"electron_flags": "--ozone-platform=x11 --disable-gpu"}}
+    with patch("clawk_cli.config.load_config", return_value=cfg):
+        flags, _ = cli_main._desktop_launch_options()
+    assert flags == ["--ozone-platform=x11", "--disable-gpu"]
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        (True, "1"),
+        (False, "0"),
+        ("true", "1"),
+        ("off", "0"),
+        ("auto", "auto"),
+        ("garbage", "auto"),
+    ],
+)
+def test_desktop_launch_options_normalizes_disable_gpu(raw, expected):
+    cfg = {"desktop": {"disable_gpu": raw}}
+    with patch("clawk_cli.config.load_config", return_value=cfg):
+        _, gpu = cli_main._desktop_launch_options()
+    assert gpu == expected
+
+
+def test_desktop_launch_options_survives_config_error():
+    with patch("clawk_cli.config.load_config", side_effect=RuntimeError("boom")):
+        flags, gpu = cli_main._desktop_launch_options()
+    assert flags == []
+    assert gpu == "auto"

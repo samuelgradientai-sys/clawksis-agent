@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from clawk_constants import get_clawk_home
-from agent.skill_utils import is_excluded_skill_path
+from agent.skill_utils import is_excluded_skill_path, is_external_skill_path
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,6 @@ def activity_count(record: Dict[str, Any]) -> int:
 # Provenance — which skills are agent-created (and thus eligible for curation)
 # ---------------------------------------------------------------------------
 
-
 def _read_bundled_manifest_names() -> Set[str]:
     """Return the set of skill names that were seeded from the bundled repo.
 
@@ -291,9 +290,7 @@ def _write_suppressed_names(names: Set[str]) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         data = "\n".join(sorted(names)) + ("\n" if names else "")
-        fd, tmp = tempfile.mkstemp(
-            dir=str(path.parent), prefix=".curator_suppressed_", suffix=".tmp"
-        )
+        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".curator_suppressed_", suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(data)
@@ -354,6 +351,10 @@ def list_agent_created_skill_names() -> List[str]:
     for skill_md in base.rglob("SKILL.md"):
         # Skip Clawksis metadata, VCS, virtualenv/dependency, and cache dirs
         if is_excluded_skill_path(skill_md):
+            continue
+        # External skill dirs can be mounted below the local skills tree.
+        # Discovery may see them, but autonomous lifecycle curation must not.
+        if is_external_skill_path(skill_md):
             continue
         try:
             skill_md.relative_to(base)
@@ -418,7 +419,12 @@ def _read_skill_name(skill_md: Path, fallback: str) -> str:
 def is_agent_created(skill_name: str) -> bool:
     """Whether *skill_name* is neither bundled nor hub-installed."""
     off_limits = _read_bundled_manifest_names() | _read_hub_installed_names()
-    return skill_name not in off_limits
+    if skill_name in off_limits:
+        return False
+    return not (
+        _find_skill_dir(skill_name) is None
+        and _find_external_skill_dir(skill_name) is not None
+    )
 
 
 def is_hub_installed(skill_name: str) -> bool:
@@ -431,21 +437,36 @@ def is_bundled(skill_name: str) -> bool:
     return skill_name in _read_bundled_manifest_names()
 
 
-def is_curation_eligible(skill_name: str) -> bool:
+def _external_read_only_message(skill_name: str) -> str:
+    return (
+        f"skill '{skill_name}' lives in skills.external_dirs; "
+        "external skills are read-only to the curator"
+    )
+
+
+def is_curation_eligible(skill_name: str, skill_path: Optional[Path] = None) -> bool:
     """Whether the curator may track/archive *skill_name*.
 
     Agent-created skills are always eligible. Bundled built-ins become eligible
-    only when ``curator.prune_builtins`` is enabled. Hub-installed skills are
-    NEVER eligible — they have an external upstream owner. Protected built-ins
-    (``PROTECTED_BUILTIN_SKILLS``) are NEVER eligible regardless of any flag —
-    they back load-bearing UX and must never be archived or consolidated.
+    only when ``curator.prune_builtins`` is enabled. Hub-installed and external
+    skill-dir skills are NEVER eligible — they have an external upstream owner.
+    Protected built-ins (``PROTECTED_BUILTIN_SKILLS``) are NEVER eligible
+    regardless of any flag — they back load-bearing UX and must never be
+    archived or consolidated.
     """
+    if skill_path is not None and is_external_skill_path(skill_path):
+        return False
     if is_protected_builtin(skill_name):
         return False
     if is_hub_installed(skill_name):
         return False
     if is_bundled(skill_name):
         return _prune_builtins_enabled()
+    local_dir = _find_skill_dir(skill_name)
+    if local_dir is not None:
+        return not is_external_skill_path(local_dir)
+    if _find_external_skill_dir(skill_name) is not None:
+        return False
     return True
 
 
@@ -459,7 +480,6 @@ def _is_curator_managed_record(record: Any) -> bool:
 # ---------------------------------------------------------------------------
 # Sidecar I/O
 # ---------------------------------------------------------------------------
-
 
 def _empty_record() -> Dict[str, Any]:
     return {
@@ -553,17 +573,10 @@ def seed_record_if_missing(skill_name: str) -> None:
             data[skill_name] = _empty_record()
             save_usage(data)
     except Exception as e:
-        logger.debug(
-            "skill_usage.seed_record_if_missing(%s) failed: %s",
-            skill_name,
-            e,
-            exc_info=True,
-        )
+        logger.debug("skill_usage.seed_record_if_missing(%s) failed: %s", skill_name, e, exc_info=True)
 
 
-def _mutate(
-    skill_name: str, mutator, *, require_curation_eligible: bool = False
-) -> None:
+def _mutate(skill_name: str, mutator, *, require_curation_eligible: bool = False) -> None:
     """Load, apply *mutator(record)* in place, save. Best-effort.
 
     By default this records telemetry for ANY skill — bundled, hub-installed,
@@ -595,18 +608,15 @@ def _mutate(
 # Public counter-bump helpers — telemetry for ALL skills (observability only)
 # ---------------------------------------------------------------------------
 
-
 def bump_view(skill_name: str) -> None:
     """Bump view_count and last_viewed_at. Called from skill_view().
 
     Tracks every skill regardless of provenance — built-ins and hub skills
     included. Usage telemetry is observability, not a curation signal.
     """
-
     def _apply(rec: Dict[str, Any]) -> None:
         rec["view_count"] = int(rec.get("view_count") or 0) + 1
         rec["last_viewed_at"] = _now_iso()
-
     _mutate(skill_name, _apply)
 
 
@@ -616,11 +626,9 @@ def bump_use(skill_name: str) -> None:
 
     Tracks every skill regardless of provenance.
     """
-
     def _apply(rec: Dict[str, Any]) -> None:
         rec["use_count"] = int(rec.get("use_count") or 0) + 1
         rec["last_used_at"] = _now_iso()
-
     _mutate(skill_name, _apply)
 
 
@@ -629,11 +637,9 @@ def bump_patch(skill_name: str) -> None:
 
     Tracks every skill regardless of provenance.
     """
-
     def _apply(rec: Dict[str, Any]) -> None:
         rec["patch_count"] = int(rec.get("patch_count") or 0) + 1
         rec["last_patched_at"] = _now_iso()
-
     _mutate(skill_name, _apply)
 
 
@@ -643,10 +649,8 @@ def mark_agent_created(skill_name: str) -> None:
     Viewing or invoking a manually authored skill may still create telemetry,
     but only this explicit marker makes it eligible for automatic curation.
     """
-
     def _apply(rec: Dict[str, Any]) -> None:
         rec["created_by"] = "agent"
-
     _mutate(skill_name, _apply, require_curation_eligible=True)
 
 
@@ -656,21 +660,18 @@ def set_state(skill_name: str, state: str) -> None:
     if state not in _VALID_STATES:
         logger.debug("set_state: invalid state %r for %s", state, skill_name)
         return
-
     def _apply(rec: Dict[str, Any]) -> None:
         rec["state"] = state
         if state == STATE_ARCHIVED:
             rec["archived_at"] = _now_iso()
         elif state == STATE_ACTIVE:
             rec["archived_at"] = None
-
     _mutate(skill_name, _apply, require_curation_eligible=True)
 
 
 def set_pinned(skill_name: str, pinned: bool) -> None:
     def _apply(rec: Dict[str, Any]) -> None:
         rec["pinned"] = bool(pinned)
-
     _mutate(skill_name, _apply, require_curation_eligible=True)
 
 
@@ -692,7 +693,6 @@ def forget(skill_name: str) -> None:
 # Archive / restore
 # ---------------------------------------------------------------------------
 
-
 def archive_skill(skill_name: str) -> Tuple[bool, str]:
     """Move a curator-eligible skill directory to ~/.clawksis/skills/.archive/.
 
@@ -701,7 +701,11 @@ def archive_skill(skill_name: str) -> Tuple[bool, str]:
     when one is archived, its name is added to the suppression list so the
     update-time re-seeder leaves it archived instead of restoring it.
     """
-    if not is_curation_eligible(skill_name):
+    local_skill_dir = _find_skill_dir(skill_name)
+    if local_skill_dir is None and _find_external_skill_dir(skill_name) is not None:
+        return False, _external_read_only_message(skill_name)
+
+    if not is_curation_eligible(skill_name, local_skill_dir):
         if is_protected_builtin(skill_name):
             return False, (
                 f"skill '{skill_name}' is a protected built-in; it backs "
@@ -714,9 +718,11 @@ def archive_skill(skill_name: str) -> Tuple[bool, str]:
             "curator.prune_builtins to allow pruning it"
         )
 
-    skill_dir = _find_skill_dir(skill_name)
+    skill_dir = local_skill_dir
     if skill_dir is None:
         return False, f"skill '{skill_name}' not found"
+    if is_external_skill_path(skill_dir):
+        return False, _external_read_only_message(skill_name)
 
     archive_root = _archive_dir()
     try:
@@ -728,17 +734,13 @@ def archive_skill(skill_name: str) -> Tuple[bool, str]:
     # are simple. If a collision exists, append a timestamp.
     dest = archive_root / skill_dir.name
     if dest.exists():
-        dest = (
-            archive_root
-            / f"{skill_dir.name}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
-        )
+        dest = archive_root / f"{skill_dir.name}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
     try:
         skill_dir.rename(dest)
     except OSError as e:
         # Cross-device — fall back to shutil.move
         import shutil
-
         try:
             shutil.move(str(skill_dir), str(dest))
         except Exception as e2:
@@ -780,18 +782,26 @@ def restore_skill(skill_name: str) -> Tuple[bool, str]:
     if not archive_root.exists():
         return False, "no archive directory"
 
-    # Try exact name match first, then any prefix match (for timestamped dupes).
+    # Try exact name match first, then the timestamped-duplicate fallback.
     # Recursive walk handles nested archive layouts (e.g. .archive/<category>/<skill>/)
     # left behind by older archive paths or external imports.
-    candidates = [
-        p for p in archive_root.rglob("*") if p.is_dir() and p.name == skill_name
-    ]
+    candidates = [p for p in archive_root.rglob("*") if p.is_dir() and p.name == skill_name]
     if not candidates:
+        # A name collision makes archive_skill() disambiguate by appending its
+        # UTC timestamp ("<skill>-YYYYMMDDHHMMSS", a 14-digit suffix), so only
+        # that exact shape is another copy of THIS skill. A bare
+        # startswith(f"{skill_name}-") also swallows unrelated sibling skills —
+        # restoring "git" would otherwise pull an archived "git-helpers" out of
+        # the archive and rename it to "git", destroying the sibling's only
+        # copy. Require the suffix to be the timestamp archive_skill writes.
+        prefix = f"{skill_name}-"
         candidates = sorted(
             [
-                p
-                for p in archive_root.rglob("*")
-                if p.is_dir() and p.name.startswith(f"{skill_name}-")
+                p for p in archive_root.rglob("*")
+                if p.is_dir()
+                and p.name.startswith(prefix)
+                and len(p.name) - len(prefix) == 14
+                and p.name[len(prefix):].isdigit()
             ],
             reverse=True,
         )
@@ -807,7 +817,6 @@ def restore_skill(skill_name: str) -> Tuple[bool, str]:
         src.rename(dest)
     except OSError:
         import shutil
-
         try:
             shutil.move(str(src), str(dest))
         except Exception as e:
@@ -832,15 +841,31 @@ def _find_skill_dir(skill_name: str) -> Optional[Path]:
     for skill_md in base.rglob("SKILL.md"):
         if is_excluded_skill_path(skill_md):
             continue
+        if is_external_skill_path(skill_md):
+            continue
         if _read_skill_name(skill_md, fallback=skill_md.parent.name) == skill_name:
             return skill_md.parent
+    return None
+
+
+def _find_external_skill_dir(skill_name: str) -> Optional[Path]:
+    """Locate a skill under configured external dirs by frontmatter name."""
+    from agent.skill_utils import get_all_skills_dirs
+
+    for base in get_all_skills_dirs()[1:]:
+        if not base.exists():
+            continue
+        for skill_md in base.rglob("SKILL.md"):
+            if is_excluded_skill_path(skill_md):
+                continue
+            if _read_skill_name(skill_md, fallback=skill_md.parent.name) == skill_name:
+                return skill_md.parent
     return None
 
 
 # ---------------------------------------------------------------------------
 # Reporting — for the curator CLI / slash command
 # ---------------------------------------------------------------------------
-
 
 def agent_created_report() -> List[Dict[str, Any]]:
     """Return a list of {name, state, pinned, last_activity_at, ...}

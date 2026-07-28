@@ -23,6 +23,7 @@ def _invoke_callback(
     outcome,
     *,
     allow_permanent=True,
+    smart_denied=False,
     timeout=60.0,
     use_prompt_path=False,
 ):
@@ -38,17 +39,14 @@ def _invoke_callback(
         scheduled["loop"] = passed_loop
         return future
 
-    with patch(
-        "agent.async_utils.asyncio.run_coroutine_threadsafe", side_effect=_schedule
-    ):
-        cb = make_approval_callback(
-            request_permission, loop, session_id="s1", timeout=timeout
-        )
+    with patch("agent.async_utils.asyncio.run_coroutine_threadsafe", side_effect=_schedule):
+        cb = make_approval_callback(request_permission, loop, session_id="s1", timeout=timeout)
         if use_prompt_path:
             result = prompt_dangerous_approval(
                 "rm -rf /",
                 "dangerous command",
                 allow_permanent=allow_permanent,
+                smart_denied=smart_denied,
                 approval_callback=cb,
             )
         else:
@@ -56,6 +54,7 @@ def _invoke_callback(
                 "rm -rf /",
                 "dangerous command",
                 allow_permanent=allow_permanent,
+                smart_denied=smart_denied,
             )
 
     scheduled["coro"].close()
@@ -105,10 +104,7 @@ class TestApprovalBridge:
             AllowedOutcome(option_id="allow_once", outcome="selected"),
         )
 
-        assert (
-            first_kwargs["tool_call"].tool_call_id
-            != second_kwargs["tool_call"].tool_call_id
-        )
+        assert first_kwargs["tool_call"].tool_call_id != second_kwargs["tool_call"].tool_call_id
 
     def test_prompt_path_keeps_session_option_when_permanent_disabled(self):
         result, kwargs, _, _, _ = _invoke_callback(
@@ -122,15 +118,37 @@ class TestApprovalBridge:
         assert result == "session"
         assert option_ids == ["allow_once", "allow_session", "deny", "deny_always"]
 
+    def test_smart_deny_prompt_only_offers_once_and_deny(self):
+        result, kwargs, _, _, _ = _invoke_callback(
+            AllowedOutcome(option_id="allow_once", outcome="selected"),
+            allow_permanent=False,
+            smart_denied=True,
+            use_prompt_path=True,
+        )
+
+        assert result == "once"
+        assert [option.option_id for option in kwargs["options"]] == [
+            "allow_once", "deny",
+        ]
+
+    def test_smart_deny_rejects_disallowed_session_outcome(self):
+        result, kwargs, _, _, _ = _invoke_callback(
+            AllowedOutcome(option_id="allow_session", outcome="selected"),
+            smart_denied=True,
+        )
+
+        assert result == "deny"
+        assert [option.option_id for option in kwargs["options"]] == [
+            "allow_once", "deny",
+        ]
+
     def test_reject_always_outcome_denies_without_changing_policy(self):
         result, kwargs, _, _, _ = _invoke_callback(
             AllowedOutcome(option_id="deny_always", outcome="selected"),
             use_prompt_path=True,
         )
 
-        deny_always = [
-            option for option in kwargs["options"] if option.option_id == "deny_always"
-        ]
+        deny_always = [option for option in kwargs["options"] if option.option_id == "deny_always"]
 
         assert result == "deny"
         assert len(deny_always) == 1
@@ -166,12 +184,8 @@ class TestApprovalBridge:
             scheduled["loop"] = passed_loop
             return future
 
-        with patch(
-            "agent.async_utils.asyncio.run_coroutine_threadsafe", side_effect=_schedule
-        ):
-            cb = make_approval_callback(
-                request_permission, loop, session_id="s1", timeout=0.01
-            )
+        with patch("agent.async_utils.asyncio.run_coroutine_threadsafe", side_effect=_schedule):
+            cb = make_approval_callback(request_permission, loop, session_id="s1", timeout=0.01)
             result = cb("rm -rf /", "dangerous command")
 
         scheduled["coro"].close()
@@ -194,12 +208,8 @@ class TestApprovalBridge:
             scheduled["loop"] = passed_loop
             return future
 
-        with patch(
-            "agent.async_utils.asyncio.run_coroutine_threadsafe", side_effect=_schedule
-        ):
-            cb = make_approval_callback(
-                request_permission, loop, session_id="s1", timeout=1.0
-            )
+        with patch("agent.async_utils.asyncio.run_coroutine_threadsafe", side_effect=_schedule):
+            cb = make_approval_callback(request_permission, loop, session_id="s1", timeout=1.0)
             result = cb("echo hi", "demo")
 
         scheduled["coro"].close()
@@ -222,9 +232,7 @@ class TestSchedulerFailure:
         created = {"coro": None}
 
         async def _response_coro(**kwargs):
-            return _make_response(
-                AllowedOutcome(option_id="allow_once", outcome="selected")
-            )
+            return _make_response(AllowedOutcome(option_id="allow_once", outcome="selected"))
 
         def _request_permission(**kwargs):
             created["coro"] = _response_coro(**kwargs)
@@ -236,9 +244,7 @@ class TestSchedulerFailure:
                 "agent.async_utils.asyncio.run_coroutine_threadsafe",
                 side_effect=RuntimeError("scheduler down"),
             ):
-                cb = make_approval_callback(
-                    _request_permission, loop, session_id="s1", timeout=0.01
-                )
+                cb = make_approval_callback(_request_permission, loop, session_id="s1", timeout=0.01)
                 result = cb("rm -rf /", "dangerous")
             gc.collect()
 
@@ -246,8 +252,7 @@ class TestSchedulerFailure:
         assert created["coro"] is not None
         assert created["coro"].cr_frame is None
         runtime_warnings = [
-            w
-            for w in caught
+            w for w in caught
             if issubclass(w.category, RuntimeWarning)
             and "was never awaited" in str(w.message)
             and "_response_coro" in str(w.message)

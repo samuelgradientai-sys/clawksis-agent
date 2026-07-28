@@ -11,13 +11,7 @@ import sys
 from pathlib import Path
 
 from clawk_constants import get_clawk_home
-from plugins.memory.honcho.client import (
-    _host_block,
-    profile_host_key,
-    resolve_active_host,
-    resolve_config_path,
-    HOST,
-)
+from plugins.memory.honcho.client import _host_block, profile_host_key, resolve_active_host, resolve_config_path, HOST
 from clawk_cli.config import cfg_get
 
 
@@ -47,34 +41,20 @@ def clone_honcho_for_profile(profile_name: str) -> bool:
         return False  # already exists
 
     # Clone settings from default block, override identity fields.
-    # Identity-mapping keys (pinPeerName/pinUserPeer, userPeerAliases,
-    # runtimePeerPrefix) carry the operator's runtime-to-peer routing
-    # intent from #27371.  Both pin keys are inherited because
-    # HonchoClientConfig prefers pinUserPeer over pinPeerName — leaving
-    # the canonical key off this allowlist silently drops the pin on
-    # cloned profiles when the default uses the newer name.
+    # Identity-mapping keys (pinUserPeer, userPeerAliases, runtimePeerPrefix)
+    # carry the operator's runtime-to-peer routing intent from #27371.
     new_block = {}
-    for key in (
-        "recallMode",
-        "writeFrequency",
-        "sessionStrategy",
-        "sessionPeerPrefix",
-        "contextTokens",
-        "dialecticReasoningLevel",
-        "dialecticDynamic",
-        "dialecticMaxChars",
-        "messageMaxChars",
-        "dialecticMaxInputChars",
-        "saveMessages",
-        "observation",
-        "pinPeerName",
-        "pinUserPeer",
-        "userPeerAliases",
-        "runtimePeerPrefix",
-    ):
+    for key in ("recallMode", "writeFrequency", "sessionStrategy",
+                "sessionPeerPrefix", "contextTokens", "dialecticReasoningLevel",
+                "dialecticDynamic", "dialecticMaxChars", "messageMaxChars",
+                "dialecticMaxInputChars", "saveMessages", "observation",
+                "pinUserPeer", "userPeerAliases", "runtimePeerPrefix"):
         val = default_block.get(key)
         if val is not None:
             new_block[key] = val
+    # Carry a legacy default-block pinPeerName forward under the canonical key.
+    if "pinUserPeer" not in new_block and default_block.get("pinPeerName") is not None:
+        new_block["pinUserPeer"] = default_block["pinPeerName"]
 
     # Inherit peer name from default
     peer_name = default_block.get("peerName") or cfg.get("peerName")
@@ -86,9 +66,7 @@ def clone_honcho_for_profile(profile_name: str) -> bool:
     # Use the bare profile name as the peer identity (not the host key)
     # because Honcho's peer ID pattern is ^[a-zA-Z0-9_-]+$ (no dots).
     new_block["aiPeer"] = profile_name
-    new_block["workspace"] = (
-        default_block.get("workspace") or cfg.get("workspace") or HOST
-    )
+    new_block["workspace"] = default_block.get("workspace") or cfg.get("workspace") or HOST
     new_block["enabled"] = default_block.get("enabled", True)
 
     cfg.setdefault("hosts", {})[new_host] = new_block
@@ -107,7 +85,6 @@ def _ensure_peer_exists(host_key: str | None = None) -> bool:
     """
     try:
         from plugins.memory.honcho.client import HonchoClientConfig, get_honcho_client
-
         hcfg = HonchoClientConfig.from_global_config(host=host_key)
         if not hcfg.enabled or not (hcfg.api_key or hcfg.base_url):
             return False
@@ -137,19 +114,10 @@ def cmd_enable(args) -> None:
     # If this is a new profile host block with no settings, clone from default
     if not block.get("aiPeer"):
         default_block = cfg_get(cfg, "hosts", HOST, default={})
-        for key in (
-            "recallMode",
-            "writeFrequency",
-            "sessionStrategy",
-            "contextTokens",
-            "dialecticReasoningLevel",
-            "dialecticDynamic",
-            "dialecticMaxChars",
-            "messageMaxChars",
-            "dialecticMaxInputChars",
-            "saveMessages",
-            "observation",
-        ):
+        for key in ("recallMode", "writeFrequency", "sessionStrategy",
+                    "contextTokens", "dialecticReasoningLevel", "dialecticDynamic",
+                    "dialecticMaxChars", "messageMaxChars", "dialecticMaxInputChars",
+                    "saveMessages", "observation"):
             val = default_block.get(key)
             if val is not None and key not in block:
                 block[key] = val
@@ -159,9 +127,7 @@ def cmd_enable(args) -> None:
         # Use bare profile name as AI peer, not the host key
         ai_peer = host.split(".", 1)[1] if "." in host else host
         block.setdefault("aiPeer", ai_peer)
-        block.setdefault(
-            "workspace", default_block.get("workspace") or cfg.get("workspace") or HOST
-        )
+        block.setdefault("workspace", default_block.get("workspace") or cfg.get("workspace") or HOST)
 
     _write_config(cfg)
     print(f"  {label}Honcho enabled.")
@@ -200,7 +166,6 @@ def cmd_sync(args) -> None:
     """
     try:
         from clawk_cli.profiles import list_profiles
-
         profiles = list_profiles()
     except Exception as e:
         print(f"  Could not list profiles: {e}\n")
@@ -216,9 +181,7 @@ def cmd_sync(args) -> None:
     has_key = bool(cfg.get("apiKey") or os.environ.get("HONCHO_API_KEY"))
 
     if not default_block and not has_key:
-        print(
-            "  Honcho not configured on default profile. Run 'clawk honcho setup' first.\n"
-        )
+        print("  Honcho not configured on default profile. Run 'clawk honcho setup' first.\n")
         return
 
     created = 0
@@ -248,7 +211,6 @@ def sync_honcho_profiles_quiet() -> int:
     """
     try:
         from clawk_cli.profiles import list_profiles
-
         profiles = list_profiles()
     except Exception:
         return 0
@@ -312,7 +274,6 @@ def _write_config(cfg: dict, path: Path | None = None) -> None:
     path = path or _local_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     from utils import atomic_json_write
-
     atomic_json_write(path, cfg, mode=0o600)
 
 
@@ -330,15 +291,10 @@ def _resolve_api_key(cfg: dict) -> str:
     host_key = _host_block(cfg, _host_key()).get("apiKey")
     key = host_key or cfg.get("apiKey", "") or os.environ.get("HONCHO_API_KEY", "")
     if not key:
-        base_url = (
-            cfg.get("baseUrl")
-            or cfg.get("base_url")
-            or os.environ.get("HONCHO_BASE_URL", "")
-        )
+        base_url = cfg.get("baseUrl") or cfg.get("base_url") or os.environ.get("HONCHO_BASE_URL", "")
         base_url = (base_url or "").strip()
         if base_url:
             from urllib.parse import urlparse
-
             try:
                 parsed = urlparse(base_url)
             except (TypeError, ValueError):
@@ -349,11 +305,9 @@ def _resolve_api_key(cfg: dict) -> str:
             # a boolean literal): let it through so legacy configs don't
             # regress into "no API key configured" when they previously worked.
             lowered = base_url.lower()
-            if (
-                lowered not in {"true", "false", "none", "null"}
-                and any(c in base_url for c in ".:")
-                and not base_url.isdigit()
-            ):
+            if lowered not in {"true", "false", "none", "null"} and any(
+                c in base_url for c in ".:"
+            ) and not base_url.isdigit():
                 return "local"
     return key
 
@@ -415,13 +369,120 @@ def _resolve_effective_identity_mapping(
 def _scrub_identity_mapping(clawk_host: dict) -> None:
     """Drop every peer-mapping key from the host block.
 
-    Called before the wizard writes a chosen shape so latent precedence
-    conflicts can't survive — e.g. a stray host ``pinUserPeer: false``
-    that would silently outrank a freshly written ``pinPeerName: true``
-    (host ``pinUserPeer`` is first in the resolver ladder).
+    Called before the wizard writes a chosen shape so a stale alias, prefix,
+    or pin from an earlier run can't bleed into the new mapping.
     """
     for key in _IDENTITY_MAPPING_KEYS:
         clawk_host.pop(key, None)
+
+
+def _migrate_pin_key(block: dict) -> bool:
+    """Rewrite a legacy ``pinPeerName`` to canonical ``pinUserPeer`` in place.
+
+    ``pinUserPeer`` wins over ``pinPeerName`` in the resolver, so setup writes
+    only the canonical form and migrates on touch to stop configs carrying
+    both.  Returns True if the block changed.
+    """
+    if "pinPeerName" not in block:
+        return False
+    legacy = block.pop("pinPeerName")
+    if "pinUserPeer" not in block:
+        block["pinUserPeer"] = legacy
+    return True
+
+
+def _gateway_platforms() -> list[str] | None:
+    """Connected gateway platforms, or None if undetectable.
+
+    Identity mapping only affects gateway runtime users, so setup gates the
+    whole step on this.  Best-effort and dependency-free: the memory plugin
+    must not hard-depend on the gateway package, so the import is lazy and
+    guarded (matching the idiom clawk_cli already uses for gateway refs).
+    """
+    try:
+        from gateway.config import load_gateway_config
+        return [p.value for p in load_gateway_config().get_connected_platforms()]
+    except Exception:
+        return None
+
+
+def _collect_operator_aliases(existing: dict, peer_target: str) -> dict:
+    """Prompt for the operator's per-platform runtime IDs, aliasing each to
+    ``peer_target``.  Existing entries are preserved."""
+    aliases = dict(existing)
+    print(f"\n  Add runtime IDs that should alias to peer '{peer_target}'.")
+    print("  Leave blank to skip a platform.  Existing aliases are preserved.")
+    for platform_label, alias_hint in (
+        ("Telegram UID", "e.g. 7654321"),
+        ("Discord snowflake", "e.g. 491827364"),
+        ("Slack user ID", "e.g. U04ABCDEF"),
+        ("Matrix MXID", "e.g. @you:matrix.org"),
+    ):
+        entered = _prompt(f"  {platform_label} ({alias_hint})", default="").strip()
+        if entered:
+            aliases[entered] = peer_target
+    return aliases
+
+
+def _apply_runtime_prefix(
+    clawk_host: dict, current_prefix: str, prefix_from_root: bool, label: str
+) -> None:
+    """Write a host-level runtimePeerPrefix only when it diverges from an
+    inherited root value; otherwise let the root cascade stand."""
+    new_prefix = _prompt(label, default=current_prefix or "").strip()
+    if new_prefix and not (prefix_from_root and new_prefix == current_prefix):
+        clawk_host["runtimePeerPrefix"] = new_prefix
+
+
+def _echo_identity_mapping(clawk_host: dict) -> None:
+    """Show the resulting keys so the operator can verify what was written."""
+    aliases = clawk_host.get("userPeerAliases")
+    prefix = clawk_host.get("runtimePeerPrefix")
+    print("  resolved →")
+    print(f"    pinUserPeer       = {bool(clawk_host.get('pinUserPeer'))}")
+    print(f"    userPeerAliases   = {aliases if aliases else '{}'}")
+    print(f"    runtimePeerPrefix = {prefix if prefix else '(none)'}")
+
+
+def _configure_raw_identity_mapping(
+    clawk_host: dict,
+    current_pin: bool,
+    current_aliases: dict,
+    current_prefix: str,
+    aliases_from_root: bool,
+    prefix_from_root: bool,
+) -> None:
+    """Power-user escape hatch: set the three resolver knobs directly."""
+    print("\n  Raw identity-mapping keys (resolver tries them top-down):")
+    pin_in = _prompt(
+        "pinUserPeer — pin all gateway users to your peer? (true/false)",
+        default=str(bool(current_pin)).lower(),
+    ).strip().lower()
+    pin = pin_in in {"true", "t", "yes", "y", "1"}
+    _scrub_identity_mapping(clawk_host)
+    clawk_host["pinUserPeer"] = pin
+    if pin:
+        return
+    aliases = (
+        dict(current_aliases)
+        if isinstance(current_aliases, dict) and not aliases_from_root
+        else {}
+    )
+    print("  userPeerAliases — 'runtime_id=peer' pairs (blank line to finish):")
+    while True:
+        entry = _prompt("    alias", default="").strip()
+        if not entry:
+            break
+        if "=" in entry:
+            rid, peer = (p.strip() for p in entry.split("=", 1))
+            if rid and peer:
+                aliases[rid] = peer
+    if aliases:
+        clawk_host["userPeerAliases"] = aliases
+    _apply_runtime_prefix(
+        clawk_host, current_prefix, prefix_from_root,
+        "runtimePeerPrefix — namespace for unknown IDs (blank for none)",
+    )
 
 
 def _prompt(label: str, default: str | None = None, secret: bool = False) -> str:
@@ -431,7 +492,6 @@ def _prompt(label: str, default: str | None = None, secret: bool = False) -> str
     if secret:
         if sys.stdin.isatty():
             from clawk_cli.secret_prompt import masked_secret_prompt
-
             val = masked_secret_prompt("")
         else:
             # Non-TTY (piped input, test runners) — read plaintext
@@ -445,32 +505,26 @@ def _ensure_sdk_installed() -> bool:
     """Check honcho-ai is importable; offer to install if not. Returns True if ready."""
     try:
         import honcho  # noqa: F401
-
         return True
     except ImportError:
         pass
 
     print("  honcho-ai is not installed.")
-    answer = _prompt("Install it now? (honcho-ai>=2.0.1)", default="y")
+    answer = _prompt("Install it now? (honcho-ai==2.2.0)", default="y")
     if answer.lower() not in {"y", "yes"}:
-        print("  Skipping install. Run: pip install 'honcho-ai>=2.0.1'\n")
+        print("  Skipping install. Run: pip install 'honcho-ai==2.2.0'\n")
         return False
 
-    import subprocess
-
     print("  Installing honcho-ai...", flush=True)
-    result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "honcho-ai>=2.0.1"],
-        capture_output=True,
-        text=True,
-        stdin=subprocess.DEVNULL,
-    )
+    from clawk_cli.tools_config import _pip_install
+
+    result = _pip_install(["honcho-ai==2.2.0"])
     if result.returncode == 0:
         print("  Installed.\n")
         return True
     else:
-        print(f"  Install failed:\n{result.stderr.strip()}")
-        print("  Run manually: pip install 'honcho-ai>=2.0.1'\n")
+        print(f"  Install failed:\n{(result.stderr or '').strip()}")
+        print("  Run manually: uv pip install 'honcho-ai==2.2.0'\n")
         return False
 
 
@@ -493,18 +547,18 @@ def cmd_setup(args) -> None:
     hosts = cfg.setdefault("hosts", {})
     clawk_host = hosts.setdefault(_host_key(), {})
 
+    # Canonicalize any legacy pinPeerName before detection/writes.
+    _migrate_pin_key(cfg)
+    _migrate_pin_key(clawk_host)
+
     # --- 1. Cloud or local? ---
     print("  Deployment:")
     print("    cloud -- Honcho cloud (api.honcho.dev)")
     print("    local -- self-hosted Honcho server")
-    current_deploy = (
-        "local"
-        if any(
-            h in (cfg.get("baseUrl") or cfg.get("base_url") or "")
-            for h in ("localhost", "127.0.0.1", "::1")
-        )
-        else "cloud"
-    )
+    current_deploy = "local" if any(
+        h in (cfg.get("baseUrl") or cfg.get("base_url") or "")
+        for h in ("localhost", "127.0.0.1", "::1")
+    ) else "cloud"
     deploy = _prompt("Cloud or local?", default=current_deploy)
     is_local = deploy.lower() in {"local", "l"}
 
@@ -534,7 +588,10 @@ def cmd_setup(args) -> None:
             if len(current_host_key) > 8
             else ("set" if current_host_key else "not set")
         )
-        print("\n  Local Honcho auth (JWT signed with the server's AUTH_JWT_SECRET).")
+        print(
+            "\n  Local Honcho auth (JWT signed with the server's "
+            "AUTH_JWT_SECRET)."
+        )
         print(
             "  Leave blank if your server runs with AUTH_USE_AUTH=false. "
             f"Current: {masked}"
@@ -561,31 +618,71 @@ def cmd_setup(args) -> None:
                 )
             else:
                 print("\n  No local JWT set. Local no-auth ready.")
-    else:
-        # --- Cloud: set default base URL, require API key ---
+    use_oauth = False
+    if not is_local:
+        # --- Cloud: OAuth (browser) or API key ---
         cfg.pop("baseUrl", None)  # cloud uses SDK default
 
-        current_key = cfg.get("apiKey", "")
-        masked = (
-            f"...{current_key[-8:]}"
-            if len(current_key) > 8
-            else ("set" if current_key else "not set")
-        )
-        print(f"\n  Current API key: {masked}")
-        new_key = _prompt("Honcho API key (leave blank to keep current)", secret=True)
-        if new_key:
-            cfg["apiKey"] = new_key
+        # Detect an existing OAuth grant so re-running setup reflects it instead
+        # of looking like a fresh connect.
+        from plugins.memory.honcho.oauth import OAuthCredential
+        existing_oauth = OAuthCredential.from_host_block(clawk_host)
 
-        if not cfg.get("apiKey"):
-            print("\n  No API key configured. Get yours at https://app.honcho.dev")
-            print("  Run 'clawk honcho setup' again once you have a key.\n")
-            return
+        print("\n  Auth method:")
+        if existing_oauth is not None:
+            print(f"    (currently connected via OAuth — client {existing_oauth.client_id})")
+        print("    oauth  -- sign in via browser (recommended)")
+        print("    apikey -- paste an API key from https://app.honcho.dev")
+        method = _prompt("OAuth or API key?", default="oauth").strip().lower()
+        use_oauth = method in {"oauth", "o"}
+
+        if use_oauth:
+            # Sign in now, up front — the browser link is the whole point, so
+            # don't bury it behind the identity prompts. The grant's tokens are
+            # merged into the in-memory cfg so the wizard's final save preserves
+            # them; settings stay wizard-owned (apply_config=False).
+            from plugins.memory.honcho.oauth_flow import authorize_via_loopback
+
+            def _open(url: str) -> None:
+                print(f"\n  Open this link to authorize (waiting up to 5 minutes):\n\n    {url}\n")
+                import webbrowser
+
+                webbrowser.open(url)
+
+            print("\n  Starting browser sign-in…")
+            try:
+                cred = authorize_via_loopback(
+                    config_path=write_path,
+                    source="clawk-cli",
+                    apply_config=False,
+                    open_url=_open,
+                )
+            except Exception as e:
+                print(f"  OAuth sign-in failed: {e}")
+                print("  Re-run 'clawk honcho setup' to retry, or choose an API key instead.\n")
+                return
+            clawk_host["apiKey"] = cred.access_token
+            clawk_host["oauth"] = cred.oauth_block()
+            # Default the peer prompt to the name entered at consent.
+            if cred.consent_peer_name:
+                clawk_host["peerName"] = cred.consent_peer_name
+            print("  Authorized — token saved. Let's finish configuring.\n")
+        else:
+            current_key = cfg.get("apiKey", "")
+            masked = f"...{current_key[-8:]}" if len(current_key) > 8 else ("set" if current_key else "not set")
+            print(f"\n  Current API key: {masked}")
+            new_key = _prompt("Honcho API key (leave blank to keep current)", secret=True)
+            if new_key:
+                cfg["apiKey"] = new_key
+
+            if not cfg.get("apiKey"):
+                print("\n  No API key configured. Get yours at https://app.honcho.dev")
+                print("  Run 'clawk honcho setup' again once you have a key.\n")
+                return
 
     # --- 3. Identity ---
     current_peer = clawk_host.get("peerName") or cfg.get("peerName", "")
-    new_peer = _prompt(
-        "Your name (user peer)", default=current_peer or os.getenv("USER", "user")
-    )
+    new_peer = _prompt("Your name (user peer)", default=current_peer or os.getenv("USER", "user"))
     if new_peer:
         clawk_host["peerName"] = new_peer
 
@@ -599,18 +696,15 @@ def cmd_setup(args) -> None:
     if new_workspace:
         clawk_host["workspace"] = new_workspace
 
-    # --- 3b. Deployment shape ---
-    # Determines how runtime user identities (Telegram UIDs, Discord
-    # snowflakes, etc.) map to Honcho peers in gateway sessions.  Three
-    # shapes cover the realistic deployments; each writes a different
-    # combination of pinPeerName / userPeerAliases / runtimePeerPrefix.
-    # See plugins/memory/honcho/README.md for the resolver ladder.
+    # --- 3b. Gateway identity mapping ---
+    # These keys only affect the Clawksis GATEWAY (Telegram/Discord/Slack/...),
+    # the one entrypoint that supplies a runtime user ID.  CLI/TUI/desktop/ACP
+    # sessions have no runtime ID and fall through to peerName, so the step is
+    # moot off-gateway — gate it behind detection.
     #
-    # Detection must mirror the gateway resolver: root-level config and
-    # ``pinUserPeer`` (which outranks ``pinPeerName`` at the same level)
-    # both affect effective routing, so reading host-only fields would
-    # mis-classify a profile that inherits its mapping from root or uses
-    # the newer canonical key.
+    # Detection mirrors the gateway resolver: root-level config and the
+    # canonical ``pinUserPeer`` both affect routing, so host-only reads would
+    # mis-classify a profile that inherits its mapping from root.
     (
         current_pin,
         current_aliases,
@@ -626,131 +720,115 @@ def cmd_setup(args) -> None:
     else:
         current_shape = "multi"
 
-    print("\n  Deployment shape (how gateway users map to peers):")
-    print(
-        "    single -- all platforms route to your peer (recommended for personal use)"
-    )
-    print("    multi  -- each platform user gets their own peer (multi-user bots)")
-    print("    hybrid -- multi-user, but YOUR runtime IDs alias to your peer")
-    print("    skip   -- don't touch identity-mapping config")
-    new_shape = _prompt("Deployment shape", default=current_shape).strip().lower()
-
-    # Transitioning single → multi orphans the peerName pool for runtime users
-    # (their resolved peers go from peerName to runtime-derived IDs with empty
-    # history).  Steer the operator toward hybrid so their own continuity is
-    # preserved via alias mappings.
-    if current_shape == "single" and new_shape == "multi":
-        peer_target = clawk_host.get("peerName") or current_peer or "user"
-        print(
-            f"\n  ⚠ Switching from single to multi will orphan memory accumulated\n"
-            f"    under peer '{peer_target}'.  Existing runtime users (Telegram,\n"
-            f"    Discord, etc.) will resolve to fresh, empty peers."
-        )
-        print(
-            "    To keep your own continuity, choose 'hybrid' and alias your\n"
-            "    runtime IDs back to peerName."
-        )
-        confirm = (
-            _prompt("Continue with multi anyway? (yes/hybrid/no)", default="hybrid")
-            .strip()
-            .lower()
-        )
-        if confirm in {"hybrid", "h"}:
-            new_shape = "hybrid"
-        elif confirm not in {"yes", "y"}:
-            new_shape = "skip"
-
-    # Each shape branch scrubs every peer-mapping key before writing its own,
-    # so a stale ``pinUserPeer`` left behind by an earlier setup run can't
-    # outrank the freshly written ``pinPeerName`` via host-level precedence.
-    if new_shape == "single":
-        _scrub_identity_mapping(clawk_host)
-        clawk_host["pinPeerName"] = True
-        print(
-            f"  pinPeerName=true → all gateway users route to '{clawk_host.get('peerName', '?')}'."
-        )
-    elif new_shape == "multi":
-        # Preserve operator-curated, host-level aliases so multi → multi
-        # re-runs don't drop them.  Root-sourced aliases are left to
-        # cascade naturally and are NOT copied down into the host.
-        prior_aliases = (
-            dict(current_aliases)
-            if isinstance(current_aliases, dict) and not aliases_from_root
-            else {}
-        )
-        _scrub_identity_mapping(clawk_host)
-        clawk_host["pinPeerName"] = False
-        # Do NOT auto-write ``userPeerAliases: {}``: an empty host map
-        # would override any root-level ``userPeerAliases`` the operator
-        # set as a cross-host baseline, silently disabling those aliases.
-        # Absence is the right "no host opinion" signal.
-        if prior_aliases:
-            clawk_host["userPeerAliases"] = prior_aliases
-        _prefix_default = current_prefix or ""
-        _new_prefix = _prompt(
-            "Runtime peer prefix (e.g. 'telegram_', blank for none)",
-            default=_prefix_default,
-        ).strip()
-        # Only write a host-level prefix when the operator typed one that
-        # diverges from the inherited root value; otherwise let the root
-        # cascade continue unmodified.
-        if _new_prefix and not (prefix_from_root and _new_prefix == current_prefix):
-            clawk_host["runtimePeerPrefix"] = _new_prefix
-        print(
-            "  Multi-user mode: each runtime ID → own peer. Use 'clawk honcho status' to inspect."
-        )
-    elif new_shape == "hybrid":
-        # Hybrid encodes operator intent at the host level: collect existing
-        # entries (host or root) so the wizard never silently drops a known
-        # alias, then write the combined map.  Materialising root entries
-        # into the host is the right move here — once the operator answers
-        # the alias prompts for a host, they're declaring "this host owns
-        # the mapping".
-        existing_aliases = (
-            dict(current_aliases) if isinstance(current_aliases, dict) else {}
-        )
-        _scrub_identity_mapping(clawk_host)
-        clawk_host["pinPeerName"] = False
-        peer_target = clawk_host.get("peerName") or current_peer or "user"
-        print(f"\n  Add runtime IDs that should alias to peer '{peer_target}'.")
-        print("  Leave blank to skip a platform.  Existing aliases are preserved.")
-        for platform_label, alias_hint in (
-            ("Telegram UID", "e.g. 86701400"),
-            ("Discord snowflake", "e.g. 491827364"),
-            ("Slack user ID", "e.g. U04ABCDEF"),
-            ("Matrix MXID", "e.g. @you:matrix.org"),
-        ):
-            entered = _prompt(f"  {platform_label} ({alias_hint})", default="").strip()
-            if entered:
-                existing_aliases[entered] = peer_target
-        if existing_aliases:
-            clawk_host["userPeerAliases"] = existing_aliases
-        _prefix_default = current_prefix or ""
-        _new_prefix = _prompt(
-            "Runtime peer prefix for unknown users (e.g. 'telegram_', blank for none)",
-            default=_prefix_default,
-        ).strip()
-        if _new_prefix and not (prefix_from_root and _new_prefix == current_prefix):
-            clawk_host["runtimePeerPrefix"] = _new_prefix
-        print(f"  Hybrid mode: your runtime IDs → '{peer_target}', others → own peer.")
-    elif new_shape == "skip":
-        pass  # leave config untouched
+    gw_platforms = _gateway_platforms()
+    if gw_platforms is None:
+        print("\n  Gateway identity mapping routes platform users to memory peers.")
+        run_mapping = _prompt(
+            "Running the Clawksis gateway (Telegram/Discord/etc.)? (y/N)",
+            default="n",
+        ).strip().lower() in {"y", "yes"}
+    elif not gw_platforms:
+        print("\n  No gateway platforms connected — identity mapping only affects")
+        print("  gateway users, so this step doesn't apply here.")
+        run_mapping = _prompt(
+            "Configure gateway mapping anyway? (y/N)", default="n",
+        ).strip().lower() in {"y", "yes"}
     else:
-        print(
-            f"  Unknown shape '{new_shape}' — leaving identity-mapping config untouched."
-        )
+        print(f"\n  Gateway platforms detected: {', '.join(gw_platforms)}")
+        run_mapping = True
+
+    if run_mapping:
+        peer_target = clawk_host.get("peerName") or current_peer or "user"
+        default_choice = {"single": "1", "hybrid": "2", "multi": "3"}.get(current_shape, "3")
+        print("\n  How should gateway users map to memory peers?")
+        print("    [1] just me — every non-agent user collapses to your peer")
+        print("    [2] me + other people — keep mine pooled, others separate")
+        print("    [3] only other people — everyone gets their own peer")
+        print("    [s] skip (leave untouched)   [e] edit raw keys")
+        choice = _prompt("Choice", default=default_choice).strip().lower()
+
+        if choice in {"2", "me+others", "both"}:
+            pooled = _prompt(
+                "  Keep my own memory pooled across platforms? (Y/n)", default="y",
+            ).strip().lower()
+            shape = "hybrid" if pooled in {"y", "yes", ""} else "multi"
+        elif choice in {"1", "me", "just-me"}:
+            shape = "single"
+        elif choice in {"3", "others"}:
+            shape = "multi"
+        elif choice in {"e", "edit", "raw"}:
+            shape = "raw"
+        else:
+            shape = "skip"
+
+        # Un-pinning a currently-pinned profile without aliasing strands the
+        # pooled peerName history; steer the operator toward pooling instead.
+        if current_pin and shape == "multi":
+            print(
+                f"\n  ⚠ Un-pinning will orphan memory accumulated under peer\n"
+                f"    '{peer_target}'.  Existing gateway users resolve to fresh,\n"
+                f"    empty peers."
+            )
+            confirm = _prompt(
+                "  Pool my own memory instead (alias my IDs to peerName)? (Y/n)",
+                default="y",
+            ).strip().lower()
+            if confirm in {"y", "yes", ""}:
+                shape = "hybrid"
+
+        # Each branch scrubs every peer-mapping key first so a stale alias,
+        # prefix, or pin from an earlier run starts clean.
+        if shape == "single":
+            _scrub_identity_mapping(clawk_host)
+            clawk_host["pinUserPeer"] = True
+            print(f"  All non-agent gateway users route to '{peer_target}' (pin overrides aliases).")
+            _echo_identity_mapping(clawk_host)
+        elif shape == "multi":
+            # Preserve operator-curated host-level aliases across multi → multi
+            # re-runs.  Root-sourced aliases cascade naturally and are NOT
+            # copied down — an empty host map would mask a root baseline.
+            prior_aliases = (
+                dict(current_aliases)
+                if isinstance(current_aliases, dict) and not aliases_from_root
+                else {}
+            )
+            _scrub_identity_mapping(clawk_host)
+            clawk_host["pinUserPeer"] = False
+            if prior_aliases:
+                clawk_host["userPeerAliases"] = prior_aliases
+            _apply_runtime_prefix(
+                clawk_host, current_prefix, prefix_from_root,
+                "Runtime peer prefix (e.g. 'telegram_', blank for none)",
+            )
+            print("  Each gateway user → own peer.")
+            _echo_identity_mapping(clawk_host)
+        elif shape == "hybrid":
+            existing_aliases = dict(current_aliases) if isinstance(current_aliases, dict) else {}
+            _scrub_identity_mapping(clawk_host)
+            clawk_host["pinUserPeer"] = False
+            merged = _collect_operator_aliases(existing_aliases, peer_target)
+            if merged:
+                clawk_host["userPeerAliases"] = merged
+            _apply_runtime_prefix(
+                clawk_host, current_prefix, prefix_from_root,
+                "Runtime peer prefix for unknown users (e.g. 'telegram_', blank for none)",
+            )
+            print(f"  Your runtime IDs → '{peer_target}', others → own peer.")
+            _echo_identity_mapping(clawk_host)
+        elif shape == "raw":
+            _configure_raw_identity_mapping(
+                clawk_host, current_pin, current_aliases, current_prefix,
+                aliases_from_root, prefix_from_root,
+            )
+            _echo_identity_mapping(clawk_host)
+        else:  # skip
+            print("  Identity mapping left untouched.")
 
     # --- 4. Observation mode ---
-    current_obs = clawk_host.get("observationMode") or cfg.get(
-        "observationMode", "directional"
-    )
+    current_obs = clawk_host.get("observationMode") or cfg.get("observationMode", "directional")
     print("\n  Observation mode:")
-    print(
-        "    directional  -- all observations on, each AI peer builds its own view (default)"
-    )
-    print(
-        "    unified      -- shared pool, user observes self, AI observes others only"
-    )
+    print("    directional  -- all observations on, each AI peer builds its own view (default)")
+    print("    unified      -- user observes self, AI observes others only")
     new_obs = _prompt("Observation mode", default=current_obs)
     if new_obs in {"unified", "directional"}:
         clawk_host["observationMode"] = new_obs
@@ -758,9 +836,7 @@ def cmd_setup(args) -> None:
         clawk_host["observationMode"] = "directional"
 
     # --- 5. Write frequency ---
-    current_wf = str(
-        clawk_host.get("writeFrequency") or cfg.get("writeFrequency", "async")
-    )
+    current_wf = str(clawk_host.get("writeFrequency") or cfg.get("writeFrequency", "async"))
     print("\n  Write frequency:")
     print("    async   -- background thread, no token cost (recommended)")
     print("    turn    -- sync write after every turn")
@@ -770,15 +846,11 @@ def cmd_setup(args) -> None:
     try:
         clawk_host["writeFrequency"] = int(new_wf)
     except (ValueError, TypeError):
-        clawk_host["writeFrequency"] = (
-            new_wf if new_wf in {"async", "turn", "session"} else "async"
-        )
+        clawk_host["writeFrequency"] = new_wf if new_wf in {"async", "turn", "session"} else "async"
 
     # --- 6. Recall mode ---
     _raw_recall = clawk_host.get("recallMode") or cfg.get("recallMode", "hybrid")
-    current_recall = (
-        "hybrid" if _raw_recall not in {"hybrid", "context", "tools"} else _raw_recall
-    )
+    current_recall = "hybrid" if _raw_recall not in {"hybrid", "context", "tools"} else _raw_recall
     print("\n  Recall mode:")
     print("    hybrid  -- auto-injected context + Honcho tools available (default)")
     print("    context -- auto-injected context only, Honcho tools hidden")
@@ -807,9 +879,7 @@ def cmd_setup(args) -> None:
             pass  # keep current
 
     # --- 7b. Dialectic cadence ---
-    current_dialectic = str(
-        clawk_host.get("dialecticCadence") or cfg.get("dialecticCadence") or "2"
-    )
+    current_dialectic = str(clawk_host.get("dialecticCadence") or cfg.get("dialecticCadence") or "2")
     print("\n  Dialectic cadence:")
     print("    How often Honcho rebuilds its user model (LLM call on Honcho backend).")
     print("    1 = every turn, 2 = every other turn, 3+ = sparser.")
@@ -829,9 +899,7 @@ def cmd_setup(args) -> None:
         or "low"
     )
     print("\n  Dialectic reasoning level:")
-    print(
-        "    Depth Honcho uses when synthesizing user context on auto-injected calls."
-    )
+    print("    Depth Honcho uses when synthesizing user context on auto-injected calls.")
     print("    minimal  -- quick factual lookups")
     print("    low      -- straightforward questions (default)")
     print("    medium   -- multi-aspect synthesis")
@@ -844,16 +912,10 @@ def cmd_setup(args) -> None:
         clawk_host["dialecticReasoningLevel"] = "low"
 
     # --- 8. Session strategy ---
-    current_strat = clawk_host.get("sessionStrategy") or cfg.get(
-        "sessionStrategy", "per-session"
-    )
+    current_strat = clawk_host.get("sessionStrategy") or cfg.get("sessionStrategy", "per-session")
     print("\n  Session strategy:")
-    print(
-        "    per-session   -- each run starts clean, Honcho injects context automatically"
-    )
-    print(
-        "    per-directory -- reuses session per dir, prior context auto-injected each run"
-    )
+    print("    per-session   -- each run starts clean, Honcho injects context automatically")
+    print("    per-directory -- reuses session per dir, prior context auto-injected each run")
     print("    per-repo      -- one session per git repository")
     print("    global        -- single session across all directories")
     new_strat = _prompt("Session strategy", default=current_strat)
@@ -869,7 +931,6 @@ def cmd_setup(args) -> None:
     # --- Auto-enable Honcho as memory provider in config.yaml ---
     try:
         from clawk_cli.config import load_config, save_config
-
         clawk_config = load_config()
         clawk_config.setdefault("memory", {})["provider"] = "honcho"
         save_config(clawk_config)
@@ -881,12 +942,7 @@ def cmd_setup(args) -> None:
     # --- Test connection ---
     print("  Testing connection... ", end="", flush=True)
     try:
-        from plugins.memory.honcho.client import (
-            HonchoClientConfig,
-            get_honcho_client,
-            reset_honcho_client,
-        )
-
+        from plugins.memory.honcho.client import HonchoClientConfig, get_honcho_client, reset_honcho_client
         reset_honcho_client()
         hcfg = HonchoClientConfig.from_global_config(host=_host_key())
         get_honcho_client(hcfg)
@@ -905,9 +961,7 @@ def cmd_setup(args) -> None:
     print(f"  Recall:    {hcfg.recall_mode}")
     print(f"  Sessions:  {hcfg.session_strategy}")
     print("\n  Honcho tools available in chat:")
-    print(
-        "    honcho_context   -- session context: summary, representation, card, messages"
-    )
+    print("    honcho_context   -- session context: summary, representation, card, messages")
     print("    honcho_search    -- semantic search over history")
     print("    honcho_profile   -- peer card, key facts")
     print("    honcho_reasoning -- ask Honcho a question, synthesized answer")
@@ -926,7 +980,6 @@ def _active_profile_name() -> str:
         return _profile_override
     try:
         from clawk_cli.profiles import get_active_profile_name
-
         return get_active_profile_name()
     except Exception:
         return "default"
@@ -939,7 +992,6 @@ def _all_profile_host_configs() -> list[tuple[str, str, dict]]:
     """
     try:
         from clawk_cli.profiles import list_profiles
-
         profiles = list_profiles()
     except Exception:
         return [(_active_profile_name(), _host_key(), {})]
@@ -984,7 +1036,6 @@ def cmd_status(args) -> None:
         # Config file missing — try env var fallback before giving up.
         try:
             from plugins.memory.honcho.client import HonchoClientConfig
-
             _env_cfg = HonchoClientConfig.from_global_config(host=_host_key())
             if _env_cfg.api_key or _env_cfg.base_url:
                 # Env var fallback worked — use that config instead.
@@ -1000,16 +1051,19 @@ def cmd_status(args) -> None:
 
     try:
         from plugins.memory.honcho.client import HonchoClientConfig, get_honcho_client
-
         hcfg = HonchoClientConfig.from_global_config(host=_host_key())
     except Exception as e:
         print(f"  Config error: {e}\n")
         return
 
     api_key = hcfg.api_key or ""
-    masked = (
-        f"...{api_key[-8:]}" if len(api_key) > 8 else ("set" if api_key else "not set")
-    )
+    masked = f"...{api_key[-8:]}" if len(api_key) > 8 else ("set" if api_key else "not set")
+
+    # Auth line distinguishes an OAuth grant (refreshable) from a static API key
+    # — the OAuth access token is also stored under apiKey, so masking alone hides it.
+    from plugins.memory.honcho.oauth import OAuthCredential
+    host_block = (getattr(hcfg, "raw", None) or {}).get("hosts", {}).get(hcfg.host) or {}
+    cred = OAuthCredential.from_host_block(host_block)
 
     profile = _active_profile_name()
     profile_label = f" [{hcfg.host}]" if profile != "default" else ""
@@ -1019,7 +1073,13 @@ def cmd_status(args) -> None:
         print(f"  Profile:        {profile}")
     print(f"  Host:           {hcfg.host}")
     print(f"  Enabled:        {hcfg.enabled}")
-    print(f"  API key:        {masked}")
+    if cred is not None:
+        import time as _time
+        remaining = int(cred.expires_at - _time.time())
+        token_state = f"valid {remaining // 60}m" if remaining > 0 else "expired — refreshes on next use"
+        print(f"  Auth:           OAuth ({cred.client_id}, token {token_state})")
+    else:
+        print(f"  Auth:           API key ({masked})")
     print(f"  Workspace:      {hcfg.workspace_id}")
 
     # Config paths — show where config was read from and where writes go
@@ -1028,7 +1088,7 @@ def cmd_status(args) -> None:
     if write_path != active_path:
         print(f"  Write to:       {write_path}  (profile-local)")
     if active_path == global_path:
-        print(f"  Fallback:       (none — using global ~/.honcho/config.json)")
+        print("  Fallback:       (none — using global ~/.honcho/config.json)")
     elif global_path.exists():
         print(f"  Fallback:       {global_path}  (exists, cross-app interop)")
 
@@ -1039,18 +1099,12 @@ def cmd_status(args) -> None:
     print(f"  Recall mode:    {hcfg.recall_mode}")
     print(f"  Context budget: {hcfg.context_tokens or '(uncapped)'} tokens")
     raw = getattr(hcfg, "raw", None) or {}
-    dialectic_cadence = raw.get("dialecticCadence") or 1
-    print(
-        f"  Dialectic cad:  every {dialectic_cadence} turn{'s' if dialectic_cadence != 1 else ''}"
-    )
+    dialectic_cadence = getattr(hcfg, "dialectic_cadence", None) or raw.get("dialecticCadence") or 1
+    print(f"  Dialectic cad:  every {dialectic_cadence} turn{'s' if dialectic_cadence != 1 else ''}")
     reasoning_cap = raw.get("reasoningLevelCap") or hcfg.reasoning_level_cap
     heuristic_on = "on" if hcfg.reasoning_heuristic else "off"
-    print(
-        f"  Reasoning:      base={hcfg.dialectic_reasoning_level}, cap={reasoning_cap}, heuristic={heuristic_on}"
-    )
-    print(
-        f"  Observation:    user(me={hcfg.user_observe_me},others={hcfg.user_observe_others}) ai(me={hcfg.ai_observe_me},others={hcfg.ai_observe_others})"
-    )
+    print(f"  Reasoning:      base={hcfg.dialectic_reasoning_level}, cap={reasoning_cap}, heuristic={heuristic_on}")
+    print(f"  Observation:    user(me={hcfg.user_observe_me},others={hcfg.user_observe_others}) ai(me={hcfg.ai_observe_me},others={hcfg.ai_observe_others})")
     print(f"  Write freq:     {hcfg.write_frequency}")
 
     if hcfg.enabled and (hcfg.api_key or hcfg.base_url):
@@ -1075,7 +1129,6 @@ def _show_peer_cards(hcfg, client) -> None:
     """
     try:
         from plugins.memory.honcho.session import HonchoSessionManager
-
         mgr = HonchoSessionManager(honcho=client, config=hcfg)
         session_key = hcfg.resolve_session_name()
         mgr.get_or_create(session_key)
@@ -1095,7 +1148,7 @@ def _show_peer_cards(hcfg, client) -> None:
         if ai_text:
             # Truncate to first 200 chars
             display = ai_text[:200] + ("..." if len(ai_text) > 200 else "")
-            print(f"\n  AI peer representation:")
+            print("\n  AI peer representation:")
             print(f"    {display}")
 
         if not card and not ai_text:
@@ -1129,7 +1182,7 @@ def _cmd_status_all() -> None:
         marker = " *" if name == active else ""
         print(f"  {name + marker:<14} {host:<22} {enabled_str:<9} {recall:<9} {write}")
 
-    print(f"\n  * active profile\n")
+    print("\n  * active profile\n")
 
 
 def cmd_peers(args) -> None:
@@ -1182,8 +1235,7 @@ def cmd_map(args) -> None:
         return
 
     import re
-
-    sanitized = re.sub(r"[^a-zA-Z0-9_-]", "-", session_name).strip("-")
+    sanitized = re.sub(r'[^a-zA-Z0-9_-]', '-', session_name).strip('-')
     if sanitized != session_name:
         print(f"  Session name sanitized to: {sanitized}")
         session_name = sanitized
@@ -1209,23 +1261,15 @@ def cmd_peer(args) -> None:
         # Show current values
         hosts = cfg.get("hosts", {})
         clawk = hosts.get(_host_key(), {})
-        user = clawk.get("peerName") or cfg.get("peerName") or "(not set)"
-        ai = clawk.get("aiPeer") or cfg.get("aiPeer") or _host_key()
-        lvl = (
-            clawk.get("dialecticReasoningLevel")
-            or cfg.get("dialecticReasoningLevel")
-            or "low"
-        )
-        max_chars = (
-            clawk.get("dialecticMaxChars") or cfg.get("dialecticMaxChars") or 600
-        )
+        user = clawk.get('peerName') or cfg.get('peerName') or '(not set)'
+        ai = clawk.get('aiPeer') or cfg.get('aiPeer') or _host_key()
+        lvl = clawk.get("dialecticReasoningLevel") or cfg.get("dialecticReasoningLevel") or "low"
+        max_chars = clawk.get("dialecticMaxChars") or cfg.get("dialecticMaxChars") or 600
         print("\nHoncho peers\n" + "─" * 40)
         print(f"  User peer:   {user}")
         print("    Your identity in Honcho. Messages you send build this peer's card.")
         print(f"  AI peer:     {ai}")
-        print(
-            "    Clawksis' identity in Honcho. Seed with 'clawk honcho identity <file>'."
-        )
+        print("    Clawksis' identity in Honcho. Seed with 'clawk honcho identity <file>'.")
         print("    Dialectic calls ask this peer questions to warm session context.")
         print()
         print(f"  Dialectic reasoning:  {lvl}  ({', '.join(REASONING_LEVELS)})")
@@ -1247,13 +1291,9 @@ def cmd_peer(args) -> None:
 
     if reasoning is not None:
         if reasoning not in REASONING_LEVELS:
-            print(
-                f"  Invalid reasoning level '{reasoning}'. Options: {', '.join(REASONING_LEVELS)}"
-            )
+            print(f"  Invalid reasoning level '{reasoning}'. Options: {', '.join(REASONING_LEVELS)}")
             return
-        cfg.setdefault("hosts", {}).setdefault(host, {})["dialecticReasoningLevel"] = (
-            reasoning
-        )
+        cfg.setdefault("hosts", {}).setdefault(host, {})["dialecticReasoningLevel"] = reasoning
         changed = True
         print(f"  {label}Dialectic reasoning level -> {reasoning}")
 
@@ -1282,7 +1322,7 @@ def cmd_mode(args) -> None:
         for m, desc in MODES.items():
             marker = " <-" if m == current else ""
             print(f"  {m:<10}  {desc}{marker}")
-        print(f"\n  Set with: clawk honcho mode [hybrid|context|tools]\n")
+        print("\n  Set with: clawk honcho mode [hybrid|context|tools]\n")
         return
 
     if mode_arg not in MODES:
@@ -1317,9 +1357,7 @@ def cmd_strategy(args) -> None:
         for s, desc in STRATEGIES.items():
             marker = " <-" if s == current else ""
             print(f"  {s:<15}  {desc}{marker}")
-        print(
-            f"\n  Set with: clawk honcho strategy [per-session|per-directory|per-repo|global]\n"
-        )
+        print("\n  Set with: clawk honcho strategy [per-session|per-directory|per-repo|global]\n")
         return
 
     if strat_arg not in STRATEGIES:
@@ -1343,15 +1381,9 @@ def cmd_tokens(args) -> None:
     dialectic = getattr(args, "dialectic", None)
 
     if context is None and dialectic is None:
-        ctx_tokens = (
-            clawk.get("contextTokens") or cfg.get("contextTokens") or "(Honcho default)"
-        )
+        ctx_tokens = clawk.get("contextTokens") or cfg.get("contextTokens") or "(Honcho default)"
         d_chars = clawk.get("dialecticMaxChars") or cfg.get("dialecticMaxChars") or 600
-        d_level = (
-            clawk.get("dialecticReasoningLevel")
-            or cfg.get("dialecticReasoningLevel")
-            or "low"
-        )
+        d_level = clawk.get("dialecticReasoningLevel") or cfg.get("dialecticReasoningLevel") or "low"
         print("\nHoncho budgets\n" + "─" * 40)
         print()
         print(f"  Context     {ctx_tokens} tokens")
@@ -1360,7 +1392,7 @@ def cmd_tokens(args) -> None:
         print()
         print(f"  Dialectic   {d_chars} chars, reasoning: {d_level}")
         print("    AI-to-AI inference. Clawksis asks Honcho's AI peer a question")
-        print('    (e.g. "what were we working on?") and Honcho runs its own model')
+        print("    (e.g. \"what were we working on?\") and Honcho runs its own model")
         print("    to synthesize an answer. Used for first-turn session continuity.")
         print("    Level controls how much reasoning Honcho spends on the answer.")
         print("\n  Set with: clawk honcho tokens [--context N] [--dialectic N]\n")
@@ -1374,9 +1406,7 @@ def cmd_tokens(args) -> None:
         print(f"  {label}context tokens -> {context}")
         changed = True
     if dialectic is not None:
-        cfg.setdefault("hosts", {}).setdefault(host, {})["dialecticMaxChars"] = (
-            dialectic
-        )
+        cfg.setdefault("hosts", {}).setdefault(host, {})["dialecticMaxChars"] = dialectic
         print(f"  {label}dialectic cap  -> {dialectic} chars")
         changed = True
 
@@ -1398,7 +1428,6 @@ def cmd_identity(args) -> None:
     try:
         from plugins.memory.honcho.client import HonchoClientConfig, get_honcho_client
         from plugins.memory.honcho.session import HonchoSessionManager
-
         hcfg = HonchoClientConfig.from_global_config(host=_host_key())
         client = get_honcho_client(hcfg)
         mgr = HonchoSessionManager(honcho=client, config=hcfg)
@@ -1436,16 +1465,11 @@ def cmd_identity(args) -> None:
         print(f"  User peer: {hcfg.peer_name or 'not set'}")
         print(f"  AI peer:   {hcfg.ai_peer}")
         print()
-        print(
-            "    clawk honcho identity --show        — show both peer representations"
-        )
-        print(
-            "    clawk honcho identity <file>        — seed AI peer from SOUL.md or any .md/.txt\n"
-        )
+        print("    clawk honcho identity --show        — show both peer representations")
+        print("    clawk honcho identity <file>        — seed AI peer from SOUL.md or any .md/.txt\n")
         return
 
     from pathlib import Path
-
     p = Path(file_path).expanduser()
     if not p.exists():
         print(f"  File not found: {p}\n")
@@ -1460,9 +1484,7 @@ def cmd_identity(args) -> None:
     ok = mgr.seed_ai_identity(session_key, content, source=source)
     if ok:
         print(f"  Seeded AI peer identity from {p.name} into session '{session_key}'")
-        print(
-            f"  Honcho will incorporate this into {hcfg.ai_peer}'s representation over time.\n"
-        )
+        print(f"  Honcho will incorporate this into {hcfg.ai_peer}'s representation over time.\n")
     else:
         print("  Failed to seed identity. Check logs for details.\n")
 
@@ -1478,13 +1500,7 @@ def cmd_migrate(args) -> None:
     # User peer: facts about the user
     user_file_names = ["USER.md", "MEMORY.md"]
     # AI peer: agent identity / configuration
-    agent_file_names = [
-        "SOUL.md",
-        "IDENTITY.md",
-        "AGENTS.md",
-        "TOOLS.md",
-        "BOOTSTRAP.md",
-    ]
+    agent_file_names = ["SOUL.md", "IDENTITY.md", "AGENTS.md", "TOOLS.md", "BOOTSTRAP.md"]
 
     user_files: list[Path] = []
     agent_files: list[Path] = []
@@ -1519,9 +1535,7 @@ def cmd_migrate(args) -> None:
         print(f"  Honcho API key already configured: {masked}")
         print("  Skip to Step 2.")
     else:
-        print(
-            "  Honcho is a cloud memory service that gives Clawksis persistent memory"
-        )
+        print("  Honcho is a cloud memory service that gives Clawksis persistent memory")
         print("  across sessions. You need an API key to use it.")
         print()
         print("  1. Get your API key at https://app.honcho.dev")
@@ -1535,9 +1549,7 @@ def cmd_migrate(args) -> None:
             has_key = bool(cfg.get("apiKey", ""))
         else:
             print()
-            print(
-                "  Run 'clawk honcho setup' when ready, then re-run this walkthrough."
-            )
+            print("  Run 'clawk honcho setup' when ready, then re-run this walkthrough.")
 
     # ── Step 2: Detected files ────────────────────────────────────────────────
     print()
@@ -1545,15 +1557,11 @@ def cmd_migrate(args) -> None:
     print()
     if user_files or agent_files:
         if user_files:
-            print(
-                f"  User memory ({len(user_files)} file(s)) — will go to Honcho user peer:"
-            )
+            print(f"  User memory ({len(user_files)} file(s)) — will go to Honcho user peer:")
             for f in user_files:
                 print(f"    {f}")
         if agent_files:
-            print(
-                f"  Agent identity ({len(agent_files)} file(s)) — will go to Honcho AI peer:"
-            )
+            print(f"  Agent identity ({len(agent_files)} file(s)) — will go to Honcho AI peer:")
             for f in agent_files:
                 print(f"    {f}")
     else:
@@ -1603,13 +1611,9 @@ def cmd_migrate(args) -> None:
                         if mgr.migrate_memory_files(session_key, d):
                             any_uploaded = True
                     if any_uploaded:
-                        print(
-                            f"  Uploaded user memory files from: {', '.join(dirs_with_files)}"
-                        )
+                        print(f"  Uploaded user memory files from: {', '.join(dirs_with_files)}")
                     else:
-                        print(
-                            "  Nothing uploaded (files may already be migrated or empty)."
-                        )
+                        print("  Nothing uploaded (files may already be migrated or empty).")
                 except Exception as e:
                     print(f"  Failed: {e}")
         else:
@@ -1634,9 +1638,7 @@ def cmd_migrate(args) -> None:
         print(f"  Found: {', '.join(f.name for f in agent_files)}")
         print()
         if has_key:
-            answer = _prompt(
-                "  Seed AI identity from all detected files now?", default="y"
-            )
+            answer = _prompt("  Seed AI identity from all detected files now?", default="y")
             if answer.lower() in {"y", "yes"}:
                 try:
                     from plugins.memory.honcho.client import (
@@ -1655,9 +1657,7 @@ def cmd_migrate(args) -> None:
                     for f in agent_files:
                         content = f.read_text(encoding="utf-8").strip()
                         if content:
-                            ok = mgr.seed_ai_identity(
-                                session_key, content, source=f.name
-                            )
+                            ok = mgr.seed_ai_identity(session_key, content, source=f.name)
                             status = "seeded" if ok else "failed"
                             print(f"    {f.name}: {status}")
                 except Exception as e:
@@ -1675,20 +1675,14 @@ def cmd_migrate(args) -> None:
     print("Step 5  What changes vs. OpenClaw native memory")
     print()
     print("  Storage")
-    print(
-        "    OpenClaw: markdown files on disk, searched via QMD at prompt-build time."
-    )
+    print("    OpenClaw: markdown files on disk, searched via QMD at prompt-build time.")
     print("    Clawksis:   cloud-backed Honcho peers. Files can stay on disk as source")
     print("              of truth; Honcho holds the live representation.")
     print()
     print("  Context injection")
     print("    OpenClaw: file excerpts injected synchronously before each LLM call.")
-    print(
-        "    Clawksis:   Honcho context fetched async at turn end, injected next turn."
-    )
-    print(
-        "              First turn has no Honcho context; subsequent turns are loaded."
-    )
+    print("    Clawksis:   Honcho context fetched async at turn end, injected next turn.")
+    print("              First turn has no Honcho context; subsequent turns are loaded.")
     print()
     print("  Memory growth")
     print("    OpenClaw: you edit files manually to update memory.")
@@ -1696,9 +1690,7 @@ def cmd_migrate(args) -> None:
     print("              automatically. Files become the seed, not the live store.")
     print()
     print("  Honcho tools (available to the agent during conversation)")
-    print(
-        "    honcho_context   — session context: summary, representation, card, messages"
-    )
+    print("    honcho_context   — session context: summary, representation, card, messages")
     print("    honcho_search        — semantic search over stored context")
     print("    honcho_profile       — fast peer card snapshot")
     print("    honcho_reasoning     — ask Honcho a question, synthesized answer")
@@ -1721,9 +1713,7 @@ def cmd_migrate(args) -> None:
         print("  2. clawk                           — start a session")
         print("     (user memory files auto-uploaded on first turn if not done above)")
         print("  3. clawk honcho identity --show    — verify AI peer representation")
-        print(
-            "  4. clawk honcho tokens             — tune context and dialectic budgets"
-        )
+        print("  4. clawk honcho tokens             — tune context and dialectic budgets")
         print("  5. clawk honcho mode               — view or change memory mode")
     print()
 
@@ -1739,7 +1729,6 @@ def honcho_command(args) -> None:
         print("\n  Honcho is configured via the memory provider system.")
         print("  Running 'clawk memory setup'...\n")
         from clawk_cli.memory_setup import cmd_setup_provider
-
         cmd_setup_provider("honcho")
         return
     elif sub is None:
@@ -1772,9 +1761,7 @@ def honcho_command(args) -> None:
         cmd_sync(args)
     else:
         print(f"  Unknown honcho command: {sub}")
-        print(
-            "  Available: status, sessions, map, peer, mode, strategy, tokens, identity, migrate, enable, disable, sync\n"
-        )
+        print("  Available: status, sessions, map, peer, mode, strategy, tokens, identity, migrate, enable, disable, sync\n")
 
 
 def register_cli(subparser) -> None:
@@ -1785,9 +1772,7 @@ def register_cli(subparser) -> None:
     """
 
     subparser.add_argument(
-        "--target-profile",
-        metavar="NAME",
-        dest="target_profile",
+        "--target-profile", metavar="NAME", dest="target_profile",
         help="Target a specific profile's Honcho config without switching",
     )
     subs = subparser.add_subparsers(dest="honcho_command")
@@ -1798,96 +1783,73 @@ def register_cli(subparser) -> None:
     )
 
     status_parser = subs.add_parser(
-        "status",
-        help="Show current Honcho config and connection status",
+        "status", help="Show current Honcho config and connection status",
     )
     status_parser.add_argument(
-        "--all",
-        action="store_true",
-        help="Show config overview across all profiles",
+        "--all", action="store_true", help="Show config overview across all profiles",
     )
 
     subs.add_parser("peers", help="Show peer identities across all profiles")
     subs.add_parser("sessions", help="List known Honcho session mappings")
 
     map_parser = subs.add_parser(
-        "map",
-        help="Map current directory to a Honcho session name (no arg = list mappings)",
+        "map", help="Map current directory to a Honcho session name (no arg = list mappings)",
     )
     map_parser.add_argument(
-        "session_name",
-        nargs="?",
-        default=None,
+        "session_name", nargs="?", default=None,
         help="Session name to associate with this directory. Omit to list current mappings.",
     )
 
     peer_parser = subs.add_parser(
-        "peer",
-        help="Show or update peer names and dialectic reasoning level",
+        "peer", help="Show or update peer names and dialectic reasoning level",
     )
     peer_parser.add_argument("--user", metavar="NAME", help="Set user peer name")
     peer_parser.add_argument("--ai", metavar="NAME", help="Set AI peer name")
     peer_parser.add_argument(
-        "--reasoning",
-        metavar="LEVEL",
+        "--reasoning", metavar="LEVEL",
         choices=("minimal", "low", "medium", "high", "max"),
         help="Set default dialectic reasoning level (minimal/low/medium/high/max)",
     )
 
     mode_parser = subs.add_parser(
-        "mode",
-        help="Show or set recall mode (hybrid/context/tools)",
+        "mode", help="Show or set recall mode (hybrid/context/tools)",
     )
     mode_parser.add_argument(
-        "mode",
-        nargs="?",
-        metavar="MODE",
+        "mode", nargs="?", metavar="MODE",
         choices=("hybrid", "context", "tools"),
         help="Recall mode to set (hybrid/context/tools). Omit to show current.",
     )
 
     strategy_parser = subs.add_parser(
-        "strategy",
-        help="Show or set session strategy (per-session/per-directory/per-repo/global)",
+        "strategy", help="Show or set session strategy (per-session/per-directory/per-repo/global)",
     )
     strategy_parser.add_argument(
-        "strategy",
-        nargs="?",
-        metavar="STRATEGY",
+        "strategy", nargs="?", metavar="STRATEGY",
         choices=("per-session", "per-directory", "per-repo", "global"),
         help="Session strategy to set. Omit to show current.",
     )
 
     tokens_parser = subs.add_parser(
-        "tokens",
-        help="Show or set token budget for context and dialectic",
+        "tokens", help="Show or set token budget for context and dialectic",
     )
     tokens_parser.add_argument(
-        "--context",
-        type=int,
-        metavar="N",
+        "--context", type=int, metavar="N",
         help="Max tokens Honcho returns from session.context() per turn",
     )
     tokens_parser.add_argument(
-        "--dialectic",
-        type=int,
-        metavar="N",
+        "--dialectic", type=int, metavar="N",
         help="Max chars of dialectic result to inject into system prompt",
     )
 
     identity_parser = subs.add_parser(
-        "identity",
-        help="Seed or show the AI peer's Honcho identity representation",
+        "identity", help="Seed or show the AI peer's Honcho identity representation",
     )
     identity_parser.add_argument(
-        "file",
-        nargs="?",
-        default=None,
+        "file", nargs="?", default=None,
         help="Path to file to seed from (e.g. SOUL.md). Omit to show usage.",
     )
     identity_parser.add_argument(
-        "--show",
-        action="store_true",
+        "--show", action="store_true",
         help="Show current AI peer representation from Honcho",
     )
 

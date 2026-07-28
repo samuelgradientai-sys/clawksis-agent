@@ -12,7 +12,7 @@ import json
 import os
 import time
 import pytest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from tools.process_registry import (
     ProcessRegistry,
@@ -52,7 +52,6 @@ def _make_session(
 # ProcessSession field
 # =========================================================================
 
-
 class TestProcessSessionField:
     def test_default_false(self):
         s = ProcessSession(id="proc_1", command="echo hi")
@@ -66,7 +65,6 @@ class TestProcessSessionField:
 # =========================================================================
 # Completion queue
 # =========================================================================
-
 
 class TestCompletionQueue:
     def test_queue_exists(self, registry):
@@ -101,6 +99,8 @@ class TestCompletionQueue:
         assert completion["session_id"] == s.id
         assert completion["command"] == "echo hello"
         assert completion["exit_code"] == 0
+        assert completion["completion_reason"] == "exited"
+        assert completion["termination_source"] == ""
         assert "build succeeded" in completion["output"]
 
     def test_move_to_finished_nonzero_exit(self, registry):
@@ -139,6 +139,35 @@ class TestCompletionQueue:
         assert registry.completion_queue.qsize() == 1
         completion = registry.completion_queue.get_nowait()
         assert completion["exit_code"] == -15  # from the first (kill) call
+
+    def test_kill_process_sets_completion_reason_and_source(self, registry):
+        s = _make_session(notify_on_complete=True, output="stopping")
+        s.process = MagicMock()
+        s.process.pid = 4242
+        registry._running[s.id] = s
+
+        class FakeProcess:
+            def __init__(self, pid):
+                self.pid = pid
+
+            def children(self, recursive=False):
+                return []
+
+            def terminate(self):
+                pass
+
+        import psutil as _psutil
+
+        with patch.object(_psutil, "Process", side_effect=lambda pid: FakeProcess(pid)), \
+             patch.object(registry, "_write_checkpoint"):
+            result = registry.kill_process(s.id)
+
+        assert result["status"] == "killed"
+        assert result["completion_reason"] == "killed"
+        assert result["termination_source"] == "process.kill"
+        completion = registry.completion_queue.get_nowait()
+        assert completion["completion_reason"] == "killed"
+        assert completion["termination_source"] == "process.kill"
 
     def test_output_truncated_to_2000(self, registry):
         """Long output is truncated to last 2000 chars."""
@@ -182,7 +211,6 @@ class TestCompletionQueue:
 # Checkpoint persistence
 # =========================================================================
 
-
 class TestCheckpointNotify:
     def test_checkpoint_includes_notify(self, registry, tmp_path):
         with patch("tools.process_registry.CHECKPOINT_PATH", tmp_path / "procs.json"):
@@ -205,17 +233,13 @@ class TestCheckpointNotify:
 
     def test_recover_preserves_notify(self, registry, tmp_path):
         checkpoint = tmp_path / "procs.json"
-        checkpoint.write_text(
-            json.dumps([
-                {
-                    "session_id": "proc_live",
-                    "command": "sleep 999",
-                    "pid": os.getpid(),
-                    "task_id": "t1",
-                    "notify_on_complete": True,
-                }
-            ])
-        )
+        checkpoint.write_text(json.dumps([{
+            "session_id": "proc_live",
+            "command": "sleep 999",
+            "pid": os.getpid(),
+            "task_id": "t1",
+            "notify_on_complete": True,
+        }]))
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 1
@@ -224,24 +248,20 @@ class TestCheckpointNotify:
 
     def test_recover_requeues_notify_watchers(self, registry, tmp_path):
         checkpoint = tmp_path / "procs.json"
-        checkpoint.write_text(
-            json.dumps([
-                {
-                    "session_id": "proc_live",
-                    "command": "sleep 999",
-                    "pid": os.getpid(),
-                    "task_id": "t1",
-                    "session_key": "sk1",
-                    "watcher_platform": "telegram",
-                    "watcher_chat_id": "123",
-                    "watcher_user_id": "u123",
-                    "watcher_user_name": "alice",
-                    "watcher_thread_id": "42",
-                    "watcher_interval": 5,
-                    "notify_on_complete": True,
-                }
-            ])
-        )
+        checkpoint.write_text(json.dumps([{
+            "session_id": "proc_live",
+            "command": "sleep 999",
+            "pid": os.getpid(),
+            "task_id": "t1",
+            "session_key": "sk1",
+            "watcher_platform": "telegram",
+            "watcher_chat_id": "123",
+            "watcher_user_id": "u123",
+            "watcher_user_name": "alice",
+            "watcher_thread_id": "42",
+            "watcher_interval": 5,
+            "notify_on_complete": True,
+        }]))
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 1
@@ -253,16 +273,12 @@ class TestCheckpointNotify:
     def test_recover_defaults_false(self, registry, tmp_path):
         """Old checkpoint entries without the field default to False."""
         checkpoint = tmp_path / "procs.json"
-        checkpoint.write_text(
-            json.dumps([
-                {
-                    "session_id": "proc_live",
-                    "command": "sleep 999",
-                    "pid": os.getpid(),
-                    "task_id": "t1",
-                }
-            ])
-        )
+        checkpoint.write_text(json.dumps([{
+            "session_id": "proc_live",
+            "command": "sleep 999",
+            "pid": os.getpid(),
+            "task_id": "t1",
+        }]))
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 1
@@ -274,11 +290,9 @@ class TestCheckpointNotify:
 # Terminal tool schema
 # =========================================================================
 
-
 class TestTerminalSchema:
     def test_schema_has_notify_on_complete(self):
         from tools.terminal_tool import TERMINAL_SCHEMA
-
         props = TERMINAL_SCHEMA["parameters"]["properties"]
         assert "notify_on_complete" in props
         assert props["notify_on_complete"]["type"] == "boolean"
@@ -287,10 +301,7 @@ class TestTerminalSchema:
     def test_handler_passes_notify(self):
         """_handle_terminal passes notify_on_complete to terminal_tool."""
         from tools.terminal_tool import _handle_terminal
-
-        with patch(
-            "tools.terminal_tool.terminal_tool", return_value='{"ok":true}'
-        ) as mock_tt:
+        with patch("tools.terminal_tool.terminal_tool", return_value='{"ok":true}') as mock_tt:
             _handle_terminal(
                 {"command": "echo hi", "background": True, "notify_on_complete": True},
                 task_id="t1",
@@ -303,11 +314,9 @@ class TestTerminalSchema:
 # Code execution blocked params
 # =========================================================================
 
-
 class TestCodeExecutionBlocked:
     def test_notify_on_complete_blocked_in_sandbox(self):
         from tools.code_execution_tool import _TERMINAL_BLOCKED_PARAMS
-
         assert "notify_on_complete" in _TERMINAL_BLOCKED_PARAMS
 
 
@@ -315,9 +324,8 @@ class TestCodeExecutionBlocked:
 # Completion consumed suppression
 # =========================================================================
 
-
 class TestCompletionConsumed:
-    """Test that wait/poll/log suppress redundant completion notifications."""
+    """Test that wait/log consume completion notifications while poll stays read-only."""
 
     def test_wait_marks_completion_consumed(self, registry):
         """wait() returning exited status marks session as consumed."""
@@ -339,8 +347,8 @@ class TestCompletionConsumed:
         # Now the completion is marked as consumed
         assert registry.is_completion_consumed("proc_wait")
 
-    def test_poll_marks_completion_consumed(self, registry):
-        """poll() returning exited status marks session as consumed."""
+    def test_poll_does_not_mark_completion_consumed(self, registry):
+        """poll() is a read-only status check and must not suppress notify_on_complete."""
         s = _make_session(sid="proc_poll", notify_on_complete=True, output="done")
         s.exited = True
         s.exit_code = 0
@@ -348,13 +356,11 @@ class TestCompletionConsumed:
 
         result = registry.poll("proc_poll")
         assert result["status"] == "exited"
-        assert registry.is_completion_consumed("proc_poll")
+        assert not registry.is_completion_consumed("proc_poll")
 
     def test_log_marks_completion_consumed(self, registry):
         """read_log() on exited session marks as consumed."""
-        s = _make_session(
-            sid="proc_log", notify_on_complete=True, output="line1\nline2"
-        )
+        s = _make_session(sid="proc_log", notify_on_complete=True, output="line1\nline2")
         s.exited = True
         s.exit_code = 0
         registry._finished[s.id] = s
@@ -371,6 +377,72 @@ class TestCompletionConsumed:
         result = registry.poll("proc_running")
         assert result["status"] == "running"
         assert not registry.is_completion_consumed("proc_running")
+
+    def test_poll_marks_poll_observed_for_cli_drain(self, registry):
+        """poll() on an exited process records _poll_observed so the CLI drain
+        dedups (the agent already saw the exit inline) without marking the
+        session _completion_consumed (which would suppress the gateway watcher)."""
+        s = _make_session(sid="proc_pobs", notify_on_complete=True, output="done")
+        s.exited = True
+        s.exit_code = 0
+        registry._running[s.id] = s
+        with patch.object(registry, "_write_checkpoint"):
+            registry._move_to_finished(s)
+
+        # Completion is queued, nothing consumed/observed yet.
+        assert not registry.completion_queue.empty()
+        assert "proc_pobs" not in registry._poll_observed
+        assert not registry.is_completion_consumed("proc_pobs")
+
+        # Agent polls inline — read-only, so NOT _completion_consumed, but the
+        # exit was observed so the CLI drain must skip the queued completion.
+        assert registry.poll("proc_pobs")["status"] == "exited"
+        assert "proc_pobs" in registry._poll_observed
+        assert not registry.is_completion_consumed("proc_pobs")
+
+        # CLI drain skips it → no duplicate [SYSTEM: ...] injection (#8228).
+        drained = registry.drain_notifications()
+        assert drained == []
+
+    def test_poll_observed_does_not_suppress_gateway_watcher(self, registry):
+        """The gateway/tui watcher gate (is_completion_consumed) must stay False
+        after a read-only poll, so the autonomous delivery turn still fires
+        even though the CLI drain was deduped (#10156)."""
+        s = _make_session(sid="proc_gw", notify_on_complete=True, output="done")
+        s.exited = True
+        s.exit_code = 0
+        registry._finished[s.id] = s
+
+        registry.poll("proc_gw")
+        # CLI-side dedup signal present...
+        assert "proc_gw" in registry._poll_observed
+        # ...but the gateway watcher gate is untouched, so it still delivers.
+        assert not registry.is_completion_consumed("proc_gw")
+
+    def test_running_poll_does_not_mark_poll_observed(self, registry):
+        """poll() on a still-running process must not record _poll_observed."""
+        s = _make_session(sid="proc_run2", notify_on_complete=True, output="partial")
+        registry._running[s.id] = s
+
+        registry.poll("proc_run2")
+        assert "proc_run2" not in registry._poll_observed
+
+    def test_wait_and_log_still_skip_cli_drain(self, registry):
+        """wait()/read_log() consume the output, so the CLI drain skips their
+        completions via _completion_consumed (the original #8228 contract)."""
+        for sid, action in (("proc_w", "wait"), ("proc_l", "log")):
+            s = _make_session(sid=sid, notify_on_complete=True, output="done")
+            s.exited = True
+            s.exit_code = 0
+            registry._running[s.id] = s
+            with patch.object(registry, "_write_checkpoint"):
+                registry._move_to_finished(s)
+            if action == "wait":
+                registry.wait(sid, timeout=1)
+            else:
+                registry.read_log(sid)
+            assert registry.is_completion_consumed(sid)
+        assert registry.drain_notifications() == []
 
 
 # ---------------------------------------------------------------------------
@@ -423,14 +495,8 @@ def _silent_bg_harness(monkeypatch, tmp_path):
 
     monkeypatch.setattr(terminal_tool_module, "_get_env_config", lambda: config)
     monkeypatch.setattr(terminal_tool_module, "_start_cleanup_thread", lambda: None)
-    monkeypatch.setattr(
-        terminal_tool_module,
-        "_check_all_guards",
-        lambda *_args, **_kwargs: {"approved": True},
-    )
-    monkeypatch.setattr(
-        process_registry_module.process_registry, "spawn_local", fake_spawn_local
-    )
+    monkeypatch.setattr(terminal_tool_module, "_check_all_guards", lambda *_args, **_kwargs: {"approved": True})
+    monkeypatch.setattr(process_registry_module.process_registry, "spawn_local", fake_spawn_local)
     monkeypatch.setitem(terminal_tool_module._active_environments, "default", dummy_env)
     monkeypatch.setitem(terminal_tool_module._last_activity, "default", 0.0)
     return terminal_tool_module
@@ -512,7 +578,6 @@ def test_foreground_command_does_not_emit_hint(monkeypatch, tmp_path):
     # exec method to short-circuit to a clean exit so the test doesn't
     # actually shell out.
     from types import SimpleNamespace
-
     dummy_env = SimpleNamespace(
         env={},
         execute=lambda *a, **kw: {"output": "done", "exit_code": 0, "error": None},
@@ -561,7 +626,7 @@ def test_homebrew_ci_poller_via_statusCheckRollup_emits_hint(monkeypatch, tmp_pa
                     "status=$(gh pr view $PR --json statusCheckRollup "
                     "--jq '[.statusCheckRollup[] | .conclusion] "
                     "| group_by(.) | map({k:.[0],v:length}) | from_entries'); "
-                    'echo "$status"; sleep 30; done'
+                    "echo \"$status\"; sleep 30; done"
                 ),
                 background=True,
                 notify_on_complete=True,
@@ -577,14 +642,12 @@ def test_homebrew_ci_poller_via_statusCheckRollup_emits_hint(monkeypatch, tmp_pa
         "Hint must name the canonical skill file so the agent can find the verbatim snippets"
     )
     # Naming exit-code-driven OR column-2 in the hint is what makes it actionable.
-    assert (
-        "exit" in hint.lower() or "column-2" in hint.lower() or "tab" in hint.lower()
-    ), "Hint must point at the canonical alternatives (exit-code or column-2)"
+    assert "exit" in hint.lower() or "column-2" in hint.lower() or "tab" in hint.lower(), (
+        "Hint must point at the canonical alternatives (exit-code or column-2)"
+    )
 
 
-def test_homebrew_ci_poller_via_gh_pr_checks_piped_to_jq_emits_hint(
-    monkeypatch, tmp_path
-):
+def test_homebrew_ci_poller_via_gh_pr_checks_piped_to_jq_emits_hint(monkeypatch, tmp_path):
     """`gh pr checks` doesn't emit JSON, so piping it to jq is a confused-
     intent anti-pattern that produces silent failures (jq fails, loop
     keeps spinning with empty data)."""
@@ -610,9 +673,7 @@ def test_homebrew_ci_poller_via_gh_pr_checks_piped_to_jq_emits_hint(
     assert "green-ci-policy" in hint
 
 
-def test_canonical_column2_awk_poller_does_not_emit_homebrew_hint(
-    monkeypatch, tmp_path
-):
+def test_canonical_column2_awk_poller_does_not_emit_homebrew_hint(monkeypatch, tmp_path):
     """The blessed column-2 awk-on-tabs poller from green-ci-policy is the
     PREFERRED pattern for sharded matrices. Must not be flagged as
     homebrew — the gating signal is statusCheckRollup or `gh pr checks
@@ -624,10 +685,10 @@ def test_canonical_column2_awk_poller_does_not_emit_homebrew_hint(
                 command=(
                     "PR=1; while :; do "
                     "out=$(gh pr checks $PR 2>&1); "
-                    'pending=$(echo "$out" | awk -F"\\t" "\\$2==\\"pending\\"" | wc -l); '
-                    'failed=$(echo "$out" | awk -F"\\t" "\\$2==\\"fail\\"" | wc -l); '
-                    'if [ "$pending" -eq 0 ]; then '
-                    '[ "$failed" -gt 0 ] && exit 1 || exit 0; '
+                    "pending=$(echo \"$out\" | awk -F\"\\t\" \"\\$2==\\\"pending\\\"\" | wc -l); "
+                    "failed=$(echo \"$out\" | awk -F\"\\t\" \"\\$2==\\\"fail\\\"\" | wc -l); "
+                    "if [ \"$pending\" -eq 0 ]; then "
+                    "[ \"$failed\" -gt 0 ] && exit 1 || exit 0; "
                     "fi; sleep 30; "
                     "done"
                 ),
@@ -644,9 +705,7 @@ def test_canonical_column2_awk_poller_does_not_emit_homebrew_hint(
     )
 
 
-def test_canonical_gh_pr_checks_exit_code_loop_does_not_emit_hint(
-    monkeypatch, tmp_path
-):
+def test_canonical_gh_pr_checks_exit_code_loop_does_not_emit_hint(monkeypatch, tmp_path):
     """The blessed exit-code-driven snippet from green-ci-policy is exactly
     what we want — no jq, no awk-on-stdout, gates the loop on exit code.
     Must not be flagged as a homebrew anti-pattern."""

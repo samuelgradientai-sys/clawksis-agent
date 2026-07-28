@@ -16,7 +16,6 @@ gateway channel onboards through a single setup surface).
 Photon uses the spectrum-ts gRPC stream for inbound — there is no webhook
 to register, so there are no webhook subcommands.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -37,7 +36,6 @@ _SIDECAR_DIR = Path(__file__).parent / "sidecar"
 # ---------------------------------------------------------------------------
 # argparse wiring
 
-
 def register_cli(parser: argparse.ArgumentParser) -> None:
     """Wire up `clawk photon ...` subcommands."""
     subs = parser.add_subparsers(dest="photon_command", required=False)
@@ -46,39 +44,27 @@ def register_cli(parser: argparse.ArgumentParser) -> None:
         "setup",
         help="First-time setup (device login + project + user + sidecar)",
     )
-    p_setup.add_argument(
-        "--project-name", default=None, help="Project name (default: 'Clawksis')"
-    )
-    p_setup.add_argument(
-        "--phone", default=None, help="Your E.164 phone number (e.g. +15551234567)"
-    )
+    p_setup.add_argument("--project-name", default=None,
+                         help="Project name (default: 'Clawksis')")
+    p_setup.add_argument("--phone", default=None,
+                         help="Your E.164 phone number (e.g. +15551234567)")
     p_setup.add_argument("--first-name", default=None)
     p_setup.add_argument("--last-name", default=None)
     p_setup.add_argument("--email", default=None)
-    p_setup.add_argument(
-        "--no-browser",
-        action="store_true",
-        help="Don't try to open a browser for device login; print the URL only",
-    )
-    p_setup.add_argument(
-        "--skip-sidecar-install",
-        action="store_true",
-        help="Skip `npm install` inside the sidecar directory",
-    )
+    p_setup.add_argument("--no-browser", action="store_true",
+                         help="Don't try to open a browser for device login; print the URL only")
+    p_setup.add_argument("--skip-sidecar-install", action="store_true",
+                         help="Skip `npm install` inside the sidecar directory")
 
     subs.add_parser("status", help="Show login + project + sidecar dep state")
-    subs.add_parser(
-        "install-sidecar", help="Run npm install inside the sidecar directory"
-    )
+    subs.add_parser("install-sidecar", help="Run npm install inside the sidecar directory")
 
     p_telemetry = subs.add_parser(
         "telemetry",
         help="Show or toggle Spectrum SDK telemetry (on/off)",
     )
     p_telemetry.add_argument(
-        "state",
-        nargs="?",
-        choices=("on", "off"),
+        "state", nargs="?", choices=("on", "off"),
         help="Turn telemetry on or off (omit to show the current state)",
     )
 
@@ -87,7 +73,6 @@ def register_cli(parser: argparse.ArgumentParser) -> None:
 
 # ---------------------------------------------------------------------------
 # Dispatch
-
 
 def dispatch(args: argparse.Namespace) -> int:
     sub = getattr(args, "photon_command", None)
@@ -109,7 +94,6 @@ def dispatch(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 # Subcommand handlers
 
-
 def _run_device_login(args: argparse.Namespace) -> int:
     """Run the RFC 8628 device-code login flow and persist the token.
 
@@ -117,7 +101,6 @@ def _run_device_login(args: argparse.Namespace) -> int:
     no standalone ``clawk photon login`` command; Photon onboards
     through the single ``setup`` surface like every other channel.
     """
-
     def _print_code(code):
         target = code.verification_uri_complete or code.verification_uri
         print()
@@ -181,18 +164,14 @@ def _cmd_setup(args: argparse.Namespace) -> int:
         print("could not resolve a Photon project id", file=sys.stderr)
         return 1
 
-    # 3. Enable Spectrum, fetch the spectrum project id, rotate the secret,
-    #    and persist both (runtime creds -> ~/.clawksis/.env, ids -> auth.json).
+    # 3. Rotate the project secret and persist creds (runtime -> ~/.clawksis/.env,
+    #    ids -> auth.json). Spectrum is always enabled and provisioned at
+    #    create-time, and the dashboard project id *is* the Spectrum project id
+    #    (ids unified), so there's nothing to enable — the id we already have is
+    #    the Spectrum id.
     try:
-        print("[3/5] Enabling Spectrum and provisioning credentials...")
-        proj = photon_auth.ensure_spectrum_enabled(token, dashboard_id)
-        spectrum_id = proj.get("spectrumProjectId")
-        if not spectrum_id:
-            print(
-                "spectrum provisioning failed: no spectrum project id", file=sys.stderr
-            )
-            return 1
-        spectrum_id = str(spectrum_id)
+        print("[3/5] Provisioning Spectrum credentials...")
+        spectrum_id = dashboard_id
         secret = photon_auth.regenerate_project_secret(token, dashboard_id)
         photon_auth.store_project_credentials(
             spectrum_project_id=spectrum_id,
@@ -201,7 +180,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
             name=name,
         )
         # spectrum_id is an opaque non-secret id; safe to show.
-        print(f"  ✓ Spectrum enabled (project id {spectrum_id}) — secret saved")
+        print(f"  ✓ Spectrum ready (project id {spectrum_id}) — secret saved")
     except Exception as e:
         print(f"spectrum provisioning failed: {e}", file=sys.stderr)
         return 1
@@ -217,9 +196,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     registered_phone = None
     registered_user_id = None
     if not phone:
-        print(
-            "      Skipped user registration (no phone given). Re-run with --phone later."
-        )
+        print("      Skipped user registration (no phone given). Re-run with --phone later.")
     else:
         # Name/email are optional and never prompted for — pass --first-name /
         # --email if you want them sent to the dashboard.
@@ -227,8 +204,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
         email = args.email
         try:
             user, created = photon_auth.register_user_if_absent(
-                spectrum_id,
-                secret,
+                spectrum_id, secret,
                 phone_number=phone,
                 first_name=first_name,
                 last_name=args.last_name,
@@ -265,28 +241,13 @@ def _cmd_setup(args: argparse.Namespace) -> int:
             print(f"      (could not fetch the assigned line: {e})", file=sys.stderr)
     if agent_number:
         print()
-        print(
-            color(
-                "┌─ Your agent's iMessage number ───────────────────────────────",
-                Colors.GREEN,
-            )
-        )
+        print(color("┌─ Your agent's iMessage number ───────────────────────────────", Colors.GREEN))
         print(
             color("│  📱 ", Colors.GREEN)
             + color(str(agent_number), Colors.GREEN, Colors.BOLD)
         )
-        print(
-            color(
-                "│  Text this number from your phone to talk to your agent.",
-                Colors.GREEN,
-            )
-        )
-        print(
-            color(
-                "└──────────────────────────────────────────────────────────────",
-                Colors.GREEN,
-            )
-        )
+        print(color("│  Text this number from your phone to talk to your agent.", Colors.GREEN))
+        print(color("└──────────────────────────────────────────────────────────────", Colors.GREEN))
     else:
         print("      No iMessage line assigned yet — check the Photon dashboard.")
     if registered_phone:
@@ -298,9 +259,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
                 dashboard_project_id=dashboard_id,
             )
         except Exception as e:
-            print(
-                f"      (could not save Photon status metadata: {e})", file=sys.stderr
-            )
+            print(f"      (could not save Photon status metadata: {e})", file=sys.stderr)
 
     # 6. Sidecar deps (spectrum-ts).
     if args.skip_sidecar_install:
@@ -353,12 +312,8 @@ def _cmd_status(_args: argparse.Namespace) -> int:
     node_bin = os.getenv("PHOTON_NODE_BIN") or shutil.which("node")
     sidecar_installed = (_SIDECAR_DIR / "node_modules").exists()
     print(f"  node binary         : {node_bin or '✗ missing (install Node 18+)'}")
-    print(
-        f"  sidecar deps        : {'✓ installed' if sidecar_installed else '✗ run `clawk photon install-sidecar`'}"
-    )
-    print(
-        f"  telemetry           : {'on' if _telemetry_enabled() else 'off'} (`clawk photon telemetry on|off`)"
-    )
+    print(f"  sidecar deps        : {'✓ installed' if sidecar_installed else '✗ run `clawk photon install-sidecar`'}")
+    print(f"  telemetry           : {'on' if _telemetry_enabled() else 'off'} (`clawk photon telemetry on|off`)")
     return 0
 
 
@@ -387,7 +342,6 @@ def _telemetry_enabled() -> bool:
     """
     try:
         from clawk_cli.config import get_env_value
-
         raw = get_env_value("PHOTON_TELEMETRY")
     except ImportError:
         raw = os.getenv("PHOTON_TELEMETRY")
@@ -398,13 +352,10 @@ def _cmd_telemetry(args: argparse.Namespace) -> int:
     state = getattr(args, "state", None)
     if state is None:
         print(f"Photon telemetry: {'on' if _telemetry_enabled() else 'off'}")
-        print(
-            "  Toggle with `clawk photon telemetry on` / `clawk photon telemetry off`."
-        )
+        print("  Toggle with `clawk photon telemetry on` / `clawk photon telemetry off`.")
         return 0
     try:
         from clawk_cli.config import save_env_value
-
         save_env_value("PHOTON_TELEMETRY", "true" if state == "on" else "false")
     except Exception as e:
         print(f"could not save PHOTON_TELEMETRY: {e}", file=sys.stderr)
@@ -418,17 +369,19 @@ def _install_sidecar() -> int:
     npm = shutil.which("npm") or "npm"
     if not shutil.which(npm):
         print(
-            "npm is not on PATH. Install Node.js 18+ (https://nodejs.org/) and re-run.",
+            "npm is not on PATH. Install Node.js 18+ (https://nodejs.org/) "
+            "and re-run.",
             file=sys.stderr,
         )
         return 1
     # spectrum-ts is pinned exactly in package.json/package-lock.json because
     # the SDK ships breaking majors (v2 removed defineFusorPlatform; v3
-    # reworked space construction). Upgrades are deliberate: bump the pin,
-    # migrate sidecar/index.mjs, re-run the photon tests — never `@latest`
-    # (see README "Upgrading spectrum-ts"). `npm ci` installs the committed
-    # lockfile verbatim; fall back to `npm install` when the lockfile is
-    # missing or drifted (e.g. a dev checkout mid-upgrade).
+    # reworked space construction; v5 split it into @spectrum-ts/* packages).
+    # Upgrades are deliberate: bump the pin, migrate sidecar/index.mjs, re-run
+    # the photon tests — never `@latest` (see README "Upgrading spectrum-ts").
+    # `npm ci` installs the committed lockfile verbatim; fall back to
+    # `npm install` when the lockfile is missing or drifted (e.g. a dev
+    # checkout mid-upgrade).
     print(f"  $ cd {_SIDECAR_DIR} && {npm} ci")
     proc = subprocess.run(  # noqa: S603
         [npm, "ci"],
@@ -457,7 +410,6 @@ def _install_sidecar() -> int:
 # project + user + sidecar flow as ``clawk photon setup`` with interactive
 # defaults (phone is prompted when stdin is a TTY).
 
-
 def gateway_setup() -> None:
     """Run Photon first-time setup from the `clawk gateway setup` wizard."""
     args = argparse.Namespace(
@@ -475,7 +427,6 @@ def gateway_setup() -> None:
 
 # ---------------------------------------------------------------------------
 # Small interactive helpers
-
 
 def _prompt(prompt: str, *, secret: bool = False) -> str:
     if not sys.stdin.isatty():

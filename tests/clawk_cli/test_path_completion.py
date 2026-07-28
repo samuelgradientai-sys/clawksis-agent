@@ -17,9 +17,7 @@ def _display_names(completions):
 
 def _display_metas(completions):
     """Extract plain-text display_meta from a list of Completion objects."""
-    return [
-        to_plain_text(c.display_meta) if c.display_meta else "" for c in completions
-    ]
+    return [to_plain_text(c.display_meta) if c.display_meta else "" for c in completions]
 
 
 @pytest.fixture
@@ -29,30 +27,19 @@ def completer():
 
 class TestExtractPathWord:
     def test_relative_path(self):
-        assert (
-            SlashCommandCompleter._extract_path_word("look at ./src/main.py")
-            == "./src/main.py"
-        )
+        assert SlashCommandCompleter._extract_path_word("look at ./src/main.py") == "./src/main.py"
 
     def test_home_path(self):
         assert SlashCommandCompleter._extract_path_word("edit ~/docs/") == "~/docs/"
 
     def test_absolute_path(self):
-        assert (
-            SlashCommandCompleter._extract_path_word("read /etc/hosts") == "/etc/hosts"
-        )
+        assert SlashCommandCompleter._extract_path_word("read /etc/hosts") == "/etc/hosts"
 
     def test_parent_path(self):
-        assert (
-            SlashCommandCompleter._extract_path_word("check ../config.yaml")
-            == "../config.yaml"
-        )
+        assert SlashCommandCompleter._extract_path_word("check ../config.yaml") == "../config.yaml"
 
     def test_path_with_slash_in_middle(self):
-        assert (
-            SlashCommandCompleter._extract_path_word("open src/utils/helpers.py")
-            == "src/utils/helpers.py"
-        )
+        assert SlashCommandCompleter._extract_path_word("open src/utils/helpers.py") == "src/utils/helpers.py"
 
     def test_plain_word_not_path(self):
         assert SlashCommandCompleter._extract_path_word("hello world") is None
@@ -64,16 +51,39 @@ class TestExtractPathWord:
         assert SlashCommandCompleter._extract_path_word("README.md") is None
 
     def test_word_after_space(self):
-        assert (
-            SlashCommandCompleter._extract_path_word("fix the bug in ./tools/")
-            == "./tools/"
-        )
+        assert SlashCommandCompleter._extract_path_word("fix the bug in ./tools/") == "./tools/"
 
     def test_just_dot_slash(self):
         assert SlashCommandCompleter._extract_path_word("./") == "./"
 
     def test_just_tilde_slash(self):
         assert SlashCommandCompleter._extract_path_word("~/") == "~/"
+
+    def test_url_is_not_treated_as_path(self):
+        # A URL contains "/" so the bare slash heuristic would otherwise return
+        # it as a path word, firing os.listdir("https:") on every keystroke.
+        assert SlashCommandCompleter._extract_path_word("see https://paste.rs/abc") is None
+
+    def test_http_url_is_not_treated_as_path(self):
+        assert SlashCommandCompleter._extract_path_word("ref http://example.com/x") is None
+
+    def test_scheme_alone_is_enough_to_reject(self):
+        # The "://" scheme separator is the signal, even before any path part
+        # has been typed.
+        assert SlashCommandCompleter._extract_path_word("ssh://host") is None
+
+    def test_path_word_with_colon_but_no_scheme_still_resolves(self):
+        # Only the "://" scheme separator should reject; a bare colon inside a
+        # real path token must not regress path detection.
+        assert (
+            SlashCommandCompleter._extract_path_word("open ./a:b/c.py") == "./a:b/c.py"
+        )
+
+    def test_ordinary_path_unaffected_by_url_guard(self):
+        assert (
+            SlashCommandCompleter._extract_path_word("edit src/pkg/mod.py")
+            == "src/pkg/mod.py"
+        )
 
 
 class TestPathCompletions:
@@ -124,18 +134,14 @@ class TestPathCompletions:
         assert "testfile.md" in names
 
     def test_nonexistent_dir_returns_empty(self):
-        completions = list(
-            SlashCommandCompleter._path_completions("/nonexistent_dir_xyz/")
-        )
+        completions = list(SlashCommandCompleter._path_completions("/nonexistent_dir_xyz/"))
         assert completions == []
 
     def test_respects_limit(self, tmp_path):
         for i in range(50):
             (tmp_path / f"file_{i:03d}.txt").touch()
 
-        completions = list(
-            SlashCommandCompleter._path_completions(f"{tmp_path}/", limit=10)
-        )
+        completions = list(SlashCommandCompleter._path_completions(f"{tmp_path}/", limit=10))
         assert len(completions) == 10
 
     def test_case_insensitive_prefix(self, tmp_path):
@@ -174,6 +180,23 @@ class TestIntegration:
         event = MagicMock()
         completions = list(completer.get_completions(doc, event))
         assert completions == []
+
+    def test_url_does_not_touch_filesystem(self, completer, monkeypatch):
+        # Regression for laggy typing: a URL token contains "/", so before the
+        # scheme guard it reached _path_completions and called os.listdir on
+        # every keystroke. Assert no completions AND that the filesystem is
+        # never touched while a URL is under the cursor.
+        import clawk_cli.commands as commands_mod
+
+        def _fail(*_args, **_kwargs):
+            raise AssertionError("os.listdir must not run for a URL token")
+
+        monkeypatch.setattr(commands_mod.os, "listdir", _fail)
+
+        text = "open https://paste.rs/abc"
+        doc = Document(text, cursor_position=len(text))
+        event = MagicMock()
+        assert list(completer.get_completions(doc, event)) == []
 
     def test_absolute_path_triggers_completion(self, completer):
         doc = Document("check /etc/hos", cursor_position=14)

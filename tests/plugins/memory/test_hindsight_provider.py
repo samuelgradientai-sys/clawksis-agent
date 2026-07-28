@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from clawk_cli.memory_setup import _CANCELLED
 from plugins.memory.hindsight import (
     HindsightMemoryProvider,
     RECALL_SCHEMA,
@@ -22,6 +23,7 @@ from plugins.memory.hindsight import (
     RETAIN_SCHEMA,
     _load_config,
     _build_embedded_profile_env,
+    _normalize_observation_scopes,
     _normalize_retain_tags,
     _resolve_bank_id_template,
     _sanitize_bank_segment,
@@ -37,25 +39,18 @@ from plugins.memory.hindsight import (
 def _clean_env(monkeypatch):
     """Ensure no stale env vars leak between tests."""
     for key in (
-        "HINDSIGHT_API_KEY",
-        "HINDSIGHT_API_URL",
-        "HINDSIGHT_BANK_ID",
-        "HINDSIGHT_BUDGET",
-        "HINDSIGHT_MODE",
-        "HINDSIGHT_TIMEOUT",
-        "HINDSIGHT_IDLE_TIMEOUT",
-        "HINDSIGHT_LLM_API_KEY",
-        "HINDSIGHT_RETAIN_TAGS",
+        "HINDSIGHT_API_KEY", "HINDSIGHT_API_URL", "HINDSIGHT_BANK_ID",
+        "HINDSIGHT_BUDGET", "HINDSIGHT_MODE", "HINDSIGHT_TIMEOUT",
+        "HINDSIGHT_IDLE_TIMEOUT", "HINDSIGHT_LLM_API_KEY",
+        "HINDSIGHT_RETAIN_TAGS", "HINDSIGHT_RETAIN_OBSERVATION_SCOPES",
         "HINDSIGHT_RETAIN_SOURCE",
-        "HINDSIGHT_RETAIN_USER_PREFIX",
-        "HINDSIGHT_RETAIN_ASSISTANT_PREFIX",
+        "HINDSIGHT_RETAIN_USER_PREFIX", "HINDSIGHT_RETAIN_ASSISTANT_PREFIX",
     ):
         monkeypatch.delenv(key, raising=False)
 
 
 def _make_mock_client():
     """Create a mock Hindsight client with async methods."""
-
     async def _aretain(
         bank_id,
         content,
@@ -80,10 +75,72 @@ def _make_mock_client():
             ]
         )
     )
-    client.areflect = AsyncMock(return_value=SimpleNamespace(text="Synthesized answer"))
+    client.areflect = AsyncMock(
+        return_value=SimpleNamespace(text="Synthesized answer")
+    )
     client.aretain_batch = AsyncMock()
     client.aclose = AsyncMock()
     return client
+
+
+def _provider_for_mode(tmp_path, monkeypatch, mode: str):
+    """Create an initialized provider without pre-seeding its client."""
+    config = {
+        "mode": mode,
+        "apiKey": "test-key",
+        "api_url": "http://localhost:9999",
+        "bank_id": "test-bank",
+        "budget": "mid",
+        "memory_mode": "hybrid",
+    }
+    config_path = tmp_path / "hindsight" / "config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps(config))
+
+    monkeypatch.setattr(
+        "plugins.memory.hindsight.get_clawk_home", lambda: tmp_path
+    )
+
+    provider = HindsightMemoryProvider()
+    provider.initialize(session_id="test-session", clawk_home=str(tmp_path), platform="cli")
+    return provider
+
+
+def _assert_cloud_client_lazy_installed_before_import(tmp_path, monkeypatch, mode: str):
+    """Cloud/local-external clients must ensure lazy deps before importing."""
+    import builtins
+
+    provider = _provider_for_mode(tmp_path, monkeypatch, mode)
+    ensure_calls = []
+
+    def fake_ensure(feature, prompt=True):
+        ensure_calls.append((feature, prompt))
+
+    class FakeHindsight:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    real_import = builtins.__import__
+
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "hindsight_client":
+            if ensure_calls != [("memory.hindsight", False)]:
+                raise ModuleNotFoundError("No module named 'hindsight_client'")
+            return SimpleNamespace(Hindsight=FakeHindsight)
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr("tools.lazy_deps.ensure", fake_ensure)
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+
+    client = provider._get_client()
+
+    assert ensure_calls == [("memory.hindsight", False)]
+    assert isinstance(client, FakeHindsight)
+    assert client.kwargs == {
+        "base_url": "http://localhost:9999",
+        "timeout": 120.0,
+        "api_key": "test-key",
+    }
 
 
 class _FakeSessionDB:
@@ -109,7 +166,9 @@ def provider(tmp_path, monkeypatch):
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(json.dumps(config))
 
-    monkeypatch.setattr("plugins.memory.hindsight.get_clawk_home", lambda: tmp_path)
+    monkeypatch.setattr(
+        "plugins.memory.hindsight.get_clawk_home", lambda: tmp_path
+    )
 
     p = HindsightMemoryProvider()
     p.initialize(session_id="test-session", clawk_home=str(tmp_path), platform="cli")
@@ -120,7 +179,6 @@ def provider(tmp_path, monkeypatch):
 @pytest.fixture()
 def provider_with_config(tmp_path, monkeypatch):
     """Create a provider factory that accepts custom config overrides."""
-
     def _make(**overrides):
         config = {
             "mode": "cloud",
@@ -135,22 +193,19 @@ def provider_with_config(tmp_path, monkeypatch):
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(json.dumps(config))
 
-        monkeypatch.setattr("plugins.memory.hindsight.get_clawk_home", lambda: tmp_path)
+        monkeypatch.setattr(
+            "plugins.memory.hindsight.get_clawk_home", lambda: tmp_path
+        )
 
         p = HindsightMemoryProvider()
-        p.initialize(
-            session_id="test-session", clawk_home=str(tmp_path), platform="cli"
-        )
+        p.initialize(session_id="test-session", clawk_home=str(tmp_path), platform="cli")
         p._client = _make_mock_client()
         return p
-
     return _make
 
 
 def test_normalize_retain_tags_accepts_csv_and_dedupes():
-    assert _normalize_retain_tags(
-        "agent:fakeassistantname, source_system:clawksis-agent, agent:fakeassistantname"
-    ) == [
+    assert _normalize_retain_tags("agent:fakeassistantname, source_system:clawksis-agent, agent:fakeassistantname") == [
         "agent:fakeassistantname",
         "source_system:clawksis-agent",
     ]
@@ -158,9 +213,44 @@ def test_normalize_retain_tags_accepts_csv_and_dedupes():
 
 def test_normalize_retain_tags_accepts_json_array_string():
     value = json.dumps(["agent:fakeassistantname", "source_system:clawksis-agent"])
-    assert _normalize_retain_tags(value) == [
-        "agent:fakeassistantname",
-        "source_system:clawksis-agent",
+    assert _normalize_retain_tags(value) == ["agent:fakeassistantname", "source_system:clawksis-agent"]
+
+
+def test_normalize_observation_scopes_empty_is_none():
+    assert _normalize_observation_scopes("") is None
+    assert _normalize_observation_scopes(None) is None
+    assert _normalize_observation_scopes("   ") is None
+
+
+def test_normalize_observation_scopes_keywords_pass_through():
+    assert _normalize_observation_scopes("per_tag") == "per_tag"
+    assert _normalize_observation_scopes("combined") == "combined"
+    assert _normalize_observation_scopes(" all_combinations ") == "all_combinations"
+
+
+def test_normalize_observation_scopes_unknown_keyword_is_none():
+    assert _normalize_observation_scopes("nonsense") is None
+
+
+def test_normalize_observation_scopes_json_list_of_lists():
+    value = json.dumps([["user:alice"], ["team:eng"], ["user:alice", "team:eng"]])
+    assert _normalize_observation_scopes(value) == [
+        ["user:alice"],
+        ["team:eng"],
+        ["user:alice", "team:eng"],
+    ]
+
+
+def test_normalize_observation_scopes_flat_list_is_single_scope():
+    assert _normalize_observation_scopes(["user:alice", "team:eng"]) == [
+        ["user:alice", "team:eng"]
+    ]
+
+
+def test_normalize_observation_scopes_list_of_lists():
+    assert _normalize_observation_scopes([["user:alice"], ["team:eng"]]) == [
+        ["user:alice"],
+        ["team:eng"],
     ]
 
 
@@ -202,6 +292,14 @@ class TestSchemas:
 
 
 class TestConfig:
+    def test_cloud_client_lazy_installs_dependency_before_import(self, tmp_path, monkeypatch):
+        _assert_cloud_client_lazy_installed_before_import(tmp_path, monkeypatch, "cloud")
+
+    def test_local_external_client_lazy_installs_dependency_before_import(self, tmp_path, monkeypatch):
+        _assert_cloud_client_lazy_installed_before_import(
+            tmp_path, monkeypatch, "local_external"
+        )
+
     def test_default_values(self, provider):
         assert provider._auto_retain is True
         assert provider._auto_recall is True
@@ -209,6 +307,7 @@ class TestConfig:
         assert provider._recall_max_tokens == 4096
         assert provider._recall_max_input_chars == 800
         assert provider._tags is None
+        assert provider._observation_scopes is None
         assert provider._recall_tags is None
         # Default recall narrowed to observation-only; world/experience are
         # aggregate facts that often crowd out concrete-event signal during
@@ -235,6 +334,16 @@ class TestConfig:
         """An empty list shouldn't disable the filter (would be wider than default)."""
         p = provider_with_config(recall_types=[])
         assert p._recall_types == ["observation"]
+
+    def test_observation_scopes_keyword_config(self, provider_with_config):
+        p = provider_with_config(observation_scopes="per_tag")
+        assert p._observation_scopes == "per_tag"
+
+    def test_observation_scopes_custom_list_config(self, provider_with_config):
+        p = provider_with_config(
+            observation_scopes=[["user:alice"], ["team:eng"]]
+        )
+        assert p._observation_scopes == [["user:alice"], ["team:eng"]]
 
     def test_custom_config_values(self, provider_with_config):
         p = provider_with_config(
@@ -315,14 +424,8 @@ class TestConfig:
             def __init__(self, **kwargs):
                 captured.update(kwargs)
 
-        monkeypatch.setitem(
-            sys.modules,
-            "hindsight",
-            SimpleNamespace(HindsightEmbedded=FakeHindsightEmbedded),
-        )
-        monkeypatch.setattr(
-            "plugins.memory.hindsight._check_local_runtime", lambda: (True, "")
-        )
+        monkeypatch.setitem(sys.modules, "hindsight", SimpleNamespace(HindsightEmbedded=FakeHindsightEmbedded))
+        monkeypatch.setattr("plugins.memory.hindsight._check_local_runtime", lambda: (True, ""))
 
         p = HindsightMemoryProvider()
         p._mode = "local_embedded"
@@ -342,6 +445,61 @@ class TestConfig:
 
 
 class TestPostSetup:
+    def test_setup_cancel_at_mode_picker_writes_nothing(self, tmp_path, monkeypatch):
+        clawk_home = tmp_path / "clawk-home"
+        user_home = tmp_path / "user-home"
+        user_home.mkdir()
+        monkeypatch.setenv("HOME", str(user_home))
+        monkeypatch.setattr("plugins.memory.hindsight.get_clawk_home", lambda: clawk_home)
+
+        save_config = MagicMock()
+        which = MagicMock(return_value="/usr/bin/uv")
+        run = MagicMock()
+        monkeypatch.setattr("clawk_cli.memory_setup._curses_select", lambda *args, **kwargs: _CANCELLED)
+        monkeypatch.setattr("shutil.which", which)
+        monkeypatch.setattr("subprocess.run", run)
+        monkeypatch.setattr("builtins.input", MagicMock(side_effect=AssertionError("prompt should not run")))
+        monkeypatch.setattr("getpass.getpass", MagicMock(side_effect=AssertionError("prompt should not run")))
+        monkeypatch.setattr("clawk_cli.config.save_config", save_config)
+
+        provider = HindsightMemoryProvider()
+        provider.post_setup(str(clawk_home), {"memory": {"provider": "builtin"}})
+
+        save_config.assert_not_called()
+        which.assert_not_called()
+        run.assert_not_called()
+        assert not (clawk_home / ".env").exists()
+        assert not (clawk_home / "hindsight" / "config.json").exists()
+        assert not (user_home / ".hindsight" / "profiles" / "clawk.env").exists()
+
+    def test_local_embedded_setup_cancel_at_llm_picker_writes_nothing(self, tmp_path, monkeypatch):
+        clawk_home = tmp_path / "clawk-home"
+        user_home = tmp_path / "user-home"
+        user_home.mkdir()
+        monkeypatch.setenv("HOME", str(user_home))
+        monkeypatch.setattr("plugins.memory.hindsight.get_clawk_home", lambda: clawk_home)
+
+        selections = iter([1, _CANCELLED])  # local_embedded, then cancel LLM picker
+        save_config = MagicMock()
+        which = MagicMock(return_value="/usr/bin/uv")
+        run = MagicMock()
+        monkeypatch.setattr("clawk_cli.memory_setup._curses_select", lambda *args, **kwargs: next(selections))
+        monkeypatch.setattr("shutil.which", which)
+        monkeypatch.setattr("subprocess.run", run)
+        monkeypatch.setattr("builtins.input", MagicMock(side_effect=AssertionError("prompt should not run")))
+        monkeypatch.setattr("getpass.getpass", MagicMock(side_effect=AssertionError("prompt should not run")))
+        monkeypatch.setattr("clawk_cli.config.save_config", save_config)
+
+        provider = HindsightMemoryProvider()
+        provider.post_setup(str(clawk_home), {"memory": {"provider": "builtin"}})
+
+        save_config.assert_not_called()
+        which.assert_not_called()
+        run.assert_not_called()
+        assert not (clawk_home / ".env").exists()
+        assert not (clawk_home / "hindsight" / "config.json").exists()
+        assert not (user_home / ".hindsight" / "profiles" / "clawk.env").exists()
+
     def test_local_embedded_setup_materializes_profile_env(self, tmp_path, monkeypatch):
         clawk_home = tmp_path / "clawk-home"
         user_home = tmp_path / "user-home"
@@ -349,18 +507,13 @@ class TestPostSetup:
         monkeypatch.setenv("HOME", str(user_home))
 
         selections = iter([1, 0])  # local_embedded, openai
-        monkeypatch.setattr(
-            "clawk_cli.memory_setup._curses_select",
-            lambda *args, **kwargs: next(selections),
-        )
+        monkeypatch.setattr("clawk_cli.memory_setup._curses_select", lambda *args, **kwargs: next(selections))
         monkeypatch.setattr("shutil.which", lambda name: None)
         monkeypatch.setattr("builtins.input", lambda prompt="": "")
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
         monkeypatch.setattr("getpass.getpass", lambda prompt="": "sk-local-test")
         saved_configs = []
-        monkeypatch.setattr(
-            "clawk_cli.config.save_config", lambda cfg: saved_configs.append(cfg.copy())
-        )
+        monkeypatch.setattr("clawk_cli.config.save_config", lambda cfg: saved_configs.append(cfg.copy()))
 
         provider = HindsightMemoryProvider()
         provider.post_setup(str(clawk_home), {"memory": {}})
@@ -381,19 +534,14 @@ class TestPostSetup:
             "HINDSIGHT_EMBED_DAEMON_IDLE_TIMEOUT=300\n"
         )
 
-    def test_local_embedded_setup_respects_existing_profile_name(
-        self, tmp_path, monkeypatch
-    ):
+    def test_local_embedded_setup_respects_existing_profile_name(self, tmp_path, monkeypatch):
         clawk_home = tmp_path / "clawk-home"
         user_home = tmp_path / "user-home"
         user_home.mkdir()
         monkeypatch.setenv("HOME", str(user_home))
 
         selections = iter([1, 0])  # local_embedded, openai
-        monkeypatch.setattr(
-            "clawk_cli.memory_setup._curses_select",
-            lambda *args, **kwargs: next(selections),
-        )
+        monkeypatch.setattr("clawk_cli.memory_setup._curses_select", lambda *args, **kwargs: next(selections))
         monkeypatch.setattr("shutil.which", lambda name: None)
         monkeypatch.setattr("builtins.input", lambda prompt="": "")
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
@@ -409,19 +557,14 @@ class TestPostSetup:
         assert coder_env.exists()
         assert not clawk_env.exists()
 
-    def test_local_embedded_setup_preserves_existing_key_when_input_left_blank(
-        self, tmp_path, monkeypatch
-    ):
+    def test_local_embedded_setup_preserves_existing_key_when_input_left_blank(self, tmp_path, monkeypatch):
         clawk_home = tmp_path / "clawk-home"
         user_home = tmp_path / "user-home"
         user_home.mkdir()
         monkeypatch.setenv("HOME", str(user_home))
 
         selections = iter([1, 0])  # local_embedded, openai
-        monkeypatch.setattr(
-            "clawk_cli.memory_setup._curses_select",
-            lambda *args, **kwargs: next(selections),
-        )
+        monkeypatch.setattr("clawk_cli.memory_setup._curses_select", lambda *args, **kwargs: next(selections))
         monkeypatch.setattr("shutil.which", lambda name: None)
         monkeypatch.setattr("builtins.input", lambda prompt="": "")
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
@@ -439,17 +582,14 @@ class TestPostSetup:
         assert profile_env.exists()
         assert "HINDSIGHT_API_LLM_API_KEY=existing-key\n" in profile_env.read_text()
 
-    def test_local_embedded_setup_blank_inputs_preserve_existing_config(
-        self, tmp_path, monkeypatch
-    ):
+
+    def test_local_embedded_setup_blank_inputs_preserve_existing_config(self, tmp_path, monkeypatch):
         """Pressing Enter through setup should keep existing Hindsight values."""
         clawk_home = tmp_path / "clawk-home"
         user_home = tmp_path / "user-home"
         user_home.mkdir()
         monkeypatch.setenv("HOME", str(user_home))
-        monkeypatch.setattr(
-            "plugins.memory.hindsight.get_clawk_home", lambda: clawk_home
-        )
+        monkeypatch.setattr("plugins.memory.hindsight.get_clawk_home", lambda: clawk_home)
 
         existing_config = {
             "mode": "local_embedded",
@@ -469,10 +609,7 @@ class TestPostSetup:
 
         # Simulate pressing Enter at the mode and LLM-provider pickers, which
         # should select their current values, and pressing Enter at text prompts.
-        monkeypatch.setattr(
-            "clawk_cli.memory_setup._curses_select",
-            lambda *args, **kwargs: kwargs.get("default", 0),
-        )
+        monkeypatch.setattr("clawk_cli.memory_setup._curses_select", lambda *args, **kwargs: kwargs.get("default", 0))
         monkeypatch.setattr("shutil.which", lambda name: None)
         monkeypatch.setattr("builtins.input", lambda prompt="": "")
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
@@ -494,6 +631,7 @@ class TestPostSetup:
         assert saved["timeout"] == 120
 
 
+
 # ---------------------------------------------------------------------------
 # Tool handler tests
 # ---------------------------------------------------------------------------
@@ -501,22 +639,24 @@ class TestPostSetup:
 
 class TestToolHandlers:
     def test_retain_success(self, provider):
-        result = json.loads(
-            provider.handle_tool_call(
-                "hindsight_retain", {"content": "user likes dark mode"}
-            )
-        )
+        result = json.loads(provider.handle_tool_call(
+            "hindsight_retain", {"content": "user likes dark mode"}
+        ))
         assert result["result"] == "Memory stored successfully."
-        provider._client.aretain.assert_called_once()
-        call_kwargs = provider._client.aretain.call_args.kwargs
+        provider._client.aretain_batch.assert_called_once()
+        call_kwargs = provider._client.aretain_batch.call_args.kwargs
         assert call_kwargs["bank_id"] == "test-bank"
-        assert call_kwargs["content"] == "user likes dark mode"
+        item = call_kwargs["items"][0]
+        assert item["content"] == "user likes dark mode"
+        # bank_id/retain_async are call-level args, never item keys.
+        assert "bank_id" not in item
+        assert "retain_async" not in item
 
     def test_retain_with_tags(self, provider_with_config):
         p = provider_with_config(retain_tags=["pref", "ui"])
         p.handle_tool_call("hindsight_retain", {"content": "likes dark mode"})
-        call_kwargs = p._client.aretain.call_args.kwargs
-        assert call_kwargs["tags"] == ["pref", "ui"]
+        item = p._client.aretain_batch.call_args.kwargs["items"][0]
+        assert item["tags"] == ["pref", "ui"]
 
     def test_retain_merges_per_call_tags_with_config_tags(self, provider_with_config):
         p = provider_with_config(retain_tags=["pref", "ui"])
@@ -524,22 +664,35 @@ class TestToolHandlers:
             "hindsight_retain",
             {"content": "likes dark mode", "tags": ["client:x", "ui"]},
         )
-        call_kwargs = p._client.aretain.call_args.kwargs
-        assert call_kwargs["tags"] == ["pref", "ui", "client:x"]
+        item = p._client.aretain_batch.call_args.kwargs["items"][0]
+        assert item["tags"] == ["pref", "ui", "client:x"]
 
     def test_retain_without_tags(self, provider):
         provider.handle_tool_call("hindsight_retain", {"content": "hello"})
-        call_kwargs = provider._client.aretain.call_args.kwargs
-        assert "tags" not in call_kwargs
+        item = provider._client.aretain_batch.call_args.kwargs["items"][0]
+        assert "tags" not in item
+
+    def test_retain_passes_observation_scopes(self, provider_with_config):
+        p = provider_with_config(observation_scopes="per_tag")
+        p.handle_tool_call("hindsight_retain", {"content": "likes dark mode"})
+        item = p._client.aretain_batch.call_args.kwargs["items"][0]
+        assert item["observation_scopes"] == "per_tag"
+
+    def test_retain_omits_observation_scopes_by_default(self, provider):
+        provider.handle_tool_call("hindsight_retain", {"content": "hello"})
+        item = provider._client.aretain_batch.call_args.kwargs["items"][0]
+        assert "observation_scopes" not in item
 
     def test_retain_missing_content(self, provider):
-        result = json.loads(provider.handle_tool_call("hindsight_retain", {}))
+        result = json.loads(provider.handle_tool_call(
+            "hindsight_retain", {}
+        ))
         assert "error" in result
 
     def test_recall_success(self, provider):
-        result = json.loads(
-            provider.handle_tool_call("hindsight_recall", {"query": "dark mode"})
-        )
+        result = json.loads(provider.handle_tool_call(
+            "hindsight_recall", {"query": "dark mode"}
+        ))
         assert "Memory 1" in result["result"]
         assert "Memory 2" in result["result"]
 
@@ -564,51 +717,53 @@ class TestToolHandlers:
 
     def test_recall_no_results(self, provider):
         provider._client.arecall.return_value = SimpleNamespace(results=[])
-        result = json.loads(
-            provider.handle_tool_call("hindsight_recall", {"query": "test"})
-        )
+        result = json.loads(provider.handle_tool_call(
+            "hindsight_recall", {"query": "test"}
+        ))
         assert result["result"] == "No relevant memories found."
 
     def test_recall_missing_query(self, provider):
-        result = json.loads(provider.handle_tool_call("hindsight_recall", {}))
+        result = json.loads(provider.handle_tool_call(
+            "hindsight_recall", {}
+        ))
         assert "error" in result
 
     def test_reflect_success(self, provider):
-        result = json.loads(
-            provider.handle_tool_call("hindsight_reflect", {"query": "summarize"})
-        )
+        result = json.loads(provider.handle_tool_call(
+            "hindsight_reflect", {"query": "summarize"}
+        ))
         assert result["result"] == "Synthesized answer"
 
     def test_reflect_missing_query(self, provider):
-        result = json.loads(provider.handle_tool_call("hindsight_reflect", {}))
+        result = json.loads(provider.handle_tool_call(
+            "hindsight_reflect", {}
+        ))
         assert "error" in result
 
     def test_unknown_tool(self, provider):
-        result = json.loads(provider.handle_tool_call("hindsight_unknown", {}))
+        result = json.loads(provider.handle_tool_call(
+            "hindsight_unknown", {}
+        ))
         assert "error" in result
 
     def test_retain_error_handling(self, provider):
-        provider._client.aretain.side_effect = RuntimeError("connection failed")
-        result = json.loads(
-            provider.handle_tool_call("hindsight_retain", {"content": "test"})
-        )
+        provider._client.aretain_batch.side_effect = RuntimeError("connection failed")
+        result = json.loads(provider.handle_tool_call(
+            "hindsight_retain", {"content": "test"}
+        ))
         assert "error" in result
         assert "connection failed" in result["error"]
 
     def test_recall_error_handling(self, provider):
         provider._client.arecall.side_effect = RuntimeError("timeout")
-        result = json.loads(
-            provider.handle_tool_call("hindsight_recall", {"query": "test"})
-        )
+        result = json.loads(provider.handle_tool_call(
+            "hindsight_recall", {"query": "test"}
+        ))
         assert "error" in result
 
-    def test_local_embedded_recall_reconnects_after_idle_shutdown(
-        self, provider, monkeypatch
-    ):
+    def test_local_embedded_recall_reconnects_after_idle_shutdown(self, provider, monkeypatch):
         first_client = _make_mock_client()
-        first_client.arecall.side_effect = RuntimeError(
-            "Cannot connect to host 127.0.0.1:8888"
-        )
+        first_client.arecall.side_effect = RuntimeError("Cannot connect to host 127.0.0.1:8888")
         second_client = _make_mock_client()
         second_client.arecall.return_value = SimpleNamespace(
             results=[SimpleNamespace(text="Recovered memory")]
@@ -619,9 +774,9 @@ class TestToolHandlers:
         provider._client = first_client
         monkeypatch.setattr(provider, "_get_client", lambda: next(clients))
 
-        result = json.loads(
-            provider.handle_tool_call("hindsight_recall", {"query": "test"})
-        )
+        result = json.loads(provider.handle_tool_call(
+            "hindsight_recall", {"query": "test"}
+        ))
 
         assert result["result"] == "1. Recovered memory"
         assert provider._client is second_client
@@ -757,14 +912,8 @@ class TestSyncTurn:
         assert item["metadata"]["agent_identity"] == "fakeassistantname"
         assert item["metadata"]["turn_index"] == "1"
         assert item["metadata"]["message_count"] == "2"
-        assert re.fullmatch(
-            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?\+00:00",
-            content[0][0]["timestamp"],
-        )
-        assert re.fullmatch(
-            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z",
-            item["metadata"]["retained_at"],
-        )
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?\+00:00", content[0][0]["timestamp"])
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z", item["metadata"]["retained_at"])
 
     def test_sync_turn_skipped_when_auto_retain_off(self, provider_with_config):
         p = provider_with_config(auto_retain=False)
@@ -790,10 +939,7 @@ class TestSyncTurn:
         assert call_kwargs["document_id"].startswith("test-session-")
         assert call_kwargs["retain_async"] is True
         assert len(call_kwargs["items"]) == 1
-        assert (
-            call_kwargs["items"][0]["context"]
-            == "conversation between Clawksis and the User"
-        )
+        assert call_kwargs["items"][0]["context"] == "conversation between Clawksis and the User"
 
     def test_sync_turn_custom_context(self, provider_with_config):
         p = provider_with_config(retain_context="my-agent")
@@ -824,9 +970,7 @@ class TestSyncTurn:
         assert item["metadata"]["turn_index"] == "3"
         assert item["metadata"]["message_count"] == "6"
 
-    def test_sync_turn_accumulates_full_session_without_append_support(
-        self, provider_with_config
-    ):
+    def test_sync_turn_accumulates_full_session_without_append_support(self, provider_with_config):
         """Legacy/overwrite APIs (no update_mode=append) resend the ENTIRE session each retain."""
         p = provider_with_config(retain_every_n_turns=2)
 
@@ -848,19 +992,13 @@ class TestSyncTurn:
         assert "turn3-user" in content
         assert "turn4-user" in content
 
-    def test_sync_turn_appends_only_delta_when_append_supported(
-        self, provider_with_config, monkeypatch
-    ):
+    def test_sync_turn_appends_only_delta_when_append_supported(self, provider_with_config, monkeypatch):
         """On append-capable APIs each retain ships only the new turns, not the whole session."""
         monkeypatch.setattr(
             "plugins.memory.hindsight._fetch_hindsight_api_version",
             lambda *a, **kw: "0.5.6",
         )
-        from plugins.memory.hindsight import (
-            _append_capability_cache,
-            _append_capability_lock,
-        )
-
+        from plugins.memory.hindsight import _append_capability_cache, _append_capability_lock
         # Clear before AND after: the capability cache is module-global and keyed
         # per api_url, so a stale entry would leak into other tests.
         with _append_capability_lock:
@@ -919,19 +1057,14 @@ class TestSyncTurn:
         monkeypatch.setattr("plugins.memory.hindsight.get_clawk_home", lambda: tmp_path)
 
         p1 = HindsightMemoryProvider()
-        p1.initialize(
-            session_id="resumed-session", clawk_home=str(tmp_path), platform="cli"
-        )
+        p1.initialize(session_id="resumed-session", clawk_home=str(tmp_path), platform="cli")
 
         # Sleep just enough that the microsecond timestamp differs
         import time
-
         time.sleep(0.001)
 
         p2 = HindsightMemoryProvider()
-        p2.initialize(
-            session_id="resumed-session", clawk_home=str(tmp_path), platform="cli"
-        )
+        p2.initialize(session_id="resumed-session", clawk_home=str(tmp_path), platform="cli")
 
         # Same session, but each process gets its own document_id
         assert p1._document_id != p2._document_id
@@ -1206,11 +1339,7 @@ class TestSessionSwitchBufferFlush:
 
 class TestUpdateModeAppendCapability:
     def _clear_capability_cache(self):
-        from plugins.memory.hindsight import (
-            _append_capability_cache,
-            _append_capability_lock,
-        )
-
+        from plugins.memory.hindsight import _append_capability_cache, _append_capability_lock
         with _append_capability_lock:
             _append_capability_cache.clear()
 
@@ -1269,7 +1398,6 @@ class TestUpdateModeAppendCapability:
     def test_legacy_warning_emitted_once(self, provider, monkeypatch, caplog):
         """One-time WARN nudges users to upgrade Hindsight."""
         import logging
-
         self._clear_capability_cache()
         monkeypatch.setattr(
             "plugins.memory.hindsight._fetch_hindsight_api_version",
@@ -1280,11 +1408,9 @@ class TestUpdateModeAppendCapability:
             provider._retain_queue.join()
             provider.sync_turn("c", "d")
             provider._retain_queue.join()
-        warns = [
-            r
-            for r in caplog.records
-            if r.levelno == logging.WARNING and "older than 0.5.0" in r.getMessage()
-        ]
+        warns = [r for r in caplog.records
+                 if r.levelno == logging.WARNING
+                 and "older than 0.5.0" in r.getMessage()]
         # Cache hit on the second call → no second warn.
         assert len(warns) == 1
 
@@ -1345,32 +1471,15 @@ class TestConfigSchema:
         schema = provider.get_config_schema()
         keys = {f["key"] for f in schema}
         expected_keys = {
-            "mode",
-            "api_url",
-            "api_key",
-            "llm_provider",
-            "llm_api_key",
-            "llm_model",
-            "bank_id",
-            "bank_id_template",
-            "bank_mission",
-            "bank_retain_mission",
-            "recall_budget",
-            "memory_mode",
-            "recall_prefetch_method",
-            "retain_tags",
-            "retain_source",
-            "retain_user_prefix",
-            "retain_assistant_prefix",
-            "recall_tags",
-            "recall_tags_match",
-            "auto_recall",
-            "auto_retain",
-            "retain_every_n_turns",
-            "retain_async",
-            "retain_context",
-            "recall_max_tokens",
-            "recall_max_input_chars",
+            "mode", "api_url", "api_key", "llm_provider", "llm_api_key",
+            "llm_model", "bank_id", "bank_id_template", "bank_mission", "bank_retain_mission",
+            "recall_budget", "memory_mode", "recall_prefetch_method",
+            "retain_tags", "retain_source",
+            "retain_user_prefix", "retain_assistant_prefix",
+            "recall_tags", "recall_tags_match",
+            "auto_recall", "auto_retain",
+            "retain_every_n_turns", "retain_async", "retain_context",
+            "recall_max_tokens", "recall_max_input_chars",
             "recall_prompt_preamble",
         }
         assert expected_keys.issubset(keys), f"Missing: {expected_keys - keys}"
@@ -1396,18 +1505,15 @@ class TestBankIdTemplate:
         assert _sanitize_bank_segment(None) == ""
 
     def test_resolve_empty_template_uses_fallback(self):
-        result = _resolve_bank_id_template("", fallback="clawk", profile="coder")
+        result = _resolve_bank_id_template(
+            "", fallback="clawk", profile="coder"
+        )
         assert result == "clawk"
 
     def test_resolve_with_profile(self):
         result = _resolve_bank_id_template(
-            "clawk-{profile}",
-            fallback="clawk",
-            profile="coder",
-            workspace="",
-            platform="",
-            user="",
-            session="",
+            "clawk-{profile}", fallback="clawk",
+            profile="coder", workspace="", platform="", user="", session="",
         )
         assert result == "clawk-coder"
 
@@ -1415,74 +1521,47 @@ class TestBankIdTemplate:
         result = _resolve_bank_id_template(
             "{workspace}-{profile}-{platform}",
             fallback="clawk",
-            profile="coder",
-            workspace="myorg",
-            platform="cli",
-            user="",
-            session="",
+            profile="coder", workspace="myorg", platform="cli",
+            user="", session="",
         )
         assert result == "myorg-coder-cli"
 
     def test_resolve_collapses_empty_placeholders(self):
         # When user is empty, "clawk-{user}" becomes "clawk-" -> trimmed to "clawk"
         result = _resolve_bank_id_template(
-            "clawk-{user}",
-            fallback="default",
-            profile="",
-            workspace="",
-            platform="",
-            user="",
-            session="",
+            "clawk-{user}", fallback="default",
+            profile="", workspace="", platform="", user="", session="",
         )
         assert result == "clawk"
 
     def test_resolve_collapses_double_dashes(self):
         # Two empty placeholders with a dash between them should collapse
         result = _resolve_bank_id_template(
-            "{workspace}-{profile}-{user}",
-            fallback="fallback",
-            profile="coder",
-            workspace="",
-            platform="",
-            user="",
-            session="",
+            "{workspace}-{profile}-{user}", fallback="fallback",
+            profile="coder", workspace="", platform="", user="", session="",
         )
         assert result == "coder"
 
     def test_resolve_empty_rendered_falls_back(self):
         result = _resolve_bank_id_template(
-            "{user}-{profile}",
-            fallback="fallback",
-            profile="",
-            workspace="",
-            platform="",
-            user="",
-            session="",
+            "{user}-{profile}", fallback="fallback",
+            profile="", workspace="", platform="", user="", session="",
         )
         assert result == "fallback"
 
     def test_resolve_sanitizes_placeholder_values(self):
         result = _resolve_bank_id_template(
-            "user-{user}",
-            fallback="clawk",
-            profile="",
-            workspace="",
-            platform="",
-            user="josh@example.com",
-            session="",
+            "user-{user}", fallback="clawk",
+            profile="", workspace="", platform="",
+            user="josh@example.com", session="",
         )
         assert result == "user-josh-example-com"
 
     def test_resolve_invalid_template_returns_fallback(self):
         # Unknown placeholder should fall back without raising
         result = _resolve_bank_id_template(
-            "clawk-{unknown}",
-            fallback="clawk",
-            profile="",
-            workspace="",
-            platform="",
-            user="",
-            session="",
+            "clawk-{unknown}", fallback="clawk",
+            profile="", workspace="", platform="", user="", session="",
         )
         assert result == "clawk"
 
@@ -1531,9 +1610,7 @@ class TestBankIdTemplate:
         )
         assert p._bank_id == "my-static-bank"
 
-    def test_provider_template_with_missing_profile_falls_back(
-        self, tmp_path, monkeypatch
-    ):
+    def test_provider_template_with_missing_profile_falls_back(self, tmp_path, monkeypatch):
         config = {
             "mode": "cloud",
             "apiKey": "k",
@@ -1591,12 +1668,10 @@ class TestAvailability:
     def test_available_with_snake_case_api_key_in_config(self, tmp_path, monkeypatch):
         config_path = tmp_path / "hindsight" / "config.json"
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text(
-            json.dumps({
-                "mode": "cloud",
-                "api_key": "***",
-            })
-        )
+        config_path.write_text(json.dumps({
+            "mode": "cloud",
+            "api_key": "***",
+        }))
         monkeypatch.setattr(
             "plugins.memory.hindsight.get_clawk_home",
             lambda: tmp_path,
@@ -1606,9 +1681,7 @@ class TestAvailability:
 
         assert p.is_available()
 
-    def test_local_mode_unavailable_when_runtime_import_fails(
-        self, tmp_path, monkeypatch
-    ):
+    def test_local_mode_unavailable_when_runtime_import_fails(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
             "plugins.memory.hindsight.get_clawk_home",
             lambda: tmp_path / "nonexistent",
@@ -1627,14 +1700,14 @@ class TestAvailability:
         p = HindsightMemoryProvider()
         assert not p.is_available()
 
-    def test_initialize_disables_local_mode_when_runtime_import_fails(
-        self, tmp_path, monkeypatch
-    ):
+    def test_initialize_disables_local_mode_when_runtime_import_fails(self, tmp_path, monkeypatch):
         config = {"mode": "local_embedded"}
         config_path = tmp_path / "hindsight" / "config.json"
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(json.dumps(config))
-        monkeypatch.setattr("plugins.memory.hindsight.get_clawk_home", lambda: tmp_path)
+        monkeypatch.setattr(
+            "plugins.memory.hindsight.get_clawk_home", lambda: tmp_path
+        )
 
         def _raise(_name):
             raise RuntimeError("x86_64-v2 unsupported")
@@ -1645,9 +1718,7 @@ class TestAvailability:
         )
 
         p = HindsightMemoryProvider()
-        p.initialize(
-            session_id="test-session", clawk_home=str(tmp_path), platform="cli"
-        )
+        p.initialize(session_id="test-session", clawk_home=str(tmp_path), platform="cli")
         assert p._mode == "disabled"
 
 
@@ -1722,9 +1793,7 @@ class TestSharedEventLoopLifecycle:
 
 
 class TestShutdown:
-    def test_local_embedded_shutdown_closes_inner_async_client_on_shared_loop(
-        self, provider
-    ):
+    def test_local_embedded_shutdown_closes_inner_async_client_on_shared_loop(self, provider):
         inner_client = _make_mock_client()
         embedded = MagicMock()
         embedded._client = inner_client

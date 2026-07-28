@@ -34,6 +34,7 @@ DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8646
 DEFAULT_WEBHOOK_PATH = "/msgraph/webhook"
 DEFAULT_MAX_SEEN_RECEIPTS = 5000
+DEFAULT_MAX_BODY_BYTES = 1_048_576
 NotificationScheduler = Callable[[Dict[str, Any], MessageEvent], Awaitable[None] | None]
 
 
@@ -53,19 +54,18 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
         self._webhook_path: str = self._normalize_path(
             extra.get("webhook_path", DEFAULT_WEBHOOK_PATH)
         )
-        self._health_path: str = self._normalize_path(
-            extra.get("health_path", "/health")
-        )
+        self._health_path: str = self._normalize_path(extra.get("health_path", "/health"))
         self._accepted_resources: list[str] = [
             str(value).strip()
             for value in (extra.get("accepted_resources") or [])
             if str(value).strip()
         ]
-        self._client_state: Optional[str] = self._string_or_none(
-            extra.get("client_state")
-        )
+        self._client_state: Optional[str] = self._string_or_none(extra.get("client_state"))
         self._max_seen_receipts = max(
             1, int(extra.get("max_seen_receipts", DEFAULT_MAX_SEEN_RECEIPTS))
+        )
+        self._max_body_bytes = max(
+            1, int(extra.get("max_body_bytes", DEFAULT_MAX_BODY_BYTES))
         )
         self._allowed_source_networks: list[ipaddress._BaseNetwork] = (
             self._parse_allowed_source_cidrs(extra.get("allowed_source_cidrs"))
@@ -134,15 +134,13 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
                 )
         return networks
 
-    def set_notification_scheduler(
-        self, scheduler: Optional[NotificationScheduler]
-    ) -> None:
+    def set_notification_scheduler(self, scheduler: Optional[NotificationScheduler]) -> None:
         self._notification_scheduler = scheduler
 
     def _source_allowlist_required_but_missing(self) -> bool:
         return is_network_accessible(self._host) and not self._allowed_source_networks
 
-    async def connect(self) -> bool:
+    async def connect(self, *, is_reconnect: bool = False) -> bool:
         if self._client_state is None:
             logger.error(
                 "[msgraph_webhook] Refusing to start without extra.client_state configured"
@@ -158,7 +156,7 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
             )
             return False
 
-        app = web.Application()
+        app = web.Application(client_max_size=self._max_body_bytes)
         app.router.add_get(self._health_path, self._handle_health)
         app.router.add_get(self._webhook_path, self._handle_validation)
         app.router.add_post(self._webhook_path, self._handle_notification)
@@ -198,13 +196,15 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
     async def _handle_health(self, request: "web.Request") -> "web.Response":
         if not self._source_ip_allowed(request):
             return web.Response(status=403)
-        return web.json_response({
-            "status": "ok",
-            "platform": self.platform.value,
-            "webhook_path": self._webhook_path,
-            "accepted": self._accepted_count,
-            "duplicates": self._duplicate_count,
-        })
+        return web.json_response(
+            {
+                "status": "ok",
+                "platform": self.platform.value,
+                "webhook_path": self._webhook_path,
+                "accepted": self._accepted_count,
+                "duplicates": self._duplicate_count,
+            }
+        )
 
     async def _handle_validation(self, request: "web.Request") -> "web.Response":
         """Handle Microsoft Graph subscription validation handshake.
@@ -233,8 +233,24 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
             return web.Response(text=validation_token, content_type="text/plain")
 
         try:
-            body = await request.json()
+            content_length = request.content_length
         except Exception:
+            content_length = None
+        if content_length is not None and content_length > self._max_body_bytes:
+            return web.Response(status=413)
+
+        try:
+            raw_body = await request.read()
+        except Exception:
+            return web.Response(status=400)
+        if len(raw_body) > self._max_body_bytes:
+            return web.Response(status=413)
+
+        try:
+            body = json.loads(raw_body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return web.Response(status=400)
+        if not isinstance(body, dict):
             return web.Response(status=400)
 
         notifications = body.get("value")
@@ -317,9 +333,7 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
                 continue
             if normalized_pattern.endswith("*"):
                 prefix = normalized_pattern[:-1].rstrip("/")
-                if normalized_resource == prefix or normalized_resource.startswith(
-                    f"{prefix}/"
-                ):
+                if normalized_resource == prefix or normalized_resource.startswith(f"{prefix}/"):
                     return True
                 continue
             if (
@@ -344,7 +358,9 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
         provided = self._string_or_none(notification.get("clientState"))
         if provided is None:
             return False
-        return hmac.compare_digest(provided, expected)
+        # Compare as bytes: ``compare_digest`` raises TypeError on a str with
+        # non-ASCII characters, and clientState comes from the request body.
+        return hmac.compare_digest(provided.encode(), expected.encode())
 
     def _has_seen_receipt(self, receipt_key: str) -> bool:
         return receipt_key in self._seen_receipts
@@ -361,10 +377,7 @@ class MSGraphWebhookAdapter(BasePlatformAdapter):
         notification: Dict[str, Any],
         receipt_key: Optional[str],
     ) -> MessageEvent:
-        message_id = (
-            receipt_key
-            or f"sha1:{sha1(json.dumps(notification, sort_keys=True).encode('utf-8')).hexdigest()}"
-        )
+        message_id = receipt_key or f"sha1:{sha1(json.dumps(notification, sort_keys=True).encode('utf-8')).hexdigest()}"
         source = self.build_source(
             chat_id=f"msgraph:{notification.get('subscriptionId', 'unknown')}",
             chat_name="msgraph/webhook",

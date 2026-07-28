@@ -132,7 +132,11 @@ def _extract_json_blob(raw: str) -> Optional[dict]:
 def _profile_author() -> str:
     """Mirror of ``clawk_cli.kanban._profile_author``. Kept local to
     avoid a circular import when kanban.py imports this module."""
-    return os.environ.get("CLAWK_PROFILE") or os.environ.get("USER") or "specifier"
+    return (
+        os.environ.get("CLAWK_PROFILE")
+        or os.environ.get("USER")
+        or "specifier"
+    )
 
 
 def specify_task(
@@ -158,22 +162,10 @@ def specify_task(
         )
 
     try:
-        from agent.auxiliary_client import (
-            get_auxiliary_extra_body,
-            get_text_auxiliary_client,
-        )
+        from agent.auxiliary_client import call_llm
     except Exception as exc:  # pragma: no cover — import smoke test
         logger.debug("specify: auxiliary client import failed: %s", exc)
         return SpecifyOutcome(task_id, False, "auxiliary client unavailable")
-
-    try:
-        client, model = get_text_auxiliary_client("triage_specifier")
-    except Exception as exc:
-        logger.debug("specify: get_text_auxiliary_client failed: %s", exc)
-        return SpecifyOutcome(task_id, False, "auxiliary client unavailable")
-
-    if client is None or not model:
-        return SpecifyOutcome(task_id, False, "no auxiliary client configured")
 
     user_msg = _USER_TEMPLATE.format(
         task_id=task.id,
@@ -182,8 +174,11 @@ def specify_task(
     )
 
     try:
-        resp = client.chat.completions.create(
-            model=model,
+        # Route through call_llm so auxiliary.triage_specifier.* config
+        # (provider/model/base_url, extra_body, reasoning_effort, retries)
+        # all apply — the direct-create path dropped extra_body (#35566).
+        resp = call_llm(
+            task="triage_specifier",
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_msg},
@@ -191,15 +186,15 @@ def specify_task(
             temperature=0.3,
             max_tokens=CLAWK_KANBAN_SPECIFY_MAX_TOKENS,
             timeout=timeout or 120,
-            extra_body=get_auxiliary_extra_body() or None,
         )
     except Exception as exc:
         logger.info(
             "specify: API call failed for %s (%s) — skipping",
-            task_id,
-            exc,
+            task_id, exc,
         )
-        return SpecifyOutcome(task_id, False, f"LLM error: {type(exc).__name__}")
+        return SpecifyOutcome(
+            task_id, False, f"LLM error: {type(exc).__name__}"
+        )
 
     try:
         raw = (resp.choices[0].message.content or "").strip()
@@ -216,7 +211,9 @@ def specify_task(
         # the task in triage on a malformed LLM reply.
         stripped_raw = raw.strip()
         if not stripped_raw:
-            return SpecifyOutcome(task_id, False, "LLM returned an empty response")
+            return SpecifyOutcome(
+                task_id, False, "LLM returned an empty response"
+            )
         new_title = None
         new_body = stripped_raw
     else:
@@ -227,9 +224,13 @@ def specify_task(
             if isinstance(title_val, str) and title_val.strip()
             else None
         )
-        new_body = body_val if isinstance(body_val, str) and body_val.strip() else None
+        new_body = (
+            body_val if isinstance(body_val, str) and body_val.strip() else None
+        )
         if new_body is None and new_title is None:
-            return SpecifyOutcome(task_id, False, "LLM response missing title and body")
+            return SpecifyOutcome(
+                task_id, False, "LLM response missing title and body"
+            )
 
     with kb.connect_closing() as conn:
         ok = kb.specify_triage_task(

@@ -11,7 +11,6 @@ Subcommands:
 
 No external dependencies — stdlib only.
 """
-
 import sys
 import math
 
@@ -30,10 +29,10 @@ def bmi(weight_kg, height_cm):
     print(f"BMI: {val:.1f} — {cat}")
     print()
     print("Ranges:")
-    print(f"  Underweight : < 18.5")
-    print(f"  Normal      : 18.5 – 24.9")
-    print(f"  Overweight  : 25.0 – 29.9")
-    print(f"  Obese       : 30.0+")
+    print("  Underweight : < 18.5")
+    print("  Normal      : 18.5 – 24.9")
+    print("  Overweight  : 25.0 – 29.9")
+    print("  Obese       : 30.0+")
 
 
 def tdee(weight_kg, height_cm, age, sex, activity):
@@ -76,7 +75,7 @@ def one_rep_max(weight, reps):
 
     epley = weight * (1 + reps / 30)
     brzycki = weight * (36 / (37 - reps)) if reps < 37 else 0
-    lombardi = weight * (reps**0.1)
+    lombardi = weight * (reps ** 0.1)
     avg = (epley + brzycki + lombardi) / 3
 
     print(f"Estimated 1RM ({weight} x {reps} reps):")
@@ -87,15 +86,9 @@ def one_rep_max(weight, reps):
     print()
     print("Training percentages off average 1RM:")
     for pct, rep_range in [
-        (100, "1"),
-        (95, "1-2"),
-        (90, "3-4"),
-        (85, "4-6"),
-        (80, "6-8"),
-        (75, "8-10"),
-        (70, "10-12"),
-        (65, "12-15"),
-        (60, "15-20"),
+        (100, "1"), (95, "1-2"), (90, "3-4"), (85, "4-6"),
+        (80, "6-8"), (75, "8-10"), (70, "10-12"),
+        (65, "12-15"), (60, "15-20"),
     ]:
         print(f"  {pct:>3}% = {avg * pct / 100:>7.1f}  (~{rep_range} reps)")
 
@@ -126,34 +119,20 @@ def macros(tdee_kcal, goal):
     print(f"  Fat     : {fat_g:>6.0f}g ({f * 100:.0f}%)  = {fat_g * 9:.0f} kcal")
     print(f"  Carbs   : {carb_g:>6.0f}g ({c * 100:.0f}%)  = {carb_g * 4:.0f} kcal")
     print()
-    print(
-        f"Per meal (3 meals): P {prot_g / 3:.0f}g | F {fat_g / 3:.0f}g | C {carb_g / 3:.0f}g"
-    )
-    print(
-        f"Per meal (4 meals): P {prot_g / 4:.0f}g | F {fat_g / 4:.0f}g | C {carb_g / 4:.0f}g"
-    )
+    print(f"Per meal (3 meals): P {prot_g / 3:.0f}g | F {fat_g / 3:.0f}g | C {carb_g / 3:.0f}g")
+    print(f"Per meal (4 meals): P {prot_g / 4:.0f}g | F {fat_g / 4:.0f}g | C {carb_g / 4:.0f}g")
 
 
 def bodyfat(sex, neck_cm, waist_cm, hip_cm, height_cm):
     sex = sex.upper()
     if sex == "M":
         if waist_cm <= neck_cm:
-            print("Error: waist must be larger than neck.")
-            sys.exit(1)
-        bf = (
-            86.010 * math.log10(waist_cm - neck_cm)
-            - 70.041 * math.log10(height_cm)
-            + 36.76
-        )
+            print("Error: waist must be larger than neck."); sys.exit(1)
+        bf = 86.010 * math.log10(waist_cm - neck_cm) - 70.041 * math.log10(height_cm) + 36.76
     else:
         if (waist_cm + hip_cm) <= neck_cm:
-            print("Error: waist + hip must be larger than neck.")
-            sys.exit(1)
-        bf = (
-            163.205 * math.log10(waist_cm + hip_cm - neck_cm)
-            - 97.684 * math.log10(height_cm)
-            - 78.387
-        )
+            print("Error: waist + hip must be larger than neck."); sys.exit(1)
+        bf = 163.205 * math.log10(waist_cm + hip_cm - neck_cm) - 97.684 * math.log10(height_cm) - 78.387
 
     print(f"Estimated body fat: {bf:.1f}%")
 
@@ -181,7 +160,7 @@ def bodyfat(sex, neck_cm, waist_cm, hip_cm, height_cm):
             break
 
     print(f"Category: {cat}")
-    print(f"Method: US Navy circumference formula")
+    print("Method: US Navy circumference formula")
 
 
 def usage():
@@ -201,11 +180,8 @@ def main():
 
         elif cmd == "tdee":
             tdee(
-                float(sys.argv[2]),
-                float(sys.argv[3]),
-                int(sys.argv[4]),
-                sys.argv[5],
-                int(sys.argv[6]),
+                float(sys.argv[2]), float(sys.argv[3]),
+                int(sys.argv[4]), sys.argv[5], int(sys.argv[6]),
             )
 
         elif cmd in {"1rm", "orm"}:
@@ -217,17 +193,9 @@ def main():
         elif cmd == "bodyfat":
             sex = sys.argv[2]
             if sex.upper() == "M":
-                bodyfat(
-                    sex, float(sys.argv[3]), float(sys.argv[4]), 0, float(sys.argv[5])
-                )
+                bodyfat(sex, float(sys.argv[3]), float(sys.argv[4]), 0, float(sys.argv[5]))
             else:
-                bodyfat(
-                    sex,
-                    float(sys.argv[3]),
-                    float(sys.argv[4]),
-                    float(sys.argv[5]),
-                    float(sys.argv[6]),
-                )
+                bodyfat(sex, float(sys.argv[3]), float(sys.argv[4]), float(sys.argv[5]), float(sys.argv[6]))
 
         else:
             print(f"Unknown command: {cmd}")

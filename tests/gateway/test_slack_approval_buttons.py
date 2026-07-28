@@ -42,7 +42,7 @@ def _ensure_slack_mock():
 
 _ensure_slack_mock()
 
-from gateway.platforms.slack import SlackAdapter
+from plugins.platforms.slack.adapter import SlackAdapter
 from gateway.config import PlatformConfig, Platform
 
 
@@ -80,7 +80,6 @@ def _attach_auth_runner(adapter, auth_fn=None):
 # ===========================================================================
 # send_exec_approval — Block Kit buttons
 # ===========================================================================
-
 
 class TestSlackExecApproval:
     """Test the send_exec_approval method sends Block Kit buttons."""
@@ -121,6 +120,24 @@ class TestSlackExecApproval:
         # Each button carries the session key as value
         for e in elements:
             assert e["value"] == "agent:main:slack:group:C1:1111"
+
+    @pytest.mark.asyncio
+    async def test_smart_deny_owner_override_hides_persistent_buttons(self):
+        adapter = _make_adapter()
+        mock_client = adapter._team_clients["T1"]
+        mock_client.chat_postMessage = AsyncMock(return_value={"ts": "1234.5678"})
+
+        await adapter.send_exec_approval(
+            chat_id="C1", command="rm -rf /", session_key="s",
+            allow_permanent=False, smart_denied=True,
+        )
+
+        kwargs = mock_client.chat_postMessage.call_args.kwargs
+        elements = kwargs["blocks"][1]["elements"]
+        assert [element["action_id"] for element in elements] == [
+            "clawk_approve_once", "clawk_deny",
+        ]
+        assert "one operation" in kwargs["blocks"][0]["text"]["text"].lower()
 
     @pytest.mark.asyncio
     async def test_sends_in_thread(self):
@@ -168,7 +185,6 @@ class TestSlackExecApproval:
 # _handle_approval_action — button click handler
 # ===========================================================================
 
-
 class TestSlackApprovalAction:
     """Test the approval button click handler."""
 
@@ -183,10 +199,7 @@ class TestSlackApprovalAction:
             "message": {
                 "ts": "1234.5678",
                 "blocks": [
-                    {
-                        "type": "section",
-                        "text": {"type": "mrkdwn", "text": "original text"},
-                    },
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "original text"}},
                     {"type": "actions", "elements": []},
                 ],
             },
@@ -201,9 +214,7 @@ class TestSlackApprovalAction:
         mock_client = adapter._team_clients["T1"]
         mock_client.chat_update = AsyncMock()
 
-        with patch(
-            "tools.approval.resolve_gateway_approval", return_value=1
-        ) as mock_resolve:
+        with patch("tools.approval.resolve_gateway_approval", return_value=1) as mock_resolve:
             await adapter._handle_approval_action(ack, body, action)
 
         ack.assert_called_once()
@@ -246,12 +257,9 @@ class TestSlackApprovalAction:
 
         ack = AsyncMock()
         body = {
-            "message": {
-                "ts": "1.2",
-                "blocks": [
-                    {"type": "section", "text": {"type": "mrkdwn", "text": "cmd"}},
-                ],
-            },
+            "message": {"ts": "1.2", "blocks": [
+                {"type": "section", "text": {"type": "mrkdwn", "text": "cmd"}},
+            ]},
             "channel": {"id": "C1"},
             "user": {"name": "alice", "id": "U_ALICE"},
         }
@@ -260,9 +268,7 @@ class TestSlackApprovalAction:
         mock_client = adapter._team_clients["T1"]
         mock_client.chat_update = AsyncMock()
 
-        with patch(
-            "tools.approval.resolve_gateway_approval", return_value=1
-        ) as mock_resolve:
+        with patch("tools.approval.resolve_gateway_approval", return_value=1) as mock_resolve:
             await adapter._handle_approval_action(ack, body, action)
 
         mock_resolve.assert_called_once_with("session-key", "deny")
@@ -299,31 +305,35 @@ class TestSlackApprovalAction:
 class TestSlackInteractiveAuth:
     def test_delegates_to_gateway_runner_auth(self):
         adapter = _make_adapter()
-        runner = _attach_auth_runner(
-            adapter, auth_fn=lambda source: source.user_id == "U_OK"
-        )
+        runner = _attach_auth_runner(adapter, auth_fn=lambda source: source.user_id == "U_OK")
 
-        assert (
-            adapter._is_interactive_user_authorized(
-                "U_OK",
-                channel_id="C1",
-                user_name="operator",
-            )
-            is True
-        )
-        assert (
-            adapter._is_interactive_user_authorized(
-                "U_BAD",
-                channel_id="C1",
-                user_name="intruder",
-            )
-            is False
-        )
+        assert adapter._is_interactive_user_authorized(
+            "U_OK",
+            channel_id="C1",
+            user_name="operator",
+        ) is True
+        assert adapter._is_interactive_user_authorized(
+            "U_BAD",
+            channel_id="C1",
+            user_name="intruder",
+        ) is False
 
         assert len(runner.seen_sources) == 2
         assert runner.seen_sources[0].platform == Platform.SLACK
         assert runner.seen_sources[0].chat_id == "C1"
         assert runner.seen_sources[0].chat_type == "group"
+
+    def test_passes_workspace_scope_to_gateway_runner_auth(self):
+        adapter = _make_adapter()
+        runner = _attach_auth_runner(adapter)
+
+        assert adapter._is_interactive_user_authorized(
+            "U_OK",
+            channel_id="C1",
+            user_name="operator",
+            team_id="T1",
+        ) is True
+        assert runner.seen_sources[0].scope_id == "T1"
 
 
 class TestSlackSlashConfirmAction:
@@ -343,10 +353,7 @@ class TestSlackSlashConfirmAction:
             "message": {
                 "ts": "2222.3333",
                 "blocks": [
-                    {
-                        "type": "section",
-                        "text": {"type": "mrkdwn", "text": "Original prompt"},
-                    },
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "Original prompt"}},
                 ],
             },
             "channel": {"id": "C1"},
@@ -357,9 +364,7 @@ class TestSlackSlashConfirmAction:
             "value": "agent:main:slack:group:C1:1111|confirm-1",
         }
 
-        with patch(
-            "tools.slash_confirm.resolve", new=AsyncMock(return_value="follow-up")
-        ) as mock_resolve:
+        with patch("tools.slash_confirm.resolve", new=AsyncMock(return_value="follow-up")) as mock_resolve:
             await adapter._handle_slash_confirm_action(ack, body, action)
 
         ack.assert_called_once()
@@ -371,11 +376,44 @@ class TestSlackSlashConfirmAction:
         mock_client.chat_update.assert_called_once()
         mock_client.chat_postMessage.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_action_uses_outer_payload_workspace_client(self, monkeypatch):
+        adapter = _make_adapter()
+        secondary_client = AsyncMock()
+        adapter._team_clients["T2"] = secondary_client
+        monkeypatch.delenv("SLACK_ALLOWED_USERS", raising=False)
+        monkeypatch.delenv("SLACK_ALLOW_ALL_USERS", raising=False)
+        monkeypatch.delenv("GATEWAY_ALLOW_ALL_USERS", raising=False)
+        monkeypatch.setenv("GATEWAY_ALLOWED_USERS", "U_OWNER")
+
+        ack = AsyncMock()
+        body = {
+            "team_id": "T2",
+            "message": {
+                "ts": "2222.3333",
+                "blocks": [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "Original prompt"}},
+                ],
+            },
+            "channel": {"id": "C1"},
+            "user": {"name": "owner", "id": "U_OWNER"},
+        }
+        action = {
+            "action_id": "clawk_confirm_once",
+            "value": "agent:main:slack:group:C1:1111|confirm-1",
+        }
+
+        with patch("tools.slash_confirm.resolve", new=AsyncMock(return_value="follow-up")):
+            await adapter._handle_slash_confirm_action(ack, body, action)
+
+        secondary_client.chat_update.assert_awaited_once()
+        secondary_client.chat_postMessage.assert_awaited_once()
+        adapter._team_clients["T1"].chat_update.assert_not_called()
+
 
 # ===========================================================================
 # _fetch_thread_context
 # ===========================================================================
-
 
 class TestSlackThreadContext:
     """Test thread context fetching."""
@@ -384,30 +422,16 @@ class TestSlackThreadContext:
     async def test_fetches_and_formats_context(self):
         adapter = _make_adapter()
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(
-            return_value={
-                "messages": [
-                    {
-                        "ts": "1000.0",
-                        "user": "U1",
-                        "text": "This is the parent message",
-                    },
-                    {
-                        "ts": "1000.1",
-                        "user": "U2",
-                        "text": "I think we should refactor",
-                    },
-                    {
-                        "ts": "1000.2",
-                        "user": "U1",
-                        "text": "Good idea, <@U_BOT> what do you think?",
-                    },
-                ]
-            }
-        )
+        mock_client.conversations_replies = AsyncMock(return_value={
+            "messages": [
+                {"ts": "1000.0", "user": "U1", "text": "This is the parent message"},
+                {"ts": "1000.1", "user": "U2", "text": "I think we should refactor"},
+                {"ts": "1000.2", "user": "U1", "text": "Good idea, <@U_BOT> what do you think?"},
+            ]
+        })
 
         # Mock user name resolution
-        adapter._user_name_cache = {"U1": "Alice", "U2": "Bob"}
+        adapter._user_name_cache = {("T1", "U1"): "Alice", ("T1", "U2"): "Bob"}
 
         context = await adapter._fetch_thread_context(
             channel_id="C1",
@@ -434,29 +458,30 @@ class TestSlackThreadContext:
         to a cron-posted thread parent."""
         adapter = _make_adapter()
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(
-            return_value={
-                "messages": [
-                    {"ts": "1000.0", "user": "U1", "text": "Parent"},
-                    # Self-bot reply -> must be skipped (circular)
-                    {
-                        "ts": "1000.1",
-                        "bot_id": "B_SELF",
-                        "user": "U_BOT",
-                        "text": "Previous bot self-reply (should be skipped)",
-                    },
-                    # Third-party bot child -> kept (useful context)
-                    {
-                        "ts": "1000.15",
-                        "bot_id": "B_OTHER",
-                        "user": "U_OTHER_BOT",
-                        "text": "Deploy succeeded",
-                    },
-                    {"ts": "1000.2", "user": "U1", "text": "Current"},
-                ]
-            }
-        )
-        adapter._user_name_cache = {"U1": "Alice", "U_OTHER_BOT": "DeployBot"}
+        mock_client.conversations_replies = AsyncMock(return_value={
+            "messages": [
+                {"ts": "1000.0", "user": "U1", "text": "Parent"},
+                # Self-bot reply -> must be skipped (circular)
+                {
+                    "ts": "1000.1",
+                    "bot_id": "B_SELF",
+                    "user": "U_BOT",
+                    "text": "Previous bot self-reply (should be skipped)",
+                },
+                # Third-party bot child -> kept (useful context)
+                {
+                    "ts": "1000.15",
+                    "bot_id": "B_OTHER",
+                    "user": "U_OTHER_BOT",
+                    "text": "Deploy succeeded",
+                },
+                {"ts": "1000.2", "user": "U1", "text": "Current"},
+            ]
+        })
+        adapter._user_name_cache = {
+            ("T1", "U1"): "Alice",
+            ("T1", "U_OTHER_BOT"): "DeployBot",
+        }
 
         context = await adapter._fetch_thread_context(
             channel_id="C1", thread_ts="1000.0", current_ts="1000.2", team_id="T1"
@@ -482,9 +507,7 @@ class TestSlackThreadContext:
     async def test_api_failure_returns_empty(self):
         adapter = _make_adapter()
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(
-            side_effect=Exception("API error")
-        )
+        mock_client.conversations_replies = AsyncMock(side_effect=Exception("API error"))
 
         context = await adapter._fetch_thread_context(
             channel_id="C1", thread_ts="1000.0", current_ts="1000.1", team_id="T1"
@@ -497,23 +520,21 @@ class TestSlackThreadContext:
         included in the context, prefixed with ``[thread parent]``."""
         adapter = _make_adapter()
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(
-            return_value={
-                "messages": [
-                    # Bot-posted parent (cron job)
-                    {
-                        "ts": "1000.0",
-                        "bot_id": "B123",
-                        "subtype": "bot_message",
-                        "username": "cron",
-                        "text": "メール要約: 本日の新着3件",
-                    },
-                    # User reply that triggered the fetch
-                    {"ts": "1000.1", "user": "U1", "text": "詳細を教えて"},
-                ]
-            }
-        )
-        adapter._user_name_cache = {"U1": "Alice"}
+        mock_client.conversations_replies = AsyncMock(return_value={
+            "messages": [
+                # Bot-posted parent (cron job)
+                {
+                    "ts": "1000.0",
+                    "bot_id": "B123",
+                    "subtype": "bot_message",
+                    "username": "cron",
+                    "text": "メール要約: 本日の新着3件",
+                },
+                # User reply that triggered the fetch
+                {"ts": "1000.1", "user": "U1", "text": "詳細を教えて"},
+            ]
+        })
+        adapter._user_name_cache = {("T1", "U1"): "Alice"}
 
         context = await adapter._fetch_thread_context(
             channel_id="C1",
@@ -531,25 +552,23 @@ class TestSlackThreadContext:
         user replies are kept."""
         adapter = _make_adapter()
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(
-            return_value={
-                "messages": [
-                    {"ts": "1000.0", "bot_id": "B_CRON", "text": "Cron summary"},
-                    # Self-bot child reply -> excluded
-                    {
-                        "ts": "1000.1",
-                        "bot_id": "B_SELF",
-                        "user": "U_BOT",  # matches adapter._bot_user_id
-                        "text": "Previous self reply",
-                    },
-                    # User reply -> kept
-                    {"ts": "1000.2", "user": "U1", "text": "Follow-up question"},
-                    # Current trigger (excluded by current_ts match)
-                    {"ts": "1000.3", "user": "U1", "text": "Current"},
-                ]
-            }
-        )
-        adapter._user_name_cache = {"U1": "Alice"}
+        mock_client.conversations_replies = AsyncMock(return_value={
+            "messages": [
+                {"ts": "1000.0", "bot_id": "B_CRON", "text": "Cron summary"},
+                # Self-bot child reply -> excluded
+                {
+                    "ts": "1000.1",
+                    "bot_id": "B_SELF",
+                    "user": "U_BOT",  # matches adapter._bot_user_id
+                    "text": "Previous self reply",
+                },
+                # User reply -> kept
+                {"ts": "1000.2", "user": "U1", "text": "Follow-up question"},
+                # Current trigger (excluded by current_ts match)
+                {"ts": "1000.3", "user": "U1", "text": "Current"},
+            ]
+        })
+        adapter._user_name_cache = {("T1", "U1"): "Alice"}
 
         context = await adapter._fetch_thread_context(
             channel_id="C1", thread_ts="1000.0", current_ts="1000.3", team_id="T1"
@@ -574,32 +593,30 @@ class TestSlackThreadContext:
         adapter._channel_team["C2"] = "T2"
 
         mock_client = adapter._team_clients["T2"]
-        mock_client.conversations_replies = AsyncMock(
-            return_value={
-                "messages": [
-                    {"ts": "2000.0", "user": "U2", "text": "Parent T2"},
-                    # This has the *T1* bot's user id — from T2's perspective this
-                    # is a third-party bot, so it must be kept.
-                    {
-                        "ts": "2000.1",
-                        "bot_id": "B_FOREIGN",
-                        "user": "U_BOT_T1",
-                        "team": "T2",
-                        "text": "Cross-workspace bot reply",
-                    },
-                    # Self-bot for T2 — must be skipped
-                    {
-                        "ts": "2000.2",
-                        "bot_id": "B_SELF_T2",
-                        "user": "U_BOT_T2",
-                        "team": "T2",
-                        "text": "Own T2 bot reply",
-                    },
-                    {"ts": "2000.3", "user": "U2", "text": "Current"},
-                ]
-            }
-        )
-        adapter._user_name_cache = {"U2": "Bob"}
+        mock_client.conversations_replies = AsyncMock(return_value={
+            "messages": [
+                {"ts": "2000.0", "user": "U2", "text": "Parent T2"},
+                # This has the *T1* bot's user id — from T2's perspective this
+                # is a third-party bot, so it must be kept.
+                {
+                    "ts": "2000.1",
+                    "bot_id": "B_FOREIGN",
+                    "user": "U_BOT_T1",
+                    "team": "T2",
+                    "text": "Cross-workspace bot reply",
+                },
+                # Self-bot for T2 — must be skipped
+                {
+                    "ts": "2000.2",
+                    "bot_id": "B_SELF_T2",
+                    "user": "U_BOT_T2",
+                    "team": "T2",
+                    "text": "Own T2 bot reply",
+                },
+                {"ts": "2000.3", "user": "U2", "text": "Current"},
+            ]
+        })
+        adapter._user_name_cache = {("T2", "U2"): "Bob"}
 
         context = await adapter._fetch_thread_context(
             channel_id="C2", thread_ts="2000.0", current_ts="2000.3", team_id="T2"
@@ -616,15 +633,13 @@ class TestSlackThreadContext:
         message itself)."""
         adapter = _make_adapter()
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(
-            return_value={
-                "messages": [
-                    {"ts": "1000.0", "user": "U1", "text": "Parent"},
-                    {"ts": "1000.1", "user": "U1", "text": "DO NOT INCLUDE THIS"},
-                ]
-            }
-        )
-        adapter._user_name_cache = {"U1": "Alice"}
+        mock_client.conversations_replies = AsyncMock(return_value={
+            "messages": [
+                {"ts": "1000.0", "user": "U1", "text": "Parent"},
+                {"ts": "1000.1", "user": "U1", "text": "DO NOT INCLUDE THIS"},
+            ]
+        })
+        adapter._user_name_cache = {("T1", "U1"): "Alice"}
 
         context = await adapter._fetch_thread_context(
             channel_id="C1", thread_ts="1000.0", current_ts="1000.1", team_id="T1"
@@ -639,14 +654,12 @@ class TestSlackThreadContext:
         when it is warm, avoiding an extra conversations.replies call."""
         adapter = _make_adapter()
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(
-            return_value={
-                "messages": [
-                    {"ts": "1000.0", "bot_id": "B123", "text": "Parent summary"},
-                    {"ts": "1000.1", "user": "U1", "text": "reply"},
-                ]
-            }
-        )
+        mock_client.conversations_replies = AsyncMock(return_value={
+            "messages": [
+                {"ts": "1000.0", "bot_id": "B123", "text": "Parent summary"},
+                {"ts": "1000.1", "user": "U1", "text": "reply"},
+            ]
+        })
 
         # Warm the cache via _fetch_thread_context
         await adapter._fetch_thread_context(
@@ -666,7 +679,6 @@ class TestSlackThreadContext:
 # _has_active_session_for_thread — session key fix (#5833)
 # ===========================================================================
 
-
 class TestSessionKeyFix:
     """Test that _has_active_session_for_thread uses build_session_key."""
 
@@ -676,12 +688,12 @@ class TestSessionKeyFix:
 
         # Mock session store with a known entry
         mock_store = MagicMock()
-        mock_store._entries = {"agent:main:slack:group:C1:1000.0": MagicMock()}
+        mock_store._entries = {
+            "agent:main:slack:group:C1:1000.0": MagicMock()
+        }
         mock_store._ensure_loaded = MagicMock()
         mock_store.config = MagicMock()
-        mock_store.config.group_sessions_per_user = (
-            False  # threads don't include user_id
-        )
+        mock_store.config.group_sessions_per_user = False  # threads don't include user_id
         mock_store.config.thread_sessions_per_user = False
         adapter._session_store = mock_store
 
@@ -723,7 +735,6 @@ class TestSessionKeyFix:
 # Thread engagement — bot-started threads & mentioned threads
 # ===========================================================================
 
-
 class TestThreadEngagement:
     """Test _bot_message_ts and _mentioned_threads tracking."""
 
@@ -734,9 +745,7 @@ class TestThreadEngagement:
         mock_client = adapter._team_clients["T1"]
         mock_client.chat_postMessage = AsyncMock(return_value={"ts": "9000.1"})
 
-        await adapter.send(
-            chat_id="C1", content="Hello!", metadata={"thread_id": "8000.0"}
-        )
+        await adapter.send(chat_id="C1", content="Hello!", metadata={"thread_id": "8000.0"})
 
         assert "9000.1" in adapter._bot_message_ts
         # Thread root should also be tracked
@@ -769,9 +778,7 @@ class TestThreadEngagement:
         for i in range(15):
             adapter._mentioned_threads.add(f"{i}.0")
             if len(adapter._mentioned_threads) > adapter._MENTIONED_THREADS_MAX:
-                to_remove = list(adapter._mentioned_threads)[
-                    : adapter._MENTIONED_THREADS_MAX // 2
-                ]
+                to_remove = list(adapter._mentioned_threads)[:adapter._MENTIONED_THREADS_MAX // 2]
                 for t in to_remove:
                     adapter._mentioned_threads.discard(t)
         assert len(adapter._mentioned_threads) <= 10

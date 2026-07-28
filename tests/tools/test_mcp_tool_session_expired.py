@@ -10,7 +10,6 @@ Before the #13383 fix, this class of failure fell through as a plain
 tool error with no recovery path, so every subsequent call on the
 affected MCP server failed until the gateway was manually restarted.
 """
-
 import json
 import threading
 from unittest.mock import MagicMock
@@ -26,7 +25,6 @@ import pytest
 def test_is_session_expired_detects_invalid_or_expired_session():
     """Reporter's exact wpcom-mcp error message (#13383)."""
     from tools.mcp_tool import _is_session_expired_error
-
     exc = RuntimeError("Invalid params: Invalid or expired session")
     assert _is_session_expired_error(exc) is True
 
@@ -35,7 +33,6 @@ def test_is_session_expired_detects_expired_session_variant():
     """Generic ``session expired`` / ``expired session`` phrasings used
     by other SDK servers."""
     from tools.mcp_tool import _is_session_expired_error
-
     assert _is_session_expired_error(RuntimeError("Session expired")) is True
     assert _is_session_expired_error(RuntimeError("expired session: abc")) is True
 
@@ -44,7 +41,6 @@ def test_is_session_expired_detects_session_not_found():
     """Server-side GC produces ``session not found`` / ``unknown session``
     on some implementations."""
     from tools.mcp_tool import _is_session_expired_error
-
     assert _is_session_expired_error(RuntimeError("session not found")) is True
     assert _is_session_expired_error(RuntimeError("Unknown session: abc123")) is True
 
@@ -60,26 +56,17 @@ def test_is_session_expired_detects_stale_pipe_and_closed_transport_variants():
     """Stdio/AnyIO stale-pipe failures usually surface as closed-resource
     or broken-pipe text, not an HTTP session-expired JSON-RPC error."""
     from tools.mcp_tool import _is_session_expired_error
-
     assert _is_session_expired_error(RuntimeError("ClosedResourceError")) is True
-    assert (
-        _is_session_expired_error(RuntimeError("closed resource in MCP child")) is True
-    )
+    assert _is_session_expired_error(RuntimeError("closed resource in MCP child")) is True
     assert _is_session_expired_error(RuntimeError("transport is closed")) is True
-    assert (
-        _is_session_expired_error(RuntimeError("Broken pipe while writing request"))
-        is True
-    )
-    assert (
-        _is_session_expired_error(RuntimeError("End of file from MCP server")) is True
-    )
+    assert _is_session_expired_error(RuntimeError("Broken pipe while writing request")) is True
+    assert _is_session_expired_error(RuntimeError("End of file from MCP server")) is True
 
 
 def test_is_session_expired_is_case_insensitive():
     """Match uses lower-cased comparison so servers that emit the
     message in different cases (SDK formatter quirks) still trigger."""
     from tools.mcp_tool import _is_session_expired_error
-
     assert _is_session_expired_error(RuntimeError("INVALID OR EXPIRED SESSION")) is True
     assert _is_session_expired_error(RuntimeError("Session Expired")) is True
 
@@ -88,7 +75,6 @@ def test_is_session_expired_rejects_unrelated_errors():
     """Narrow scope: only the specific session-expired markers trigger.
     A regular RuntimeError / ValueError does not."""
     from tools.mcp_tool import _is_session_expired_error
-
     assert _is_session_expired_error(RuntimeError("Tool failed to execute")) is False
     assert _is_session_expired_error(ValueError("Missing parameter")) is False
     assert _is_session_expired_error(Exception("Connection refused")) is False
@@ -100,18 +86,13 @@ def test_is_session_expired_rejects_interrupted_error():
     """InterruptedError is the user-cancel signal — must never route
     through the session-reconnect path."""
     from tools.mcp_tool import _is_session_expired_error
-
     assert _is_session_expired_error(InterruptedError()) is False
-    assert (
-        _is_session_expired_error(InterruptedError("Invalid or expired session"))
-        is False
-    )
+    assert _is_session_expired_error(InterruptedError("Invalid or expired session")) is False
 
 
 def test_is_session_expired_rejects_empty_message():
     """Bare exceptions with no message shouldn't match."""
     from tools.mcp_tool import _is_session_expired_error
-
     assert _is_session_expired_error(RuntimeError("")) is False
     assert _is_session_expired_error(Exception()) is False
 
@@ -131,22 +112,46 @@ def _install_stub_server(name: str = "wpcom"):
 
     server = MagicMock()
     server.name = name
+
+    ready_flag = threading.Event()
+    ready_flag.set()
+
+    class _ReadyAdapter:
+        def is_set(self):
+            return ready_flag.is_set()
+
+        def clear(self):
+            ready_flag.clear()
+
+        def set(self):
+            ready_flag.set()
+
+    server._ready = _ReadyAdapter()
+
     # _reconnect_event is called via loop.call_soon_threadsafe(…set); use
-    # a threading-safe substitute.
+    # a threading-safe substitute.  The production reconnect path must not
+    # treat the old stale session as fresh, so this test double swaps in a
+    # distinct session object when reconnect is requested.
     reconnect_flag = threading.Event()
 
     class _EventAdapter:
         def set(self):
             reconnect_flag.set()
+            old_session = server.session
+            new_session = MagicMock()
+            for method_name in (
+                "call_tool",
+                "list_resources",
+                "read_resource",
+                "list_prompts",
+                "get_prompt",
+            ):
+                if hasattr(old_session, method_name):
+                    setattr(new_session, method_name, getattr(old_session, method_name))
+            server.session = new_session
+            ready_flag.set()
 
     server._reconnect_event = _EventAdapter()
-
-    # Immediately "ready" — simulates a fast reconnect (_ready.is_set()
-    # is polled by _handle_session_expired_and_retry until the timeout).
-    ready_flag = threading.Event()
-    ready_flag.set()
-    server._ready = MagicMock()
-    server._ready.is_set = ready_flag.is_set
 
     # session attr must be truthy for the handler's initial check
     # (``if not server or not server.session``) and for the post-
@@ -205,6 +210,74 @@ def test_call_tool_handler_reconnects_on_session_expired(monkeypatch, tmp_path):
     finally:
         mcp_tool._servers.pop("wpcom", None)
         mcp_tool._server_error_counts.pop("wpcom", None)
+
+
+def test_session_expired_retry_waits_for_new_session(monkeypatch, tmp_path):
+    """Regression for long-lived HTTP/stream MCP sessions.
+
+    If the reconnect helper only checks ``_ready.is_set()`` and
+    ``session is not None``, it can return immediately while ``session`` still
+    points at the stale transport. The retry then hits the same dead session
+    and the circuit breaker eventually reports the server as unreachable. The
+    handler must wait for a distinct session object before retrying.
+    """
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
+
+    from tools import mcp_tool
+    from tools.mcp_tool import _make_tool_handler
+
+    mcp_tool._ensure_mcp_loop()
+    server = MagicMock()
+    server.name = "hindsight"
+    ready_flag = threading.Event()
+    ready_flag.set()
+
+    class _ReadyAdapter:
+        def is_set(self):
+            return ready_flag.is_set()
+
+        def clear(self):
+            ready_flag.clear()
+
+        def set(self):
+            ready_flag.set()
+
+    old_session = MagicMock()
+
+    async def _old_call(*a, **kw):
+        raise RuntimeError("Session terminated")
+
+    old_session.call_tool = _old_call
+    new_session = MagicMock()
+
+    async def _new_call(*a, **kw):
+        result = MagicMock()
+        result.isError = False
+        result.content = [MagicMock(type="text", text="bank ok")]
+        result.structuredContent = None
+        return result
+
+    new_session.call_tool = _new_call
+    server.session = old_session
+    server._ready = _ReadyAdapter()
+
+    class _ReconnectAdapter:
+        def set(self):
+            server.session = new_session
+            ready_flag.set()
+
+    server._reconnect_event = _ReconnectAdapter()
+    mcp_tool._servers["hindsight"] = server
+    mcp_tool._server_error_counts.pop("hindsight", None)
+
+    try:
+        handler = _make_tool_handler("hindsight", "get_bank", 10.0)
+        parsed = json.loads(handler({}))
+        assert parsed.get("result") == "bank ok", parsed
+        assert mcp_tool._server_error_counts.get("hindsight", 0) == 0
+    finally:
+        mcp_tool._servers.pop("hindsight", None)
+        mcp_tool._server_error_counts.pop("hindsight", None)
 
 
 def test_call_tool_handler_non_session_expired_error_falls_through(
@@ -280,7 +353,6 @@ def test_session_expired_handler_returns_none_without_server_record():
     """If the server has been torn down / isn't in _servers, fall
     through cleanly — nothing to reconnect to."""
     from tools.mcp_tool import _handle_session_expired_and_retry
-
     out = _handle_session_expired_and_retry(
         "does-not-exist",
         RuntimeError("Invalid or expired session"),
@@ -331,30 +403,10 @@ def test_session_expired_handler_returns_none_when_retry_also_fails(
 @pytest.mark.parametrize(
     "handler_factory, handler_kwargs, session_method, op_label",
     [
-        (
-            "_make_list_resources_handler",
-            {"tool_timeout": 10.0},
-            "list_resources",
-            "list_resources",
-        ),
-        (
-            "_make_read_resource_handler",
-            {"tool_timeout": 10.0},
-            "read_resource",
-            "read_resource",
-        ),
-        (
-            "_make_list_prompts_handler",
-            {"tool_timeout": 10.0},
-            "list_prompts",
-            "list_prompts",
-        ),
-        (
-            "_make_get_prompt_handler",
-            {"tool_timeout": 10.0},
-            "get_prompt",
-            "get_prompt",
-        ),
+        ("_make_list_resources_handler", {"tool_timeout": 10.0}, "list_resources", "list_resources"),
+        ("_make_read_resource_handler", {"tool_timeout": 10.0}, "read_resource", "read_resource"),
+        ("_make_list_prompts_handler", {"tool_timeout": 10.0}, "list_prompts", "list_prompts"),
+        ("_make_get_prompt_handler", {"tool_timeout": 10.0}, "get_prompt", "get_prompt"),
     ],
 )
 def test_non_tool_handlers_also_reconnect_on_session_expired(
@@ -408,7 +460,9 @@ def test_non_tool_handlers_also_reconnect_on_session_expired(
         assert reconnect_flag.is_set(), (
             f"{op_label}: reconnect should fire for session-expired"
         )
-        assert call_count["n"] == 2, f"{op_label}: expected 1 original + 1 retry"
+        assert call_count["n"] == 2, (
+            f"{op_label}: expected 1 original + 1 retry"
+        )
     finally:
         mcp_tool._servers.pop(f"srv-{op_label}", None)
         mcp_tool._server_error_counts.pop(f"srv-{op_label}", None)

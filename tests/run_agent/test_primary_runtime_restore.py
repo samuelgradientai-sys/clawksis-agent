@@ -30,14 +30,10 @@ def _make_tool_defs(*names: str) -> list:
     ]
 
 
-def _make_agent(
-    fallback_model=None, provider="custom", base_url="https://my-llm.example.com/v1"
-):
+def _make_agent(fallback_model=None, provider="custom", base_url="https://my-llm.example.com/v1"):
     """Create a minimal AIAgent with optional fallback config."""
     with (
-        patch(
-            "run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")
-        ),
+        patch("run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")),
         patch("run_agent.check_toolset_requirements", return_value={}),
         patch("run_agent.OpenAI"),
     ):
@@ -66,7 +62,6 @@ def _mock_resolve(base_url="https://openrouter.ai/api/v1", api_key="fallback-key
 # _primary_runtime snapshot
 # =============================================================================
 
-
 class TestPrimaryRuntimeSnapshot:
     def test_snapshot_created_at_init(self):
         agent = _make_agent()
@@ -91,16 +86,10 @@ class TestPrimaryRuntimeSnapshot:
     def test_snapshot_includes_anthropic_state_when_applicable(self):
         """Anthropic-mode agents should snapshot Anthropic-specific state."""
         with (
-            patch(
-                "run_agent.get_tool_definitions",
-                return_value=_make_tool_defs("web_search"),
-            ),
+            patch("run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")),
             patch("run_agent.check_toolset_requirements", return_value={}),
             patch("run_agent.OpenAI"),
-            patch(
-                "agent.anthropic_adapter.build_anthropic_client",
-                return_value=MagicMock(),
-            ),
+            patch("agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()),
         ):
             agent = AIAgent(
                 api_key="sk-ant-test-12345678",
@@ -126,7 +115,6 @@ class TestPrimaryRuntimeSnapshot:
 # _restore_primary_runtime()
 # =============================================================================
 
-
 class TestRestorePrimaryRuntime:
     def test_noop_when_not_fallback(self):
         agent = _make_agent()
@@ -135,20 +123,14 @@ class TestRestorePrimaryRuntime:
 
     def test_restores_model_and_provider(self):
         agent = _make_agent(
-            fallback_model={
-                "provider": "openrouter",
-                "model": "anthropic/claude-sonnet-4",
-            },
+            fallback_model={"provider": "openrouter", "model": "anthropic/claude-sonnet-4"},
         )
         original_model = agent.model
         original_provider = agent.provider
 
         # Simulate fallback activation
         mock_client = _mock_resolve()
-        with patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(mock_client, None),
-        ):
+        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)):
             agent._try_activate_fallback()
 
         assert agent._fallback_activated is True
@@ -174,10 +156,7 @@ class TestRestorePrimaryRuntime:
         )
         # Advance through the chain
         mock_client = _mock_resolve()
-        with patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(mock_client, None),
-        ):
+        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)):
             agent._try_activate_fallback()
 
         assert agent._fallback_index == 1  # consumed one entry
@@ -189,20 +168,14 @@ class TestRestorePrimaryRuntime:
 
     def test_restores_compressor_state(self):
         agent = _make_agent(
-            fallback_model={
-                "provider": "openrouter",
-                "model": "anthropic/claude-sonnet-4",
-            },
+            fallback_model={"provider": "openrouter", "model": "anthropic/claude-sonnet-4"},
         )
         original_ctx_len = agent.context_compressor.context_length
         original_threshold = agent.context_compressor.threshold_tokens
 
         # Simulate fallback modifying compressor
         mock_client = _mock_resolve()
-        with patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(mock_client, None),
-        ):
+        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)):
             agent._try_activate_fallback()
 
         # Manually simulate compressor being changed (as _try_activate_fallback does)
@@ -228,6 +201,211 @@ class TestRestorePrimaryRuntime:
 
         assert agent._use_prompt_caching == original_caching
 
+    def test_restore_skips_cross_provider_pool_entry(self):
+        """Restore must not swap in a fallback provider credential for the primary runtime."""
+
+        class _Entry:
+            provider = "openrouter"
+            id = "fallback-entry"
+            label = "fallback"
+            runtime_api_key = "fallback-key"
+            runtime_base_url = "https://openrouter.ai/api/v1"
+            access_token = "fallback-key"
+
+        class _Pool:
+            provider = "openrouter"
+
+            def has_available(self):
+                return True
+
+            def select(self):
+                return _Entry()
+
+        agent = _make_agent(
+            provider="custom",
+            base_url="https://primary.example.com/v1",
+            fallback_model={"provider": "openrouter", "model": "anthropic/claude-sonnet-4"},
+        )
+        original_base_url = agent.base_url
+        mock_client = _mock_resolve()
+        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)):
+            agent._try_activate_fallback()
+        agent._credential_pool = _Pool()
+        agent._swap_credential = MagicMock()
+
+        with patch("run_agent.OpenAI", return_value=MagicMock()):
+            result = agent._restore_primary_runtime()
+
+        assert result is True
+        assert agent.provider == "custom"
+        assert agent.base_url == original_base_url
+        agent._swap_credential.assert_not_called()
+
+    def test_restore_keeps_primary_base_url_when_fallback_pool_attached(self):
+        """Issue #56885: plain-provider primary must not inherit a fallback
+        provider's base_url via the restore-path pool reselect.
+
+        Repro: primary is openai-api/gpt-5.5, a transient failure falls back to
+        deepseek and attaches deepseek's credential pool. On the next turn the
+        restore reselect must NOT swap in the deepseek entry — otherwise the
+        request goes out as model=gpt-5.5 to base_url=api.deepseek.com → 404.
+        """
+
+        class _DeepseekEntry:
+            provider = "deepseek"
+            id = "dsk-1"
+            label = "deepseek-key"
+            runtime_api_key = "sk-deepseek-xxx"
+            runtime_base_url = "https://api.deepseek.com/v1"
+            base_url = "https://api.deepseek.com/v1"
+            access_token = "sk-deepseek-xxx"
+
+        class _DeepseekPool:
+            provider = "deepseek"
+
+            def has_available(self):
+                return True
+
+            def select(self):
+                return _DeepseekEntry()
+
+        agent = _make_agent(
+            provider="openai-api",
+            base_url="https://api.openai.com/v1",
+            fallback_model={"provider": "deepseek", "model": "deepseek-v4-flash"},
+        )
+        primary_base_url = agent.base_url
+        primary_provider = agent.provider
+        mock_client = _mock_resolve(base_url="https://api.deepseek.com/v1")
+        with patch(
+            "agent.auxiliary_client.resolve_provider_client",
+            return_value=(mock_client, None),
+        ):
+            agent._try_activate_fallback()
+        # Fallback attached deepseek's pool; simulate it surviving into the next turn.
+        agent._credential_pool = _DeepseekPool()
+        agent._swap_credential = MagicMock()
+
+        primary_pool = MagicMock()
+        primary_pool.provider = primary_provider
+        primary_pool.has_available.return_value = False
+        with (
+            patch("run_agent.OpenAI", return_value=MagicMock()),
+            patch("agent.credential_pool.load_pool", return_value=primary_pool) as load_pool,
+        ):
+            result = agent._restore_primary_runtime()
+
+        assert result is True
+        assert agent.provider == primary_provider
+        assert agent.base_url == primary_base_url
+        assert "deepseek" not in str(agent.base_url)
+        assert agent._credential_pool is primary_pool
+        load_pool.assert_called_once_with(primary_provider)
+        agent._swap_credential.assert_not_called()
+
+    def test_restore_clears_fallback_pool_when_primary_pool_reload_fails(self):
+        """A fallback pool must never remain attached to the restored primary."""
+        agent = _make_agent(
+            provider="openai-api",
+            base_url="https://api.openai.com/v1",
+        )
+        agent._fallback_activated = True
+        fallback_pool = MagicMock()
+        fallback_pool.provider = "deepseek"
+        agent._credential_pool = fallback_pool
+
+        with (
+            patch("run_agent.OpenAI", return_value=MagicMock()),
+            patch(
+                "agent.credential_pool.load_pool",
+                side_effect=RuntimeError("auth store unavailable"),
+            ),
+        ):
+            result = agent._restore_primary_runtime()
+
+        assert result is True
+        assert agent.provider == "openai-api"
+        assert agent._credential_pool is None
+
+    def test_restore_swaps_matching_custom_pool_entry(self):
+        """Custom primary + custom:<name> entry whose base_url resolves to the
+        SAME custom key must swap (legitimate same-endpoint rotation)."""
+
+        class _Entry:
+            provider = "custom:myllm"
+            id = "custom-entry"
+            label = "myllm"
+            runtime_api_key = "custom-key"
+            runtime_base_url = "https://my-llm.example.com/v1"
+            access_token = "custom-key"
+
+        class _Pool:
+            provider = "custom:myllm"
+
+            def has_available(self):
+                return True
+
+            def select(self):
+                return _Entry()
+
+        agent = _make_agent(provider="custom", base_url="https://my-llm.example.com/v1")
+        agent._fallback_activated = True
+        agent._credential_pool = _Pool()
+        agent._swap_credential = MagicMock()
+
+        with (
+            patch(
+                "agent.credential_pool.get_custom_provider_pool_key",
+                return_value="custom:myllm",
+            ),
+            patch("run_agent.OpenAI", return_value=MagicMock()),
+        ):
+            result = agent._restore_primary_runtime()
+
+        assert result is True
+        agent._swap_credential.assert_called_once()
+
+    def test_restore_skips_cross_endpoint_custom_pool_entry(self):
+        """Custom primary + custom:<name> entry whose base_url resolves to a
+        DIFFERENT custom key must skip — two named custom providers sharing a
+        gateway must not cross-contaminate."""
+
+        class _Entry:
+            provider = "custom:otherllm"
+            id = "other-entry"
+            label = "otherllm"
+            runtime_api_key = "other-key"
+            runtime_base_url = "https://my-llm.example.com/v1"
+            access_token = "other-key"
+
+        class _Pool:
+            provider = "custom:otherllm"
+
+            def has_available(self):
+                return True
+
+            def select(self):
+                return _Entry()
+
+        agent = _make_agent(provider="custom", base_url="https://my-llm.example.com/v1")
+        agent._fallback_activated = True
+        original_base_url = agent.base_url
+        agent._credential_pool = _Pool()
+        agent._swap_credential = MagicMock()
+
+        with (
+            patch(
+                "agent.credential_pool.get_custom_provider_pool_key",
+                return_value="custom:myllm",  # primary resolves to a DIFFERENT key
+            ),
+            patch("run_agent.OpenAI", return_value=MagicMock()),
+        ):
+            result = agent._restore_primary_runtime()
+
+        assert result is True
+        assert agent.base_url == original_base_url
+        agent._swap_credential.assert_not_called()
+
     def test_restore_survives_exception(self):
         """If client rebuild fails, the method returns False gracefully."""
         agent = _make_agent()
@@ -243,7 +421,6 @@ class TestRestorePrimaryRuntime:
 # _try_recover_primary_transport()
 # =============================================================================
 
-
 def _make_transport_error(error_type="ReadTimeout"):
     """Create an exception whose type().__name__ matches the given name."""
     cls = type(error_type, (Exception,), {})
@@ -251,15 +428,15 @@ def _make_transport_error(error_type="ReadTimeout"):
 
 
 class TestTryRecoverPrimaryTransport:
+
     def test_recovers_on_read_timeout(self):
         agent = _make_agent(provider="custom")
         error = _make_transport_error("ReadTimeout")
 
-        with patch("run_agent.OpenAI", return_value=MagicMock()), patch("time.sleep"):
+        with patch("run_agent.OpenAI", return_value=MagicMock()), \
+             patch("time.sleep"):
             result = agent._try_recover_primary_transport(
-                error,
-                retry_count=3,
-                max_retries=3,
+                error, retry_count=3, max_retries=3,
             )
 
         assert result is True
@@ -268,11 +445,10 @@ class TestTryRecoverPrimaryTransport:
         agent = _make_agent(provider="custom")
         error = _make_transport_error("ConnectTimeout")
 
-        with patch("run_agent.OpenAI", return_value=MagicMock()), patch("time.sleep"):
+        with patch("run_agent.OpenAI", return_value=MagicMock()), \
+             patch("time.sleep"):
             result = agent._try_recover_primary_transport(
-                error,
-                retry_count=3,
-                max_retries=3,
+                error, retry_count=3, max_retries=3,
             )
 
         assert result is True
@@ -281,11 +457,10 @@ class TestTryRecoverPrimaryTransport:
         agent = _make_agent(provider="zai")
         error = _make_transport_error("PoolTimeout")
 
-        with patch("run_agent.OpenAI", return_value=MagicMock()), patch("time.sleep"):
+        with patch("run_agent.OpenAI", return_value=MagicMock()), \
+             patch("time.sleep"):
             result = agent._try_recover_primary_transport(
-                error,
-                retry_count=3,
-                max_retries=3,
+                error, retry_count=3, max_retries=3,
             )
 
         assert result is True
@@ -294,11 +469,10 @@ class TestTryRecoverPrimaryTransport:
         agent = _make_agent(provider="custom")
         error = _make_transport_error("APIConnectionError")
 
-        with patch("run_agent.OpenAI", return_value=MagicMock()), patch("time.sleep"):
+        with patch("run_agent.OpenAI", return_value=MagicMock()), \
+             patch("time.sleep"):
             result = agent._try_recover_primary_transport(
-                error,
-                retry_count=3,
-                max_retries=3,
+                error, retry_count=3, max_retries=3,
             )
 
         assert result is True
@@ -307,11 +481,10 @@ class TestTryRecoverPrimaryTransport:
         agent = _make_agent(provider="custom")
         error = _make_transport_error("APITimeoutError")
 
-        with patch("run_agent.OpenAI", return_value=MagicMock()), patch("time.sleep"):
+        with patch("run_agent.OpenAI", return_value=MagicMock()), \
+             patch("time.sleep"):
             result = agent._try_recover_primary_transport(
-                error,
-                retry_count=3,
-                max_retries=3,
+                error, retry_count=3, max_retries=3,
             )
 
         assert result is True
@@ -322,9 +495,7 @@ class TestTryRecoverPrimaryTransport:
         error = _make_transport_error("ReadTimeout")
 
         result = agent._try_recover_primary_transport(
-            error,
-            retry_count=3,
-            max_retries=3,
+            error, retry_count=3, max_retries=3,
         )
         assert result is False
 
@@ -334,35 +505,25 @@ class TestTryRecoverPrimaryTransport:
         error = ValueError("invalid model")
 
         result = agent._try_recover_primary_transport(
-            error,
-            retry_count=3,
-            max_retries=3,
+            error, retry_count=3, max_retries=3,
         )
         assert result is False
 
     def test_skipped_for_openrouter(self):
-        agent = _make_agent(
-            provider="openrouter", base_url="https://openrouter.ai/api/v1"
-        )
+        agent = _make_agent(provider="openrouter", base_url="https://openrouter.ai/api/v1")
         error = _make_transport_error("ReadTimeout")
 
         result = agent._try_recover_primary_transport(
-            error,
-            retry_count=3,
-            max_retries=3,
+            error, retry_count=3, max_retries=3,
         )
         assert result is False
 
     def test_skipped_for_nous_provider(self):
-        agent = _make_agent(
-            provider="nous", base_url="https://inference.nous.nousresearch.com/v1"
-        )
+        agent = _make_agent(provider="nous", base_url="https://inference.nous.nousresearch.com/v1")
         error = _make_transport_error("ReadTimeout")
 
         result = agent._try_recover_primary_transport(
-            error,
-            retry_count=3,
-            max_retries=3,
+            error, retry_count=3, max_retries=3,
         )
         assert result is False
 
@@ -372,11 +533,10 @@ class TestTryRecoverPrimaryTransport:
         # For non-anthropic_messages api_mode, it will use OpenAI client
         error = _make_transport_error("ConnectError")
 
-        with patch("run_agent.OpenAI", return_value=MagicMock()), patch("time.sleep"):
+        with patch("run_agent.OpenAI", return_value=MagicMock()), \
+             patch("time.sleep"):
             result = agent._try_recover_primary_transport(
-                error,
-                retry_count=3,
-                max_retries=3,
+                error, retry_count=3, max_retries=3,
             )
 
         assert result is True
@@ -385,11 +545,10 @@ class TestTryRecoverPrimaryTransport:
         agent = _make_agent(provider="ollama", base_url="http://localhost:11434/v1")
         error = _make_transport_error("ConnectTimeout")
 
-        with patch("run_agent.OpenAI", return_value=MagicMock()), patch("time.sleep"):
+        with patch("run_agent.OpenAI", return_value=MagicMock()), \
+             patch("time.sleep"):
             result = agent._try_recover_primary_transport(
-                error,
-                retry_count=3,
-                max_retries=3,
+                error, retry_count=3, max_retries=3,
             )
 
         assert result is True
@@ -398,14 +557,10 @@ class TestTryRecoverPrimaryTransport:
         agent = _make_agent(provider="custom")
         error = _make_transport_error("ReadTimeout")
 
-        with (
-            patch("run_agent.OpenAI", return_value=MagicMock()),
-            patch("time.sleep") as mock_sleep,
-        ):
+        with patch("run_agent.OpenAI", return_value=MagicMock()), \
+             patch("time.sleep") as mock_sleep:
             agent._try_recover_primary_transport(
-                error,
-                retry_count=3,
-                max_retries=3,
+                error, retry_count=3, max_retries=3,
             )
             # wait_time = min(3 + retry_count, 8) = min(6, 8) = 6
             mock_sleep.assert_called_once_with(6)
@@ -414,14 +569,10 @@ class TestTryRecoverPrimaryTransport:
         agent = _make_agent(provider="custom")
         error = _make_transport_error("ReadTimeout")
 
-        with (
-            patch("run_agent.OpenAI", return_value=MagicMock()),
-            patch("time.sleep") as mock_sleep,
-        ):
+        with patch("run_agent.OpenAI", return_value=MagicMock()), \
+             patch("time.sleep") as mock_sleep:
             agent._try_recover_primary_transport(
-                error,
-                retry_count=10,
-                max_retries=3,
+                error, retry_count=10, max_retries=3,
             )
             # wait_time = min(3 + 10, 8) = 8
             mock_sleep.assert_called_once_with(8)
@@ -431,20 +582,14 @@ class TestTryRecoverPrimaryTransport:
         old_client = agent.client
         error = _make_transport_error("ReadTimeout")
 
-        with (
-            patch("run_agent.OpenAI", return_value=MagicMock()),
-            patch("time.sleep"),
-            patch.object(agent, "_close_openai_client") as mock_close,
-        ):
+        with patch("run_agent.OpenAI", return_value=MagicMock()), \
+             patch("time.sleep"), \
+             patch.object(agent, "_close_openai_client") as mock_close:
             agent._try_recover_primary_transport(
-                error,
-                retry_count=3,
-                max_retries=3,
+                error, retry_count=3, max_retries=3,
             )
             mock_close.assert_called_once_with(
-                old_client,
-                reason="primary_recovery",
-                shared=True,
+                old_client, reason="primary_recovery", shared=True,
             )
 
     def test_survives_rebuild_failure(self):
@@ -452,14 +597,10 @@ class TestTryRecoverPrimaryTransport:
         agent = _make_agent(provider="custom")
         error = _make_transport_error("ReadTimeout")
 
-        with (
-            patch("run_agent.OpenAI", side_effect=Exception("socket error")),
-            patch("time.sleep"),
-        ):
+        with patch("run_agent.OpenAI", side_effect=Exception("socket error")), \
+             patch("time.sleep"):
             result = agent._try_recover_primary_transport(
-                error,
-                retry_count=3,
-                max_retries=3,
+                error, retry_count=3, max_retries=3,
             )
 
         assert result is False
@@ -469,7 +610,6 @@ class TestTryRecoverPrimaryTransport:
 # Integration: restore_primary_runtime called from run_conversation
 # =============================================================================
 
-
 class TestRestoreInRunConversation:
     """Verify the hook in run_conversation() calls _restore_primary_runtime."""
 
@@ -477,12 +617,8 @@ class TestRestoreInRunConversation:
         agent = _make_agent()
         agent._fallback_activated = True
 
-        with (
-            patch.object(
-                agent, "_restore_primary_runtime", return_value=True
-            ) as mock_restore,
-            patch.object(agent, "run_conversation", wraps=None) as _,
-        ):
+        with patch.object(agent, "_restore_primary_runtime", return_value=True) as mock_restore, \
+             patch.object(agent, "run_conversation", wraps=None) as _:
             # We can't easily run the full conversation, but we can verify
             # the method exists and is callable
             agent._restore_primary_runtime()
@@ -491,19 +627,13 @@ class TestRestoreInRunConversation:
     def test_full_cycle_fallback_then_restore(self):
         """Simulate: turn 1 activates fallback, turn 2 restores primary."""
         agent = _make_agent(
-            fallback_model={
-                "provider": "openrouter",
-                "model": "anthropic/claude-sonnet-4",
-            },
+            fallback_model={"provider": "openrouter", "model": "anthropic/claude-sonnet-4"},
             provider="custom",
         )
 
         # Turn 1: activate fallback
         mock_client = _mock_resolve()
-        with patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(mock_client, None),
-        ):
+        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)):
             assert agent._try_activate_fallback() is True
 
         assert agent._fallback_activated is True
@@ -525,23 +655,16 @@ class TestRestoreInRunConversation:
 # Rate-limit cooldown gate
 # =============================================================================
 
-
 class TestRateLimitCooldown:
     """Verify _restore_primary_runtime() respects the 60s rate-limit cooldown."""
 
     def test_restore_blocked_during_cooldown(self):
         """While _rate_limited_until is in the future, restore returns False."""
         agent = _make_agent(
-            fallback_model={
-                "provider": "openrouter",
-                "model": "anthropic/claude-sonnet-4",
-            },
+            fallback_model={"provider": "openrouter", "model": "anthropic/claude-sonnet-4"},
         )
         mock_client = _mock_resolve()
-        with patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(mock_client, None),
-        ):
+        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)):
             agent._try_activate_fallback()
 
         assert agent._fallback_activated is True
@@ -556,16 +679,10 @@ class TestRateLimitCooldown:
     def test_restore_allowed_after_cooldown_expires(self):
         """Once the cooldown window passes, restore proceeds normally."""
         agent = _make_agent(
-            fallback_model={
-                "provider": "openrouter",
-                "model": "anthropic/claude-sonnet-4",
-            },
+            fallback_model={"provider": "openrouter", "model": "anthropic/claude-sonnet-4"},
         )
         mock_client = _mock_resolve()
-        with patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(mock_client, None),
-        ):
+        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)):
             agent._try_activate_fallback()
 
         assert agent._fallback_activated is True
@@ -582,19 +699,12 @@ class TestRateLimitCooldown:
     def test_cooldown_set_on_rate_limit_reason(self):
         """_try_activate_fallback with rate_limit reason sets _rate_limited_until."""
         from run_agent import FailoverReason
-
         agent = _make_agent(
-            fallback_model={
-                "provider": "openrouter",
-                "model": "anthropic/claude-sonnet-4",
-            },
+            fallback_model={"provider": "openrouter", "model": "anthropic/claude-sonnet-4"},
         )
         before = time.monotonic()
         mock_client = _mock_resolve()
-        with patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(mock_client, None),
-        ):
+        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)):
             agent._try_activate_fallback(reason=FailoverReason.rate_limit)
 
         assert hasattr(agent, "_rate_limited_until")
@@ -603,7 +713,6 @@ class TestRateLimitCooldown:
     def test_cooldown_not_set_when_already_on_fallback(self):
         """Chain-switching while already on fallback must not reset cooldown."""
         from run_agent import FailoverReason
-
         agent = _make_agent(
             fallback_model=[
                 {"provider": "openrouter", "model": "model-a"},
@@ -611,10 +720,7 @@ class TestRateLimitCooldown:
             ],
         )
         mock_client = _mock_resolve()
-        with patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(mock_client, None),
-        ):
+        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)):
             # First call: leaving primary → cooldown should be set
             agent._try_activate_fallback(reason=FailoverReason.rate_limit)
             first_cooldown = getattr(agent, "_rate_limited_until", 0)

@@ -38,7 +38,7 @@ class _StubAdapter(BasePlatformAdapter):
     def __init__(self):
         super().__init__(PlatformConfig(enabled=True, token="test"), Platform.TELEGRAM)
 
-    async def connect(self) -> bool:
+    async def connect(self, *, is_reconnect: bool = False) -> bool:
         return True
 
     async def disconnect(self) -> None:
@@ -130,7 +130,8 @@ class TestKeepTypingTimeoutPerTick:
         await asyncio.wait_for(task, timeout=1.0)
 
         assert len(completed) >= 2, (
-            f"expected multiple completed send_typing calls, got {len(completed)}"
+            f"expected multiple completed send_typing calls, got "
+            f"{len(completed)}"
         )
         assert all(c == "456" for c in completed)
 
@@ -194,7 +195,9 @@ class TestKeepTypingTimeoutPerTick:
         stop_event.set()
         await asyncio.wait_for(task, timeout=1.0)
 
-        assert calls == [], f"send_typing was called on a paused chat: {calls}"
+        assert calls == [], (
+            f"send_typing was called on a paused chat: {calls}"
+        )
 
     @pytest.mark.asyncio
     async def test_stop_typing_refresh_blocks_late_cancel_tick(self, monkeypatch):

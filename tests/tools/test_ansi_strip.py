@@ -5,7 +5,7 @@ ANSI codes leaking into the model's context via terminal/execute_code output.
 It must strip ALL terminal escape sequences while preserving legitimate text.
 """
 
-from tools.ansi_strip import strip_ansi
+from tools.ansi_strip import sanitize_display_text, strip_ansi
 
 
 class TestStripAnsiBasicSGR:
@@ -60,10 +60,9 @@ class TestStripAnsiOSC:
         assert strip_ansi("\x1b]0;title\x1b\\") == ""
 
     def test_hyperlink_preserves_text(self):
-        assert (
-            strip_ansi("\x1b]8;;https://example.com\x1b\\click\x1b]8;;\x1b\\")
-            == "click"
-        )
+        assert strip_ansi(
+            "\x1b]8;;https://example.com\x1b\\click\x1b]8;;\x1b\\"
+        ) == "click"
 
 
 class TestStripAnsiDECPrivate:
@@ -126,19 +125,19 @@ class TestStripAnsiRealWorld:
 
     def test_colored_shebang(self):
         """The original reported bug: shebang corrupted by color codes."""
-        assert (
-            strip_ansi("\x1b[32m#!/usr/bin/env python3\x1b[0m\nprint('hello')")
-            == "#!/usr/bin/env python3\nprint('hello')"
-        )
+        assert strip_ansi(
+            "\x1b[32m#!/usr/bin/env python3\x1b[0m\nprint('hello')"
+        ) == "#!/usr/bin/env python3\nprint('hello')"
 
     def test_stacked_sgr(self):
-        assert strip_ansi("\x1b[1m\x1b[31m\x1b[42mhello\x1b[0m") == "hello"
+        assert strip_ansi(
+            "\x1b[1m\x1b[31m\x1b[42mhello\x1b[0m"
+        ) == "hello"
 
     def test_ansi_mid_code(self):
-        assert (
-            strip_ansi("def foo(\x1b[33m):\x1b[0m\n    return 42")
-            == "def foo():\n    return 42"
-        )
+        assert strip_ansi(
+            "def foo(\x1b[33m):\x1b[0m\n    return 42"
+        ) == "def foo():\n    return 42"
 
 
 class TestStripAnsiPassthrough:
@@ -167,3 +166,46 @@ class TestStripAnsiPassthrough:
         """Array indexing must not be confused with CSI."""
         code = "arr[0] = arr[31]"
         assert strip_ansi(code) == code
+
+
+class TestSanitizeDisplayText:
+    """sanitize_display_text — escape sequences AND bare control chars.
+
+    Port of the openai/codex#31494 bug class: stored/untrusted text
+    replayed into a terminal UI (e.g. the /resume recap) must not be able
+    to clear the screen, retitle the window, or corrupt adjacent output.
+    """
+
+    def test_csi_removed(self):
+        assert sanitize_display_text("a\x1b[2Jb") == "ab"
+
+    def test_osc_title_removed(self):
+        assert sanitize_display_text("x\x1b]0;pwned\x07y") == "xy"
+
+    def test_c1_csi_removed(self):
+        assert sanitize_display_text("a\x9b31mb") == "ab"
+
+    def test_bare_controls_removed(self):
+        assert sanitize_display_text("a\x00b\x08c\x07d\x7fe") == "abcde"
+
+    def test_newline_and_tab_preserved(self):
+        assert sanitize_display_text("line1\nline2\tend") == "line1\nline2\tend"
+
+    def test_crlf_normalized_to_newline(self):
+        assert sanitize_display_text("one\r\ntwo\rthree") == "one\ntwo\nthree"
+
+    def test_clean_text_fast_path_identity(self):
+        s = "plain text with unicode 🎉 and [brackets]"
+        assert sanitize_display_text(s) is s
+
+    def test_empty(self):
+        assert sanitize_display_text("") == ""
+
+    def test_codex_31494_fixture(self):
+        """The exact input shape from openai/codex#31494's test."""
+        raw = "_count_r\x1b[13;2:3uows\tindent\n\x00two\x7f"
+        assert sanitize_display_text(raw) == "_count_rows\tindent\ntwo"
+
+    def test_mixed_escape_and_controls(self):
+        raw = "hello \x1b[2J\x1b]0;pwned\x07 world \x9b31m red\x07"
+        assert sanitize_display_text(raw) == "hello  world  red"

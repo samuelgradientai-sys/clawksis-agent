@@ -12,6 +12,7 @@ import sys
 import threading
 
 
+
 def _spawn_sleep(seconds: float = 60) -> subprocess.Popen:
     """Spawn a portable long-lived Python sleep process (no shell wrapper)."""
     return subprocess.Popen(
@@ -100,18 +101,15 @@ class TestAgentCloseMethod:
 
         with patch("run_agent.AIAgent.__init__", return_value=None):
             from run_agent import AIAgent
-
             agent = AIAgent.__new__(AIAgent)
             agent.session_id = "test-close-cleanup"
             agent._active_children = []
             agent._active_children_lock = threading.Lock()
             agent.client = None
 
-            with (
-                patch("tools.process_registry.process_registry") as mock_registry,
-                patch("run_agent.cleanup_vm") as mock_cleanup_vm,
-                patch("run_agent.cleanup_browser") as mock_cleanup_browser,
-            ):
+            with patch("tools.process_registry.process_registry") as mock_registry, \
+                 patch("run_agent.cleanup_vm") as mock_cleanup_vm, \
+                 patch("run_agent.cleanup_browser") as mock_cleanup_browser:
                 agent.close()
 
                 mock_registry.kill_all.assert_called_once_with(
@@ -126,7 +124,6 @@ class TestAgentCloseMethod:
 
         with patch("run_agent.AIAgent.__init__", return_value=None):
             from run_agent import AIAgent
-
             agent = AIAgent.__new__(AIAgent)
             agent.session_id = "test-close-idempotent"
             agent._active_children = []
@@ -143,7 +140,6 @@ class TestAgentCloseMethod:
 
         with patch("run_agent.AIAgent.__init__", return_value=None):
             from run_agent import AIAgent
-
             agent = AIAgent.__new__(AIAgent)
             agent.session_id = "test-close-children"
             agent._active_children_lock = threading.Lock()
@@ -159,24 +155,78 @@ class TestAgentCloseMethod:
             child_2.close.assert_called_once()
             assert agent._active_children == []
 
+    def test_close_ends_owned_session_row(self):
+        """close() finalizes the agent's owned SQLite session row."""
+        from unittest.mock import MagicMock, patch
+
+        with patch("run_agent.AIAgent.__init__", return_value=None):
+            from run_agent import AIAgent
+            agent = AIAgent.__new__(AIAgent)
+            agent.session_id = "test-close-session-row"
+            agent._active_children = []
+            agent._active_children_lock = threading.Lock()
+            agent.client = None
+            agent._end_session_on_close = True
+            agent._session_db = MagicMock()
+
+            agent.close()
+
+            agent._session_db.end_session.assert_called_once_with(
+                "test-close-session-row", "agent_close"
+            )
+
+    def test_close_skips_session_end_for_forwarded_continuation_agents(self):
+        """Helper agents that handed session ownership forward opt out."""
+        from unittest.mock import MagicMock, patch
+
+        with patch("run_agent.AIAgent.__init__", return_value=None):
+            from run_agent import AIAgent
+            agent = AIAgent.__new__(AIAgent)
+            agent.session_id = "test-close-forwarded-session"
+            agent._active_children = []
+            agent._active_children_lock = threading.Lock()
+            agent.client = None
+            agent._end_session_on_close = False
+            agent._session_db = MagicMock()
+
+            agent.close()
+
+            agent._session_db.end_session.assert_not_called()
+
+    def test_close_session_end_noops_without_session_db(self):
+        """close() is a no-op for session finalization when no DB is wired in."""
+        from unittest.mock import patch
+
+        with patch("run_agent.AIAgent.__init__", return_value=None):
+            from run_agent import AIAgent
+            agent = AIAgent.__new__(AIAgent)
+            agent.session_id = "test-close-no-db"
+            agent._active_children = []
+            agent._active_children_lock = threading.Lock()
+            agent.client = None
+            # No _session_db / _end_session_on_close attributes at all —
+            # getattr defaults must keep close() from raising.
+            agent.close()  # must not raise
+
     def test_close_survives_partial_failures(self):
         """close() continues cleanup even if one step fails."""
         from unittest.mock import patch
 
         with patch("run_agent.AIAgent.__init__", return_value=None):
             from run_agent import AIAgent
-
             agent = AIAgent.__new__(AIAgent)
             agent.session_id = "test-close-partial"
             agent._active_children = []
             agent._active_children_lock = threading.Lock()
             agent.client = None
 
-            with (
-                patch("tools.process_registry.process_registry") as mock_reg,
-                patch("run_agent.cleanup_vm") as mock_vm,
-                patch("run_agent.cleanup_browser") as mock_browser,
-            ):
+            with patch(
+                "tools.process_registry.process_registry"
+            ) as mock_reg, patch(
+                "run_agent.cleanup_vm"
+            ) as mock_vm, patch(
+                "run_agent.cleanup_browser"
+            ) as mock_browser:
                 mock_reg.kill_all.side_effect = RuntimeError("boom")
 
                 agent.close()
@@ -233,12 +283,10 @@ class TestGatewayCleanupWiring:
 
         loop = asyncio.new_event_loop()
         try:
-            with (
-                patch("gateway.status.remove_pid_file"),
-                patch("gateway.status.write_runtime_status"),
-                patch("tools.terminal_tool.cleanup_all_environments"),
-                patch("tools.browser_tool.cleanup_all_browsers"),
-            ):
+            with patch("gateway.status.remove_pid_file"), \
+                 patch("gateway.status.write_runtime_status"), \
+                 patch("tools.terminal_tool.cleanup_all_environments"), \
+                 patch("tools.browser_tool.cleanup_all_browsers"):
                 loop.run_until_complete(GatewayRunner.stop(runner))
         finally:
             loop.close()

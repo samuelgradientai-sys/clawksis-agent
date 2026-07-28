@@ -21,13 +21,12 @@ that reaches ``handle_message`` exposes exactly what the session store
 will key on.  Asserting on the event keeps the seam tight against the
 production function's behaviour rather than a re-implementation.
 """
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from gateway.config import PlatformConfig
-from gateway.platforms.slack import SlackAdapter
+from plugins.platforms.slack.adapter import SlackAdapter
 
 
 @pytest.fixture
@@ -80,16 +79,18 @@ class TestChannelSessionScopeDefault:
         )
 
         captured = []
-        adapter.handle_message = AsyncMock(side_effect=lambda e: captured.append(e))
+        adapter.handle_message = AsyncMock(
+            side_effect=lambda e: captured.append(e)
+        )
         with patch.object(
-            adapter,
-            "_resolve_user_name",
+            adapter, "_resolve_user_name",
             new=AsyncMock(return_value="testuser"),
         ):
             await adapter._handle_slack_message(event)
 
         assert len(captured) == 1, (
-            "handler dropped the top-level channel mention — mention gating misfired"
+            "handler dropped the top-level channel mention — "
+            "mention gating misfired"
         )
         source = captured[0].source
         assert source.thread_id == "1700000000.000001", (
@@ -109,10 +110,11 @@ class TestChannelSessionScopeDefault:
         )
 
         captured = []
-        adapter.handle_message = AsyncMock(side_effect=lambda e: captured.append(e))
+        adapter.handle_message = AsyncMock(
+            side_effect=lambda e: captured.append(e)
+        )
         with patch.object(
-            adapter,
-            "_resolve_user_name",
+            adapter, "_resolve_user_name",
             new=AsyncMock(return_value="testuser"),
         ):
             await adapter._handle_slack_message(event)
@@ -136,10 +138,11 @@ class TestChannelSessionScopeShared:
         )
 
         captured = []
-        adapter.handle_message = AsyncMock(side_effect=lambda e: captured.append(e))
+        adapter.handle_message = AsyncMock(
+            side_effect=lambda e: captured.append(e)
+        )
         with patch.object(
-            adapter,
-            "_resolve_user_name",
+            adapter, "_resolve_user_name",
             new=AsyncMock(return_value="testuser"),
         ):
             await adapter._handle_slack_message(event)
@@ -175,10 +178,11 @@ class TestChannelSessionScopeShared:
         )
 
         captured = []
-        adapter.handle_message = AsyncMock(side_effect=lambda e: captured.append(e))
+        adapter.handle_message = AsyncMock(
+            side_effect=lambda e: captured.append(e)
+        )
         with patch.object(
-            adapter,
-            "_resolve_user_name",
+            adapter, "_resolve_user_name",
             new=AsyncMock(return_value="testuser"),
         ):
             await adapter._handle_slack_message(event)
@@ -203,10 +207,11 @@ class TestChannelSessionScopeShared:
         )
 
         captured = []
-        adapter.handle_message = AsyncMock(side_effect=lambda e: captured.append(e))
+        adapter.handle_message = AsyncMock(
+            side_effect=lambda e: captured.append(e)
+        )
         with patch.object(
-            adapter,
-            "_resolve_user_name",
+            adapter, "_resolve_user_name",
             new=AsyncMock(return_value="testuser"),
         ):
             await adapter._handle_slack_message(event)
@@ -239,10 +244,11 @@ class TestThreadReplyAlwaysScopesByThread:
         )
 
         captured = []
-        adapter.handle_message = AsyncMock(side_effect=lambda e: captured.append(e))
+        adapter.handle_message = AsyncMock(
+            side_effect=lambda e: captured.append(e)
+        )
         with patch.object(
-            adapter,
-            "_resolve_user_name",
+            adapter, "_resolve_user_name",
             new=AsyncMock(return_value="testuser"),
         ):
             await adapter._handle_slack_message(event)

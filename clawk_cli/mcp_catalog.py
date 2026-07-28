@@ -10,7 +10,11 @@ Catalog policy:
 - Entries are added only by merging a PR into clawksis-agent. Presence in the
   ``optional-mcps/`` directory = Nous approval. No community tier, no trust
   signals beyond "it's in the catalog".
-- Manifests pin transport details (commands, args, refs). MCPs are never
+- Manifests pin transport details (commands, args, refs). Pins follow the
+  same supply-chain rules as pyproject dependencies: exact versions for
+  package launchers (``uvx pkg==X``, ``npx pkg@X``), full commit SHAs for
+  git installs, and the pinned release should be at least 2 weeks old at
+  pin time. MCPs are never
   auto-updated; users explicitly re-run ``clawk mcp install <name>`` to
   pull a new manifest version after a repo update.
 - Secrets prompted at install time go to ``~/.clawksis/.env`` (the
@@ -77,6 +81,10 @@ class TransportSpec:
     args: List[str] = field(default_factory=list)
     url: Optional[str] = None
     version: Optional[str] = None  # informational, pinned
+    # Static environment variables for the stdio subprocess (e.g. telemetry
+    # opt-outs, mode flags). NOT for secrets — credentials go through
+    # auth.env so they are prompted for and land in ~/.clawksis/.env.
+    env: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -85,7 +93,6 @@ class InstallSpec:
 
     Omit for one-shot launchable servers (npx, uvx).
     """
-
     type: str  # "git"
     url: str
     ref: str  # commit/tag/branch — pinned, never floats
@@ -185,12 +192,20 @@ def _parse_manifest(path: Path) -> CatalogEntry:
     args = transport_raw.get("args") or []
     if not isinstance(args, list):
         raise CatalogError(f"{path}: transport.args must be a list")
+    env_raw = transport_raw.get("env") or {}
+    if not isinstance(env_raw, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in env_raw.items()
+    ):
+        raise CatalogError(
+            f"{path}: transport.env must be a mapping of string to string"
+        )
     transport = TransportSpec(
         type=t_type,
         command=transport_raw.get("command"),
         args=[str(a) for a in args],
         url=transport_raw.get("url"),
         version=transport_raw.get("version"),
+        env=dict(env_raw),
     )
     if t_type == "stdio" and not transport.command:
         raise CatalogError(f"{path}: stdio transport requires 'command'")
@@ -315,7 +330,7 @@ def catalog_diagnostics() -> List[tuple]:
 def get_entry(name: str) -> Optional[CatalogEntry]:
     """Look up a single entry by name. ``official/<name>`` prefix accepted."""
     if name.startswith("official/"):
-        name = name[len("official/") :]
+        name = name[len("official/"):]
     for entry in list_catalog():
         if entry.name == name:
             return entry
@@ -367,7 +382,9 @@ def _run_bootstrap(cwd: Path, commands: List[str]) -> None:
         print(color(f"  $ {cmd}", Colors.DIM))
         proc = subprocess.run(cmd, cwd=str(cwd), shell=True)
         if proc.returncode != 0:
-            raise CatalogError(f"bootstrap step failed (exit {proc.returncode}): {cmd}")
+            raise CatalogError(
+                f"bootstrap step failed (exit {proc.returncode}): {cmd}"
+            )
 
 
 def _do_git_install(entry: CatalogEntry) -> Path:
@@ -379,9 +396,7 @@ def _do_git_install(entry: CatalogEntry) -> Path:
 
     git = shutil.which("git")
     if not git:
-        raise CatalogError(
-            "git is required to install this MCP but was not found on PATH"
-        )
+        raise CatalogError("git is required to install this MCP but was not found on PATH")
 
     if dest.exists():
         # Fresh checkout each install — manifest version is the source of truth,
@@ -399,16 +414,7 @@ def _do_git_install(entry: CatalogEntry) -> Path:
 
     if not is_sha_ref:
         proc = subprocess.run(
-            [
-                git,
-                "clone",
-                "--depth",
-                "1",
-                "--branch",
-                install.ref,
-                install.url,
-                str(dest),
-            ],
+            [git, "clone", "--depth", "1", "--branch", install.ref, install.url, str(dest)],
         )
         if proc.returncode == 0:
             pass
@@ -467,7 +473,9 @@ def _prompt_env_vars(specs: List[EnvVarSpec]) -> Dict[str, str]:
     return collected
 
 
-def _build_server_config(entry: CatalogEntry, install_dir: Optional[Path]) -> dict:
+def _build_server_config(
+    entry: CatalogEntry, install_dir: Optional[Path]
+) -> dict:
     """Translate a manifest into the ``mcp_servers.<name>`` block format used
     by clawk_cli/mcp_config.py."""
     cfg: dict = {}
@@ -476,6 +484,8 @@ def _build_server_config(entry: CatalogEntry, install_dir: Optional[Path]) -> di
         cfg["command"] = _expand_install_dir(t.command or "", install_dir)
         if t.args:
             cfg["args"] = [_expand_install_dir(a, install_dir) for a in t.args]
+        if t.env:
+            cfg["env"] = dict(t.env)
     elif t.type == "http":
         cfg["url"] = t.url
         if entry.auth.type == "oauth":
@@ -573,26 +583,22 @@ def _apply_tool_selection(
         manifest_default = entry.tools.default_enabled
         if manifest_default:
             _write_tools_include(entry.name, manifest_default)
-            print(
-                color(
-                    f"  Couldn't probe server. Applied manifest default "
-                    f"({len(manifest_default)} tools). "
-                    f"Run `clawk mcp configure {entry.name}` after the server "
-                    "is reachable to refine.",
-                    Colors.YELLOW,
-                )
-            )
+            print(color(
+                f"  Couldn\'t probe server. Applied manifest default "
+                f"({len(manifest_default)} tools). "
+                f"Run `clawk mcp configure {entry.name}` after the server "
+                "is reachable to refine.",
+                Colors.YELLOW,
+            ))
         else:
             _write_tools_include(entry.name, None)
-            print(
-                color(
-                    f"  Couldn't probe server; installed with no tool filter "
-                    "(all tools enabled when reachable). "
-                    f"Run `clawk mcp configure {entry.name}` after first "
-                    "connect to prune.",
-                    Colors.YELLOW,
-                )
-            )
+            print(color(
+                f"  Couldn\'t probe server; installed with no tool filter "
+                "(all tools enabled when reachable). "
+                f"Run `clawk mcp configure {entry.name}` after first "
+                "connect to prune.",
+                Colors.YELLOW,
+            ))
         return
 
     if not probed:
@@ -616,7 +622,6 @@ def _apply_tool_selection(
     # Non-TTY: skip the checklist. Priority matches the interactive
     # pre-check priority: prior user selection > manifest default > all-on.
     import sys as _sys
-
     if not _sys.stdin.isatty():
         if prior_selection is not None:
             include = [n for n in prior_selection if n in tool_names]
@@ -628,16 +633,18 @@ def _apply_tool_selection(
             _write_tools_include(entry.name, None)
         return
 
-    print(
-        color(
-            f"  Found {len(probed)} tool(s). Pre-checked: {len(pre_indices)}.",
-            Colors.GREEN,
-        )
-    )
+    print(color(
+        f"  Found {len(probed)} tool(s). "
+        f"Pre-checked: {len(pre_indices)}.",
+        Colors.GREEN,
+    ))
 
     from clawk_cli.curses_ui import curses_checklist
 
-    labels = [f"{n}  —  {(d[:60] + '...') if len(d) > 60 else d}" for n, d in probed]
+    labels = [
+        f"{n}  —  {(d[:60] + '...') if len(d) > 60 else d}"
+        for n, d in probed
+    ]
     chosen_indices = curses_checklist(
         f"Select tools for '{entry.name}' (SPACE toggle, ENTER confirm)",
         labels,
@@ -648,13 +655,11 @@ def _apply_tool_selection(
         # User unchecked everything; treat as "no tools" — write empty include
         # so the server is installed but contributes nothing until reconfigured.
         _write_tools_include(entry.name, [])
-        print(
-            color(
-                f"  No tools selected. Run `clawk mcp configure {entry.name}` "
-                "to change.",
-                Colors.YELLOW,
-            )
-        )
+        print(color(
+            f"  No tools selected. Run `clawk mcp configure {entry.name}` "
+            "to change.",
+            Colors.YELLOW,
+        ))
         return
 
     if len(chosen_indices) == len(probed):
@@ -664,23 +669,19 @@ def _apply_tool_selection(
         # the user can re-run `clawk mcp configure <name>` and unselect a
         # tool to switch back to include-mode.
         _write_tools_include(entry.name, None)
-        print(
-            color(
-                f"  ✓ All {len(probed)} tools enabled (no filter — new tools "
-                "the server adds later will be auto-enabled).",
-                Colors.GREEN,
-            )
-        )
+        print(color(
+            f"  ✓ All {len(probed)} tools enabled (no filter — new tools "
+            "the server adds later will be auto-enabled).",
+            Colors.GREEN,
+        ))
         return
 
     chosen_names = [tool_names[i] for i in sorted(chosen_indices)]
     _write_tools_include(entry.name, chosen_names)
-    print(
-        color(
-            f"  ✓ {len(chosen_names)}/{len(probed)} tools enabled.",
-            Colors.GREEN,
-        )
-    )
+    print(color(
+        f"  ✓ {len(chosen_names)}/{len(probed)} tools enabled.",
+        Colors.GREEN,
+    ))
 
 
 def install_entry(entry: CatalogEntry, *, enable: bool = True) -> None:
@@ -723,22 +724,18 @@ def install_entry(entry: CatalogEntry, *, enable: bool = True) -> None:
             # the existing `clawk auth <provider>` flow. Surface guidance
             # here rather than auto-running it — keeps the catalog install
             # decoupled from provider-auth lifecycle.
-            print(
-                color(
-                    f"  This MCP uses {entry.auth.provider} OAuth. Run "
-                    f"`clawk auth {entry.auth.provider}` if you have not "
-                    "already authenticated.",
-                    Colors.YELLOW,
-                )
-            )
+            print(color(
+                f"  This MCP uses {entry.auth.provider} OAuth. Run "
+                f"`clawk auth {entry.auth.provider}` if you have not "
+                "already authenticated.",
+                Colors.YELLOW,
+            ))
         else:
-            print(
-                color(
-                    "  This MCP uses native OAuth 2.1; tokens will be acquired "
-                    "on first connection (browser flow).",
-                    Colors.DIM,
-                )
-            )
+            print(color(
+                "  This MCP uses native OAuth 2.1; tokens will be acquired "
+                "on first connection (browser flow).",
+                Colors.DIM,
+            ))
     # auth.type == "none": nothing to do.
 
     # ── Preserve any prior user tool selection across reinstalls ────────
@@ -762,14 +759,12 @@ def install_entry(entry: CatalogEntry, *, enable: bool = True) -> None:
     _apply_tool_selection(entry, prior_selection=prior_selection)
 
     print()
-    print(
-        color(
-            f"  ✓ Installed '{entry.name}' "
-            f"({'enabled' if enable else 'disabled'}). "
-            f"Start a new Clawksis session to load its tools.",
-            Colors.GREEN,
-        )
-    )
+    print(color(
+        f"  ✓ Installed '{entry.name}' "
+        f"({'enabled' if enable else 'disabled'}). "
+        f"Start a new Clawksis session to load its tools.",
+        Colors.GREEN,
+    ))
     if entry.post_install:
         print()
         for line in entry.post_install.strip().splitlines():

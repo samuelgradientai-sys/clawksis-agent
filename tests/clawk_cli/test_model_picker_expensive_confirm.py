@@ -51,14 +51,16 @@ def test_prompt_toolkit_model_picker_defers_confirmation_off_key_handler(monkeyp
         _invalidate=lambda **_kwargs: None,
     )
     self_._close_model_picker = _bound(cli_mod.ClawksisCLI._close_model_picker, self_)
-    self_._confirm_and_apply_model_switch_result = lambda *_args: captured.setdefault(
-        "ran_inline", True
+    self_._confirm_and_apply_model_switch_result = (
+        lambda *_args: captured.setdefault("ran_inline", True)
     )
 
-    _bound(cli_mod.ClawksisCLI._handle_model_picker_selection, self_)()
+    # The key handler now resolves persistence via resolve_persist_behavior,
+    # which defaults to True (persist-by-default). Simulate that call.
+    _bound(cli_mod.ClawksisCLI._handle_model_picker_selection, self_)(persist_global=True)
 
     assert self_._model_picker_state is None
     assert captured["started"] is True
     assert captured["daemon"] is True
-    assert captured["args"] == (result, False)
+    assert captured["args"] == (result, True)
     assert "ran_inline" not in captured

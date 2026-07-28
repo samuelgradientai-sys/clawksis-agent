@@ -17,6 +17,7 @@ from gateway.config import (
 from plugins.platforms.homeassistant.adapter import (
     HomeAssistantAdapter,
     check_ha_requirements,
+    validate_ha_config,
 )
 
 
@@ -26,9 +27,9 @@ from plugins.platforms.homeassistant.adapter import (
 
 
 class TestCheckRequirements:
-    def test_returns_false_without_token(self, monkeypatch):
+    def test_returns_true_without_token_when_aiohttp_available(self, monkeypatch):
         monkeypatch.delenv("HASS_TOKEN", raising=False)
-        assert check_ha_requirements() is False
+        assert check_ha_requirements() is True
 
     def test_returns_true_with_token(self, monkeypatch):
         monkeypatch.setenv("HASS_TOKEN", "test-token")
@@ -39,6 +40,30 @@ class TestCheckRequirements:
         monkeypatch.setenv("HASS_TOKEN", "test-token")
         assert check_ha_requirements() is False
 
+    def test_validate_config_accepts_platform_token(self, monkeypatch):
+        monkeypatch.delenv("HASS_TOKEN", raising=False)
+        config = PlatformConfig(enabled=True, token="config-token")
+        assert validate_ha_config(config) is True
+
+    def test_validate_config_rejects_missing_token(self, monkeypatch):
+        monkeypatch.delenv("HASS_TOKEN", raising=False)
+        config = PlatformConfig(enabled=True, token="")
+        assert validate_ha_config(config) is False
+
+
+class TestValidateConfig:
+    def test_returns_false_without_token_in_config_or_env(self, monkeypatch):
+        monkeypatch.delenv("HASS_TOKEN", raising=False)
+        assert validate_ha_config(PlatformConfig(enabled=True)) is False
+
+    def test_returns_true_with_token_in_env(self, monkeypatch):
+        monkeypatch.setenv("HASS_TOKEN", "test-token")
+        assert validate_ha_config(PlatformConfig(enabled=True)) is True
+
+    def test_returns_true_with_token_in_config(self, monkeypatch):
+        monkeypatch.delenv("HASS_TOKEN", raising=False)
+        assert validate_ha_config(PlatformConfig(enabled=True, token="cfg-token")) is True
+
 
 # ---------------------------------------------------------------------------
 # _format_state_change - pure function, all domain branches
@@ -48,22 +73,17 @@ class TestCheckRequirements:
 class TestFormatStateChange:
     @staticmethod
     def fmt(entity_id, old_state, new_state):
-        return HomeAssistantAdapter._format_state_change(
-            entity_id, old_state, new_state
-        )
+        return HomeAssistantAdapter._format_state_change(entity_id, old_state, new_state)
 
     def test_climate_includes_temperatures(self):
         msg = self.fmt(
             "climate.thermostat",
             {"state": "off"},
-            {
-                "state": "heat",
-                "attributes": {
-                    "friendly_name": "Main Thermostat",
-                    "current_temperature": 21.5,
-                    "temperature": 23,
-                },
-            },
+            {"state": "heat", "attributes": {
+                "friendly_name": "Main Thermostat",
+                "current_temperature": 21.5,
+                "temperature": 23,
+            }},
         )
         assert "Main Thermostat" in msg
         assert "'off'" in msg and "'heat'" in msg
@@ -73,13 +93,10 @@ class TestFormatStateChange:
         msg = self.fmt(
             "sensor.temperature",
             {"state": "22.5"},
-            {
-                "state": "25.1",
-                "attributes": {
-                    "friendly_name": "Living Room Temp",
-                    "unit_of_measurement": "C",
-                },
-            },
+            {"state": "25.1", "attributes": {
+                "friendly_name": "Living Room Temp",
+                "unit_of_measurement": "C",
+            }},
         )
         assert "22.5C" in msg and "25.1C" in msg
         assert "Living Room Temp" in msg
@@ -152,14 +169,11 @@ class TestFormatStateChange:
         assert "Morning Routine" in msg
 
     def test_same_state_returns_none(self):
-        assert (
-            self.fmt(
-                "sensor.temp",
-                {"state": "22"},
-                {"state": "22", "attributes": {"friendly_name": "Temp"}},
-            )
-            is None
-        )
+        assert self.fmt(
+            "sensor.temp",
+            {"state": "22"},
+            {"state": "22", "attributes": {"friendly_name": "Temp"}},
+        ) is None
 
     def test_empty_new_state_returns_none(self):
         assert self.fmt("light.x", {"state": "on"}, {}) is None
@@ -211,8 +225,7 @@ class TestAdapterInit:
 
     def test_trailing_slash_stripped(self):
         config = PlatformConfig(
-            enabled=True,
-            token="t",
+            enabled=True, token="t",
             extra={"url": "http://ha.local:8123/"},
         )
         adapter = HomeAssistantAdapter(config)
@@ -220,8 +233,7 @@ class TestAdapterInit:
 
     def test_watch_filters_parsed(self):
         config = PlatformConfig(
-            enabled=True,
-            token="***",
+            enabled=True, token="***",
             extra={
                 "watch_domains": ["climate", "binary_sensor"],
                 "watch_entities": ["sensor.special"],
@@ -238,8 +250,7 @@ class TestAdapterInit:
 
     def test_watch_all_parsed(self):
         config = PlatformConfig(
-            enabled=True,
-            token="***",
+            enabled=True, token="***",
             extra={"watch_all": True},
         )
         adapter = HomeAssistantAdapter(config)
@@ -276,10 +287,7 @@ def _make_event(entity_id, old_state, new_state, old_attrs=None, new_attrs=None)
         "data": {
             "entity_id": entity_id,
             "old_state": {"state": old_state, "attributes": old_attrs or {}},
-            "new_state": {
-                "state": new_state,
-                "attributes": new_attrs or {"friendly_name": entity_id},
-            },
+            "new_state": {"state": new_state, "attributes": new_attrs or {"friendly_name": entity_id}},
         }
     }
 
@@ -301,16 +309,8 @@ class TestEventFilteringPipeline:
     async def test_watched_domain_forwarded(self):
         adapter = _make_adapter(watch_domains=["climate"], cooldown_seconds=0)
         await adapter._handle_ha_event(
-            _make_event(
-                "climate.thermostat",
-                "off",
-                "heat",
-                new_attrs={
-                    "friendly_name": "Thermostat",
-                    "current_temperature": 20,
-                    "temperature": 22,
-                },
-            )
+            _make_event("climate.thermostat", "off", "heat",
+                        new_attrs={"friendly_name": "Thermostat", "current_temperature": 20, "temperature": 22})
         )
         adapter.handle_message.assert_called_once()
 
@@ -325,15 +325,8 @@ class TestEventFilteringPipeline:
     async def test_watched_entity_forwarded(self):
         adapter = _make_adapter(watch_entities=["sensor.important"], cooldown_seconds=0)
         await adapter._handle_ha_event(
-            _make_event(
-                "sensor.important",
-                "10",
-                "20",
-                new_attrs={
-                    "friendly_name": "Important Sensor",
-                    "unit_of_measurement": "W",
-                },
-            )
+            _make_event("sensor.important", "10", "20",
+                        new_attrs={"friendly_name": "Important Sensor", "unit_of_measurement": "W"})
         )
         adapter.handle_message.assert_called_once()
         msg_event = adapter.handle_message.call_args[0][0]
@@ -369,9 +362,8 @@ class TestEventFilteringPipeline:
     async def test_message_event_has_correct_source(self):
         adapter = _make_adapter(watch_all=True, cooldown_seconds=0)
         await adapter._handle_ha_event(
-            _make_event(
-                "light.test", "off", "on", new_attrs={"friendly_name": "Test Light"}
-            )
+            _make_event("light.test", "off", "on",
+                        new_attrs={"friendly_name": "Test Light"})
         )
         msg_event = adapter.handle_message.call_args[0][0]
         assert msg_event.source.user_name == "Home Assistant"
@@ -389,16 +381,14 @@ class TestCooldown:
     async def test_cooldown_blocks_rapid_events(self):
         adapter = _make_adapter(watch_all=True, cooldown_seconds=60)
 
-        event = _make_event(
-            "sensor.temp", "20", "21", new_attrs={"friendly_name": "Temp"}
-        )
+        event = _make_event("sensor.temp", "20", "21",
+                            new_attrs={"friendly_name": "Temp"})
         await adapter._handle_ha_event(event)
         assert adapter.handle_message.call_count == 1
 
         # Second event immediately after should be blocked
-        event2 = _make_event(
-            "sensor.temp", "21", "22", new_attrs={"friendly_name": "Temp"}
-        )
+        event2 = _make_event("sensor.temp", "21", "22",
+                             new_attrs={"friendly_name": "Temp"})
         await adapter._handle_ha_event(event2)
         assert adapter.handle_message.call_count == 1  # Still 1
 
@@ -406,18 +396,16 @@ class TestCooldown:
     async def test_cooldown_expires(self):
         adapter = _make_adapter(watch_all=True, cooldown_seconds=1)
 
-        event = _make_event(
-            "sensor.temp", "20", "21", new_attrs={"friendly_name": "Temp"}
-        )
+        event = _make_event("sensor.temp", "20", "21",
+                            new_attrs={"friendly_name": "Temp"})
         await adapter._handle_ha_event(event)
         assert adapter.handle_message.call_count == 1
 
         # Simulate time passing beyond cooldown
         adapter._last_event_time["sensor.temp"] = time.time() - 2
 
-        event2 = _make_event(
-            "sensor.temp", "21", "22", new_attrs={"friendly_name": "Temp"}
-        )
+        event2 = _make_event("sensor.temp", "21", "22",
+                             new_attrs={"friendly_name": "Temp"})
         await adapter._handle_ha_event(event2)
         assert adapter.handle_message.call_count == 2
 
@@ -446,12 +434,8 @@ class TestCooldown:
 
         for i in range(5):
             await adapter._handle_ha_event(
-                _make_event(
-                    "sensor.temp",
-                    str(i),
-                    str(i + 1),
-                    new_attrs={"friendly_name": "Temp"},
-                )
+                _make_event("sensor.temp", str(i), str(i + 1),
+                            new_attrs={"friendly_name": "Temp"})
             )
         assert adapter.handle_message.call_count == 5
 
@@ -470,7 +454,6 @@ class TestConfigIntegration:
             monkeypatch.delenv(v, raising=False)
 
         from gateway.config import load_gateway_config
-
         config = load_gateway_config()
 
         assert Platform.HOMEASSISTANT in config.platforms
@@ -480,17 +463,11 @@ class TestConfigIntegration:
         assert ha.extra["url"] == "http://10.0.0.5:8123"
 
     def test_no_env_no_platform(self, monkeypatch):
-        for v in [
-            "HASS_TOKEN",
-            "HASS_URL",
-            "TELEGRAM_BOT_TOKEN",
-            "DISCORD_BOT_TOKEN",
-            "SLACK_BOT_TOKEN",
-        ]:
+        for v in ["HASS_TOKEN", "HASS_URL", "TELEGRAM_BOT_TOKEN",
+                   "DISCORD_BOT_TOKEN", "SLACK_BOT_TOKEN"]:
             monkeypatch.delenv(v, raising=False)
 
         from gateway.config import load_gateway_config
-
         config = load_gateway_config()
         assert Platform.HOMEASSISTANT not in config.platforms
 
@@ -516,7 +493,6 @@ class TestConfigIntegration:
         assert ha.token == "tok"
         assert ha.extra["watch_domains"] == ["climate"]
         assert ha.extra["cooldown_seconds"] == 45
-
 
 # ---------------------------------------------------------------------------
 # send() via REST API
@@ -626,21 +602,13 @@ class TestSendViaRestApi:
 
 class TestWsUrlConstruction:
     def test_http_to_ws(self):
-        config = PlatformConfig(
-            enabled=True, token="t", extra={"url": "http://ha:8123"}
-        )
+        config = PlatformConfig(enabled=True, token="t", extra={"url": "http://ha:8123"})
         adapter = HomeAssistantAdapter(config)
-        ws_url = adapter._hass_url.replace("http://", "ws://").replace(
-            "https://", "wss://"
-        )
+        ws_url = adapter._hass_url.replace("http://", "ws://").replace("https://", "wss://")
         assert ws_url == "ws://ha:8123"
 
     def test_https_to_wss(self):
-        config = PlatformConfig(
-            enabled=True, token="t", extra={"url": "https://ha.example.com"}
-        )
+        config = PlatformConfig(enabled=True, token="t", extra={"url": "https://ha.example.com"})
         adapter = HomeAssistantAdapter(config)
-        ws_url = adapter._hass_url.replace("http://", "ws://").replace(
-            "https://", "wss://"
-        )
+        ws_url = adapter._hass_url.replace("http://", "ws://").replace("https://", "wss://")
         assert ws_url == "wss://ha.example.com"

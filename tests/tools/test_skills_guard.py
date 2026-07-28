@@ -61,9 +61,7 @@ class TestResolveTrustLevel:
 
     def test_trusted_repo_sibling_prefixes_are_not_trusted(self):
         assert _resolve_trust_level("openai/skills-evil") == "community"
-        assert (
-            _resolve_trust_level("anthropics/skills-foo/frontend-design") == "community"
-        )
+        assert _resolve_trust_level("anthropics/skills-foo/frontend-design") == "community"
         assert _resolve_trust_level("huggingface/skills-bar/some-skill") == "community"
 
     def test_official_github_namespace_does_not_resolve_to_builtin(self):
@@ -71,19 +69,11 @@ class TestResolveTrustLevel:
         assert _resolve_trust_level("official/agent/evil-skill") == "community"
 
     def test_skills_sh_wrapped_trusted_repos(self):
-        assert (
-            _resolve_trust_level("skills-sh/openai/skills/skill-creator") == "trusted"
-        )
-        assert (
-            _resolve_trust_level("skills-sh/anthropics/skills/frontend-design")
-            == "trusted"
-        )
+        assert _resolve_trust_level("skills-sh/openai/skills/skill-creator") == "trusted"
+        assert _resolve_trust_level("skills-sh/anthropics/skills/frontend-design") == "trusted"
 
     def test_common_skills_sh_prefix_typo_still_maps_to_trusted_repo(self):
-        assert (
-            _resolve_trust_level("skils-sh/anthropics/skills/frontend-design")
-            == "trusted"
-        )
+        assert _resolve_trust_level("skils-sh/anthropics/skills/frontend-design") == "trusted"
 
     def test_community_default(self):
         assert _resolve_trust_level("random-user/my-skill") == "community"
@@ -159,17 +149,13 @@ class TestShouldAllowInstall:
 
     def test_force_overrides_caution(self):
         f = [Finding("x", "high", "c", "f", 1, "m", "d")]
-        allowed, reason = should_allow_install(
-            self._result("community", "caution", f), force=True
-        )
+        allowed, reason = should_allow_install(self._result("community", "caution", f), force=True)
         assert allowed is True
         assert "Force-installed" in reason
 
     def test_dangerous_blocked_without_force(self):
         f = [Finding("x", "critical", "c", "f", 1, "m", "d")]
-        allowed, _ = should_allow_install(
-            self._result("community", "dangerous", f), force=False
-        )
+        allowed, _ = should_allow_install(self._result("community", "dangerous", f), force=False)
         assert allowed is False
 
     def test_force_does_not_override_dangerous_for_community(self):
@@ -221,20 +207,8 @@ class TestShouldAllowInstall:
 
     def test_caution_agent_created_allowed(self):
         """Agent-created skills with caution verdict (e.g. docker refs) should pass."""
-        f = [
-            Finding(
-                "docker_pull",
-                "medium",
-                "supply_chain",
-                "SKILL.md",
-                1,
-                "docker pull img",
-                "pulls Docker image",
-            )
-        ]
-        allowed, reason = should_allow_install(
-            self._result("agent-created", "caution", f)
-        )
+        f = [Finding("docker_pull", "medium", "supply_chain", "SKILL.md", 1, "docker pull img", "pulls Docker image")]
+        allowed, reason = should_allow_install(self._result("agent-created", "caution", f))
         assert allowed is True
         assert "agent-created" in reason
 
@@ -244,20 +218,8 @@ class TestShouldAllowInstall:
         to the agent, who can retry without the flagged content.
 
         This gate only runs when skills.guard_agent_created is enabled (off by default)."""
-        f = [
-            Finding(
-                "env_exfil_curl",
-                "critical",
-                "exfiltration",
-                "SKILL.md",
-                1,
-                "curl $TOKEN",
-                "exfiltration",
-            )
-        ]
-        allowed, reason = should_allow_install(
-            self._result("agent-created", "dangerous", f)
-        )
+        f = [Finding("env_exfil_curl", "critical", "exfiltration", "SKILL.md", 1, "curl $TOKEN", "exfiltration")]
+        allowed, reason = should_allow_install(self._result("agent-created", "dangerous", f))
         assert allowed is None
         assert "Requires confirmation" in reason
 
@@ -328,7 +290,7 @@ class TestScanFile:
 
     def test_detect_invisible_unicode(self, tmp_path):
         f = tmp_path / "hidden.md"
-        f.write_text(f"normal text\u200b with zero-width space\n")
+        f.write_text("normal text\u200b with zero-width space\n")
         findings = scan_file(f, "hidden.md")
         assert any(fi.pattern_id == "invisible_unicode" for fi in findings)
 
@@ -403,6 +365,7 @@ class TestScanSkill:
         assert result.verdict != "safe"
 
 
+
 # ---------------------------------------------------------------------------
 # _check_structure
 # ---------------------------------------------------------------------------
@@ -436,7 +399,9 @@ class TestCheckStructure:
         findings = _check_structure(tmp_path / "skill")
         assert any(fi.pattern_id == "symlink_escape" for fi in findings)
 
-    @pytest.mark.skipif(not _can_symlink(), reason="Symlinks need elevated privileges")
+    @pytest.mark.skipif(
+        not _can_symlink(), reason="Symlinks need elevated privileges"
+    )
     def test_symlink_prefix_confusion_blocked(self, tmp_path):
         """A symlink resolving to a sibling dir with a shared prefix must be caught.
 
@@ -458,7 +423,9 @@ class TestCheckStructure:
         findings = _check_structure(skill_dir)
         assert any(fi.pattern_id == "symlink_escape" for fi in findings)
 
-    @pytest.mark.skipif(not _can_symlink(), reason="Symlinks need elevated privileges")
+    @pytest.mark.skipif(
+        not _can_symlink(), reason="Symlinks need elevated privileges"
+    )
     def test_symlink_within_skill_dir_allowed(self, tmp_path):
         """A symlink that stays within the skill directory is fine."""
         skill_dir = tmp_path / "my-skill"

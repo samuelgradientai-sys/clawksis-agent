@@ -15,7 +15,7 @@ class RestartTestAdapter(BasePlatformAdapter):
         self.sent: list[str] = []
         self.sent_calls: list[tuple[str, str, object]] = []
 
-    async def connect(self):
+    async def connect(self, *, is_reconnect: bool = False):
         return True
 
     async def disconnect(self):
@@ -70,6 +70,7 @@ def make_restart_runner(
     runner._restart_task_started = False
     runner._restart_detached = False
     runner._restart_via_service = False
+    runner._detached_restart_helper_started = False
     runner._restart_command_source = None
     runner._restart_drain_timeout = DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
     runner._stop_task = None
@@ -81,8 +82,8 @@ def make_restart_runner(
     runner._session_sources_max = 512
     runner._shutdown_all_gateway_honcho = lambda: None
     runner._update_runtime_status = MagicMock()
-    runner._queue_or_replace_pending_event = (
-        GatewayRunner._queue_or_replace_pending_event.__get__(runner, GatewayRunner)
+    runner._queue_or_replace_pending_event = GatewayRunner._queue_or_replace_pending_event.__get__(
+        runner, GatewayRunner
     )
     runner._session_key_for_source = GatewayRunner._session_key_for_source.__get__(
         runner, GatewayRunner
@@ -96,13 +97,11 @@ def make_restart_runner(
     runner._handle_set_home_command = GatewayRunner._handle_set_home_command.__get__(
         runner, GatewayRunner
     )
-    runner._send_restart_notification = (
-        GatewayRunner._send_restart_notification.__get__(runner, GatewayRunner)
+    runner._send_restart_notification = GatewayRunner._send_restart_notification.__get__(
+        runner, GatewayRunner
     )
     runner._send_home_channel_startup_notifications = (
-        GatewayRunner._send_home_channel_startup_notifications.__get__(
-            runner, GatewayRunner
-        )
+        GatewayRunner._send_home_channel_startup_notifications.__get__(runner, GatewayRunner)
     )
     runner._status_action_label = GatewayRunner._status_action_label.__get__(
         runner, GatewayRunner
@@ -110,10 +109,22 @@ def make_restart_runner(
     runner._status_action_gerund = GatewayRunner._status_action_gerund.__get__(
         runner, GatewayRunner
     )
-    runner._queue_during_drain_enabled = (
-        GatewayRunner._queue_during_drain_enabled.__get__(runner, GatewayRunner)
+    runner._queue_during_drain_enabled = GatewayRunner._queue_during_drain_enabled.__get__(
+        runner, GatewayRunner
     )
     runner._running_agent_count = GatewayRunner._running_agent_count.__get__(
+        runner, GatewayRunner
+    )
+    runner._active_cron_job_count = GatewayRunner._active_cron_job_count.__get__(
+        runner, GatewayRunner
+    )
+    runner._active_api_run_count = GatewayRunner._active_api_run_count.__get__(
+        runner, GatewayRunner
+    )
+    runner._active_work_count = GatewayRunner._active_work_count.__get__(
+        runner, GatewayRunner
+    )
+    runner._persist_active_agents = GatewayRunner._persist_active_agents.__get__(
         runner, GatewayRunner
     )
     runner._snapshot_running_agents = GatewayRunner._snapshot_running_agents.__get__(
@@ -125,15 +136,13 @@ def make_restart_runner(
     runner._cache_session_source = GatewayRunner._cache_session_source.__get__(
         runner, GatewayRunner
     )
-    runner._get_cached_session_source = (
-        GatewayRunner._get_cached_session_source.__get__(runner, GatewayRunner)
-    )
-    runner._launch_detached_restart_command = (
-        GatewayRunner._launch_detached_restart_command.__get__(runner, GatewayRunner)
-    )
-    runner.request_restart = GatewayRunner.request_restart.__get__(
+    runner._get_cached_session_source = GatewayRunner._get_cached_session_source.__get__(
         runner, GatewayRunner
     )
+    runner._launch_detached_restart_command = GatewayRunner._launch_detached_restart_command.__get__(
+        runner, GatewayRunner
+    )
+    runner.request_restart = GatewayRunner.request_restart.__get__(runner, GatewayRunner)
     runner._is_user_authorized = lambda _source: True
     runner.hooks = MagicMock()
     runner.hooks.emit = AsyncMock()
@@ -144,8 +153,6 @@ def make_restart_runner(
 
     platform_adapter = adapter or RestartTestAdapter()
     platform_adapter.set_message_handler(AsyncMock(return_value=None))
-    platform_adapter.set_busy_session_handler(
-        runner._handle_active_session_busy_message
-    )
+    platform_adapter.set_busy_session_handler(runner._handle_active_session_busy_message)
     runner.adapters = {Platform.TELEGRAM: platform_adapter}
     return runner, platform_adapter

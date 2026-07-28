@@ -38,98 +38,22 @@ from typing import Optional
 # label field. There is NO uniqueness constraint on the portal side (the row
 # id is the key), so collisions are harmless and we don't retry.
 _NAME_ADJECTIVES = (
-    "amber",
-    "bold",
-    "brave",
-    "bright",
-    "calm",
-    "clever",
-    "cosmic",
-    "crisp",
-    "dreamy",
-    "eager",
-    "electric",
-    "fancy",
-    "gentle",
-    "golden",
-    "happy",
-    "hidden",
-    "jolly",
-    "keen",
-    "lively",
-    "lucid",
-    "lunar",
-    "mellow",
-    "merry",
-    "mighty",
-    "nimble",
-    "noble",
-    "polished",
-    "quiet",
-    "quirky",
-    "rapid",
-    "serene",
-    "sharp",
-    "shiny",
-    "silent",
-    "snappy",
-    "solar",
-    "spry",
-    "stellar",
-    "sunny",
-    "swift",
-    "tidy",
-    "vivid",
-    "vibrant",
-    "witty",
-    "zesty",
+    "amber", "bold", "brave", "bright", "calm", "clever", "cosmic", "crisp",
+    "dreamy", "eager", "electric", "fancy", "gentle", "golden", "happy",
+    "hidden", "jolly", "keen", "lively", "lucid", "lunar", "mellow", "merry",
+    "mighty", "nimble", "noble", "polished", "quiet", "quirky", "rapid",
+    "serene", "sharp", "shiny", "silent", "snappy", "solar", "spry", "stellar",
+    "sunny", "swift", "tidy", "vivid", "vibrant", "witty", "zesty",
 )
 
 _NAME_NOUNS = (
-    "albatross",
-    "antelope",
-    "badger",
-    "beacon",
-    "comet",
-    "condor",
-    "cypress",
-    "dolphin",
-    "ember",
-    "falcon",
-    "ferret",
-    "galaxy",
-    "glacier",
-    "harbor",
-    "heron",
-    "ibex",
-    "jaguar",
-    "kestrel",
-    "lantern",
-    "lynx",
-    "meadow",
-    "nebula",
-    "ocelot",
-    "orchid",
-    "otter",
-    "panther",
-    "petrel",
-    "quasar",
-    "raven",
-    "reef",
-    "sparrow",
-    "summit",
-    "tundra",
-    "vortex",
-    "walrus",
-    "willow",
-    "yarrow",
+    "albatross", "antelope", "badger", "beacon", "comet", "condor", "cypress",
+    "dolphin", "ember", "falcon", "ferret", "galaxy", "glacier", "harbor",
+    "heron", "ibex", "jaguar", "kestrel", "lantern", "lynx", "meadow", "nebula",
+    "ocelot", "orchid", "otter", "panther", "petrel", "quasar", "raven", "reef",
+    "sparrow", "summit", "tundra", "vortex", "walrus", "willow", "yarrow",
     # A couple of scientist surnames in the Docker spirit.
-    "kepler",
-    "tesla",
-    "curie",
-    "hopper",
-    "turing",
-    "lovelace",
+    "kepler", "tesla", "curie", "hopper", "turing", "lovelace",
 )
 
 
@@ -221,13 +145,17 @@ def _register_self_hosted_client(
         detail = ""
         try:
             err_body = json.loads(exc.read().decode())
-            detail = err_body.get("error_description") or err_body.get("error") or ""
+            detail = (
+                err_body.get("error_description")
+                or err_body.get("error")
+                or ""
+            )
         except Exception:
             pass
         if exc.code == 401:
             raise RuntimeError(
                 "Nous Portal rejected the access token (401). "
-                "Try `clawk auth login nous` to re-authenticate."
+                "Try `clawk auth add nous` to re-authenticate."
             ) from exc
         if exc.code == 403:
             raise RuntimeError(
@@ -235,7 +163,8 @@ def _register_self_hosted_client(
                 or "Your account is not permitted to register a self-hosted dashboard."
             ) from exc
         raise RuntimeError(
-            f"Portal returned HTTP {exc.code}" + (f": {detail}" if detail else "")
+            f"Portal returned HTTP {exc.code}"
+            + (f": {detail}" if detail else "")
         ) from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(
@@ -290,8 +219,12 @@ def _print_post_register_hint(
         print("    clawk dashboard --host 0.0.0.0")
         print("  …then log in at the dashboard's /login page.")
     print()
-    print("  If the dashboard is already running, restart it to pick up the new env.")
-    print(f"  Manage or revoke this dashboard at {portal_base_url}/local-dashboards")
+    print(
+        "  If the dashboard is already running, restart it to pick up the new env."
+    )
+    print(
+        f"  Manage or revoke this dashboard at {portal_base_url}/local-dashboards"
+    )
 
 
 def cmd_dashboard_register(args) -> None:
@@ -318,7 +251,7 @@ def cmd_dashboard_register(args) -> None:
     except AuthError as exc:
         if getattr(exc, "relogin_required", False):
             print("✗ You're not logged into Nous Portal.")
-            print("  Run `clawk setup` (or `clawk auth login nous`) first, then retry.")
+            print("  Run `clawk setup` (or `clawk auth add nous`) first, then retry.")
         else:
             print(f"✗ Could not resolve a Nous Portal access token: {exc}")
         sys.exit(1)
@@ -390,7 +323,9 @@ def cmd_dashboard_register(args) -> None:
 
     # Distinguish create vs update for the user: the portal echoes back the
     # same client_id we sent when it updated in place.
-    updated_existing = bool(existing_client_id and client_id == existing_client_id)
+    updated_existing = bool(
+        existing_client_id and client_id == existing_client_id
+    )
     if updated_existing:
         print(f'✓ Updated dashboard "{registered_name}"')
     else:

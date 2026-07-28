@@ -36,16 +36,10 @@ class TestSupportsMediaInToolResults:
         assert _supports_media_in_tool_results("anthropic", "claude-opus-4-6") is True
 
     def test_openrouter_yes(self):
-        assert (
-            _supports_media_in_tool_results("openrouter", "anthropic/claude-opus-4.6")
-            is True
-        )
+        assert _supports_media_in_tool_results("openrouter", "anthropic/claude-opus-4.6") is True
 
     def test_nous_yes(self):
-        assert (
-            _supports_media_in_tool_results("nous", "anthropic/claude-sonnet-4.6")
-            is True
-        )
+        assert _supports_media_in_tool_results("nous", "anthropic/claude-sonnet-4.6") is True
 
     def test_openai_chat_yes(self):
         assert _supports_media_in_tool_results("openai", "gpt-5.4") is True
@@ -54,17 +48,13 @@ class TestSupportsMediaInToolResults:
         assert _supports_media_in_tool_results("openai-codex", "gpt-5-codex") is True
 
     def test_gemini_3_yes(self):
-        assert (
-            _supports_media_in_tool_results("google", "gemini-3-flash-preview") is True
-        )
+        assert _supports_media_in_tool_results("google", "gemini-3-flash-preview") is True
 
     def test_gemini_2_no(self):
         assert _supports_media_in_tool_results("google", "gemini-2.5-pro") is False
 
     def test_unknown_provider_conservative_no(self):
-        assert (
-            _supports_media_in_tool_results("brand-new-provider", "any-model") is False
-        )
+        assert _supports_media_in_tool_results("brand-new-provider", "any-model") is False
 
     def test_empty_provider_no(self):
         assert _supports_media_in_tool_results("", "anything") is False
@@ -129,7 +119,9 @@ class TestVisionAnalyzeNative:
         assert isinstance(result, str)
         parsed = json.loads(result)
         assert parsed.get("success") is False
-        assert "Invalid image source" in parsed.get("error", "")
+        # Unified resolver: local backend reports a clean not-found.
+        err = parsed.get("error", "").lower()
+        assert "image file not found" in err or "no active sandbox" in err
 
     def test_empty_image_url_returns_error(self):
         result = asyncio.get_event_loop().run_until_complete(
@@ -171,9 +163,7 @@ class TestVisionAnalyzeNative:
         # Noisy PNG that base64-encodes to well over 5 MB (won't compress much).
         big = tmp_path / "big.png"
         Image.effect_noise((2600, 2600), 80).convert("RGB").save(big, format="PNG")
-        assert big.stat().st_size * 4 // 3 > 5 * 1024 * 1024, (
-            "test image not big enough"
-        )
+        assert big.stat().st_size * 4 // 3 > 5 * 1024 * 1024, "test image not big enough"
 
         result = asyncio.get_event_loop().run_until_complete(
             _vision_analyze_native(str(big), "describe")
@@ -203,7 +193,6 @@ class TestHandleVisionAnalyzeFastPath:
 
         # Set runtime override so the handler thinks we're on opus@openrouter
         from agent.auxiliary_client import set_runtime_main, clear_runtime_main
-
         set_runtime_main("openrouter", "anthropic/claude-opus-4.6")
         try:
             # Mock decide_image_input_mode to always return "native" so the
@@ -217,9 +206,8 @@ class TestHandleVisionAnalyzeFastPath:
         finally:
             clear_runtime_main()
 
-        assert isinstance(result, dict), (
+        assert isinstance(result, dict), \
             f"Expected multimodal envelope, got {type(result).__name__}: {str(result)[:200]}"
-        )
         assert result.get("_multimodal") is True
 
     def test_non_vision_main_model_falls_through_to_aux(self, tmp_path, monkeypatch):
@@ -231,20 +219,16 @@ class TestHandleVisionAnalyzeFastPath:
             return '{"sentinel": "aux-path"}'
 
         from agent.auxiliary_client import set_runtime_main, clear_runtime_main
-
         set_runtime_main("openrouter", "qwen/qwen3-coder")
         try:
-            with patch(
-                "tools.vision_tools.vision_analyze_tool", side_effect=_aux_sentinel
-            ):
+            with patch("tools.vision_tools.vision_analyze_tool", side_effect=_aux_sentinel):
                 coro = _handle_vision_analyze({"image_url": str(img), "question": "?"})
                 result = asyncio.get_event_loop().run_until_complete(coro)
         finally:
             clear_runtime_main()
 
-        assert not (isinstance(result, dict) and result.get("_multimodal") is True), (
+        assert not (isinstance(result, dict) and result.get("_multimodal") is True), \
             "Fast path fired for non-vision model; should have fallen through to aux LLM"
-        )
 
     def test_fast_path_disabled_for_unsupported_provider(self, tmp_path, monkeypatch):
         """Even with vision-capable model, unknown provider → fall through."""
@@ -255,20 +239,16 @@ class TestHandleVisionAnalyzeFastPath:
             return '{"sentinel": "aux-path"}'
 
         from agent.auxiliary_client import set_runtime_main, clear_runtime_main
-
         set_runtime_main("brand-new-provider", "anthropic/claude-opus-4.6")
         try:
-            with patch(
-                "tools.vision_tools.vision_analyze_tool", side_effect=_aux_sentinel
-            ):
+            with patch("tools.vision_tools.vision_analyze_tool", side_effect=_aux_sentinel):
                 coro = _handle_vision_analyze({"image_url": str(img), "question": "?"})
                 result = asyncio.get_event_loop().run_until_complete(coro)
         finally:
             clear_runtime_main()
 
-        assert not (isinstance(result, dict) and result.get("_multimodal") is True), (
+        assert not (isinstance(result, dict) and result.get("_multimodal") is True), \
             "Fast path fired for unknown provider; should have fallen through"
-        )
 
     def test_supports_vision_override_bypasses_provider_allowlist(self, tmp_path):
         """supports_vision=true enables the fast path on an unlisted provider."""
@@ -279,19 +259,14 @@ class TestHandleVisionAnalyzeFastPath:
             return '{"sentinel": "aux-path"}'
 
         from agent.auxiliary_client import set_runtime_main, clear_runtime_main
-
         set_runtime_main("brand-new-provider", "llava-v1.6")
         try:
-            with (
-                patch(
-                    "clawk_cli.config.load_config",
-                    return_value={"model": {"supports_vision": True}},
-                ),
-                patch(
-                    "tools.vision_tools.vision_analyze_tool",
-                    side_effect=_aux_sentinel,
-                ) as mock_aux,
-            ):
+            with patch(
+                "clawk_cli.config.load_config",
+                return_value={"model": {"supports_vision": True}},
+            ), patch(
+                "tools.vision_tools.vision_analyze_tool", side_effect=_aux_sentinel,
+            ) as mock_aux:
                 coro = _handle_vision_analyze({"image_url": str(img), "question": "?"})
                 result = asyncio.get_event_loop().run_until_complete(coro)
         finally:
@@ -309,22 +284,17 @@ class TestHandleVisionAnalyzeFastPath:
             return '{"sentinel": "aux-path"}'
 
         from agent.auxiliary_client import set_runtime_main, clear_runtime_main
-
         set_runtime_main("brand-new-provider", "llava-v1.6")
         try:
-            with (
-                patch(
-                    "clawk_cli.config.load_config",
-                    return_value={
-                        "agent": {"image_input_mode": "text"},
-                        "model": {"supports_vision": True},
-                    },
-                ),
-                patch(
-                    "tools.vision_tools.vision_analyze_tool",
-                    side_effect=_aux_sentinel,
-                ) as mock_aux,
-            ):
+            with patch(
+                "clawk_cli.config.load_config",
+                return_value={
+                    "agent": {"image_input_mode": "text"},
+                    "model": {"supports_vision": True},
+                },
+            ), patch(
+                "tools.vision_tools.vision_analyze_tool", side_effect=_aux_sentinel,
+            ) as mock_aux:
                 coro = _handle_vision_analyze({"image_url": str(img), "question": "?"})
                 result = asyncio.get_event_loop().run_until_complete(coro)
         finally:

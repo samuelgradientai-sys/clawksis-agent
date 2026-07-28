@@ -124,7 +124,6 @@ def create_swarm(
         idempotency_key=idempotency_key,
         workspace_kind=workspace_kind,
         workspace_path=workspace_path,
-        skills=["kanban-orchestrator"],
     )
 
     # If idempotency returned an existing non-archived root, do not duplicate the
@@ -175,8 +174,9 @@ def create_swarm(
 
     verifier_body = (
         "Review every worker handoff and blackboard update. Gate the swarm: "
-        'complete only with metadata {"gate": "pass"} when evidence is '
-        "sufficient; otherwise block with exact missing work." + context_suffix
+        "complete only with metadata {\"gate\": \"pass\"} when evidence is "
+        "sufficient; otherwise block with exact missing work."
+        + context_suffix
     )
     verifier = kb.create_task(
         conn,
@@ -194,7 +194,8 @@ def create_swarm(
 
     synthesizer_body = (
         "Synthesize the verified worker outputs into the final deliverable. "
-        "Do not start until the verifier has passed the gate." + context_suffix
+        "Do not start until the verifier has passed the gate."
+        + context_suffix
     )
     synthesizer = kb.create_task(
         conn,
@@ -234,12 +235,8 @@ def post_blackboard_update(
     _require_text(root_id, "root_id")
     author = _require_text(author, "author")
     key = _require_text(key, "key")
-    payload = json.dumps(
-        {"key": key, "value": value}, ensure_ascii=False, sort_keys=True
-    )
-    return kb.add_comment(
-        conn, root_id, author=author, body=BLACKBOARD_PREFIX + payload
-    )
+    payload = json.dumps({"key": key, "value": value}, ensure_ascii=False, sort_keys=True)
+    return kb.add_comment(conn, root_id, author=author, body=BLACKBOARD_PREFIX + payload)
 
 
 def latest_blackboard(conn: sqlite3.Connection, root_id: str) -> dict[str, Any]:
@@ -256,7 +253,7 @@ def latest_blackboard(conn: sqlite3.Connection, root_id: str) -> dict[str, Any]:
         if not body.startswith(BLACKBOARD_PREFIX):
             continue
         try:
-            payload = json.loads(body[len(BLACKBOARD_PREFIX) :])
+            payload = json.loads(body[len(BLACKBOARD_PREFIX):])
         except json.JSONDecodeError:
             continue
         key = payload.get("key")
@@ -278,6 +275,4 @@ def parse_worker_arg(raw: str) -> SwarmWorkerSpec:
     skills: list[str] = []
     if len(parts) == 3 and parts[2]:
         skills = [s.strip() for s in parts[2].split(",") if s.strip()]
-    return SwarmWorkerSpec(
-        profile=parts[0], title=parts[1], body=parts[1], skills=skills
-    )
+    return SwarmWorkerSpec(profile=parts[0], title=parts[1], body=parts[1], skills=skills)

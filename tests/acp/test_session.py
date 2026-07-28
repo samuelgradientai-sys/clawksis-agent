@@ -39,16 +39,12 @@ class TestCreateSession:
 
     def test_create_session_registers_task_cwd(self, manager, monkeypatch):
         calls = []
-        monkeypatch.setattr(
-            "acp_adapter.session._register_task_cwd",
-            lambda task_id, cwd: calls.append((task_id, cwd)),
-        )
+        monkeypatch.setattr("acp_adapter.session._register_task_cwd", lambda task_id, cwd: calls.append((task_id, cwd)))
         state = manager.create_session(cwd="/tmp/work")
         assert calls == [(state.session_id, "/tmp/work")]
 
-    def test_register_task_cwd_translates_windows_drive_for_wsl_tools(
-        self, monkeypatch
-    ):
+
+    def test_register_task_cwd_translates_windows_drive_for_wsl_tools(self, monkeypatch):
         captured = {}
 
         def fake_register_task_env_overrides(task_id, overrides):
@@ -81,6 +77,52 @@ class TestCreateSession:
     def test_get_nonexistent_session_returns_none(self, manager):
         assert manager.get_session("does-not-exist") is None
 
+    def test_make_agent_stamps_session_cwd_for_codex_runtime(self, monkeypatch):
+        class FakeAgent:
+            model = "fake-model"
+
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        monkeypatch.setattr("run_agent.AIAgent", FakeAgent)
+        monkeypatch.setattr(
+            "acp_adapter.session.load_config",
+            lambda: {
+                "model": {
+                    "default": "fake-model",
+                    "provider": "fake-provider",
+                },
+                "mcp_servers": {},
+            },
+            raising=False,
+        )
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: {
+                "model": {
+                    "default": "fake-model",
+                    "provider": "fake-provider",
+                },
+                "mcp_servers": {},
+            },
+        )
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider.resolve_runtime_provider",
+            lambda requested=None: {
+                "provider": requested,
+                "api_mode": "codex_app_server",
+                "base_url": "https://example.invalid",
+                "api_key": "test-key",
+            },
+        )
+        monkeypatch.setattr("acp_adapter.session._register_task_cwd", lambda task_id, cwd: None)
+
+        state = SessionManager(db=None).create_session(cwd="/tmp/project")
+
+        assert state.agent.session_cwd == "/tmp/project"
+
+
+
 
 # ---------------------------------------------------------------------------
 # WSL cwd translation
@@ -91,35 +133,22 @@ class TestWslCwdTranslation:
     def test_translate_acp_cwd_converts_windows_drive_path_when_wsl(self, monkeypatch):
         monkeypatch.setattr("clawk_constants._wsl_detected", True)
 
-        assert (
-            acp_session._translate_acp_cwd(r"E:\Projects\AI\paperclip")
-            == "/mnt/e/Projects/AI/paperclip"
-        )
+        assert acp_session._translate_acp_cwd(r"E:\Projects\AI\paperclip") == "/mnt/e/Projects/AI/paperclip"
 
     def test_translate_acp_cwd_handles_forward_slashes_when_wsl(self, monkeypatch):
         monkeypatch.setattr("clawk_constants._wsl_detected", True)
 
-        assert (
-            acp_session._translate_acp_cwd("D:/work/project") == "/mnt/d/work/project"
-        )
+        assert acp_session._translate_acp_cwd("D:/work/project") == "/mnt/d/work/project"
 
-    def test_translate_acp_cwd_leaves_windows_drive_path_unchanged_off_wsl(
-        self, monkeypatch
-    ):
+    def test_translate_acp_cwd_leaves_windows_drive_path_unchanged_off_wsl(self, monkeypatch):
         monkeypatch.setattr("clawk_constants._wsl_detected", False)
 
-        assert (
-            acp_session._translate_acp_cwd(r"E:\Projects\AI\paperclip")
-            == r"E:\Projects\AI\paperclip"
-        )
+        assert acp_session._translate_acp_cwd(r"E:\Projects\AI\paperclip") == r"E:\Projects\AI\paperclip"
 
     def test_translate_acp_cwd_leaves_posix_path_unchanged_on_wsl(self, monkeypatch):
         monkeypatch.setattr("clawk_constants._wsl_detected", True)
 
-        assert (
-            acp_session._translate_acp_cwd("/mnt/e/Projects/AI/paperclip")
-            == "/mnt/e/Projects/AI/paperclip"
-        )
+        assert acp_session._translate_acp_cwd("/mnt/e/Projects/AI/paperclip") == "/mnt/e/Projects/AI/paperclip"
 
     def test_create_session_stores_translated_cwd_on_wsl(self, manager, monkeypatch):
         monkeypatch.setattr("clawk_constants._wsl_detected", True)
@@ -145,7 +174,6 @@ class TestWslCwdTranslation:
 
         assert updated is not None
         assert updated.cwd == "/mnt/c/Users/foo/project"
-
 
 # ---------------------------------------------------------------------------
 # fork
@@ -227,7 +255,128 @@ class TestListAndCleanup:
 
         db = manager._get_db()
         messages = db.get_messages_as_conversation(state.session_id)
-        assert messages == [{"role": "user", "content": "original"}]
+        assert len(messages) == 1
+        assert messages[0]["role"] == "user"
+        assert messages[0]["content"] == "original"
+        assert isinstance(messages[0].get("timestamp"), (int, float))
+
+    def test_save_session_preserves_agent_archived_history(self, tmp_path):
+        """Regression: ACP _persist must not destroy compression-archived rows.
+
+        When the agent owns persistence to the same SessionDB, it has already
+        flushed the transcript itself and used archive_and_compact() to keep
+        pre-compaction turns as searchable active=0/compacted=1 rows. A blind
+        replace_messages() here used to DELETE those archived rows (and the FTS
+        index entries with them) on every save — silent data loss for any ACP
+        conversation long enough to compress.
+        """
+        db = SessionDB(tmp_path / "state.db")
+
+        def factory():
+            # Mimic a live ACP agent: it persists to *this* db and has already
+            # created its session row / flushed at least one turn.
+            return SimpleNamespace(
+                model="test-model",
+                _session_db=db,
+                _session_db_created=True,
+            )
+
+        manager = SessionManager(agent_factory=factory, db=db)
+        state = manager.create_session(cwd="/work")
+
+        # Simulate the agent's own persistence: it flushed the live transcript,
+        # then compression archived the pre-compaction turns and inserted a
+        # compacted summary as the new active set.
+        db.append_message(
+            session_id=state.session_id, role="user", content="archived needle"
+        )
+        db.archive_and_compact(
+            state.session_id, [{"role": "user", "content": "compacted summary"}]
+        )
+
+        # ACP's in-memory history only tracks the post-compaction (active) set.
+        state.history = [{"role": "user", "content": "compacted summary"}]
+        manager.save_session(state.session_id)
+
+        # The archived pre-compaction turn must survive and stay discoverable.
+        contents = [
+            m["content"]
+            for m in db.get_messages(state.session_id, include_inactive=True)
+        ]
+        assert "archived needle" in contents
+        assert "compacted summary" in contents
+        hits = {r["session_id"] for r in db.search_messages("needle")}
+        assert state.session_id in hits
+
+    def test_save_session_still_replaces_when_agent_not_self_persisting(self, manager):
+        """Agents that don't own DB persistence keep ACP as the source of truth.
+
+        The default fixture's MagicMock agent has a ``_session_db`` that is *not*
+        the manager's db, so the destructive replace path stays active and ACP
+        history overwrites cleanly (no orphaned rows from a prior save).
+        """
+        state = manager.create_session()
+        db = manager._get_db()
+
+        state.history = [{"role": "user", "content": "v1"}]
+        manager.save_session(state.session_id)
+        assert [
+            m["content"] for m in db.get_messages_as_conversation(state.session_id)
+        ] == ["v1"]
+
+        state.history = [{"role": "user", "content": "v2 replaced"}]
+        manager.save_session(state.session_id)
+        assert [
+            m["content"] for m in db.get_messages_as_conversation(state.session_id)
+        ] == ["v2 replaced"]
+
+    def test_save_session_preserves_archived_rows_on_model_switch(self, tmp_path):
+        """Regression (#50405 W1/W2): a save by a fresh, non-self-persisting
+        agent must not destroy compaction-archived rows.
+
+        Model switches and /restore mint a brand-new agent with
+        ``_session_db_created=False`` (so it does NOT "own" persistence) and
+        then immediately call save_session. If the session had already
+        compacted, a blind full-history replace would DELETE the archived
+        active=0/compacted=1 rows — the same data loss the owned-agent guard
+        prevents. When archived rows exist, _persist must replace only the live
+        set (active_only) and leave the archived transcript intact.
+        """
+        from types import SimpleNamespace
+
+        db = SessionDB(tmp_path / "state.db")
+        # Use a mock agent factory so create_session doesn't spin up a real
+        # AIAgent (which needs credentials and leaks provider-probe state across
+        # xdist workers). The factory's agent does NOT own persistence to db.
+        manager = SessionManager(
+            agent_factory=lambda: SimpleNamespace(model="m"), db=db
+        )
+        state = manager.create_session(cwd="/work")
+
+        # Session flushed a live turn, then compaction archived it.
+        db.append_message(
+            session_id=state.session_id, role="user", content="archived needle"
+        )
+        db.archive_and_compact(
+            state.session_id, [{"role": "user", "content": "compacted summary"}]
+        )
+
+        # Model switch: a fresh agent bound to THIS db but not yet self-created.
+        state.agent = SimpleNamespace(
+            model="new-model", _session_db=db, _session_db_created=False
+        )
+        state.history = [{"role": "user", "content": "compacted summary"}]
+        manager.save_session(state.session_id)
+
+        # Archived pre-compaction turn survives and stays discoverable.
+        contents = [
+            m["content"]
+            for m in db.get_messages(state.session_id, include_inactive=True)
+        ]
+        assert "archived needle" in contents
+        assert "compacted summary" in contents
+        hits = {r["session_id"] for r in db.search_messages("needle")}
+        assert state.session_id in hits
 
     def test_cleanup_clears_all(self, manager):
         s1 = manager.create_session()
@@ -254,9 +403,7 @@ class TestListAndCleanup:
 class TestPersistence:
     """Verify that sessions are persisted to SessionDB and can be restored."""
 
-    def test_create_session_includes_registered_mcp_toolsets(
-        self, tmp_path, monkeypatch
-    ):
+    def test_create_session_includes_registered_mcp_toolsets(self, tmp_path, monkeypatch):
         captured = {}
 
         def fake_resolve_runtime_provider(requested=None, **kwargs):
@@ -271,22 +418,16 @@ class TestPersistence:
 
         def fake_agent(**kwargs):
             captured.update(kwargs)
-            return SimpleNamespace(
-                model=kwargs.get("model"),
-                enabled_toolsets=kwargs.get("enabled_toolsets"),
-            )
+            return SimpleNamespace(model=kwargs.get("model"), enabled_toolsets=kwargs.get("enabled_toolsets"))
 
-        monkeypatch.setattr(
-            "clawk_cli.config.load_config",
-            lambda: {
-                "model": {"provider": "openrouter", "default": "test-model"},
-                "mcp_servers": {
-                    "olympus": {"command": "python", "enabled": True},
-                    "exa": {"url": "https://exa.ai/mcp"},
-                    "disabled": {"command": "python", "enabled": False},
-                },
+        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {
+            "model": {"provider": "openrouter", "default": "test-model"},
+            "mcp_servers": {
+                "olympus": {"command": "python", "enabled": True},
+                "exa": {"url": "https://exa.ai/mcp"},
+                "disabled": {"command": "python", "enabled": False},
             },
-        )
+        })
         monkeypatch.setattr(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
             fake_resolve_runtime_provider,
@@ -397,10 +538,7 @@ class TestPersistence:
 
     def test_list_sessions_prefers_title_then_preview(self, manager):
         state = manager.create_session(cwd="/named")
-        state.history.append({
-            "role": "user",
-            "content": "Investigate broken ACP history in Zed",
-        })
+        state.history.append({"role": "user", "content": "Investigate broken ACP history in Zed"})
         manager.save_session(state.session_id)
         db = manager._get_db()
         db.set_session_title(state.session_id, "Fix Zed ACP history")
@@ -422,10 +560,7 @@ class TestPersistence:
         manager.save_session(newer.session_id)
 
         listing = manager.list_sessions(cwd="/ordered")
-        assert [item["session_id"] for item in listing[:2]] == [
-            newer.session_id,
-            older.session_id,
-        ]
+        assert [item["session_id"] for item in listing[:2]] == [newer.session_id, older.session_id]
         assert listing[0]["updated_at"]
         assert listing[1]["updated_at"]
 
@@ -474,10 +609,7 @@ class TestPersistence:
         """ACP sessions stored in SessionDB are searchable via FTS5."""
         state = manager.create_session()
         state.history.append({"role": "user", "content": "how do I configure nginx"})
-        state.history.append({
-            "role": "assistant",
-            "content": "Here is the nginx config...",
-        })
+        state.history.append({"role": "assistant", "content": "Here is the nginx config..."})
         manager.save_session(state.session_id)
 
         db = manager._get_db()
@@ -492,13 +624,8 @@ class TestPersistence:
         state.history.append({
             "role": "assistant",
             "content": None,
-            "tool_calls": [
-                {
-                    "id": "tc_1",
-                    "type": "function",
-                    "function": {"name": "terminal", "arguments": "{}"},
-                }
-            ],
+            "tool_calls": [{"id": "tc_1", "type": "function",
+                            "function": {"name": "terminal", "arguments": "{}"}}],
         })
         state.history.append({
             "role": "tool",
@@ -539,23 +666,19 @@ class TestPersistence:
 
         restored = manager.get_session(state.session_id)
         assert restored is not None
-        assert restored.history == [
-            {
-                "role": "assistant",
-                "content": "hello",
-                "reasoning": "step-by-step",
-                "reasoning_details": [
-                    {"type": "thinking", "thinking": "first thought"},
-                ],
-                "codex_reasoning_items": [
-                    {
-                        "type": "reasoning",
-                        "id": "rs_123",
-                        "encrypted_content": "enc_blob",
-                    },
-                ],
-            }
-        ]
+        msg = restored.history[0]
+        assert isinstance(msg.pop("timestamp", None), (int, float))
+        assert restored.history == [{
+            "role": "assistant",
+            "content": "hello",
+            "reasoning": "step-by-step",
+            "reasoning_details": [
+                {"type": "thinking", "thinking": "first thought"},
+            ],
+            "codex_reasoning_items": [
+                {"type": "reasoning", "id": "rs_123", "encrypted_content": "enc_blob"},
+            ],
+        }]
 
     def test_restore_preserves_persisted_provider_snapshot(self, tmp_path, monkeypatch):
         """Restored ACP sessions should keep their original runtime provider."""
@@ -565,9 +688,7 @@ class TestPersistence:
             provider = requested or runtime_choice["provider"]
             return {
                 "provider": provider,
-                "api_mode": "anthropic_messages"
-                if provider == "anthropic"
-                else "chat_completions",
+                "api_mode": "anthropic_messages" if provider == "anthropic" else "chat_completions",
                 "base_url": f"https://{provider}.example/v1",
                 "api_key": f"{provider}-key",
                 "command": None,
@@ -582,15 +703,9 @@ class TestPersistence:
                 api_mode=kwargs.get("api_mode"),
             )
 
-        monkeypatch.setattr(
-            "clawk_cli.config.load_config",
-            lambda: {
-                "model": {
-                    "provider": runtime_choice["provider"],
-                    "default": "test-model",
-                }
-            },
-        )
+        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {
+            "model": {"provider": runtime_choice["provider"], "default": "test-model"}
+        })
         monkeypatch.setattr(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
             fake_resolve_runtime_provider,
@@ -628,10 +743,9 @@ class TestPersistence:
         def fake_agent(**kwargs):
             return SimpleNamespace(model=kwargs.get("model"), _print_fn=None)
 
-        monkeypatch.setattr(
-            "clawk_cli.config.load_config",
-            lambda: {"model": {"provider": "openrouter", "default": "test-model"}},
-        )
+        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {
+            "model": {"provider": "openrouter", "default": "test-model"}
+        })
         monkeypatch.setattr(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
             fake_resolve_runtime_provider,
@@ -644,10 +758,7 @@ class TestPersistence:
 
         stdout_buf = io.StringIO()
         stderr_buf = io.StringIO()
-        with (
-            contextlib.redirect_stdout(stdout_buf),
-            contextlib.redirect_stderr(stderr_buf),
-        ):
+        with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
             state.agent._print_fn("ACP noise")
 
         assert stdout_buf.getvalue() == ""

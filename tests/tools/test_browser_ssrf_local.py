@@ -64,9 +64,7 @@ class TestPreNavigationSsrf:
         assert result["success"] is False
         assert "private or internal address" in result["error"]
 
-    def test_cloud_allows_private_url_when_setting_true(
-        self, monkeypatch, _common_patches
-    ):
+    def test_cloud_allows_private_url_when_setting_true(self, monkeypatch, _common_patches):
         """Private URLs pass in cloud mode when allow_private_urls is True."""
         monkeypatch.setattr(browser_tool, "_is_local_backend", lambda: False)
         monkeypatch.setattr(browser_tool, "_allow_private_urls", lambda: True)
@@ -117,10 +115,10 @@ class TestPreNavigationSsrf:
     # browser_snapshot. The always-blocked floor must fire regardless of
     # routing.
     IMDS_URLS = [
-        "http://169.254.169.254/latest/meta-data/",  # AWS / GCP / Azure / DO / Oracle
-        "http://169.254.169.253/metadata/instance",  # Azure IMDS wire server
-        "http://169.254.170.2/v2/credentials",  # AWS ECS task metadata
-        "http://100.100.100.200/latest/meta-data/",  # Alibaba Cloud
+        "http://169.254.169.254/latest/meta-data/",      # AWS / GCP / Azure / DO / Oracle
+        "http://169.254.169.253/metadata/instance",        # Azure IMDS wire server
+        "http://169.254.170.2/v2/credentials",             # AWS ECS task metadata
+        "http://100.100.100.200/latest/meta-data/",        # Alibaba Cloud
         "http://metadata.google.internal/computeMetadata/v1/",  # GCP hostname
     ]
 
@@ -162,9 +160,7 @@ class TestPreNavigationSsrf:
             "http://myservice.local/",
         ):
             result = json.loads(browser_tool.browser_navigate(private))
-            assert result["success"] is True, (
-                f"Unexpected block for {private}: {result}"
-            )
+            assert result["success"] is True, f"Unexpected block for {private}: {result}"
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +189,39 @@ class TestIsLocalBackend:
         monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: "bb")
 
         assert browser_tool._is_local_backend() is False
+
+    @pytest.mark.parametrize("backend", ["docker", "modal", "daytona", "ssh", "singularity"])
+    def test_container_terminal_backend_is_not_local(self, monkeypatch, backend):
+        """Terminal running in a container → NOT local (browser on host can access internal networks)."""
+        monkeypatch.setattr(browser_tool, "_is_camofox_mode", lambda: False)
+        monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: None)
+        monkeypatch.setenv("TERMINAL_ENV", backend)
+
+        assert browser_tool._is_local_backend() is False
+
+    def test_empty_terminal_env_is_local(self, monkeypatch):
+        """Empty TERMINAL_ENV → local backend."""
+        monkeypatch.setattr(browser_tool, "_is_camofox_mode", lambda: False)
+        monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: None)
+        monkeypatch.setenv("TERMINAL_ENV", "")
+
+        assert browser_tool._is_local_backend() is True
+
+    def test_local_terminal_env_is_local(self, monkeypatch):
+        """Explicit 'local' TERMINAL_ENV → local backend."""
+        monkeypatch.setattr(browser_tool, "_is_camofox_mode", lambda: False)
+        monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: None)
+        monkeypatch.setenv("TERMINAL_ENV", "local")
+
+        assert browser_tool._is_local_backend() is True
+
+    def test_camofox_overrides_container_backend(self, monkeypatch):
+        """Camofox mode always counts as local, even with container terminal."""
+        monkeypatch.setattr(browser_tool, "_is_camofox_mode", lambda: True)
+        monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: None)
+        monkeypatch.setenv("TERMINAL_ENV", "docker")
+
+        assert browser_tool._is_local_backend() is True
 
 
 # ---------------------------------------------------------------------------
@@ -228,9 +257,7 @@ class TestPostRedirectSsrf:
         monkeypatch.setattr(browser_tool, "_is_local_backend", lambda: False)
         monkeypatch.setattr(browser_tool, "_allow_private_urls", lambda: False)
         monkeypatch.setattr(
-            browser_tool,
-            "_is_safe_url",
-            lambda url: "192.168" not in url,
+            browser_tool, "_is_safe_url", lambda url: "192.168" not in url,
         )
         monkeypatch.setattr(
             browser_tool,
@@ -243,16 +270,12 @@ class TestPostRedirectSsrf:
         assert result["success"] is False
         assert "redirect landed on a private/internal address" in result["error"]
 
-    def test_cloud_allows_redirect_to_private_when_setting_true(
-        self, monkeypatch, _common_patches
-    ):
+    def test_cloud_allows_redirect_to_private_when_setting_true(self, monkeypatch, _common_patches):
         """Redirects to private addresses pass in cloud mode with allow_private_urls."""
         monkeypatch.setattr(browser_tool, "_is_local_backend", lambda: False)
         monkeypatch.setattr(browser_tool, "_allow_private_urls", lambda: True)
         monkeypatch.setattr(
-            browser_tool,
-            "_is_safe_url",
-            lambda url: "192.168" not in url,
+            browser_tool, "_is_safe_url", lambda url: "192.168" not in url,
         )
         monkeypatch.setattr(
             browser_tool,
@@ -272,9 +295,7 @@ class TestPostRedirectSsrf:
         monkeypatch.setattr(browser_tool, "_is_local_backend", lambda: True)
         monkeypatch.setattr(browser_tool, "_allow_private_urls", lambda: False)
         monkeypatch.setattr(
-            browser_tool,
-            "_is_safe_url",
-            lambda url: "192.168" not in url,
+            browser_tool, "_is_safe_url", lambda url: "192.168" not in url,
         )
         monkeypatch.setattr(
             browser_tool,

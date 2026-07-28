@@ -44,7 +44,9 @@ UPDATE_PROMPT_PREFIX = "update_prompt:"
 # Pattern: approve:<session_key>:<decision>
 # session_key may itself contain colons (e.g. agent:main:qqbot:c2c:OPENID),
 # so the session_key group is greedy but trails the decision.
-_APPROVAL_DATA_RE = re.compile(r"^approve:(.+):(allow-once|allow-always|deny)$")
+_APPROVAL_DATA_RE = re.compile(
+    r"^approve:(.+):(allow-once|allow-always|deny)$"
+)
 
 # Pattern: update_prompt:y | update_prompt:n
 _UPDATE_PROMPT_RE = re.compile(r"^update_prompt:(y|n)$")
@@ -52,11 +54,9 @@ _UPDATE_PROMPT_RE = re.compile(r"^update_prompt:(y|n)$")
 
 # ── Keyboard dataclasses ─────────────────────────────────────────────
 
-
 @dataclass
 class KeyboardButtonPermission:
     """Button permission metadata. ``type=2`` means all users can click."""
-
     type: int = 2
 
     def to_dict(self) -> Dict[str, Any]:
@@ -74,7 +74,6 @@ class KeyboardButtonAction:
     :param permission: :class:`KeyboardButtonPermission`.
     :param click_limit: Max clicks per user (``1`` = single-use).
     """
-
     type: int
     data: str
     permission: KeyboardButtonPermission = field(
@@ -99,7 +98,6 @@ class KeyboardButtonRenderData:
     :param visited_label: Post-click label (button stays greyed in place).
     :param style: ``0`` = grey, ``1`` = blue.
     """
-
     label: str
     visited_label: str
     style: int = 1
@@ -119,7 +117,6 @@ class KeyboardButton:
     :param group_id: Buttons sharing a ``group_id`` are mutually exclusive —
         clicking one greys the rest.
     """
-
     id: str
     render_data: KeyboardButtonRenderData
     action: KeyboardButtonAction
@@ -153,7 +150,6 @@ class KeyboardContent:
 @dataclass
 class InlineKeyboard:
     """Top-level keyboard payload — goes into ``MessageToCreate.keyboard``."""
-
     content: KeyboardContent = field(default_factory=KeyboardContent)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -161,7 +157,6 @@ class InlineKeyboard:
 
 
 # ── INTERACTION_CREATE parsing ───────────────────────────────────────
-
 
 def parse_approval_button_data(button_data: str) -> Optional[tuple[str, str]]:
     """Parse approval ``button_data`` into ``(session_key, decision)``.
@@ -186,7 +181,6 @@ def parse_update_prompt_button_data(button_data: str) -> Optional[str]:
 
 # ── Keyboard builders ────────────────────────────────────────────────
 
-
 def _make_callback_button(
     btn_id: str,
     label: str,
@@ -207,8 +201,8 @@ def _make_callback_button(
     )
 
 
-def build_approval_keyboard(session_key: str) -> InlineKeyboard:
-    """Build the 3-button approval keyboard.
+def build_approval_keyboard(session_key: str, *, allow_permanent: bool = True) -> InlineKeyboard:
+    """Build the approval keyboard, hiding persistent scope when unavailable.
 
     Layout: ``[✅ 允许一次] [⭐ 始终允许] [❌ 拒绝]`` — all three share
     ``group_id='approval'`` so clicking one greys out the rest.
@@ -216,40 +210,25 @@ def build_approval_keyboard(session_key: str) -> InlineKeyboard:
     :param session_key: Embedded into ``button_data`` so the decision
         routes back to the right pending approval.
     """
-    return InlineKeyboard(
-        content=KeyboardContent(
-            rows=[
-                KeyboardRow(
-                    buttons=[
-                        _make_callback_button(
-                            btn_id="allow",
-                            label="✅ 允许一次",
-                            visited_label="已允许",
-                            data=f"{APPROVAL_BUTTON_PREFIX}{session_key}:allow-once",
-                            style=1,
-                            group_id="approval",
-                        ),
-                        _make_callback_button(
-                            btn_id="always",
-                            label="⭐ 始终允许",
-                            visited_label="已始终允许",
-                            data=f"{APPROVAL_BUTTON_PREFIX}{session_key}:allow-always",
-                            style=1,
-                            group_id="approval",
-                        ),
-                        _make_callback_button(
-                            btn_id="deny",
-                            label="❌ 拒绝",
-                            visited_label="已拒绝",
-                            data=f"{APPROVAL_BUTTON_PREFIX}{session_key}:deny",
-                            style=0,
-                            group_id="approval",
-                        ),
-                    ]
-                ),
-            ]
+    buttons = [
+        _make_callback_button(
+            btn_id="allow", label="✅ 允许一次", visited_label="已允许",
+            data=f"{APPROVAL_BUTTON_PREFIX}{session_key}:allow-once",
+            style=1, group_id="approval",
         )
-    )
+    ]
+    if allow_permanent:
+        buttons.append(_make_callback_button(
+            btn_id="always", label="⭐ 始终允许", visited_label="已始终允许",
+            data=f"{APPROVAL_BUTTON_PREFIX}{session_key}:allow-always",
+            style=1, group_id="approval",
+        ))
+    buttons.append(_make_callback_button(
+        btn_id="deny", label="❌ 拒绝", visited_label="已拒绝",
+        data=f"{APPROVAL_BUTTON_PREFIX}{session_key}:deny",
+        style=0, group_id="approval",
+    ))
+    return InlineKeyboard(content=KeyboardContent(rows=[KeyboardRow(buttons=buttons)]))
 
 
 def build_update_prompt_keyboard() -> InlineKeyboard:
@@ -257,33 +236,30 @@ def build_update_prompt_keyboard() -> InlineKeyboard:
     return InlineKeyboard(
         content=KeyboardContent(
             rows=[
-                KeyboardRow(
-                    buttons=[
-                        _make_callback_button(
-                            btn_id="yes",
-                            label="✓ 确认",
-                            visited_label="已确认",
-                            data=f"{UPDATE_PROMPT_PREFIX}y",
-                            style=1,
-                            group_id="update_prompt",
-                        ),
-                        _make_callback_button(
-                            btn_id="no",
-                            label="✗ 取消",
-                            visited_label="已取消",
-                            data=f"{UPDATE_PROMPT_PREFIX}n",
-                            style=0,
-                            group_id="update_prompt",
-                        ),
-                    ]
-                ),
+                KeyboardRow(buttons=[
+                    _make_callback_button(
+                        btn_id="yes",
+                        label="✓ 确认",
+                        visited_label="已确认",
+                        data=f"{UPDATE_PROMPT_PREFIX}y",
+                        style=1,
+                        group_id="update_prompt",
+                    ),
+                    _make_callback_button(
+                        btn_id="no",
+                        label="✗ 取消",
+                        visited_label="已取消",
+                        data=f"{UPDATE_PROMPT_PREFIX}n",
+                        style=0,
+                        group_id="update_prompt",
+                    ),
+                ]),
             ]
         )
     )
 
 
 # ── ApprovalRequest + text builder ───────────────────────────────────
-
 
 @dataclass
 class ApprovalRequest:
@@ -298,7 +274,6 @@ class ApprovalRequest:
     :param severity: ``'critical' | 'info' | ''``.
     :param timeout_sec: Seconds until the approval expires.
     """
-
     session_key: str
     title: str
     description: str = ""
@@ -307,6 +282,7 @@ class ApprovalRequest:
     tool_name: str = ""
     severity: str = ""
     timeout_sec: int = 120
+    allow_permanent: bool = True
 
 
 def build_approval_text(req: ApprovalRequest) -> str:
@@ -334,7 +310,9 @@ def _build_exec_text(req: ApprovalRequest) -> str:
 
 def _build_plugin_text(req: ApprovalRequest) -> str:
     icon = (
-        "🔴" if req.severity == "critical" else "🔵" if req.severity == "info" else "🟡"
+        "🔴" if req.severity == "critical"
+        else "🔵" if req.severity == "info"
+        else "🟡"
     )
     lines: List[str] = [f"{icon} **审批请求**", ""]
     lines.append(f"📋 {req.title}")
@@ -394,10 +372,7 @@ class ApprovalSender:
 
         logger.info(
             "[%s] Sending approval request to %s:%s (session=%.20s…)",
-            self._log_tag,
-            chat_type,
-            chat_id,
-            req.session_key,
+            self._log_tag, chat_type, chat_id, req.session_key,
         )
 
         try:
@@ -408,30 +383,23 @@ class ApprovalSender:
             else:
                 logger.warning(
                     "[%s] Approval: unsupported chat_type %r",
-                    self._log_tag,
-                    chat_type,
+                    self._log_tag, chat_type,
                 )
                 return False
             logger.info(
                 "[%s] Approval message sent to %s:%s",
-                self._log_tag,
-                chat_type,
-                chat_id,
+                self._log_tag, chat_type, chat_id,
             )
             return True
         except Exception as exc:
             logger.error(
                 "[%s] Failed to send approval message to %s:%s: %s",
-                self._log_tag,
-                chat_type,
-                chat_id,
-                exc,
+                self._log_tag, chat_type, chat_id, exc,
             )
             return False
 
 
 # ── INTERACTION_CREATE event shape ───────────────────────────────────
-
 
 @dataclass
 class InteractionEvent:
@@ -439,7 +407,6 @@ class InteractionEvent:
 
     See https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/interface-framework/event-emit.html
     """
-
     id: str = ""
     """Interaction event id — required for the ``PUT /interactions/{id}`` ACK."""
 
@@ -465,7 +432,11 @@ class InteractionEvent:
     @property
     def operator_openid(self) -> str:
         """Best available operator openid (group → member; c2c → user)."""
-        return self.group_member_openid or self.user_openid or self.resolver_user_id
+        return (
+            self.group_member_openid
+            or self.user_openid
+            or self.resolver_user_id
+        )
 
 
 def parse_interaction_event(raw: Dict[str, Any]) -> InteractionEvent:

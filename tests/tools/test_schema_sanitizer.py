@@ -27,19 +27,14 @@ def test_object_without_properties_gets_empty_properties():
 
 
 def test_nested_object_without_properties_gets_empty_properties():
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "arguments": {"type": "object", "description": "free-form"},
-                },
-                "required": ["name"],
-            },
-        )
-    ]
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "arguments": {"type": "object", "description": "free-form"},
+        },
+        "required": ["name"],
+    })]
     out = sanitize_tool_schemas(tools)
     args = out[0]["function"]["parameters"]["properties"]["arguments"]
     assert args["type"] == "object"
@@ -50,17 +45,12 @@ def test_nested_object_without_properties_gets_empty_properties():
 def test_bare_string_object_value_replaced_with_schema_dict():
     # Malformed: a property's schema value is the bare string "object".
     # This is the exact shape llama.cpp reports as `Unrecognized schema: "object"`.
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {
-                    "payload": "object",  # <-- invalid, should be {"type": "object"}
-                },
-            },
-        )
-    ]
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "payload": "object",  # <-- invalid, should be {"type": "object"}
+        },
+    })]
     out = sanitize_tool_schemas(tools)
     payload = out[0]["function"]["parameters"]["properties"]["payload"]
     assert isinstance(payload, dict)
@@ -69,54 +59,98 @@ def test_bare_string_object_value_replaced_with_schema_dict():
 
 
 def test_bare_string_primitive_value_replaced_with_schema_dict():
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {"name": "string"},
-            },
-        )
-    ]
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {"name": "string"},
+    })]
     out = sanitize_tool_schemas(tools)
     assert out[0]["function"]["parameters"]["properties"]["name"] == {"type": "string"}
 
 
 def test_nullable_type_array_collapsed_to_single_string():
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {
-                    "maybe_name": {"type": ["string", "null"]},
-                },
-            },
-        )
-    ]
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "maybe_name": {"type": ["string", "null"]},
+        },
+    })]
     out = sanitize_tool_schemas(tools)
     prop = out[0]["function"]["parameters"]["properties"]["maybe_name"]
     assert prop["type"] == "string"
     assert prop.get("nullable") is True
 
 
+def test_multitype_array_becomes_anyof_no_branch_dropped():
+    # Ported from anomalyco/opencode#31877: a genuine multi-type array such as
+    # ["number", "string"] (common in MCP tool schemas) must keep BOTH branches
+    # as an anyOf, not silently drop all but the first. Several backends
+    # (llama.cpp, Gemini via OpenAI-compatible transports) reject the array form.
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "status": {"type": ["number", "string"], "description": "status filter"},
+        },
+    })]
+    out = sanitize_tool_schemas(tools)
+    prop = out[0]["function"]["parameters"]["properties"]["status"]
+    assert "type" not in prop
+    assert prop["anyOf"] == [{"type": "number"}, {"type": "string"}]
+    assert prop.get("nullable") is None
+    # Sibling keywords survive alongside the generated anyOf.
+    assert prop["description"] == "status filter"
+
+
+def test_multitype_array_with_null_lifts_nullable():
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "v": {"type": ["integer", "boolean", "null"]},
+        },
+    })]
+    out = sanitize_tool_schemas(tools)
+    prop = out[0]["function"]["parameters"]["properties"]["v"]
+    assert "type" not in prop
+    assert prop["anyOf"] == [{"type": "integer"}, {"type": "boolean"}]
+    assert prop.get("nullable") is True
+
+
+def test_all_null_type_array_becomes_null_type():
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "n": {"type": ["null"]},
+        },
+    })]
+    out = sanitize_tool_schemas(tools)
+    prop = out[0]["function"]["parameters"]["properties"]["n"]
+    assert prop["type"] == "null"
+
+
+def test_single_element_type_array_unwrapped():
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "s": {"type": ["string"]},
+        },
+    })]
+    out = sanitize_tool_schemas(tools)
+    prop = out[0]["function"]["parameters"]["properties"]["s"]
+    assert prop["type"] == "string"
+    assert prop.get("nullable") is None
+
+
 def test_anyof_nested_objects_sanitized():
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {
-                    "opt": {
-                        "anyOf": [
-                            {"type": "object"},  # bare object
-                            {"type": "string"},
-                        ],
-                    },
-                },
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "opt": {
+                "anyOf": [
+                    {"type": "object"},               # bare object
+                    {"type": "string"},
+                ],
             },
-        )
-    ]
+        },
+    })]
     out = sanitize_tool_schemas(tools)
     variants = out[0]["function"]["parameters"]["properties"]["opt"]["anyOf"]
     assert variants[0] == {"type": "object", "properties": {}}
@@ -136,31 +170,21 @@ def test_non_dict_parameters_gets_default_object_schema():
 
 
 def test_required_pruned_to_existing_properties():
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name", "missing_field"],
-            },
-        )
-    ]
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name", "missing_field"],
+    })]
     out = sanitize_tool_schemas(tools)
     assert out[0]["function"]["parameters"]["required"] == ["name"]
 
 
 def test_required_all_missing_is_dropped():
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {},
-                "required": ["x", "y"],
-            },
-        )
-    ]
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {},
+        "required": ["x", "y"],
+    })]
     out = sanitize_tool_schemas(tools)
     assert "required" not in out[0]["function"]["parameters"]
 
@@ -180,43 +204,31 @@ def test_well_formed_schema_unchanged():
 
 
 def test_additional_properties_bool_preserved():
-    tools = [
-        _tool(
-            "t",
-            {
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "payload": {
                 "type": "object",
-                "properties": {
-                    "payload": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": True,
-                    },
-                },
+                "properties": {},
+                "additionalProperties": True,
             },
-        )
-    ]
+        },
+    })]
     out = sanitize_tool_schemas(tools)
     payload = out[0]["function"]["parameters"]["properties"]["payload"]
     assert payload["additionalProperties"] is True
 
 
 def test_additional_properties_schema_sanitized():
-    tools = [
-        _tool(
-            "t",
-            {
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "dict_field": {
                 "type": "object",
-                "properties": {
-                    "dict_field": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "object"
-                        },  # bare object schema
-                    },
-                },
+                "additionalProperties": {"type": "object"},  # bare object schema
             },
-        )
-    ]
+        },
+    })]
     out = sanitize_tool_schemas(tools)
     field = out[0]["function"]["parameters"]["properties"]["dict_field"]
     assert field["additionalProperties"] == {"type": "object", "properties": {}}
@@ -234,20 +246,15 @@ def test_deepcopy_does_not_mutate_input():
 
 
 def test_items_sanitized_in_array_schema():
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {
-                    "bag": {
-                        "type": "array",
-                        "items": {"type": "object"},  # bare object items
-                    },
-                },
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "bag": {
+                "type": "array",
+                "items": {"type": "object"},  # bare object items
             },
-        )
-    ]
+        },
+    })]
     out = sanitize_tool_schemas(tools)
     items = out[0]["function"]["parameters"]["properties"]["bag"]["items"]
     assert items == {"type": "object", "properties": {}}
@@ -255,23 +262,18 @@ def test_items_sanitized_in_array_schema():
 
 def test_ref_with_default_sibling_stripped():
     """Strict backends reject ``default`` alongside ``$ref``."""
-    tools = [
-        _tool(
-            "t",
-            {
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "payload": {"$ref": "#/$defs/Payload", "default": None},
+        },
+        "$defs": {
+            "Payload": {
                 "type": "object",
-                "properties": {
-                    "payload": {"$ref": "#/$defs/Payload", "default": None},
-                },
-                "$defs": {
-                    "Payload": {
-                        "type": "object",
-                        "properties": {"q": {"type": "string"}},
-                    },
-                },
+                "properties": {"q": {"type": "string"}},
             },
-        )
-    ]
+        },
+    })]
     out = sanitize_tool_schemas(tools)
     payload = out[0]["function"]["parameters"]["properties"]["payload"]
     assert payload == {"$ref": "#/$defs/Payload"}
@@ -279,29 +281,24 @@ def test_ref_with_default_sibling_stripped():
 
 def test_nullable_union_collapse_does_not_leave_default_on_ref():
     """Nullable anyOf collapse must not attach ``default`` to a ``$ref`` branch."""
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {
-                    "input": {
-                        "anyOf": [
-                            {"$ref": "#/$defs/Payload"},
-                            {"type": "null"},
-                        ],
-                        "default": None,
-                    },
-                },
-                "$defs": {
-                    "Payload": {
-                        "type": "object",
-                        "properties": {"q": {"type": "string"}},
-                    },
-                },
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "input": {
+                "anyOf": [
+                    {"$ref": "#/$defs/Payload"},
+                    {"type": "null"},
+                ],
+                "default": None,
             },
-        )
-    ]
+        },
+        "$defs": {
+            "Payload": {
+                "type": "object",
+                "properties": {"q": {"type": "string"}},
+            },
+        },
+    })]
     out = sanitize_tool_schemas(tools)
     prop = out[0]["function"]["parameters"]["properties"]["input"]
     assert prop["$ref"] == "#/$defs/Payload"
@@ -311,23 +308,18 @@ def test_nullable_union_collapse_does_not_leave_default_on_ref():
 
 def test_ref_description_preserved():
     """Annotation siblings that strict backends allow should survive."""
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {
-                    "payload": {
-                        "$ref": "#/$defs/Payload",
-                        "description": "The payload",
-                    },
-                },
-                "$defs": {
-                    "Payload": {"type": "object", "properties": {}},
-                },
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "payload": {
+                "$ref": "#/$defs/Payload",
+                "description": "The payload",
             },
-        )
-    ]
+        },
+        "$defs": {
+            "Payload": {"type": "object", "properties": {}},
+        },
+    })]
     out = sanitize_tool_schemas(tools)
     payload = out[0]["function"]["parameters"]["properties"]["payload"]
     assert payload["description"] == "The payload"
@@ -351,17 +343,12 @@ def test_none_tools_returns_none():
 
 def test_strip_pattern_removes_schema_pattern_keyword():
     """`pattern` as a sibling of `type` → stripped."""
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {
-                    "date": {"type": "string", "pattern": "\\d{4,4}-\\d{2,2}-\\d{2,2}"},
-                },
-            },
-        )
-    ]
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "date": {"type": "string", "pattern": "\\d{4,4}-\\d{2,2}-\\d{2,2}"},
+        },
+    })]
     _, stripped = strip_pattern_and_format(tools)
     assert stripped == 1
     prop = tools[0]["function"]["parameters"]["properties"]["date"]
@@ -371,17 +358,12 @@ def test_strip_pattern_removes_schema_pattern_keyword():
 
 def test_strip_format_removes_schema_format_keyword():
     """`format` as a sibling of `type` → stripped."""
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {
-                    "ts": {"type": "string", "format": "date-time"},
-                },
-            },
-        )
-    ]
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "ts": {"type": "string", "format": "date-time"},
+        },
+    })]
     _, stripped = strip_pattern_and_format(tools)
     assert stripped == 1
     assert "format" not in tools[0]["function"]["parameters"]["properties"]["ts"]
@@ -389,19 +371,14 @@ def test_strip_format_removes_schema_format_keyword():
 
 def test_strip_preserves_property_named_pattern():
     """Property literally *named* 'pattern' (search_files) must survive."""
-    tools = [
-        _tool(
-            "search_files",
-            {
-                "type": "object",
-                "properties": {
-                    "pattern": {"type": "string", "description": "Regex pattern..."},
-                    "limit": {"type": "integer"},
-                },
-                "required": ["pattern"],
-            },
-        )
-    ]
+    tools = [_tool("search_files", {
+        "type": "object",
+        "properties": {
+            "pattern": {"type": "string", "description": "Regex pattern..."},
+            "limit": {"type": "integer"},
+        },
+        "required": ["pattern"],
+    })]
     _, stripped = strip_pattern_and_format(tools)
     assert stripped == 0
     params = tools[0]["function"]["parameters"]
@@ -413,22 +390,17 @@ def test_strip_preserves_property_named_pattern():
 
 def test_strip_recurses_into_anyof_variants():
     """Pattern/format inside anyOf variant schemas are also stripped."""
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {
-                    "value": {
-                        "anyOf": [
-                            {"type": "string", "pattern": "[A-Z]+", "format": "uuid"},
-                            {"type": "integer"},
-                        ],
-                    },
-                },
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "value": {
+                "anyOf": [
+                    {"type": "string", "pattern": "[A-Z]+", "format": "uuid"},
+                    {"type": "integer"},
+                ],
             },
-        )
-    ]
+        },
+    })]
     _, stripped = strip_pattern_and_format(tools)
     assert stripped == 2
     variants = tools[0]["function"]["parameters"]["properties"]["value"]["anyOf"]
@@ -439,15 +411,10 @@ def test_strip_recurses_into_anyof_variants():
 
 def test_strip_is_idempotent():
     """Second call on already-stripped tools is a no-op."""
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {"d": {"type": "string", "pattern": "\\d+"}},
-            },
-        )
-    ]
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {"d": {"type": "string", "pattern": "\\d+"}},
+    })]
     _, first = strip_pattern_and_format(tools)
     _, second = strip_pattern_and_format(tools)
     assert first == 1
@@ -466,6 +433,7 @@ def test_strip_none_returns_zero():
     assert stripped == 0
 
 
+
 def test_strip_responses_format_strips_format_keyword():
     """Responses-format:  keyword should be stripped."""
     from tools.schema_sanitizer import strip_pattern_and_format
@@ -477,46 +445,34 @@ def test_strip_responses_format_strips_format_keyword():
                 "type": "object",
                 "properties": {
                     "ts": {"type": "string", "format": "date-time"},
-                },
+                }
             },
-            "type": "function",
+            "type": "function"
         }
     ]
 
     result, stripped = strip_pattern_and_format(tools)
     assert stripped == 1, f"Expected 1 format stripped, got {stripped}"
-    assert "format" not in result[0]["parameters"]["properties"]["ts"], (
-        "format should be stripped"
-    )
-    assert result[0]["parameters"]["properties"]["ts"]["type"] == "string", (
-        "type should be preserved"
-    )
+    assert "format" not in result[0]["parameters"]["properties"]["ts"], "format should be stripped"
+    assert result[0]["parameters"]["properties"]["ts"]["type"] == "string", "type should be preserved"
 
 
 def test_top_level_allof_stripped_for_codex_backend_compat():
     """OpenAI Codex backend rejects top-level allOf/oneOf/anyOf/enum/not."""
-    tools = [
-        _tool(
-            "memory",
+    tools = [_tool("memory", {
+        "type": "object",
+        "properties": {
+            "action": {"type": "string", "enum": ["add", "replace"]},
+            "content": {"type": "string"},
+        },
+        "required": ["action"],
+        "allOf": [
             {
-                "type": "object",
-                "properties": {
-                    "action": {"type": "string", "enum": ["add", "replace"]},
-                    "content": {"type": "string"},
-                },
-                "required": ["action"],
-                "allOf": [
-                    {
-                        "if": {
-                            "properties": {"action": {"const": "add"}},
-                            "required": ["action"],
-                        },
-                        "then": {"required": ["content"]},
-                    },
-                ],
+                "if": {"properties": {"action": {"const": "add"}}, "required": ["action"]},
+                "then": {"required": ["content"]},
             },
-        )
-    ]
+        ],
+    })]
     out = sanitize_tool_schemas(tools)
     params = out[0]["function"]["parameters"]
     assert "allOf" not in params
@@ -527,19 +483,14 @@ def test_top_level_allof_stripped_for_codex_backend_compat():
 
 def test_top_level_oneof_anyof_enum_not_stripped():
     """All five forbidden top-level combinators are dropped."""
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {"x": {"type": "string"}},
-                "oneOf": [{"required": ["x"]}],
-                "anyOf": [{"required": ["x"]}],
-                "enum": ["bogus-top-level"],
-                "not": {"required": ["y"]},
-            },
-        )
-    ]
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {"x": {"type": "string"}},
+        "oneOf": [{"required": ["x"]}],
+        "anyOf": [{"required": ["x"]}],
+        "enum": ["bogus-top-level"],
+        "not": {"required": ["y"]},
+    })]
     out = sanitize_tool_schemas(tools)
     params = out[0]["function"]["parameters"]
     for key in ("oneOf", "anyOf", "enum", "not"):
@@ -548,21 +499,16 @@ def test_top_level_oneof_anyof_enum_not_stripped():
 
 def test_nested_allof_preserved():
     """Combinators inside a property's schema are preserved (only top is strict)."""
-    tools = [
-        _tool(
-            "t",
-            {
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "config": {
                 "type": "object",
-                "properties": {
-                    "config": {
-                        "type": "object",
-                        "properties": {"mode": {"type": "string"}},
-                        "allOf": [{"required": ["mode"]}],
-                    },
-                },
+                "properties": {"mode": {"type": "string"}},
+                "allOf": [{"required": ["mode"]}],
             },
-        )
-    ]
+        },
+    })]
     out = sanitize_tool_schemas(tools)
     nested = out[0]["function"]["parameters"]["properties"]["config"]
     assert "allOf" in nested
@@ -585,18 +531,18 @@ def test_strip_responses_format_tools():
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "pattern": "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$",
-                        },
-                    },
-                },
+                            "pattern": "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+                        }
+                    }
+                }
             },
-            "type": "function",
+            "type": "function"
         }
     ]
 
     result, stripped = strip_pattern_and_format(tools)
     assert stripped == 1, f"Expected 1 pattern stripped, got {stripped}"
-
+    
     # Verify pattern keyword was removed from includeDomains
     domains = result[0]["parameters"]["properties"]["includeDomains"]["items"]
     assert "pattern" not in domains, f"pattern should be stripped: {domains}"
@@ -613,21 +559,17 @@ def test_strip_responses_idempotent():
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "pattern": {
-                        "type": "string"
-                    }  # This is a property named pattern, NOT schema keyword
-                },
-            },
+                    "pattern": {"type": "string"}  # This is a property named pattern, NOT schema keyword
+                }
+            }
         }
     ]
 
     # Pass 1 - property named 'pattern' should NOT be stripped
     result, first = strip_pattern_and_format(tools)
     assert first == 0, f"Expected 0 stripped (property pattern preserved), got {first}"
-    assert "pattern" in result[0]["parameters"]["properties"], (
-        "property named pattern should survive"
-    )
-
+    assert "pattern" in result[0]["parameters"]["properties"], "property named pattern should survive"
+    
     # Pass 2 - idempotent
     _, second = strip_pattern_and_format(tools)
     assert second == 0, f"Expected 0 on second pass, got {second}"
@@ -645,19 +587,23 @@ def test_strip_responses_mixed_formats():
                 "name": "search",
                 "parameters": {
                     "type": "object",
-                    "properties": {"query": {"type": "string", "pattern": "^[a-z]+$"}},
-                },
-            },
+                    "properties": {
+                        "query": {"type": "string", "pattern": "^[a-z]+$"}
+                    }
+                }
+            }
         },
         # Responses-format: {"name": "...", "parameters": {...}}
         {
             "name": "get_time",
             "parameters": {
                 "type": "object",
-                "properties": {"tz": {"type": "string", "format": "date-time"}},
+                "properties": {
+                    "tz": {"type": "string", "format": "date-time"}
+                }
             },
-            "type": "function",
-        },
+            "type": "function"
+        }
     ]
 
     result, stripped = strip_pattern_and_format(tools)
@@ -665,9 +611,7 @@ def test_strip_responses_mixed_formats():
 
     # OpenAI-format tool: pattern stripped from parameters
     openai_params = result[0]["function"]["parameters"]["properties"]["query"]
-    assert "pattern" not in openai_params, (
-        f"pattern should be stripped: {openai_params}"
-    )
+    assert "pattern" not in openai_params, f"pattern should be stripped: {openai_params}"
 
     # Responses-format tool: format stripped
     resp_params = result[1]["parameters"]["properties"]["tz"]
@@ -689,20 +633,15 @@ def test_strip_responses_mixed_formats():
 
 def test_strip_slash_enum_removes_huggingface_id_enum():
     """enum containing HF-style 'owner/name' IDs → stripped."""
-    tools = [
-        _tool(
-            "train",
-            {
-                "type": "object",
-                "properties": {
-                    "model": {
-                        "type": "string",
-                        "enum": ["Qwen/Qwen3.5-0.8B", "openai/gpt-oss-20b"],
-                    },
-                },
+    tools = [_tool("train", {
+        "type": "object",
+        "properties": {
+            "model": {
+                "type": "string",
+                "enum": ["Qwen/Qwen3.5-0.8B", "openai/gpt-oss-20b"],
             },
-        )
-    ]
+        },
+    })]
     _, stripped = strip_slash_enum(tools)
     assert stripped == 1
     prop = tools[0]["function"]["parameters"]["properties"]["model"]
@@ -713,23 +652,15 @@ def test_strip_slash_enum_removes_huggingface_id_enum():
 
 def test_strip_slash_enum_preserves_slashless_enum():
     """enum without any '/' → preserved."""
-    tools = [
-        _tool(
-            "pick",
-            {
-                "type": "object",
-                "properties": {
-                    "mode": {"type": "string", "enum": ["fast", "slow"]},
-                },
-            },
-        )
-    ]
+    tools = [_tool("pick", {
+        "type": "object",
+        "properties": {
+            "mode": {"type": "string", "enum": ["fast", "slow"]},
+        },
+    })]
     _, stripped = strip_slash_enum(tools)
     assert stripped == 0
-    assert tools[0]["function"]["parameters"]["properties"]["mode"]["enum"] == [
-        "fast",
-        "slow",
-    ]
+    assert tools[0]["function"]["parameters"]["properties"]["mode"]["enum"] == ["fast", "slow"]
 
 
 def test_strip_slash_enum_partial_match_strips_whole_enum():
@@ -739,17 +670,12 @@ def test_strip_slash_enum_partial_match_strips_whole_enum():
     them, but xAI's grammar-compile failure is all-or-nothing on the enum
     keyword — keeping a mixed-content enum would still 400. Drop it whole.
     """
-    tools = [
-        _tool(
-            "pick",
-            {
-                "type": "object",
-                "properties": {
-                    "target": {"type": "string", "enum": ["local", "hf://Qwen/Qwen3"]},
-                },
-            },
-        )
-    ]
+    tools = [_tool("pick", {
+        "type": "object",
+        "properties": {
+            "target": {"type": "string", "enum": ["local", "hf://Qwen/Qwen3"]},
+        },
+    })]
     _, stripped = strip_slash_enum(tools)
     assert stripped == 1
     assert "enum" not in tools[0]["function"]["parameters"]["properties"]["target"]
@@ -757,24 +683,19 @@ def test_strip_slash_enum_partial_match_strips_whole_enum():
 
 def test_strip_slash_enum_responses_format():
     """Responses-format tools (no `function` wrapper) are also handled."""
-    tools = [
-        {
-            "type": "function",
-            "name": "mcp_prime_lab_train_model",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "model": {
-                        "type": "string",
-                        "enum": [
-                            "Qwen/Qwen3.5-0.8B",
-                            "meta-llama/Llama-3.2-1B-Instruct",
-                        ],
-                    },
+    tools = [{
+        "type": "function",
+        "name": "mcp_prime_lab_train_model",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "model": {
+                    "type": "string",
+                    "enum": ["Qwen/Qwen3.5-0.8B", "meta-llama/Llama-3.2-1B-Instruct"],
                 },
             },
-        }
-    ]
+        },
+    }]
     _, stripped = strip_slash_enum(tools)
     assert stripped == 1
     assert "enum" not in tools[0]["parameters"]["properties"]["model"]
@@ -782,22 +703,17 @@ def test_strip_slash_enum_responses_format():
 
 def test_strip_slash_enum_recurses_into_anyof():
     """enum-with-slash inside an anyOf variant is also stripped."""
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {
-                    "value": {
-                        "anyOf": [
-                            {"type": "string", "enum": ["owner/repo"]},
-                            {"type": "null"},
-                        ],
-                    },
-                },
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "value": {
+                "anyOf": [
+                    {"type": "string", "enum": ["owner/repo"]},
+                    {"type": "null"},
+                ],
             },
-        )
-    ]
+        },
+    })]
     _, stripped = strip_slash_enum(tools)
     assert stripped == 1
     variants = tools[0]["function"]["parameters"]["properties"]["value"]["anyOf"]
@@ -807,15 +723,10 @@ def test_strip_slash_enum_recurses_into_anyof():
 
 def test_strip_slash_enum_is_idempotent():
     """Second call on already-stripped tools is a no-op."""
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {"m": {"type": "string", "enum": ["a/b"]}},
-            },
-        )
-    ]
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {"m": {"type": "string", "enum": ["a/b"]}},
+    })]
     _, first = strip_slash_enum(tools)
     _, second = strip_slash_enum(tools)
     assert first == 1
@@ -836,18 +747,13 @@ def test_strip_slash_enum_none_returns_zero():
 
 def test_strip_slash_enum_ignores_non_string_enum_values():
     """Integer/boolean enum values can't contain '/' — leave them alone."""
-    tools = [
-        _tool(
-            "t",
-            {
-                "type": "object",
-                "properties": {
-                    "level": {"type": "integer", "enum": [1, 2, 3]},
-                    "flag": {"type": "boolean", "enum": [True, False]},
-                },
-            },
-        )
-    ]
+    tools = [_tool("t", {
+        "type": "object",
+        "properties": {
+            "level": {"type": "integer", "enum": [1, 2, 3]},
+            "flag": {"type": "boolean", "enum": [True, False]},
+        },
+    })]
     _, stripped = strip_slash_enum(tools)
     assert stripped == 0
     props = tools[0]["function"]["parameters"]["properties"]

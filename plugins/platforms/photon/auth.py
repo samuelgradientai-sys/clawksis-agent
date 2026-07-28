@@ -3,29 +3,29 @@ Photon Dashboard API client + device-code login flow.
 
 This module is pure Python — it intentionally does not depend on
 ``spectrum-ts``.  Every management-plane operation (login, find/create
-project, enable Spectrum, rotate the project secret, register a user,
-list the assigned iMessage line) talks to Photon's **Dashboard API** on a
-single host, exactly like the official Photon CLI (``photon-hq/cli``):
+project, rotate the project secret, register a user, list the assigned
+iMessage line) talks to Photon's **Dashboard API** on a single host,
+exactly like the official Photon CLI (``photon-hq/cli``):
 
     Dashboard API   https://app.photon.codes/api/...
                     OAuth 2.0 device flow, Bearer access token
 
-A Photon project carries two distinct identifiers:
-
-    * ``id``                — the Dashboard project id (used in API paths)
-    * ``spectrumProjectId`` — the Spectrum Cloud project id, populated when
-                              Spectrum is enabled on the project
+A Photon project has a single identifier: the dashboard ``id`` *is* the
+Spectrum Cloud project id. They used to diverge (a separate
+``spectrumProjectId`` field), but the dashboard unified them — every
+project is created with matching ids and the pre-existing diverged rows
+were backfilled so ``project.id == spectrumProjectId`` everywhere
+(dashboard ENG-1582). Spectrum is always enabled and provisioned at
+create-time, so there is no enable/toggle step anymore.
 
 The ``spectrum-ts`` SDK (run by the Node sidecar) authenticates to Spectrum
-Cloud with ``(spectrumProjectId, projectSecret)`` — so the value we persist
-as ``PHOTON_PROJECT_ID`` for the runtime is the **spectrumProjectId**, not
-the Dashboard ``id``.  The Dashboard ``id`` is kept only for management
-calls.
+Cloud with ``(id, projectSecret)`` — the same ``id`` used in Dashboard API
+paths — which we persist as ``PHOTON_PROJECT_ID`` for the runtime.
 
 Credential storage mirrors every other Clawksis channel:
 
     * runtime SDK creds  -> ``~/.clawksis/.env``  (``PHOTON_PROJECT_ID`` =
-      spectrumProjectId, ``PHOTON_PROJECT_SECRET``) via ``save_env_value``
+      project id, ``PHOTON_PROJECT_SECRET``) via ``save_env_value``
     * management metadata -> ``~/.clawksis/auth.json`` under
       ``credential_pool.photon`` (device token),
       ``credential_pool.photon_project`` (dashboard id, spectrum id, name), and
@@ -34,7 +34,6 @@ Credential storage mirrors every other Clawksis channel:
 Reference: https://github.com/photon-hq/cli and
 https://photon.codes/docs/api-reference/device-login/request-device-+-user-code
 """
-
 from __future__ import annotations
 
 import json
@@ -57,7 +56,6 @@ logger = logging.getLogger(__name__)
 
 class PhotonDashboardAuthError(RuntimeError):
     """Raised when Photon rejects a device-flow token for the dashboard API."""
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -87,12 +85,10 @@ E164_RE = re.compile(r"^\+[1-9]\d{6,14}$")
 # ---------------------------------------------------------------------------
 # auth.json helpers — share the file with the rest of clawksis-agent.
 
-
 def _auth_json_path() -> Path:
     """Resolve ``~/.clawksis/auth.json`` honouring the active Clawksis profile."""
     try:
         from clawk_constants import get_clawk_home
-
         return Path(get_clawk_home()) / "auth.json"
     except Exception:
         return Path(os.path.expanduser("~/.clawksis")) / "auth.json"
@@ -152,8 +148,8 @@ def load_project_credentials() -> Tuple[Optional[str], Optional[str]]:
 
     Precedence: process env (``~/.clawksis/.env`` is loaded into the gateway's
     environment at startup) wins, then ``auth.json`` for offline / status
-    use.  This is the pair the Node sidecar feeds to ``spectrum-ts`` — the id
-    is the **spectrumProjectId**, not the Dashboard id.
+    use.  This is the pair the Node sidecar feeds to ``spectrum-ts``; the id
+    is the unified project id (dashboard id == spectrumProjectId).
     """
     env_id = os.getenv("PHOTON_PROJECT_ID")
     env_sec = os.getenv("PHOTON_PROJECT_SECRET")
@@ -170,14 +166,26 @@ def load_project_credentials() -> Tuple[Optional[str], Optional[str]]:
 
 
 def load_dashboard_project_id() -> Optional[str]:
-    """Return the Dashboard project id (for management API calls)."""
+    """Return the project id used for management API calls.
+
+    Post-unification the dashboard id and the Spectrum id are the same value,
+    so we prefer the stored ``spectrum_project_id``: for pre-backfill installs
+    the old ``dashboard_project_id`` is the diverged id that the unification
+    rewrote (it now 404s), while the Spectrum id always matches the live row.
+    Falls back to the legacy keys for older records.
+    """
     env_id = os.getenv("PHOTON_DASHBOARD_PROJECT_ID")
     if env_id:
         return env_id
     auth = _load_auth()
     proj = auth.get("credential_pool", {}).get("photon_project") or []
     if isinstance(proj, list) and proj:
-        return proj[0].get("dashboard_project_id") or proj[0].get("project_id")
+        entry = proj[0]
+        return (
+            entry.get("spectrum_project_id")
+            or entry.get("dashboard_project_id")
+            or entry.get("project_id")
+        )
     return None
 
 
@@ -258,7 +266,6 @@ def _persist_runtime_env(spectrum_project_id: str, project_secret: str) -> None:
 # ---------------------------------------------------------------------------
 # Device login flow (RFC 8628)
 
-
 @dataclass
 class DeviceCode:
     device_code: str
@@ -272,7 +279,6 @@ class DeviceCode:
 @dataclass(frozen=True)
 class _DeviceTokenCandidate:
     """A token-like value extracted from the device-token response."""
-
     source: str
     token: str
 
@@ -319,9 +325,7 @@ def _raise_for_status(resp: Any, action: str) -> None:
 
 
 def request_device_code(
-    *,
-    client_id: str = DEFAULT_CLIENT_ID,
-    scope: Optional[str] = DEFAULT_SCOPE,
+    *, client_id: str = DEFAULT_CLIENT_ID, scope: Optional[str] = DEFAULT_SCOPE,
 ) -> DeviceCode:
     """POST ``/api/auth/device/code`` and return the device + user codes."""
     if httpx is None:
@@ -366,9 +370,7 @@ def poll_for_token(
         raise RuntimeError("httpx is required for Photon device login")
     url = f"{_dashboard_host()}/api/auth/device/token"
     deadline = time.time() + (timeout or code.expires_in or DEFAULT_POLL_TIMEOUT)
-    sleep = (
-        interval if interval is not None else (code.interval or DEFAULT_POLL_INTERVAL)
-    )
+    sleep = interval if interval is not None else (code.interval or DEFAULT_POLL_INTERVAL)
     while time.time() < deadline:
         time.sleep(sleep)
         try:
@@ -392,8 +394,7 @@ def poll_for_token(
             except (TypeError, ValueError, json.JSONDecodeError):
                 body = {}
             candidates = _device_response_token_candidates(
-                body,
-                headers=getattr(resp, "headers", {}),
+                body, headers=getattr(resp, "headers", {}),
             )
             if not candidates:
                 raise RuntimeError(
@@ -429,8 +430,7 @@ def poll_for_token(
             raise RuntimeError(f"Photon device token error: {err or resp.text}")
         logger.warning(
             "photon: device-token unexpected status %s: %s",
-            resp.status_code,
-            resp.text[:200],
+            resp.status_code, resp.text[:200],
         )
     raise TimeoutError("Photon device login timed out")
 
@@ -544,7 +544,8 @@ def _validated_dashboard_token(candidates: list) -> str:
     """Return the first candidate token that passes dashboard validation."""
     if not candidates:
         raise RuntimeError(
-            "Photon returned 200 but no token candidate in the device-token response."
+            "Photon returned 200 but no token candidate in the device-token "
+            "response."
         )
     dashboard_error: Optional[PhotonDashboardAuthError] = None
     last_error: Optional[BaseException] = None
@@ -594,7 +595,6 @@ def login_device_flow(
     if open_browser:
         try:
             import webbrowser
-
             target = code.verification_uri_complete or code.verification_uri
             webbrowser.open(target, new=2)
         except Exception:
@@ -622,7 +622,6 @@ def get_session(token: str) -> Dict[str, Any]:
 
 # ---------------------------------------------------------------------------
 # Dashboard API: projects
-
 
 def _unwrap_list(data: Any) -> List[Dict[str, Any]]:
     if isinstance(data, list):
@@ -659,30 +658,23 @@ def find_project_by_name(token: str, name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def get_project(token: str, project_id: str) -> Dict[str, Any]:
-    """GET ``/api/projects/{id}`` — includes ``spectrum`` + ``spectrumProjectId``."""
-    if httpx is None:
-        raise RuntimeError("httpx is required for Photon")
-    url = f"{_dashboard_host()}/api/projects/{project_id}"
-    resp = httpx.get(url, headers=_bearer(token), timeout=30.0)
-    resp.raise_for_status()
-    return resp.json() or {}
-
-
 def create_project(
     token: str,
     *,
     name: str = DEFAULT_PROJECT_NAME,
     location: str = "United States",
 ) -> Dict[str, Any]:
-    """POST ``/api/projects`` with ``spectrum: true`` and return ``{success, id}``."""
+    """POST ``/api/projects`` and return ``{success, id}``.
+
+    Spectrum is always provisioned at create-time, so the request body no
+    longer carries a ``spectrum`` flag (the field was dropped from the API).
+    """
     if httpx is None:
         raise RuntimeError("httpx is required for Photon project creation")
     url = f"{_dashboard_host()}/api/projects"
     body: Dict[str, Any] = {
         "name": name,
         "location": location,
-        "spectrum": True,
         "template": False,
         "observability": False,
     }
@@ -694,29 +686,6 @@ def create_project(
     if not data.get("id"):
         raise RuntimeError("Photon create-project did not return a project id")
     return data
-
-
-def ensure_spectrum_enabled(token: str, project_id: str) -> Dict[str, Any]:
-    """Enable Spectrum on the project if needed; return the project dict.
-
-    The dashboard exposes Spectrum as a toggle, so we only flip it when
-    ``spectrum`` is currently false, then re-fetch to pick up the freshly
-    populated ``spectrumProjectId``.
-    """
-    if httpx is None:
-        raise RuntimeError("httpx is required for Photon")
-    proj = get_project(token, project_id)
-    if not proj.get("spectrum"):
-        url = f"{_dashboard_host()}/api/projects/{project_id}/spectrum/toggle"
-        resp = httpx.post(url, json={}, headers=_bearer(token), timeout=30.0)
-        resp.raise_for_status()
-        proj = get_project(token, project_id)
-    if not proj.get("spectrumProjectId"):
-        raise RuntimeError(
-            "Spectrum is enabled but the project has no spectrumProjectId yet — "
-            "retry in a moment, or enable Spectrum from the dashboard."
-        )
-    return proj
 
 
 def regenerate_project_secret(token: str, project_id: str) -> str:
@@ -742,7 +711,6 @@ def regenerate_project_secret(token: str, project_id: str) -> str:
 # ---------------------------------------------------------------------------
 # Spectrum API: users
 
-
 def _normalize_phone(phone: str) -> str:
     """Reduce a phone string to ``+`` and digits for dedup comparison."""
     return re.sub(r"[^\d+]", "", phone or "")
@@ -759,9 +727,7 @@ def list_users(project_id: str, project_secret: str) -> List[Dict[str, Any]]:
 
 
 def find_user_by_phone(
-    project_id: str,
-    project_secret: str,
-    phone_number: str,
+    project_id: str, project_secret: str, phone_number: str,
 ) -> Optional[Dict[str, Any]]:
     """Return an existing Spectrum user with the given phone number, or None."""
     target = _normalize_phone(phone_number)
@@ -866,8 +832,9 @@ def load_user_numbers() -> Tuple[Optional[str], Optional[str]]:
         entry = user_entries[0] or {}
         if isinstance(entry, dict):
             phone = entry.get("phone_number") or entry.get("phoneNumber")
-            assigned = entry.get("assigned_phone_number") or entry.get(
-                "assignedPhoneNumber"
+            assigned = (
+                entry.get("assigned_phone_number")
+                or entry.get("assignedPhoneNumber")
             )
             if phone or assigned:
                 return (
@@ -878,8 +845,7 @@ def load_user_numbers() -> Tuple[Optional[str], Optional[str]]:
 
 
 def refresh_user_numbers(
-    project_id: str,
-    project_secret: str,
+    project_id: str, project_secret: str,
 ) -> Tuple[Optional[str], Optional[str]]:
     """Refresh cached user numbers from Photon without provisioning anything."""
     phone, cached_assigned = load_user_numbers()
@@ -959,7 +925,6 @@ def _get_config_env_value(key: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Dashboard API: iMessage lines (the assigned number inventory)
 
-
 def list_lines(token: str, project_id: str) -> List[Dict[str, Any]]:
     """GET ``/api/projects/{id}/lines`` → ``[{id, platform, phoneNumber, status}]``."""
     if httpx is None:
@@ -971,20 +936,14 @@ def list_lines(token: str, project_id: str) -> List[Dict[str, Any]]:
 
 
 def add_line(
-    token: str,
-    project_id: str,
-    *,
-    platform: str = "imessage",
+    token: str, project_id: str, *, platform: str = "imessage",
 ) -> Dict[str, Any]:
     """POST ``/api/projects/{id}/lines`` to provision a new line."""
     if httpx is None:
         raise RuntimeError("httpx is required for Photon")
     url = f"{_dashboard_host()}/api/projects/{project_id}/lines"
     resp = httpx.post(
-        url,
-        json={"platform": platform},
-        headers=_bearer(token),
-        timeout=30.0,
+        url, json={"platform": platform}, headers=_bearer(token), timeout=30.0,
     )
     resp.raise_for_status()
     data = resp.json() or {}
@@ -994,10 +953,7 @@ def add_line(
 
 
 def get_imessage_line(
-    token: str,
-    project_id: str,
-    *,
-    create_if_missing: bool = True,
+    token: str, project_id: str, *, create_if_missing: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """Return the project's iMessage line (the number to text the agent).
 
@@ -1019,7 +975,6 @@ def get_imessage_line(
 # ---------------------------------------------------------------------------
 # Credential status (display-only — never emits raw secret material)
 
-
 def print_credential_summary(emit: Any = print) -> None:
     """Pretty-print the credential status table via the *emit* callback.
 
@@ -1030,11 +985,13 @@ def print_credential_summary(emit: Any = print) -> None:
     """
     labels: Dict[str, str] = {}
     labels["device_token"] = (
-        "✓ stored" if load_photon_token() else "✗ missing (run `clawk photon setup`)"
+        "✓ stored" if load_photon_token()
+        else "✗ missing (run `clawk photon setup`)"
     )
     sid, sec = load_project_credentials()
-    labels["spectrum_project_id"] = sid if sid else "✗ missing"
-    labels["dashboard_project_id"] = load_dashboard_project_id() or "—"
+    # Dashboard id and Spectrum id are the same value now (ids unified), so
+    # there's a single project id to show.
+    labels["project_id"] = sid if sid else "✗ missing"
     labels["project_key"] = "✓ stored" if sec else "✗ missing"
     phone, assigned = load_user_numbers()
     labels["phone_number"] = (
@@ -1048,8 +1005,7 @@ def print_credential_summary(emit: Any = print) -> None:
         "Photon iMessage status",
         "──────────────────────",
         "  device token        : " + labels["device_token"],
-        "  dashboard project   : " + labels["dashboard_project_id"],
-        "  spectrum project id : " + labels["spectrum_project_id"],
+        "  project id          : " + labels["project_id"],
         "  project secret      : " + labels["project_key"],
         "  my number           : " + labels["phone_number"],
         "  assigned number     : " + labels["assigned_phone_number"],
@@ -1059,15 +1015,13 @@ def print_credential_summary(emit: Any = print) -> None:
 
 def credential_summary() -> Dict[str, str]:
     """Return a fully pre-formatted credential status dict (no raw secrets)."""
-
     def _present_token() -> str:
         return (
-            "✓ stored"
-            if load_photon_token()
+            "✓ stored" if load_photon_token()
             else "✗ missing (run `clawk photon setup`)"
         )
 
-    def _present_spectrum_id() -> str:
+    def _present_project_id() -> str:
         sid, _sec = load_project_credentials()
         return sid or "✗ missing"
 
@@ -1085,8 +1039,7 @@ def credential_summary() -> Dict[str, str]:
 
     return {
         "device_token": _present_token(),
-        "dashboard_project_id": load_dashboard_project_id() or "—",
-        "spectrum_project_id": _present_spectrum_id(),
+        "project_id": _present_project_id(),
         "project_key": _present_secret(),
         "phone_number": _present_phone(),
         "assigned_phone_number": _present_assigned_phone(),

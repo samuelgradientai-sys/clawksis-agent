@@ -32,6 +32,10 @@ from gateway.config import (
     DEFAULT_STREAMING_BUFFER_THRESHOLD as _DEFAULT_STREAMING_BUFFER_THRESHOLD,
     DEFAULT_STREAMING_CURSOR as _DEFAULT_STREAMING_CURSOR,
 )
+from gateway.response_filters import (
+    is_intentional_silence_response as _is_intentional_silence_response,
+    is_partial_silence_marker as _is_partial_silence_marker,
+)
 
 logger = logging.getLogger("gateway.stream_consumer")
 
@@ -50,7 +54,6 @@ _COMMENTARY = object()
 @dataclass
 class StreamConsumerConfig:
     """Runtime config for a single stream consumer instance."""
-
     edit_interval: float = _DEFAULT_STREAMING_EDIT_INTERVAL
     buffer_threshold: int = _DEFAULT_STREAMING_BUFFER_THRESHOLD
     cursor: str = _DEFAULT_STREAMING_CURSOR
@@ -100,20 +103,12 @@ class GatewayStreamConsumer:
     # Must stay in sync with cli.py _OPEN_TAGS/_CLOSE_TAGS and
     # run_agent.py _strip_think_blocks() tag variants.
     _OPEN_THINK_TAGS = (
-        "<REASONING_SCRATCHPAD>",
-        "<think>",
-        "<reasoning>",
-        "<THINKING>",
-        "<thinking>",
-        "<thought>",
+        "<REASONING_SCRATCHPAD>", "<think>", "<reasoning>",
+        "<THINKING>", "<thinking>", "<thought>",
     )
     _CLOSE_THINK_TAGS = (
-        "</REASONING_SCRATCHPAD>",
-        "</think>",
-        "</reasoning>",
-        "</THINKING>",
-        "</thinking>",
-        "</thought>",
+        "</REASONING_SCRATCHPAD>", "</think>", "</reasoning>",
+        "</THINKING>", "</thinking>", "</thought>",
     )
 
     # Class-wide monotonic counter for native-streaming draft ids.  Telegram
@@ -128,7 +123,9 @@ class GatewayStreamConsumer:
         config: Optional[StreamConsumerConfig] = None,
         metadata: Optional[dict] = None,
         on_new_message: Optional[callable] = None,
+        on_before_finalize: Optional[Callable[[], Any]] = None,
         initial_reply_to_id: Optional[str] = None,
+        run_still_current: Optional[Callable[[], bool]] = None,
     ):
         self.adapter = adapter
         self.chat_id = chat_id
@@ -142,6 +139,10 @@ class GatewayStreamConsumer:
         # the content, not edit the old bubble above it.
         # Called with no arguments. Exceptions are swallowed.
         self._on_new_message = on_new_message
+        # Fired once when the stream transitions into its finalization path.
+        # Gateway callers use this to pause typing refreshes before a slow
+        # final rich-text edit (Telegram MarkdownV2 finalize, etc.).
+        self._on_before_finalize = on_before_finalize
         self._initial_reply_to_id = initial_reply_to_id
         self._queue: queue.Queue = queue.Queue()
         self._accumulated = ""
@@ -159,12 +160,14 @@ class GatewayStreamConsumer:
         # reply that was split across the platform's edit limit while streaming
         # doesn't leave stale fragments above the final message.
         self._preview_message_ids: "set[str]" = set()
+        # IDs from only the active text segment.  A tool boundary preserves
+        # the run-wide set for fresh-final bookkeeping, but a failure recovery
+        # must never delete an earlier finalized preamble/commentary message.
+        self._segment_preview_message_ids: "set[str]" = set()
         self._already_sent = False
-        self._edit_supported = (
-            True  # Disabled when progressive edits are no longer usable
-        )
+        self._edit_supported = True  # Disabled when progressive edits are no longer usable
         self._last_edit_time = 0.0
-        self._last_sent_text = ""  # Track last-sent text to skip redundant edits
+        self._last_sent_text = ""   # Track last-sent text to skip redundant edits
         # True when the most recent _send_or_edit split-and-delivered across
         # continuation messages (the adapter adopted a new message id).
         self._last_edit_overflowed = False
@@ -174,13 +177,25 @@ class GatewayStreamConsumer:
         # Telegram overflow delivery.  In that case the already-visible prefix
         # is intentional content, not a stale preview to delete.
         self._fallback_preserve_partial_messages = False
-        self._flood_strikes = 0  # Consecutive flood-control edit failures
+        # Keep fallback recovery responsive. Telegram's adapter already bounds
+        # edit retries at five seconds; a final-delivery fallback must not hold
+        # the stream task through a longer flood cooldown before retrying.
+        self._max_fallback_flood_retry_seconds = 5.0
+        self._flood_strikes = 0         # Consecutive flood-control edit failures
         self._current_edit_interval = self.cfg.edit_interval  # Adaptive backoff
         self._final_response_sent = False
         # Set when the final response content was sent to the user via
         # streaming, even if the final edit (cursor removal etc.)
         # subsequently failed.
         self._final_content_delivered = False
+        self._delivered_commentary_texts: list[str] = []
+        # Retains the finalized visible text of each streaming segment so
+        # ``has_delivered_text`` can still match after ``_reset_segment_state``
+        # clears ``_last_sent_text``. Without this, a segment break (triggered
+        # by ``on_segment_break`` or ``on_commentary``) erases the only record
+        # of what was delivered, and the gateway's final-send suppression
+        # can't recognize an already-delivered response. (#65919 review)
+        self._delivered_segment_texts: list[str] = []
         # Cache adapter lifecycle capability: only platforms that need an
         # explicit finalize call (e.g. DingTalk AI Cards) force us to make
         # a redundant final edit.  Everyone else keeps the fast path.
@@ -189,6 +204,11 @@ class GatewayStreamConsumer:
         self._adapter_requires_finalize: bool = (
             getattr(adapter, "REQUIRES_EDIT_FINALIZE", False) is True
         )
+
+        # Session staleness guard — when set to False (e.g. after /new or
+        # /stop), the run() loop will abandon the stream early instead of
+        # continuing to edit and deliver stale deltas.
+        self._run_still_current = run_still_current or (lambda: True)
 
         # Think-block filter state (mirrors CLI's _stream_delta tag suppression)
         self._in_think_block = False
@@ -207,6 +227,33 @@ class GatewayStreamConsumer:
         # first failure we permanently disable drafts for the remainder of
         # this response and route through edit-based for graceful degradation.
         self._draft_failures = 0
+        self._before_finalize_notified = False
+
+    def _metadata_for_send(
+        self,
+        *,
+        final: bool = False,
+        expect_edits: bool = False,
+    ) -> dict | None:
+        """Return per-send metadata for stream-created messages.
+
+        Mattermost treats notify-worthy sends as user-visible final content
+        when deciding whether a broken thread root may fall back flat.  Preview
+        and progress sends keep their original metadata and remain thread-strict.
+
+        ``expect_edits`` preserves the upstream Telegram streaming contract:
+        preview messages that may be edited later must stay on the editable
+        legacy send path, while fresh/fallback final sends can still use richer
+        final-message delivery.
+        """
+        meta = dict(self.metadata) if self.metadata else {}
+        if self._initial_reply_to_id:
+            meta["reply_to_message_id"] = self._initial_reply_to_id
+        if expect_edits:
+            meta["expect_edits"] = True
+        if final:
+            meta["notify"] = True
+        return meta or None
 
     @property
     def already_sent(self) -> bool:
@@ -228,6 +275,20 @@ class GatewayStreamConsumer:
         """True when the final response content reached the user, even if
         the subsequent cosmetic edit (cursor removal) failed."""
         return self._final_content_delivered
+
+    async def _notify_before_finalize(self) -> None:
+        """Run the pre-finalize hook exactly once, swallowing hook errors."""
+        if self._before_finalize_notified:
+            return
+        self._before_finalize_notified = True
+        if self._on_before_finalize is None:
+            return
+        try:
+            result = self._on_before_finalize()
+            if inspect.isawaitable(result):
+                await result
+        except Exception:
+            pass
 
     async def _edit_message(
         self,
@@ -258,6 +319,19 @@ class GatewayStreamConsumer:
                 pass
         return await self.adapter.edit_message(**kwargs)
 
+    def has_delivered_text(self, text: str) -> bool:
+        """Return True if *text* was already delivered as visible chat content."""
+        target = self._clean_for_display(text or "").strip()
+        if not target:
+            return False
+        visible_prefix = self._visible_prefix().strip()
+        if visible_prefix == target:
+            return True
+        return any(
+            sent.strip() == target
+            for sent in (*self._delivered_commentary_texts, *self._delivered_segment_texts)
+        )
+
     def on_segment_break(self) -> None:
         """Finalize the current stream segment and start a fresh message."""
         self._queue.put(_NEW_SEGMENT)
@@ -280,6 +354,13 @@ class GatewayStreamConsumer:
     def _reset_segment_state(self, *, preserve_no_edit: bool = False) -> None:
         if preserve_no_edit and self._message_id == "__no_edit__":
             return
+        # Retain the finalized visible text of the current segment before
+        # clearing ``_last_sent_text``, so ``has_delivered_text`` can still
+        # match it after a segment break. (#65919 review)
+        if self._last_sent_text:
+            finalized = self._clean_for_display(self._last_sent_text).strip()
+            if finalized:
+                self._delivered_segment_texts.append(finalized)
         self._message_id = None
         self._message_created_ts = None
         self._accumulated = ""
@@ -287,6 +368,7 @@ class GatewayStreamConsumer:
         self._fallback_final_send = False
         self._fallback_prefix = ""
         self._fallback_preserve_partial_messages = False
+        self._segment_preview_message_ids = set()
         # #29346: a tool/segment boundary means what we delivered was an interim
         # preamble, not the final answer — clear the flags so a premature setter
         # can't fool the gateway. Safe: got_done returns before any reset, and
@@ -340,12 +422,17 @@ class GatewayStreamConsumer:
         self._think_buffer = ""
 
         while buf:
+            # Case-insensitive matching: models emit mixed-case tag
+            # variants (<Think>, <THINKING>, …). Match against a
+            # lowercased view of the buffer with lowercased tag names so
+            # every case variant is caught with a single canonical form.
+            lower_buf = buf.lower()
             if self._in_think_block:
                 # Look for the earliest closing tag
                 best_idx = -1
                 best_len = 0
                 for tag in self._CLOSE_THINK_TAGS:
-                    idx = buf.find(tag)
+                    idx = lower_buf.find(tag.lower())
                     if idx != -1 and (best_idx == -1 or idx < best_idx):
                         best_idx = idx
                         best_len = len(tag)
@@ -353,7 +440,7 @@ class GatewayStreamConsumer:
                 if best_len:
                     # Found closing tag — discard block, process remainder
                     self._in_think_block = False
-                    buf = buf[best_idx + best_len :]
+                    buf = buf[best_idx + best_len:]
                 else:
                     # No closing tag yet — hold tail that could be a
                     # partial closing tag prefix, discard the rest.
@@ -368,9 +455,10 @@ class GatewayStreamConsumer:
                 best_idx = -1
                 best_len = 0
                 for tag in self._OPEN_THINK_TAGS:
+                    tag_lower = tag.lower()
                     search_start = 0
                     while True:
-                        idx = buf.find(tag, search_start)
+                        idx = lower_buf.find(tag_lower, search_start)
                         if idx == -1:
                             break
                         # Block-boundary check (mirrors cli.py logic)
@@ -384,11 +472,12 @@ class GatewayStreamConsumer:
                             last_nl = preceding.rfind("\n")
                             if last_nl == -1:
                                 is_boundary = (
-                                    not self._accumulated
-                                    or self._accumulated.endswith("\n")
-                                ) and preceding.strip() == ""
+                                    (not self._accumulated
+                                     or self._accumulated.endswith("\n"))
+                                    and preceding.strip() == ""
+                                )
                             else:
-                                is_boundary = preceding[last_nl + 1 :].strip() == ""
+                                is_boundary = preceding[last_nl + 1:].strip() == ""
 
                         if is_boundary and (best_idx == -1 or idx < best_idx):
                             best_idx = idx
@@ -400,20 +489,60 @@ class GatewayStreamConsumer:
                     # Emit text before the tag, enter think block
                     self._accumulated += buf[:best_idx]
                     self._in_think_block = True
-                    buf = buf[best_idx + best_len :]
+                    buf = buf[best_idx + best_len:]
                 else:
                     # No opening tag — check for a partial tag at the tail
                     held_back = 0
                     for tag in self._OPEN_THINK_TAGS:
+                        tag_lower = tag.lower()
                         for i in range(1, len(tag)):
-                            if buf.endswith(tag[:i]) and i > held_back:
+                            if lower_buf.endswith(tag_lower[:i]) and i > held_back:
                                 held_back = i
                     if held_back:
                         self._accumulated += buf[:-held_back]
                         self._think_buffer = buf[-held_back:]
                     else:
-                        self._accumulated += buf
+                        # No (partial) open tag — but the model may have
+                        # emitted an orphan close tag like </think> on its
+                        # own (e.g. when a thinking-mode toggle drops the
+                        # matched open, or when upstream stripping is
+                        # incomplete). Strip those before accumulating so
+                        # they never reach the user.
+                        self._accumulated += self._strip_orphan_close_tags(buf)
                     return
+
+    @classmethod
+    def _strip_orphan_close_tags(cls, text: str) -> str:
+        """Remove any close tags from *text* that have no matching open.
+
+        Mirrors ``agent/think_scrubber.py::StreamingThinkScrubber.
+        _strip_orphan_close_tags`` so the progressive-display filter
+        behaves the same as the post-stream final-response scrubber.
+        An orphan close tag is always noise — stripped along with any
+        trailing whitespace so surrounding prose flows naturally.
+        """
+        if "</" not in text:
+            return text
+        text_lower = text.lower()
+        out: list[str] = []
+        i = 0
+        while i < len(text):
+            matched = False
+            if text_lower[i:i + 2] == "</":
+                for tag in cls._CLOSE_THINK_TAGS:
+                    tag_lower = tag.lower()
+                    tag_len = len(tag_lower)
+                    if text_lower[i:i + tag_len] == tag_lower:
+                        j = i + tag_len
+                        while j < len(text) and text[j] in " \t\n\r":
+                            j += 1
+                        i = j
+                        matched = True
+                        break
+            if not matched:
+                out.append(text[i])
+                i += 1
+        return "".join(out)
 
     def _flush_think_buffer(self) -> None:
         """Flush any held-back partial-tag buffer into accumulated text.
@@ -422,7 +551,9 @@ class GatewayStreamConsumer:
         was held back waiting for a possible opening tag is not lost.
         """
         if self._think_buffer and not self._in_think_block:
-            self._accumulated += self._think_buffer
+            # Strip any orphan close tags that may have been held back —
+            # see _filter_and_accumulate for context.
+            self._accumulated += self._strip_orphan_close_tags(self._think_buffer)
             self._think_buffer = ""
 
     async def run(self) -> None:
@@ -454,12 +585,17 @@ class GatewayStreamConsumer:
             self._draft_id = type(self)._draft_id_counter
             logger.debug(
                 "Stream consumer using native-draft transport (chat=%s draft_id=%s)",
-                self.chat_id,
-                self._draft_id,
+                self.chat_id, self._draft_id,
             )
 
         try:
             while True:
+                # Abandon the stream early if the session has been reset
+                # (e.g. /new or /stop). Prevents stale deltas from being
+                # delivered after the user has already moved on.
+                if not self._run_still_current():
+                    return
+
                 # Drain all available items from the queue
                 got_done = False
                 got_segment_break = False
@@ -473,11 +609,7 @@ class GatewayStreamConsumer:
                         if item is _NEW_SEGMENT:
                             got_segment_break = True
                             break
-                        if (
-                            isinstance(item, tuple)
-                            and len(item) == 2
-                            and item[0] is _COMMENTARY
-                        ):
+                        if isinstance(item, tuple) and len(item) == 2 and item[0] is _COMMENTARY:
                             commentary_text = item[1]
                             break
                         self._filter_and_accumulate(item)
@@ -490,15 +622,34 @@ class GatewayStreamConsumer:
                 if got_done:
                     self._flush_think_buffer()
 
+                    # Intentional-silence suppression.  When the agent chose
+                    # not to reply it emits a bare control marker (NO_REPLY /
+                    # [SILENT] / …).  The gateway's whole-response filter
+                    # (gateway/run.py) suppresses this on the non-streaming
+                    # path, but by the time it runs the stream consumer has
+                    # already edited the raw marker onto the screen.  Detect
+                    # the exact-marker final buffer here and retract any
+                    # preview instead of finalizing it, so the marker never
+                    # reaches the chat.  Substantive prose that merely mentions
+                    # a marker is NOT suppressed (see is_intentional_silence_response).
+                    if _is_intentional_silence_response(
+                        self._clean_for_display(self._accumulated)
+                    ):
+                        await self._suppress_silence_marker()
+                        return
+
                 # Decide whether to flush an edit
                 now = time.monotonic()
                 elapsed = now - self._last_edit_time
                 should_edit = (
-                    got_done or got_segment_break or commentary_text is not None
+                    got_done
+                    or got_segment_break
+                    or commentary_text is not None
                 )
                 if not self.cfg.buffer_only:
                     should_edit = should_edit or (
-                        (elapsed >= self._current_edit_interval and self._accumulated)
+                        (elapsed >= self._current_edit_interval
+                            and self._accumulated)
                         # buffer_threshold is intentionally codepoint-based:
                         # it's a debounce heuristic ("send updates roughly
                         # every N visible characters"), not a platform-limit
@@ -507,6 +658,24 @@ class GatewayStreamConsumer:
                     )
 
                 current_update_visible = False
+                # Hold back mid-stream edits while the buffer so far could
+                # still resolve to an intentional-silence marker.  Without
+                # this, a partial marker (e.g. "NO_REPLY" streamed as
+                # "NO"→"NO_REPLY") would flash onto the screen on an interval
+                # tick before got_done can suppress it.  Only defers display —
+                # got_done above always resolves the buffer (suppress if it's
+                # an exact marker, otherwise fall through and flush normally),
+                # so genuine prose that merely starts marker-like is never lost.
+                if (
+                    should_edit
+                    and not got_done
+                    and not got_segment_break
+                    and commentary_text is None
+                    and _is_partial_silence_marker(
+                        self._clean_for_display(self._accumulated)
+                    )
+                ):
+                    should_edit = False
                 if should_edit and self._accumulated:
                     # Split overflow: if accumulated text exceeds the platform
                     # limit, split into properly sized chunks.
@@ -520,14 +689,16 @@ class GatewayStreamConsumer:
                         # proper word/code-fence boundaries and chunk
                         # indicators like "(1/2)".
                         chunks = self.adapter.truncate_message(
-                            self._accumulated,
-                            _safe_limit,
-                            len_fn=_len_fn,
+                            self._accumulated, _safe_limit, len_fn=_len_fn,
                         )
                         chunks_delivered = False
                         reply_to = self._message_id or self._initial_reply_to_id
                         for chunk in chunks:
-                            new_id = await self._send_new_chunk(chunk, reply_to)
+                            new_id = await self._send_new_chunk(
+                                chunk,
+                                reply_to,
+                                final=got_done,
+                            )
                             if new_id is not None and new_id != reply_to:
                                 chunks_delivered = True
                         self._accumulated = ""
@@ -556,9 +727,7 @@ class GatewayStreamConsumer:
                         and self._edit_supported
                     ):
                         _cp_budget = _custom_unit_to_cp(
-                            self._accumulated,
-                            _safe_limit,
-                            _len_fn,
+                            self._accumulated, _safe_limit, _len_fn,
                         )
                         split_at = self._accumulated.rfind("\n", 0, _cp_budget)
                         if split_at < _safe_limit // 2:
@@ -589,11 +758,7 @@ class GatewayStreamConsumer:
                         self._last_sent_text = ""
 
                     display_text = self._accumulated
-                    if (
-                        not got_done
-                        and not got_segment_break
-                        and commentary_text is None
-                    ):
+                    if not got_done and not got_segment_break and commentary_text is None:
                         display_text += self.cfg.cursor
 
                     # Segment break: finalize the current message so platforms
@@ -612,6 +777,8 @@ class GatewayStreamConsumer:
                     self._last_edit_time = time.monotonic()
 
                 if got_done:
+                    if self._accumulated or self._message_id is not None or self._already_sent:
+                        await self._notify_before_finalize()
                     # Final edit without cursor. If progressive editing failed
                     # mid-stream, send a single continuation/fallback message
                     # here instead of letting the base gateway path send the
@@ -627,9 +794,12 @@ class GatewayStreamConsumer:
                             # edit here would duplicate the message / re-delete,
                             # so just record delivery and stop.
                             self._final_content_delivered = True
-                        elif current_update_visible and (
-                            not self._adapter_requires_finalize
-                            or self._last_edit_overflowed
+                        elif (
+                            current_update_visible
+                            and (
+                                not self._adapter_requires_finalize
+                                or self._last_edit_overflowed
+                            )
                         ):
                             # Mid-stream edit above already delivered the
                             # final accumulated content.  Skip the redundant
@@ -648,8 +818,7 @@ class GatewayStreamConsumer:
                             # visible update this tick) OR the adapter needs
                             # explicit finalize=True to close the stream.
                             self._final_response_sent = await self._send_or_edit(
-                                self._accumulated,
-                                finalize=True,
+                                self._accumulated, finalize=True,
                             )
                             if self._final_response_sent:
                                 self._final_content_delivered = True
@@ -663,9 +832,7 @@ class GatewayStreamConsumer:
                                 # not duplicate the visible prefix.
                                 await self._send_fallback_final(self._accumulated)
                         elif not self._already_sent:
-                            self._final_response_sent = await self._send_or_edit(
-                                self._accumulated
-                            )
+                            self._final_response_sent = await self._send_or_edit(self._accumulated)
                             if self._final_response_sent:
                                 self._final_content_delivered = True
                     return
@@ -723,9 +890,7 @@ class GatewayStreamConsumer:
                 try:
                     _best_effort_ok = bool(
                         await self._send_or_edit(
-                            self._accumulated,
-                            finalize=True,
-                            is_turn_final=False,
+                            self._accumulated, finalize=True, is_turn_final=False,
                         )
                     )
                 except Exception:
@@ -762,17 +927,14 @@ class GatewayStreamConsumer:
         stream finishes — we just need to hide the raw directives from the
         user.
         """
-        if "MEDIA:" not in text and "[[audio_as_voice]]" not in text:
-            return text
-        cleaned = text.replace("[[audio_as_voice]]", "")
-        cleaned = GatewayStreamConsumer._MEDIA_RE.sub("", cleaned)
-        # Collapse excessive blank lines left behind by removed tags
-        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-        # Strip trailing whitespace/newlines but preserve leading content
-        return cleaned.rstrip()
+        return _BasePlatformAdapter.strip_media_directives_for_display(text)
 
     async def _send_new_chunk(
-        self, text: str, reply_to_id: Optional[str]
+        self,
+        text: str,
+        reply_to_id: Optional[str],
+        *,
+        final: bool = False,
     ) -> Optional[str]:
         """Send a new message chunk, optionally threaded to a previous message.
 
@@ -782,15 +944,11 @@ class GatewayStreamConsumer:
         if not text.strip():
             return reply_to_id
         try:
-            meta = dict(self.metadata) if self.metadata else {}
-            # This chunk becomes the next edit target — adapters that support
-            # rich final sends (Telegram) must keep it on the editable path.
-            meta["expect_edits"] = True
             result = await self.adapter.send(
                 chat_id=self.chat_id,
                 content=text,
                 reply_to=reply_to_id,
-                metadata=meta,
+                metadata=self._metadata_for_send(final=final, expect_edits=True),
             )
             if result.success and result.message_id:
                 self._message_id = str(result.message_id)
@@ -812,20 +970,19 @@ class GatewayStreamConsumer:
         """Return the visible text already shown in the streamed message."""
         prefix = self._last_sent_text or ""
         if self.cfg.cursor and prefix.endswith(self.cfg.cursor):
-            prefix = prefix[: -len(self.cfg.cursor)]
+            prefix = prefix[:-len(self.cfg.cursor)]
         return self._clean_for_display(prefix)
 
     def _continuation_text(self, final_text: str) -> str:
         """Return only the part of final_text the user has not already seen."""
         prefix = self._fallback_prefix or self._visible_prefix()
         if prefix and final_text.startswith(prefix):
-            return final_text[len(prefix) :].lstrip()
+            return final_text[len(prefix):].lstrip()
         return final_text
 
     @staticmethod
     def _split_text_chunks(
-        text: str,
-        limit: int,
+        text: str, limit: int,
         len_fn: "Callable[[str], int]" = len,
     ) -> list[str]:
         """Split text into reasonably sized chunks for fallback sends."""
@@ -853,6 +1010,36 @@ class GatewayStreamConsumer:
         continuation = self._continuation_text(final_text)
         self._fallback_final_send = False
         if not continuation.strip():
+            # Some platforms treat a successful streaming preview as durable
+            # delivery. Telegram clients can instead lose or retain only part
+            # of that preview after a failed final edit, so opt-in adapters
+            # commit the completed answer with a fresh final send.
+            if (
+                final_text.strip()
+                and final_text == self._visible_prefix()
+                and getattr(
+                    self.adapter,
+                    "RESEND_FINAL_ON_EMPTY_STREAM_FALLBACK",
+                    False,
+                ) is True
+            ):
+                delivery = await self._send_empty_fallback_final(final_text)
+                if delivery == "delivered":
+                    return
+                self._already_sent = True
+                self._fallback_prefix = ""
+                self._fallback_preserve_partial_messages = False
+                if delivery == "ambiguous":
+                    # A timeout may mean Telegram accepted the send but the
+                    # client never received the response. Preserve duplicate
+                    # suppression for that one uncertain outcome.
+                    self._final_content_delivered = True
+                else:
+                    # A confirmed failure leaves the gateway free to perform
+                    # its normal final send.
+                    self._final_response_sent = False
+                    self._final_content_delivered = False
+                return
             # Nothing new to send — the visible partial already matches final text.
             # BUT: if final_text itself has meaningful content (e.g. a timeout
             # message after a long tool call), the prefix-based continuation
@@ -875,7 +1062,7 @@ class GatewayStreamConsumer:
                     and self.cfg.cursor
                     and self._last_sent_text.endswith(self.cfg.cursor)
                 ):
-                    clean_text = self._last_sent_text[: -len(self.cfg.cursor)]
+                    clean_text = self._last_sent_text[:-len(self.cfg.cursor)]
                     try:
                         result = await self._edit_message(
                             message_id=self._message_id,
@@ -910,15 +1097,19 @@ class GatewayStreamConsumer:
                 result = await self.adapter.send(
                     chat_id=self.chat_id,
                     content=chunk,
-                    metadata=self.metadata,
+                    metadata=self._metadata_for_send(final=True),
                 )
                 if result.success:
                     break
-                if attempt == 0 and self._is_flood_error(result):
-                    logger.debug("Flood control on fallback send, retrying in 3s")
-                    await asyncio.sleep(3.0)
+                retry_delay = self._fallback_flood_retry_delay(result)
+                if attempt == 0 and retry_delay is not None:
+                    logger.debug(
+                        "Flood control on fallback send, retrying in %.1fs",
+                        retry_delay,
+                    )
+                    await asyncio.sleep(retry_delay)
                 else:
-                    break  # non-flood error or second attempt failed
+                    break  # non-flood error, long flood wait, or second failure
 
             if not result or not result.success:
                 if sent_any_chunk:
@@ -970,8 +1161,7 @@ class GatewayStreamConsumer:
                 except Exception as e:
                     logger.debug(
                         "Fallback partial cleanup failed (%s): %s",
-                        stale_message_id,
-                        e,
+                        stale_message_id, e,
                     )
 
         self._message_id = last_message_id
@@ -981,6 +1171,103 @@ class GatewayStreamConsumer:
         self._last_sent_text = chunks[-1]
         self._fallback_prefix = ""
         self._fallback_preserve_partial_messages = False
+
+    async def _send_empty_fallback_final(self, final_text: str) -> str:
+        """Commit a completed answer after Telegram finalization fails.
+
+        Returns ``delivered`` on confirmed success, ``failed`` when the
+        gateway can safely retry, and ``ambiguous`` when a timeout may have
+        reached the platform already.
+        """
+        # Tool/segment boundaries intentionally preserve the run-wide preview
+        # IDs for normal fresh-final cleanup.  This recovery replaces only the
+        # active final segment, so never delete an earlier finalized preamble.
+        stale_ids = set(self._segment_preview_message_ids)
+        if self._message_id and self._message_id != "__no_edit__":
+            stale_ids.add(str(self._message_id))
+
+        result = None
+        for attempt in range(2):
+            try:
+                result = await self.adapter.send(
+                    chat_id=self.chat_id,
+                    content=final_text,
+                    metadata=self._metadata_for_send(final=True),
+                )
+            except Exception as exc:
+                logger.debug("Empty fallback final send failed: %s", exc)
+                return (
+                    "ambiguous"
+                    if self._send_failure_may_have_delivered(exc)
+                    else "failed"
+                )
+
+            if getattr(result, "success", False):
+                break
+            retry_delay = self._fallback_flood_retry_delay(result)
+            if attempt == 0 and retry_delay is not None:
+                logger.debug(
+                    "Flood control on empty fallback final send; retrying in %.1fs",
+                    retry_delay,
+                )
+                await asyncio.sleep(retry_delay)
+                continue
+            return (
+                "ambiguous"
+                if self._send_failure_may_have_delivered(result)
+                else "failed"
+            )
+
+        new_message_id = getattr(result, "message_id", None)
+        delete_fn = getattr(self.adapter, "delete_message", None)
+        if delete_fn is not None:
+            for stale_id in stale_ids:
+                if not stale_id or stale_id == new_message_id:
+                    continue
+                try:
+                    await delete_fn(self.chat_id, stale_id)
+                except Exception as exc:
+                    logger.debug(
+                        "Empty fallback preview cleanup failed (%s): %s",
+                        stale_id,
+                        exc,
+                    )
+
+        self._segment_preview_message_ids = set()
+        self._message_id = new_message_id or "__no_edit__"
+        self._already_sent = True
+        self._final_response_sent = True
+        self._final_content_delivered = True
+        self._last_sent_text = final_text
+        self._fallback_prefix = ""
+        self._fallback_preserve_partial_messages = False
+        self._notify_new_message()
+        return "delivered"
+
+    @staticmethod
+    def _send_failure_may_have_delivered(result_or_exc: Any) -> bool:
+        """Return True for timeout failures where retrying may duplicate."""
+        if getattr(result_or_exc, "retryable", None) is True:
+            return False
+        error = str(getattr(result_or_exc, "error", None) or result_or_exc).lower()
+        name = result_or_exc.__class__.__name__.lower()
+        return "timeout" in error or "timed out" in error or "timeout" in name
+
+    def _fallback_flood_retry_delay(self, result: Any) -> float | None:
+        """Return a bounded retry delay for a fallback send, if safe to retry."""
+        if not self._is_flood_error(result):
+            return None
+        try:
+            delay = float(getattr(result, "retry_after", None) or 3.0)
+        except (TypeError, ValueError):
+            delay = 3.0
+        if delay > self._max_fallback_flood_retry_seconds:
+            logger.debug(
+                "Flood control requests %.1fs; leaving final delivery to the gateway",
+                delay,
+            )
+            return None
+        return max(0.0, delay)
 
     def _is_flood_error(self, result) -> bool:
         """Check if a SendResult failure is due to flood control / rate limiting."""
@@ -1026,8 +1313,7 @@ class GatewayStreamConsumer:
                 logger.debug(
                     "Draft streaming requested but unsupported (chat=%s, type=%r) — "
                     "falling back to edit",
-                    self.chat_id,
-                    self.cfg.chat_type,
+                    self.chat_id, self.cfg.chat_type,
                 )
             return False
         return True
@@ -1055,8 +1341,7 @@ class GatewayStreamConsumer:
             )
         except Exception as e:
             logger.debug(
-                "send_draft raised, disabling draft transport for this run: %s",
-                e,
+                "send_draft raised, disabling draft transport for this run: %s", e,
             )
             self._draft_failures += 1
             self._use_draft_streaming = False
@@ -1091,7 +1376,7 @@ class GatewayStreamConsumer:
         visible = self._fallback_prefix or self._visible_prefix()
         tail = self._accumulated
         if visible and tail.startswith(visible):
-            tail = tail[len(visible) :].lstrip()
+            tail = tail[len(visible):].lstrip()
         tail = self._clean_for_display(tail)
         if not tail.strip():
             return
@@ -1118,11 +1403,12 @@ class GatewayStreamConsumer:
         if not prefix or not prefix.strip():
             return
         try:
-            await self._edit_message(
+            result = await self._edit_message(
                 message_id=self._message_id,
                 content=prefix,
             )
-            self._last_sent_text = prefix
+            if getattr(result, "success", False):
+                self._last_sent_text = prefix
         except Exception:
             pass  # best-effort — don't let this block the fallback path
 
@@ -1147,6 +1433,10 @@ class GatewayStreamConsumer:
                 # stale tool bubble above it so the next tool starts a
                 # new bubble below.
                 self._notify_new_message()
+                # Record the exact delivered text so run.py can confirm whether
+                # an interim "preview" actually carried the final response, vs.
+                # unrelated commentary delivered during a session split (#14238).
+                self._delivered_commentary_texts.append(text)
             return result.success
         except Exception as e:
             logger.error("Commentary send error: %s", e)
@@ -1198,20 +1488,22 @@ class GatewayStreamConsumer:
         return base
 
     def _track_preview_id(self, message_id: Optional[str]) -> None:
-        """Record a real preview message id for fresh-final cleanup."""
+        """Record a real preview message id for finalization cleanup."""
         if message_id and message_id != "__no_edit__":
-            self._preview_message_ids.add(str(message_id))
+            message_id = str(message_id)
+            self._preview_message_ids.add(message_id)
+            self._segment_preview_message_ids.add(message_id)
 
     def _track_preview_ids_from_result(self, result: Any) -> None:
         """Record every message id a send/edit result exposes: the primary id
         plus any continuation ids from an oversized split
         (``continuation_message_ids`` or ``raw_response['message_ids']``)."""
         self._track_preview_id(getattr(result, "message_id", None))
-        for mid in getattr(result, "continuation_message_ids", None) or ():
+        for mid in (getattr(result, "continuation_message_ids", None) or ()):
             self._track_preview_id(mid)
         raw = getattr(result, "raw_response", None) or {}
         if isinstance(raw, dict):
-            for mid in raw.get("message_ids") or ():
+            for mid in (raw.get("message_ids") or ()):
                 self._track_preview_id(mid)
 
     def _adapter_prefers_fresh_final(self, text: str) -> bool:
@@ -1268,7 +1560,7 @@ class GatewayStreamConsumer:
             result = await self.adapter.send(
                 chat_id=self.chat_id,
                 content=text,
-                metadata=self.metadata,
+                metadata=self._metadata_for_send(final=True),
             )
         except Exception as e:
             logger.debug("Fresh-final send failed, falling back to edit: %s", e)
@@ -1288,19 +1580,14 @@ class GatewayStreamConsumer:
         delete_fn = getattr(self.adapter, "delete_message", None)
         if delete_fn is not None:
             for stale_id in stale_ids:
-                if (
-                    not stale_id
-                    or stale_id == "__no_edit__"
-                    or stale_id == new_message_id
-                ):
+                if not stale_id or stale_id == "__no_edit__" or stale_id == new_message_id:
                     continue
                 try:
                     await delete_fn(self.chat_id, stale_id)
                 except Exception as e:
                     logger.debug(
                         "Fresh-final preview cleanup failed (%s): %s",
-                        stale_id,
-                        e,
+                        stale_id, e,
                     )
         self._preview_message_ids = set()
         if new_message_id:
@@ -1318,12 +1605,51 @@ class GatewayStreamConsumer:
             self._final_response_sent = True
         return True
 
+    async def _suppress_silence_marker(self) -> None:
+        """Retract any streamed preview when the final reply is a silence marker.
+
+        The agent chose not to respond and emitted a bare control marker.  Any
+        preview message the consumer already put on screen (a partial marker
+        flushed on an interval tick, or a preamble before a tool boundary) must
+        be removed so the raw marker is never left visible.  Deletion reuses the
+        same best-effort ``delete_message`` path as :meth:`_try_fresh_final`.
+
+        Crucially, the delivery flags (``_final_response_sent`` /
+        ``_final_content_delivered``) are left **False**: nothing was delivered.
+        The gateway then does not mistake the marker for a delivered reply, and
+        its own whole-response filter turns the marker into "" so no fallback
+        send happens either.  ``_already_sent`` is likewise cleared so the
+        gateway's ``already_sent`` short-circuits do not fire.
+        """
+        stale_ids = set(self._preview_message_ids)
+        if self._message_id and self._message_id != "__no_edit__":
+            stale_ids.add(self._message_id)
+        delete_fn = getattr(self.adapter, "delete_message", None)
+        if delete_fn is not None:
+            for stale_id in stale_ids:
+                if not stale_id or stale_id == "__no_edit__":
+                    continue
+                try:
+                    await delete_fn(self.chat_id, stale_id)
+                except Exception as e:
+                    logger.debug(
+                        "Silence-marker preview cleanup failed (%s): %s",
+                        stale_id, e,
+                    )
+        self._preview_message_ids = set()
+        self._message_id = None
+        self._accumulated = ""
+        self._last_sent_text = ""
+        self._already_sent = False
+        self._final_response_sent = False
+        self._final_content_delivered = False
+        logger.info(
+            "Suppressed streamed intentional-silence marker (chat=%s)",
+            self.chat_id,
+        )
+
     async def _send_or_edit(
-        self,
-        text: str,
-        *,
-        finalize: bool = False,
-        is_turn_final: bool = True,
+        self, text: str, *, finalize: bool = False, is_turn_final: bool = True,
     ) -> bool:
         """Send or edit the streaming message.
 
@@ -1358,12 +1684,10 @@ class GatewayStreamConsumer:
         # ▉ block character renders as a visible white box ("tofu").
         # Existing messages (edits) are unaffected — only first sends gated.
         _MIN_NEW_MSG_CHARS = 4
-        if (
-            self._message_id is None
-            and self.cfg.cursor
-            and self.cfg.cursor in text
-            and len(_visible_stripped) < _MIN_NEW_MSG_CHARS
-        ):
+        if (self._message_id is None
+                and self.cfg.cursor
+                and self.cfg.cursor in text
+                and len(_visible_stripped) < _MIN_NEW_MSG_CHARS):
             return True  # too short for a standalone message — accumulate more
 
         # Native draft streaming: route mid-stream frames through send_draft.
@@ -1377,7 +1701,11 @@ class GatewayStreamConsumer:
         #     a tool-boundary segment break where the prior text was finalized
         #     as a real sendMessage and the next text segment continues editing
         #     that one — staying on edit-based for that segment is correct).
-        if self._use_draft_streaming and not finalize and self._message_id is None:
+        if (
+            self._use_draft_streaming
+            and not finalize
+            and self._message_id is None
+        ):
             # No-op skip: identical to the last frame we sent.
             if text == self._last_sent_text:
                 return True
@@ -1421,15 +1749,40 @@ class GatewayStreamConsumer:
                     # finalizing through edit would visibly downgrade a rich
                     # preview, so re-deliver as a fresh message + delete the
                     # preview instead.
+                    #
+                    # When the adapter exposes prefers_fresh_final_streaming
+                    # and explicitly returns False, the time-based threshold
+                    # must NOT override that decision.  On Telegram the
+                    # fresh-final path sends a Rich Message (sendRichMessage)
+                    # that overlaps with the legacy MarkdownV2 preview already
+                    # visible from streaming — both remain on screen because
+                    # the old message is only best-effort deleted.  Adapters
+                    # without the hook still get the time-based fresh-final.
+                    # (#47048)
+                    # Check the *class* for the hook so MagicMock adapters
+                    # (which auto-create attributes on access) are not
+                    # falsely detected as having it.  Also check instance
+                    # __dict__ for test doubles that explicitly assign the
+                    # attribute (e.g. adapter.prefers_fresh_final_streaming
+                    # = MagicMock(return_value=False)).
+                    _has_prefers_hook = (
+                        hasattr(type(self.adapter),
+                                "prefers_fresh_final_streaming")
+                        or "prefers_fresh_final_streaming"
+                            in getattr(self.adapter, "__dict__", {})
+                    )
+                    _prefers_fresh = self._adapter_prefers_fresh_final(text)
                     if (
                         finalize
                         and (
-                            self._should_send_fresh_final()
-                            or self._adapter_prefers_fresh_final(text)
+                            _prefers_fresh
+                            or (
+                                not _has_prefers_hook
+                                and self._should_send_fresh_final()
+                            )
                         )
                         and await self._try_fresh_final(
-                            text,
-                            is_turn_final=is_turn_final,
+                            text, is_turn_final=is_turn_final,
                         )
                     ):
                         return True
@@ -1455,9 +1808,7 @@ class GatewayStreamConsumer:
                         # below the new continuation, not the original.
                         # ``getattr`` with default keeps backwards compat with
                         # SimpleNamespace mocks in tests that pre-date the field.
-                        _continuation_ids = (
-                            getattr(result, "continuation_message_ids", ()) or ()
-                        )
+                        _continuation_ids = getattr(result, "continuation_message_ids", ()) or ()
                         if (
                             _continuation_ids
                             and result.message_id
@@ -1474,6 +1825,7 @@ class GatewayStreamConsumer:
                         self._flood_strikes = 0
                         return True
                     else:
+                        immediate_final_fallback = False
                         if (
                             finalize
                             and is_turn_final
@@ -1491,9 +1843,7 @@ class GatewayStreamConsumer:
                             # final edit (#36965, #25349).
                             self._final_content_delivered = True
                         raw_response = getattr(result, "raw_response", None)
-                        if isinstance(raw_response, dict) and raw_response.get(
-                            "partial_overflow"
-                        ):
+                        if isinstance(raw_response, dict) and raw_response.get("partial_overflow"):
                             # Telegram edited/sent one or more overflow chunks,
                             # but not the complete response.  Preserve the
                             # visible prefix so the got_done fallback sends the
@@ -1508,8 +1858,8 @@ class GatewayStreamConsumer:
                             if isinstance(delivered_prefix, str) and delivered_prefix:
                                 self._last_sent_text = delivered_prefix
                                 self._fallback_prefix = delivered_prefix
-                                self._fallback_preserve_partial_messages = (
-                                    text.startswith(delivered_prefix)
+                                self._fallback_preserve_partial_messages = text.startswith(
+                                    delivered_prefix
                                 )
                             else:
                                 self._fallback_prefix = self._visible_prefix()
@@ -1528,8 +1878,7 @@ class GatewayStreamConsumer:
                         if self._is_flood_error(result):
                             self._flood_strikes += 1
                             self._current_edit_interval = min(
-                                self._current_edit_interval * 2,
-                                10.0,
+                                self._current_edit_interval * 2, 10.0,
                             )
                             logger.debug(
                                 "Flood control on edit (strike %d/%d), "
@@ -1538,12 +1887,30 @@ class GatewayStreamConsumer:
                                 self._MAX_FLOOD_STRIKES,
                                 self._current_edit_interval,
                             )
-                            if self._flood_strikes < self._MAX_FLOOD_STRIKES:
+                            immediate_final_fallback = (
+                                finalize
+                                and is_turn_final
+                                and getattr(
+                                    self.adapter,
+                                    "FALLBACK_ON_FINAL_EDIT_FLOOD",
+                                    False,
+                                ) is True
+                            )
+                            if (
+                                self._flood_strikes < self._MAX_FLOOD_STRIKES
+                                and not immediate_final_fallback
+                            ):
                                 # Don't disable edits yet — just slow down.
                                 # Update _last_edit_time so the next edit
                                 # respects the new interval.
                                 self._last_edit_time = time.monotonic()
                                 return False
+
+                            if immediate_final_fallback:
+                                logger.debug(
+                                    "Turn-final edit hit flood control; "
+                                    "entering fallback immediately"
+                                )
 
                         # Non-flood error OR flood strikes exhausted: enter
                         # fallback mode — send only the missing tail once the
@@ -1557,8 +1924,12 @@ class GatewayStreamConsumer:
                         self._edit_supported = False
                         self._already_sent = True
                         # Best-effort: strip the cursor from the last visible
-                        # message so the user doesn't see a stuck ▉.
-                        await self._try_strip_cursor()
+                        # message so the user doesn't see a stuck ▉. A
+                        # turn-final Telegram flood skips this cosmetic edit:
+                        # another edit would consume the same flood budget and
+                        # delay the fallback send that carries the answer.
+                        if not immediate_final_fallback:
+                            await self._try_strip_cursor()
                         return False
                 else:
                     # Editing not supported — skip intermediate updates.
@@ -1571,7 +1942,10 @@ class GatewayStreamConsumer:
                     chat_id=self.chat_id,
                     content=text,
                     reply_to=self._initial_reply_to_id,
-                    metadata={**(self.metadata or {}), "expect_edits": True},
+                    metadata=self._metadata_for_send(
+                        final=finalize,
+                        expect_edits=True,
+                    ),
                 )
                 if result.success:
                     if result.message_id:

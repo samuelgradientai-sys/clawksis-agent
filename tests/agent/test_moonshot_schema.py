@@ -29,6 +29,10 @@ class TestMoonshotModelDetection:
         [
             "kimi-k2.6",
             "kimi-k2-thinking",
+            "k3",
+            "K3",
+            "moonshotai/k3",
+            "k3.1-preview",
             "moonshotai/Kimi-K2.6",
             "moonshotai/kimi-k2.6",
             "nous/moonshotai/kimi-k2.6",
@@ -184,18 +188,10 @@ class TestTopLevelGuarantees:
     """The returned top-level schema is always a well-formed object."""
 
     def test_non_dict_input_returns_empty_object(self):
-        assert sanitize_moonshot_tool_parameters(None) == {
-            "type": "object",
-            "properties": {},
-        }
-        assert sanitize_moonshot_tool_parameters("garbage") == {
-            "type": "object",
-            "properties": {},
-        }
-        assert sanitize_moonshot_tool_parameters([]) == {
-            "type": "object",
-            "properties": {},
-        }
+        empty = {"type": "object", "properties": {}, "required": []}
+        assert sanitize_moonshot_tool_parameters(None) == empty
+        assert sanitize_moonshot_tool_parameters("garbage") == empty
+        assert sanitize_moonshot_tool_parameters([]) == empty
 
     def test_non_object_top_level_coerced(self):
         params = {"type": "string"}
@@ -215,6 +211,66 @@ class TestTopLevelGuarantees:
         sanitize_moonshot_tool_parameters(params)
         assert params["type"] == snapshot["type"]
         assert "type" not in params["properties"]["q"]
+
+
+class TestRequiredArray:
+    """Rule 4: every object schema must carry a ``required`` array (#66835)."""
+
+    def test_empty_object_gets_empty_required(self):
+        out = sanitize_moonshot_tool_parameters({"type": "object", "properties": {}})
+        assert out["required"] == []
+
+    def test_object_with_only_optional_props_gets_empty_required(self):
+        params = {
+            "type": "object",
+            "properties": {"q": {"type": "string"}},
+        }
+        out = sanitize_moonshot_tool_parameters(params)
+        assert out["required"] == []
+
+    def test_existing_required_preserved(self):
+        params = {
+            "type": "object",
+            "properties": {"q": {"type": "string"}},
+            "required": ["q"],
+        }
+        out = sanitize_moonshot_tool_parameters(params)
+        assert out["required"] == ["q"]
+
+    def test_dangling_required_pruned(self):
+        params = {
+            "type": "object",
+            "properties": {"q": {"type": "string"}},
+            "required": ["q", "ghost"],
+        }
+        out = sanitize_moonshot_tool_parameters(params)
+        assert out["required"] == ["q"]
+
+    def test_non_list_required_replaced(self):
+        params = {
+            "type": "object",
+            "properties": {},
+            "required": "q",  # invalid: string, not array
+        }
+        out = sanitize_moonshot_tool_parameters(params)
+        assert out["required"] == []
+
+    def test_nested_object_property_gets_required(self):
+        params = {
+            "type": "object",
+            "properties": {
+                "filter": {"type": "object", "properties": {}},
+            },
+        }
+        out = sanitize_moonshot_tool_parameters(params)
+        assert out["properties"]["filter"]["required"] == []
+        assert out["required"] == []
+
+    def test_coerced_top_level_gets_required(self):
+        # A non-object top level is forced to object and must gain required.
+        out = sanitize_moonshot_tool_parameters({"type": "string"})
+        assert out["type"] == "object"
+        assert out["required"] == []
 
 
 class TestToolListSanitizer:
@@ -244,8 +300,10 @@ class TestToolListSanitizer:
         ]
         out = sanitize_moonshot_tools(tools)
         assert out[0]["function"]["parameters"]["properties"]["q"]["type"] == "string"
-        # Second tool already clean — should be structurally equivalent
-        assert out[1]["function"]["parameters"] == {"type": "object", "properties": {}}
+        # Second tool: empty object gains the required-array Moonshot demands
+        assert out[1]["function"]["parameters"] == {
+            "type": "object", "properties": {}, "required": []
+        }
 
     def test_empty_list_is_passthrough(self):
         assert sanitize_moonshot_tools([]) == []
@@ -350,15 +408,7 @@ class TestEnumNullStripping:
             "properties": {
                 "datasource": {"type": "string"},
                 "db_type": {
-                    "enum": [
-                        "mysql",
-                        "mariadb",
-                        "postgresql",
-                        "sqlserver",
-                        "oracle",
-                        "",
-                        None,
-                    ],
+                    "enum": ["mysql", "mariadb", "postgresql", "sqlserver", "oracle", "", None],
                     "type": "string",
                     "nullable": True,
                     "default": None,
@@ -371,13 +421,7 @@ class TestEnumNullStripping:
         assert "nullable" not in db_type, "nullable keyword must be stripped"
         assert None not in db_type["enum"]
         assert "" not in db_type["enum"]
-        assert db_type["enum"] == [
-            "mysql",
-            "mariadb",
-            "postgresql",
-            "sqlserver",
-            "oracle",
-        ]
+        assert db_type["enum"] == ["mysql", "mariadb", "postgresql", "sqlserver", "oracle"]
         assert db_type["type"] == "string"
 
     def test_enum_on_object_type_not_stripped(self):
@@ -416,13 +460,10 @@ class TestEnumNullStripping:
         out = sanitize_moonshot_tool_parameters(params)
         db_type = out["properties"]["db_type"]
         assert "anyOf" not in db_type
-        assert "nullable" not in db_type, (
-            "nullable must be stripped after anyOf collapse"
-        )
+        assert "nullable" not in db_type, "nullable must be stripped after anyOf collapse"
         assert db_type["type"] == "string"
-        assert db_type["enum"] == ["mysql", "postgresql"], (
+        assert db_type["enum"] == ["mysql", "postgresql"], \
             "null/empty enum values must be stripped after anyOf collapse"
-        )
 
 
 class TestUnionTypeList:
