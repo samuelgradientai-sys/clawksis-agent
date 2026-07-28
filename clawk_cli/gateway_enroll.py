@@ -5,11 +5,11 @@ customer-managed and internet-exposed). This command is the gateway half of the
 zero-touch enrollment in the connector repo's
 ``docs/connector-gateway-auth-design.md``:
 
-  1. Resolve a fresh Nous Portal access token from the existing login
-     (``~/.clawksis/auth.json``) — the same path ``clawk dashboard register``
-     uses (``resolve_nous_access_token``). This proves *which Nous org (tenant)*
-     the caller owns; the connector derives the authoritative tenant from it via
-     ``GET /api/oauth/account`` (never from anything the gateway asserts).
+  1. Resolve a caller-identity access token from the operator's own IdP (OAuth2
+     ``client_credentials`` — see ``gateway.relay._resolve_relay_identity_token``).
+     This proves *which tenant* the caller owns; the connector derives the
+     authoritative tenant by introspecting that token (never from anything the
+     gateway asserts).
   2. POST ``{enrollmentToken, gatewayId}`` to the connector's ``/relay/enroll``
      with that token in the ``Authorization`` header, over TLS.
   3. The connector verifies the enrollment token (signature + single-use +
@@ -20,9 +20,9 @@ zero-touch enrollment in the connector repo's
      ``~/.clawksis/.env``. The per-gateway secret authenticates the WS upgrade;
      the per-tenant delivery key verifies signed inbound deliveries.
 
-Managed/hosted installs do NOT self-enroll: the orchestrator (NAS) mints the
-secret directly and stamps it into the container env, so this command refuses to
-run under ``is_managed()`` (mirrors ``dashboard register``).
+Managed/hosted installs do NOT self-enroll: the orchestrator mints the secret
+directly and stamps it into the container env, so this command refuses to run
+under ``is_managed()`` (mirrors ``dashboard register``).
 
 EXPERIMENTAL: the relay auth scheme may change without a deprecation cycle until
 ≥2 Class-1 platforms validate the contract.
@@ -87,12 +87,13 @@ def _resolve_connector_url(override: Optional[str]) -> Optional[str]:
 
 
 def _resolve_identity_token() -> str:
-    """Resolve the caller-identity bearer token (generic-OIDC or Nous Portal).
+    """Resolve the caller-identity bearer token (generic OIDC client-credentials).
 
     Delegates to the canonical resolver in ``gateway.relay`` so the enroll CLI and
-    the runtime self-provision path share ONE implementation (generic OAuth2
-    client-credentials when ``gateway.idp.token_url`` is set — the air-gapped /
-    self-hosted-IdP path; otherwise Nous Portal). Raises RuntimeError on failure.
+    the runtime self-provision path share ONE implementation: an OAuth2
+    ``client_credentials`` grant against the operator's own IdP, configured via
+    ``gateway.idp.token_url`` / ``GATEWAY_RELAY_IDP_TOKEN_URL``. Raises
+    RuntimeError on failure (including "no IdP configured").
     """
     from gateway.relay import _resolve_relay_identity_token
 
@@ -137,8 +138,9 @@ def _post_enroll(
             pass
         if exc.code == 401:
             raise RuntimeError(
-                "Connector rejected the caller identity (401). Your Nous Portal "
-                "token could not be verified — try `clawk auth add nous` and retry."
+                "Connector rejected the caller identity (401). Your IdP token "
+                "could not be verified — check gateway.idp.* (token_url / "
+                "client_id / client_secret / scope) and retry."
             ) from exc
         if exc.code == 403:
             raise RuntimeError(
@@ -160,7 +162,6 @@ def _post_enroll(
 
 def cmd_gateway_enroll(args) -> None:
     """Enroll this gateway with a relay connector; persist the auth creds to .env."""
-    from clawk_cli.auth import AuthError, resolve_nous_access_token
     from clawk_cli.config import is_managed, save_env_value
 
     # Managed installs get GATEWAY_RELAY_* stamped in by the orchestrator (NAS
@@ -194,20 +195,16 @@ def cmd_gateway_enroll(args) -> None:
 
     gateway_id = (getattr(args, "gateway_id", None) or _default_gateway_id()).strip()
 
-    # 1. Resolve the caller-identity token (the tenant-proving identity). Generic
-    #    OIDC client-credentials when an IdP token endpoint is configured (air-
-    #    gapped / self-hosted-IdP, NO Nous Portal); otherwise the Nous Portal token.
+    # 1. Resolve the caller-identity token (the tenant-proving identity): a
+    #    generic OIDC client-credentials grant against the operator's own IdP.
     try:
         access_token = _resolve_identity_token()
-    except AuthError as exc:
-        if getattr(exc, "relogin_required", False):
-            print("✗ You're not logged into Nous Portal.")
-            print("  Run `clawk setup` (or `clawk auth add nous`) first, then retry.")
-        else:
-            print(f"✗ Could not resolve a Nous Portal access token: {exc}")
-        sys.exit(1)
     except Exception as exc:
         print(f"✗ Could not resolve a caller-identity token: {exc}")
+        print(
+            "  Configure gateway.idp.token_url / client_id / client_secret (or "
+            "GATEWAY_RELAY_IDP_*) and retry."
+        )
         sys.exit(1)
 
     # 2-3. Redeem the enrollment token at the connector.

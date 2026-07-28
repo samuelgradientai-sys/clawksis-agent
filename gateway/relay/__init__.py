@@ -441,19 +441,19 @@ def _resolve_relay_identity_token() -> str:
     """Resolve the caller-identity bearer token the connector introspects to a tenant.
 
     Canonical resolver shared by the runtime self-provision path and the
-    ``clawk gateway enroll`` CLI. Two modes, in precedence order:
+    ``clawk gateway enroll`` CLI. ONE mode (Clawksis is self-hosted / BYOK — the
+    upstream vendor-portal identity mode is deliberately absent):
 
-      1. **Generic OIDC client-credentials** (air-gapped / self-hosted-IdP, NO
-         Nous Portal): when ``gateway.idp.token_url`` (or
-         ``GATEWAY_RELAY_IDP_TOKEN_URL``) is configured, obtain a workload access
-         token via the OAuth2 ``client_credentials`` grant against the operator's
-         own IdP (Entra; Authentik in the sandbox). The connector's Seam-A OIDC
-         verifier reads a claim (default ``tid``) off it as the tenant.
-      2. **Nous Portal** (default): ``resolve_nous_access_token()`` — existing
-         managed/hosted behaviour.
+      **Generic OIDC client-credentials** (air-gapped / self-hosted-IdP): when
+      ``gateway.idp.token_url`` (or ``GATEWAY_RELAY_IDP_TOKEN_URL``) is
+      configured, obtain a workload access token via the OAuth2
+      ``client_credentials`` grant against the operator's own IdP (Entra;
+      Authentik in the sandbox). The connector's Seam-A OIDC verifier reads a
+      claim (default ``tid``) off it as the tenant.
 
-    Raises on failure; callers decide whether that's fatal (enroll CLI) or a
-    graceful boot no-op (self-provision).
+    With no IdP configured there is NO identity to assert, so this raises.
+    Callers decide whether that's fatal (enroll CLI) or a graceful boot no-op
+    (self-provision).
     """
     token_url = os.environ.get("GATEWAY_RELAY_IDP_TOKEN_URL", "").strip()
     client_id = os.environ.get("GATEWAY_RELAY_IDP_CLIENT_ID", "").strip()
@@ -472,12 +472,13 @@ def _resolve_relay_identity_token() -> str:
             token_url = token_url or ""
 
     if not token_url:
-        # Mode 2 — Nous Portal (default, unchanged behaviour).
-        from clawk_cli.auth import resolve_nous_access_token
+        raise RuntimeError(
+            "no relay caller identity configured: set gateway.idp.token_url "
+            "(or GATEWAY_RELAY_IDP_TOKEN_URL) plus client_id/client_secret so "
+            "the connector can introspect a tenant"
+        )
 
-        return resolve_nous_access_token()
-
-    # Mode 1 — generic OAuth2 client_credentials grant.
+    # Generic OAuth2 client_credentials grant.
     import json
     import urllib.error
     import urllib.parse
@@ -515,27 +516,25 @@ def self_provision_relay() -> bool:
     """Boot-time relay self-provision: mint relay creds in-process, no human, no disk.
 
     Fires when relay is configured (``relay_url()`` set) and NO per-gateway secret
-    is already present, AND the agent can resolve its own Nous access token. In
-    that case the runtime resolves the agent's own Nous access token (the same
-    ``resolve_nous_access_token()`` the enroll CLI / dashboard register use),
-    POSTs ``/relay/provision`` asserting its own endpoint + route keys, and sets
+    is already present, AND the agent can resolve a caller-identity token from the
+    operator's own IdP (``_resolve_relay_identity_token()``, the same resolver the
+    enroll CLI uses). In that case the runtime POSTs ``/relay/provision`` asserting
+    its own endpoint + route keys, and sets
     ``GATEWAY_RELAY_ID`` / ``GATEWAY_RELAY_SECRET`` / ``GATEWAY_RELAY_DELIVERY_KEY``
     into ``os.environ`` so the subsequent ``register_relay_adapter()`` picks them
     up. The creds live ONLY in process memory — never written to ``~/.clawksis/.env``.
 
     The trigger is deliberately NOT ``is_managed()``: that means
-    "package-manager/NixOS-managed" and is False on a NAS-hosted Fly agent (which
-    sets neither ``CLAWK_MANAGED`` nor a ``.managed`` marker), so gating on it
-    blocked the exact hosted case this is for. The real signal is "you pointed me
-    at a connector and didn't pin a secret" — which is both NAS-independent and
-    self-guarding:
+    "package-manager/NixOS-managed", which is orthogonal to "am I fronted by a
+    connector". The real signal is "you pointed me at a connector and didn't pin
+    a secret" — which is self-guarding:
 
-      - A NAS-hosted agent: has ``GATEWAY_RELAY_URL``, no pinned secret, and a
-        bootstrapped NAS token -> self-provisions.
-      - A self-hosted operator who ran ``clawk gateway enroll``: has a PINNED
+      - A box with ``GATEWAY_RELAY_URL``, no pinned secret, and a configured IdP
+        -> self-provisions.
+      - An operator who ran ``clawk gateway enroll``: has a PINNED
         ``GATEWAY_RELAY_SECRET`` -> skipped (the secret-present guard below).
-      - A self-hosted box with a relay URL but no NAS identity:
-        ``resolve_nous_access_token()`` fails -> graceful no-op.
+      - A box with a relay URL but no IdP identity:
+        ``_resolve_relay_identity_token()`` raises -> graceful no-op.
 
     Stateless: process-env creds don't survive a restart, so a hosted container
     re-provisions every boot; the connector's rotation window covers a still-

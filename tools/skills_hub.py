@@ -26,17 +26,16 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from clawk_constants import get_clawk_home
+from clawk_cli._subprocess_compat import windows_hide_flags
 from agent.skill_utils import is_excluded_skill_path
 from typing import Any, Dict, List, Optional, Tuple, Union
-from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.parse import unquote, urljoin, urlparse, urlsplit, urlunparse
 
 import httpx
 import yaml
 
 from tools.skills_guard import (
-    ScanResult,
-    content_hash,
-    TRUSTED_REPOS,
+    ScanResult, content_hash, TRUSTED_REPOS,
 )
 from tools.url_safety import is_safe_url
 from tools.website_policy import check_website_access
@@ -47,18 +46,78 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
+# Resolved per-call (not frozen at import) so the profile override is honored;
+# import-time constants leaked across profiles in single-process multi-profile
+# runtimes. Legacy names (SKILLS_DIR, ...) are re-exposed via __getattr__ below
+# so external `from tools.skills_hub import SKILLS_DIR` callers still work.
 
-CLAWK_HOME = get_clawk_home()
-SKILLS_DIR = CLAWK_HOME / "skills"
-HUB_DIR = SKILLS_DIR / ".hub"
-LOCK_FILE = HUB_DIR / "lock.json"
-QUARANTINE_DIR = HUB_DIR / "quarantine"
-AUDIT_LOG = HUB_DIR / "audit.log"
-TAPS_FILE = HUB_DIR / "taps.json"
-INDEX_CACHE_DIR = HUB_DIR / "index-cache"
-
-# Cache duration for remote index fetches
 INDEX_CACHE_TTL = 3600  # 1 hour
+
+
+# _override lets a test-injected real module attribute (patch.object/monkeypatch
+# on SKILLS_DIR etc.) win over dynamic resolution; None means resolve live.
+def _override(name: str):
+    return globals().get(name)
+
+
+def _clawk_home() -> Path:
+    return get_clawk_home()
+
+
+def _skills_dir() -> Path:
+    forced = _override("SKILLS_DIR")
+    return Path(forced) if forced is not None else _clawk_home() / "skills"
+
+
+def _hub_dir() -> Path:
+    forced = _override("HUB_DIR")
+    return Path(forced) if forced is not None else _skills_dir() / ".hub"
+
+
+def _lock_file() -> Path:
+    forced = _override("LOCK_FILE")
+    return Path(forced) if forced is not None else _hub_dir() / "lock.json"
+
+
+def _quarantine_dir() -> Path:
+    forced = _override("QUARANTINE_DIR")
+    return Path(forced) if forced is not None else _hub_dir() / "quarantine"
+
+
+def _audit_log() -> Path:
+    forced = _override("AUDIT_LOG")
+    return Path(forced) if forced is not None else _hub_dir() / "audit.log"
+
+
+def _taps_file() -> Path:
+    forced = _override("TAPS_FILE")
+    return Path(forced) if forced is not None else _hub_dir() / "taps.json"
+
+
+def _index_cache_dir() -> Path:
+    forced = _override("INDEX_CACHE_DIR")
+    return Path(forced) if forced is not None else _hub_dir() / "index-cache"
+
+
+_DYNAMIC_PATH_RESOLVERS = {
+    "CLAWK_HOME": _clawk_home,
+    "SKILLS_DIR": _skills_dir,
+    "HUB_DIR": _hub_dir,
+    "LOCK_FILE": _lock_file,
+    "QUARANTINE_DIR": _quarantine_dir,
+    "AUDIT_LOG": _audit_log,
+    "TAPS_FILE": _taps_file,
+    "INDEX_CACHE_DIR": _index_cache_dir,
+}
+
+
+def __getattr__(name: str):
+    """Resolve legacy path constants dynamically (PEP 562) so they reflect the
+    active profile override; a test's patch.object-set real attribute shadows it."""
+    resolver = _DYNAMIC_PATH_RESOLVERS.get(name)
+    if resolver is not None:
+        return resolver()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 _REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 _MAX_SKILL_FETCH_REDIRECTS = 5
@@ -68,16 +127,14 @@ _MAX_SKILL_FETCH_REDIRECTS = 5
 # Data models
 # ---------------------------------------------------------------------------
 
-
 @dataclass
 class SkillMeta:
     """Minimal metadata returned by search results."""
-
     name: str
     description: str
-    source: str  # "official", "github", "clawhub", "claude-marketplace", "lobehub"
-    identifier: str  # source-specific ID (e.g. "openai/skills/skill-creator")
-    trust_level: str  # "builtin" | "trusted" | "community"
+    source: str           # "official", "github", "clawhub", "claude-marketplace", "lobehub"
+    identifier: str       # source-specific ID (e.g. "openai/skills/skill-creator")
+    trust_level: str      # "builtin" | "trusted" | "community"
     repo: Optional[str] = None
     path: Optional[str] = None
     tags: List[str] = field(default_factory=list)
@@ -87,18 +144,55 @@ class SkillMeta:
 @dataclass
 class SkillBundle:
     """A downloaded skill ready for quarantine/scanning/installation."""
-
     name: str
-    files: Dict[str, Union[str, bytes]]  # relative_path -> file content
+    files: Dict[str, Union[str, bytes]]   # relative_path -> file content
     source: str
     identifier: str
     trust_level: str
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-def _normalize_bundle_path(
-    path_value: str, *, field_name: str, allow_nested: bool
-) -> str:
+_ALLOWED_SUPPORT_DIRS = frozenset({"references", "templates", "scripts", "assets", "examples"})
+_LOCAL_LINK_RE = re.compile(
+    r"(?:\]\(|`|(?:^|[\s\"']))((?:references|templates|scripts|assets|examples)/[^\s)`\"'<>]+)",
+    re.MULTILINE,
+)
+_SUSPICIOUS_LOCAL_REF_RE = re.compile(
+    r"(?:references|templates|scripts|assets|examples)/(?:[^\s)`\"'<>]*/)?\.\.(?:/|$)"
+)
+
+
+def _referenced_support_paths(skill_md: str) -> Optional[set[str]]:
+    """Extract safe referenced paths; return None on a traversal attempt."""
+    normalized = skill_md.replace("\\", "/")
+    if _SUSPICIOUS_LOCAL_REF_RE.search(normalized):
+        return None
+    paths: set[str] = set()
+    for match in _LOCAL_LINK_RE.finditer(normalized):
+        raw = unquote(urlsplit(match.group(1).rstrip(".,;:")).path)
+        try:
+            safe = _validate_bundle_rel_path(raw)
+        except ValueError:
+            return None
+        if safe.split("/", 1)[0] in _ALLOWED_SUPPORT_DIRS:
+            paths.add(safe)
+    return paths
+
+
+def source_url_for_bundle(bundle: SkillBundle) -> str:
+    """Best available human-facing immutable-source provenance URL."""
+    explicit = bundle.metadata.get("source_url") or bundle.metadata.get("url")
+    if explicit:
+        return str(explicit)
+    if bundle.source == "github":
+        parts = bundle.identifier.split("/", 2)
+        if len(parts) >= 2:
+            suffix = f"/tree/main/{parts[2]}" if len(parts) == 3 else ""
+            return f"https://github.com/{parts[0]}/{parts[1]}{suffix}"
+    return bundle.identifier
+
+
+def _normalize_bundle_path(path_value: str, *, field_name: str, allow_nested: bool) -> str:
     """Normalize and validate bundle-controlled paths before touching disk."""
     if not isinstance(path_value, str):
         raise ValueError(f"Unsafe {field_name}: expected a string")
@@ -128,9 +222,7 @@ def _validate_skill_name(name: str) -> str:
 
 
 def _validate_install_parent_path(category: str) -> str:
-    return _normalize_bundle_path(
-        category, field_name="install parent path", allow_nested=True
-    )
+    return _normalize_bundle_path(category, field_name="install parent path", allow_nested=True)
 
 
 def _normalize_lock_install_path(install_path: str, skill_name: str) -> str:
@@ -184,9 +276,10 @@ def _resolve_lock_install_path(install_path: str, skill_name: str) -> Path:
        and ``rmtree(SKILLS_DIR)`` would wipe every installed skill.
     """
     normalized = _normalize_lock_install_path(install_path, skill_name)
-    skills_root = SKILLS_DIR.resolve()
+    skills_dir = _skills_dir()
+    skills_root = skills_dir.resolve()
 
-    target = SKILLS_DIR
+    target = skills_dir
     for part in normalized.split("/"):
         target = target / part
         if _is_path_redirect(target):
@@ -236,15 +329,12 @@ def _guarded_http_get(url: str, *, timeout: int = 20) -> Optional[httpx.Response
 
 
 def _validate_bundle_rel_path(rel_path: str) -> str:
-    return _normalize_bundle_path(
-        rel_path, field_name="bundle file path", allow_nested=True
-    )
+    return _normalize_bundle_path(rel_path, field_name="bundle file path", allow_nested=True)
 
 
 # ---------------------------------------------------------------------------
 # GitHub Authentication
 # ---------------------------------------------------------------------------
-
 
 class GitHubAuth:
     """
@@ -279,10 +369,7 @@ class GitHubAuth:
     def _resolve_token(self) -> Optional[str]:
         # Return cached token if still valid
         if self._cached_token:
-            if (
-                self._cached_method != "github-app"
-                or time.time() < self._app_token_expiry
-            ):
+            if self._cached_method != "github-app" or time.time() < self._app_token_expiry:
                 return self._cached_token
 
         # 1. Environment variable
@@ -315,10 +402,9 @@ class GitHubAuth:
         try:
             result = subprocess.run(
                 ["gh", "auth", "token"],
-                capture_output=True,
-                text=True,
-                timeout=5,
+                capture_output=True, text=True, timeout=5,
                 stdin=subprocess.DEVNULL,
+                creationflags=windows_hide_flags(),
             )
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
@@ -375,7 +461,6 @@ class GitHubAuth:
 # Source adapter interface
 # ---------------------------------------------------------------------------
 
-
 class SkillSource(ABC):
     """Abstract base for all skill registry adapters."""
 
@@ -407,6 +492,56 @@ class SkillSource(ABC):
 # ---------------------------------------------------------------------------
 # GitHub source adapter
 # ---------------------------------------------------------------------------
+
+# Map a GitHub tap repo (owner/repo) to the human-facing provider label used
+# in the docs-site catalog (website/scripts/extract-skills.py::GITHUB_TAP_LABELS).
+# The runtime index collapses every GitHub tap into source="github"; stamping
+# this provider label onto each skill's ``extra`` keeps the per-tap identity
+# (NVIDIA / OpenAI / Anthropic / HuggingFace / gstack / ...) searchable and
+# filterable at the CLI without disturbing the source="github" dedup / floor /
+# index-skip logic that keys off the bare source id.
+GITHUB_TAP_PROVIDERS = {
+    "openai/skills": "OpenAI",
+    "anthropics/skills": "Anthropic",
+    "huggingface/skills": "HuggingFace",
+    "nvidia/skills": "NVIDIA",
+    "voltagent/awesome-agent-skills": "VoltAgent",
+    "garrytan/gstack": "gstack",
+    "minimax-ai/cli": "MiniMax",
+}
+
+
+def github_provider_for(repo: str) -> Optional[str]:
+    """Return the provider label for a GitHub tap repo, or None.
+
+    ``repo`` is ``owner/repo``; matched case-insensitively so ``NVIDIA/skills``
+    and ``nvidia/skills`` both resolve to ``"NVIDIA"``.
+    """
+    if not repo:
+        return None
+    return GITHUB_TAP_PROVIDERS.get(repo.strip().lower())
+
+
+# Lowercased set of accepted ``--source`` provider filters. These are not real
+# source ids — they narrow the merged results to GitHub-tap skills carrying the
+# matching ``extra.provider`` label (see ``_filter_results_by_provider``).
+_PROVIDER_FILTER_VALUES = frozenset(v.lower() for v in GITHUB_TAP_PROVIDERS.values())
+
+
+def _filter_results_by_provider(
+    results: List["SkillMeta"], provider: str
+) -> List["SkillMeta"]:
+    """Keep only results whose ``extra.provider`` matches ``provider``.
+
+    An explicit provider filter (e.g. ``--source nvidia``) means "show me that
+    provider's skills" — so it narrows to exactly those, without injecting the
+    official catalog the unfiltered browse/search would lead with.
+    """
+    want = provider.strip().lower()
+    return [
+        r for r in results
+        if str((r.extra or {}).get("provider", "")).lower() == want
+    ]
 
 
 class GitHubSource(SkillSource):
@@ -440,6 +575,7 @@ class GitHubSource(SkillSource):
         # Per-instance cache: repo -> (default_branch, tree_entries)
         # Survives within a single search/install flow, avoiding redundant API calls.
         self._tree_cache: Dict[str, Tuple[str, List[dict]]] = {}
+        self._tree_revisions: Dict[str, str] = {}
         # Per-repo cache of the optional skills.sh.json grouping sidecar,
         # mapping skill_name -> human-readable grouping title. ``None`` means
         # "fetched, no sidecar"; a missing key means "not fetched yet".
@@ -488,9 +624,7 @@ class GitHubSource(SkillSource):
         for r in results:
             if r.identifier not in seen:
                 seen[r.identifier] = r
-            elif _trust_rank.get(r.trust_level, 0) > _trust_rank.get(
-                seen[r.identifier].trust_level, 0
-            ):
+            elif _trust_rank.get(r.trust_level, 0) > _trust_rank.get(seen[r.identifier].trust_level, 0):
                 seen[r.identifier] = r
         results = list(seen.values())
 
@@ -508,9 +642,40 @@ class GitHubSource(SkillSource):
         repo = f"{parts[0]}/{parts[1]}"
         skill_path = parts[2]
 
-        files = self._download_directory(repo, skill_path)
-        if not files or "SKILL.md" not in files:
+        skill_md = self._fetch_file_content(repo, f"{skill_path.rstrip('/')}/SKILL.md")
+        if skill_md is None:
             return None
+        referenced = _referenced_support_paths(skill_md)
+        if referenced is None:
+            return None
+
+        files: Dict[str, Union[str, bytes]] = {"SKILL.md": skill_md}
+        tree = self._get_repo_tree(repo)
+        if tree is not None:
+            branch, entries = tree
+            prefix = f"{skill_path.rstrip('/')}/"
+            entries_by_path = {item.get("path", ""): item for item in entries}
+            for rel_path in sorted(referenced):
+                item_path = f"{prefix}{rel_path}"
+                item = entries_by_path.get(item_path)
+                if item is None:
+                    logger.warning("Referenced skill support file is missing: %s", item_path)
+                    return None
+                if item.get("type") != "blob" or item.get("mode") == "120000":
+                    logger.warning("Rejected non-regular file in skill bundle: %s", item_path)
+                    return None
+                content = self._fetch_file_bytes(repo, item_path)
+                if content is None:
+                    return None
+                files[rel_path] = content
+            revision = self._tree_revisions.get(repo) or branch
+        else:
+            for rel_path in referenced:
+                content = self._fetch_file_bytes(repo, f"{skill_path.rstrip('/')}/{rel_path}")
+                if content is None:
+                    return None
+                files[rel_path] = content
+            revision = ""
 
         skill_name = skill_path.rstrip("/").split("/")[-1]
         trust = self.trust_level_for(identifier)
@@ -521,6 +686,13 @@ class GitHubSource(SkillSource):
             source="github",
             identifier=identifier,
             trust_level=trust,
+            metadata={
+                "source_url": (
+                    f"https://github.com/{repo}/tree/{revision}/{skill_path}"
+                    if revision else f"https://github.com/{repo}/{skill_path}"
+                ),
+                "source_revision": revision,
+            },
         )
 
     def inspect(self, identifier: str) -> Optional[SkillMeta]:
@@ -551,6 +723,11 @@ class GitHubSource(SkillSource):
             raw_tags = fm.get("tags", [])
             tags = raw_tags if isinstance(raw_tags, list) else []
 
+        provider = github_provider_for(repo)
+        extra: Dict[str, Any] = {}
+        if provider:
+            extra["provider"] = provider
+
         return SkillMeta(
             name=skill_name,
             description=str(description),
@@ -560,6 +737,7 @@ class GitHubSource(SkillSource):
             repo=repo,
             path=skill_path,
             tags=[str(t) for t in tags],
+            extra=extra,
         )
 
     # -- Internal helpers --
@@ -591,9 +769,7 @@ class GitHubSource(SkillSource):
                 continue
 
             prefix = path.rstrip("/")
-            skill_identifier = (
-                f"{repo}/{prefix}/{dir_name}" if prefix else f"{repo}/{dir_name}"
-            )
+            skill_identifier = f"{repo}/{prefix}/{dir_name}" if prefix else f"{repo}/{dir_name}"
             meta = self.inspect(skill_identifier)
             if meta:
                 if groupings:
@@ -628,9 +804,7 @@ class GitHubSource(SkillSource):
         try:
             resp = httpx.get(
                 f"https://api.github.com/repos/{repo}",
-                headers=headers,
-                timeout=15,
-                follow_redirects=True,
+                headers=headers, timeout=15, follow_redirects=True,
             )
             if resp.status_code != 200:
                 self._check_rate_limit_response(resp)
@@ -644,9 +818,7 @@ class GitHubSource(SkillSource):
             resp = httpx.get(
                 f"https://api.github.com/repos/{repo}/git/trees/{default_branch}",
                 params={"recursive": "1"},
-                headers=headers,
-                timeout=30,
-                follow_redirects=True,
+                headers=headers, timeout=30, follow_redirects=True,
             )
             if resp.status_code != 200:
                 self._check_rate_limit_response(resp)
@@ -659,6 +831,9 @@ class GitHubSource(SkillSource):
             return None
 
         entries = tree_data.get("tree", [])
+        revision = tree_data.get("sha")
+        if isinstance(revision, str) and revision:
+            self._tree_revisions[repo] = revision
         self._tree_cache[repo] = (default_branch, entries)
         return (default_branch, entries)
 
@@ -705,20 +880,12 @@ class GitHubSource(SkillSource):
         for attempt in range(max_retries):
             try:
                 resp = httpx.get(
-                    url,
-                    params=params,
-                    headers=hdrs,
-                    timeout=timeout,
-                    follow_redirects=True,
+                    url, params=params, headers=hdrs,
+                    timeout=timeout, follow_redirects=True,
                 )
             except httpx.HTTPError as e:
-                logger.debug(
-                    "GitHub GET %s failed (attempt %d/%d): %s",
-                    url,
-                    attempt + 1,
-                    max_retries,
-                    e,
-                )
+                logger.debug("GitHub GET %s failed (attempt %d/%d): %s",
+                             url, attempt + 1, max_retries, e)
                 if attempt < max_retries - 1:
                     time.sleep(backoff)
                     backoff = min(backoff * 2, 30.0)
@@ -745,10 +912,7 @@ class GitHubSource(SkillSource):
                             wait = delta
                     logger.debug(
                         "GitHub rate limited on %s, waiting %.1fs (attempt %d/%d)",
-                        url,
-                        wait,
-                        attempt + 1,
-                        max_retries,
+                        url, wait, attempt + 1, max_retries,
                     )
                     time.sleep(wait)
                     backoff = min(backoff * 2, 30.0)
@@ -766,6 +930,7 @@ class GitHubSource(SkillSource):
 
         return last_resp
 
+
     def _download_directory(self, repo: str, path: str) -> Dict[str, str]:
         """Recursively download all text files from a GitHub directory.
 
@@ -777,14 +942,10 @@ class GitHubSource(SkillSource):
         files = self._download_directory_via_tree(repo, path)
         if files is not None:
             return files
-        logger.debug(
-            "Tree API unavailable for %s/%s, falling back to Contents API", repo, path
-        )
+        logger.debug("Tree API unavailable for %s/%s, falling back to Contents API", repo, path)
         return self._download_directory_recursive(repo, path)
 
-    def _download_directory_via_tree(
-        self, repo: str, path: str
-    ) -> Optional[Dict[str, str]]:
+    def _download_directory_via_tree(self, repo: str, path: str) -> Optional[Dict[str, str]]:
         """Download an entire directory using the Git Trees API (single request).
 
         Returns:
@@ -818,7 +979,7 @@ class GitHubSource(SkillSource):
             item_path = item.get("path", "")
             if not item_path.startswith(prefix):
                 continue
-            rel_path = item_path[len(prefix) :]
+            rel_path = item_path[len(prefix):]
             content = self._fetch_file_content(repo, item_path)
             if content is not None:
                 files[rel_path] = content
@@ -830,16 +991,13 @@ class GitHubSource(SkillSource):
     def _download_directory_recursive(self, repo: str, path: str) -> Dict[str, str]:
         """Recursively download via Contents API (fallback)."""
         url = f"https://api.github.com/repos/{repo}/contents/{path.rstrip('/')}"
-        try:
-            resp = httpx.get(
-                url, headers=self.auth.get_headers(), timeout=15, follow_redirects=True
-            )
-            if resp.status_code != 200:
-                logger.debug(
-                    "Contents API returned %d for %s/%s", resp.status_code, repo, path
-                )
-                return {}
-        except httpx.HTTPError:
+        # Route through _github_get so directory listing gets the same
+        # 429/403-rate-limit retry + backoff as file fetches (#3033).
+        resp = self._github_get(url)
+        if resp is None:
+            return {}
+        if resp.status_code != 200:
+            logger.debug("Contents API returned %d for %s/%s", resp.status_code, repo, path)
             return {}
 
         entries = resp.json()
@@ -857,15 +1015,9 @@ class GitHubSource(SkillSource):
                     rel_path = name
                     files[rel_path] = content
             elif entry_type == "dir":
-                sub_files = self._download_directory_recursive(
-                    repo, entry.get("path", "")
-                )
+                sub_files = self._download_directory_recursive(repo, entry.get("path", ""))
                 if not sub_files:
-                    logger.debug(
-                        "Empty or failed subdirectory: %s/%s",
-                        repo,
-                        entry.get("path", ""),
-                    )
+                    logger.debug("Empty or failed subdirectory: %s/%s", repo, entry.get("path", ""))
                 for sub_name, sub_content in sub_files.items():
                     files[f"{name}/{sub_name}"] = sub_content
 
@@ -898,17 +1050,24 @@ class GitHubSource(SkillSource):
         return None
 
     def _fetch_file_content(self, repo: str, path: str) -> Optional[str]:
-        """Fetch a single file's content from GitHub."""
+        """Fetch a single text file from GitHub."""
+        content = self._fetch_file_bytes(repo, path)
+        if content is None:
+            return None
+        try:
+            return content.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+
+    def _fetch_file_bytes(self, repo: str, path: str) -> Optional[bytes]:
+        """Fetch exact file bytes from GitHub without text decoding."""
         url = f"https://api.github.com/repos/{repo}/contents/{path}"
         resp = self._github_get(
             url,
-            headers={
-                **self.auth.get_headers(),
-                "Accept": "application/vnd.github.v3.raw",
-            },
+            headers={**self.auth.get_headers(), "Accept": "application/vnd.github.v3.raw"},
         )
         if resp is not None and resp.status_code == 200:
-            return resp.text
+            return resp.content
         return None
 
     def _get_skillsh_groupings(self, repo: str) -> Optional[Dict[str, str]]:
@@ -968,7 +1127,7 @@ class GitHubSource(SkillSource):
 
     def _read_cache(self, key: str) -> Optional[list]:
         """Read cached index if not expired."""
-        cache_file = INDEX_CACHE_DIR / f"{key}.json"
+        cache_file = _index_cache_dir() / f"{key}.json"
         if not cache_file.exists():
             return None
         try:
@@ -981,8 +1140,9 @@ class GitHubSource(SkillSource):
 
     def _write_cache(self, key: str, data: list) -> None:
         """Write index data to cache."""
-        INDEX_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cache_file = INDEX_CACHE_DIR / f"{key}.json"
+        index_cache_dir = _index_cache_dir()
+        index_cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = index_cache_dir / f"{key}.json"
         try:
             cache_file.write_text(json.dumps(data, ensure_ascii=False))
         except OSError as e:
@@ -1005,12 +1165,13 @@ class GitHubSource(SkillSource):
     @staticmethod
     def _parse_frontmatter_quick(content: str) -> dict:
         """Parse YAML frontmatter from SKILL.md content."""
+        content = content.lstrip("\ufeff")  # tolerate UTF-8 BOM (Windows editors)
         if not content.startswith("---"):
             return {}
-        match = re.search(r"\n---\s*\n", content[3:])
+        match = re.search(r'\n---\s*\n', content[3:])
         if not match:
             return {}
-        yaml_text = content[3 : match.start() + 3]
+        yaml_text = content[3:match.start() + 3]
         try:
             parsed = yaml.safe_load(yaml_text)
             return parsed if isinstance(parsed, dict) else {}
@@ -1021,7 +1182,6 @@ class GitHubSource(SkillSource):
 # ---------------------------------------------------------------------------
 # Well-known Agent Skills endpoint source adapter
 # ---------------------------------------------------------------------------
-
 
 class WellKnownSkillSource(SkillSource):
     """Read skills from a domain exposing /.well-known/skills/index.json."""
@@ -1050,21 +1210,19 @@ class WellKnownSkillSource(SkillSource):
                 continue
             description = entry.get("description", "")
             files = entry.get("files", ["SKILL.md"])
-            results.append(
-                SkillMeta(
-                    name=name,
-                    description=str(description),
-                    source="well-known",
-                    identifier=self._wrap_identifier(parsed["base_url"], name),
-                    trust_level="community",
-                    path=name,
-                    extra={
-                        "index_url": parsed["index_url"],
-                        "base_url": parsed["base_url"],
-                        "files": files if isinstance(files, list) else ["SKILL.md"],
-                    },
-                )
-            )
+            results.append(SkillMeta(
+                name=name,
+                description=str(description),
+                source="well-known",
+                identifier=self._wrap_identifier(parsed["base_url"], name),
+                trust_level="community",
+                path=name,
+                extra={
+                    "index_url": parsed["index_url"],
+                    "base_url": parsed["base_url"],
+                    "files": files if isinstance(files, list) else ["SKILL.md"],
+                },
+            ))
         return results
 
     def inspect(self, identifier: str) -> Optional[SkillMeta]:
@@ -1106,10 +1264,7 @@ class WellKnownSkillSource(SkillSource):
         try:
             skill_name = _validate_skill_name(parsed["skill_name"])
         except ValueError:
-            logger.warning(
-                "Well-known skill identifier contained unsafe skill name: %s",
-                identifier,
-            )
+            logger.warning("Well-known skill identifier contained unsafe skill name: %s", identifier)
             return None
 
         entry = self._index_entry(parsed["index_url"], parsed["skill_name"])
@@ -1167,11 +1322,7 @@ class WellKnownSkillSource(SkillSource):
         return query.rstrip("/") + f"{self.BASE_PATH}/index.json"
 
     def _parse_identifier(self, identifier: str) -> Optional[dict]:
-        raw = (
-            identifier[len("well-known:") :]
-            if identifier.startswith("well-known:")
-            else identifier
-        )
+        raw = identifier[len("well-known:"):] if identifier.startswith("well-known:") else identifier
         if not raw.startswith(("http://", "https://")):
             return None
 
@@ -1182,7 +1333,7 @@ class WellKnownSkillSource(SkillSource):
         if clean_url.endswith("/index.json"):
             if not fragment:
                 return None
-            base_url = clean_url[: -len("/index.json")]
+            base_url = clean_url[:-len("/index.json")]
             skill_name = fragment
             skill_url = f"{base_url}/{skill_name}"
             return {
@@ -1193,7 +1344,7 @@ class WellKnownSkillSource(SkillSource):
             }
 
         if clean_url.endswith("/SKILL.md"):
-            skill_url = clean_url[: -len("/SKILL.md")]
+            skill_url = clean_url[:-len("/SKILL.md")]
         else:
             skill_url = clean_url.rstrip("/")
 
@@ -1228,7 +1379,7 @@ class WellKnownSkillSource(SkillSource):
 
         parsed = {
             "index_url": index_url,
-            "base_url": index_url[: -len("/index.json")],
+            "base_url": index_url[:-len("/index.json")],
             "skills": skills,
         }
         _write_index_cache(cache_key, parsed)
@@ -1259,14 +1410,13 @@ class WellKnownSkillSource(SkillSource):
 # Direct URL source adapter
 # ---------------------------------------------------------------------------
 
-
 class UrlSource(SkillSource):
-    """Fetch a single-file SKILL.md skill directly from an HTTP(S) URL.
+    """Fetch SKILL.md plus explicitly referenced, allowlisted support files.
 
     The identifier IS the URL (e.g. ``https://example.com/path/SKILL.md``).
-    Only single-file skills are supported — multi-file skills with
-    ``references/`` or ``scripts/`` subfolders need a manifest we can't
-    discover from a bare URL.
+    Bare URLs cannot safely enumerate a repository, so only exact references
+    below references/templates/scripts/assets are fetched. Other repository
+    files are never copied.
 
     The skill name is read from the ``name:`` field in the SKILL.md YAML
     frontmatter (with a URL-slug fallback). Trust level is always
@@ -1345,6 +1495,19 @@ class UrlSource(SkillSource):
 
         fm = GitHubSource._parse_frontmatter_quick(text)
         name = self._resolve_skill_name(fm, url)
+        referenced = _referenced_support_paths(text)
+        if referenced is None:
+            return None
+        files: Dict[str, Union[str, bytes]] = {"SKILL.md": text}
+        base_url = url.rsplit("/", 1)[0] + "/"
+        for rel_path in sorted(referenced):
+            support_url = urljoin(base_url, rel_path)
+            if urlparse(support_url).netloc != urlparse(url).netloc:
+                return None
+            content = self._fetch_bytes(support_url)
+            if content is None:
+                return None
+            files[rel_path] = content
 
         # When auto-resolution fails, return a bundle with an empty name and
         # ``awaiting_name=True`` in metadata. The install flow (``do_install``)
@@ -1361,11 +1524,11 @@ class UrlSource(SkillSource):
 
         return SkillBundle(
             name=skill_name,
-            files={"SKILL.md": text},
+            files=files,
             source="url",
             identifier=url,
             trust_level="community",
-            metadata={"url": url, "awaiting_name": not skill_name},
+            metadata={"url": url, "source_url": url, "awaiting_name": not skill_name},
         )
 
     @staticmethod
@@ -1373,6 +1536,13 @@ class UrlSource(SkillSource):
         resp = _guarded_http_get(url, timeout=20)
         if resp is not None and resp.status_code == 200:
             return resp.text
+        return None
+
+    @staticmethod
+    def _fetch_bytes(url: str) -> Optional[bytes]:
+        resp = _guarded_http_get(url, timeout=20)
+        if resp is not None and resp.status_code == 200:
+            return resp.content
         return None
 
     # Skill names must look like identifiers: lowercase letters/digits with
@@ -1426,7 +1596,6 @@ class UrlSource(SkillSource):
 # skills.sh source adapter
 # ---------------------------------------------------------------------------
 
-
 class SkillsShSource(SkillSource):
     """Discover skills via skills.sh and fetch content from the underlying GitHub repo."""
 
@@ -1442,15 +1611,13 @@ class SkillsShSource(SkillSource):
         r"^https?://(?:www\.)?skills\.sh/(?P<owner>[^/]+)/(?P<repo>[^/]+)/(?P<skill>[^/]+)/?$",
         re.IGNORECASE,
     )
-    _SKILL_LINK_RE = re.compile(
-        r'href=["\']/(?P<id>(?!agents/|_next/|api/)[^"\'/]+/[^"\'/]+/[^"\'/]+)["\']'
-    )
+    _SKILL_LINK_RE = re.compile(r'href=["\']/(?P<id>(?!agents/|_next/|api/)[^"\'/]+/[^"\'/]+/[^"\'/]+)["\']')
     _INSTALL_CMD_RE = re.compile(
-        r"npx\s+skills\s+add\s+(?P<repo>https?://github\.com/[^\s<]+|[^\s<]+)"
-        r"(?:\s+--skill\s+(?P<skill>[^\s<]+))?",
+        r'npx\s+skills\s+add\s+(?P<repo>https?://github\.com/[^\s<]+|[^\s<]+)'
+        r'(?:\s+--skill\s+(?P<skill>[^\s<]+))?',
         re.IGNORECASE,
     )
-    _PAGE_H1_RE = re.compile(r"<h1[^>]*>(?P<title>.*?)</h1>", re.IGNORECASE | re.DOTALL)
+    _PAGE_H1_RE = re.compile(r'<h1[^>]*>(?P<title>.*?)</h1>', re.IGNORECASE | re.DOTALL)
     _PROSE_H1_RE = re.compile(
         r'<div[^>]*class=["\'][^"\']*prose[^"\']*["\'][^>]*>.*?<h1[^>]*>(?P<title>.*?)</h1>',
         re.IGNORECASE | re.DOTALL,
@@ -1459,9 +1626,7 @@ class SkillsShSource(SkillSource):
         r'<div[^>]*class=["\'][^"\']*prose[^"\']*["\'][^>]*>.*?<p[^>]*>(?P<body>.*?)</p>',
         re.IGNORECASE | re.DOTALL,
     )
-    _WEEKLY_INSTALLS_RE = re.compile(
-        r'Weekly Installs.*?children\\":\\"(?P<count>[0-9.,Kk]+)\\"', re.DOTALL
-    )
+    _WEEKLY_INSTALLS_RE = re.compile(r'Weekly Installs.*?children\\":\\"(?P<count>[0-9.,Kk]+)\\"', re.DOTALL)
 
     def __init__(self, auth: GitHubAuth):
         self.auth = auth
@@ -1480,9 +1645,7 @@ class SkillsShSource(SkillSource):
             # entries; the sitemap walks the full ~20k+ catalog.
             return self._sitemap_catalog(limit)
 
-        cache_key = (
-            f"skills_sh_search_{hashlib.md5(f'{query}|{limit}'.encode()).hexdigest()}"
-        )
+        cache_key = f"skills_sh_search_{hashlib.md5(f'{query}|{limit}'.encode()).hexdigest()}"
         cached = _read_index_cache(cache_key)
         if cached is not None:
             return [SkillMeta(**item) for item in cached][:limit]
@@ -1612,21 +1775,19 @@ class SkillsShSource(SkillSource):
                     continue
                 seen.add(canonical)
                 repo = f"{owner}/{repo_name}"
-                results.append(
-                    SkillMeta(
-                        name=skill_name,
-                        description=f"Indexed by skills.sh from {repo}",
-                        source="skills.sh",
-                        identifier=self._wrap_identifier(canonical),
-                        trust_level=self.github.trust_level_for(canonical),
-                        repo=repo,
-                        path=skill_name,
-                        extra={
-                            "detail_url": f"{self.BASE_URL}/{canonical}",
-                            "repo_url": f"https://github.com/{repo}",
-                        },
-                    )
-                )
+                results.append(SkillMeta(
+                    name=skill_name,
+                    description=f"Indexed by skills.sh from {repo}",
+                    source="skills.sh",
+                    identifier=self._wrap_identifier(canonical),
+                    trust_level=self.github.trust_level_for(canonical),
+                    repo=repo,
+                    path=skill_name,
+                    extra={
+                        "detail_url": f"{self.BASE_URL}/{canonical}",
+                        "repo_url": f"https://github.com/{repo}",
+                    },
+                ))
 
         if not results:
             return self._featured_skills(limit)
@@ -1659,17 +1820,15 @@ class SkillsShSource(SkillSource):
                 continue
             repo = f"{parts[0]}/{parts[1]}"
             skill_path = parts[2]
-            results.append(
-                SkillMeta(
-                    name=skill_path.split("/")[-1],
-                    description=f"Featured on skills.sh from {repo}",
-                    source="skills.sh",
-                    identifier=self._wrap_identifier(canonical),
-                    trust_level=self.github.trust_level_for(canonical),
-                    repo=repo,
-                    path=skill_path,
-                )
-            )
+            results.append(SkillMeta(
+                name=skill_path.split("/")[-1],
+                description=f"Featured on skills.sh from {repo}",
+                source="skills.sh",
+                identifier=self._wrap_identifier(canonical),
+                trust_level=self.github.trust_level_for(canonical),
+                repo=repo,
+                path=skill_path,
+            ))
             if len(results) >= limit:
                 break
 
@@ -1695,9 +1854,7 @@ class SkillsShSource(SkillSource):
         repo = f"{parts[0]}/{parts[1]}"
         skill_path = parts[2]
         installs = item.get("installs")
-        installs_label = (
-            f" · {int(installs):,} installs" if isinstance(installs, int) else ""
-        )
+        installs_label = f" · {int(installs):,} installs" if isinstance(installs, int) else ""
 
         return SkillMeta(
             name=str(item.get("name") or skill_path.split("/")[-1]),
@@ -1769,21 +1926,15 @@ class SkillsShSource(SkillSource):
             "security_audits": security_audits,
         }
 
-    def _discover_identifier(
-        self, identifier: str, detail: Optional[dict] = None
-    ) -> Optional[str]:
+    def _discover_identifier(self, identifier: str, detail: Optional[dict] = None) -> Optional[str]:
         parts = identifier.split("/", 2)
         if len(parts) < 3:
             return None
 
         default_repo = f"{parts[0]}/{parts[1]}"
-        repo = (
-            detail.get("repo", default_repo)
-            if isinstance(detail, dict)
-            else default_repo
-        )
-        skill_token = parts[2].split("/")[-1]
-        tokens = [skill_token]
+        repo = detail.get("repo", default_repo) if isinstance(detail, dict) else default_repo
+        skill_token=parts[2].split("/")[-1]
+        tokens=[skill_token]
         if isinstance(detail, dict):
             tokens.extend([
                 detail.get("install_skill", ""),
@@ -1813,12 +1964,8 @@ class SkillsShSource(SkillSource):
         # Fallback: scan repo root for directories that might contain skills
         try:
             root_url = f"https://api.github.com/repos/{repo}/contents/"
-            resp = httpx.get(
-                root_url,
-                headers=self.github.auth.get_headers(),
-                timeout=15,
-                follow_redirects=True,
-            )
+            resp = httpx.get(root_url, headers=self.github.auth.get_headers(),
+                             timeout=15, follow_redirects=True)
             if resp.status_code == 200:
                 entries = resp.json()
                 if isinstance(entries, list):
@@ -1837,9 +1984,7 @@ class SkillsShSource(SkillSource):
                             return meta.identifier
                         # Try listing skills in this directory
                         try:
-                            skills = self.github._list_skills_in_repo(
-                                repo, dir_name + "/"
-                            )
+                            skills = self.github._list_skills_in_repo(repo, dir_name + "/")
                         except Exception:
                             continue
                         for meta in skills:
@@ -1850,9 +1995,7 @@ class SkillsShSource(SkillSource):
 
         return None
 
-    def _resolve_github_meta(
-        self, identifier: str, detail: Optional[dict] = None
-    ) -> Optional[SkillMeta]:
+    def _resolve_github_meta(self, identifier: str, detail: Optional[dict] = None) -> Optional[SkillMeta]:
         for candidate in self._candidate_identifiers(identifier):
             meta = self.github.inspect(candidate)
             if meta:
@@ -1863,9 +2006,7 @@ class SkillsShSource(SkillSource):
             return self.github.inspect(resolved)
         return None
 
-    def _finalize_inspect_meta(
-        self, meta: SkillMeta, canonical: str, detail: Optional[dict]
-    ) -> SkillMeta:
+    def _finalize_inspect_meta(self, meta: SkillMeta, canonical: str, detail: Optional[dict]) -> SkillMeta:
         meta.source = "skills.sh"
         meta.identifier = self._wrap_identifier(canonical)
         meta.trust_level = self.trust_level_for(canonical)
@@ -1887,11 +2028,7 @@ class SkillsShSource(SkillSource):
         candidates = set()
         candidates.update(cls._token_variants(meta.name))
         candidates.update(cls._token_variants(meta.path))
-        candidates.update(
-            cls._token_variants(
-                meta.identifier.split("/", 2)[-1] if meta.identifier else None
-            )
-        )
+        candidates.update(cls._token_variants(meta.identifier.split("/", 2)[-1] if meta.identifier else None))
 
         for token in skill_tokens:
             variants = cls._token_variants(token)
@@ -1909,11 +2046,11 @@ class SkillsShSource(SkillSource):
             return set()
 
         base = plain.split("/")[-1]
-        sanitized = re.sub(r"[^a-z0-9/_-]+", "-", plain).strip("-")
+        sanitized = re.sub(r'[^a-z0-9/_-]+', '-', plain).strip('-')
         sanitized_base = sanitized.split("/")[-1] if sanitized else ""
         slash_tail = plain.split("/")[-1]
-        slash_tail_clean = slash_tail.lstrip("@")
-        slash_tail_clean = slash_tail_clean.split("/")[-1]
+        slash_tail_clean = slash_tail.lstrip('@')
+        slash_tail_clean = slash_tail_clean.split('/')[-1]
 
         variants = {
             plain,
@@ -1934,7 +2071,7 @@ class SkillsShSource(SkillSource):
     def _extract_repo_slug(repo_value: str) -> Optional[str]:
         repo_value = repo_value.strip()
         if repo_value.startswith("https://github.com/"):
-            repo_value = repo_value[len("https://github.com/") :]
+            repo_value = repo_value[len("https://github.com/"):]
         repo_value = repo_value.strip("/")
         parts = repo_value.split("/")
         if len(parts) >= 2:
@@ -1951,9 +2088,7 @@ class SkillsShSource(SkillSource):
             return None
         return SkillsShSource._strip_html(value).strip() or None
 
-    def _detail_to_metadata(
-        self, canonical: str, detail: Optional[dict]
-    ) -> Dict[str, Any]:
+    def _detail_to_metadata(self, canonical: str, detail: Optional[dict]) -> Dict[str, Any]:
         parts = canonical.split("/", 2)
         repo = f"{parts[0]}/{parts[1]}" if len(parts) >= 2 else ""
         metadata = {
@@ -1962,13 +2097,7 @@ class SkillsShSource(SkillSource):
         if repo:
             metadata["repo_url"] = f"https://github.com/{repo}"
         if isinstance(detail, dict):
-            for key in (
-                "weekly_installs",
-                "install_command",
-                "repo_url",
-                "detail_url",
-                "security_audits",
-            ):
+            for key in ("weekly_installs", "install_command", "repo_url", "detail_url", "security_audits"):
                 value = detail.get(key)
                 if value:
                     metadata[key] = value
@@ -1988,15 +2117,15 @@ class SkillsShSource(SkillSource):
             idx = html.find(f"/security/{audit}")
             if idx == -1:
                 continue
-            window = html[idx : idx + 500]
-            match = re.search(r"(Pass|Warn|Fail)", window, re.IGNORECASE)
+            window = html[idx:idx + 500]
+            match = re.search(r'(Pass|Warn|Fail)', window, re.IGNORECASE)
             if match:
                 audits[audit] = match.group(1).title()
         return audits
 
     @staticmethod
     def _strip_html(value: str) -> str:
-        return re.sub(r"<[^>]+>", "", value)
+        return re.sub(r'<[^>]+>', '', value)
 
     @staticmethod
     def _normalize_identifier(identifier: str) -> str:
@@ -2008,7 +2137,7 @@ class SkillsShSource(SkillSource):
         )
         for prefix in prefix_aliases:
             if identifier.startswith(prefix):
-                return identifier[len(prefix) :]
+                return identifier[len(prefix):]
         return identifier
 
     @staticmethod
@@ -2042,7 +2171,6 @@ class SkillsShSource(SkillSource):
 # ---------------------------------------------------------------------------
 # ClawHub source adapter
 # ---------------------------------------------------------------------------
-
 
 class ClawHubSource(SkillSource):
     """
@@ -2184,16 +2312,12 @@ class ClawHubSource(SkillSource):
 
         return None
 
-    def _finalize_search_results(
-        self, query: str, results: List[SkillMeta], limit: int
-    ) -> List[SkillMeta]:
+    def _finalize_search_results(self, query: str, results: List[SkillMeta], limit: int) -> List[SkillMeta]:
         query_norm = query.strip()
         if not query_norm:
             return self._dedupe_results(results)[:limit]
 
-        filtered = [
-            meta for meta in results if self._search_score(query_norm, meta) > 0
-        ]
+        filtered = [meta for meta in results if self._search_score(query_norm, meta) > 0]
         filtered.sort(
             key=lambda meta: (
                 -self._search_score(query_norm, meta),
@@ -2205,9 +2329,7 @@ class ClawHubSource(SkillSource):
 
         exact = self._exact_slug_meta(query_norm)
         if exact:
-            filtered = [
-                meta for meta in filtered if self._search_score(query_norm, meta) >= 20
-            ]
+            filtered = [meta for meta in filtered if self._search_score(query_norm, meta) >= 20]
             filtered = self._dedupe_results([exact] + filtered)
 
         if filtered:
@@ -2240,11 +2362,7 @@ class ClawHubSource(SkillSource):
             # only by the offline index builder via search("", limit=0)).
             catalog = self._load_catalog_index(max_items=limit if limit > 0 else 0)
             if catalog:
-                return (
-                    self._dedupe_results(catalog)[:limit]
-                    if limit > 0
-                    else self._dedupe_results(catalog)
-                )
+                return self._dedupe_results(catalog)[:limit] if limit > 0 else self._dedupe_results(catalog)
 
         # Non-empty query catalog miss, or catalog walker failure: fall back to
         # the lightweight listing API for a best-effort response.
@@ -2281,16 +2399,14 @@ class ClawHubSource(SkillSource):
             display_name = item.get("displayName") or item.get("name") or slug
             summary = item.get("summary") or item.get("description") or ""
             tags = self._normalize_tags(item.get("tags", []))
-            results.append(
-                SkillMeta(
-                    name=display_name,
-                    description=summary,
-                    source="clawhub",
-                    identifier=slug,
-                    trust_level="community",
-                    tags=tags,
-                )
-            )
+            results.append(SkillMeta(
+                name=display_name,
+                description=summary,
+                source="clawhub",
+                identifier=slug,
+                trust_level="community",
+                tags=tags,
+            ))
 
         final_results = self._finalize_search_results(query, results, limit)
         _write_index_cache(cache_key, [_skill_meta_to_dict(s) for s in final_results])
@@ -2305,9 +2421,7 @@ class ClawHubSource(SkillSource):
 
         latest_version = self._resolve_latest_version(slug, skill_data)
         if not latest_version:
-            logger.warning(
-                "ClawHub fetch failed for %s: could not resolve latest version", slug
-            )
+            logger.warning("ClawHub fetch failed for %s: could not resolve latest version", slug)
             return None
 
         # Primary method: download the skill as a ZIP bundle from /download
@@ -2315,9 +2429,7 @@ class ClawHubSource(SkillSource):
 
         # Fallback: try the version metadata endpoint for inline/raw content
         if "SKILL.md" not in files:
-            version_data = self._get_json(
-                f"{self.BASE_URL}/skills/{slug}/versions/{latest_version}"
-            )
+            version_data = self._get_json(f"{self.BASE_URL}/skills/{slug}/versions/{latest_version}")
             if isinstance(version_data, dict):
                 # Files may be nested under version_data["version"]["files"]
                 files = self._extract_files(version_data) or files
@@ -2344,19 +2456,14 @@ class ClawHubSource(SkillSource):
 
     def inspect(self, identifier: str) -> Optional[SkillMeta]:
         slug = identifier.split("/")[-1]
-        data = self._coerce_skill_payload(
-            self._get_json(f"{self.BASE_URL}/skills/{slug}")
-        )
+        data = self._coerce_skill_payload(self._get_json(f"{self.BASE_URL}/skills/{slug}"))
         if not isinstance(data, dict):
             return None
 
         tags = self._normalize_tags(data.get("tags", []))
 
         return SkillMeta(
-            name=data.get("displayName")
-            or data.get("name")
-            or data.get("slug")
-            or slug,
+            name=data.get("displayName") or data.get("name") or data.get("slug") or slug,
             description=data.get("summary") or data.get("description") or "",
             source="clawhub",
             identifier=data.get("slug") or slug,
@@ -2447,16 +2554,14 @@ class ClawHubSource(SkillSource):
                 display_name = item.get("displayName") or item.get("name") or slug
                 summary = item.get("summary") or item.get("description") or ""
                 tags = self._normalize_tags(item.get("tags", []))
-                results.append(
-                    SkillMeta(
-                        name=display_name,
-                        description=summary,
-                        source="clawhub",
-                        identifier=slug,
-                        trust_level="community",
-                        tags=tags,
-                    )
-                )
+                results.append(SkillMeta(
+                    name=display_name,
+                    description=summary,
+                    source="clawhub",
+                    identifier=slug,
+                    trust_level="community",
+                    tags=tags,
+                ))
 
             cursor = data.get("nextCursor") if isinstance(data, dict) else None
             if not isinstance(cursor, str) or not cursor:
@@ -2486,9 +2591,7 @@ class ClawHubSource(SkillSource):
         except (httpx.HTTPError, json.JSONDecodeError):
             return None
 
-    def _resolve_latest_version(
-        self, slug: str, skill_data: Dict[str, Any]
-    ) -> Optional[str]:
+    def _resolve_latest_version(self, slug: str, skill_data: Dict[str, Any]) -> Optional[str]:
         latest = skill_data.get("latestVersion")
         if isinstance(latest, dict):
             version = latest.get("version")
@@ -2533,11 +2636,7 @@ class ClawHubSource(SkillSource):
                 files[fname] = inline_content
                 continue
 
-            raw_url = (
-                file_meta.get("rawUrl")
-                or file_meta.get("downloadUrl")
-                or file_meta.get("url")
-            )
+            raw_url = file_meta.get("rawUrl") or file_meta.get("downloadUrl") or file_meta.get("url")
             if isinstance(raw_url, str) and raw_url.startswith("http"):
                 content = self._fetch_text(raw_url)
                 if content is not None:
@@ -2568,20 +2667,12 @@ class ClawHubSource(SkillSource):
                     retry_after = min(retry_after, 15)  # Cap wait time
                     logger.debug(
                         "ClawHub download rate-limited for %s, retrying in %ds (attempt %d/%d)",
-                        slug,
-                        retry_after,
-                        attempt + 1,
-                        max_retries,
+                        slug, retry_after, attempt + 1, max_retries,
                     )
                     time.sleep(retry_after)
                     continue
                 if resp.status_code != 200:
-                    logger.debug(
-                        "ClawHub ZIP download for %s v%s returned %s",
-                        slug,
-                        version,
-                        resp.status_code,
-                    )
+                    logger.debug("ClawHub ZIP download for %s v%s returned %s", slug, version, resp.status_code)
                     return files
 
                 with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
@@ -2591,17 +2682,11 @@ class ClawHubSource(SkillSource):
                         try:
                             name = _validate_bundle_rel_path(info.filename)
                         except ValueError:
-                            logger.debug(
-                                "Skipping unsafe ZIP member path: %s", info.filename
-                            )
+                            logger.debug("Skipping unsafe ZIP member path: %s", info.filename)
                             continue
                         # Only extract text-sized files (skip large binaries)
                         if info.file_size > 500_000:
-                            logger.debug(
-                                "Skipping large file in ZIP: %s (%d bytes)",
-                                name,
-                                info.file_size,
-                            )
+                            logger.debug("Skipping large file in ZIP: %s (%d bytes)", name, info.file_size)
                             continue
                         try:
                             raw = zf.read(info.filename)
@@ -2616,9 +2701,7 @@ class ClawHubSource(SkillSource):
                 logger.warning("ClawHub returned invalid ZIP for %s v%s", slug, version)
                 return files
             except httpx.HTTPError as exc:
-                logger.debug(
-                    "ClawHub ZIP download failed for %s v%s: %s", slug, version, exc
-                )
+                logger.debug("ClawHub ZIP download failed for %s v%s: %s", slug, version, exc)
                 return files
 
         logger.debug("ClawHub ZIP download exhausted retries for %s v%s", slug, version)
@@ -2634,7 +2717,6 @@ class ClawHubSource(SkillSource):
 # ---------------------------------------------------------------------------
 # Claude Code marketplace source adapter
 # ---------------------------------------------------------------------------
-
 
 class ClaudeMarketplaceSource(SkillSource):
     """
@@ -2677,9 +2759,7 @@ class ClaudeMarketplaceSource(SkillSource):
         for marketplace_repo in self.KNOWN_MARKETPLACES:
             plugins = self._fetch_marketplace_index(marketplace_repo)
             for plugin in plugins:
-                searchable = (
-                    f"{plugin.get('name', '')} {plugin.get('description', '')}".lower()
-                )
+                searchable = f"{plugin.get('name', '')} {plugin.get('description', '')}".lower()
                 if query_lower in searchable:
                     source_path = plugin.get("source", "")
                     if source_path.startswith("./"):
@@ -2689,16 +2769,14 @@ class ClaudeMarketplaceSource(SkillSource):
                     else:
                         identifier = f"{marketplace_repo}/{source_path}"
 
-                    results.append(
-                        SkillMeta(
-                            name=plugin.get("name", ""),
-                            description=plugin.get("description", ""),
-                            source="claude-marketplace",
-                            identifier=identifier,
-                            trust_level=self.trust_level_for(identifier),
-                            repo=marketplace_repo,
-                        )
-                    )
+                    results.append(SkillMeta(
+                        name=plugin.get("name", ""),
+                        description=plugin.get("description", ""),
+                        source="claude-marketplace",
+                        identifier=identifier,
+                        trust_level=self.trust_level_for(identifier),
+                        repo=marketplace_repo,
+                    ))
 
         return results[:limit]
 
@@ -2726,10 +2804,7 @@ class ClaudeMarketplaceSource(SkillSource):
         url = f"https://api.github.com/repos/{repo}/contents/.claude-plugin/marketplace.json"
         resp = self.github._github_get(
             url,
-            headers={
-                **self.auth.get_headers(),
-                "Accept": "application/vnd.github.v3.raw",
-            },
+            headers={**self.auth.get_headers(), "Accept": "application/vnd.github.v3.raw"},
         )
         if resp is None or resp.status_code != 200:
             return []
@@ -2746,7 +2821,6 @@ class ClaudeMarketplaceSource(SkillSource):
 # ---------------------------------------------------------------------------
 # LobeHub source adapter
 # ---------------------------------------------------------------------------
-
 
 class LobeHubSource(SkillSource):
     """
@@ -2784,16 +2858,14 @@ class LobeHubSource(SkillSource):
             searchable = f"{title} {desc} {' '.join(tags) if isinstance(tags, list) else ''}".lower()
             if query_lower in searchable:
                 identifier = agent.get("identifier", title.lower().replace(" ", "-"))
-                results.append(
-                    SkillMeta(
-                        name=identifier,
-                        description=desc[:200],
-                        source="lobehub",
-                        identifier=f"lobehub/{identifier}",
-                        trust_level="community",
-                        tags=tags if isinstance(tags, list) else [],
-                    )
-                )
+                results.append(SkillMeta(
+                    name=identifier,
+                    description=desc[:200],
+                    source="lobehub",
+                    identifier=f"lobehub/{identifier}",
+                    trust_level="community",
+                    tags=tags if isinstance(tags, list) else [],
+                ))
 
             if len(results) >= limit:
                 break
@@ -2802,11 +2874,7 @@ class LobeHubSource(SkillSource):
 
     def fetch(self, identifier: str) -> Optional[SkillBundle]:
         # Strip "lobehub/" prefix if present
-        agent_id = (
-            identifier.split("/", 1)[-1]
-            if identifier.startswith("lobehub/")
-            else identifier
-        )
+        agent_id = identifier.split("/", 1)[-1] if identifier.startswith("lobehub/") else identifier
 
         agent_data = self._fetch_agent(agent_id)
         if not agent_data:
@@ -2822,11 +2890,7 @@ class LobeHubSource(SkillSource):
         )
 
     def inspect(self, identifier: str) -> Optional[SkillMeta]:
-        agent_id = (
-            identifier.split("/", 1)[-1]
-            if identifier.startswith("lobehub/")
-            else identifier
-        )
+        agent_id = identifier.split("/", 1)[-1] if identifier.startswith("lobehub/") else identifier
         index = self._fetch_index()
         if not index:
             return None
@@ -2844,9 +2908,7 @@ class LobeHubSource(SkillSource):
                     source="lobehub",
                     identifier=f"lobehub/{agent_id}",
                     trust_level="community",
-                    tags=meta.get("tags", [])
-                    if isinstance(meta.get("tags"), list)
-                    else [],
+                    tags=meta.get("tags", []) if isinstance(meta.get("tags"), list) else [],
                 )
         return None
 
@@ -3086,14 +3148,13 @@ class BrowseShSource(SkillSource):
     def _slug_from_identifier(self, identifier: str) -> str:
         """Extract slug from identifier like 'browse-sh/airbnb.com/search-listings-abc'."""
         if identifier.startswith("browse-sh/"):
-            return identifier[len("browse-sh/") :]
+            return identifier[len("browse-sh/"):]
         return identifier
 
 
 # ---------------------------------------------------------------------------
 # Official optional skills source adapter
 # ---------------------------------------------------------------------------
-
 
 class OptionalSkillSource(SkillSource):
     """
@@ -3104,6 +3165,8 @@ class OptionalSkillSource(SkillSource):
     ~/.clawksis/skills/ during setup.  They are discoverable via the Skills Hub
     (search / install / inspect) and labelled "official" with "builtin" trust.
     """
+
+    OFFICIAL_REPO = "samuelgradientai-sys/clawksis-agent"
 
     def __init__(self):
         from clawk_constants import get_optional_skills_dir
@@ -3137,17 +3200,14 @@ class OptionalSkillSource(SkillSource):
 
     def fetch(self, identifier: str) -> Optional[SkillBundle]:
         # identifier format: "official/category/skill" or "official/skill"
-        rel = (
-            identifier.split("/", 1)[-1]
-            if identifier.startswith("official/")
-            else identifier
-        )
+        rel = identifier.split("/", 1)[-1] if identifier.startswith("official/") else identifier
         skill_dir = self._optional_dir / rel
 
         # Guard against path traversal (e.g. "official/../../etc")
         try:
             resolved = skill_dir.resolve()
-            if not str(resolved).startswith(str(self._optional_dir.resolve())):
+            optional_root = self._optional_dir.resolve()
+            if not resolved.is_relative_to(optional_root):
                 return None
         except (OSError, ValueError):
             return None
@@ -3192,11 +3252,7 @@ class OptionalSkillSource(SkillSource):
     # -- inspect ----------------------------------------------------------
 
     def inspect(self, identifier: str) -> Optional[SkillMeta]:
-        rel = (
-            identifier.split("/", 1)[-1]
-            if identifier.startswith("official/")
-            else identifier
-        )
+        rel = identifier.split("/", 1)[-1] if identifier.startswith("official/") else identifier
         skill_name = rel.rsplit("/", 1)[-1]
 
         for meta in self._scan_all():
@@ -3243,31 +3299,32 @@ class OptionalSkillSource(SkillSource):
                 if isinstance(clawk_meta, dict):
                     tags = clawk_meta.get("tags", [])
 
-            rel_path = str(parent.relative_to(self._optional_dir))
+            rel_path = parent.relative_to(self._optional_dir).as_posix()
 
-            results.append(
-                SkillMeta(
-                    name=name,
-                    description=desc[:200],
-                    source="official",
-                    identifier=f"official/{rel_path}",
-                    trust_level="builtin",
-                    path=rel_path,
-                    tags=tags if isinstance(tags, list) else [],
-                )
-            )
+            results.append(SkillMeta(
+                name=name,
+                description=desc[:200],
+                source="official",
+                identifier=f"official/{rel_path}",
+                trust_level="builtin",
+                repo=self.OFFICIAL_REPO,
+                # The centralized skills index consumes repo-root-relative paths.
+                path=f"optional-skills/{rel_path}",
+                tags=tags if isinstance(tags, list) else [],
+            ))
 
         return results
 
     @staticmethod
     def _parse_frontmatter(content: str) -> dict:
         """Parse YAML frontmatter from SKILL.md content."""
+        content = content.lstrip("\ufeff")  # tolerate UTF-8 BOM (Windows editors)
         if not content.startswith("---"):
             return {}
-        match = re.search(r"\n---\s*\n", content[3:])
+        match = re.search(r'\n---\s*\n', content[3:])
         if not match:
             return {}
-        yaml_text = content[3 : match.start() + 3]
+        yaml_text = content[3:match.start() + 3]
         try:
             parsed = yaml.safe_load(yaml_text)
             return parsed if isinstance(parsed, dict) else {}
@@ -3279,10 +3336,9 @@ class OptionalSkillSource(SkillSource):
 # Shared cache helpers (used by multiple adapters)
 # ---------------------------------------------------------------------------
 
-
 def _read_index_cache(key: str) -> Optional[Any]:
     """Read cached data if not expired."""
-    cache_file = INDEX_CACHE_DIR / f"{key}.json"
+    cache_file = _index_cache_dir() / f"{key}.json"
     if not cache_file.exists():
         return None
     try:
@@ -3296,17 +3352,18 @@ def _read_index_cache(key: str) -> Optional[Any]:
 
 def _write_index_cache(key: str, data: Any) -> None:
     """Write data to cache."""
-    INDEX_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    index_cache_dir = _index_cache_dir()
+    index_cache_dir.mkdir(parents=True, exist_ok=True)
     # Ensure .ignore exists so ripgrep (and tools respecting .ignore) skip
     # this directory.  Cache files contain unvetted community content that
     # could include adversarial text (prompt injection via catalog entries).
-    ignore_file = HUB_DIR / ".ignore"
+    ignore_file = _hub_dir() / ".ignore"
     if not ignore_file.exists():
         try:
             ignore_file.write_text("# Exclude hub internals from search tools\n*\n")
         except OSError:
             pass
-    cache_file = INDEX_CACHE_DIR / f"{key}.json"
+    cache_file = index_cache_dir / f"{key}.json"
     try:
         cache_file.write_text(json.dumps(data, ensure_ascii=False, default=str))
     except OSError as e:
@@ -3332,12 +3389,11 @@ def _skill_meta_to_dict(meta: SkillMeta) -> dict:
 # Lock file management
 # ---------------------------------------------------------------------------
 
-
 class HubLockFile:
     """Manages skills/.hub/lock.json — tracks provenance of installed hub skills."""
 
-    def __init__(self, path: Path = LOCK_FILE):
-        self.path = path
+    def __init__(self, path: Optional[Path] = None):
+        self.path = path if path is not None else _lock_file()
 
     def load(self) -> dict:
         if not self.path.exists():
@@ -3362,6 +3418,7 @@ class HubLockFile:
         install_path: str,
         files: List[str],
         metadata: Optional[Dict[str, Any]] = None,
+        scan_provenance: Optional[Dict[str, Any]] = None,
     ) -> None:
         # Validate both the skill name and the install path SHAPE before
         # writing into lock.json. A poisoned lock entry is the precondition
@@ -3379,6 +3436,7 @@ class HubLockFile:
             "install_path": safe_install_path,
             "files": files,
             "metadata": metadata or {},
+            "scan_provenance": scan_provenance or {},
             "installed_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -3405,12 +3463,11 @@ class HubLockFile:
 # Taps management
 # ---------------------------------------------------------------------------
 
-
 class TapsManager:
     """Manages the taps.json file — custom GitHub repo sources."""
 
-    def __init__(self, path: Path = TAPS_FILE):
-        self.path = path
+    def __init__(self, path: Optional[Path] = None):
+        self.path = path if path is not None else _taps_file()
 
     def load(self) -> List[dict]:
         if not self.path.exists():
@@ -3451,24 +3508,18 @@ class TapsManager:
 # Audit log
 # ---------------------------------------------------------------------------
 
-
-def append_audit_log(
-    action: str,
-    skill_name: str,
-    source: str,
-    trust_level: str,
-    verdict: str,
-    extra: str = "",
-) -> None:
+def append_audit_log(action: str, skill_name: str, source: str,
+                     trust_level: str, verdict: str, extra: str = "") -> None:
     """Append a line to the audit log."""
-    AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+    audit_log = _audit_log()
+    audit_log.parent.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     parts = [timestamp, action, skill_name, f"{source}:{trust_level}", verdict]
     if extra:
         parts.append(extra)
     line = " ".join(parts) + "\n"
     try:
-        with open(AUDIT_LOG, "a", encoding="utf-8") as f:
+        with open(audit_log, "a", encoding="utf-8") as f:
             f.write(line)
     except OSError as e:
         logger.debug("Could not write audit log: %s", e)
@@ -3478,18 +3529,21 @@ def append_audit_log(
 # Hub operations (high-level)
 # ---------------------------------------------------------------------------
 
-
 def ensure_hub_dirs() -> None:
     """Create the .hub directory structure if it doesn't exist."""
-    HUB_DIR.mkdir(parents=True, exist_ok=True)
-    QUARANTINE_DIR.mkdir(exist_ok=True)
-    INDEX_CACHE_DIR.mkdir(exist_ok=True)
-    if not LOCK_FILE.exists():
-        LOCK_FILE.write_text('{"version": 1, "installed": {}}\n')
-    if not AUDIT_LOG.exists():
-        AUDIT_LOG.touch()
-    if not TAPS_FILE.exists():
-        TAPS_FILE.write_text('{"taps": []}\n')
+    hub_dir = _hub_dir()
+    lock_file = _lock_file()
+    audit_log = _audit_log()
+    taps_file = _taps_file()
+    hub_dir.mkdir(parents=True, exist_ok=True)
+    _quarantine_dir().mkdir(exist_ok=True)
+    _index_cache_dir().mkdir(exist_ok=True)
+    if not lock_file.exists():
+        lock_file.write_text('{"version": 1, "installed": {}}\n')
+    if not audit_log.exists():
+        audit_log.touch()
+    if not taps_file.exists():
+        taps_file.write_text('{"taps": []}\n')
 
 
 def quarantine_bundle(bundle: SkillBundle) -> Path:
@@ -3501,7 +3555,7 @@ def quarantine_bundle(bundle: SkillBundle) -> Path:
         safe_rel_path = _validate_bundle_rel_path(rel_path)
         validated_files.append((safe_rel_path, file_content))
 
-    dest = QUARANTINE_DIR / skill_name
+    dest = _quarantine_dir() / skill_name
     if dest.exists():
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
@@ -3523,12 +3577,13 @@ def install_from_quarantine(
     category: str,
     bundle: SkillBundle,
     scan_result: ScanResult,
+    scan_provenance: Optional[Dict[str, Any]] = None,
 ) -> Path:
     """Move a scanned skill from quarantine into the skills directory."""
     safe_skill_name = _validate_skill_name(skill_name)
     safe_category = _validate_install_parent_path(category) if category else ""
     quarantine_resolved = quarantine_path.resolve()
-    quarantine_root = QUARANTINE_DIR.resolve()
+    quarantine_root = _quarantine_dir().resolve()
     if not quarantine_resolved.is_relative_to(quarantine_root):
         raise ValueError(f"Unsafe quarantine path: {quarantine_path}")
 
@@ -3588,17 +3643,15 @@ def install_from_quarantine(
         trust_level=bundle.trust_level,
         scan_verdict=scan_result.verdict,
         skill_hash=content_hash(install_dir),
-        install_path=str(install_dir.relative_to(SKILLS_DIR)),
+        install_path=str(install_dir.relative_to(_skills_dir())),
         files=list(bundle.files.keys()),
         metadata=bundle.metadata,
+        scan_provenance=scan_provenance or getattr(scan_result, "scan_provenance", None),
     )
 
     append_audit_log(
-        "INSTALL",
-        safe_skill_name,
-        bundle.source,
-        bundle.trust_level,
-        scan_result.verdict,
+        "INSTALL", safe_skill_name, bundle.source,
+        bundle.trust_level, scan_result.verdict,
         content_hash(install_dir),
     )
 
@@ -3630,14 +3683,7 @@ def uninstall_skill(skill_name: str) -> Tuple[bool, str]:
         shutil.rmtree(install_path)
 
     lock.record_uninstall(skill_name)
-    append_audit_log(
-        "UNINSTALL",
-        skill_name,
-        entry["source"],
-        entry["trust_level"],
-        "n/a",
-        "user_request",
-    )
+    append_audit_log("UNINSTALL", skill_name, entry["source"], entry["trust_level"], "n/a", "user_request")
 
     return True, f"Uninstalled '{skill_name}' from {entry['install_path']}"
 
@@ -3686,9 +3732,7 @@ def check_for_skill_updates(
     for entry in installed:
         identifier = entry.get("identifier", "")
         source_name = entry.get("source", "")
-        candidate_sources = [
-            src for src in sources if _source_matches(src, source_name)
-        ] or sources
+        candidate_sources = [src for src in sources if _source_matches(src, source_name)] or sources
 
         bundle = None
         for src in candidate_sources:
@@ -3729,8 +3773,11 @@ def check_for_skill_updates(
 # ---------------------------------------------------------------------------
 
 CLAWK_INDEX_URL = "https://github.com/samuelgradientai-sys/clawksis-agent"
-CLAWK_INDEX_CACHE_FILE = INDEX_CACHE_DIR / "clawk-index.json"
 CLAWK_INDEX_TTL = 6 * 3600  # 6 hours
+
+
+def _clawk_index_cache_file() -> Path:
+    return _index_cache_dir() / "clawk-index.json"
 
 
 def _load_clawk_index() -> Optional[dict]:
@@ -3741,23 +3788,56 @@ def _load_clawk_index() -> Optional[dict]:
     downloads within a session.
     """
     # Check local cache
-    if CLAWK_INDEX_CACHE_FILE.exists():
+    clawk_index_cache_file = _clawk_index_cache_file()
+    if clawk_index_cache_file.exists():
         try:
-            age = time.time() - CLAWK_INDEX_CACHE_FILE.stat().st_mtime
+            age = time.time() - clawk_index_cache_file.stat().st_mtime
             if age < CLAWK_INDEX_TTL:
-                return json.loads(CLAWK_INDEX_CACHE_FILE.read_text())
+                return json.loads(clawk_index_cache_file.read_text())
         except (OSError, json.JSONDecodeError):
             pass
 
-    # Fetch from docs site
-    try:
-        resp = httpx.get(CLAWK_INDEX_URL, timeout=15, follow_redirects=True)
-        if resp.status_code != 200:
-            logger.debug("Clawksis index fetch returned %d", resp.status_code)
+    # Fetch from docs site.
+    #
+    # We deliberately DON'T let httpx negotiate Brotli here.  The index is a
+    # large body (tens of MB); httpx's streaming Brotli decoder, backed by
+    # brotlicffi 1.2.0.1 (pinned for Discord attachment decoding), trips over
+    # its own output_buffer_limit on payloads this size and raises
+    # DecodingError("brotli: decoder process called with data when
+    # 'can_accept_more_data()' is False").  That surfaces as an empty Skills
+    # Hub (blank Browse-hub landing, index contributes 0 search hits) because
+    # the error is caught below and we silently fall back to a (often absent)
+    # stale cache.  Requesting gzip/deflate sidesteps the broken decoder while
+    # still compressing the transfer.  The identity retry is belt-and-braces
+    # for any future proxy that ignores the header and returns Brotli anyway.
+    data = None
+    for accept_encoding in ("gzip, deflate", "identity"):
+        try:
+            resp = httpx.get(
+                CLAWK_INDEX_URL,
+                timeout=15,
+                follow_redirects=True,
+                headers={"Accept-Encoding": accept_encoding},
+            )
+            if resp.status_code != 200:
+                logger.debug("Clawksis index fetch returned %d", resp.status_code)
+                return _load_stale_index_cache()
+            data = resp.json()
+            break
+        except httpx.DecodingError as e:
+            # Content-Encoding decode failed — retry once uncompressed before
+            # giving up on the network path entirely.
+            logger.debug(
+                "Clawksis index decode failed (Accept-Encoding=%s): %s",
+                accept_encoding,
+                e,
+            )
+            continue
+        except (httpx.HTTPError, json.JSONDecodeError) as e:
+            logger.debug("Clawksis index fetch failed: %s", e)
             return _load_stale_index_cache()
-        data = resp.json()
-    except (httpx.HTTPError, json.JSONDecodeError) as e:
-        logger.debug("Clawksis index fetch failed: %s", e)
+
+    if data is None:
         return _load_stale_index_cache()
 
     # Validate structure
@@ -3766,8 +3846,8 @@ def _load_clawk_index() -> Optional[dict]:
 
     # Cache locally
     try:
-        CLAWK_INDEX_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        CLAWK_INDEX_CACHE_FILE.write_text(json.dumps(data))
+        clawk_index_cache_file.parent.mkdir(parents=True, exist_ok=True)
+        clawk_index_cache_file.write_text(json.dumps(data))
     except OSError:
         pass
 
@@ -3776,9 +3856,10 @@ def _load_clawk_index() -> Optional[dict]:
 
 def _load_stale_index_cache() -> Optional[dict]:
     """Fall back to stale cache when the network fetch fails."""
-    if CLAWK_INDEX_CACHE_FILE.exists():
+    clawk_index_cache_file = _clawk_index_cache_file()
+    if clawk_index_cache_file.exists():
         try:
-            return json.loads(CLAWK_INDEX_CACHE_FILE.read_text())
+            return json.loads(clawk_index_cache_file.read_text())
         except (OSError, json.JSONDecodeError):
             pass
     return None
@@ -3832,25 +3913,58 @@ class ClawksisIndexSource(SkillSource):
         return "community"
 
     def search(self, query: str, limit: int = 10) -> List[SkillMeta]:
-        """Search the cached index.  Zero API calls."""
+        """Search the cached index.  Zero API calls.
+
+        Matches against name, description, tags, identifier, and the per-tap
+        ``extra.provider`` label (so a query like ``nvidia`` surfaces the
+        ``NVIDIA/skills/...`` entries even though their ``source`` is the bare
+        ``github``).  Results are scored and ranked (exact name > name prefix >
+        whole-word > substring) rather than returned in raw index order and
+        truncated at the first ``limit`` hits — that earlier break-at-limit
+        behaviour returned an arbitrary file-order slice and buried the most
+        relevant skills.
+        """
         index = self._ensure_loaded()
         skills = index.get("skills", [])
         if not skills:
             return []
 
         if not query.strip():
-            # No query — return featured/popular
+            # No query — return featured/popular (index order)
             return [self._to_meta(s) for s in skills[:limit]]
 
         query_lower = query.lower()
-        results: List[SkillMeta] = []
-        for s in skills:
-            searchable = f"{s.get('name', '')} {s.get('description', '')} {' '.join(s.get('tags', []))}".lower()
-            if query_lower in searchable:
-                results.append(self._to_meta(s))
-                if len(results) >= limit:
-                    break
-        return results
+        scored: List[Tuple[int, int, dict]] = []
+        for i, s in enumerate(skills):
+            name = str(s.get("name", "")).lower()
+            provider = str((s.get("extra") or {}).get("provider", "")).lower()
+            haystack = " ".join([
+                name,
+                str(s.get("description", "")).lower(),
+                " ".join(str(t).lower() for t in s.get("tags", [])),
+                str(s.get("identifier", "")).lower(),
+                provider,
+            ])
+            if query_lower not in haystack:
+                continue
+            # Lower score sorts first.
+            if name == query_lower:
+                score = 0
+            elif name.startswith(query_lower):
+                score = 1
+            elif provider == query_lower:
+                score = 2
+            elif query_lower in name.split() or query_lower in provider.split():
+                score = 3
+            elif query_lower in name:
+                score = 4
+            else:
+                score = 5
+            # i (original index order) is the stable tiebreaker.
+            scored.append((score, i, s))
+
+        scored.sort(key=lambda x: (x[0], x[1]))
+        return [self._to_meta(s) for _, _, s in scored[:limit]]
 
     def fetch(self, identifier: str) -> Optional[SkillBundle]:
         """Fetch a skill using the resolved path from the index.
@@ -3908,7 +4022,7 @@ class ClawksisIndexSource(SkillSource):
         normalized = identifier
         for prefix in ("skills-sh/", "skills.sh/", "official/", "github/", "clawhub/"):
             if identifier.startswith(prefix):
-                normalized = identifier[len(prefix) :]
+                normalized = identifier[len(prefix):]
                 break
 
         # Match on normalized identifier or name
@@ -3916,15 +4030,9 @@ class ClawksisIndexSource(SkillSource):
             sid = s.get("identifier", "")
             # Strip prefix from stored identifier too
             stored_normalized = sid
-            for prefix in (
-                "skills-sh/",
-                "skills.sh/",
-                "official/",
-                "github/",
-                "clawhub/",
-            ):
+            for prefix in ("skills-sh/", "skills.sh/", "official/", "github/", "clawhub/"):
                 if sid.startswith(prefix):
-                    stored_normalized = sid[len(prefix) :]
+                    stored_normalized = sid[len(prefix):]
                     break
             if stored_normalized == normalized:
                 return s
@@ -3958,18 +4066,16 @@ def create_source_router(auth: Optional[GitHubAuth] = None) -> List[SkillSource]
     extra_taps = taps_mgr.list_taps()
 
     sources: List[SkillSource] = [
-        OptionalSkillSource(),  # Official optional skills (highest priority)
-        ClawksisIndexSource(
-            auth=auth
-        ),  # Centralized index (search + resolved install paths)
+        OptionalSkillSource(),        # Official optional skills (highest priority)
+        ClawksisIndexSource(auth=auth), # Centralized index (search + resolved install paths)
         SkillsShSource(auth=auth),
         WellKnownSkillSource(),
-        UrlSource(),  # Direct HTTP(S) URL to a SKILL.md file
+        UrlSource(),                  # Direct HTTP(S) URL to a SKILL.md file
         GitHubSource(auth=auth, extra_taps=extra_taps),
         ClawHubSource(),
         ClaudeMarketplaceSource(auth=auth),
         LobeHubSource(),
-        BrowseShSource(),  # browse.sh: 169+ site-specific browser automation skills
+        BrowseShSource(),   # browse.sh: 169+ site-specific browser automation skills
     ]
 
     return sources
@@ -4005,29 +4111,33 @@ def parallel_search_sources(
 
     per_source_limits = per_source_limits or {}
 
+    # A provider filter (e.g. "nvidia", "openai") targets GitHub-tap skills
+    # that the runtime index stores under source="github" with an
+    # ``extra.provider`` label. It is NOT a real source id, so source-level
+    # selection must treat it like "all" (the index / github source carries
+    # the data); the per-provider narrowing happens downstream on the merged
+    # results (see ``_filter_results_by_provider``).
+    _provider_filter = source_filter.strip().lower() in _PROVIDER_FILTER_VALUES
+    _effective_filter = "all" if _provider_filter else source_filter
+
     active: List[SkillSource] = []
     # When the centralized index is available and the user hasn't filtered
     # to a specific source, skip external API sources (github, skills-sh,
     # clawhub, etc.) — the index already has their data.  This avoids
     # ~70 GitHub API calls per search for unauthenticated users.
     _index_available = False
-    _api_source_ids = frozenset({
-        "github",
-        "skills-sh",
-        "clawhub",
-        "claude-marketplace",
-        "lobehub",
-        "well-known",
-    })
-    if source_filter == "all":
+    _api_source_ids = frozenset({"github", "skills-sh", "clawhub",
+                                  "claude-marketplace", "lobehub", "well-known"})
+    if _effective_filter == "all":
         for src in sources:
-            if src.source_id() == "clawk-index" and getattr(src, "is_available", False):
+            if (src.source_id() == "clawk-index"
+                    and getattr(src, "is_available", False)):
                 _index_available = True
                 break
 
     for src in sources:
         sid = src.source_id()
-        if source_filter != "all" and sid != source_filter and sid != "official":
+        if _effective_filter != "all" and sid != _effective_filter and sid != "official":
             continue
         # Skip external API sources when the index covers them
         if _index_available and sid in _api_source_ids:
@@ -4046,8 +4156,11 @@ def parallel_search_sources(
     # worker finishes — so a single slow source (e.g. ClawHub) keeps the
     # caller blocked for minutes and renders ``overall_timeout`` a no-op.
     # Manage the executor manually and shut it down with ``wait=False`` so
-    # the timeout is actually honoured.
-    pool = ThreadPoolExecutor(max_workers=min(len(active), 8))
+    # the timeout is actually honoured.  Daemon workers (tools.daemon_pool):
+    # an abandoned slow source must not block interpreter exit either —
+    # stdlib workers are joined unconditionally by the atexit hook.
+    from tools.daemon_pool import DaemonThreadPoolExecutor
+    pool = DaemonThreadPoolExecutor(max_workers=min(len(active), 8))
     futures = {}
     for src in active:
         lim = per_source_limits.get(src.source_id(), 50)
@@ -4066,7 +4179,9 @@ def parallel_search_sources(
                 except Exception:
                     pass
         except TimeoutError:
-            timed_out_ids = [futures[f] for f in futures if not f.done()]
+            timed_out_ids = [
+                futures[f] for f in futures if not f.done()
+            ]
             if timed_out_ids:
                 logger.debug(
                     "Skills browse timed out waiting for: %s",
@@ -4080,9 +4195,8 @@ def parallel_search_sources(
     return all_results, source_counts, timed_out_ids
 
 
-def unified_search(
-    query: str, sources: List[SkillSource], source_filter: str = "all", limit: int = 10
-) -> List[SkillMeta]:
+def unified_search(query: str, sources: List[SkillSource],
+                   source_filter: str = "all", limit: int = 10) -> List[SkillMeta]:
     """Search all sources (in parallel) and merge results."""
     all_results, _, _ = parallel_search_sources(
         sources,
@@ -4090,6 +4204,12 @@ def unified_search(
         source_filter=source_filter,
         overall_timeout=30,
     )
+
+    # A provider filter (nvidia/openai/...) is applied here, on the merged set,
+    # because it targets the per-tap ``extra.provider`` label rather than a real
+    # source id (the runtime index stores every GitHub tap as source="github").
+    if source_filter.strip().lower() in _PROVIDER_FILTER_VALUES:
+        all_results = _filter_results_by_provider(all_results, source_filter)
 
     # Deduplicate by identifier, preferring higher trust levels.
     # identifier is always unique per skill (e.g. "browse-sh/airbnb.com/search-listings-ddgioa").
@@ -4100,9 +4220,7 @@ def unified_search(
     for r in all_results:
         if r.identifier not in seen:
             seen[r.identifier] = r
-        elif _TRUST_RANK.get(r.trust_level, 0) > _TRUST_RANK.get(
-            seen[r.identifier].trust_level, 0
-        ):
+        elif _TRUST_RANK.get(r.trust_level, 0) > _TRUST_RANK.get(seen[r.identifier].trust_level, 0):
             seen[r.identifier] = r
     deduped = list(seen.values())
 

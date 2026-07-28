@@ -21,7 +21,6 @@ Outbound:
     ``attachment()`` / ``voice()`` content builders via the sidecar's
     ``/send-attachment`` endpoint.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -45,12 +44,10 @@ if TYPE_CHECKING:
     # site type-checks cleanly. The runtime fallback below keeps the optional
     # dependency truly optional (each use site is guarded by HTTPX_AVAILABLE).
     import httpx
-
     HTTPX_AVAILABLE = True
 else:
     try:
         import httpx
-
         HTTPX_AVAILABLE = True
     except ImportError:  # pragma: no cover - httpx is already a Clawksis dep
         HTTPX_AVAILABLE = False
@@ -88,6 +85,30 @@ _DEDUP_WINDOW_SECONDS = 48 * 3600
 
 _SIDECAR_DIR = Path(__file__).parent / "sidecar"
 
+# Cap on a self-heal `npm ci`/`npm install` of the sidecar deps. A cold
+# install of the pinned spectrum-ts tree normally takes well under a minute;
+# a wedged npm (dead registry, network blackhole) must not stall the photon
+# connect path indefinitely.
+_NPM_REINSTALL_TIMEOUT = 600
+
+# Photon / Envoy / spectrum-ts error substrings that indicate a transient
+# upstream overload rather than a permanent failure.  These are not in the
+# core _RETRYABLE_ERROR_PATTERNS because they are specific to this adapter.
+_PHOTON_RETRYABLE_PATTERNS = (
+    "internal sidecar error",
+    "upstream connect error",
+    "upstream unavailable",
+    "connection dropped",
+    "reset reason: overflow",
+    "upstream_overflow",
+    "upstream_unavailable",
+)
+
+# Minimum seconds between typing-indicator calls for the same chat.
+# iMessage is a personal channel — suppressing rapid repeats reduces
+# upstream gRPC pressure during Photon overflow events.
+_TYPING_COOLDOWN_SECONDS = 5.0
+
 # Group-chat mention wake words. When ``require_mention`` is enabled, group
 # messages are ignored unless they match one of these patterns — same
 # behavior and defaults as the BlueBubbles iMessage channel so the two
@@ -100,7 +121,6 @@ _DEFAULT_MENTION_PATTERNS = [
 
 # ---------------------------------------------------------------------------
 # Module-level helpers — also used by check_fn / standalone send
-
 
 def _coerce_port(value: Any, default: int) -> int:
     try:
@@ -121,6 +141,83 @@ def check_requirements() -> bool:
         # surfaces the missing-deps state in `clawk setup` / status.
         return False
     return True
+
+
+def _sidecar_deps_stale() -> bool:
+    """True when node_modules exists but is older than the committed lockfile.
+
+    `clawk update` rewrites ``package-lock.json`` when the spectrum-ts pin is
+    bumped, but does not reinstall ``node_modules``. npm records the state of
+    the last install in ``node_modules/.package-lock.json``; when the top-level
+    lockfile is newer than that marker, the install is out of date. This is the
+    same signal ``npm ci`` uses. Returns False (do nothing) if either file is
+    missing or unreadable, so a first-run or odd filesystem never blocks start.
+    """
+    lockfile = _SIDECAR_DIR / "package-lock.json"
+    marker = _SIDECAR_DIR / "node_modules" / ".package-lock.json"
+    try:
+        return lockfile.stat().st_mtime > marker.stat().st_mtime
+    except OSError:
+        return False
+
+
+def _reinstall_sidecar_deps() -> None:
+    """Reinstall the sidecar's node_modules from the lockfile (blocking).
+
+    Mirrors ``clawk photon install-sidecar``: ``npm ci`` for an exact,
+    reproducible install, falling back to ``npm install`` if the lockfile is
+    missing or drifted. Runs the postinstall patch as part of the install.
+    Best-effort — a failure here just leaves the (stale) deps in place and the
+    normal ``_start_sidecar`` readiness check reports the real error.
+    """
+    npm = shutil.which("npm")
+    if not npm:
+        logger.warning("[photon] cannot reinstall stale sidecar deps: npm not on PATH")
+        return
+    # Windows: suppress the console flash these short-lived npm runs would
+    # otherwise pop (0 elsewhere). Same helper as the sidecar spawn below.
+    from clawk_cli._subprocess_compat import windows_hide_flags
+
+    try:
+        result = subprocess.run(  # noqa: S603
+            [npm, "ci"],
+            cwd=str(_SIDECAR_DIR),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_NPM_REINSTALL_TIMEOUT,
+            creationflags=windows_hide_flags(),
+        )
+        if result.returncode != 0:
+            logger.warning(
+                "[photon] sidecar `npm ci` failed; falling back to `npm install`"
+            )
+            result = subprocess.run(  # noqa: S603
+                [npm, "install"],
+                cwd=str(_SIDECAR_DIR),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=_NPM_REINSTALL_TIMEOUT,
+                creationflags=windows_hide_flags(),
+            )
+    except subprocess.TimeoutExpired:
+        # A wedged npm (dead registry, network blackhole) must not stall the
+        # photon connect forever — give up, leave the stale deps in place, and
+        # let the readiness check report the real error. Retried on the next
+        # reconnect tick.
+        logger.error(
+            "[photon] sidecar dependency reinstall timed out after %ss",
+            _NPM_REINSTALL_TIMEOUT,
+        )
+        return
+    if result.returncode != 0:
+        logger.error(
+            "[photon] sidecar dependency reinstall failed: %s",
+            (result.stderr or result.stdout or "").strip(),
+        )
+    else:
+        logger.info("[photon] sidecar dependencies reinstalled from lockfile")
 
 
 def validate_config(cfg: PlatformConfig) -> bool:
@@ -166,15 +263,12 @@ def _markdown_enabled() -> bool:
     text without a release.
     """
     return os.getenv("PHOTON_MARKDOWN", "true").strip().lower() not in {
-        "false",
-        "0",
-        "no",
+        "false", "0", "no",
     }
 
 
 # ---------------------------------------------------------------------------
 # Adapter
-
 
 class PhotonAdapter(BasePlatformAdapter):
     """Bidirectional bridge to Photon Spectrum via the Node spectrum-ts sidecar.
@@ -194,7 +288,10 @@ class PhotonAdapter(BasePlatformAdapter):
         # the spectrum-ts SDK authenticates with.
         stored_id, stored_sec = load_project_credentials()
         self._project_id: str = (
-            os.getenv("PHOTON_PROJECT_ID") or extra.get("project_id") or stored_id or ""
+            os.getenv("PHOTON_PROJECT_ID")
+            or extra.get("project_id")
+            or stored_id
+            or ""
         )
         self._project_secret: str = (
             os.getenv("PHOTON_PROJECT_SECRET")
@@ -209,7 +306,9 @@ class PhotonAdapter(BasePlatformAdapter):
             _DEFAULT_SIDECAR_PORT,
         )
         self._sidecar_bind = _DEFAULT_SIDECAR_BIND
-        self._sidecar_token = os.getenv("PHOTON_SIDECAR_TOKEN") or secrets.token_hex(16)
+        self._sidecar_token = (
+            os.getenv("PHOTON_SIDECAR_TOKEN") or secrets.token_hex(16)
+        )
         self._autostart_sidecar = str(
             os.getenv("PHOTON_SIDECAR_AUTOSTART", "true")
         ).lower() not in ("0", "false", "no")
@@ -223,8 +322,10 @@ class PhotonAdapter(BasePlatformAdapter):
         self._sidecar_proc: Optional[subprocess.Popen] = None
         self._sidecar_supervisor_task: Optional[asyncio.Task] = None
         self._inbound_task: Optional[asyncio.Task] = None
+        self._sidecar_health_task: Optional[asyncio.Task] = None
         self._inbound_running = False
         self._http_client: Optional["httpx.AsyncClient"] = None
+        self._sidecar_health_interval = 15.0
         # Lightweight in-memory dedup. The gRPC stream is at-least-once, so we
         # may see the same messageId more than once (e.g. after a reconnect).
         self._seen_messages: Dict[str, float] = {}
@@ -236,6 +337,8 @@ class PhotonAdapter(BasePlatformAdapter):
         # react action default to "the message that triggered me" without
         # requiring the model to thread message ids through tool calls.
         self._last_inbound_by_chat: Dict[str, str] = {}
+        # Last time we sent a typing indicator per chat, for cooldown gating.
+        self._typing_last_sent: Dict[str, float] = {}
 
         # Group-chat mention gating (parity with BlueBubbles). When enabled,
         # group messages are ignored unless they match a wake word; DMs are
@@ -244,10 +347,7 @@ class PhotonAdapter(BasePlatformAdapter):
         if _require_mention is None:
             _require_mention = os.getenv("PHOTON_REQUIRE_MENTION")
         self.require_mention = str(_require_mention).strip().lower() in {
-            "true",
-            "1",
-            "yes",
-            "on",
+            "true", "1", "yes", "on",
         }
         self._mention_patterns = self._compile_mention_patterns(
             extra["mention_patterns"]
@@ -274,15 +374,11 @@ class PhotonAdapter(BasePlatformAdapter):
                 loaded = json.loads(text) if text else []
             except Exception:
                 loaded = None
-            patterns = (
-                loaded
-                if isinstance(loaded, list)
-                else [
-                    part.strip()
-                    for line in text.splitlines()
-                    for part in line.split(",")
-                ]
-            )
+            patterns = loaded if isinstance(loaded, list) else [
+                part.strip()
+                for line in text.splitlines()
+                for part in line.split(",")
+            ]
         elif isinstance(raw, list):
             patterns = raw
         else:
@@ -315,15 +411,17 @@ class PhotonAdapter(BasePlatformAdapter):
         for pattern in self._mention_patterns:
             match = pattern.match(text.lstrip())
             if match:
-                cleaned = text.lstrip()[match.end() :].lstrip(" ,:-")
+                cleaned = text.lstrip()[match.end():].lstrip(" ,:-")
                 return cleaned or text
         return text
 
     # -- Connection lifecycle ---------------------------------------------
 
-    async def connect(self) -> bool:
+    async def connect(self, *, is_reconnect: bool = False) -> bool:
         if not HTTPX_AVAILABLE:
-            self._set_fatal_error("MISSING_DEP", "httpx not installed", retryable=False)
+            self._set_fatal_error(
+                "MISSING_DEP", "httpx not installed", retryable=False
+            )
             return False
         if not self._project_id or not self._project_secret:
             self._set_fatal_error(
@@ -358,18 +456,33 @@ class PhotonAdapter(BasePlatformAdapter):
 
         # Start consuming the inbound gRPC stream from the sidecar.
         self._inbound_running = True
-        self._inbound_task = asyncio.get_event_loop().create_task(self._inbound_loop())
+        self._inbound_task = asyncio.get_event_loop().create_task(
+            self._inbound_loop()
+        )
+        self._sidecar_health_task = asyncio.get_event_loop().create_task(
+            self._monitor_sidecar_health()
+        )
 
         self._mark_connected()
         logger.info(
             "[photon] connected — sidecar on %s:%d, streaming inbound over gRPC",
-            self._sidecar_bind,
-            self._sidecar_port,
+            self._sidecar_bind, self._sidecar_port,
         )
         return True
 
     async def disconnect(self) -> None:
         self._inbound_running = False
+        if self._sidecar_health_task is not None:
+            task = self._sidecar_health_task
+            self._sidecar_health_task = None
+            task.cancel()
+            if task is not asyncio.current_task():
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    pass
         if self._inbound_task is not None:
             self._inbound_task.cancel()
             try:
@@ -406,10 +519,7 @@ class PhotonAdapter(BasePlatformAdapter):
         while self._inbound_running:
             try:
                 async with client.stream(
-                    "GET",
-                    url,
-                    headers=headers,
-                    timeout=None,
+                    "GET", url, headers=headers, timeout=None,
                 ) as resp:
                     if resp.status_code != 200:
                         raise RuntimeError(f"/inbound returned {resp.status_code}")
@@ -428,11 +538,53 @@ class PhotonAdapter(BasePlatformAdapter):
                     break
                 logger.warning(
                     "[photon] inbound stream dropped (%s); reconnecting in %.1fs",
-                    e,
-                    backoff,
+                    e, backoff,
                 )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 30.0)
+
+    async def _monitor_sidecar_health(self) -> None:
+        """Promote degraded upstream Photon stream health into reconnect.
+
+        The sidecar HTTP process can stay alive while spectrum-ts repeatedly
+        fails to maintain the upstream inbound gRPC stream. Polling `/healthz`
+        keeps that from becoming a silent inbound outage.
+        """
+        while self._inbound_running:
+            await asyncio.sleep(self._sidecar_health_interval)
+            if not self._inbound_running:
+                break
+            try:
+                data = await self._sidecar_call("/healthz", {})
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.debug("[photon] sidecar health check failed: %s", exc)
+                continue
+
+            stream = data.get("stream") if isinstance(data, dict) else None
+            if not isinstance(stream, dict) or stream.get("ok") is not False:
+                continue
+
+            state = str(stream.get("state") or "unknown")
+            degraded_for_ms = stream.get("degradedForMs")
+            last_issue = str(stream.get("lastIssue") or "unknown stream issue")
+            message = (
+                "Photon upstream stream degraded"
+                f" (state={state}, degradedForMs={degraded_for_ms}): "
+                f"{last_issue}"
+            )
+            logger.error("[photon] %s", message)
+            self._set_fatal_error(
+                "UPSTREAM_STREAM_DEGRADED",
+                message,
+                retryable=True,
+            )
+            try:
+                await self._notify_fatal_error()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("[photon] fatal-error notification failed: %s", exc)
+            break
 
     async def _on_inbound_line(self, line: str) -> None:
         try:
@@ -481,7 +633,8 @@ class PhotonAdapter(BasePlatformAdapter):
                           "encoding"?}
                        | {"type": "reaction", "emoji": "❤️",
                           "targetMessageId": "..." | null,
-                          "targetDirection": "inbound"|"outbound" | null},
+                          "targetDirection": "inbound"|"outbound" | null,
+                          "targetText": "..." | null},
               "timestamp": "2026-05-14T19:06:32.000Z"
 
         Attachment and voice content carry the bytes inline as base64 ``data``
@@ -518,6 +671,38 @@ class PhotonAdapter(BasePlatformAdapter):
         media_urls: List[str] = []
         media_types: List[str] = []
 
+        def _normalize_binary_payload(
+            payload: Dict[str, Any]
+        ) -> tuple[str, MessageType, List[str], List[str]]:
+            is_voice = payload.get("type") == "voice"
+            name = payload.get("name") or ("voice" if is_voice else "(unnamed)")
+            mime = payload.get("mimeType") or ""
+            mtype = MessageType.VOICE if is_voice else _attachment_message_type(mime)
+            cached = _cache_inbound_attachment(
+                payload, name, mime, force_audio=is_voice
+            )
+            if cached:
+                return (
+                    "(voice)" if is_voice else "(attachment)",
+                    mtype,
+                    [cached],
+                    [mime or ("audio/mp4" if is_voice else "application/octet-stream")],
+                )
+            label = "voice" if is_voice else "attachment"
+            duration = payload.get("duration")
+            duration_text = (
+                f", duration: {duration}s"
+                if isinstance(duration, (int, float))
+                else ""
+            )
+            return (
+                f"[Photon {label} received: {name} "
+                f"({mime or 'unknown MIME'}{duration_text})]",
+                mtype,
+                [],
+                [],
+            )
+
         ctype = content.get("type")
         if ctype == "reaction":
             # Route only tapbacks on messages WE sent — those are implicitly
@@ -529,7 +714,9 @@ class PhotonAdapter(BasePlatformAdapter):
                 target_id and target_id in self._sent_message_ids
             )
             if not is_ours:
-                logger.debug("[photon] ignoring reaction on a message we didn't send")
+                logger.debug(
+                    "[photon] ignoring reaction on a message we didn't send"
+                )
                 return
             emoji = content.get("emoji") or ""
             source = self.build_source(
@@ -539,12 +726,22 @@ class PhotonAdapter(BasePlatformAdapter):
                 user_id=sender_id,
                 user_name=sender_id or None,
             )
+            # Correlate the tapback to the message it reacted to, so the agent
+            # sees WHAT was reacted to. `is_ours` above guarantees the target is
+            # one of the bot's own messages, so reply_to_is_own_message holds and
+            # the gateway injects `[Replying to your previous message: "..."]`.
+            # reply_to_text comes from the sidecar (hydrated reaction target);
+            # it's None for attachment/voice-only targets, and the gateway only
+            # injects the pointer when both id and text are present.
             await self.handle_message(
                 MessageEvent(
                     text=f"reaction:added:{emoji}",
                     message_type=MessageType.TEXT,
                     source=source,
                     message_id=event.get("messageId"),
+                    reply_to_message_id=target_id,
+                    reply_to_text=content.get("targetText") or None,
+                    reply_to_is_own_message=True,
                     raw_message=event,
                     timestamp=timestamp,
                 )
@@ -559,37 +756,40 @@ class PhotonAdapter(BasePlatformAdapter):
             text = content.get("text") or ""
             mtype = MessageType.TEXT
         elif ctype in {"attachment", "voice"}:
-            is_voice = ctype == "voice"
-            name = content.get("name") or ("voice" if is_voice else "(unnamed)")
-            mime = content.get("mimeType") or ""
-            mtype = MessageType.VOICE if is_voice else _attachment_message_type(mime)
-            cached = _cache_inbound_attachment(
-                content, name, mime, force_audio=is_voice
-            )
-            if cached:
-                media_urls.append(cached)
-                media_types.append(
-                    mime or ("audio/mp4" if is_voice else "application/octet-stream")
-                )
-                # The real bytes are attached, so the agent sees the media
-                # itself — a short marker is enough text, and it keeps group
-                # mention-gating consistent with plain messages.
-                text = "(voice)" if is_voice else "(attachment)"
-            else:
-                # No bytes (over the sidecar cap, a failed read, or a caching
-                # failure) — fall back to a metadata marker so the agent still
-                # knows something arrived.
-                label = "voice" if is_voice else "attachment"
-                duration = content.get("duration")
-                duration_text = (
-                    f", duration: {duration}s"
-                    if isinstance(duration, (int, float))
-                    else ""
-                )
-                text = (
-                    f"[Photon {label} received: {name} "
-                    f"({mime or 'unknown MIME'}{duration_text})]"
-                )
+            text, mtype, media_urls, media_types = _normalize_binary_payload(content)
+        elif ctype == "group":
+            text_parts: List[str] = []
+            mtype = MessageType.TEXT
+            for item in content.get("items") or []:
+                if not isinstance(item, dict):
+                    continue
+                item_content = item.get("content") or {}
+                if not isinstance(item_content, dict):
+                    continue
+                item_type = item_content.get("type")
+                if item_type == "text":
+                    item_text = item_content.get("text") or ""
+                    if item_text:
+                        text_parts.append(item_text)
+                    continue
+                if item_type in {"attachment", "voice"}:
+                    marker, item_mtype, item_urls, item_types = _normalize_binary_payload(
+                        item_content
+                    )
+                    if mtype == MessageType.TEXT:
+                        mtype = item_mtype
+                    media_urls.extend(item_urls)
+                    media_types.extend(item_types)
+                    if not item_urls:
+                        text_parts.append(marker)
+                    continue
+                if item_type:
+                    text_parts.append(f"[Photon content type not handled: {item_type}]")
+            if media_urls and mtype == MessageType.TEXT:
+                mtype = MessageType.DOCUMENT
+            text = "\n".join(part for part in text_parts if part).strip()
+            if not text:
+                text = "(attachment)" if media_urls else "[Photon empty group received]"
         else:
             text = f"[Photon content type not handled: {ctype}]"
             mtype = MessageType.TEXT
@@ -634,10 +834,7 @@ class PhotonAdapter(BasePlatformAdapter):
         try:
             out = subprocess.run(  # noqa: S603, S607
                 ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-                check=False,
+                capture_output=True, text=True, timeout=5.0, check=False,
             )
         except (OSError, subprocess.TimeoutExpired):
             return []
@@ -649,10 +846,7 @@ class PhotonAdapter(BasePlatformAdapter):
         try:
             out = subprocess.run(  # noqa: S603, S607
                 ["ps", "-p", str(pid), "-o", "command="],
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-                check=False,
+                capture_output=True, text=True, timeout=5.0, check=False,
             )
         except (OSError, subprocess.TimeoutExpired):
             return False
@@ -662,9 +856,7 @@ class PhotonAdapter(BasePlatformAdapter):
     @staticmethod
     def _pid_alive(pid: int) -> bool:
         try:
-            os.kill(
-                pid, 0
-            )  # windows-footgun: ok — only called from _reap_stale_sidecar which win32-guards early
+            os.kill(pid, 0)  # windows-footgun: ok — only called from _reap_stale_sidecar which win32-guards early
             return True
         except OSError:
             return False
@@ -702,8 +894,7 @@ class PhotonAdapter(BasePlatformAdapter):
         for pid in stale:
             logger.warning(
                 "[photon] reaping orphaned sidecar (pid %d) on port %d",
-                pid,
-                self._sidecar_port,
+                pid, self._sidecar_port,
             )
             try:
                 os.kill(pid, signal.SIGTERM)
@@ -715,9 +906,7 @@ class PhotonAdapter(BasePlatformAdapter):
         for pid in stale:
             if self._pid_alive(pid):
                 try:
-                    os.kill(
-                        pid, signal.SIGKILL
-                    )  # windows-footgun: ok — unreachable on win32 (early return above)
+                    os.kill(pid, signal.SIGKILL)  # windows-footgun: ok — unreachable on win32 (early return above)
                 except OSError:
                     pass
         # Give the OS a beat to release the listening socket.
@@ -735,6 +924,19 @@ class PhotonAdapter(BasePlatformAdapter):
                 f"Photon sidecar deps not installed. Run: "
                 f"cd {_SIDECAR_DIR} && npm install   (or `clawk photon setup`)"
             )
+        # A `clawk update` that bumps the spectrum-ts pin rewrites
+        # package-lock.json but never reinstalls node_modules, so the sidecar
+        # spawns against stale deps and dies on every reconnect (the v8 patch
+        # script can't find @spectrum-ts/imessage/dist that only v8 ships).
+        # Self-heal by reinstalling when the lockfile is newer than npm's
+        # install marker. Runs off the event loop so a cold install can't
+        # freeze every other platform's traffic.
+        if _sidecar_deps_stale():
+            logger.warning(
+                "[photon] sidecar deps are stale (lockfile newer than install); "
+                "reinstalling before start"
+            )
+            await asyncio.to_thread(_reinstall_sidecar_deps)
         await self._reap_stale_sidecar()
 
         env = os.environ.copy()
@@ -748,6 +950,35 @@ class PhotonAdapter(BasePlatformAdapter):
         # never runs — can't leave it orphaned on the port.
         env["PHOTON_SIDECAR_WATCH_STDIN"] = "1"
 
+        # Windows: hide the child console (0 elsewhere). Same helper the
+        # discord/whatsapp adapters use for their sidecar spawns.
+        from clawk_cli._subprocess_compat import windows_hide_flags
+
+        try:
+            patch = subprocess.run(  # noqa: S603
+                [
+                    self._node_bin,
+                    str(_SIDECAR_DIR / "patch-spectrum-mixed-attachments.mjs"),
+                    str(_SIDECAR_DIR),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+                # Windows: suppress the brief console flash this short-lived
+                # node patch run would otherwise pop on every sidecar start.
+                creationflags=windows_hide_flags(),
+            )
+            if patch.returncode != 0:
+                raise RuntimeError((patch.stderr or patch.stdout or "").strip())
+            if patch.stderr.strip():
+                logger.debug("[photon] %s", patch.stderr.strip())
+        except Exception as exc:
+            logger.warning(
+                "[photon] failed to apply Spectrum mixed attachment patch: %s",
+                exc,
+            )
+
         self._sidecar_proc = subprocess.Popen(  # noqa: S603
             [self._node_bin, str(_SIDECAR_DIR / "index.mjs")],
             stdin=subprocess.PIPE,
@@ -755,6 +986,10 @@ class PhotonAdapter(BasePlatformAdapter):
             stderr=subprocess.STDOUT,
             env=env,
             start_new_session=(sys.platform != "win32"),
+            # Windows: run the persistent sidecar headless so it does not open
+            # (or leave) a visible console window. CREATE_NO_WINDOW only (no
+            # DETACHED_PROCESS) so the stdin/stdout pipes above stay usable.
+            creationflags=windows_hide_flags(),
         )
 
         # Pump sidecar stderr/stdout into our logger so users see crashes.
@@ -798,11 +1033,24 @@ class PhotonAdapter(BasePlatformAdapter):
                 line = await loop.run_in_executor(None, stdout.readline)
                 if not line:
                     break
-                logger.info(
-                    "[photon-sidecar] %s", line.decode("utf-8", "replace").rstrip()
-                )
+                logger.info("[photon-sidecar] %s", line.decode("utf-8", "replace").rstrip())
         except Exception as e:  # pragma: no cover - defensive
             logger.warning("[photon-sidecar] supervisor exited: %s", e)
+        if self._inbound_running:
+            exit_code = proc.poll()
+            logger.error(
+                "[photon] sidecar exited unexpectedly (code %s) — triggering reconnect",
+                exit_code,
+            )
+            self._set_fatal_error(
+                "SIDECAR_CRASHED",
+                f"Photon sidecar exited unexpectedly (code {exit_code})",
+                retryable=True,
+            )
+            try:
+                await self._notify_fatal_error()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("[photon] fatal-error notification failed: %s", exc)
 
     async def _stop_sidecar(self) -> None:
         proc = self._sidecar_proc
@@ -832,9 +1080,7 @@ class PhotonAdapter(BasePlatformAdapter):
             except subprocess.TimeoutExpired:
                 if sys.platform != "win32":
                     try:
-                        os.killpg(
-                            os.getpgid(proc.pid), signal.SIGTERM
-                        )  # windows-footgun: ok
+                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)  # windows-footgun: ok
                     except (ProcessLookupError, PermissionError):
                         proc.terminate()
                 else:
@@ -884,9 +1130,7 @@ class PhotonAdapter(BasePlatformAdapter):
             # Couldn't fetch the URL — fall back to sending it as text.
             return await super().send_image(chat_id, image_url, caption, reply_to)
         return await self._sidecar_send_attachment(
-            chat_id,
-            local_path,
-            caption=caption,
+            chat_id, local_path, caption=caption,
         )
 
     async def send_image_file(
@@ -899,9 +1143,7 @@ class PhotonAdapter(BasePlatformAdapter):
         **kwargs,
     ) -> SendResult:
         return await self._sidecar_send_attachment(
-            chat_id,
-            image_path,
-            caption=caption,
+            chat_id, image_path, caption=caption,
         )
 
     async def send_voice(
@@ -914,10 +1156,7 @@ class PhotonAdapter(BasePlatformAdapter):
         **kwargs,
     ) -> SendResult:
         return await self._sidecar_send_attachment(
-            chat_id,
-            audio_path,
-            caption=caption,
-            kind="voice",
+            chat_id, audio_path, caption=caption, kind="voice",
         )
 
     async def send_video(
@@ -930,9 +1169,7 @@ class PhotonAdapter(BasePlatformAdapter):
         **kwargs,
     ) -> SendResult:
         return await self._sidecar_send_attachment(
-            chat_id,
-            video_path,
-            caption=caption,
+            chat_id, video_path, caption=caption,
         )
 
     async def send_document(
@@ -946,10 +1183,7 @@ class PhotonAdapter(BasePlatformAdapter):
         **kwargs,
     ) -> SendResult:
         return await self._sidecar_send_attachment(
-            chat_id,
-            file_path,
-            name=file_name,
-            caption=caption,
+            chat_id, file_path, name=file_name, caption=caption,
         )
 
     async def send_animation(
@@ -962,22 +1196,27 @@ class PhotonAdapter(BasePlatformAdapter):
     ) -> SendResult:
         # iMessage renders GIFs inline as ordinary image attachments.
         return await self.send_image(
-            chat_id,
-            animation_url,
-            caption,
-            reply_to,
-            metadata,
+            chat_id, animation_url, caption, reply_to, metadata,
         )
 
     async def send_typing(self, chat_id: str, metadata=None) -> None:
+        now = time.time()
+        if now - self._typing_last_sent.get(chat_id, 0.0) < _TYPING_COOLDOWN_SECONDS:
+            return
+        self._typing_last_sent[chat_id] = now
         try:
-            await self._sidecar_call("/typing", {"spaceId": chat_id, "state": "start"})
+            await self._sidecar_call(
+                "/typing", {"spaceId": chat_id, "state": "start"}
+            )
         except Exception as e:
             logger.debug("[photon] send_typing failed: %s", e)
 
     async def stop_typing(self, chat_id: str) -> None:
+        self._typing_last_sent.pop(chat_id, None)
         try:
-            await self._sidecar_call("/typing", {"spaceId": chat_id, "state": "stop"})
+            await self._sidecar_call(
+                "/typing", {"spaceId": chat_id, "state": "stop"}
+            )
         except Exception as e:
             logger.debug("[photon] stop_typing failed: %s", e)
 
@@ -1024,18 +1263,19 @@ class PhotonAdapter(BasePlatformAdapter):
             del last[key]  # refresh insertion order
         last[key] = message_id
         if len(last) > self._LAST_INBOUND_CHATS_MAX:
-            for old in list(last.keys())[: len(last) - self._LAST_INBOUND_CHATS_MAX]:
+            for old in list(last.keys())[
+                : len(last) - self._LAST_INBOUND_CHATS_MAX
+            ]:
                 del last[old]
 
     def _reactions_enabled(self) -> bool:
         return os.getenv("PHOTON_REACTIONS", "false").strip().lower() in {
-            "true",
-            "1",
-            "yes",
-            "on",
+            "true", "1", "yes", "on",
         }
 
-    async def _add_reaction(self, chat_id: str, message_id: str, emoji: str) -> bool:
+    async def _add_reaction(
+        self, chat_id: str, message_id: str, emoji: str
+    ) -> bool:
         """Tapback ``emoji`` onto a message. Soft-fails (False), never raises."""
         try:
             await self._sidecar_call(
@@ -1056,8 +1296,7 @@ class PhotonAdapter(BasePlatformAdapter):
         """
         try:
             await self._sidecar_call(
-                "/unreact",
-                {"spaceId": chat_id, "messageId": message_id},
+                "/unreact", {"spaceId": chat_id, "messageId": message_id},
             )
             return True
         except Exception as e:
@@ -1167,13 +1406,22 @@ class PhotonAdapter(BasePlatformAdapter):
             return content
         return strip_markdown(content)
 
+    @staticmethod
+    def _is_retryable_error(error: Optional[str]) -> bool:
+        if BasePlatformAdapter._is_retryable_error(error):
+            return True
+        if not error:
+            return False
+        lowered = error.lower()
+        return any(pat in lowered for pat in _PHOTON_RETRYABLE_PATTERNS)
+
     async def _send_with_retry(
         self,
         chat_id: str,
         content: str,
         reply_to: Optional[str] = None,
         metadata: Any = None,
-        max_retries: int = 2,
+        max_retries: int = 1,
         base_delay: float = 2.0,
     ) -> SendResult:
         """Retry sends without the generic Markdown banner.
@@ -1202,10 +1450,7 @@ class PhotonAdapter(BasePlatformAdapter):
                 delay = base_delay * (2 ** (attempt - 1))
                 logger.warning(
                     "[photon] Send failed (attempt %d/%d, retrying in %.1fs): %s",
-                    attempt,
-                    max_retries,
-                    delay,
-                    error_str,
+                    attempt, max_retries, delay, error_str,
                 )
                 await asyncio.sleep(delay)
                 result = await self.send(
@@ -1222,8 +1467,7 @@ class PhotonAdapter(BasePlatformAdapter):
             else:
                 logger.error(
                     "[photon] Failed to deliver response after %d retries: %s",
-                    max_retries,
-                    error_str,
+                    max_retries, error_str,
                 )
                 return result
 
@@ -1238,17 +1482,14 @@ class PhotonAdapter(BasePlatformAdapter):
             metadata=metadata,
         )
         if not fallback_result.success:
-            logger.error(
-                "[photon] Plain-text retry also failed: %s", fallback_result.error
-            )
+            logger.error("[photon] Plain-text retry also failed: %s", fallback_result.error)
         return fallback_result
 
     async def _sidecar_send(self, space_id: str, text: str) -> SendResult:
         if len(text) > self.MAX_MESSAGE_LENGTH:
             logger.warning(
                 "[photon] truncating outbound from %d to %d chars",
-                len(text),
-                self.MAX_MESSAGE_LENGTH,
+                len(text), self.MAX_MESSAGE_LENGTH,
             )
             text = text[: self.MAX_MESSAGE_LENGTH]
         body: Dict[str, Any] = {"spaceId": space_id, "text": text}
@@ -1339,7 +1580,6 @@ class PhotonAdapter(BasePlatformAdapter):
 
 # ---------------------------------------------------------------------------
 # Helpers
-
 
 def _attachment_message_type(mime: str) -> MessageType:
     mime = (mime or "").lower()
@@ -1436,7 +1676,6 @@ def _cache_inbound_attachment(
 # is not co-resident.  Reuses a live sidecar already listening on the
 # configured port (cron processes cannot spawn the sidecar themselves).
 
-
 async def _standalone_send(
     pconfig: PlatformConfig,
     chat_id: str,
@@ -1475,14 +1714,10 @@ async def _standalone_send(
                 if _markdown_enabled():
                     send_body["format"] = "markdown"
                 resp = await client.post(
-                    f"{base}/send",
-                    json=send_body,
-                    headers=headers,
+                    f"{base}/send", json=send_body, headers=headers,
                 )
                 if resp.status_code != 200:
-                    return {
-                        "error": f"sidecar returned {resp.status_code}: {resp.text[:200]}"
-                    }
+                    return {"error": f"sidecar returned {resp.status_code}: {resp.text[:200]}"}
                 data = resp.json() or {}
                 if not data.get("ok"):
                     return {"error": data.get("error") or "sidecar reported failure"}
@@ -1494,9 +1729,7 @@ async def _standalone_send(
             import mimetypes
 
             for media_path, is_voice in media_files or []:
-                safe_path = BasePlatformAdapter.validate_media_delivery_path(
-                    str(media_path)
-                )
+                safe_path = BasePlatformAdapter.validate_media_delivery_path(str(media_path))
                 if not safe_path:
                     logger.warning("[photon] standalone send skipping unsafe path")
                     continue
@@ -1509,14 +1742,10 @@ async def _standalone_send(
                 if guessed:
                     att_body["mimeType"] = guessed
                 resp = await client.post(
-                    f"{base}/send-attachment",
-                    json=att_body,
-                    headers=headers,
+                    f"{base}/send-attachment", json=att_body, headers=headers,
                 )
                 if resp.status_code != 200:
-                    return {
-                        "error": f"sidecar returned {resp.status_code}: {resp.text[:200]}"
-                    }
+                    return {"error": f"sidecar returned {resp.status_code}: {resp.text[:200]}"}
                 data = resp.json() or {}
                 if not data.get("ok"):
                     return {"error": data.get("error") or "sidecar reported failure"}
@@ -1529,7 +1758,6 @@ async def _standalone_send(
 
 # ---------------------------------------------------------------------------
 # Plugin entry point
-
 
 def register(ctx) -> None:
     """Called by the Clawksis plugin loader at startup."""
