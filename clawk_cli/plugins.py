@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from clawk_constants import get_clawk_home
-from utils import env_var_enabled
+from utils import env_var_enabled, fast_safe_load
 from clawk_cli.config import cfg_get
 from clawk_cli.middleware import OBSERVER_SCHEMA_VERSION, VALID_MIDDLEWARE
 
@@ -64,11 +64,17 @@ def get_bundled_plugins_dir() -> Path:
         return Path(env_override)
     return Path(__file__).resolve().parent.parent / "plugins"
 
-
 try:
     import yaml
 except ImportError:  # pragma: no cover – yaml is optional at import time
     yaml = None  # type: ignore[assignment]
+
+
+class PluginToolOverrideError(PermissionError):
+    """Raised when a plugin attempts to override a built-in tool without
+    operator opt-in via ``plugins.entries.<plugin_id>.allow_tool_override``.
+    """
+
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +94,7 @@ logger = logging.getLogger(__name__)
 # mid-process can call ``_install_plugin_debug_handler(force=True)``.
 
 _PLUGINS_DEBUG = os.getenv("CLAWK_PLUGINS_DEBUG", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
+    "1", "true", "yes", "on",
 }
 _DEBUG_HANDLER_INSTALLED = False
 
@@ -105,10 +108,7 @@ def _install_plugin_debug_handler(force: bool = False) -> None:
     global _DEBUG_HANDLER_INSTALLED, _PLUGINS_DEBUG
     if force:
         _PLUGINS_DEBUG = os.getenv("CLAWK_PLUGINS_DEBUG", "").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
+            "1", "true", "yes", "on",
         }
     if not _PLUGINS_DEBUG or _DEBUG_HANDLER_INSTALLED:
         return
@@ -121,7 +121,9 @@ def _install_plugin_debug_handler(force: bool = False) -> None:
     # config also writes to stderr. agent.log still captures everything.
     logger.propagate = True
     _DEBUG_HANDLER_INSTALLED = True
-    logger.debug("CLAWK_PLUGINS_DEBUG=1 — verbose plugin discovery logging enabled")
+    logger.debug(
+        "CLAWK_PLUGINS_DEBUG=1 — verbose plugin discovery logging enabled"
+    )
 
 
 _install_plugin_debug_handler()
@@ -141,6 +143,17 @@ VALID_HOOKS: Set[str] = {
     "transform_llm_output",
     "pre_llm_call",
     "post_llm_call",
+    # Verification-loop gate. Fired once per turn when the agent has edited code
+    # and is about to verify/finish (after the verify-on-stop guard). A callback
+    # may keep the agent going — run a check, defer it, tidy the diff — instead
+    # of stopping by returning:
+    #   {"action": "continue", "message": "<follow-up instruction>"}
+    # The Claude-Code Stop shape {"decision": "block", "reason": "..."} (block
+    # the stop == keep going) is accepted too. Anything else lets the turn
+    # finish. Clawksis' shipped guidance lives in the evidence-based
+    # verification-stop nudge; this hook is for user/plugin policy and is
+    # bounded by agent.max_verify_nudges.
+    "pre_verify",
     "pre_api_request",
     "post_api_request",
     "api_request_error",
@@ -159,19 +172,46 @@ VALID_HOOKS: Set[str] = {
     # Kwargs: event: MessageEvent, gateway: GatewayRunner, session_store.
     "pre_gateway_dispatch",
     # Approval lifecycle hooks. Fired by tools/approval.py when a dangerous
-    # command needs user approval -- fires BOTH for CLI-interactive prompts
-    # and for gateway/ACP approvals (Telegram, Discord, Slack, TUI, etc.).
+    # command needs an approval decision -- fires for CLI-interactive prompts,
+    # gateway/ACP approvals, and smart-mode auxiliary-LLM decisions.
     # Observers only: return values are ignored. Plugins cannot veto or
     # pre-answer an approval from these hooks (use pre_tool_call to block
     # a tool before it reaches approval).
     #
     # Kwargs for pre_approval_request:
     #   command: str, description: str, pattern_key: str, pattern_keys: list[str],
-    #   session_key: str, surface: "cli" | "gateway"
+    #   session_key: str, surface: "cli" | "gateway" | "smart"
     # Kwargs for post_approval_response: same as above plus
     #   choice: "once" | "session" | "always" | "deny" | "timeout"
+    #           | "smart_approve" | "smart_deny"
+    #   decided_by: "aux_llm"  -- only on surface="smart"
     "pre_approval_request",
     "post_approval_response",
+    # Kanban task lifecycle hooks. Fired by clawk_cli.kanban_db when a task
+    # transitions state, AFTER the change is committed to the board DB (so the
+    # hook always sees durable state and a slow plugin can never hold the
+    # SQLite write lock). Observers only: return values are ignored.
+    #
+    # WHICH PROCESS each fires in matters, because kanban workers run as
+    # separate `clawk -p <profile> chat -q` subprocesses:
+    #   - kanban_task_claimed   -> the DISPATCHER process (gateway-embedded
+    #                              dispatcher or `clawk kanban dispatch`),
+    #                              right before the worker subprocess spawns.
+    #   - kanban_task_completed -> the WORKER process, when it calls
+    #                              kanban_complete (or a CLI/manual complete).
+    #   - kanban_task_blocked   -> the WORKER process (worker-initiated block)
+    #                              or whichever process drove the block.
+    # A plugin that needs to observe every transition centrally should hook in
+    # the dispatcher; one that needs per-task in-session context should hook in
+    # the worker.
+    #
+    # Common kwargs: task_id: str, board: str | None, assignee: str | None,
+    #   run_id: int | None, profile_name: str.
+    # kanban_task_completed adds: summary: str | None.
+    # kanban_task_blocked adds:   reason: str | None.
+    "kanban_task_claimed",
+    "kanban_task_completed",
+    "kanban_task_blocked",
 }
 
 ENTRY_POINTS_GROUP = "clawk_agent.plugins"
@@ -193,7 +233,6 @@ def _get_disabled_plugins() -> set:
     """
     try:
         from clawk_cli.config import load_config
-
         config = load_config()
         disabled = cfg_get(config, "plugins", "disabled", default=[])
         return set(disabled) if isinstance(disabled, list) else set()
@@ -217,7 +256,6 @@ def _get_enabled_plugins() -> Optional[set]:
     """
     try:
         from clawk_cli.config import load_config
-
         config = load_config()
         plugins_cfg = config.get("plugins")
         if not isinstance(plugins_cfg, dict):
@@ -236,13 +274,7 @@ def _get_enabled_plugins() -> Optional[set]:
 # Data classes
 # ---------------------------------------------------------------------------
 
-_VALID_PLUGIN_KINDS: Set[str] = {
-    "standalone",
-    "backend",
-    "exclusive",
-    "platform",
-    "model-provider",
-}
+_VALID_PLUGIN_KINDS: Set[str] = {"standalone", "backend", "exclusive", "platform", "model-provider"}
 
 
 @dataclass
@@ -256,7 +288,7 @@ class PluginManifest:
     requires_env: List[Union[str, Dict[str, Any]]] = field(default_factory=list)
     provides_tools: List[str] = field(default_factory=list)
     provides_hooks: List[str] = field(default_factory=list)
-    source: str = ""  # "user", "project", or "entrypoint"
+    source: str = ""        # "user", "project", or "entrypoint"
     path: Optional[str] = None
     # Plugin kind — see plugins.py module docstring for semantics.
     # ``standalone`` (default): hooks/tools of its own; opt-in via
@@ -294,12 +326,15 @@ class LoadedPlugin:
     commands_registered: List[str] = field(default_factory=list)
     enabled: bool = False
     error: Optional[str] = None
+    # True for a bundled platform plugin recorded as a deferred (not-yet-
+    # imported) loader. The module loads on first real use via the
+    # platform_registry; see PluginManager._register_deferred_platform.
+    deferred: bool = False
 
 
 # ---------------------------------------------------------------------------
 # PluginContext  – handed to each plugin's ``register()`` function
 # ---------------------------------------------------------------------------
-
 
 class PluginContext:
     """Facade given to plugins so they can register tools and hooks."""
@@ -325,10 +360,31 @@ class PluginContext:
         See :mod:`agent.plugin_llm` for the full surface."""
         if self._llm is None:
             from agent.plugin_llm import PluginLlm
-
             plugin_id = self.manifest.key or self.manifest.name
             self._llm = PluginLlm(plugin_id=plugin_id)
         return self._llm
+
+    # -- profile awareness --------------------------------------------------
+
+    @property
+    def profile_name(self) -> str:
+        """Return the active Clawksis profile name (e.g. ``"default"``).
+
+        Derived from ``CLAWK_HOME`` via
+        :func:`clawk_cli.profiles.get_active_profile_name`, so it works in
+        every execution context — interactive CLI, gateway, and
+        kanban-spawned worker sessions alike — without depending on
+        ``_cli_ref`` (which is ``None`` outside an interactive CLI run).
+
+        Returns ``"default"`` for the default profile, the profile id when
+        running under ``~/.clawksis/profiles/<name>``, or ``"custom"`` when
+        ``CLAWK_HOME`` points somewhere unrecognized.
+        """
+        try:
+            from clawk_cli.profiles import get_active_profile_name
+            return get_active_profile_name()
+        except Exception:
+            return "default"
 
     # -- tool registration --------------------------------------------------
 
@@ -351,7 +407,24 @@ class PluginContext:
         same name (e.g. swap the default ``browser_navigate`` for a custom
         CDP-backed implementation). Without it, attempting to register a name
         already claimed by a different toolset is rejected.
+
+        ``override=True`` against a built-in tool requires the operator to
+        opt in via ``plugins.entries.<plugin_id>.allow_tool_override: true``
+        in config.yaml — mirrors the trust gate pattern used for
+        ``ctx.llm`` provider/model overrides (#23194). Without that gate,
+        any enabled plugin could silently replace a privileged built-in
+        like ``shell_exec`` or ``write_file`` and exfiltrate everything
+        the model invokes through it.
         """
+        if override and not self._tool_override_allowed(name):
+            plugin_id = self.manifest.key or self.manifest.name
+            raise PluginToolOverrideError(
+                f"Plugin {self.manifest.name!r} cannot override built-in tool "
+                f"{name!r}. Set "
+                f"plugins.entries.{plugin_id}.allow_tool_override: true "
+                f"in config.yaml to allow this plugin to replace built-in tools."
+            )
+
         from tools.registry import registry
 
         registry.register(
@@ -369,10 +442,34 @@ class PluginContext:
         self._manager._plugin_tool_names.add(name)
         logger.debug(
             "Plugin %s registered tool: %s%s",
-            self.manifest.name,
-            name,
-            " (override)" if override else "",
+            self.manifest.name, name, " (override)" if override else "",
         )
+
+    # -- override trust gate ------------------------------------------------
+
+    def _tool_override_allowed(self, tool_name: str) -> bool:
+        """Return True if this plugin is configured to override built-in tools.
+
+        Bundled plugins (shipped with Clawksis core) are trusted by default —
+        an override there is a deliberate maintainer choice, not a third-party
+        plugin trying to elevate privilege. For every other source, require
+        ``allow_tool_override: true`` under
+        ``plugins.entries.<plugin_id>`` in config.yaml.
+        """
+        source = getattr(self.manifest, "source", "") or ""
+        if source == "bundled":
+            return True
+        try:
+            from clawk_cli.config import load_config
+            cfg = load_config() or {}
+        except Exception:
+            # If we can't load config, fail closed — better to break the
+            # override than silently grant it.
+            return False
+        plugin_id = self.manifest.key or self.manifest.name
+        entries = (cfg.get("plugins") or {}).get("entries") or {}
+        entry = entries.get(plugin_id) or {}
+        return bool(entry.get("allow_tool_override", False))
 
     # -- message injection --------------------------------------------------
 
@@ -389,9 +486,7 @@ class PluginContext:
         """
         cli = self._manager._cli_ref
         if cli is None:
-            logger.warning(
-                "inject_message: no CLI reference (not available in gateway mode)"
-            )
+            logger.warning("inject_message: no CLI reference (not available in gateway mode)")
             return False
 
         msg = content if role == "user" else f"[{role}] {content}"
@@ -467,13 +562,11 @@ class PluginContext:
         # Reject if it conflicts with a built-in command
         try:
             from clawk_cli.commands import resolve_command
-
             if resolve_command(clean) is not None:
                 logger.warning(
                     "Plugin '%s' tried to register command '/%s' which conflicts "
                     "with a built-in command. Skipping.",
-                    self.manifest.name,
-                    clean,
+                    self.manifest.name, clean,
                 )
                 return
         except Exception:
@@ -537,7 +630,6 @@ class PluginContext:
             return
         # Defer the import to avoid circular deps at module level
         from agent.context_engine import ContextEngine
-
         if not isinstance(engine, ContextEngine):
             logger.warning(
                 "Plugin '%s' tried to register a context engine that does not "
@@ -548,8 +640,7 @@ class PluginContext:
         self._manager._context_engine = engine
         logger.info(
             "Plugin '%s' registered context engine: %s",
-            self.manifest.name,
-            engine.name,
+            self.manifest.name, engine.name,
         )
 
     # -- image gen provider registration ------------------------------------
@@ -576,8 +667,7 @@ class PluginContext:
         register_provider(provider)
         logger.info(
             "Plugin '%s' registered image_gen provider: %s",
-            self.manifest.name,
-            provider.name,
+            self.manifest.name, provider.name,
         )
 
     # -- dashboard auth provider registration --------------------------------
@@ -596,8 +686,7 @@ class PluginContext:
         ``register_image_gen_provider``.
         """
         from clawk_cli.dashboard_auth import (
-            DashboardAuthProvider,
-            register_provider,
+            DashboardAuthProvider, register_provider,
         )
 
         if not isinstance(provider, DashboardAuthProvider):
@@ -611,17 +700,14 @@ class PluginContext:
             register_provider(provider)
         except (TypeError, ValueError) as e:
             logger.warning(
-                "Plugin '%s' failed to register dashboard-auth provider %r: %s",
-                self.manifest.name,
-                getattr(provider, "name", "?"),
-                e,
+                "Plugin '%s' failed to register dashboard-auth provider "
+                "%r: %s",
+                self.manifest.name, getattr(provider, "name", "?"), e,
             )
             return
         logger.info(
             "Plugin '%s' registered dashboard-auth provider: %s (%s)",
-            self.manifest.name,
-            provider.name,
-            provider.display_name,
+            self.manifest.name, provider.name, provider.display_name,
         )
 
     # -- video gen provider registration -------------------------------------
@@ -636,9 +722,7 @@ class PluginContext:
         tool calls.
         """
         from agent.video_gen_provider import VideoGenProvider
-        from agent.video_gen_registry import (
-            register_provider as _register_video_provider,
-        )
+        from agent.video_gen_registry import register_provider as _register_video_provider
 
         if not isinstance(provider, VideoGenProvider):
             logger.warning(
@@ -650,8 +734,7 @@ class PluginContext:
         _register_video_provider(provider)
         logger.info(
             "Plugin '%s' registered video_gen provider: %s",
-            self.manifest.name,
-            provider.name,
+            self.manifest.name, provider.name,
         )
 
     # -- web search/extract provider registration ----------------------------
@@ -667,9 +750,7 @@ class PluginContext:
         tool calls.
         """
         from agent.web_search_provider import WebSearchProvider
-        from agent.web_search_registry import (
-            register_provider as _register_web_provider,
-        )
+        from agent.web_search_registry import register_provider as _register_web_provider
 
         if not isinstance(provider, WebSearchProvider):
             logger.warning(
@@ -681,8 +762,7 @@ class PluginContext:
         _register_web_provider(provider)
         logger.info(
             "Plugin '%s' registered web provider: %s",
-            self.manifest.name,
-            provider.name,
+            self.manifest.name, provider.name,
         )
 
     # -- browser provider registration ---------------------------------------
@@ -702,9 +782,7 @@ class PluginContext:
         consults the registry built up by these calls.
         """
         from agent.browser_provider import BrowserProvider
-        from agent.browser_registry import (
-            register_provider as _register_browser_provider,
-        )
+        from agent.browser_registry import register_provider as _register_browser_provider
 
         if not isinstance(provider, BrowserProvider):
             logger.warning(
@@ -716,9 +794,55 @@ class PluginContext:
         _register_browser_provider(provider)
         logger.info(
             "Plugin '%s' registered browser provider: %s",
-            self.manifest.name,
-            provider.name,
+            self.manifest.name, provider.name,
         )
+
+    # -- secret source registration -------------------------------------------
+
+    def register_secret_source(self, source) -> None:
+        """Register an external secret-manager backend.
+
+        ``source`` must be an instance of
+        :class:`agent.secret_sources.base.SecretSource`.  Registered
+        sources run during ``load_clawk_dotenv()`` startup — after
+        ``~/.clawksis/.env`` loads, before Clawksis reads credentials — when
+        their ``secrets.<source.name>`` config section is enabled.  The
+        orchestrator (``agent.secret_sources.registry.apply_all``) owns
+        ordering, mapped-vs-bulk precedence, conflict warnings, and
+        provenance; the source only fetches.
+
+        NOTE ON TIMING: plugin discovery happens later in startup than
+        the first ``load_clawk_dotenv()`` call, so a plugin-registered
+        source is not consulted by the initial env load of the process
+        that discovers it.  It IS consulted by every subsequently
+        spawned Clawksis process (gateway children, cron sessions,
+        subagents), and immediately after a
+        ``reset_secret_source_cache()`` re-pull.  Plugin sources are
+        therefore best for supplying credentials to the running fleet;
+        the bundled sources cover first-process bootstrap.
+
+        Contract requirements (rejected with a warning otherwise):
+        inherit from ``SecretSource``, ``api_version`` matching
+        ``SECRET_SOURCE_API_VERSION``, lowercase unique ``name``,
+        ``shape`` of ``"mapped"`` or ``"bulk"``, unique ``scheme`` (when
+        set), and a ``fetch()`` that never raises and never prompts.
+        See the base-module docstring for the full contract.
+        """
+        from agent.secret_sources.base import SecretSource
+        from agent.secret_sources.registry import register_source
+
+        if not isinstance(source, SecretSource):
+            logger.warning(
+                "Plugin '%s' tried to register a secret source that does "
+                "not inherit from SecretSource. Ignoring.",
+                self.manifest.name,
+            )
+            return
+        if register_source(source):
+            logger.info(
+                "Plugin '%s' registered secret source: %s",
+                self.manifest.name, source.name,
+            )
 
     # -- TTS provider registration -------------------------------------------
 
@@ -755,8 +879,7 @@ class PluginContext:
         _register_tts_provider(provider)
         logger.info(
             "Plugin '%s' registered TTS provider: %s",
-            self.manifest.name,
-            provider.name,
+            self.manifest.name, provider.name,
         )
 
     # -- transcription (STT) provider registration ---------------------------
@@ -788,9 +911,7 @@ class PluginContext:
         backends).
         """
         from agent.transcription_provider import TranscriptionProvider
-        from agent.transcription_registry import (
-            register_provider as _register_stt_provider,
-        )
+        from agent.transcription_registry import register_provider as _register_stt_provider
 
         if not isinstance(provider, TranscriptionProvider):
             logger.warning(
@@ -802,8 +923,7 @@ class PluginContext:
         _register_stt_provider(provider)
         logger.info(
             "Plugin '%s' registered transcription provider: %s",
-            self.manifest.name,
-            provider.name,
+            self.manifest.name, provider.name,
         )
 
     # -- platform adapter registration ---------------------------------------
@@ -911,11 +1031,9 @@ class PluginContext:
                 f"Plugin '{self.manifest.name}' tried to register a Slack "
                 f"action handler with an empty action_id."
             )
-        self._manager._slack_action_handlers.append((
-            action_id,
-            callback,
-            self.manifest.name,
-        ))
+        self._manager._slack_action_handlers.append(
+            (action_id, callback, self.manifest.name)
+        )
         logger.debug(
             "Plugin %s registered Slack action handler: %s",
             self.manifest.name,
@@ -1045,7 +1163,8 @@ class PluginContext:
         """
         if hook_name not in VALID_HOOKS:
             logger.warning(
-                "Plugin '%s' registered unknown hook '%s' (valid: %s)",
+                "Plugin '%s' registered unknown hook '%s' "
+                "(valid: %s)",
                 self.manifest.name,
                 hook_name,
                 ", ".join(sorted(VALID_HOOKS)),
@@ -1065,7 +1184,8 @@ class PluginContext:
         """
         if kind not in VALID_MIDDLEWARE:
             logger.warning(
-                "Plugin '%s' registered unknown middleware '%s' (valid: %s)",
+                "Plugin '%s' registered unknown middleware '%s' "
+                "(valid: %s)",
                 self.manifest.name,
                 kind,
                 ", ".join(sorted(VALID_MIDDLEWARE)),
@@ -1102,7 +1222,9 @@ class PluginContext:
                 f"'{self.manifest.name}' automatically)."
             )
         if not name or not _NAMESPACE_RE.match(name):
-            raise ValueError(f"Invalid skill name '{name}'. Must match [a-zA-Z0-9_-]+.")
+            raise ValueError(
+                f"Invalid skill name '{name}'. Must match [a-zA-Z0-9_-]+."
+            )
         if not path.exists():
             raise FileNotFoundError(f"SKILL.md not found at {path}")
 
@@ -1115,15 +1237,13 @@ class PluginContext:
         }
         logger.debug(
             "Plugin %s registered skill: %s",
-            self.manifest.name,
-            qualified,
+            self.manifest.name, qualified,
         )
 
 
 # ---------------------------------------------------------------------------
 # PluginManager
 # ---------------------------------------------------------------------------
-
 
 class PluginManager:
     """Central manager that discovers, loads, and invokes plugins."""
@@ -1136,9 +1256,7 @@ class PluginManager:
         self._plugin_platform_names: Set[str] = set()
         self._cli_commands: Dict[str, dict] = {}
         self._context_engine = None  # Set by a plugin via register_context_engine()
-        self._plugin_commands: Dict[
-            str, dict
-        ] = {}  # Slash commands registered by plugins
+        self._plugin_commands: Dict[str, dict] = {}  # Slash commands registered by plugins
         self._discovered: bool = False
         self._cli_ref = None  # Set by CLI after plugin discovery
         # Plugin skill registry: qualified name → metadata dict.
@@ -1167,10 +1285,6 @@ class PluginManager:
         """
         if self._discovered and not force:
             return
-        # Safe mode (--safe-mode / CLAWK_SAFE_MODE=1): troubleshooting run
-        # with all customizations disabled. Skip plugin discovery entirely so
-        # no third-party code (hooks, tools, platforms) loads. Mark as
-        # discovered so callers see a clean empty registry, not a retry loop.
         if env_var_enabled("CLAWK_SAFE_MODE"):
             logger.info("CLAWK_SAFE_MODE=1 — plugin discovery skipped")
             self._discovered = True
@@ -1314,31 +1428,43 @@ class PluginManager:
             # just work. Selection among them (e.g. which image_gen backend
             # services calls) is driven by ``<category>.provider`` config,
             # enforced by the tool wrapper.
-            #
-            # Bundled platform plugins (gateway adapters like IRC) auto-load
-            # for the same reason: every platform Clawksis ships must be
-            # available out of the box without the user having to opt in.
-            if manifest.source == "bundled" and manifest.kind in {
-                "backend",
-                "platform",
-            }:
+            if manifest.source == "bundled" and manifest.kind == "backend":
                 self._load_plugin(manifest)
+                continue
+
+            # Bundled platform plugins (gateway adapters: telegram, discord,
+            # feishu, teams, ...) are registered LAZILY. Their modules import
+            # heavy, platform-specific SDKs at module level (lark_oapi,
+            # microsoft_teams, discord.py, slack_bolt, ...), so eagerly loading
+            # all ~20 of them added several seconds to every `clawk`
+            # invocation — including plain `clawk chat`, which never touches a
+            # gateway platform. Instead we register a cheap deferred loader in
+            # the platform_registry keyed on the platform name; the real module
+            # is imported only when the gateway / cron / setup / send_message
+            # path actually asks for that platform. Every platform Clawksis ships
+            # remains available out of the box — it just loads on first use.
+            if manifest.source == "bundled" and manifest.kind == "platform":
+                self._register_deferred_platform(manifest)
                 continue
 
             # Everything else (standalone, user-installed backends,
             # entry-point plugins) is opt-in via plugins.enabled.
             # Accept both the path-derived key and the legacy bare name
             # so existing configs keep working.
-            is_enabled = enabled is not None and (
-                lookup_key in enabled or manifest.name in enabled
+            is_enabled = (
+                enabled is not None
+                and (lookup_key in enabled or manifest.name in enabled)
             )
             if not is_enabled:
                 loaded = LoadedPlugin(manifest=manifest, enabled=False)
-                loaded.error = "not enabled in config (run `clawk plugins enable {}` to activate)".format(
-                    lookup_key
+                loaded.error = (
+                    "not enabled in config (run `clawk plugins enable {}` to activate)"
+                    .format(lookup_key)
                 )
                 self._plugins[lookup_key] = loaded
-                logger.debug("Skipping '%s' (not in plugins.enabled)", lookup_key)
+                logger.debug(
+                    "Skipping '%s' (not in plugins.enabled)", lookup_key
+                )
                 continue
             self._load_plugin(manifest)
 
@@ -1407,7 +1533,9 @@ class PluginManager:
                 manifest_file = child / "plugin.yml"
 
             if manifest_file.exists():
-                manifest = self._parse_manifest(manifest_file, child, source, prefix)
+                manifest = self._parse_manifest(
+                    manifest_file, child, source, prefix
+                )
                 if manifest is not None:
                     manifests.append(manifest)
                 continue
@@ -1447,7 +1575,7 @@ class PluginManager:
             if yaml is None:
                 logger.warning("PyYAML not installed – cannot load %s", manifest_file)
                 return None
-            data = yaml.safe_load(manifest_file.read_text(encoding="utf-8")) or {}
+            data = fast_safe_load(manifest_file.read_text(encoding="utf-8")) or {}
 
             name = data.get("name", plugin_dir.name)
             key = f"{prefix}/{plugin_dir.name}" if prefix else name
@@ -1459,9 +1587,7 @@ class PluginManager:
             if kind not in _VALID_PLUGIN_KINDS:
                 logger.warning(
                     "Plugin %s: unknown kind '%s' (valid: %s); treating as 'standalone'",
-                    key,
-                    raw_kind,
-                    ", ".join(sorted(_VALID_PLUGIN_KINDS)),
+                    key, raw_kind, ", ".join(sorted(_VALID_PLUGIN_KINDS)),
                 )
                 kind = "standalone"
 
@@ -1504,11 +1630,7 @@ class PluginManager:
 
             logger.debug(
                 "Parsed manifest: key=%s name=%s kind=%s source=%s path=%s",
-                key,
-                name,
-                kind,
-                source,
-                plugin_dir,
+                key, name, kind, source, plugin_dir,
             )
             return PluginManifest(
                 name=name,
@@ -1525,10 +1647,7 @@ class PluginManager:
             )
         except Exception as exc:
             logger.warning(
-                "Failed to parse %s: %s",
-                manifest_file,
-                exc,
-                exc_info=_PLUGINS_DEBUG,
+                "Failed to parse %s: %s", manifest_file, exc, exc_info=_PLUGINS_DEBUG,
             )
             return None
 
@@ -1566,17 +1685,81 @@ class PluginManager:
     # Loading
     # -----------------------------------------------------------------------
 
+    def _platform_name_from_manifest(self, manifest: PluginManifest) -> str:
+        """Derive the gateway platform name (e.g. ``feishu``) for a platform plugin.
+
+        The platform name registered via ``register_platform(name=...)`` lives
+        inside the adapter module (which we are explicitly trying NOT to import
+        early). It is not carried in ``plugin.yaml``. Across every bundled
+        platform plugin the manifest name is ``<platform>-platform`` and the
+        plugin directory basename is ``<platform>``, so we derive the name
+        without importing: strip a trailing ``-platform`` from the manifest
+        name, falling back to the directory basename. This is also a sensible
+        convention for third-party platform plugins.
+        """
+        name = manifest.name or ""
+        if name.endswith("-platform"):
+            return name[: -len("-platform")]
+        if manifest.path:
+            return Path(manifest.path).name
+        return name
+
+    def _register_deferred_platform(self, manifest: PluginManifest) -> None:
+        """Register a lazy loader for a bundled platform plugin.
+
+        The platform adapter module is imported only when the gateway / cron /
+        setup / send_message path first asks the ``platform_registry`` for this
+        platform. Until then we record a lightweight ``LoadedPlugin`` so
+        ``clawk plugins list`` still shows the platform as available, and we
+        hand the registry a loader that runs the normal eager-load path.
+        """
+        lookup_key = manifest.key or manifest.name
+        platform_name = self._platform_name_from_manifest(manifest)
+
+        # Record an enabled placeholder for introspection (`clawk plugins
+        # list`). The real module load swaps in a fully-populated LoadedPlugin
+        # (tools/hooks/commands attribution) when the loader fires.
+        loaded = LoadedPlugin(manifest=manifest, enabled=True)
+        loaded.deferred = True
+        self._plugins[lookup_key] = loaded
+
+        def _loader(_manifest: PluginManifest = manifest) -> None:
+            self._load_plugin(_manifest)
+
+        try:
+            from gateway.platform_registry import platform_registry
+
+            platform_registry.register_deferred(platform_name, _loader)
+            logger.debug(
+                "Registered deferred platform loader: %s (plugin=%s)",
+                platform_name,
+                lookup_key,
+            )
+        except Exception:
+            # If the registry import fails for any reason, fall back to eager
+            # loading so the platform is never silently lost.
+            logger.debug(
+                "Deferred platform registration failed for '%s'; eager-loading",
+                lookup_key,
+                exc_info=True,
+            )
+            self._load_plugin(manifest)
+
     def _load_plugin(self, manifest: PluginManifest) -> None:
         """Import a plugin module and call its ``register(ctx)`` function."""
         loaded = LoadedPlugin(manifest=manifest)
         logger.debug(
             "Loading plugin '%s' (source=%s, kind=%s, path=%s)",
-            manifest.key or manifest.name,
-            manifest.source,
-            manifest.kind,
-            manifest.path,
+            manifest.key or manifest.name, manifest.source, manifest.kind, manifest.path,
         )
 
+        from tools.registry import registry as _registry
+        _plugin_id = manifest.key or manifest.name
+        _slug = _plugin_id.replace("/", "__").replace("-", "_")
+        _registry.register_plugin_override_policy(
+            f"{_NS_PARENT}.{_slug}",
+            PluginContext(manifest, self)._tool_override_allowed(""),
+        )
         try:
             if manifest.source in {"user", "project", "bundled"}:
                 module = self._load_directory_module(manifest)
@@ -1600,13 +1783,16 @@ class PluginManager:
                 # the shared name was attributed to the first plugin only, so
                 # later plugins under-reported in `clawk plugins list`.
                 _tools_before = set(self._plugin_tool_names)
-                _hook_counts_before = {h: len(cbs) for h, cbs in self._hooks.items()}
+                _hook_counts_before = {
+                    h: len(cbs) for h, cbs in self._hooks.items()
+                }
                 _mw_counts_before = {
                     kind: len(cbs) for kind, cbs in self._middleware.items()
                 }
                 register_fn(ctx)
                 loaded.tools_registered = [
-                    t for t in self._plugin_tool_names if t not in _tools_before
+                    t for t in self._plugin_tool_names
+                    if t not in _tools_before
                 ]
                 loaded.hooks_registered = [
                     h
@@ -1619,8 +1805,7 @@ class PluginManager:
                     if len(cbs) > _mw_counts_before.get(kind, 0)
                 ]
                 loaded.commands_registered = [
-                    c
-                    for c in self._plugin_commands
+                    c for c in self._plugin_commands
                     if self._plugin_commands[c].get("plugin") == manifest.name
                 ]
                 loaded.enabled = True
@@ -1631,8 +1816,7 @@ class PluginManager:
                     len(loaded.middleware_registered),
                     len(loaded.commands_registered),
                     sum(
-                        1
-                        for c in self._cli_commands
+                        1 for c in self._cli_commands
                         if self._cli_commands[c].get("plugin") == manifest.name
                     ),
                 )
@@ -1641,11 +1825,8 @@ class PluginManager:
             loaded.error = str(exc)
             logger.warning(
                 "Failed to load plugin '%s': %s",
-                manifest.name,
-                exc,
-                exc_info=_PLUGINS_DEBUG,
+                manifest.name, exc, exc_info=_PLUGINS_DEBUG,
             )
-
         self._plugins[manifest.key or manifest.name] = loaded
 
     def _load_directory_module(self, manifest: PluginManifest) -> types.ModuleType:
@@ -1800,20 +1981,22 @@ class PluginManager:
         """Return a list of info dicts for all discovered plugins."""
         result: List[Dict[str, Any]] = []
         for key, loaded in sorted(self._plugins.items()):
-            result.append({
-                "name": loaded.manifest.name,
-                "key": loaded.manifest.key or loaded.manifest.name,
-                "kind": loaded.manifest.kind,
-                "version": loaded.manifest.version,
-                "description": loaded.manifest.description,
-                "source": loaded.manifest.source,
-                "enabled": loaded.enabled,
-                "tools": len(loaded.tools_registered),
-                "hooks": len(loaded.hooks_registered),
-                "middleware": len(loaded.middleware_registered),
-                "commands": len(loaded.commands_registered),
-                "error": loaded.error,
-            })
+            result.append(
+                {
+                    "name": loaded.manifest.name,
+                    "key": loaded.manifest.key or loaded.manifest.name,
+                    "kind": loaded.manifest.kind,
+                    "version": loaded.manifest.version,
+                    "description": loaded.manifest.description,
+                    "source": loaded.manifest.source,
+                    "enabled": loaded.enabled,
+                    "tools": len(loaded.tools_registered),
+                    "hooks": len(loaded.hooks_registered),
+                    "middleware": len(loaded.middleware_registered),
+                    "commands": len(loaded.commands_registered),
+                    "error": loaded.error,
+                }
+            )
         return result
 
     # -----------------------------------------------------------------------
@@ -1896,6 +2079,13 @@ def has_hook(hook_name: str) -> bool:
 _thread_tool_whitelist = threading.local()
 
 
+@dataclass(frozen=True)
+class _PreToolCallDirective:
+    action: Optional[str] = None
+    message: Optional[str] = None
+    rule_key: Optional[str] = None
+
+
 def set_thread_tool_whitelist(
     allowed: Optional[Set[str]],
     deny_msg_fmt: str = "Tool '{tool_name}' denied: not in this thread's tool whitelist",
@@ -1908,7 +2098,7 @@ def clear_thread_tool_whitelist() -> None:
     _thread_tool_whitelist.allowed = None
 
 
-def get_pre_tool_call_block_message(
+def _get_pre_tool_call_directive_details(
     tool_name: str,
     args: Optional[Dict[str, Any]],
     task_id: str = "",
@@ -1917,22 +2107,40 @@ def get_pre_tool_call_block_message(
     turn_id: str = "",
     api_request_id: str = "",
     middleware_trace: Optional[List[Dict[str, Any]]] = None,
-) -> Optional[str]:
-    """Check ``pre_tool_call`` hooks for a blocking directive.
+) -> _PreToolCallDirective:
+    """Check ``pre_tool_call`` hooks for a blocking or approval directive.
 
     Plugins that need to enforce policy (rate limiting, security
-    restrictions, approval workflows) can return::
+    restrictions, approval workflows) can return one of::
 
-        {"action": "block", "message": "Reason the tool was blocked"}
+        {"action": "block",   "message": "Reason the tool was blocked"}
+        {"action": "approve", "message": "Why this needs human confirmation"}
+        {"action": "approve", "message": "...", "rule_key": "write_file:ssh"}
 
-    from their ``pre_tool_call`` callback.  The first valid block
-    directive wins.  Invalid or irrelevant hook return values are
-    silently ignored so existing observer-only hooks are unaffected.
+    from their ``pre_tool_call`` callback.
+
+    - ``block`` vetoes the tool call outright (the message becomes the tool
+      result the model sees).
+    - ``approve`` ESCALATES to the existing human-approval gate
+      (``prompt_dangerous_approval`` on CLI, the approval callback on the
+      gateway) — the same mechanism Tier-2 dangerous shell patterns use.
+      This lets a plugin require a human ``[o]nce/[s]ession/[a]lways/[d]eny``
+      decision on ANY tool, not just terminal command strings. The caller is
+      responsible for invoking the gate (see
+      :func:`tools.approval.request_tool_approval`).
+    - ``rule_key`` is optional and only honored for ``approve`` directives. It
+      lets plugins choose the allowlist grain for `[a]lways` approvals.
+
+    The first valid directive wins. Invalid or irrelevant hook return values
+    are silently ignored so existing observer-only hooks are unaffected.
     """
     allowed = getattr(_thread_tool_whitelist, "allowed", None)
     if allowed is not None and tool_name not in allowed:
         fmt = getattr(_thread_tool_whitelist, "fmt", "Tool '{tool_name}' denied")
-        return fmt.format(tool_name=tool_name)
+        return _PreToolCallDirective(
+            action="block",
+            message=fmt.format(tool_name=tool_name),
+        )
 
     hook_results = invoke_hook(
         "pre_tool_call",
@@ -1949,11 +2157,172 @@ def get_pre_tool_call_block_message(
     for result in hook_results:
         if not isinstance(result, dict):
             continue
-        if result.get("action") != "block":
+        action = result.get("action")
+        if action not in ("block", "approve"):
             continue
         message = result.get("message")
-        if isinstance(message, str) and message:
-            return message
+        message = message if isinstance(message, str) and message else None
+        # A block directive requires a message (it becomes the tool result);
+        # an approve directive can carry an optional reason.
+        if action == "block" and not message:
+            continue
+        rule_key = result.get("rule_key") if action == "approve" else None
+        rule_key = rule_key.strip() if isinstance(rule_key, str) else None
+        if not rule_key:
+            rule_key = None
+        return _PreToolCallDirective(action=action, message=message, rule_key=rule_key)
+
+    return _PreToolCallDirective()
+
+
+def get_pre_tool_call_directive(
+    tool_name: str,
+    args: Optional[Dict[str, Any]],
+    task_id: str = "",
+    session_id: str = "",
+    tool_call_id: str = "",
+    turn_id: str = "",
+    api_request_id: str = "",
+    middleware_trace: Optional[List[Dict[str, Any]]] = None,
+) -> tuple[Optional[str], Optional[str]]:
+    """Check ``pre_tool_call`` hooks for a blocking or approval directive.
+
+    Backward-compatible public helper: returns ``(directive, message)`` where
+    ``directive`` is ``"block"``, ``"approve"``, or ``None``. Internal callers
+    that need approve-specific metadata use
+    :func:`_get_pre_tool_call_directive_details`.
+    """
+    details = _get_pre_tool_call_directive_details(
+        tool_name, args, task_id=task_id, session_id=session_id,
+        tool_call_id=tool_call_id, turn_id=turn_id,
+        api_request_id=api_request_id, middleware_trace=middleware_trace,
+    )
+    return (details.action, details.message)
+
+
+def get_pre_tool_call_block_message(
+    tool_name: str,
+    args: Optional[Dict[str, Any]],
+    task_id: str = "",
+    session_id: str = "",
+    tool_call_id: str = "",
+    turn_id: str = "",
+    api_request_id: str = "",
+    middleware_trace: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[str]:
+    """Back-compat shim: return only a ``block`` message (or ``None``).
+
+    Deprecated in favor of :func:`get_pre_tool_call_directive`, which also
+    surfaces the ``approve`` escalation directive. Kept so any external caller
+    importing the old name keeps working; ``approve`` directives are invisible
+    to this shim (it only reports blocks).
+    """
+    directive, message = get_pre_tool_call_directive(
+        tool_name, args, task_id=task_id, session_id=session_id,
+        tool_call_id=tool_call_id, turn_id=turn_id,
+        api_request_id=api_request_id, middleware_trace=middleware_trace,
+    )
+    return message if directive == "block" else None
+
+
+def resolve_pre_tool_block(
+    tool_name: str,
+    args: Optional[Dict[str, Any]],
+    task_id: str = "",
+    session_id: str = "",
+    tool_call_id: str = "",
+    turn_id: str = "",
+    api_request_id: str = "",
+    middleware_trace: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[str]:
+    """Resolve the pre_tool_call directive to a final block message (or None).
+
+    Single entry point for every tool-dispatch site: fetches the plugin
+    directive and, for an ``approve`` escalation, invokes the human-approval
+    gate (:func:`tools.approval.request_tool_approval`). Returns the message
+    the tool result should carry when the call is blocked, or ``None`` when
+    the call may proceed.
+
+    Centralizing this keeps the security-critical fail-closed logic in ONE
+    place instead of copy-pasted across the concurrent/sequential/helper
+    dispatch paths: an ``approve`` directive whose gate errors, denies, or
+    times out is fail-closed to a block; ``block`` blocks with its message;
+    anything else proceeds.
+    """
+    details = _get_pre_tool_call_directive_details(
+        tool_name, args, task_id=task_id, session_id=session_id,
+        tool_call_id=tool_call_id, turn_id=turn_id,
+        api_request_id=api_request_id, middleware_trace=middleware_trace,
+    )
+    if details.action == "block":
+        return details.message
+    if details.action == "approve":
+        try:
+            from tools.approval import request_tool_approval
+            result = request_tool_approval(
+                tool_name,
+                details.message or "",
+                rule_key=details.rule_key or tool_name,
+            )
+        except Exception:
+            # Fail-closed: if the gate itself errors, block rather than
+            # silently execute an action a plugin flagged for approval.
+            return f"BLOCKED: plugin approval gate failed for {tool_name}"
+        if not result.get("approved"):
+            return str(
+                result.get("message")
+                or f"BLOCKED: plugin approval required for {tool_name}"
+            )
+    return None
+
+
+def get_pre_verify_continue_message(
+    *,
+    session_id: str = "",
+    platform: str = "",
+    model: str = "",
+    coding: bool = False,
+    attempt: int = 0,
+    final_response: str = "",
+    changed_paths: Optional[List[str]] = None,
+) -> Optional[str]:
+    """Check user ``pre_verify`` hooks for a directive to keep the agent going.
+
+    Fired once per turn when the agent edited code and is about to verify/finish.
+    A hook keeps the turn going (run a check, defer it, tidy the diff) by
+    returning::
+
+        {"action": "continue", "message": "<follow-up for the model>"}
+
+    The Claude-Code Stop shape ``{"decision": "block", "reason": "..."}`` (block
+    the stop == keep going) is accepted too. The first directive carrying a
+    non-empty message wins; any other return lets the turn finish. Mirrors
+    :func:`get_pre_tool_call_block_message` — the call site stays a one-liner.
+
+    ``coding`` / ``attempt`` let a hook scope itself (``if not coding`` …) and
+    self-throttle (``if attempt`` …), the same way a ``pre_tool_call`` hook
+    scopes on ``tool_name``.
+    """
+    hook_results = invoke_hook(
+        "pre_verify",
+        session_id=session_id,
+        platform=platform,
+        model=model,
+        coding=coding,
+        attempt=attempt,
+        final_response=final_response,
+        changed_paths=list(changed_paths or []),
+    )
+
+    for result in hook_results:
+        if not isinstance(result, dict):
+            continue
+        action = str(result.get("action") or result.get("decision") or "").strip().lower()
+        if action not in ("continue", "block"):
+            continue
+        message = result.get("message") or result.get("reason")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
 
     return None
 

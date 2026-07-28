@@ -51,7 +51,10 @@ _GATEWAY_LIFECYCLE_PATTERN = re.compile(
     # `start` is intentionally excluded: starting a gateway from inside a
     # gateway is benign (a no-op or "already running" error), and a
     # legitimate cron job might start a sibling profile's gateway.
-    r"(?:clawk\s+gateway\s+(?:restart|stop))"
+    # Fork-only: also match the `clawksis` binary (this repo ships two
+    # same-named CLIs) and the legacy `hermes` name, so the self-DoS guard
+    # can't be bypassed by invoking an alias. Do not narrow on upstream syncs.
+    r"(?:(?:clawk|clawksis|hermes)\s+gateway\s+(?:restart|stop))"
     # Branch B: launchctl ops on a clawk-gateway label. macOS launchd
     # labels look like `ai.clawk.gateway` / `clawk-gateway`. Requiring the
     # gateway identifier prevents blocking unrelated clawk services (e.g.

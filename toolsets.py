@@ -1,129 +1,83 @@
 #!/usr/bin/env python3
-
 """
-
 Toolsets Module
 
-
-
 This module provides a flexible system for defining and managing tool aliases/toolsets.
-
 Toolsets allow you to group tools together for specific scenarios and can be composed
-
 from individual tools or other toolsets.
 
-
-
 Features:
-
 - Define custom toolsets with specific tools
-
 - Compose toolsets from other toolsets
-
 - Built-in common toolsets for typical use cases
-
 - Easy extension for new toolsets
-
 - Support for dynamic toolset resolution
 
-
-
 Usage:
-
     from toolsets import get_toolset, resolve_toolset, get_all_toolsets
-
-
-
+    
     # Get tools for a specific toolset
-
     tools = get_toolset("research")
-
-
-
+    
     # Resolve a toolset to get all tool names (including from composed toolsets)
-
     all_tools = resolve_toolset("full_stack")
-
 """
 
 from typing import List, Dict, Any, Set, Optional
 
 
 # Shared tool list for CLI and all messaging platform toolsets.
-
 # Edit this once to update all platforms simultaneously.
-
 _CLAWK_CORE_TOOLS = [
     # Web
-    "web_search",
-    "web_extract",
-    "scrape",
-    "scrapegraph",
+    "web_search", "web_extract",
+    # Anti-bot fetch (Scrapling) + structured extraction (ScrapeGraphAI)
+    "scrape", "scrapegraph",
     # Terminal + process management
-    "terminal",
-    "process",
-    # Read the desktop GUI's embedded terminal pane (gated on CLAWK_DESKTOP
-    # via check_fn in tools/read_terminal_tool.py — hidden outside the GUI).
-    "read_terminal",
+    "terminal", "process",
+    # Read the desktop GUI's embedded terminal pane, and close an agent's
+    # read-only terminal tab (both gated on CLAWK_DESKTOP via check_fn —
+    # hidden outside the GUI).
+    "read_terminal", "close_terminal",
     # File manipulation
-    "read_file",
-    "write_file",
-    "patch",
-    "search_files",
+    "read_file", "write_file", "patch", "search_files",
     # Vision + image generation
-    "vision_analyze",
-    "image_generate",
+    "vision_analyze", "image_generate",
     # Skills
-    "skills_list",
-    "skill_view",
-    "skill_manage",
+    "skills_list", "skill_view", "skill_manage",
     # Browser automation
-    "browser_navigate",
-    "browser_snapshot",
-    "browser_click",
-    "browser_type",
-    "browser_scroll",
-    "browser_back",
-    "browser_press",
-    "browser_get_images",
-    "browser_vision",
-    "browser_console",
-    "browser_cdp",
-    "browser_dialog",
+    "browser_navigate", "browser_snapshot", "browser_click",
+    "browser_type", "browser_scroll", "browser_back",
+    "browser_press", "browser_get_images",
+    "browser_vision", "browser_console", "browser_cdp", "browser_dialog",
     # Text-to-speech
     "text_to_speech",
     # Planning & memory
-    "todo",
-    "memory",
+    "todo", "memory",
+    # NOTE: the desktop Project tools (project_list/create/switch) are
+    # deliberately NOT here. They only make sense where a GUI can follow the
+    # move, so they live in the `project` toolset and are enabled solely by the
+    # GUI gateway (tui_gateway/server.py::_load_enabled_toolsets) — keeping them
+    # off every CLI/messaging/cron schema (narrow waist).
     # Session history search
     "session_search",
     # Clarifying questions
     "clarify",
     # Code execution + delegation
-    "execute_code",
-    "delegate_task",
+    "execute_code", "delegate_task",
     # Cronjob management
     "cronjob",
-    # Cross-platform messaging (gated on gateway running via check_fn)
-    "send_message",
     # Home Assistant smart home control (gated on HASS_TOKEN via check_fn)
-    "ha_list_entities",
-    "ha_get_state",
-    "ha_list_services",
-    "ha_call_service",
+    "ha_list_entities", "ha_get_state", "ha_list_services", "ha_call_service",
     # Kanban multi-agent coordination — only in schema when the agent is
     # spawned as a kanban worker (CLAWK_KANBAN_TASK env set) or the current
     # profile explicitly enables the kanban toolset. Gated via check_fn in
     # tools/kanban_tools.py.
-    "kanban_show",
-    "kanban_list",
-    "kanban_complete",
-    "kanban_block",
-    "kanban_heartbeat",
-    "kanban_comment",
-    "kanban_create",
-    "kanban_link",
+    "kanban_show", "kanban_list",
+    "kanban_complete", "kanban_block", "kanban_heartbeat",
+    "kanban_comment", "kanban_create", "kanban_link",
     "kanban_unblock",
+    "kanban_attach", "kanban_attach_url", "kanban_attachments",
     # Computer use (macOS, gated on cua-driver being installed via check_fn)
     "computer_use",
     # Social media content generation tools (feature DESACTIVADO 2026-06-30)
@@ -135,13 +89,9 @@ _CLAWK_CORE_TOOLS = [
     # "list_recent_generations",
 ]
 
-
 # Webhook events may originate from untrusted third-party content (for example,
-
 # public PR titles/comments). Keep the default webhook toolset intentionally
-
 # constrained to avoid local file/system execution by prompt injection.
-
 _CLAWK_WEBHOOK_SAFE_TOOLS = [
     "web_search",
     "web_extract",
@@ -151,21 +101,21 @@ _CLAWK_WEBHOOK_SAFE_TOOLS = [
 
 
 # Core toolset definitions
-
 # These can include individual tools or reference other toolsets
-
 TOOLSETS = {
     # Basic toolsets - individual tool categories
     "web": {
         "description": "Web research and content extraction tools (incl. anti-bot scrape + structured ScrapeGraphAI extraction)",
         "tools": ["web_search", "web_extract", "scrape", "scrapegraph"],
-        "includes": [],  # No other toolsets included
+        "includes": []  # No other toolsets included
     },
+    
     "search": {
         "description": "Web search only (no content extraction/scraping)",
         "tools": ["web_search"],
-        "includes": [],
+        "includes": []
     },
+
     "x_search": {
         "description": (
             "Search X (Twitter) posts and threads via xAI's built-in "
@@ -174,47 +124,55 @@ TOOLSETS = {
             "enable in `clawk tools` → X (Twitter) Search."
         ),
         "tools": ["x_search"],
-        "includes": [],
+        "includes": []
     },
+    
     "vision": {
         "description": "Image analysis and vision tools",
         "tools": ["vision_analyze"],
-        "includes": [],
+        "includes": []
     },
+
     "video": {
         "description": "Video analysis and understanding tools (opt-in, not in default toolset)",
         "tools": ["video_analyze"],
-        "includes": [],
+        "includes": []
     },
+    
     "image_gen": {
         "description": "Creative generation tools (images)",
         "tools": ["image_generate"],
-        "includes": [],
+        "includes": []
     },
+
     "video_gen": {
         "description": (
             "Video generation tools. Single ``video_generate`` tool covers "
             "text-to-video (prompt only) and image-to-video (prompt + "
-            "image_url) — the active backend auto-routes. Configure via "
+            "image_url), plus reference-to-video. Provider-specific edit/"
+            "extend workflows may appear as separate tools. Configure via "
             "``clawk tools`` → Video Generation."
         ),
-        "tools": ["video_generate"],
-        "includes": [],
+        "tools": ["video_generate", "xai_video_edit", "xai_video_extend"],
+        "includes": []
     },
+
     "computer_use": {
         "description": (
-            "Background macOS desktop control via cua-driver — screenshots, "
-            "mouse, keyboard, scroll, drag. Does NOT steal the user's cursor "
-            "or keyboard focus. Works with any tool-capable model."
+            "Background desktop control via cua-driver (macOS/Windows/Linux) — "
+            "screenshots, mouse, keyboard, scroll, drag. Does NOT steal the "
+            "user's cursor or keyboard focus. Works with any tool-capable model."
         ),
         "tools": ["computer_use"],
-        "includes": [],
+        "includes": []
     },
+
     "terminal": {
         "description": "Terminal/command execution and process management tools",
         "tools": ["terminal", "process"],
-        "includes": [],
+        "includes": []
     },
+
     "codex_cli": {
         "description": (
             "Delegate coding tasks to OpenAI's Codex CLI (`codex exec`). "
@@ -224,6 +182,7 @@ TOOLSETS = {
         "tools": ["codex_exec"],
         "includes": [],
     },
+
     "claude_code_cli": {
         "description": (
             "Delegate coding tasks to Anthropic's Claude Code CLI (`claude -p`). "
@@ -233,6 +192,7 @@ TOOLSETS = {
         "tools": ["claude_code"],
         "includes": [],
     },
+
     "opencode_cli": {
         "description": (
             "Delegate coding tasks to the open-source OpenCode CLI "
@@ -242,6 +202,7 @@ TOOLSETS = {
         "tools": ["opencode_run"],
         "includes": [],
     },
+
     "mirofish": {
         "description": (
             "Run MiroFish multi-agent social/opinion simulations via its REST "
@@ -251,6 +212,7 @@ TOOLSETS = {
         "tools": ["mirofish"],
         "includes": [],
     },
+
     "agent_comms": {
         "description": (
             "Peer-to-peer agent messaging: agent_message (send a note to "
@@ -261,102 +223,101 @@ TOOLSETS = {
         "tools": ["agent_message", "agent_inbox"],
         "includes": [],
     },
-    "moa": {
-        "description": "Advanced reasoning and problem-solving tools",
-        "tools": ["mixture_of_agents"],
-        "includes": [],
-    },
+
     "skills": {
         "description": "Access, create, edit, and manage skill documents with specialized instructions and knowledge",
         "tools": ["skills_list", "skill_view", "skill_manage"],
-        "includes": [],
+        "includes": []
     },
+    
     "browser": {
         "description": "Browser automation for web interaction (navigate, click, type, scroll, iframes, hold-click) with web search for finding URLs",
         "tools": [
-            "browser_navigate",
-            "browser_snapshot",
-            "browser_click",
-            "browser_type",
-            "browser_scroll",
-            "browser_back",
-            "browser_press",
-            "browser_get_images",
-            "browser_vision",
-            "browser_console",
-            "browser_cdp",
-            "browser_dialog",
-            "web_search",
+            "browser_navigate", "browser_snapshot", "browser_click",
+            "browser_type", "browser_scroll", "browser_back",
+            "browser_press", "browser_get_images",
+            "browser_vision", "browser_console", "browser_cdp",
+            "browser_dialog", "web_search"
         ],
-        "includes": [],
+        "includes": []
     },
+    
     "cronjob": {
         "description": "Cronjob management tool - create, list, update, pause, resume, remove, and trigger scheduled tasks",
         "tools": ["cronjob"],
-        "includes": [],
+        "includes": []
     },
-    "messaging": {
-        "description": "Cross-platform messaging: send messages to Telegram, Discord, Slack, SMS, etc.",
-        "tools": ["send_message"],
-        "includes": [],
-    },
+    
+
     "file": {
         "description": "File manipulation tools: read, write, patch (with fuzzy matching), and search (content + files)",
         "tools": ["read_file", "write_file", "patch", "search_files"],
-        "includes": [],
+        "includes": []
     },
+    
     "tts": {
         "description": "Text-to-speech: convert text to audio with Edge TTS (free), ElevenLabs, OpenAI, or xAI",
         "tools": ["text_to_speech"],
-        "includes": [],
+        "includes": []
     },
+    
     "todo": {
         "description": "Task planning and tracking for multi-step work",
         "tools": ["todo"],
-        "includes": [],
+        "includes": []
     },
+    
     "memory": {
         "description": "Persistent memory across sessions (personal notes + user profile)",
         "tools": ["memory"],
-        "includes": [],
+        "includes": []
     },
+
     "context_engine": {
         "description": "Runtime tools exposed by the active context engine",
         "tools": [],
-        "includes": [],
+        "includes": []
     },
+    
     "session_search": {
         "description": "Search and recall past conversations with summarization",
         "tools": ["session_search"],
-        "includes": [],
+        "includes": []
     },
+
+    "project": {
+        "description": "Desktop Projects — create/switch named workspaces (GUI sessions only)",
+        "tools": ["project_list", "project_create", "project_switch"],
+        "includes": []
+    },
+    
     "clarify": {
         "description": "Ask the user clarifying questions (multiple-choice or open-ended)",
         "tools": ["clarify"],
-        "includes": [],
+        "includes": []
     },
+    
     "code_execution": {
         "description": "Run Python scripts that call tools programmatically (reduces LLM round trips)",
         "tools": ["execute_code"],
-        "includes": [],
+        "includes": []
     },
+    
     "delegation": {
         "description": "Spawn subagents with isolated context for complex subtasks",
         "tools": ["delegate_task"],
-        "includes": [],
+        "includes": []
     },
+
     # "honcho" toolset removed — Honcho is now a memory provider plugin.
     # Tools are injected via MemoryManager, not the toolset system.
+
     "homeassistant": {
         "description": "Home Assistant smart home control and monitoring",
-        "tools": [
-            "ha_list_entities",
-            "ha_get_state",
-            "ha_list_services",
-            "ha_call_service",
-        ],
-        "includes": [],
+        "tools": ["ha_list_entities", "ha_get_state", "ha_list_services", "ha_call_service"],
+        "includes": []
     },
+
     "kanban": {
         "description": (
             "Kanban multi-agent coordination — only active when the agent "
@@ -364,32 +325,31 @@ TOOLSETS = {
             "set). The dispatcher runs inside the gateway by default; see "
             "`kanban.dispatch_in_gateway` in config.yaml. Lets workers mark "
             "tasks done with structured handoffs, block for human input, "
-            "heartbeat during long ops, comment on threads, and (for "
-            "orchestrators) list, unblock, and fan out tasks."
+            "heartbeat during long ops, comment on threads, attach files, and "
+            "(for orchestrators) list, unblock, and fan out tasks."
         ),
         "tools": [
-            "kanban_show",
-            "kanban_list",
-            "kanban_complete",
-            "kanban_block",
-            "kanban_heartbeat",
-            "kanban_comment",
-            "kanban_create",
-            "kanban_link",
+            "kanban_show", "kanban_list", "kanban_complete", "kanban_block",
+            "kanban_heartbeat", "kanban_comment",
+            "kanban_create", "kanban_link",
             "kanban_unblock",
+            "kanban_attach", "kanban_attach_url", "kanban_attachments",
         ],
         "includes": [],
     },
+
     "discord": {
         "description": "Discord read and participate tools (fetch messages, search members, create threads)",
         "tools": ["discord"],
         "includes": [],
     },
+
     "discord_admin": {
         "description": "Discord server management (list channels/roles, pin messages, assign roles)",
         "tools": ["discord_admin"],
         "includes": [],
     },
+
     "yuanbao": {
         "description": "Yuanbao platform tools - group info, member queries, DM, stickers",
         "tools": [
@@ -399,50 +359,48 @@ TOOLSETS = {
             "yb_search_sticker",
             "yb_send_sticker",
         ],
-        "includes": [],
+        "includes": []
     },
+
     "feishu_doc": {
         "description": "Read Feishu/Lark document content",
         "tools": ["feishu_doc_read"],
-        "includes": [],
+        "includes": []
     },
+
     "feishu_drive": {
         "description": "Feishu/Lark document comment operations (list, reply, add)",
         "tools": [
-            "feishu_drive_list_comments",
-            "feishu_drive_list_comment_replies",
-            "feishu_drive_reply_comment",
-            "feishu_drive_add_comment",
+            "feishu_drive_list_comments", "feishu_drive_list_comment_replies",
+            "feishu_drive_reply_comment", "feishu_drive_add_comment",
         ],
-        "includes": [],
+        "includes": []
     },
+
     "spotify": {
         "description": "Native Spotify playback, search, playlist, album, and library tools",
         "tools": [
-            "spotify_playback",
-            "spotify_devices",
-            "spotify_queue",
-            "spotify_search",
-            "spotify_playlists",
-            "spotify_albums",
-            "spotify_library",
+            "spotify_playback", "spotify_devices", "spotify_queue", "spotify_search",
+            "spotify_playlists", "spotify_albums", "spotify_library",
         ],
-        "includes": [],
+        "includes": []
     },
+
+
     # Scenario-specific toolsets
+    
     "debugging": {
         "description": "Debugging and troubleshooting toolkit",
         "tools": ["terminal", "process"],
-        "includes": [
-            "web",
-            "file",
-        ],  # For searching error messages and solutions, and file operations
+        "includes": ["web", "file"]  # For searching error messages and solutions, and file operations
     },
+    
     "safe": {
         "description": "Safe toolkit without terminal access",
         "tools": [],
-        "includes": ["web", "vision", "image_gen"],
+        "includes": ["web", "vision", "image_gen"]
     },
+
     # Coding posture (base Clawksis — CLI/TUI/desktop/ACP). Auto-selected in a
     # code workspace; see agent/coding_context.py. Keeps everything you reach
     # for while pairing on code and drops the rest (messaging, tts, image_gen,
@@ -450,37 +408,18 @@ TOOLSETS = {
     "coding": {
         "description": "Coding-focused toolset: files, terminal, search, web docs, skills, todo, delegate, vision, browser",
         "tools": [
-            "web_search",
-            "web_extract",
-            "terminal",
-            "process",
-            "read_terminal",
-            "read_file",
-            "write_file",
-            "patch",
-            "search_files",
+            "web_search", "web_extract",
+            "terminal", "process", "read_terminal", "close_terminal",
+            "read_file", "write_file", "patch", "search_files",
             "vision_analyze",
-            "skills_list",
-            "skill_view",
-            "skill_manage",
-            "browser_navigate",
-            "browser_snapshot",
-            "browser_click",
-            "browser_type",
-            "browser_scroll",
-            "browser_back",
-            "browser_press",
-            "browser_get_images",
-            "browser_vision",
-            "browser_console",
-            "browser_cdp",
-            "browser_dialog",
-            "todo",
-            "memory",
-            "session_search",
-            "clarify",
-            "execute_code",
-            "delegate_task",
+            "skills_list", "skill_view", "skill_manage",
+            "browser_navigate", "browser_snapshot", "browser_click",
+            "browser_type", "browser_scroll", "browser_back",
+            "browser_press", "browser_get_images",
+            "browser_vision", "browser_console", "browser_cdp", "browser_dialog",
+            "todo", "memory",
+            "session_search", "clarify",
+            "execute_code", "delegate_task",
         ],
         "includes": [],
         # Posture toolset: selected per-session by agent/coding_context.py,
@@ -488,104 +427,74 @@ TOOLSETS = {
         # non-configurable-toolset recovery loop in clawk_cli/tools_config.py).
         "posture": True,
     },
+    
     # ==========================================================================
     # Full Clawksis toolsets (CLI + messaging platforms)
     #
-    # All platforms share the same core tools (including send_message,
-    # which is gated on gateway running via its check_fn).
+    # All platforms share the same core tools. Note: agents do NOT get an
+    # agent-callable send_message tool — outbound platform messaging is handled
+    # outside the agent loop (cron delivery, the gateway kanban notifier, and
+    # the `clawk send` CLI), not by the model deciding to send on its own.
     # ==========================================================================
+
     "clawk-acp": {
         "description": "Editor integration (VS Code, Zed, JetBrains) — coding-focused tools without messaging, audio, or clarify UI",
         "tools": [
-            "web_search",
-            "web_extract",
-            "terminal",
-            "process",
-            "read_file",
-            "write_file",
-            "patch",
-            "search_files",
+            "web_search", "web_extract",
+            "terminal", "process",
+            "read_file", "write_file", "patch", "search_files",
             "vision_analyze",
-            "skills_list",
-            "skill_view",
-            "skill_manage",
-            "browser_navigate",
-            "browser_snapshot",
-            "browser_click",
-            "browser_type",
-            "browser_scroll",
-            "browser_back",
-            "browser_press",
-            "browser_get_images",
-            "browser_vision",
-            "browser_console",
-            "browser_cdp",
-            "browser_dialog",
-            "todo",
-            "memory",
+            "skills_list", "skill_view", "skill_manage",
+            "browser_navigate", "browser_snapshot", "browser_click",
+            "browser_type", "browser_scroll", "browser_back",
+            "browser_press", "browser_get_images",
+            "browser_vision", "browser_console", "browser_cdp", "browser_dialog",
+            "todo", "memory",
             "session_search",
-            "execute_code",
-            "delegate_task",
+            "execute_code", "delegate_task",
         ],
-        "includes": [],
+        "includes": []
     },
+
     "clawk-api-server": {
         "description": "OpenAI-compatible API server — full agent tools accessible via HTTP (no interactive UI tools like clarify or send_message)",
         "tools": [
             # Web
-            "web_search",
-            "web_extract",
+            "web_search", "web_extract",
             # Terminal + process management
-            "terminal",
-            "process",
+            "terminal", "process",
             # File manipulation
-            "read_file",
-            "write_file",
-            "patch",
-            "search_files",
+            "read_file", "write_file", "patch", "search_files",
             # Vision + image generation
-            "vision_analyze",
-            "image_generate",
+            "vision_analyze", "image_generate",
             # Skills
-            "skills_list",
-            "skill_view",
-            "skill_manage",
+            "skills_list", "skill_view", "skill_manage",
             # Browser automation
-            "browser_navigate",
-            "browser_snapshot",
-            "browser_click",
-            "browser_type",
-            "browser_scroll",
-            "browser_back",
-            "browser_press",
-            "browser_get_images",
-            "browser_vision",
-            "browser_console",
-            "browser_cdp",
-            "browser_dialog",
+            "browser_navigate", "browser_snapshot", "browser_click",
+            "browser_type", "browser_scroll", "browser_back",
+            "browser_press", "browser_get_images",
+            "browser_vision", "browser_console", "browser_cdp", "browser_dialog",
             # Planning & memory
-            "todo",
-            "memory",
+            "todo", "memory",
             # Session history search
             "session_search",
             # Code execution + delegation
-            "execute_code",
-            "delegate_task",
+            "execute_code", "delegate_task",
             # Cronjob management
             "cronjob",
             # Home Assistant smart home control (gated on HASS_TOKEN via check_fn)
-            "ha_list_entities",
-            "ha_get_state",
-            "ha_list_services",
-            "ha_call_service",
+            "ha_list_entities", "ha_get_state", "ha_list_services", "ha_call_service",
+
         ],
-        "includes": [],
+        "includes": []
     },
+    
     "clawk-cli": {
         "description": "Full interactive CLI toolset - all default tools plus cronjob management",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-cron": {
         # Mirrors clawk-cli so cron's "default" toolset is the same set of
         # core tools users see interactively — then `clawk tools` filters
@@ -594,103 +503,117 @@ TOOLSETS = {
         # the user explicitly enables them.
         "description": "Default cron toolset - same core tools as clawk-cli; gated by `clawk tools`",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-telegram": {
         "description": "Telegram bot toolset - full access for personal use (terminal has safety checks)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+    
     "clawk-discord": {
         "description": "Discord bot toolset - full access (terminal has safety checks via dangerous command approval)",
-        "tools": _CLAWK_CORE_TOOLS
-        + [
+        "tools": _CLAWK_CORE_TOOLS + [
             "discord",
             "discord_admin",
         ],
-        "includes": [],
+        "includes": []
     },
+    
     "clawk-whatsapp": {
         "description": "WhatsApp bot toolset - similar to Telegram (personal messaging, more trusted)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+    
     "clawk-slack": {
         "description": "Slack bot toolset - full access for workspace use (terminal has safety checks)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+    
     "clawk-signal": {
         "description": "Signal bot toolset - encrypted messaging platform (full access)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-bluebubbles": {
         "description": "BlueBubbles iMessage bot toolset - Apple iMessage via local BlueBubbles server",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-homeassistant": {
         "description": "Home Assistant bot toolset - smart home event monitoring and control",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-email": {
         "description": "Email bot toolset - interact with Clawksis via email (IMAP/SMTP)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-mattermost": {
         "description": "Mattermost bot toolset - self-hosted team messaging (full access)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-matrix": {
         "description": "Matrix bot toolset - decentralized encrypted messaging (full access)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-dingtalk": {
         "description": "DingTalk bot toolset - enterprise messaging platform (full access)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-feishu": {
         "description": "Feishu/Lark bot toolset - enterprise messaging via Feishu/Lark (full access)",
-        "tools": _CLAWK_CORE_TOOLS
-        + [
+        "tools": _CLAWK_CORE_TOOLS + [
             "feishu_doc_read",
             "feishu_drive_list_comments",
             "feishu_drive_list_comment_replies",
             "feishu_drive_reply_comment",
             "feishu_drive_add_comment",
         ],
-        "includes": [],
+        "includes": []
     },
+
     "clawk-weixin": {
         "description": "Weixin bot toolset - personal WeChat messaging via iLink (full access)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-qqbot": {
         "description": "QQBot toolset - QQ messaging via Official Bot API v2 (full access)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-wecom": {
         "description": "WeCom bot toolset - enterprise WeChat messaging (full access)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-wecom-callback": {
         "description": "WeCom callback toolset - enterprise self-built app messaging (full access)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-yuanbao": {
         "description": "Yuanbao Bot 元宝消息平台工具集 - 群信息、成员查询、私聊、贴纸表情",
-        "tools": _CLAWK_CORE_TOOLS
-        + [
+        "tools": _CLAWK_CORE_TOOLS + [
             "yb_query_group_info",
             "yb_query_group_members",
             "yb_send_dm",
@@ -698,72 +621,67 @@ TOOLSETS = {
             "yb_send_sticker",
         ],
         "module": "tools.yuanbao_tools",
-        "includes": [],
+        "includes": []
     },
+
     "clawk-sms": {
         "description": "SMS bot toolset - interact with Clawksis via SMS (Twilio)",
         "tools": _CLAWK_CORE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawksis-webhook": {
         "description": "Webhook toolset - receive and process external webhook events",
         "tools": _CLAWK_WEBHOOK_SAFE_TOOLS,
-        "includes": [],
+        "includes": []
     },
+
     "clawk-gateway": {
         "description": "Gateway toolset - union of all messaging platform tools",
         "tools": [],
-        "includes": [
-            "clawk-telegram",
-            "clawk-discord",
-            "clawk-whatsapp",
-            "clawk-slack",
-            "clawk-signal",
-            "clawk-bluebubbles",
-            "clawk-homeassistant",
-            "clawk-email",
-            "clawk-sms",
-            "clawk-mattermost",
-            "clawk-matrix",
-            "clawk-dingtalk",
-            "clawk-feishu",
-            "clawk-wecom",
-            "clawk-wecom-callback",
-            "clawk-weixin",
-            "clawk-qqbot",
-            "clawksis-webhook",
-            "clawk-yuanbao",
-        ],
-    },
+        "includes": ["clawk-telegram", "clawk-discord", "clawk-whatsapp", "clawk-slack", "clawk-signal", "clawk-bluebubbles", "clawk-homeassistant", "clawk-email", "clawk-sms", "clawk-mattermost", "clawk-matrix", "clawk-dingtalk", "clawk-feishu", "clawk-wecom", "clawk-wecom-callback", "clawk-weixin", "clawk-qqbot", "clawksis-webhook", "clawk-yuanbao"]
+    }
 }
 
 
-def get_toolset(name: str) -> Optional[Dict[str, Any]]:
-    """
 
+def get_toolset(name: str, *, include_registry: bool = True) -> Optional[Dict[str, Any]]:
+    """
     Get a toolset definition by name.
 
-
-
     Args:
-
         name (str): Name of the toolset
-
-
+        include_registry (bool): When True (default), merge in tools that
+            plugins/overlays registered into this toolset via the registry.
+            When False, return only the static ``TOOLSETS`` definition (the
+            composite-authored view). Platform reverse-mapping in
+            ``_get_platform_tools`` uses False so that a tool registered into a
+            toolset but absent from a platform's static composite does not drop
+            the whole toolset from inference. See issue #49622.
 
     Returns:
-
         Dict: Toolset definition with description, tools, and includes
-
-        None: If toolset not found
-
+        None: If toolset not found. With include_registry=False the static
+            view only recognizes names literally present in ``TOOLSETS``, so
+            registry/MCP-only toolsets AND registry-derived aliases return None
+            (they have no static counterpart).
     """
-
     toolset = TOOLSETS.get(name)
+
+    if not include_registry:
+        # Static view only: return the built-in definition (copying the nested
+        # tools/includes lists so callers can't mutate TOOLSETS), or None for
+        # registry/MCP-only toolsets that have no static counterpart.
+        if not toolset:
+            return None
+        return {
+            **toolset,
+            "tools": list(toolset.get("tools", [])),
+            "includes": list(toolset.get("includes", [])),
+        }
 
     try:
         from tools.registry import registry
-
     except Exception:
         return toolset if toolset else None
 
@@ -772,32 +690,24 @@ def get_toolset(name: str) -> Optional[Dict[str, Any]]:
             set(toolset.get("tools", []))
             | set(registry.get_tool_names_for_toolset(name))
         )
-
         return {**toolset, "tools": merged_tools}
 
     registry_toolset = name
-
     description = f"Plugin toolset: {name}"
-
     alias_target = registry.get_toolset_alias_target(name)
 
     if name not in _get_plugin_toolset_names():
         registry_toolset = alias_target
-
         if not registry_toolset:
             return None
-
         description = f"MCP server '{name}' tools"
-
     else:
         reverse_aliases = {
             canonical: alias
             for alias, canonical in _get_registry_toolset_aliases().items()
             if alias not in TOOLSETS
         }
-
         alias = reverse_aliases.get(name)
-
         if alias:
             description = f"MCP server '{alias}' tools"
 
@@ -808,115 +718,111 @@ def get_toolset(name: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def resolve_toolset(name: str, visited: Set[str] = None) -> List[str]:
-    """
+def bundle_non_core_tools(toolset_name: str) -> Set[str]:
+    """Return a ``clawk-*`` bundle's platform-specific tools, excluding core.
 
+    Platform bundles are defined as ``_CLAWK_CORE_TOOLS + [platform extras]``.
+    When a bundle name appears in ``disabled_toolsets``, subtracting the whole
+    bundle would strip core tools (terminal, read_file, …) shared by every
+    other enabled toolset, emptying the model's tool list (#33924). This
+    returns only the bundle's non-core delta (its own extras plus those of any
+    one-level ``includes``), so disabling a bundle removes its platform tools
+    while leaving core intact.
+
+    Bundle nesting is one level deep in practice (only ``clawk-gateway``
+    includes other bundles, and those leaves don't nest further), so a single
+    ``includes`` pass is sufficient. Unknown/garbage names fall back to the
+    full resolution minus core — never re-introducing the core wipe.
+    """
+    core = set(_CLAWK_CORE_TOOLS)
+    ts_def = get_toolset(toolset_name)
+    if not (ts_def and "tools" in ts_def):
+        return set(resolve_toolset(toolset_name)) - core
+    to_remove = set(ts_def["tools"]) - core
+    for inc in ts_def.get("includes", []):
+        inc_def = get_toolset(inc)
+        if inc_def and "tools" in inc_def:
+            to_remove.update(set(inc_def["tools"]) - core)
+    return to_remove
+
+
+def resolve_toolset(name: str, visited: Set[str] = None, *, include_registry: bool = True) -> List[str]:
+    """
     Recursively resolve a toolset to get all tool names.
 
-
-
     This function handles toolset composition by recursively resolving
-
     included toolsets and combining all tools.
 
-
-
     Args:
-
         name (str): Name of the toolset to resolve
-
         visited (Set[str]): Set of already visited toolsets (for cycle detection)
-
-
+        include_registry (bool): When True (default), include tools that
+            plugins/overlays registered into a toolset. When False, resolve only
+            the static ``TOOLSETS`` definition (includes are still resolved, but
+            statically). Platform reverse-mapping uses False so a registry-added
+            tool cannot drop the whole toolset from inference (see #49622 and
+            ``_get_platform_tools``).
 
     Returns:
-
         List[str]: List of all tool names in the toolset
-
     """
-
     if visited is None:
         visited = set()
 
     # Special aliases that represent all tools across every toolset
-
     # This ensures future toolsets are automatically included without changes.
-
     if name in {"all", "*"}:
         all_tools: Set[str] = set()
-
         for toolset_name in get_toolset_names():
             # Use a fresh visited set per branch to avoid cross-branch contamination
-
-            resolved = resolve_toolset(toolset_name, visited.copy())
-
+            resolved = resolve_toolset(toolset_name, visited.copy(), include_registry=include_registry)
             all_tools.update(resolved)
-
         return sorted(all_tools)
 
     # Check for cycles / already-resolved (diamond deps).
-
     # Silently return [] — either this is a diamond (not a bug, tools already
-
     # collected via another path) or a genuine cycle (safe to skip).
-
     if name in visited:
         return []
 
     visited.add(name)
 
     # Get toolset definition
-
-    toolset = get_toolset(name)
-
+    toolset = get_toolset(name, include_registry=include_registry)
     if not toolset:
         # Auto-generate a toolset for plugin platforms (clawk-<name>).
-
         # Gives them _CLAWK_CORE_TOOLS plus any tools the plugin registered
-
-        # into a toolset matching the platform name.
-
-        if name.startswith("clawk-"):
-            platform_name = name[len("clawk-") :]
-
+        # into a toolset matching the platform name. This is a registry-derived
+        # view, so it only applies when registry tools are requested; the static
+        # view (include_registry=False) has no plugin-platform definition.
+        if include_registry and name.startswith("clawk-"):
+            platform_name = name[len("clawk-"):]
             try:
                 from gateway.platform_registry import platform_registry
-
                 if platform_registry.is_registered(platform_name):
                     plugin_tools = set(_CLAWK_CORE_TOOLS)
-
                     try:
                         from tools.registry import registry
-
                         plugin_tools.update(
-                            e.name
-                            for e in registry._tools.values()
+                            e.name for e in registry._tools.values()
                             if e.toolset == platform_name
                         )
-
                     except Exception:
                         pass
-
                     return list(plugin_tools)
-
             except Exception:
                 pass
 
         return []
 
     # Collect direct tools
-
     tools = set(toolset.get("tools", []))
 
     # Recursively resolve included toolsets, sharing the visited set across
-
     # sibling includes so diamond dependencies are only resolved once and
-
     # cycle warnings don't fire multiple times for the same cycle.
-
     for included_name in toolset.get("includes", []):
-        included_tools = resolve_toolset(included_name, visited)
-
+        included_tools = resolve_toolset(included_name, visited, include_registry=include_registry)
         tools.update(included_tools)
 
     return sorted(tools)
@@ -924,231 +830,157 @@ def resolve_toolset(name: str, visited: Set[str] = None) -> List[str]:
 
 def resolve_multiple_toolsets(toolset_names: List[str]) -> List[str]:
     """
-
     Resolve multiple toolsets and combine their tools.
-
-
-
+    
     Args:
-
         toolset_names (List[str]): List of toolset names to resolve
-
-
-
+        
     Returns:
-
         List[str]: Combined list of all tool names (deduplicated)
-
     """
-
     all_tools = set()
-
+    
     for name in toolset_names:
         tools = resolve_toolset(name)
-
         all_tools.update(tools)
-
+    
     return sorted(all_tools)
 
 
 def _get_plugin_toolset_names() -> Set[str]:
     """Return toolset names registered by plugins (from the tool registry).
 
-
-
     These are toolsets that exist in the registry but not in the static
-
     ``TOOLSETS`` dict — i.e. they were added by plugins at load time.
-
     """
-
     try:
         from tools.registry import registry
-
         return {
             toolset_name
             for toolset_name in registry.get_registered_toolset_names()
             if toolset_name not in TOOLSETS
         }
-
     except Exception:
         return set()
 
 
 def _get_registry_toolset_aliases() -> Dict[str, str]:
     """Return explicit toolset aliases registered in the live registry."""
-
     try:
         from tools.registry import registry
-
         return registry.get_registered_toolset_aliases()
-
     except Exception:
         return {}
 
 
 def get_all_toolsets() -> Dict[str, Dict[str, Any]]:
     """
-
     Get all available toolsets with their definitions.
 
-
-
     Includes both statically-defined toolsets and plugin-registered ones.
-
-
-
+    
     Returns:
-
         Dict: All toolset definitions
-
     """
-
     result = dict(TOOLSETS)
-
     aliases = _get_registry_toolset_aliases()
-
     for ts_name in _get_plugin_toolset_names():
         display_name = ts_name
-
         for alias, canonical in aliases.items():
             if canonical == ts_name and alias not in TOOLSETS:
                 display_name = alias
-
                 break
-
         if display_name in result:
             continue
-
         toolset = get_toolset(display_name)
-
         if toolset:
             result[display_name] = toolset
-
     return result
 
 
 def get_toolset_names() -> List[str]:
     """
-
     Get names of all available toolsets (excluding aliases).
 
-
-
     Includes plugin-registered toolset names.
-
-
-
+    
     Returns:
-
         List[str]: List of toolset names
-
     """
-
     names = set(TOOLSETS.keys())
-
     aliases = _get_registry_toolset_aliases()
-
     for ts_name in _get_plugin_toolset_names():
         for alias, canonical in aliases.items():
             if canonical == ts_name and alias not in TOOLSETS:
                 names.add(alias)
-
                 break
-
         else:
             names.add(ts_name)
-
     return sorted(names)
+
+
 
 
 def validate_toolset(name: str) -> bool:
     """
-
     Check if a toolset name is valid.
-
-
-
+    
     Args:
-
         name (str): Toolset name to validate
-
-
-
+        
     Returns:
-
         bool: True if valid, False otherwise
-
     """
-
     # Accept special alias names for convenience
-
     if name in {"all", "*"}:
         return True
-
     if name in TOOLSETS:
         return True
-
     if name in _get_plugin_toolset_names():
         return True
-
     return name in _get_registry_toolset_aliases()
 
 
 def create_custom_toolset(
-    name: str, description: str, tools: List[str] = None, includes: List[str] = None
+    name: str,
+    description: str,
+    tools: List[str] = None,
+    includes: List[str] = None
 ) -> None:
     """
-
     Create a custom toolset at runtime.
-
-
-
+    
     Args:
-
         name (str): Name for the new toolset
-
         description (str): Description of the toolset
-
         tools (List[str]): Direct tools to include
-
         includes (List[str]): Other toolsets to include
-
     """
-
     TOOLSETS[name] = {
         "description": description,
         "tools": tools or [],
-        "includes": includes or [],
+        "includes": includes or []
     }
+
+
 
 
 def get_toolset_info(name: str) -> Dict[str, Any]:
     """
-
     Get detailed information about a toolset including resolved tools.
-
-
-
+    
     Args:
-
         name (str): Toolset name
-
-
-
+        
     Returns:
-
         Dict: Detailed toolset information
-
     """
-
     toolset = get_toolset(name)
-
     if not toolset:
         return None
-
+    
     resolved_tools = resolve_toolset(name)
-
+    
     return {
         "name": name,
         "description": toolset["description"],
@@ -1156,64 +988,46 @@ def get_toolset_info(name: str) -> Dict[str, Any]:
         "includes": toolset["includes"],
         "resolved_tools": resolved_tools,
         "tool_count": len(resolved_tools),
-        "is_composite": bool(toolset["includes"]),
+        "is_composite": bool(toolset["includes"])
     }
+
+
 
 
 if __name__ == "__main__":
     print("Toolsets System Demo")
-
     print("=" * 60)
-
+    
     print("\nAvailable Toolsets:")
-
     print("-" * 40)
-
     for name, toolset in get_all_toolsets().items():
         info = get_toolset_info(name)
-
         composite = "[composite]" if info["is_composite"] else "[leaf]"
-
         print(f"  {composite} {name:20} - {toolset['description']}")
-
         print(f"     Tools: {len(info['resolved_tools'])} total")
-
+    
     print("\nToolset Resolution Examples:")
-
     print("-" * 40)
-
     for name in ["web", "terminal", "safe", "debugging"]:
         tools = resolve_toolset(name)
-
         print(f"\n  {name}:")
-
         print(f"    Resolved to {len(tools)} tools: {', '.join(sorted(tools))}")
-
+    
     print("\nMultiple Toolset Resolution:")
-
     print("-" * 40)
-
     combined = resolve_multiple_toolsets(["web", "vision", "terminal"])
-
     print("  Combining ['web', 'vision', 'terminal']:")
-
     print(f"    Result: {', '.join(sorted(combined))}")
-
+    
     print("\nCustom Toolset Creation:")
-
     print("-" * 40)
-
     create_custom_toolset(
         name="my_custom",
         description="My custom toolset for specific tasks",
         tools=["web_search"],
-        includes=["terminal", "vision"],
+        includes=["terminal", "vision"]
     )
-
     custom_info = get_toolset_info("my_custom")
-
     print("  Created 'my_custom' toolset:")
-
     print(f"    Description: {custom_info['description']}")
-
     print(f"    Resolved tools: {', '.join(custom_info['resolved_tools'])}")
