@@ -54,6 +54,8 @@ from typing import Any, Dict, List, Optional
 
 from agent.codex_responses_adapter import _summarize_user_message_for_log
 
+from agent.conversation_compression import conversation_history_after_compression
+
 from agent.display import KawaiiSpinner
 
 from agent.error_classifier import FailoverReason, classify_api_error
@@ -1139,7 +1141,9 @@ def run_conversation(
 
                 # pre-compression length.
 
-                conversation_history = None
+                conversation_history = conversation_history_after_compression(
+                    agent, messages
+                )
 
                 # Fix: reset retry counters after compression so the model
 
@@ -3282,6 +3286,18 @@ def run_conversation(
                             f"({hit_pct:.0f}% hit, {written:,} written)"
                         )
 
+                elif getattr(
+                    agent.context_compressor,
+                    "awaiting_real_usage_after_compression",
+                    False,
+                ):
+                    # A response with no usage cannot adjudicate whether the
+                    # prior compaction cleared the threshold. Consume the pending
+                    # verdict now so a much later, unrelated reading is not
+                    # charged to that old compaction, and so preflight deferral
+                    # does not remain latched indefinitely.
+                    agent.context_compressor.update_from_response({})
+
                 has_retried_429 = False  # Reset on success
 
                 # Note: don't clear the retry buffer here — an "API call
@@ -3694,6 +3710,14 @@ def run_conversation(
                     # "unknown variant `image_url`, expected `text`".
                     "unknown variant `image_url`, expected `text`",
                     "unknown variant image_url, expected text",
+                    # OpenRouter routes a request to upstream endpoints and,
+                    # when none of the candidate endpoints for the model accept
+                    # image input, returns HTTP 404 "No endpoints found that
+                    # support image input". Without this phrase the agent never
+                    # strips the images, the retry loop re-sends the same
+                    # rejected request until exhaustion, and the gateway leaves
+                    # every subsequent message queued behind the stuck turn.
+                    "no endpoints found that support image input",
                 )
 
                 _err_lower = _err_body.lower()
@@ -4535,7 +4559,9 @@ def run_conversation(
 
                         # messages to the new session, not skipping them.
 
-                        conversation_history = None
+                        conversation_history = conversation_history_after_compression(
+                            agent, messages
+                        )
 
                         if len(messages) < original_len or old_ctx > _reduced_ctx:
                             agent._buffer_status(
@@ -4713,7 +4739,9 @@ def run_conversation(
 
                     # messages to the new session, not skipping them.
 
-                    conversation_history = None
+                    conversation_history = conversation_history_after_compression(
+                        agent, messages
+                    )
 
                     if len(messages) < original_len:
                         agent._buffer_status(
@@ -4979,7 +5007,9 @@ def run_conversation(
 
                     # messages to the new session, not skipping them.
 
-                    conversation_history = None
+                    conversation_history = conversation_history_after_compression(
+                        agent, messages
+                    )
 
                     if len(messages) < original_len or new_ctx and new_ctx < old_ctx:
                         if len(messages) < original_len:
@@ -5606,9 +5636,15 @@ def run_conversation(
 
                         if _ra_raw:
                             try:
+                                # Cap at 10 minutes. Anthropic Tier 1 input-token
+                                # buckets reset in ~171s, so a 120s cap caused us
+                                # to retry before the actual reset window and
+                                # re-trip the limit. 600s covers all realistic
+                                # provider reset windows while still rejecting
+                                # pathological values. (#26293)
                                 _retry_after = min(
-                                    float(_ra_raw), 120
-                                )  # Cap at 2 minutes
+                                    float(_ra_raw), 600
+                                )
 
                             except (TypeError, ValueError):
                                 pass
@@ -6580,7 +6616,9 @@ def run_conversation(
 
                     # to the new session (see preflight compression comment).
 
-                    conversation_history = None
+                    conversation_history = conversation_history_after_compression(
+                        agent, messages
+                    )
 
                 # Save session log incrementally (so progress is visible even if interrupted)
 
