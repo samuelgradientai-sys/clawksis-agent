@@ -6196,8 +6196,10 @@ def _anthropic_oauth_status() -> Dict[str, Any]:
         from agent.anthropic_adapter import (
             read_clawk_oauth_credentials,
             read_claude_code_credentials,
-            _CLAWK_OAUTH_FILE,
+            _get_clawk_oauth_file,
         )
+
+        _CLAWK_OAUTH_FILE = _get_clawk_oauth_file()
 
     except ImportError:
         read_claude_code_credentials = None  # type: ignore
@@ -6597,10 +6599,12 @@ async def disconnect_oauth_provider(provider_id: str, request: Request):
 
     if provider_id in {"anthropic", "claude-code"}:
         try:
-            from agent.anthropic_adapter import _CLAWK_OAUTH_FILE
+            from agent.anthropic_adapter import _get_clawk_oauth_file
 
-            if _CLAWK_OAUTH_FILE.exists():
-                _CLAWK_OAUTH_FILE.unlink()
+            oauth_file = _get_clawk_oauth_file()
+
+            if oauth_file.exists():
+                oauth_file.unlink()
 
         except Exception:
             pass
@@ -6808,7 +6812,9 @@ def _save_anthropic_oauth_creds(
 
     """
 
-    from agent.anthropic_adapter import _CLAWK_OAUTH_FILE
+    from agent.anthropic_adapter import _get_clawk_oauth_file
+
+    _CLAWK_OAUTH_FILE = _get_clawk_oauth_file()
 
     payload = {
         "accessToken": access_token,

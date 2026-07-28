@@ -31,22 +31,24 @@ logger = logging.getLogger(__name__)
 # -- Clawksis overlay ----------------------------------------------------------
 # Clawksis-specific metadata that models.dev doesn't provide.
 
-
 @dataclass(frozen=True)
 class ClawksisOverlay:
     """Clawksis-specific provider metadata layered on top of models.dev."""
 
-    transport: str = "openai_chat"  # openai_chat | anthropic_messages | codex_responses
+    transport: str = "openai_chat"        # openai_chat | anthropic_messages | codex_responses
     is_aggregator: bool = False
-    auth_type: str = (
-        "api_key"  # api_key | oauth_device_code | oauth_external | external_process
-    )
+    auth_type: str = "api_key"            # api_key | oauth_device_code | oauth_external | external_process
     extra_env_vars: Tuple[str, ...] = ()  # env vars models.dev doesn't list
-    base_url_override: str = ""  # override if models.dev URL is wrong/missing
-    base_url_env_var: str = ""  # env var for user-custom base URL
+    base_url_override: str = ""           # override if models.dev URL is wrong/missing
+    base_url_env_var: str = ""            # env var for user-custom base URL
 
 
 CLAWK_OVERLAYS: Dict[str, ClawksisOverlay] = {
+    "moa": ClawksisOverlay(
+        transport="openai_chat",
+        auth_type="virtual",
+        base_url_override="moa://local",
+    ),
     "openrouter": ClawksisOverlay(
         transport="openai_chat",
         is_aggregator=True,
@@ -74,6 +76,9 @@ CLAWK_OVERLAYS: Dict[str, ClawksisOverlay] = {
         base_url_override="https://portal.qwen.ai/v1",
         base_url_env_var="CLAWK_QWEN_BASE_URL",
     ),
+    # Fork-only: upstream lo removio, pero clawk_cli/auth.py del fork sigue
+    # sosteniendo el flujo OAuth + Code Assist (get_gemini_oauth_auth_status,
+    # resolve_gemini_oauth_runtime_credentials). No borrar en syncs.
     "google-gemini-cli": ClawksisOverlay(
         transport="openai_chat",
         auth_type="oauth_external",
@@ -194,6 +199,17 @@ CLAWK_OVERLAYS: Dict[str, ClawksisOverlay] = {
         base_url_override="https://api.gmi-serving.com/v1",
         base_url_env_var="GMI_BASE_URL",
     ),
+    "fireworks": ClawksisOverlay(
+        transport="openai_chat",
+        extra_env_vars=("FIREWORKS_API_KEY",),
+        base_url_override="https://api.fireworks.ai/inference/v1",
+    ),
+    "upstage": ClawksisOverlay(
+        transport="openai_chat",
+        extra_env_vars=("UPSTAGE_API_KEY",),
+        base_url_override="https://api.upstage.ai/v1",
+        base_url_env_var="UPSTAGE_BASE_URL",
+    ),
     "ollama-cloud": ClawksisOverlay(
         transport="openai_chat",
         base_url_override="https://ollama.com/v1",
@@ -223,21 +239,20 @@ CLAWK_OVERLAYS: Dict[str, ClawksisOverlay] = {
 # -- Resolved provider -------------------------------------------------------
 # The merged result of models.dev + overlay + user config.
 
-
 @dataclass
 class ProviderDef:
     """Complete provider definition — merged from all sources."""
 
     id: str
     name: str
-    transport: str  # openai_chat | anthropic_messages | codex_responses
-    api_key_env_vars: Tuple[str, ...]  # all env vars to check for API key
+    transport: str                        # openai_chat | anthropic_messages | codex_responses
+    api_key_env_vars: Tuple[str, ...]     # all env vars to check for API key
     base_url: str = ""
     base_url_env_var: str = ""
     is_aggregator: bool = False
     auth_type: str = "api_key"
     doc: str = ""
-    source: str = ""  # "models.dev", "clawk", "user-config"
+    source: str = ""                      # "models.dev", "clawk", "user-config"
 
 
 # -- Aliases ------------------------------------------------------------------
@@ -246,12 +261,14 @@ class ProviderDef:
 
 ALIASES: Dict[str, str] = {
     # openrouter
-    "openai": "openrouter",  # bare "openai" → route through aggregator
+    "openai": "openrouter",     # bare "openai" → route through aggregator
+
     # zai
     "glm": "zai",
     "z-ai": "zai",
     "z.ai": "zai",
     "zhipu": "zai",
+
     # xai
     "x-ai": "xai",
     "x.ai": "xai",
@@ -260,41 +277,52 @@ ALIASES: Dict[str, str] = {
     "xai-oauth": "xai-oauth",
     "x-ai-oauth": "xai-oauth",
     "xai-grok-oauth": "xai-oauth",
+
     # nvidia
     "nim": "nvidia",
     "nvidia-nim": "nvidia",
     "build-nvidia": "nvidia",
     "nemotron": "nvidia",
+
     # kimi-for-coding (models.dev ID)
     "kimi": "kimi-for-coding",
     "kimi-coding": "kimi-for-coding",
     "kimi-coding-cn": "kimi-for-coding",
     "moonshot": "kimi-for-coding",
+
     # stepfun
     "step": "stepfun",
     "stepfun-coding-plan": "stepfun",
+
     # minimax-cn
     "minimax-china": "minimax-cn",
     "minimax_cn": "minimax-cn",
+
     # anthropic
     "claude": "anthropic",
     "claude-code": "anthropic",
+
     # github-copilot (models.dev ID)
     "copilot": "github-copilot",
     "github": "github-copilot",
     "github-copilot-acp": "copilot-acp",
+
     # opencode (models.dev ID for OpenCode Zen)
     "opencode-zen": "opencode",
     "zen": "opencode",
+
     # opencode-go
     "go": "opencode-go",
     "opencode-go-sub": "opencode-go",
+
     # kilo (models.dev ID for KiloCode)
     "kilocode": "kilo",
     "kilo-code": "kilo",
     "kilo-gateway": "kilo",
+
     # deepseek
     "deep-seek": "deepseek",
+
     # alibaba
     "dashscope": "alibaba",
     "aliyun": "alibaba",
@@ -303,35 +331,50 @@ ALIASES: Dict[str, str] = {
     "alibaba_coding": "alibaba-coding-plan",
     "alibaba-coding": "alibaba-coding-plan",
     "alibaba_coding_plan": "alibaba-coding-plan",
-    # google-gemini-cli (OAuth + Code Assist)
+    # google-gemini-cli (OAuth + Code Assist) -- fork-only, ver overlay arriba
     "gemini-cli": "google-gemini-cli",
     "gemini-oauth": "google-gemini-cli",
+
     # huggingface
     "hf": "huggingface",
     "hugging-face": "huggingface",
     "huggingface-hub": "huggingface",
+
     # novita
     "novita-ai": "novita",
     "novitaai": "novita",
+
     # xiaomi
     "mimo": "xiaomi",
     "xiaomi-mimo": "xiaomi",
+
     # tencent
     "tencent": "tencent-tokenhub",
     "tokenhub": "tencent-tokenhub",
     "tencent-cloud": "tencent-tokenhub",
     "tencentmaas": "tencent-tokenhub",
+
     # bedrock
     "aws": "bedrock",
     "aws-bedrock": "bedrock",
     "amazon-bedrock": "bedrock",
     "amazon": "bedrock",
+
     # arcee
     "arcee-ai": "arcee",
     "arceeai": "arcee",
+
     # gmi
     "gmi-cloud": "gmi",
     "gmicloud": "gmi",
+
+    # fireworks
+    "fireworks-ai": "fireworks",
+    "fw": "fireworks",
+
+    # upstage
+    "solar": "upstage",
+
     # Local server aliases → virtual "local" concept (resolved via user config)
     "lmstudio": "lmstudio",
     "lm-studio": "lmstudio",
@@ -353,11 +396,13 @@ ALIASES: Dict[str, str] = {
 # not in the catalog.
 
 _LABEL_OVERRIDES: Dict[str, str] = {
+    "moa": "Mixture of Agents",
     "openai-codex": "OpenAI Codex",
     "copilot-acp": "GitHub Copilot ACP",
     "stepfun": "StepFun Step Plan",
     "xiaomi": "Xiaomi MiMo",
     "gmi": "GMI Cloud",
+    "upstage": "Upstage Solar",
     "tencent-tokenhub": "Tencent TokenHub",
     "lmstudio": "LM Studio",
     "local": "Local endpoint",
@@ -379,7 +424,6 @@ TRANSPORT_TO_API_MODE: Dict[str, str] = {
 
 
 # -- Helper functions ---------------------------------------------------------
-
 
 def normalize_provider(name: str) -> str:
     """Resolve aliases and normalise casing to a canonical provider id.
@@ -410,7 +454,6 @@ def get_provider(name: str) -> Optional[ProviderDef]:
     # Try to get models.dev data
     try:
         from agent.models_dev import get_provider_info as _mdev_provider
-
         mdev_info = _mdev_provider(canonical)
     except Exception:
         mdev_info = None
@@ -478,6 +521,8 @@ def get_label(provider_id: str) -> str:
     return canonical
 
 
+
+
 def is_aggregator(provider: str) -> bool:
     """Return True when the provider is a multi-model aggregator."""
     provider_norm = normalize_provider(provider or "")
@@ -487,56 +532,102 @@ def is_aggregator(provider: str) -> bool:
     return pdef.is_aggregator if pdef else False
 
 
+# Flat-namespace resellers (e.g. opencode-go, opencode-zen) are flagged
+# ``is_aggregator=True`` because their live ``/v1/models`` returns bare model
+# IDs ("deepseek-v4-flash") rather than ``vendor/model`` routing slugs — the
+# model-switch resolver relies on that flag to search their flat catalog
+# (see model_switch.py step d). But they are NOT routing aggregators: every
+# model they list is a first-party model served under their own subscription,
+# not a passthrough route to another provider's endpoint. The picker dedup
+# (build_models_payload) must treat them differently from true routers like
+# OpenRouter — a reseller's first-party "minimax-m3" must never be stripped
+# just because a user's custom proxy also happens to serve a same-named model.
+_FLAT_NAMESPACE_RESELLERS: frozenset[str] = frozenset({
+    # Use normalized provider IDs: normalize_provider("opencode-zen") -> "opencode".
+    "opencode-go",
+    "opencode",
+})
+
+
+def is_routing_aggregator(provider: str) -> bool:
+    """Return True only for TRUE routing aggregators (e.g. OpenRouter, named
+    ``custom:*`` proxies) — those that route bare/vendor-slugged model names
+    to *other* providers' endpoints.
+
+    Distinct from :func:`is_aggregator`, which also reports True for
+    flat-namespace resellers (opencode-go/zen) whose catalog is entirely
+    first-party. Use this gate when the question is "would selecting this
+    model silently re-route the call away from the user's intended provider?"
+    — i.e. the picker dedup. Resellers answer no: their listed models are
+    their own, so their rows must not be deduped against user proxies.
+    """
+    provider_norm = normalize_provider(provider or "")
+    if provider_norm in _FLAT_NAMESPACE_RESELLERS:
+        return False
+    return is_aggregator(provider_norm)
+
+
+def host_mandated_api_mode(base_url: str = "") -> Optional[str]:
+    """Return the wire protocol a specific endpoint *requires*, or None.
+
+    Some hosts only accept one API mode and reject the others outright:
+      - api.openai.com only accepts the Responses API for its (reasoning)
+        models when tools + reasoning are in play (chat/completions 400s).
+      - api.anthropic.com / ``…/anthropic`` suffixes speak native Messages.
+      - Kimi's ``/coding`` endpoint speaks native Messages.
+      - AWS Bedrock runtime hosts speak Converse.
+
+    These are *mandatory* — a session carrying a stale api_mode (e.g. a
+    /model switch that kept the previous provider's ``chat_completions``)
+    must be overridden to the host's required mode, not merely filled in
+    when empty. Generic / unknown endpoints return None so an explicitly
+    configured api_mode on them is never clobbered.
+    """
+    if not base_url:
+        return None
+    url_lower = base_url.rstrip("/").lower()
+    hostname = base_url_hostname(base_url)
+    # Exact-hostname matching only — never bare substring — so lookalike hosts
+    # (api.openai.com.attacker.test) and path-segment spoofs
+    # (proxy.test/api.openai.com/v1) are NOT treated as the real endpoint. (#32243)
+    if hostname == "api.kimi.com" and "/coding" in url_lower:
+        return "anthropic_messages"
+    if hostname == "api.anthropic.com" or url_lower.endswith("/anthropic"):
+        return "anthropic_messages"
+    if hostname == "api.openai.com":
+        return "codex_responses"
+    if hostname.startswith("bedrock-runtime.") and base_url_host_matches(base_url, "amazonaws.com"):
+        return "bedrock_converse"
+    return None
+
+
 def determine_api_mode(provider: str, base_url: str = "") -> str:
     """Determine the API mode (wire protocol) for a provider/endpoint.
 
     Resolution order:
-      1. Known provider → transport → TRANSPORT_TO_API_MODE.
-      2. URL heuristics for unknown / custom providers.
-      3. Default: 'chat_completions'.
+      1. Host-mandated mode (special endpoints that only accept one protocol).
+      2. Known provider → transport → TRANSPORT_TO_API_MODE.
+      3. Direct provider checks (bedrock).
+      4. Default: 'chat_completions'.
     """
+    mandated = host_mandated_api_mode(base_url)
+    if mandated is not None:
+        return mandated
+
     pdef = get_provider(provider)
     if pdef is not None:
-        # Even for known providers, check URL heuristics for special endpoints
-        # (e.g. kimi /coding endpoint needs anthropic_messages even on 'custom')
-        if base_url:
-            url_lower = base_url.rstrip("/").lower()
-            if "api.kimi.com/coding" in url_lower:
-                return "anthropic_messages"
-            if url_lower.endswith("/anthropic") or "api.anthropic.com" in url_lower:
-                return "anthropic_messages"
-            if "api.openai.com" in url_lower:
-                return "codex_responses"
         return TRANSPORT_TO_API_MODE.get(pdef.transport, "chat_completions")
 
     # Direct provider checks for providers not in CLAWK_OVERLAYS
     if provider == "bedrock":
         return "bedrock_converse"
 
-    # URL-based heuristics for custom / unknown providers
-    if base_url:
-        url_lower = base_url.rstrip("/").lower()
-        hostname = base_url_hostname(base_url)
-        if url_lower.endswith("/anthropic") or hostname == "api.anthropic.com":
-            return "anthropic_messages"
-        if hostname == "api.kimi.com" and "/coding" in url_lower:
-            return "anthropic_messages"
-        if hostname == "api.openai.com":
-            return "codex_responses"
-        if hostname.startswith("bedrock-runtime.") and base_url_host_matches(
-            base_url, "amazonaws.com"
-        ):
-            return "bedrock_converse"
-
     return "chat_completions"
 
 
 # -- Provider from user config ------------------------------------------------
 
-
-def resolve_user_provider(
-    name: str, user_config: Dict[str, Any]
-) -> Optional[ProviderDef]:
+def resolve_user_provider(name: str, user_config: Dict[str, Any]) -> Optional[ProviderDef]:
     """Resolve a provider from the user's config.yaml ``providers:`` section.
 
     Args:
@@ -555,9 +646,7 @@ def resolve_user_provider(
 
     # Extract fields
     display_name = entry.get("name", "") or name
-    api_url = (
-        entry.get("api", "") or entry.get("url", "") or entry.get("base_url", "") or ""
-    )
+    api_url = entry.get("api", "") or entry.get("url", "") or entry.get("base_url", "") or ""
     key_env = entry.get("key_env", "") or ""
     transport = entry.get("transport", "openai_chat") or "openai_chat"
 
@@ -603,7 +692,7 @@ def resolve_custom_provider(
     # from a prior model-switch bug), fall back to the first custom
     # provider entry so existing configs self-heal.  (GH #17478)
     bare_custom_fallback = requested == "custom"
-    first_valid = None
+    first_valid: Optional[Tuple[str, str, Tuple[str, ...]]] = None
 
     for entry in custom_providers:
         if not isinstance(entry, dict):
@@ -619,9 +708,14 @@ def resolve_custom_provider(
         if not display_name or not api_url:
             continue
 
+        key_env = (entry.get("key_env") or "").strip()
+        env_vars: List[str] = []
+        if key_env:
+            env_vars.append(key_env)
+
         # Stash the first valid entry for bare-"custom" fallback
         if first_valid is None:
-            first_valid = (display_name, api_url)
+            first_valid = (display_name, api_url, tuple(env_vars))
 
         slug = custom_provider_slug(display_name)
         if requested not in {display_name.lower(), slug}:
@@ -631,7 +725,7 @@ def resolve_custom_provider(
             id=slug,
             name=display_name,
             transport="openai_chat",
-            api_key_env_vars=(),
+            api_key_env_vars=tuple(env_vars),
             base_url=api_url,
             is_aggregator=False,
             auth_type="api_key",
@@ -640,13 +734,13 @@ def resolve_custom_provider(
 
     # Self-heal: bare "custom" matched nothing — return first valid entry
     if bare_custom_fallback and first_valid:
-        dname, aurl = first_valid
+        dname, aurl, denv = first_valid
         slug = custom_provider_slug(dname)
         return ProviderDef(
             id=slug,
             name=dname,
             transport="openai_chat",
-            api_key_env_vars=(),
+            api_key_env_vars=denv,
             base_url=aurl,
             is_aggregator=False,
             auth_type="api_key",
@@ -689,6 +783,36 @@ def resolve_provider_full(
         if user_pdef is not None:
             return user_pdef
 
+    # 0.5 Exact Clawksis provider IDs must win over LOSSY alias collapsing.
+    # Example: kimi-coding-cn should stay distinct from kimi-coding instead of
+    # normalizing through the shared models.dev alias "kimi-for-coding".
+    # A collapse is lossy only when MULTIPLE distinct registry providers
+    # normalize to the same canonical name — resolving through the alias
+    # would then lose which one the caller meant. Single-entry rewrites
+    # (e.g. "copilot" → "github-copilot") are correct routing and must keep
+    # resolving through the built-in chain below so overlay transports apply.
+    if canonical != raw:
+        try:
+            from clawk_cli.auth import PROVIDER_REGISTRY as _AUTH_PROVIDER_REGISTRY
+            _pcfg = _AUTH_PROVIDER_REGISTRY.get(raw)
+            if _pcfg is not None:
+                _collapsed_siblings = [
+                    _rid
+                    for _rid in _AUTH_PROVIDER_REGISTRY
+                    if normalize_provider(_rid) == canonical
+                ]
+                if len(_collapsed_siblings) > 1:
+                    return ProviderDef(
+                        id=_pcfg.id,
+                        name=_pcfg.name,
+                        transport="openai_chat",
+                        api_key_env_vars=tuple(_pcfg.api_key_env_vars or ()),
+                        base_url=_pcfg.inference_base_url or "",
+                        source="clawk-auth-registry",
+                    )
+        except Exception:
+            pass
+
     # 1. Built-in (models.dev + overlays)
     pdef = get_provider(canonical)
     if pdef is not None:
@@ -713,7 +837,6 @@ def resolve_provider_full(
     # 3. Try models.dev directly (for providers not in our ALIASES)
     try:
         from agent.models_dev import get_provider_info as _mdev_provider
-
         mdev_info = _mdev_provider(canonical)
         if mdev_info is not None:
             return ProviderDef(
