@@ -30,7 +30,7 @@ def _make_adapter(
     bot_username="clawk_bot",
 ):
 
-    from gateway.platforms.telegram import TelegramAdapter
+    from plugins.platforms.telegram.adapter import TelegramAdapter
 
     extra = {}
 

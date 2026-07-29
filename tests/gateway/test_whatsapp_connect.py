@@ -63,7 +63,7 @@ class _AsyncCM:
 def _make_adapter():
     """Create a WhatsAppAdapter with test attributes (bypass __init__)."""
 
-    from gateway.platforms.whatsapp import WhatsAppAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
     adapter = WhatsAppAdapter.__new__(WhatsAppAdapter)
 
@@ -136,21 +136,21 @@ def _connect_patches(mock_proc, mock_fh, mock_client_cls=None):
     """Return a dict of common patches needed to reach the health-check loop."""
 
     patches = {
-        "gateway.platforms.whatsapp.check_whatsapp_requirements": True,
-        "gateway.platforms.whatsapp.asyncio.create_task": MagicMock(),
+        "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements": True,
+        "plugins.platforms.whatsapp.adapter.asyncio.create_task": MagicMock(),
     }
 
     base = [
         patch(
-            "gateway.platforms.whatsapp.check_whatsapp_requirements", return_value=True
+            "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements", return_value=True
         ),
         patch.object(Path, "exists", return_value=True),
         patch.object(Path, "mkdir", return_value=None),
         patch("subprocess.run", return_value=MagicMock(returncode=0)),
         patch("subprocess.Popen", return_value=mock_proc),
         patch("builtins.open", return_value=mock_fh),
-        patch("gateway.platforms.whatsapp.asyncio.sleep", new_callable=AsyncMock),
-        patch("gateway.platforms.whatsapp.asyncio.create_task"),
+        patch("plugins.platforms.whatsapp.adapter.asyncio.sleep", new_callable=AsyncMock),
+        patch("plugins.platforms.whatsapp.adapter.asyncio.create_task"),
     ]
 
     if mock_client_cls is not None:
@@ -172,7 +172,7 @@ class TestCloseBridgeLog:
     @staticmethod
     def _bare_adapter():
 
-        from gateway.platforms.whatsapp import WhatsAppAdapter
+        from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
         a = WhatsAppAdapter.__new__(WhatsAppAdapter)
 
@@ -340,7 +340,7 @@ class TestConnectCleanup:
 
         with (
             patch(
-                "gateway.platforms.whatsapp.check_whatsapp_requirements",
+                "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements",
                 return_value=True,
             ),
             patch.object(Path, "exists", autospec=True, side_effect=_path_exists),
@@ -629,7 +629,7 @@ class TestBridgeRuntimeFailure:
 
         with (
             patch(
-                "gateway.platforms.whatsapp.check_whatsapp_requirements",
+                "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements",
                 return_value=True,
             ),
             patch.object(Path, "exists", return_value=True),
@@ -659,7 +659,7 @@ class TestKillPortProcess:
 
     def test_uses_netstat_and_taskkill_on_windows(self):
 
-        from gateway.platforms.whatsapp import _kill_port_process
+        from plugins.platforms.whatsapp.adapter import _kill_port_process
 
         netstat_output = (
             "  Proto  Local Address          Foreign Address        State           PID\n"
@@ -682,9 +682,9 @@ class TestKillPortProcess:
             return MagicMock()
 
         with (
-            patch("gateway.platforms.whatsapp._IS_WINDOWS", True),
+            patch("plugins.platforms.whatsapp.adapter._IS_WINDOWS", True),
             patch(
-                "gateway.platforms.whatsapp.subprocess.run", side_effect=run_side_effect
+                "plugins.platforms.whatsapp.adapter.subprocess.run", side_effect=run_side_effect
             ) as mock_run,
         ):
             _kill_port_process(3000)
@@ -702,16 +702,16 @@ class TestKillPortProcess:
 
     def test_does_not_kill_wrong_port_on_windows(self):
 
-        from gateway.platforms.whatsapp import _kill_port_process
+        from plugins.platforms.whatsapp.adapter import _kill_port_process
 
         netstat_output = "  TCP    0.0.0.0:30000          0.0.0.0:0              LISTENING       55555\n"
 
         mock_netstat = MagicMock(stdout=netstat_output)
 
         with (
-            patch("gateway.platforms.whatsapp._IS_WINDOWS", True),
+            patch("plugins.platforms.whatsapp.adapter._IS_WINDOWS", True),
             patch(
-                "gateway.platforms.whatsapp.subprocess.run", return_value=mock_netstat
+                "plugins.platforms.whatsapp.adapter.subprocess.run", return_value=mock_netstat
             ) as mock_run,
         ):
             _kill_port_process(3000)
@@ -724,14 +724,14 @@ class TestKillPortProcess:
 
     def test_uses_fuser_on_linux(self):
 
-        from gateway.platforms.whatsapp import _kill_port_process
+        from plugins.platforms.whatsapp.adapter import _kill_port_process
 
         mock_check = MagicMock(returncode=0)
 
         with (
-            patch("gateway.platforms.whatsapp._IS_WINDOWS", False),
+            patch("plugins.platforms.whatsapp.adapter._IS_WINDOWS", False),
             patch(
-                "gateway.platforms.whatsapp.subprocess.run", return_value=mock_check
+                "plugins.platforms.whatsapp.adapter.subprocess.run", return_value=mock_check
             ) as mock_run,
         ):
             _kill_port_process(3000)
@@ -744,14 +744,14 @@ class TestKillPortProcess:
 
     def test_skips_fuser_kill_when_port_free(self):
 
-        from gateway.platforms.whatsapp import _kill_port_process
+        from plugins.platforms.whatsapp.adapter import _kill_port_process
 
         mock_check = MagicMock(returncode=1)  # port not in use
 
         with (
-            patch("gateway.platforms.whatsapp._IS_WINDOWS", False),
+            patch("plugins.platforms.whatsapp.adapter._IS_WINDOWS", False),
             patch(
-                "gateway.platforms.whatsapp.subprocess.run", return_value=mock_check
+                "plugins.platforms.whatsapp.adapter.subprocess.run", return_value=mock_check
             ) as mock_run,
         ):
             _kill_port_process(3000)
@@ -764,12 +764,12 @@ class TestKillPortProcess:
 
     def test_suppresses_exceptions(self):
 
-        from gateway.platforms.whatsapp import _kill_port_process
+        from plugins.platforms.whatsapp.adapter import _kill_port_process
 
         with (
-            patch("gateway.platforms.whatsapp._IS_WINDOWS", True),
+            patch("plugins.platforms.whatsapp.adapter._IS_WINDOWS", True),
             patch(
-                "gateway.platforms.whatsapp.subprocess.run",
+                "plugins.platforms.whatsapp.adapter.subprocess.run",
                 side_effect=OSError("no netstat"),
             ),
         ):
@@ -809,12 +809,12 @@ class TestHttpSessionLifecycle:
         adapter._session_lock_identity = None
 
         with (
-            patch("gateway.platforms.whatsapp._IS_WINDOWS", True),
+            patch("plugins.platforms.whatsapp.adapter._IS_WINDOWS", True),
             patch(
-                "gateway.platforms.whatsapp.subprocess.run",
+                "plugins.platforms.whatsapp.adapter.subprocess.run",
                 return_value=MagicMock(returncode=0),
             ) as mock_run,
-            patch("gateway.platforms.whatsapp.asyncio.sleep", new_callable=AsyncMock),
+            patch("plugins.platforms.whatsapp.adapter.asyncio.sleep", new_callable=AsyncMock),
         ):
             await adapter.disconnect()
 
@@ -977,7 +977,7 @@ class TestNoCredsPreflight:
     @pytest.mark.asyncio
     async def test_connect_returns_false_when_no_creds(self, tmp_path):
 
-        from gateway.platforms.whatsapp import WhatsAppAdapter
+        from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
         adapter = WhatsAppAdapter.__new__(WhatsAppAdapter)
 
@@ -1012,7 +1012,7 @@ class TestNoCredsPreflight:
         adapter._fatal_error_retryable = True
 
         with patch(
-            "gateway.platforms.whatsapp.check_whatsapp_requirements",
+            "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements",
             return_value=True,
         ):
             result = await adapter.connect()
@@ -1035,7 +1035,7 @@ class TestNoCredsPreflight:
 
         """
 
-        from gateway.platforms.whatsapp import WhatsAppAdapter
+        from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
         adapter = WhatsAppAdapter.__new__(WhatsAppAdapter)
 
@@ -1074,7 +1074,7 @@ class TestNoCredsPreflight:
         adapter._acquire_platform_lock = MagicMock(return_value=False)
 
         with patch(
-            "gateway.platforms.whatsapp.check_whatsapp_requirements",
+            "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements",
             return_value=True,
         ):
             result = await adapter.connect()

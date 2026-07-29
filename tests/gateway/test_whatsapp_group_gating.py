@@ -16,7 +16,7 @@ def _make_adapter(
     group_allow_from=None,
 ):
 
-    from gateway.platforms.whatsapp import WhatsAppAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
     extra = {}
 
@@ -506,7 +506,7 @@ def test_real_dm_still_processed_after_broadcast_filter():
 
 def test_is_broadcast_chat_helper_recognizes_common_jids():
 
-    from gateway.platforms.whatsapp import WhatsAppAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
     assert WhatsAppAdapter._is_broadcast_chat("status@broadcast") is True
 
