@@ -122,24 +122,25 @@ class TestDetectStaticProviderCostSafeDefault:
     as get_default_model_for_provider when a bare provider name is typed as a
     model (e.g. ``/model nous``)."""
 
-    def test_bare_nous_does_not_escalate_to_flagship(self):
+    def test_bare_nous_is_not_a_selectable_provider(self):
+        """Fork divergence from upstream's
+        ``test_bare_nous_does_not_escalate_to_flagship``.
+
+        Clawksis purged Nous Portal as a *selectable* provider: ``"nous"`` is
+        no longer in ``_PROVIDER_LABELS``, so typing ``/model nous`` must not
+        switch to it at all. The curated ``_PROVIDER_MODELS["nous"]`` catalog
+        survives only so the cost-safe silent default keeps working (covered by
+        ``test_nous_silent_default_is_not_the_expensive_flagship``), which is
+        why upstream's billing-footgun assertion has no bare-name path left to
+        guard here.
+        """
         from clawk_cli.models import (
-            _PROVIDER_MODELS,
-            get_default_model_for_provider,
+            _PROVIDER_LABELS,
             detect_static_provider_for_model,
         )
 
-        result = detect_static_provider_for_model("nous", "openrouter")
-        assert result is not None
-        provider, model = result
-        assert provider == "nous"
-        # Must match the cost-safe silent default, NOT the priciest catalog
-        # entry [0]. Regression: this path returned _PROVIDER_MODELS["nous"][0]
-        # directly, re-introducing the billing footgun on the interactive
-        # ``/model nous`` path.
-        assert model == get_default_model_for_provider("nous")
-        assert "opus" not in model.lower()
-        assert model != _PROVIDER_MODELS["nous"][0]
+        assert "nous" not in _PROVIDER_LABELS
+        assert detect_static_provider_for_model("nous", "openrouter") is None
 
     def test_provider_without_override_still_uses_first_model(self):
         """Providers outside _SILENT_DEFAULT_PROVIDERS are unchanged."""

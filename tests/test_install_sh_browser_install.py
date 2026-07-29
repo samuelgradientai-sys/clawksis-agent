@@ -8,6 +8,14 @@ half-installed just because Playwright's managed Chromium download hangs on an
 
 unsupported distribution.
 
+NOTE (sync v2026.7.20): upstream's rewrite of this file
+(``tools/upstream/pending/tests__test_install_sh_browser_install.py.theirs``)
+is deliberately NOT adopted yet. It asserts the *absence* of the system-browser
+autodetect and the presence of ``strip_snap_browser_override()`` /
+``run_playwright_install()``, none of which exist in this fork's
+``scripts/install.sh`` — that script is still an unmerged divergence (see
+``tools/upstream/pending/REPORT.md``: "scripts/install.sh — cambios propios del
+fork"). Adopt the upstream tests in the same change that merges the script.
 """
 
 from pathlib import Path

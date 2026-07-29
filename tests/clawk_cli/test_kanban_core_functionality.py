@@ -2770,6 +2770,14 @@ def test_build_worker_context_caps_huge_summary(kanban_home):
         conn.close()
 
 
+# NOTA (sync v2026.7.20): los tests propios
+# ``test_default_spawn_auto_loads_kanban_worker_skill``,
+# ``test_default_spawn_dedupes_kanban_worker_from_task_skills`` y
+# ``test_detect_crashed_workers_protocol_violation_auto_blocks`` NO se
+# reintroducen: upstream invirtio los dos contratos (el spawn por defecto ya no
+# auto-carga la skill kanban-worker, y una violacion de protocolo ahora tiene
+# presupuesto de reintentos en vez de bloquear en la primera). Los tres ya
+# fallaban contra el codigo de produccion mergeado.
 def test_default_spawn_does_not_auto_load_any_skill(kanban_home, monkeypatch):
     """The dispatcher no longer auto-loads a bundled kanban skill.
 

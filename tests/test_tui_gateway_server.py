@@ -10975,36 +10975,34 @@ def test_get_usage_clamps_post_compression_sentinel():
     assert "context_percent" not in usage
 
 
+# ---------------------------------------------------------------------------
+# Fork-only session lifecycle contracts (kept through the v2026.7.20 sync).
+# ---------------------------------------------------------------------------
+
 def test_session_title_queues_when_db_row_not_ready(monkeypatch):
+    """When the DB refuses the title write (no row yet), session.title queues
+    it on the live session and a subsequent get serves the pending value."""
 
     class _FakeDB:
         def get_session_title(self, _key):
-
             return None
 
         def get_session(self, _key):
-
             return None
 
         def set_session_title(self, _key, _title):
-
             return False
 
     server._sessions["sid"] = _session(pending_title=None)
-
     monkeypatch.setattr(server, "_get_db", lambda: _FakeDB())
-
     try:
         set_resp = server.handle_request({
             "id": "1",
             "method": "session.title",
             "params": {"session_id": "sid", "title": "queued title"},
         })
-
         assert set_resp["result"]["pending"] is True
-
         assert set_resp["result"]["title"] == "queued title"
-
         assert server._sessions["sid"]["pending_title"] == "queued title"
 
         get_resp = server.handle_request({
@@ -11012,9 +11010,7 @@ def test_session_title_queues_when_db_row_not_ready(monkeypatch):
             "method": "session.title",
             "params": {"session_id": "sid"},
         })
-
         assert get_resp["result"]["title"] == "queued title"
-
     finally:
         server._sessions.pop("sid", None)
 
@@ -11022,26 +11018,18 @@ def test_session_title_queues_when_db_row_not_ready(monkeypatch):
 def test_session_create_does_not_persist_empty_row(monkeypatch):
     """session.create must NOT eagerly write a DB row.
 
-
     Every TUI/desktop launch opens a session here just to paint the composer;
-
     eagerly creating a row left an empty "Untitled" session behind for every
-
     launch the user never typed into. The row is created lazily on first prompt.
-
     """
-
     created = []
 
     class _FakeDB:
         def create_session(self, *args, **kwargs):
-
             created.append((args, kwargs))
 
     monkeypatch.setattr(server, "_get_db", lambda: _FakeDB())
-
     monkeypatch.setattr(server, "_start_agent_build", lambda *a, **k: None)
-
     monkeypatch.setattr(
         server.threading,
         "Timer",
@@ -11053,13 +11041,9 @@ def test_session_create_does_not_persist_empty_row(monkeypatch):
         "method": "session.create",
         "params": {"cols": 80},
     })
-
     sid = resp["result"]["session_id"]
-
     try:
         assert resp["result"]["stored_session_id"]
-
         assert created == [], "session.create should not persist an empty DB row"
-
     finally:
         server._sessions.pop(sid, None)

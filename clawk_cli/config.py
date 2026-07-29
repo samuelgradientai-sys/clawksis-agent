@@ -54,7 +54,7 @@ from dataclasses import dataclass
 
 from pathlib import Path
 
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Set, Tuple
 
 
 from clawk_cli.secret_prompt import masked_secret_prompt
@@ -9425,3 +9425,52 @@ def clear_model_endpoint_credentials(
 
 
 _MISSING = object()
+
+def _explicit_config_paths(config: Dict[str, Any]) -> Set[Tuple[str, ...]]:
+    """Return leaf paths explicitly present in a raw config dict.
+
+    Computed on the **raw** (un-normalized, un-expanded) config so that
+    values injected by normalisation (e.g. ``agent.max_turns`` from
+    ``DEFAULT_CONFIG``) are not mistakenly treated as user-set.
+
+    Used by ``save_config`` to build the *preserve* set passed to
+    ``_strip_default_values`` so only user-authored keys survive the
+    defaults-strip pass.
+    """
+    paths: Set[Tuple[str, ...]] = set()
+
+    def _walk(value: Any, path: Tuple[str, ...]) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                _walk(child, path + (key,))
+            return
+        if path:
+            paths.add(path)
+
+    _walk(config, ())
+    return paths
+
+def _persist_migration(config: Dict[str, Any]) -> None:
+    """Persist a migrated config under the migration write invariant.
+
+    THE INVARIANT (single source of truth for the whole migration pipeline):
+    a migration may only persist values that DIFFER from the current schema
+    default, plus explicit removals/renames of user data. Pure schema defaults
+    are never materialised to disk — ``load_config()``'s deep-merge supplies
+    them at read time, so writing them adds nothing and actively shadows future
+    default changes (see ``save_config``'s docstring). Materialising defaults on
+    every version bump is what rewrote hand-curated configs into full
+    DEFAULT_CONFIG dumps (the "clawk update / clawk -p blows up my config"
+    reports).
+
+    Every migration step MUST route its write through this helper instead of
+    calling ``save_config`` directly. It is a thin wrapper over
+    ``save_config(config)`` (default-stripping ON, no ``merge_existing``);
+    centralising the call makes the invariant impossible to regress one
+    migration at a time. Callers must pass the full raw config returned by
+    ``read_raw_config()`` after in-place mutations (including key removals);
+    deep-merging the on-disk file back in would resurrect keys the migration
+    just deleted. Partial-save preservation for unrelated top-level sections
+    belongs on ``save_config(..., merge_existing=True)``, not here.
+    """
+    save_config(config)
