@@ -9,6 +9,7 @@ Build the real image and verify the actual runtime behavior:
   3. Symlinked allowlisted files are NOT chowned through the symlink
      (path_has_symlink_component guard)
 """
+
 from __future__ import annotations
 
 import tempfile
@@ -31,7 +32,8 @@ ALLOWLISTED_FILES = ("auth.json", "state.db", "gateway.lock", "gateway_state.jso
 
 
 def test_root_owned_state_files_repaired_on_boot(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """Root-owned top-level state files must be chowned to clawk on boot."""
     start_container(built_image, container_name)
@@ -39,14 +41,17 @@ def test_root_owned_state_files_repaired_on_boot(
     # Create root-owned state files to simulate docker exec (root) writes
     for f in ALLOWLISTED_FILES:
         docker_exec(
-            container_name, "touch", f"/opt/data/{f}",
-            user="root", timeout=5,
+            container_name,
+            "touch",
+            f"/opt/data/{f}",
+            user="root",
+            timeout=5,
         )
 
     # Verify they're root-owned
     r = docker_exec_sh(
         container_name,
-        " ".join(f'stat -c %U /opt/data/{f}' for f in ALLOWLISTED_FILES),
+        " ".join(f"stat -c %U /opt/data/{f}" for f in ALLOWLISTED_FILES),
         timeout=5,
     )
     for line in r.stdout.split():
@@ -58,17 +63,16 @@ def test_root_owned_state_files_repaired_on_boot(
     # Verify files are now clawk-owned
     r = docker_exec_sh(
         container_name,
-        " ".join(f'stat -c %U /opt/data/{f}' for f in ALLOWLISTED_FILES),
+        " ".join(f"stat -c %U /opt/data/{f}" for f in ALLOWLISTED_FILES),
         timeout=5,
     )
     for line in r.stdout.split():
-        assert line == "clawk", (
-            f"expected clawk-owned after restart, got: {line}"
-        )
+        assert line == "clawk", f"expected clawk-owned after restart, got: {line}"
 
 
 def test_non_allowlisted_host_file_not_touched(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """A non-allowlisted host-owned file must NOT be chowned, even if
     root-owned. Regression guard for #19788 / #19795: a bind-mounted
@@ -77,13 +81,20 @@ def test_non_allowlisted_host_file_not_touched(
 
     # Create a non-allowlisted file as root
     docker_exec(
-        container_name, "touch", "/opt/data/host_secret.json",
-        user="root", timeout=5,
+        container_name,
+        "touch",
+        "/opt/data/host_secret.json",
+        user="root",
+        timeout=5,
     )
     # Make it root-owned explicitly (it already is, but be sure)
     docker_exec(
-        container_name, "chown", "root:root", "/opt/data/host_secret.json",
-        user="root", timeout=5,
+        container_name,
+        "chown",
+        "root:root",
+        "/opt/data/host_secret.json",
+        user="root",
+        timeout=5,
     )
 
     # Restart
@@ -102,7 +113,8 @@ def test_non_allowlisted_host_file_not_touched(
 
 
 def test_symlinked_allowlisted_file_not_chowned(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """A symlinked allowlisted file (e.g. auth.json -> /tmp/outside.json)
     must NOT be chowned through the symlink.
@@ -124,19 +136,40 @@ def test_symlinked_allowlisted_file_not_chowned(
         # the chown loop enters the refuse_symlinked_path guard. We create
         # the target inside the bind mount so it persists across containers.
         subprocess.run(
-            ["docker", "run", "--rm",
-             "-v", f"{host_data}:/opt/data",
-             "--entrypoint", "sh", built_image,
-             "-c", "touch /opt/data/.symlink-target && ln -s /opt/data/.symlink-target /opt/data/auth.json"],
-            check=True, capture_output=True, timeout=30,
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{host_data}:/opt/data",
+                "--entrypoint",
+                "sh",
+                built_image,
+                "-c",
+                "touch /opt/data/.symlink-target && ln -s /opt/data/.symlink-target /opt/data/auth.json",
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
         )
 
         # Boot the container with the bind mount
         subprocess.run(
-            ["docker", "run", "-d", "--name", container_name,
-             "-v", f"{host_data}:/opt/data",
-             built_image, "sleep", "infinity"],
-            check=True, capture_output=True, timeout=60,
+            [
+                "docker",
+                "run",
+                "-d",
+                "--name",
+                container_name,
+                "-v",
+                f"{host_data}:/opt/data",
+                built_image,
+                "sleep",
+                "infinity",
+            ],
+            check=True,
+            capture_output=True,
+            timeout=60,
         )
         # Wait for cont-init to finish (first boot runs stage2)
         wait_for_container_ready(container_name)
@@ -155,7 +188,9 @@ def test_symlinked_allowlisted_file_not_chowned(
         # container-boot.log (which is written by container_boot.py).
         r = subprocess.run(
             ["docker", "logs", container_name],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         combined = r.stdout + r.stderr
         assert "refusing" in combined and "auth.json" in combined, (
@@ -166,14 +201,24 @@ def test_symlinked_allowlisted_file_not_chowned(
         if host_data is not None:
             subprocess.run(
                 ["docker", "rm", "-f", container_name],
-                capture_output=True, timeout=10,
+                capture_output=True,
+                timeout=10,
             )
             subprocess.run(
-                ["docker", "run", "--rm",
-                 "-v", f"{host_data}:/clean",
-                 "--entrypoint", "sh", built_image,
-                 "-c", "chown -R 0:0 /clean 2>/dev/null; rm -rf /clean/* /clean/.* 2>/dev/null; chown 0:0 /clean; true"],
-                capture_output=True, timeout=15,
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "-v",
+                    f"{host_data}:/clean",
+                    "--entrypoint",
+                    "sh",
+                    built_image,
+                    "-c",
+                    "chown -R 0:0 /clean 2>/dev/null; rm -rf /clean/* /clean/.* 2>/dev/null; chown 0:0 /clean; true",
+                ],
+                capture_output=True,
+                timeout=15,
             )
             try:
                 host_data.rmdir()

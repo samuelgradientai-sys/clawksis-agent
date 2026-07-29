@@ -60,7 +60,15 @@ logger = logging.getLogger(__name__)
 # Common aspect ratios across providers (Veo / Kling / xAI / Pixverse). The
 # tool schema advertises this set as an enum hint, but providers may accept
 # a narrower or wider set — they are responsible for clamping.
-COMMON_ASPECT_RATIOS: Tuple[str, ...] = ("16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3")
+COMMON_ASPECT_RATIOS: Tuple[str, ...] = (
+    "16:9",
+    "9:16",
+    "1:1",
+    "4:3",
+    "3:4",
+    "3:2",
+    "2:3",
+)
 DEFAULT_ASPECT_RATIO = "16:9"
 
 COMMON_RESOLUTIONS: Tuple[str, ...] = ("480p", "540p", "720p", "1080p")
@@ -274,7 +282,9 @@ def save_url_video(
     response = requests.get(url, timeout=timeout, stream=True)
     response.raise_for_status()
 
-    content_type = (response.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+    content_type = (
+        (response.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+    )
     extension = _URL_VIDEO_CONTENT_TYPES.get(content_type)
     if extension is None:
         url_path = url.split("?", 1)[0].lower()
@@ -427,7 +437,14 @@ class OpenAICompatibleVideoGenProvider(VideoGenProvider):
         import time
 
         video = client.videos.create(**call_kwargs)
-        terminal = {"completed", "succeeded", "failed", "error", "cancelled", "canceled"}
+        terminal = {
+            "completed",
+            "succeeded",
+            "failed",
+            "error",
+            "cancelled",
+            "canceled",
+        }
         deadline = time.monotonic() + self._poll_deadline_s
         while getattr(video, "status", None) not in terminal:
             if time.monotonic() >= deadline:
@@ -463,7 +480,9 @@ class OpenAICompatibleVideoGenProvider(VideoGenProvider):
     ) -> Dict[str, Any]:
         if not prompt or not prompt.strip():
             return error_response(
-                error="prompt is required", error_type="invalid_request", provider=self.name
+                error="prompt is required",
+                error_type="invalid_request",
+                provider=self.name,
             )
         if not self._api_key():
             return error_response(
@@ -532,7 +551,9 @@ class OpenAICompatibleVideoGenProvider(VideoGenProvider):
                 # dict stays JSON-serializable for the tool layer.
                 job_error = getattr(video, "error", None)
                 return error_response(
-                    error=str(job_error) if job_error else f"video job ended with status={status!r}",
+                    error=str(job_error)
+                    if job_error
+                    else f"video job ended with status={status!r}",
                     error_type="job_failed",
                     provider=self.name,
                     model=model_id,
@@ -547,7 +568,11 @@ class OpenAICompatibleVideoGenProvider(VideoGenProvider):
             # particular are short-lived. Matches plugins/image_gen/deepinfra.
             url = None
             for item in getattr(video, "data", None) or []:
-                candidate = item.get("url") if isinstance(item, dict) else getattr(item, "url", None)
+                candidate = (
+                    item.get("url")
+                    if isinstance(item, dict)
+                    else getattr(item, "url", None)
+                )
                 if candidate:
                     url = candidate
                     break
@@ -563,7 +588,11 @@ class OpenAICompatibleVideoGenProvider(VideoGenProvider):
             except Exception as exc:  # noqa: BLE001
                 if url:
                     # Best-effort: hand back the URL rather than fail outright.
-                    logger.debug("%s: saving video locally failed (%s); returning URL", self.name, exc)
+                    logger.debug(
+                        "%s: saving video locally failed (%s); returning URL",
+                        self.name,
+                        exc,
+                    )
                     video_ref = url
                 else:
                     return error_response(

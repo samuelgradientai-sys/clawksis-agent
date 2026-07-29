@@ -21,6 +21,7 @@ Uso:
   python tools/upstream/automerge_tests.py            # dry-run
   python tools/upstream/automerge_tests.py --apply
 """
+
 from __future__ import annotations
 
 import argparse
@@ -61,11 +62,20 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.list:
-        files = [l.strip() for l in Path(args.list).read_text(encoding="utf-8").splitlines() if l.strip()]
+        files = [
+            l.strip()
+            for l in Path(args.list).read_text(encoding="utf-8").splitlines()
+            if l.strip()
+        ]
     else:
         import re
+
         report = (PENDING / "REPORT.md").read_text(encoding="utf-8")
-        files = [p for p in re.findall(r"^- `([^`]+)`", report, re.M) if p.startswith("tests/")]
+        files = [
+            p
+            for p in re.findall(r"^- `([^`]+)`", report, re.M)
+            if p.startswith("tests/")
+        ]
 
     adopted, to_agent, skipped = [], [], []
     for fp in files:
@@ -101,7 +111,9 @@ def main() -> int:
     print(f"  adoptados de upstream (sin perder cobertura propia): {len(adopted)}")
     print(f"  a subagente (tienen tests propios del fork / Nous): {len(to_agent)}")
     print(f"  saltados: {len(skipped)}")
-    (PENDING / "TESTS_TOAGENT.txt").write_text("\n".join(p for p, _ in to_agent), encoding="utf-8")
+    (PENDING / "TESTS_TOAGENT.txt").write_text(
+        "\n".join(p for p, _ in to_agent), encoding="utf-8"
+    )
     (PENDING / "TESTS_ADOPTED.txt").write_text("\n".join(adopted), encoding="utf-8")
     if not args.apply and to_agent:
         print("\n  ejemplos a subagente:")

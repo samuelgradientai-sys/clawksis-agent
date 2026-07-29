@@ -62,8 +62,7 @@ def validate_platform_toolsets(
                 else ""
             )
             warnings.append(
-                f"platform '{platform}' references unknown toolset "
-                f"'{name}'{hint}"
+                f"platform '{platform}' references unknown toolset '{name}'{hint}"
             )
 
     if valid_count == 0:

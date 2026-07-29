@@ -92,15 +92,24 @@ def test_accepts_bare_strings_too():
 
 
 def test_arm_requires_all_three():
-    assert should_arm(enabled=True, relay_only_or_absent=True, wake_url="https://x") is True
+    assert (
+        should_arm(enabled=True, relay_only_or_absent=True, wake_url="https://x")
+        is True
+    )
 
 
 def test_arm_blocked_when_flag_off():
-    assert should_arm(enabled=False, relay_only_or_absent=True, wake_url="https://x") is False
+    assert (
+        should_arm(enabled=False, relay_only_or_absent=True, wake_url="https://x")
+        is False
+    )
 
 
 def test_arm_blocked_when_direct_socket():
-    assert should_arm(enabled=True, relay_only_or_absent=False, wake_url="https://x") is False
+    assert (
+        should_arm(enabled=True, relay_only_or_absent=False, wake_url="https://x")
+        is False
+    )
 
 
 def test_arm_blocked_without_wake_url():

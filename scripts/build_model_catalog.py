@@ -78,8 +78,7 @@ def build_catalog() -> dict:
                     ),
                 },
                 "models": [
-                    _openrouter_entry(mid, desc)
-                    for mid, desc in OPENROUTER_MODELS
+                    _openrouter_entry(mid, desc) for mid, desc in OPENROUTER_MODELS
                 ],
             },
             "nous": {
@@ -93,8 +92,7 @@ def build_catalog() -> dict:
                     ),
                 },
                 "models": [
-                    _nous_entry(mid)
-                    for mid in _PROVIDER_MODELS.get("nous", [])
+                    _nous_entry(mid) for mid in _PROVIDER_MODELS.get("nous", [])
                 ],
             },
         },

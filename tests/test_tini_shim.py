@@ -4,6 +4,7 @@ These run without Docker: the shim's CLAWK_TINI_SHIM_TARGET /
 CLAWK_TINI_SHIM_WRAPPER hooks let us record the argv that would be
 handed to /init.
 """
+
 from __future__ import annotations
 
 import os

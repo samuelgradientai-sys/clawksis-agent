@@ -290,12 +290,14 @@ def build_top_level_parser():
     # test_argparse_flag_propagation.py).
     _inherited_flag(
         chat_parser,
-        "-m", "--model",
+        "-m",
+        "--model",
         default=argparse.SUPPRESS,
         help="Model to use (e.g., anthropic/claude-sonnet-4)",
     )
     chat_parser.add_argument(
-        "-t", "--toolsets",
+        "-t",
+        "--toolsets",
         default=argparse.SUPPRESS,
         help="Comma-separated toolsets to enable",
     )

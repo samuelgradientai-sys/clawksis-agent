@@ -381,8 +381,7 @@ class SelfHostedOIDCProvider(DashboardAuthProvider):
 
         methods = disco.get("token_endpoint_auth_methods_supported") or []
         prefer_post = (
-            "client_secret_post" in methods
-            and "client_secret_basic" not in methods
+            "client_secret_post" in methods and "client_secret_basic" not in methods
         )
         if prefer_post:
             # Secret travels in the application/x-www-form-urlencoded body.
@@ -431,16 +430,12 @@ class SelfHostedOIDCProvider(DashboardAuthProvider):
                 timeout=_TOKEN_ENDPOINT_TIMEOUT_SEC,
             )
         except httpx.RequestError as exc:
-            raise ProviderError(
-                f"OIDC token endpoint unreachable: {exc}"
-            ) from exc
+            raise ProviderError(f"OIDC token endpoint unreachable: {exc}") from exc
 
         if response.status_code == 400:
             body = self._parse_json_body(response)
             error_code = body.get("error", "invalid_request")
-            raise bad_request_exc(
-                f"IDP rejected token request: {error_code}"
-            )
+            raise bad_request_exc(f"IDP rejected token request: {error_code}")
         if response.status_code != 200:
             raise ProviderError(
                 f"OIDC token endpoint returned {response.status_code}: "
@@ -566,9 +561,7 @@ class SelfHostedOIDCProvider(DashboardAuthProvider):
         _require_https_or_loopback(token_endpoint, field="token_endpoint")
         _require_https_or_loopback(jwks_uri, field="jwks_uri")
 
-        revocation_endpoint = str(
-            payload.get("revocation_endpoint", "") or ""
-        ).strip()
+        revocation_endpoint = str(payload.get("revocation_endpoint", "") or "").strip()
 
         # Client-authentication methods the IDP advertises for the token
         # endpoint. Used to pick client_secret_basic vs client_secret_post for
@@ -610,9 +603,7 @@ class SelfHostedOIDCProvider(DashboardAuthProvider):
         disco = self._get_discovery()
 
         try:
-            signing_key = self._get_jwks_client().get_signing_key_from_jwt(
-                id_token
-            )
+            signing_key = self._get_jwks_client().get_signing_key_from_jwt(id_token)
         except jwt.PyJWKClientError as exc:
             raise ProviderError(f"JWKS lookup failed: {exc}") from exc
         except Exception as exc:  # pragma: no cover - defensive
@@ -717,9 +708,7 @@ class SelfHostedOIDCProvider(DashboardAuthProvider):
         """
         parsed = urllib.parse.urlparse(redirect_uri)
         if parsed.scheme not in ("https", "http"):
-            raise ProviderError(
-                f"redirect_uri must be http(s), got {redirect_uri!r}"
-            )
+            raise ProviderError(f"redirect_uri must be http(s), got {redirect_uri!r}")
         if not parsed.path or not parsed.path.endswith("/auth/callback"):
             raise ProviderError(
                 "redirect_uri path must end with '/auth/callback', "
@@ -802,9 +791,7 @@ def register(ctx) -> None:
     oauth_section = _load_config_oauth_section()
     oidc_cfg = _oidc_subsection(oauth_section)
 
-    issuer = _resolve_setting(
-        "CLAWK_DASHBOARD_OIDC_ISSUER", oidc_cfg.get("issuer")
-    )
+    issuer = _resolve_setting("CLAWK_DASHBOARD_OIDC_ISSUER", oidc_cfg.get("issuer"))
     client_id = _resolve_setting(
         "CLAWK_DASHBOARD_OIDC_CLIENT_ID", oidc_cfg.get("client_id")
     )
@@ -840,9 +827,7 @@ def register(ctx) -> None:
             client_secret=client_secret,
         )
     except (ValueError, ProviderError) as exc:
-        LAST_SKIP_REASON = (
-            f"SelfHostedOIDCProvider construction failed: {exc}"
-        )
+        LAST_SKIP_REASON = f"SelfHostedOIDCProvider construction failed: {exc}"
         logger.warning("dashboard-auth-self-hosted: %s", LAST_SKIP_REASON)
         return
 

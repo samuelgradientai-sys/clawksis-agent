@@ -57,17 +57,13 @@ def test_format_secret_source_suffix_generic_label_for_future_sources():
     # Future-proofing: a new secret source (e.g. "vault") should still
     # produce a sensible label without needing to edit every call site.
     env_loader._SECRET_SOURCES["OPENAI_API_KEY"] = "vault"
-    assert (
-        env_loader.format_secret_source_suffix("OPENAI_API_KEY")
-        == " (from vault)"
-    )
+    assert env_loader.format_secret_source_suffix("OPENAI_API_KEY") == " (from vault)"
 
 
 def test_format_secret_source_suffix_onepassword_uses_proper_name():
     env_loader._SECRET_SOURCES["OPENAI_API_KEY"] = "onepassword"
     assert (
-        env_loader.format_secret_source_suffix("OPENAI_API_KEY")
-        == " (from 1Password)"
+        env_loader.format_secret_source_suffix("OPENAI_API_KEY") == " (from 1Password)"
     )
 
 
@@ -117,9 +113,7 @@ def test_apply_external_secret_sources_noop_when_disabled(tmp_path, monkeypatch)
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "secrets:\n"
-        "  bitwarden:\n"
-        "    enabled: false\n",
+        "secrets:\n  bitwarden:\n    enabled: false\n",
         encoding="utf-8",
     )
 
@@ -157,6 +151,7 @@ def test_apply_external_secret_sources_dedupes_within_process(tmp_path, monkeypa
         return {"ANTHROPIC_API_KEY": "sk-ant-test"}, []
 
     import agent.secret_sources.bitwarden as bw_module
+
     monkeypatch.setattr(bw_module, "find_bws", lambda **_kw: Path("/fake/bws"))
     monkeypatch.setattr(bw_module, "fetch_bitwarden_secrets", _fake_fetch)
 
@@ -184,7 +179,9 @@ def test_apply_external_secret_sources_dedupes_within_process(tmp_path, monkeypa
     assert call_count["n"] == 2
 
 
-def test_apply_external_secret_sources_records_onepassword_origin(tmp_path, monkeypatch):
+def test_apply_external_secret_sources_records_onepassword_origin(
+    tmp_path, monkeypatch
+):
     """When the 1Password source resolves refs, applied vars end up in
     ``_SECRET_SOURCES`` labeled ``onepassword``."""
 
@@ -231,9 +228,7 @@ def test_apply_external_secret_sources_survives_non_dict_section(tmp_path, monke
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     (tmp_path / "config.yaml").write_text(
-        "secrets:\n"
-        "  bitwarden: true\n"
-        "  onepassword: true\n",
+        "secrets:\n  bitwarden: true\n  onepassword: true\n",
         encoding="utf-8",
     )
 
@@ -263,6 +258,7 @@ def test_apply_external_secret_sources_bad_ttl_does_not_crash(tmp_path, monkeypa
         return {}, []
 
     import agent.secret_sources.onepassword as op_module
+
     monkeypatch.setattr(op_module, "find_op", lambda *_a, **_kw: Path("/fake/op"))
     monkeypatch.setattr(op_module, "fetch_onepassword_secrets", _fake_fetch)
 

@@ -129,10 +129,13 @@ def parse_profile_routes(raw: Optional[List[Dict[str, Any]]]) -> List[ProfileRou
                 normalize_profile_name,
                 validate_profile_name,
             )
+
             profile = normalize_profile_name(profile)
             validate_profile_name(profile)
         except (ValueError, ImportError):
-            logger.warning("Skipping profile route %s: invalid profile name %r", name, profile)
+            logger.warning(
+                "Skipping profile route %s: invalid profile name %r", name, profile
+            )
             continue
         routes.append(
             ProfileRoute(
@@ -161,6 +164,12 @@ def match_profile_route(
 ) -> Optional[ProfileRoute]:
     """Return the best-matching route, or None for no match."""
     for route in routes:
-        if route.matches(platform, guild_id=guild_id, chat_id=chat_id, thread_id=thread_id, parent_chat_id=parent_chat_id):
+        if route.matches(
+            platform,
+            guild_id=guild_id,
+            chat_id=chat_id,
+            thread_id=thread_id,
+            parent_chat_id=parent_chat_id,
+        ):
             return route
     return None

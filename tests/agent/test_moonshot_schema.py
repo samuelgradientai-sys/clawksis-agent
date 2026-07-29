@@ -302,7 +302,9 @@ class TestToolListSanitizer:
         assert out[0]["function"]["parameters"]["properties"]["q"]["type"] == "string"
         # Second tool: empty object gains the required-array Moonshot demands
         assert out[1]["function"]["parameters"] == {
-            "type": "object", "properties": {}, "required": []
+            "type": "object",
+            "properties": {},
+            "required": [],
         }
 
     def test_empty_list_is_passthrough(self):
@@ -408,7 +410,15 @@ class TestEnumNullStripping:
             "properties": {
                 "datasource": {"type": "string"},
                 "db_type": {
-                    "enum": ["mysql", "mariadb", "postgresql", "sqlserver", "oracle", "", None],
+                    "enum": [
+                        "mysql",
+                        "mariadb",
+                        "postgresql",
+                        "sqlserver",
+                        "oracle",
+                        "",
+                        None,
+                    ],
                     "type": "string",
                     "nullable": True,
                     "default": None,
@@ -421,7 +431,13 @@ class TestEnumNullStripping:
         assert "nullable" not in db_type, "nullable keyword must be stripped"
         assert None not in db_type["enum"]
         assert "" not in db_type["enum"]
-        assert db_type["enum"] == ["mysql", "mariadb", "postgresql", "sqlserver", "oracle"]
+        assert db_type["enum"] == [
+            "mysql",
+            "mariadb",
+            "postgresql",
+            "sqlserver",
+            "oracle",
+        ]
         assert db_type["type"] == "string"
 
     def test_enum_on_object_type_not_stripped(self):
@@ -460,10 +476,13 @@ class TestEnumNullStripping:
         out = sanitize_moonshot_tool_parameters(params)
         db_type = out["properties"]["db_type"]
         assert "anyOf" not in db_type
-        assert "nullable" not in db_type, "nullable must be stripped after anyOf collapse"
+        assert "nullable" not in db_type, (
+            "nullable must be stripped after anyOf collapse"
+        )
         assert db_type["type"] == "string"
-        assert db_type["enum"] == ["mysql", "postgresql"], \
+        assert db_type["enum"] == ["mysql", "postgresql"], (
             "null/empty enum values must be stripped after anyOf collapse"
+        )
 
 
 class TestUnionTypeList:

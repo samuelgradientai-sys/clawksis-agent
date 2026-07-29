@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 # Paths
 # ---------------------------------------------------------------------------
 
+
 def get_state_dir() -> Path:
     """State dir — separate from ``$CLAWK_HOME/logs/``."""
     return get_clawk_home() / "disk-cleanup"
@@ -62,6 +63,7 @@ def get_log_file() -> Path:
 # ---------------------------------------------------------------------------
 # Path safety
 # ---------------------------------------------------------------------------
+
 
 def is_safe_path(path: Path) -> bool:
     """Accept only paths under CLAWK_HOME or ``/tmp/clawk-*``.
@@ -85,6 +87,7 @@ def is_safe_path(path: Path) -> bool:
 # Audit log
 # ---------------------------------------------------------------------------
 
+
 def _log(message: str) -> None:
     try:
         log_file = get_log_file()
@@ -100,6 +103,7 @@ def _log(message: str) -> None:
 # ---------------------------------------------------------------------------
 # tracked.json — atomic read/write, backup scoped to tracked.json only
 # ---------------------------------------------------------------------------
+
 
 def load_tracked() -> List[Dict[str, Any]]:
     """Load tracked.json.  Restores from ``.bak`` on corruption."""
@@ -140,19 +144,39 @@ def save_tracked(tracked: List[Dict[str, Any]]) -> None:
 # ---------------------------------------------------------------------------
 
 ALLOWED_CATEGORIES = {
-    "temp", "test", "research", "download",
-    "chrome-profile", "cron-output", "other",
+    "temp",
+    "test",
+    "research",
+    "download",
+    "chrome-profile",
+    "cron-output",
+    "other",
 }
 
 _EMPTY_DIR_PROTECTED_TOP_LEVEL = frozenset({
-    "logs", "memories", "sessions", "cron", "cronjobs",
-    "cache", "skills", "plugins", "disk-cleanup", "optional-skills",
-    "clawksis-agent", "backups", "profiles", ".worktrees",
+    "logs",
+    "memories",
+    "sessions",
+    "cron",
+    "cronjobs",
+    "cache",
+    "skills",
+    "plugins",
+    "disk-cleanup",
+    "optional-skills",
+    "clawksis-agent",
+    "backups",
+    "profiles",
+    ".worktrees",
 })
 
 _EMPTY_DIR_SWEEP_PRUNE_DIRS = frozenset({
-    ".git", "node_modules", "venv", ".venv",
-    "site-packages", "__pycache__",
+    ".git",
+    "node_modules",
+    "venv",
+    ".venv",
+    "site-packages",
+    "__pycache__",
 })
 
 
@@ -199,6 +223,7 @@ def fmt_size(n: float) -> str:
 # ---------------------------------------------------------------------------
 # Track / forget
 # ---------------------------------------------------------------------------
+
 
 def track(path_str: str, category: str, silent: bool = False) -> bool:
     """Register a file for tracking. Returns True if newly tracked."""
@@ -253,6 +278,7 @@ def forget(path_str: str) -> int:
 # Dry run
 # ---------------------------------------------------------------------------
 
+
 def dry_run() -> Tuple[List[Dict], List[Dict]]:
     """Return (auto_delete_list, needs_prompt_list) without touching files."""
     tracked = load_tracked()
@@ -297,6 +323,7 @@ def dry_run() -> Tuple[List[Dict], List[Dict]]:
 # Quick cleanup
 # ---------------------------------------------------------------------------
 
+
 def quick() -> Dict[str, Any]:
     """Safe deterministic cleanup — no prompts.
 
@@ -329,10 +356,7 @@ def quick() -> Dict[str, Any]:
         if cat == "cron-output":
             re_cat = guess_category(p)
             if re_cat != "cron-output":
-                _log(
-                    f"SKIP stale cron-output entry: {p} "
-                    f"(re-classified as {re_cat!r})"
-                )
+                _log(f"SKIP stale cron-output entry: {p} (re-classified as {re_cat!r})")
                 # Drop the stale entry — it was misclassified.
                 continue
 
@@ -408,10 +432,7 @@ def quick() -> Dict[str, Any]:
             pass
 
     save_tracked(new_tracked)
-    _log(
-        f"QUICK_SUMMARY: {deleted} files, {empty_removed} dirs, "
-        f"{fmt_size(freed)}"
-    )
+    _log(f"QUICK_SUMMARY: {deleted} files, {empty_removed} dirs, {fmt_size(freed)}")
     return {
         "deleted": deleted,
         "empty_dirs": empty_removed,
@@ -423,6 +444,7 @@ def quick() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Deep cleanup (interactive — not called from plugin hooks)
 # ---------------------------------------------------------------------------
+
 
 def deep(
     confirm: Optional[callable] = None,
@@ -477,10 +499,7 @@ def deep(
                     to_remove.append(item)
                     freed += item["size"]
                     count += 1
-                    _log(
-                        f"DELETED: {p} ({item['category']}, "
-                        f"{fmt_size(item['size'])})"
-                    )
+                    _log(f"DELETED: {p} ({item['category']}, {fmt_size(item['size'])})")
                 except OSError as e:
                     _log(f"ERROR deleting {item['path']}: {e}")
 
@@ -495,6 +514,7 @@ def deep(
 # Status
 # ---------------------------------------------------------------------------
 
+
 def status() -> Dict[str, Any]:
     """Return per-category breakdown and top 10 largest tracked files."""
     tracked = load_tracked()
@@ -507,7 +527,8 @@ def status() -> Dict[str, Any]:
 
     existing = [
         (i["path"], i["size"], i["category"])
-        for i in tracked if Path(i["path"]).exists()
+        for i in tracked
+        if Path(i["path"]).exists()
     ]
     existing.sort(key=lambda x: x[1], reverse=True)
 
@@ -560,9 +581,19 @@ def guess_category(path: Path) -> Optional[str]:
         rel = path.resolve().relative_to(clawk_home)
         top = rel.parts[0] if rel.parts else ""
         if top in {
-            "disk-cleanup", "logs", "memories", "sessions", "config.yaml",
-            "skills", "plugins", ".env", "USER.md", "MEMORY.md", "SOUL.md",
-            "auth.json", "clawksis-agent",
+            "disk-cleanup",
+            "logs",
+            "memories",
+            "sessions",
+            "config.yaml",
+            "skills",
+            "plugins",
+            ".env",
+            "USER.md",
+            "MEMORY.md",
+            "SOUL.md",
+            "auth.json",
+            "clawksis-agent",
         }:
             return None
         if top == "cron" or top == "cronjobs":

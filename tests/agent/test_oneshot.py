@@ -45,7 +45,9 @@ class TestRenderTemplate:
         # Passing the previous message must instruct the model not to repeat it,
         # so "regenerate" yields a different result even on greedy models.
         _, plain = render_template("commit_message", {"diff": "d"})
-        _, regen = render_template("commit_message", {"diff": "d", "avoid": "feat: prior"})
+        _, regen = render_template(
+            "commit_message", {"diff": "d", "avoid": "feat: prior"}
+        )
         assert "feat: prior" in regen
         assert "do not repeat" in regen
         assert "feat: prior" not in plain

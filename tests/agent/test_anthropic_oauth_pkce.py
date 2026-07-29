@@ -56,9 +56,7 @@ def _patch_oauth_flow(
     # it never launches a console browser (w3m/lynx) inside the terminal. Tests
     # run headless, so force the GUI path to True — the URL capture relies on
     # webbrowser.open() being invoked.
-    monkeypatch.setattr(
-        "clawk_cli.auth._can_open_graphical_browser", lambda: True
-    )
+    monkeypatch.setattr("clawk_cli.auth._can_open_graphical_browser", lambda: True)
     monkeypatch.setattr("builtins.input", lambda *_a, **_kw: callback_code)
 
     class _FakeResponse:
@@ -222,13 +220,11 @@ def test_login_token_exchange_falls_back_to_console_host(monkeypatch, tmp_path):
         attempts.append(req.full_url)
         if req.full_url.startswith("https://platform.claude.com"):
             raise RuntimeError("HTTP Error 404: Not Found")
-        body = json.dumps(
-            {
-                "access_token": "sk-ant-test-access",
-                "refresh_token": "sk-ant-test-refresh",
-                "expires_in": 3600,
-            }
-        ).encode()
+        body = json.dumps({
+            "access_token": "sk-ant-test-access",
+            "refresh_token": "sk-ant-test-refresh",
+            "expires_in": 3600,
+        }).encode()
         return _FakeResponse(body)
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)

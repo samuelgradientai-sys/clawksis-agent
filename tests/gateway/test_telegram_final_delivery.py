@@ -59,7 +59,10 @@ async def test_turn_final_flood_immediately_delivers_missing_tail():
     await consumer._send_fallback_final(":( The completed answer follows here.")
 
     adapter.send.assert_awaited_once()
-    assert adapter.send.await_args.kwargs["content"] == "The completed answer follows here."
+    assert (
+        adapter.send.await_args.kwargs["content"]
+        == "The completed answer follows here."
+    )
     assert adapter.send.await_args.kwargs["metadata"] == {
         "thread_id": "77",
         "notify": True,
@@ -213,6 +216,7 @@ async def test_empty_tail_commit_skips_long_flood_retry(monkeypatch):
 @pytest.mark.asyncio
 async def test_telegram_long_flood_result_keeps_retry_after():
     """The real adapter contract preserves the server delay for consumers."""
+
     class FloodError(Exception):
         retry_after = 30.0
 
@@ -274,6 +278,9 @@ def test_timeout_exception_is_treated_as_ambiguous_delivery():
     class TimedOut(Exception):
         pass
 
-    assert GatewayStreamConsumer._send_failure_may_have_delivered(
-        TimedOut("request timed out")
-    ) is True
+    assert (
+        GatewayStreamConsumer._send_failure_may_have_delivered(
+            TimedOut("request timed out")
+        )
+        is True
+    )

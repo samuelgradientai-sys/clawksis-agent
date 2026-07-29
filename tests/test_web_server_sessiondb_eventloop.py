@@ -52,8 +52,7 @@ def test_sessiondb_handlers_open_connections_inside_executor_helpers():
         offloaded = {
             arg.id
             for node in ast.walk(handler)
-            if isinstance(node, ast.Call)
-            and _call_name(node) == "to_thread"
+            if isinstance(node, ast.Call) and _call_name(node) == "to_thread"
             for arg in node.args[:1]
             if isinstance(arg, ast.Name)
         }
@@ -83,7 +82,9 @@ def test_bulk_delete_sessiondb_work_runs_off_event_loop(monkeypatch):
         def close(self):
             db_threads.append(threading.get_ident())
 
-    monkeypatch.setattr(web_server, "_open_session_db_for_profile", lambda profile=None: _DB())
+    monkeypatch.setattr(
+        web_server, "_open_session_db_for_profile", lambda profile=None: _DB()
+    )
 
     result = asyncio.run(
         web_server.bulk_delete_sessions_endpoint(

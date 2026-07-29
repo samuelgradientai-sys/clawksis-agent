@@ -29,7 +29,9 @@ _COMMIT_CONTEXT_UNTRACKED_MAX = 80
 _TRUNK_BRANCHES = ("main", "master")
 
 
-def _git(cwd: str, args: list[str], *, timeout: int = _GIT_TIMEOUT) -> tuple[int, str, str]:
+def _git(
+    cwd: str, args: list[str], *, timeout: int = _GIT_TIMEOUT
+) -> tuple[int, str, str]:
     """Run ``git`` in ``cwd``. Returns (returncode, stdout, stderr); never raises
     on a non-zero exit (callers decide what an error means)."""
     try:
@@ -233,7 +235,11 @@ def repo_status(cwd: str) -> dict | None:
     for a, r in _numstat(cwd, ["HEAD"]).values():
         added += a
         removed += r
-    added += sum(_untracked_insertions(cwd, f["path"]) for f in files[:_UNTRACKED_SCAN_CAP] if f["untracked"])
+    added += sum(
+        _untracked_insertions(cwd, f["path"])
+        for f in files[:_UNTRACKED_SCAN_CAP]
+        if f["untracked"]
+    )
 
     return {
         "branch": branch,
@@ -291,26 +297,28 @@ def review_list(cwd: str, scope: str, base_ref: str | None) -> dict:
     for tag, xy, path in _walk_entries(raw):
         sa, sr = staged.get(path, (0, 0))
         ua, ur = unstaged.get(path, (0, 0))
-        files.append(
-            {
-                "path": path,
-                "added": sa + ua,
-                "removed": sr + ur,
-                "status": _status_letter(tag, xy),
-                "staged": _entry_staged(tag, xy),
-            }
-        )
+        files.append({
+            "path": path,
+            "added": sa + ua,
+            "removed": sr + ur,
+            "status": _status_letter(tag, xy),
+            "staged": _entry_staged(tag, xy),
+        })
     files.sort(key=lambda f: f["path"])
     _fill_untracked_counts(cwd, files)
     return {"files": files, "base": None}
 
 
-def review_diff(cwd: str, file_path: str, scope: str, base_ref: str | None, staged: bool) -> str:
+def review_diff(
+    cwd: str, file_path: str, scope: str, base_ref: str | None, staged: bool
+) -> str:
     if not _is_dir(cwd):
         return ""
     if scope == "branch":
         base = _branch_base(cwd)
-        return _git_out(cwd, ["diff", f"{base}...HEAD", "--", file_path]) if base else ""
+        return (
+            _git_out(cwd, ["diff", f"{base}...HEAD", "--", file_path]) if base else ""
+        )
     if scope == "lastTurn":
         return _git_out(cwd, ["diff", base_ref, "--", file_path]) if base_ref else ""
     if staged:
@@ -344,7 +352,12 @@ def review_stage(cwd: str, file_path: str | None) -> dict:
 
 
 def review_unstage(cwd: str, file_path: str | None) -> dict:
-    _git_ok(cwd, ["reset", "-q", "HEAD", "--", file_path] if file_path else ["reset", "-q", "HEAD"])
+    _git_ok(
+        cwd,
+        ["reset", "-q", "HEAD", "--", file_path]
+        if file_path
+        else ["reset", "-q", "HEAD"],
+    )
     return {"ok": True}
 
 
@@ -373,7 +386,9 @@ def review_commit(cwd: str, message: str, push: bool) -> dict:
 
 
 def _review_push(cwd: str) -> None:
-    upstream = _git_out(cwd, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).strip()
+    upstream = _git_out(
+        cwd, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]
+    ).strip()
     if upstream:
         _git_ok(cwd, ["push"])
         return
@@ -397,7 +412,11 @@ def review_commit_context(cwd: str) -> dict:
     entries = list(_walk_entries(raw))
 
     has_staged = any(_entry_staged(tag, xy) for tag, xy, _ in entries)
-    diff = _git_out(cwd, ["diff", "--cached"]) if has_staged else _git_out(cwd, ["diff", "HEAD"])
+    diff = (
+        _git_out(cwd, ["diff", "--cached"])
+        if has_staged
+        else _git_out(cwd, ["diff", "HEAD"])
+    )
     if len(diff) > _COMMIT_CONTEXT_DIFF_MAX_CHARS:
         omitted = len(diff) - _COMMIT_CONTEXT_DIFF_MAX_CHARS
         diff = f"{diff[:_COMMIT_CONTEXT_DIFF_MAX_CHARS]}\n# diff truncated: {omitted} chars omitted\n"
@@ -410,7 +429,10 @@ def review_commit_context(cwd: str) -> dict:
             note += f"#   ... {len(untracked) - len(visible)} more omitted\n"
         diff = f"{diff}{note}" if diff else note
 
-    return {"diff": diff or "", "recent": _git_out(cwd, ["log", "-n", "10", "--pretty=format:%s"]).strip()}
+    return {
+        "diff": diff or "",
+        "recent": _git_out(cwd, ["log", "-n", "10", "--pretty=format:%s"]).strip(),
+    }
 
 
 # ── ship flow (gh) ───────────────────────────────────────────────────────────
@@ -443,7 +465,14 @@ def review_ship_info(cwd: str) -> dict:
     except json.JSONDecodeError:
         return {"ghReady": True, "pr": None}
     if pr and pr.get("url"):
-        return {"ghReady": True, "pr": {"url": pr["url"], "state": pr.get("state"), "number": pr.get("number")}}
+        return {
+            "ghReady": True,
+            "pr": {
+                "url": pr["url"],
+                "state": pr.get("state"),
+                "number": pr.get("number"),
+            },
+        }
     return {"ghReady": True, "pr": None}
 
 
@@ -456,7 +485,9 @@ def review_create_pr(cwd: str) -> dict:
     created, out = _gh(cwd, ["pr", "create", "--fill"])
     if not created:
         raise RuntimeError("gh pr create failed (is gh installed and authenticated?)")
-    url = next((line for line in reversed(out.strip().splitlines()) if line.strip()), "")
+    url = next(
+        (line for line in reversed(out.strip().splitlines()) if line.strip()), ""
+    )
     return {"url": url}
 
 
@@ -470,7 +501,13 @@ def _parse_worktrees(out: str) -> list[dict]:
         if line.startswith("worktree "):
             if cur:
                 trees.append(cur)
-            cur = {"path": line[9:].strip(), "branch": None, "detached": False, "bare": False, "locked": False}
+            cur = {
+                "path": line[9:].strip(),
+                "branch": None,
+                "detached": False,
+                "bare": False,
+                "locked": False,
+            }
         elif cur is None:
             continue
         elif line.startswith("branch "):
@@ -526,9 +563,13 @@ def _slugify(name: str) -> str:
 
 
 def _default_branch(cwd: str) -> str:
-    remote = _git_out(
-        cwd, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]
-    ).strip().replace("origin/", "", 1)
+    remote = (
+        _git_out(
+            cwd, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]
+        )
+        .strip()
+        .replace("origin/", "", 1)
+    )
     if remote:
         return remote
     configured = _git_out(cwd, ["config", "--get", "init.defaultBranch"]).strip()
@@ -603,7 +644,7 @@ def worktree_add(cwd: str, options: dict) -> dict:
         # failures (offline / no remote) — git will use whatever local ref
         # exists, or raise a clear error below if the ref is entirely missing.
         if base.startswith("origin/"):
-            remote_branch = base[len("origin/"):]
+            remote_branch = base[len("origin/") :]
             _git(root, ["fetch", "origin", remote_branch])
         args.append(base)
     code, _, err = _git(root, args)
@@ -627,7 +668,13 @@ def worktree_remove(cwd: str, worktree_path: str, force: bool) -> dict:
 
 def branch_list(cwd: str) -> list[dict]:
     out = _git_out(
-        cwd, ["for-each-ref", "--format=%(refname:short)", "--sort=-committerdate", "refs/heads"]
+        cwd,
+        [
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "--sort=-committerdate",
+            "refs/heads",
+        ],
     )
     if not out:
         return []
@@ -681,17 +728,15 @@ def base_branch_list(cwd: str) -> list[dict]:
         if not line:
             continue
         name = line.split("\t")[0]
-        result.append(
-            {
-                "name": name,
-                "isRemote": name.startswith("origin/"),
-                # origin/HEAD when a remote exists; otherwise the local
-                # default (main/master/init.defaultBranch) so a no-remote
-                # repo still flags its trunk.
-                "isDefault": bool(
-                    (remote_default and name == remote_default)
-                    or (not remote_default and local_default and name == local_default)
-                ),
-            }
-        )
+        result.append({
+            "name": name,
+            "isRemote": name.startswith("origin/"),
+            # origin/HEAD when a remote exists; otherwise the local
+            # default (main/master/init.defaultBranch) so a no-remote
+            # repo still flags its trunk.
+            "isDefault": bool(
+                (remote_default and name == remote_default)
+                or (not remote_default and local_default and name == local_default)
+            ),
+        })
     return result

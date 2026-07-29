@@ -21,6 +21,7 @@ Every ``docker exec`` here runs as the unprivileged ``clawk`` user
 (via :func:`docker_exec_sh` in conftest); see the conftest module
 docstring.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -32,7 +33,9 @@ PROFILE = "test-harness-profile"
 
 
 def _sh(
-    container: str, command: str, timeout: int = 30,
+    container: str,
+    command: str,
+    timeout: int = 30,
 ) -> subprocess.CompletedProcess[str]:
     return docker_exec_sh(container, command, timeout=timeout)
 
@@ -66,8 +69,9 @@ def _svstat_wants_up(container: str) -> bool:
     return "want up" in state
 
 
-
-def _wait_for_want_state(container_name: str, want_up: bool, timeout: float = 15.0) -> None:
+def _wait_for_want_state(
+    container_name: str, want_up: bool, timeout: float = 15.0
+) -> None:
     """Poll s6 want-state until it matches, instead of a fixed sleep.
 
     s6 state transitions are asynchronous; fixed two-second sleeps flaked
@@ -86,7 +90,8 @@ def _wait_for_want_state(container_name: str, want_up: bool, timeout: float = 15
 
 
 def test_profile_create_then_gateway_start(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     start_container(built_image, container_name, cmd="sleep 120")
 
@@ -116,7 +121,8 @@ def test_profile_create_then_gateway_start(
 
 
 def test_profile_delete_stops_gateway(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """Deleting a profile should stop its gateway and remove the s6
     service slot."""

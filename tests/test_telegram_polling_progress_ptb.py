@@ -3,6 +3,7 @@
 import asyncio
 
 import pytest
+
 pytest.importorskip("telegram", reason="python-telegram-bot not installed")
 from telegram.error import Conflict, TelegramError
 from telegram.request import BaseRequest
@@ -217,9 +218,10 @@ async def test_real_base_request_unsuccessful_200_envelope_cannot_record_progres
             with pytest.raises(KeyError, match="result"):
                 await request.post("https://api.telegram.org/bot-token/getUpdates")
         else:
-            assert await request.post(
-                "https://api.telegram.org/bot-token/getUpdates"
-            ) == []
+            assert (
+                await request.post("https://api.telegram.org/bot-token/getUpdates")
+                == []
+            )
     finally:
         tg_adapter._POLLING_GENERATION_CONTEXT.reset(context_token)
 
@@ -241,9 +243,7 @@ async def test_real_base_request_valid_success_envelope_records_progress():
     context_token = tg_adapter._POLLING_GENERATION_CONTEXT.set(generation)
 
     try:
-        result = await request.post(
-            "https://api.telegram.org/bot-token/getUpdates"
-        )
+        result = await request.post("https://api.telegram.org/bot-token/getUpdates")
     finally:
         tg_adapter._POLLING_GENERATION_CONTEXT.reset(context_token)
 
@@ -301,7 +301,8 @@ async def test_real_ptb_stop_cleanup_cannot_heal_recovery_generation():
     adapter = TelegramAdapter(PlatformConfig(enabled=True, token="123456:test-token"))
     polling_request = _GetUpdatesRequest()
     app = (
-        tg_adapter.Application.builder()
+        tg_adapter.Application
+        .builder()
         .token("123456:test-token")
         .request(_GeneralRequest())
         .get_updates_request(adapter._instrument_polling_request(polling_request))

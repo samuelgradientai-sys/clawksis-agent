@@ -63,8 +63,16 @@ class TestResolveToolset:
 
     def test_cycle_detection(self):
         # Create a cycle: A includes B, B includes A
-        TOOLSETS["_cycle_a"] = {"description": "test", "tools": ["t1"], "includes": ["_cycle_b"]}
-        TOOLSETS["_cycle_b"] = {"description": "test", "tools": ["t2"], "includes": ["_cycle_a"]}
+        TOOLSETS["_cycle_a"] = {
+            "description": "test",
+            "tools": ["t1"],
+            "includes": ["_cycle_b"],
+        }
+        TOOLSETS["_cycle_b"] = {
+            "description": "test",
+            "tools": ["t2"],
+            "includes": ["_cycle_a"],
+        }
         try:
             tools = resolve_toolset("_cycle_a")
             # Should not infinite loop — cycle is detected
@@ -218,7 +226,15 @@ class TestToolsetConsistency:
         on clawk-discord, gated on DISCORD_BOT_TOKEN) are allowed on top —
         the invariant is that the core set is identical across platforms.
         """
-        platforms = ["clawk-cli", "clawk-telegram", "clawk-discord", "clawk-whatsapp", "clawk-slack", "clawk-signal", "clawk-homeassistant"]
+        platforms = [
+            "clawk-cli",
+            "clawk-telegram",
+            "clawk-discord",
+            "clawk-whatsapp",
+            "clawk-slack",
+            "clawk-signal",
+            "clawk-homeassistant",
+        ]
         tool_sets = [set(TOOLSETS[p]["tools"]) for p in platforms]
         # All platforms must contain the shared core; platform-specific
         # extras are OK (subset check, not equality).
@@ -261,6 +277,7 @@ class TestResolveToolsetIncludeRegistry:
 
     def test_include_registry_false_excludes_registry_tools(self):
         from tools.registry import discover_builtin_tools
+
         discover_builtin_tools()  # registers read_terminal into 'terminal'
 
         merged = set(resolve_toolset("terminal"))
@@ -290,4 +307,7 @@ class TestResolveToolsetIncludeRegistry:
         assert static <= merged
 
     def test_registry_only_toolset_static_view_is_empty(self):
-        assert resolve_toolset("__definitely_not_a_real_toolset__", include_registry=False) == []
+        assert (
+            resolve_toolset("__definitely_not_a_real_toolset__", include_registry=False)
+            == []
+        )

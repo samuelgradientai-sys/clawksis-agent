@@ -105,7 +105,9 @@ def test_goal_status_alias_shows_status(server, session):
 
 def test_goal_set_returns_send_with_notice(server, session):
     sid, session_key, _ = session
-    r = _call(server, "command.dispatch", name="goal", arg="build a rocket", session_id=sid)
+    r = _call(
+        server, "command.dispatch", name="goal", arg="build a rocket", session_id=sid
+    )
     result = r["result"]
     assert result["type"] == "send"
     assert result["message"] == "build a rocket"
@@ -206,13 +208,16 @@ def test_pending_input_commands_includes_goal(server):
 
 # ── command.dispatch /moa ────────────────────────────────────────────
 
+
 def _write_moa_config(home, text):
     cfg_path = home / "config.yaml"
     cfg_path.write_text(text)
 
 
 def test_moa_bare_returns_usage(server, session, clawk_home):
-    _write_moa_config(clawk_home, """
+    _write_moa_config(
+        clawk_home,
+        """
 moa:
   default_preset: default
   presets:
@@ -223,7 +228,8 @@ moa:
       aggregator:
         provider: openrouter
         model: anthropic/claude-opus-4.8
-""")
+""",
+    )
     sid, _, s = session
     r = _call(server, "command.dispatch", name="moa", arg="", session_id=sid)
     # Bare /moa is usage-only now; switching to a preset is via the model picker.
@@ -234,7 +240,9 @@ moa:
 def test_moa_arg_is_always_one_shot(server, session, clawk_home):
     # Any arg (even a preset name) is a one-shot prompt through the DEFAULT
     # preset; /moa never does a sticky switch anymore.
-    _write_moa_config(clawk_home, """
+    _write_moa_config(
+        clawk_home,
+        """
 moa:
   default_preset: default
   presets:
@@ -246,7 +254,8 @@ moa:
       aggregator:
         provider: openrouter
         model: anthropic/claude-opus-4.8
-""")
+""",
+    )
     sid, _, s = session
     r = _call(server, "command.dispatch", name="moa", arg="review", session_id=sid)
     result = r["result"]
@@ -260,7 +269,9 @@ moa:
 
 
 def test_moa_non_preset_returns_one_shot_send(server, session, clawk_home):
-    _write_moa_config(clawk_home, """
+    _write_moa_config(
+        clawk_home,
+        """
 moa:
   default_preset: default
   presets:
@@ -271,9 +282,16 @@ moa:
       aggregator:
         provider: openrouter
         model: anthropic/claude-opus-4.8
-""")
+""",
+    )
     sid, _, _ = session
-    r = _call(server, "command.dispatch", name="moa", arg="inspect this project", session_id=sid)
+    r = _call(
+        server,
+        "command.dispatch",
+        name="moa",
+        arg="inspect this project",
+        session_id=sid,
+    )
     result = r["result"]
     assert result["type"] == "send"
     assert result["message"] == "inspect this project"

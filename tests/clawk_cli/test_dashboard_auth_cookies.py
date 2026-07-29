@@ -1,4 +1,5 @@
 """Tests for the dashboard-auth cookie helpers."""
+
 from __future__ import annotations
 
 from fastapi import FastAPI
@@ -28,17 +29,25 @@ def _build_app(use_https: bool = True, prefix: str = ""):
     def set_endpoint():
         r = Response("ok")
         set_session_cookies(
-            r, access_token="AT", refresh_token="RT",
-            access_token_expires_in=3600, use_https=use_https,
-            prefix=prefix, provider="nous",
+            r,
+            access_token="AT",
+            refresh_token="RT",
+            access_token_expires_in=3600,
+            use_https=use_https,
+            prefix=prefix,
+            provider="nous",
         )
         return r
 
     @app.get("/set-pkce")
     def set_pkce():
         r = Response("ok")
-        set_pkce_cookie(r, payload="provider=stub;state=s;verifier=v",
-                        use_https=use_https, prefix=prefix)
+        set_pkce_cookie(
+            r,
+            payload="provider=stub;state=s;verifier=v",
+            use_https=use_https,
+            prefix=prefix,
+        )
         return r
 
     @app.get("/clear")
@@ -65,7 +74,9 @@ def test_session_cookies_use_host_prefix_on_https_direct():
     cookies = r.headers.get_list("set-cookie")
     at = next(c for c in cookies if c.startswith(f"__Host-{SESSION_AT_COOKIE}="))
     rt = next(c for c in cookies if c.startswith(f"__Host-{SESSION_RT_COOKIE}="))
-    provider = next(c for c in cookies if c.startswith(f"__Host-{SESSION_PROVIDER_COOKIE}=nous"))
+    provider = next(
+        c for c in cookies if c.startswith(f"__Host-{SESSION_PROVIDER_COOKIE}=nous")
+    )
     for c in (at, rt, provider):
         assert "HttpOnly" in c
         assert "samesite=lax" in c.lower()
@@ -83,9 +94,7 @@ def test_session_cookies_use_secure_prefix_when_proxied():
     assert "Path=/clawk" in at
     assert "Secure" in at
     # __Host- variant must NOT be emitted on the prefix path.
-    assert not any(
-        c.startswith(f"__Host-{SESSION_AT_COOKIE}=") for c in cookies
-    )
+    assert not any(c.startswith(f"__Host-{SESSION_AT_COOKIE}=") for c in cookies)
 
 
 def test_session_cookies_use_bare_name_on_http():
@@ -125,24 +134,15 @@ def test_clear_session_cookies_emits_expired_at_and_rt():
     r = client.get("/clear")
     cookies = r.headers.get_list("set-cookie")
     # At least one variant of each session cookie should be deleted.
-    assert any(
-        SESSION_AT_COOKIE in c and "Max-Age=0" in c for c in cookies
-    )
-    assert any(
-        SESSION_RT_COOKIE in c and "Max-Age=0" in c for c in cookies
-    )
-    assert any(
-        SESSION_PROVIDER_COOKIE in c and "Max-Age=0" in c for c in cookies
-    )
+    assert any(SESSION_AT_COOKIE in c and "Max-Age=0" in c for c in cookies)
+    assert any(SESSION_RT_COOKIE in c and "Max-Age=0" in c for c in cookies)
+    assert any(SESSION_PROVIDER_COOKIE in c and "Max-Age=0" in c for c in cookies)
 
 
 def test_pkce_cookie_short_ttl_and_path_root():
     client = TestClient(_build_app(use_https=True))
     r = client.get("/set-pkce")
-    pkce = next(
-        c for c in r.headers.get_list("set-cookie")
-        if PKCE_COOKIE in c
-    )
+    pkce = next(c for c in r.headers.get_list("set-cookie") if PKCE_COOKIE in c)
     assert "HttpOnly" in pkce
     assert "Max-Age=600" in pkce  # 10 minutes
     assert "Path=/" in pkce
@@ -155,10 +155,12 @@ def test_read_session_cookies_from_request_bare_name():
         "type": "http",
         "method": "GET",
         "path": "/",
-        "headers": [(
-            b"cookie",
-            f"{SESSION_AT_COOKIE}=at_value; {SESSION_RT_COOKIE}=rt_value".encode(),
-        )],
+        "headers": [
+            (
+                b"cookie",
+                f"{SESSION_AT_COOKIE}=at_value; {SESSION_RT_COOKIE}=rt_value".encode(),
+            )
+        ],
     }
     req = Request(scope)
     at, rt = read_session_cookies(req)
@@ -171,10 +173,12 @@ def test_read_session_provider_from_request():
         "type": "http",
         "method": "GET",
         "path": "/",
-        "headers": [(
-            b"cookie",
-            f"__Host-{SESSION_PROVIDER_COOKIE}=nous".encode(),
-        )],
+        "headers": [
+            (
+                b"cookie",
+                f"__Host-{SESSION_PROVIDER_COOKIE}=nous".encode(),
+            )
+        ],
     }
     assert read_session_provider(Request(scope)) == "nous"
 
@@ -186,11 +190,13 @@ def test_read_session_cookies_from_request_host_prefix():
         "type": "http",
         "method": "GET",
         "path": "/",
-        "headers": [(
-            b"cookie",
-            f"__Host-{SESSION_AT_COOKIE}=at_value; "
-            f"__Host-{SESSION_RT_COOKIE}=rt_value".encode(),
-        )],
+        "headers": [
+            (
+                b"cookie",
+                f"__Host-{SESSION_AT_COOKIE}=at_value; "
+                f"__Host-{SESSION_RT_COOKIE}=rt_value".encode(),
+            )
+        ],
     }
     req = Request(scope)
     at, rt = read_session_cookies(req)
@@ -205,11 +211,13 @@ def test_read_session_cookies_from_request_secure_prefix():
         "type": "http",
         "method": "GET",
         "path": "/",
-        "headers": [(
-            b"cookie",
-            f"__Secure-{SESSION_AT_COOKIE}=at_value; "
-            f"__Secure-{SESSION_RT_COOKIE}=rt_value".encode(),
-        )],
+        "headers": [
+            (
+                b"cookie",
+                f"__Secure-{SESSION_AT_COOKIE}=at_value; "
+                f"__Secure-{SESSION_RT_COOKIE}=rt_value".encode(),
+            )
+        ],
     }
     req = Request(scope)
     at, rt = read_session_cookies(req)
@@ -240,13 +248,22 @@ def test_detect_https_via_scheme():
     ``X-Forwarded-Proto``; that's an integration concern, not unit.
     """
     from clawk_cli.dashboard_auth.cookies import detect_https
+
     http_req = Request({
-        "type": "http", "method": "GET", "path": "/", "scheme": "http",
-        "headers": [], "server": ("x", 80),
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "scheme": "http",
+        "headers": [],
+        "server": ("x", 80),
     })
     https_req = Request({
-        "type": "http", "method": "GET", "path": "/", "scheme": "https",
-        "headers": [], "server": ("x", 443),
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "scheme": "https",
+        "headers": [],
+        "server": ("x", 443),
     })
     assert detect_https(http_req) is False
     assert detect_https(https_req) is True

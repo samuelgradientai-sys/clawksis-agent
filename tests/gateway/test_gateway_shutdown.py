@@ -77,7 +77,9 @@ async def test_gateway_stop_interrupts_running_agents_and_cancels_adapter_tasks(
     with (
         patch("gateway.status.remove_pid_file"),
         patch("gateway.status.write_runtime_status"),
-        patch("agent.auxiliary_client.shutdown_cached_clients") as shutdown_cached_clients,
+        patch(
+            "agent.auxiliary_client.shutdown_cached_clients"
+        ) as shutdown_cached_clients,
     ):
         await runner.stop()
 
@@ -110,7 +112,10 @@ async def test_gateway_stop_drains_running_agents_before_disconnect():
 
     asyncio.create_task(finish_agent())
 
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop()
 
     running_agent.interrupt.assert_not_called()
@@ -132,7 +137,10 @@ async def test_gateway_stop_cancels_secondary_reconnects_before_session_drain():
     runner._cancel_secondary_profile_reconnect_tasks = _cancel_secondary_reconnects
     runner._notify_active_sessions_of_shutdown = _notify_sessions
 
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop()
 
     assert order[:2] == ["secondary_reconnect_cancel", "notify_sessions"]
@@ -149,7 +157,10 @@ async def test_gateway_stop_interrupts_after_drain_timeout():
     running_agent = MagicMock()
     runner._running_agents = {"session": running_agent}
 
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop()
 
     running_agent.interrupt.assert_called_once_with("Gateway shutting down")
@@ -158,14 +169,19 @@ async def test_gateway_stop_interrupts_after_drain_timeout():
 
 
 @pytest.mark.asyncio
-async def test_gateway_stop_systemd_service_restart_uses_tempfail(tmp_path, monkeypatch):
+async def test_gateway_stop_systemd_service_restart_uses_tempfail(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     runner, adapter = make_restart_runner()
     adapter.disconnect = AsyncMock()
     monkeypatch.setenv("INVOCATION_ID", "systemd-test")
     runner._launch_systemd_restart_shortcut = MagicMock()
 
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop(restart=True, service_restart=True)
 
     runner._launch_systemd_restart_shortcut.assert_called_once_with()
@@ -179,14 +195,18 @@ async def test_gateway_stop_systemd_service_restart_uses_tempfail(tmp_path, monk
 
 
 @pytest.mark.asyncio
-async def test_gateway_stop_launchd_service_restart_keeps_nonzero_exit(tmp_path, monkeypatch):
+async def test_gateway_stop_launchd_service_restart_keeps_nonzero_exit(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     runner, adapter = make_restart_runner()
     adapter.disconnect = AsyncMock()
 
-    with patch("gateway.run.sys.platform", "darwin"), patch(
-        "gateway.status.remove_pid_file"
-    ), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.run.sys.platform", "darwin"),
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop(restart=True, service_restart=True)
 
     assert runner._exit_code == GATEWAY_SERVICE_RESTART_EXIT_CODE
@@ -268,7 +288,9 @@ async def test_idle_in_chat_restart_does_not_send_interruption_warning():
 
 
 @pytest.mark.asyncio
-async def test_in_chat_restart_does_not_write_home_startup_marker(tmp_path, monkeypatch):
+async def test_in_chat_restart_does_not_write_home_startup_marker(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     runner, adapter = make_restart_runner()
     adapter.disconnect = AsyncMock()
@@ -278,7 +300,10 @@ async def test_in_chat_restart_does_not_write_home_startup_marker(tmp_path, monk
     runner._launch_systemd_restart_shortcut = MagicMock()
     monkeypatch.setenv("INVOCATION_ID", "systemd-test")
 
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop(restart=True, service_restart=True)
 
     assert not (tmp_path / ".restart_pending.json").exists()
@@ -307,7 +332,9 @@ async def test_drain_active_agents_throttles_status_updates():
 
 
 @pytest.mark.asyncio
-async def test_gateway_stop_kills_tool_subprocesses_before_adapter_disconnect_on_timeout(monkeypatch):
+async def test_gateway_stop_kills_tool_subprocesses_before_adapter_disconnect_on_timeout(
+    monkeypatch,
+):
     """On drain timeout, tool subprocesses must be killed BEFORE adapter
     disconnect so systemd's TimeoutStopSec doesn't SIGKILL the cgroup with
     bash/sleep children still attached (#8202)."""
@@ -333,6 +360,7 @@ async def test_gateway_stop_kills_tool_subprocesses_before_adapter_disconnect_on
     import tools.process_registry as _pr
     import tools.terminal_tool as _tt
     import tools.browser_tool as _bt
+
     monkeypatch.setattr(_pr.process_registry, "kill_all", _fake_kill_all)
     monkeypatch.setattr(_tt, "cleanup_all_environments", _fake_cleanup_envs)
     monkeypatch.setattr(_bt, "cleanup_all_browsers", _fake_cleanup_browsers)
@@ -341,7 +369,10 @@ async def test_gateway_stop_kills_tool_subprocesses_before_adapter_disconnect_on
 
     runner._running_agents = {"session": MagicMock()}
 
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop()
 
     # First kill_all must precede the first disconnect.  (Both the eager
@@ -377,12 +408,16 @@ async def test_gateway_stop_kills_tool_subprocesses_on_graceful_path(monkeypatch
     import tools.process_registry as _pr
     import tools.terminal_tool as _tt
     import tools.browser_tool as _bt
+
     monkeypatch.setattr(_pr.process_registry, "kill_all", _fake_kill_all)
     monkeypatch.setattr(_tt, "cleanup_all_environments", lambda: None)
     monkeypatch.setattr(_bt, "cleanup_all_browsers", lambda: None)
 
     # No running agents → drain returns immediately, no timeout, no eager cleanup.
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop()
 
     # Only the final catch-all fires on the graceful path.
@@ -418,7 +453,9 @@ def _stopped_state_persisted(runner) -> bool:
 
 
 @pytest.mark.asyncio
-async def test_signal_initiated_shutdown_persists_running_not_stopped(tmp_path, monkeypatch):
+async def test_signal_initiated_shutdown_persists_running_not_stopped(
+    tmp_path, monkeypatch
+):
     """Unexpected SIGTERM (container restart / OOM / kill) must persist
     gateway_state=running — NOT stopped, and NOT leave the mid-shutdown
     'draining' marker — so container_boot auto-starts on next boot (#42675)."""
@@ -427,7 +464,10 @@ async def test_signal_initiated_shutdown_persists_running_not_stopped(tmp_path, 
     adapter.disconnect = AsyncMock()
     runner._signal_initiated_shutdown = True  # set by handler on unmarked signal
 
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop()
 
     assert not _stopped_state_persisted(runner), (
@@ -449,7 +489,10 @@ async def test_operator_initiated_stop_persists_stopped(tmp_path, monkeypatch):
     adapter.disconnect = AsyncMock()
     runner._signal_initiated_shutdown = False  # planned stop classification
 
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop()
 
     assert _stopped_state_persisted(runner), (
@@ -468,7 +511,10 @@ async def test_signal_initiated_restart_still_persists_stopped(tmp_path, monkeyp
     runner._signal_initiated_shutdown = True
     runner._launch_systemd_restart_shortcut = MagicMock()
 
-    with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"):
+    with (
+        patch("gateway.status.remove_pid_file"),
+        patch("gateway.status.write_runtime_status"),
+    ):
         await runner.stop(restart=True, service_restart=True)
 
     assert _stopped_state_persisted(runner), (

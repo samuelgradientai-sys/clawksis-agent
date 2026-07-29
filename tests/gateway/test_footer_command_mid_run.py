@@ -20,6 +20,7 @@ Mirrors the runner-construction pattern of ``test_steer_command.py`` so the
 same proven path through ``_handle_message`` reaches the running-agent
 command dispatch.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

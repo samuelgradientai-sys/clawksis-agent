@@ -68,15 +68,15 @@ class ErrorKind(str, Enum):
     ``NETWORK``/``TIMEOUT`` but not on ``AUTH_FAILED``) exactly once.
     """
 
-    NOT_CONFIGURED = "not_configured"    # enabled but missing token/project/map
-    BINARY_MISSING = "binary_missing"    # helper CLI not found / not installed
-    AUTH_FAILED = "auth_failed"          # bad credentials
-    AUTH_EXPIRED = "auth_expired"        # credentials were valid, aren't now
-    REF_INVALID = "ref_invalid"          # a secret reference failed validation
-    NETWORK = "network"                  # transport-level failure
-    EMPTY_VALUE = "empty_value"          # backend returned nothing for a ref
-    TIMEOUT = "timeout"                  # fetch exceeded its wall-clock budget
-    INTERNAL = "internal"                # anything else (bug, unexpected shape)
+    NOT_CONFIGURED = "not_configured"  # enabled but missing token/project/map
+    BINARY_MISSING = "binary_missing"  # helper CLI not found / not installed
+    AUTH_FAILED = "auth_failed"  # bad credentials
+    AUTH_EXPIRED = "auth_expired"  # credentials were valid, aren't now
+    REF_INVALID = "ref_invalid"  # a secret reference failed validation
+    NETWORK = "network"  # transport-level failure
+    EMPTY_VALUE = "empty_value"  # backend returned nothing for a ref
+    TIMEOUT = "timeout"  # fetch exceeded its wall-clock budget
+    INTERNAL = "internal"  # anything else (bug, unexpected shape)
 
 
 @dataclass
@@ -176,7 +176,9 @@ class SecretSource(ABC):
     def fetch_timeout_seconds(self, cfg: dict) -> float:
         """Wall-clock budget the orchestrator enforces around fetch()."""
         try:
-            val = float((cfg or {}).get("timeout_seconds", DEFAULT_FETCH_TIMEOUT_SECONDS))
+            val = float(
+                (cfg or {}).get("timeout_seconds", DEFAULT_FETCH_TIMEOUT_SECONDS)
+            )
         except (TypeError, ValueError):
             return DEFAULT_FETCH_TIMEOUT_SECONDS
         return val if val > 0 else DEFAULT_FETCH_TIMEOUT_SECONDS
@@ -240,8 +242,18 @@ def run_secret_cli(
     surface); returns the completed process otherwise — callers own
     returncode interpretation.
     """
-    base_keep = ("PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "TMPDIR", "TEMP",
-                 "LANG", "LC_ALL", "XDG_CONFIG_HOME", "XDG_DATA_HOME")
+    base_keep = (
+        "PATH",
+        "HOME",
+        "USERPROFILE",
+        "SYSTEMROOT",
+        "TMPDIR",
+        "TEMP",
+        "LANG",
+        "LC_ALL",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+    )
     env: Dict[str, str] = {}
     for key in (*base_keep, *allow_env):
         val = os.environ.get(key)

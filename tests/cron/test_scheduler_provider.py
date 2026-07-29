@@ -16,6 +16,7 @@ is set. We patch `cron.scheduler.tick` (both tickers import it locally as
 `cron_tick`, so the module-attribute patch is observed) and assert the loop
 drives it and stops promptly.
 """
+
 import threading
 import time
 from unittest.mock import patch
@@ -92,7 +93,9 @@ def test_desktop_ticker_calls_tick_then_stops():
             daemon=True,
         )
         t.start()
-        assert _wait_until(lambda: len(calls) >= 1), "desktop ticker never called tick()"
+        assert _wait_until(lambda: len(calls) >= 1), (
+            "desktop ticker never called tick()"
+        )
         stop.set()
         t.join(timeout=5)
 
@@ -279,7 +282,9 @@ def test_resolve_unknown_provider_falls_back_to_builtin(monkeypatch):
     import clawk_cli.config as cfg
     from cron import scheduler_provider as sp
 
-    monkeypatch.setattr(cfg, "load_config", lambda: {"cron": {"provider": "nope-not-real"}})
+    monkeypatch.setattr(
+        cfg, "load_config", lambda: {"cron": {"provider": "nope-not-real"}}
+    )
     prov = sp.resolve_cron_scheduler()
     assert prov.name == "builtin"
 
@@ -302,7 +307,9 @@ def test_resolve_unavailable_provider_falls_back(monkeypatch):
         def start(self, stop_event, **kw):
             pass
 
-    monkeypatch.setattr(cfg, "load_config", lambda: {"cron": {"provider": "unavailable"}})
+    monkeypatch.setattr(
+        cfg, "load_config", lambda: {"cron": {"provider": "unavailable"}}
+    )
     monkeypatch.setattr(pc, "load_cron_scheduler", lambda n: Unavailable())
     prov = sp.resolve_cron_scheduler()
     assert prov.name == "builtin"
@@ -365,7 +372,9 @@ def test_fire_due_default_claims_then_runs(monkeypatch):
     ran = []
     monkeypatch.setattr(jobs, "claim_job_for_fire", lambda jid: True, raising=False)
     monkeypatch.setattr(jobs, "get_job", lambda jid: {"id": jid, "name": "t"})
-    monkeypatch.setattr(sched, "run_one_job", lambda job, **kw: ran.append(job["id"]) or True)
+    monkeypatch.setattr(
+        sched, "run_one_job", lambda job, **kw: ran.append(job["id"]) or True
+    )
 
     assert InProcessCronScheduler().fire_due("j1") is True
     assert ran == ["j1"]
@@ -380,7 +389,9 @@ def test_fire_due_lost_claim_does_not_run(monkeypatch):
 
     ran = []
     monkeypatch.setattr(jobs, "claim_job_for_fire", lambda jid: False, raising=False)
-    monkeypatch.setattr(sched, "run_one_job", lambda job, **kw: ran.append(job["id"]) or True)
+    monkeypatch.setattr(
+        sched, "run_one_job", lambda job, **kw: ran.append(job["id"]) or True
+    )
 
     assert InProcessCronScheduler().fire_due("j1") is False
     assert ran == []
@@ -396,7 +407,9 @@ def test_fire_due_missing_job_does_not_run(monkeypatch):
     ran = []
     monkeypatch.setattr(jobs, "claim_job_for_fire", lambda jid: True, raising=False)
     monkeypatch.setattr(jobs, "get_job", lambda jid: None)
-    monkeypatch.setattr(sched, "run_one_job", lambda job, **kw: ran.append(job["id"]) or True)
+    monkeypatch.setattr(
+        sched, "run_one_job", lambda job, **kw: ran.append(job["id"]) or True
+    )
 
     assert InProcessCronScheduler().fire_due("gone") is False
     assert ran == []
@@ -420,13 +433,18 @@ def test_ticker_survives_baseexception_from_tick():
 
     stop = threading.Event()
     prov = InProcessCronScheduler()
-    with patch("cron.scheduler.tick", side_effect=_boom), \
-         patch("cron.jobs.record_ticker_heartbeat"):
-        t = threading.Thread(target=prov.start, args=(stop,), kwargs={"interval": 0}, daemon=True)
+    with (
+        patch("cron.scheduler.tick", side_effect=_boom),
+        patch("cron.jobs.record_ticker_heartbeat"),
+    ):
+        t = threading.Thread(
+            target=prov.start, args=(stop,), kwargs={"interval": 0}, daemon=True
+        )
         t.start()
         # Survive the BaseException AND keep ticking: wait for ≥2 calls.
-        assert _wait_until(lambda: len(calls) >= 2), \
+        assert _wait_until(lambda: len(calls) >= 2), (
             "ticker did not keep ticking after the BaseException"
+        )
         stop.set()
         t.join(timeout=5)
 
@@ -442,22 +460,31 @@ def test_ticker_records_heartbeat_each_iteration():
     beats = []  # (success,) per call
     stop = threading.Event()
     prov = InProcessCronScheduler()
-    with patch("cron.scheduler.tick", side_effect=lambda *a, **k: 0), \
-         patch("cron.jobs.record_ticker_heartbeat",
-               side_effect=lambda success=False: beats.append(success)):
-        t = threading.Thread(target=prov.start, args=(stop,), kwargs={"interval": 0}, daemon=True)
+    with (
+        patch("cron.scheduler.tick", side_effect=lambda *a, **k: 0),
+        patch(
+            "cron.jobs.record_ticker_heartbeat",
+            side_effect=lambda success=False: beats.append(success),
+        ),
+    ):
+        t = threading.Thread(
+            target=prov.start, args=(stop,), kwargs={"interval": 0}, daemon=True
+        )
         t.start()
         # Wait for the pre-loop liveness beat AND at least one successful
         # post-tick beat before stopping (was a fixed 0.2s sleep → flaky).
-        assert _wait_until(lambda: any(b is True for b in beats[1:])), \
+        assert _wait_until(lambda: any(b is True for b in beats[1:])), (
             "successful tick did not bump success marker"
+        )
         stop.set()
         t.join(timeout=5)
 
     # one pre-loop liveness beat (success=False) + post-tick beats with success=True
     assert len(beats) >= 2, "ticker did not record heartbeats"
     assert beats[0] is False, "pre-loop beat should be liveness-only"
-    assert any(b is True for b in beats[1:]), "successful tick did not bump success marker"
+    assert any(b is True for b in beats[1:]), (
+        "successful tick did not bump success marker"
+    )
 
 
 def test_failing_tick_records_liveness_but_not_success():
@@ -468,10 +495,16 @@ def test_failing_tick_records_liveness_but_not_success():
     beats = []
     stop = threading.Event()
     prov = InProcessCronScheduler()
-    with patch("cron.scheduler.tick", side_effect=RuntimeError("every tick fails")), \
-         patch("cron.jobs.record_ticker_heartbeat",
-               side_effect=lambda success=False: beats.append(success)):
-        t = threading.Thread(target=prov.start, args=(stop,), kwargs={"interval": 0}, daemon=True)
+    with (
+        patch("cron.scheduler.tick", side_effect=RuntimeError("every tick fails")),
+        patch(
+            "cron.jobs.record_ticker_heartbeat",
+            side_effect=lambda success=False: beats.append(success),
+        ),
+    ):
+        t = threading.Thread(
+            target=prov.start, args=(stop,), kwargs={"interval": 0}, daemon=True
+        )
         t.start()
         # Wait for the pre-loop beat + at least one post-tick beat (was flaky
         # with a fixed 0.2s sleep under loaded CI).
@@ -481,7 +514,9 @@ def test_failing_tick_records_liveness_but_not_success():
 
     # every post-tick beat must be success=False (ticks always failed)
     assert len(beats) >= 2
-    assert all(b is False for b in beats), "a failing tick wrongly bumped the success marker"
+    assert all(b is False for b in beats), (
+        "a failing tick wrongly bumped the success marker"
+    )
 
 
 def test_heartbeat_roundtrip_and_age(tmp_path, monkeypatch):
@@ -522,6 +557,7 @@ def test_heartbeat_age_detects_staleness(tmp_path, monkeypatch):
     monkeypatch.setattr(jobs, "TICKER_HEARTBEAT_FILE", hb)
 
     import time as _t
+
     hb.write_text(str(_t.time() - 10_000), encoding="utf-8")
     age = jobs.get_ticker_heartbeat_age()
     assert age is not None and age > 9_000
@@ -541,15 +577,21 @@ def test_heartbeat_write_failure_is_silent(tmp_path, monkeypatch):
     bad_cron_dir = blocker / "cron"  # parent is a file -> mkdir/mkstemp fail
     monkeypatch.setattr(jobs, "CRON_DIR", bad_cron_dir)
     monkeypatch.setattr(jobs, "OUTPUT_DIR", bad_cron_dir / "output")
-    monkeypatch.setattr(jobs, "TICKER_HEARTBEAT_FILE", bad_cron_dir / "ticker_heartbeat")
-    monkeypatch.setattr(jobs, "TICKER_SUCCESS_FILE", bad_cron_dir / "ticker_last_success")
+    monkeypatch.setattr(
+        jobs, "TICKER_HEARTBEAT_FILE", bad_cron_dir / "ticker_heartbeat"
+    )
+    monkeypatch.setattr(
+        jobs, "TICKER_SUCCESS_FILE", bad_cron_dir / "ticker_last_success"
+    )
 
     jobs.record_ticker_heartbeat(success=True)  # must not raise
 
     # The write never succeeded, so no heartbeat is recorded...
     assert jobs.get_ticker_heartbeat_age() is None
     # ...and no stray temp file leaked anywhere under tmp_path.
-    assert not list(tmp_path.rglob(".hb_*.tmp")), "atomic write leaked a temp file on failure"
+    assert not list(tmp_path.rglob(".hb_*.tmp")), (
+        "atomic write leaked a temp file on failure"
+    )
 
 
 def test_cron_status_reports_alive_but_failing(tmp_path, monkeypatch, capsys):
@@ -559,8 +601,8 @@ def test_cron_status_reports_alive_but_failing(tmp_path, monkeypatch, capsys):
     from clawk_cli import cron as cron_cli
 
     monkeypatch.setattr("clawk_cli.gateway.find_gateway_pids", lambda: [4321])
-    monkeypatch.setattr(jobs, "get_ticker_heartbeat_age", lambda: 5.0)      # fresh
-    monkeypatch.setattr(jobs, "get_ticker_success_age", lambda: 9_999.0)    # stale
+    monkeypatch.setattr(jobs, "get_ticker_heartbeat_age", lambda: 5.0)  # fresh
+    monkeypatch.setattr(jobs, "get_ticker_success_age", lambda: 9_999.0)  # stale
     monkeypatch.setattr("cron.jobs.list_jobs", lambda **k: [])
 
     cron_cli.cron_status()
@@ -611,8 +653,11 @@ class TestGuardJobCredentialExfil:
         import pytest
         from cron.scheduler import _guard_job_credential_exfil
 
-        job = {"id": "j1", "provider": "anthropic",
-               "base_url": "https://evil.example/v1"}
+        job = {
+            "id": "j1",
+            "provider": "anthropic",
+            "base_url": "https://evil.example/v1",
+        }
         with pytest.raises(RuntimeError) as exc:
             _guard_job_credential_exfil(job)
         assert "blocked for safety" in str(exc.value)
@@ -624,12 +669,19 @@ class TestGuardJobCredentialExfil:
 
         monkeypatch.setattr(rp, "has_named_custom_provider", lambda n: True)
         monkeypatch.setattr(
-            rp, "_get_named_custom_provider",
-            lambda n: {"name": "legit", "base_url": "https://legit.example/v1",
-                       "api_key": "sk-legit"},
+            rp,
+            "_get_named_custom_provider",
+            lambda n: {
+                "name": "legit",
+                "base_url": "https://legit.example/v1",
+                "api_key": "sk-legit",
+            },
         )
-        job = {"id": "j2", "provider": "custom:legit",
-               "base_url": "https://evil.example/v1"}
+        job = {
+            "id": "j2",
+            "provider": "custom:legit",
+            "base_url": "https://evil.example/v1",
+        }
         with pytest.raises(RuntimeError):
             _guard_job_credential_exfil(job)
 
@@ -639,25 +691,37 @@ class TestGuardJobCredentialExfil:
 
         monkeypatch.setattr(rp, "has_named_custom_provider", lambda n: True)
         monkeypatch.setattr(
-            rp, "_get_named_custom_provider",
-            lambda n: {"name": "legit", "base_url": "https://legit.example/v1",
-                       "api_key": "sk-legit"},
+            rp,
+            "_get_named_custom_provider",
+            lambda n: {
+                "name": "legit",
+                "base_url": "https://legit.example/v1",
+                "api_key": "sk-legit",
+            },
         )
-        job = {"id": "j3", "provider": "custom:legit",
-               "base_url": "https://legit.example/v1"}
+        job = {
+            "id": "j3",
+            "provider": "custom:legit",
+            "base_url": "https://legit.example/v1",
+        }
         assert _guard_job_credential_exfil(job) is None
 
     def test_bare_custom_is_allowed(self):
         from cron.scheduler import _guard_job_credential_exfil
 
-        job = {"id": "j4", "provider": "custom",
-               "base_url": "https://anything.example/v1"}
+        job = {
+            "id": "j4",
+            "provider": "custom",
+            "base_url": "https://anything.example/v1",
+        }
         assert _guard_job_credential_exfil(job) is None
 
     def test_no_base_url_is_allowed(self):
         from cron.scheduler import _guard_job_credential_exfil
 
-        assert _guard_job_credential_exfil({"id": "j5", "provider": "anthropic"}) is None
+        assert (
+            _guard_job_credential_exfil({"id": "j5", "provider": "anthropic"}) is None
+        )
         assert _guard_job_credential_exfil({"id": "j6"}) is None
 
     def test_validator_exception_with_base_url_fails_closed(self, monkeypatch):
@@ -673,8 +737,11 @@ class TestGuardJobCredentialExfil:
             raise RuntimeError("validator blew up")
 
         monkeypatch.setattr(ct, "_validate_cron_base_url", _boom)
-        job = {"id": "j7", "provider": "custom:legit",
-               "base_url": "https://evil.example/v1"}
+        job = {
+            "id": "j7",
+            "provider": "custom:legit",
+            "base_url": "https://evil.example/v1",
+        }
         with pytest.raises(RuntimeError) as exc:
             _guard_job_credential_exfil(job)
         assert "blocked for safety" in str(exc.value)
@@ -690,4 +757,6 @@ class TestGuardJobCredentialExfil:
             raise RuntimeError("validator blew up")
 
         monkeypatch.setattr(ct, "_validate_cron_base_url", _boom)
-        assert _guard_job_credential_exfil({"id": "j8", "provider": "anthropic"}) is None
+        assert (
+            _guard_job_credential_exfil({"id": "j8", "provider": "anthropic"}) is None
+        )

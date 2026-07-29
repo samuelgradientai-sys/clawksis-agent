@@ -8,6 +8,7 @@ Build the real image and verify at runtime:
   4. $CLAWK_HOME/.install_method is NOT stamped as "docker" by stage2
   5. A stale "docker" stamp in $CLAWK_HOME is healed (removed) on boot
 """
+
 from __future__ import annotations
 
 from tests.docker.conftest import (
@@ -19,7 +20,8 @@ from tests.docker.conftest import (
 
 
 def test_install_tree_not_writable_by_clawk(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """The clawk user must not be able to modify /opt/clawksis.
 
@@ -54,7 +56,8 @@ def test_install_tree_not_writable_by_clawk(
 
 
 def test_clawk_disable_lazy_installs_and_dont_write_bytecode(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """The container must set PYTHONDONTWRITEBYTECODE and
     CLAWK_DISABLE_LAZY_INSTALLS=1 so no .pyc files are written to the
@@ -65,7 +68,7 @@ def test_clawk_disable_lazy_installs_and_dont_write_bytecode(
         container_name,
         'test "$PYTHONDONTWRITEBYTECODE" = "1" && '
         'test "$CLAWK_DISABLE_LAZY_INSTALLS" = "1" && '
-        'echo ENV_OK || echo ENV_MISSING',
+        "echo ENV_OK || echo ENV_MISSING",
         timeout=10,
     )
     assert "ENV_OK" in r.stdout, (
@@ -75,7 +78,8 @@ def test_clawk_disable_lazy_installs_and_dont_write_bytecode(
 
 
 def test_install_method_stamp_is_code_scoped(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """The 'docker' install-method stamp must be baked at
     /opt/clawksis/.install_method (code-scoped), NOT in $CLAWK_HOME."""
@@ -87,9 +91,7 @@ def test_install_method_stamp_is_code_scoped(
         "cat /opt/clawksis/.install_method",
         timeout=10,
     )
-    assert r.returncode == 0, (
-        f"/opt/clawksis/.install_method not found: {r.stderr}"
-    )
+    assert r.returncode == 0, f"/opt/clawksis/.install_method not found: {r.stderr}"
     assert r.stdout.strip() == "docker", (
         f"expected 'docker' stamp, got: {r.stdout.strip()!r}"
     )
@@ -107,7 +109,8 @@ def test_install_method_stamp_is_code_scoped(
 
 
 def test_stale_docker_stamp_in_home_is_healed_on_boot(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """A stale 'docker' stamp left in $CLAWK_HOME by an older image
     must be removed on boot so shared homes self-heal."""
@@ -116,9 +119,12 @@ def test_stale_docker_stamp_in_home_is_healed_on_boot(
 
     # Write a stale 'docker' stamp as root
     docker_exec(
-        container_name, "sh", "-c",
+        container_name,
+        "sh",
+        "-c",
         "printf 'docker\\n' > /opt/data/.install_method",
-        user="root", timeout=5,
+        user="root",
+        timeout=5,
     )
     # Verify it exists
     r = docker_exec_sh(container_name, "cat /opt/data/.install_method", timeout=5)
@@ -135,6 +141,5 @@ def test_stale_docker_stamp_in_home_is_healed_on_boot(
         timeout=10,
     )
     assert "HEALED" in r.stdout or r.stdout.strip() != "docker", (
-        f"stale 'docker' stamp in $CLAWK_HOME was not healed on boot: "
-        f"{r.stdout}"
+        f"stale 'docker' stamp in $CLAWK_HOME was not healed on boot: {r.stdout}"
     )

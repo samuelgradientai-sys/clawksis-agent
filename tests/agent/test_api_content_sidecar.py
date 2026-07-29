@@ -38,6 +38,7 @@ from clawk_state import SessionDB
 # compose_user_api_content — the single source of the injection composition
 # ---------------------------------------------------------------------------
 
+
 class TestComposeUserApiContent:
     def test_none_when_nothing_to_inject(self):
         assert compose_user_api_content("hello", "", "") is None
@@ -63,6 +64,7 @@ class TestComposeUserApiContent:
 # ---------------------------------------------------------------------------
 # SessionDB: schema, round-trip, verbatim replay
 # ---------------------------------------------------------------------------
+
 
 class TestSessionDbSidecar:
     def _open(self, tmp_path):
@@ -178,6 +180,7 @@ class TestAutoMigration:
 # ---------------------------------------------------------------------------
 # Prologue stamping (build_turn_context)
 # ---------------------------------------------------------------------------
+
 
 class _FakeTodoStore:
     def has_items(self):
@@ -320,6 +323,7 @@ class TestPrologueStamping:
 # Flush: persist-override rows keep the sent bytes in the sidecar (#48677)
 # ---------------------------------------------------------------------------
 
+
 class TestFlushOverrideSidecar:
     def _make_agent(self, db, sid):
         from run_agent import AIAgent
@@ -388,6 +392,7 @@ class TestFlushOverrideSidecar:
 # End-to-end wire invariant against an in-process mock provider
 # ---------------------------------------------------------------------------
 
+
 class _MockHandler(BaseHTTPRequestHandler):
     captured_requests: list = []
     response_queue: list = []
@@ -408,15 +413,65 @@ class _MockHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
-            chunks = [{"id": "m", "choices": [{"index": 0, "delta": {"role": "assistant", "content": ""}, "finish_reason": None}]}]
+            chunks = [
+                {
+                    "id": "m",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"role": "assistant", "content": ""},
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+            ]
             if content:
-                chunks.append({"id": "m", "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": None}]})
+                chunks.append({
+                    "id": "m",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"content": content},
+                            "finish_reason": None,
+                        }
+                    ],
+                })
             if tcs:
                 for ti, tc in enumerate(tcs):
-                    chunks.append({"id": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{
-                        "index": ti, "id": tc["id"], "type": "function",
-                        "function": {"name": tc["function"]["name"], "arguments": tc["function"]["arguments"]}}]}, "finish_reason": None}]})
-            chunks.append({"id": "m", "choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls" if tcs else "stop"}]})
+                    chunks.append({
+                        "id": "m",
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {
+                                    "tool_calls": [
+                                        {
+                                            "index": ti,
+                                            "id": tc["id"],
+                                            "type": "function",
+                                            "function": {
+                                                "name": tc["function"]["name"],
+                                                "arguments": tc["function"][
+                                                    "arguments"
+                                                ],
+                                            },
+                                        }
+                                    ]
+                                },
+                                "finish_reason": None,
+                            }
+                        ],
+                    })
+            chunks.append({
+                "id": "m",
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {},
+                        "finish_reason": "tool_calls" if tcs else "stop",
+                    }
+                ],
+            })
             for c in chunks:
                 self.wfile.write(f"data: {json.dumps(c)}\n\n".encode())
             self.wfile.write(b"data: [DONE]\n\n")
@@ -436,11 +491,23 @@ class _MockHandler(BaseHTTPRequestHandler):
 def _tc_resp(name: str, args: str = "{}") -> dict:
     return {
         "id": "m",
-        "choices": [{"index": 0, "message": {
-            "role": "assistant", "content": "",
-            "tool_calls": [{"id": "call_1", "type": "function",
-                            "function": {"name": name, "arguments": args}}]},
-            "finish_reason": "tool_calls"}],
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {"name": name, "arguments": args},
+                        }
+                    ],
+                },
+                "finish_reason": "tool_calls",
+            }
+        ],
         "usage": {"prompt_tokens": 10, "completion_tokens": 0, "total_tokens": 10},
     }
 
@@ -448,7 +515,13 @@ def _tc_resp(name: str, args: str = "{}") -> dict:
 def _text_resp(text: str) -> dict:
     return {
         "id": "m",
-        "choices": [{"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": "stop"}],
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": "stop",
+            }
+        ],
         "usage": {"prompt_tokens": 10, "completion_tokens": 0, "total_tokens": 10},
     }
 
@@ -482,12 +555,19 @@ def wire_env():
 
     def make_agent():
         agent = AIAgent(
-            api_key="test-key", base_url=f"http://127.0.0.1:{port}/v1",
-            provider="openai-compat", model="test-model",
-            max_iterations=10, enabled_toolsets=[],
-            quiet_mode=True, skip_context_files=True, skip_memory=True,
-            save_trajectories=False, platform="cli",
-            session_db=db, session_id=sid,
+            api_key="test-key",
+            base_url=f"http://127.0.0.1:{port}/v1",
+            provider="openai-compat",
+            model="test-model",
+            max_iterations=10,
+            enabled_toolsets=[],
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+            save_trajectories=False,
+            platform="cli",
+            session_db=db,
+            session_id=sid,
         )
         agent.valid_tool_names = {"read_file"}
         return agent
@@ -528,7 +608,9 @@ class TestWireInvariant:
         make_agent, handler, db, sid = wire_env
         agent = make_agent()
         # Two API calls in one turn: tool call, then final text.
-        handler.response_queue.append(_tc_resp("read_file", '{"file_path": "/nonexistent-path"}'))
+        handler.response_queue.append(
+            _tc_resp("read_file", '{"file_path": "/nonexistent-path"}')
+        )
         handler.response_queue.append(_text_resp("done"))
 
         agent.run_conversation("hello please", conversation_history=[], task_id="t")
@@ -808,7 +890,10 @@ class TestFlushSanitizeDivergenceCapture:
             assert sanitize_context(raw) != raw  # test precondition
             messages = [
                 {"role": "user", "content": raw},
-                {"role": "assistant", "content": "it fences recalled memory <memory-context>"},
+                {
+                    "role": "assistant",
+                    "content": "it fences recalled memory <memory-context>",
+                },
             ]
             agent._flush_messages_to_session_db(messages, None)
 
@@ -873,15 +958,14 @@ class TestMaxIterationsSummaryReplay:
             {"role": "user", "content": "q1", "api_content": "q1\n\nPLUGIN-CTX"},
             {"role": "assistant", "content": "a1"},
         ]
-        with patch.object(
-            agent, "_ensure_primary_openai_client", return_value=client
-        ), patch.object(agent, "_get_transport", return_value=transport):
+        with (
+            patch.object(agent, "_ensure_primary_openai_client", return_value=client),
+            patch.object(agent, "_get_transport", return_value=transport),
+        ):
             out = handle_max_iterations(agent, messages, 5)
 
         assert out == "SUMMARY"
-        sent_users = [
-            m for m in captured["messages"] if m.get("role") == "user"
-        ]
+        sent_users = [m for m in captured["messages"] if m.get("role") == "user"]
         assert sent_users[0]["content"] == "q1\n\nPLUGIN-CTX"
         for m in captured["messages"]:
             assert "api_content" not in m
@@ -1028,8 +1112,6 @@ class TestStaleConfirmationRedactionDropsSidecar:
                 "timestamp": 1000.0,
             }
         ]
-        cleaned = strip_stale_dangerous_confirmations(
-            history, now=1000.0 + 999999.0
-        )
+        cleaned = strip_stale_dangerous_confirmations(history, now=1000.0 + 999999.0)
         assert cleaned[0]["content"] != "confirm forced restart"
         assert "api_content" not in cleaned[0]

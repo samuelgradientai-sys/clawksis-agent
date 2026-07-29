@@ -1,4 +1,5 @@
 """Tests for Matrix outbound message length configuration (#53026)."""
+
 import asyncio
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -63,7 +64,10 @@ class TestMatrixMaxMessageLength:
         assert os.getenv("MATRIX_MAX_MESSAGE_LENGTH") == "12000"
 
     def test_register_uses_default_limit(self):
-        from plugins.platforms.matrix.adapter import DEFAULT_MAX_MESSAGE_LENGTH, register
+        from plugins.platforms.matrix.adapter import (
+            DEFAULT_MAX_MESSAGE_LENGTH,
+            register,
+        )
 
         ctx = MagicMock()
         register(ctx)
@@ -77,7 +81,9 @@ class TestMatrixMaxMessageLength:
         long_text = "x" * 12000
 
         async def _run():
-            with patch.object(adapter, "truncate_message", wraps=adapter.truncate_message) as trunc:
+            with patch.object(
+                adapter, "truncate_message", wraps=adapter.truncate_message
+            ) as trunc:
                 await adapter.send("!room:example.org", long_text)
                 trunc.assert_called_once()
                 assert trunc.call_args[0][1] == 5000

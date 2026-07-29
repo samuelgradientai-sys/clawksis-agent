@@ -111,4 +111,6 @@ def test_aggregator_synthesis_untouched_on_non_caching_route(
 
     agg_kwargs = _aggregator_kwargs(captured_calls)
     synth_message = agg_kwargs["messages"][0]
-    assert isinstance(synth_message["content"], str), "must stay undecorated (plain string content)"
+    assert isinstance(synth_message["content"], str), (
+        "must stay undecorated (plain string content)"
+    )

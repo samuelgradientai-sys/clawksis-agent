@@ -1,4 +1,5 @@
 """Tests for browser_camofox._get_command_timeout — config-driven timeout."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +14,7 @@ class TestCamofoxCommandTimeout:
 
         # Clear cache
         import tools.browser_camofox as mod
+
         mod._cmd_timeout_resolved = False
         mod._cached_cmd_timeout = None
 
@@ -24,6 +26,7 @@ class TestCamofoxCommandTimeout:
         from tools.browser_camofox import _get_command_timeout
 
         import tools.browser_camofox as mod
+
         mod._cmd_timeout_resolved = False
         mod._cached_cmd_timeout = None
 
@@ -36,6 +39,7 @@ class TestCamofoxCommandTimeout:
         from tools.browser_camofox import _get_command_timeout
 
         import tools.browser_camofox as mod
+
         mod._cmd_timeout_resolved = False
         mod._cached_cmd_timeout = None
 
@@ -48,6 +52,7 @@ class TestCamofoxCommandTimeout:
         from tools.browser_camofox import _get_command_timeout
 
         import tools.browser_camofox as mod
+
         mod._cmd_timeout_resolved = False
         mod._cached_cmd_timeout = None
 
@@ -62,8 +67,11 @@ class TestCamofoxCommandTimeout:
         from tools.browser_camofox import _get_command_timeout
 
         import tools.browser_camofox as mod
+
         mod._cmd_timeout_resolved = False
         mod._cached_cmd_timeout = None
 
-        with patch("tools.browser_camofox.read_raw_config", side_effect=Exception("no config")):
+        with patch(
+            "tools.browser_camofox.read_raw_config", side_effect=Exception("no config")
+        ):
             assert _get_command_timeout() == 30

@@ -47,7 +47,9 @@ def test_skill_node_timestamp_uses_iso_usage_activity(tmp_path, monkeypatch):
     skill_dir = tmp_path / "skills" / "dev" / "iso-skill"
     skill_dir.mkdir(parents=True)
     skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text("---\nname: iso-skill\ncategory: dev\n---\n# ISO\n", encoding="utf-8")
+    skill_md.write_text(
+        "---\nname: iso-skill\ncategory: dev\n---\n# ISO\n", encoding="utf-8"
+    )
 
     monkeypatch.setattr(
         learning_graph,
@@ -100,7 +102,9 @@ def test_malformed_frontmatter_metadata_does_not_crash(tmp_path):
         encoding="utf-8",
     )
 
-    node = learning_graph.build_skill_nodes([("profile", tmp_path / "skills")])["bad-skill"]
+    node = learning_graph.build_skill_nodes([("profile", tmp_path / "skills")])[
+        "bad-skill"
+    ]
 
     assert node.category == "misc"  # directory fallback, not a crash
     assert node.related == []
@@ -109,7 +113,9 @@ def test_malformed_frontmatter_metadata_does_not_crash(tmp_path):
 def test_clawk_meta_tolerates_non_dict():
     assert learning_graph._clawk_meta({"metadata": "junk"}) == {}
     assert learning_graph._clawk_meta({"metadata": {"clawk": "junk"}}) == {}
-    assert learning_graph._clawk_meta({"metadata": {"clawk": {"category": "x"}}}) == {"category": "x"}
+    assert learning_graph._clawk_meta({"metadata": {"clawk": {"category": "x"}}}) == {
+        "category": "x"
+    }
 
 
 def test_full_payload_shape_and_edge_integrity(tmp_path):

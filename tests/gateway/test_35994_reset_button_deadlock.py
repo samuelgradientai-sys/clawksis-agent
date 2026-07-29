@@ -11,6 +11,7 @@ event loop, so the bot went silent until a manual restart.
 The fix offloads _cleanup_agent_resources to a worker thread with a bounded
 timeout, so the loop is never blocked and a stuck teardown degrades gracefully.
 """
+
 import asyncio
 import logging
 import threading
@@ -60,14 +61,20 @@ def _make_runner_with_cached_agent(close_fn):
 
     session_key = build_session_key(_make_source())
     session_entry = SessionEntry(
-        session_key=session_key, session_id="sess-old",
-        created_at=datetime.now(), updated_at=datetime.now(),
-        platform=Platform.TELEGRAM, chat_type="dm",
+        session_key=session_key,
+        session_id="sess-old",
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        platform=Platform.TELEGRAM,
+        chat_type="dm",
     )
     new_entry = SessionEntry(
-        session_key=session_key, session_id="sess-new",
-        created_at=datetime.now(), updated_at=datetime.now(),
-        platform=Platform.TELEGRAM, chat_type="dm",
+        session_key=session_key,
+        session_id="sess-new",
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        platform=Platform.TELEGRAM,
+        chat_type="dm",
     )
     runner.session_store = MagicMock()
     runner.session_store.reset_session.return_value = new_entry
@@ -115,9 +122,7 @@ async def test_reset_does_not_block_event_loop_during_cleanup():
             await asyncio.sleep(0.005)
 
     hb = asyncio.create_task(_heartbeat())
-    reset_task = asyncio.create_task(
-        runner._handle_reset_command(_make_event("/new"))
-    )
+    reset_task = asyncio.create_task(runner._handle_reset_command(_make_event("/new")))
 
     # Wait until close() has actually started blocking in its worker thread.
     for _ in range(200):

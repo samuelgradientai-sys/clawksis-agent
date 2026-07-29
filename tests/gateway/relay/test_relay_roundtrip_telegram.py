@@ -47,7 +47,9 @@ def _telegram_descriptor() -> CapabilityDescriptor:
     )
 
 
-def _tg_group_event(chat_id: str, user_id: str, text: str, thread_id: str | None = None) -> MessageEvent:
+def _tg_group_event(
+    chat_id: str, user_id: str, text: str, thread_id: str | None = None
+) -> MessageEvent:
     """Synthetic inbound the connector would build from a Telegram update.
 
     A plain group message has no thread_id; a forum-topic message carries the
@@ -99,7 +101,9 @@ async def test_telegram_descriptor_round_trips_through_stub(wired):
 async def test_inbound_telegram_event_reaches_adapter(wired, monkeypatch):
     adapter, stub = wired
     captured: list[MessageEvent] = []
-    monkeypatch.setattr(adapter, "handle_message", lambda ev: _async_capture(captured, ev))
+    monkeypatch.setattr(
+        adapter, "handle_message", lambda ev: _async_capture(captured, ev)
+    )
     await adapter.connect()
     await stub.push_inbound(_tg_group_event("chat-100", "userX", "hello"))
     assert len(captured) == 1

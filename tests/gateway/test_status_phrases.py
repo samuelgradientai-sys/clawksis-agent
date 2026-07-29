@@ -52,7 +52,9 @@ def test_builtin_catalog_is_loaded_from_external_asset_and_is_status_only():
 def test_relative_status_phrase_path_loads_from_clawk_home(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     phrase_file = tmp_path / "phrases.yaml"
-    phrase_file.write_text("mode: replace\nstatus:\n  - relative safe status text\n", encoding="utf-8")
+    phrase_file.write_text(
+        "mode: replace\nstatus:\n  - relative safe status text\n", encoding="utf-8"
+    )
 
     catalog = resolve_status_phrase_catalog(
         {"display": {"status_phrases": {"path": "phrases.yaml"}}},
@@ -66,7 +68,9 @@ def test_status_phrase_path_can_load_relative_directory(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     phrase_dir = tmp_path / "phrase-catalog"
     phrase_dir.mkdir()
-    (phrase_dir / "01-status.yaml").write_text("status:\n  - relative dir status text\n", encoding="utf-8")
+    (phrase_dir / "01-status.yaml").write_text(
+        "status:\n  - relative dir status text\n", encoding="utf-8"
+    )
 
     catalog = resolve_status_phrase_catalog(
         {"display": {"status_phrases": {"path": "phrase-catalog"}}},
@@ -79,7 +83,9 @@ def test_status_phrase_path_can_load_relative_directory(tmp_path, monkeypatch):
 def test_absolute_or_parent_phrase_paths_are_ignored(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     outside = tmp_path.parent / "outside-phrases.yaml"
-    outside.write_text("mode: replace\nstatus:\n  - should not load\n", encoding="utf-8")
+    outside.write_text(
+        "mode: replace\nstatus:\n  - should not load\n", encoding="utf-8"
+    )
 
     catalog = resolve_status_phrase_catalog(
         {"display": {"status_phrases": {"path": str(outside)}}},
@@ -145,7 +151,14 @@ def test_platform_custom_status_phrase_catalog_can_replace_surface():
 
 def test_choose_status_phrase_uses_custom_catalog_without_leaking_args():
     catalog = resolve_status_phrase_catalog(
-        {"display": {"status_phrases": {"mode": "replace", "status": ["custom safe status text"]}}},
+        {
+            "display": {
+                "status_phrases": {
+                    "mode": "replace",
+                    "status": ["custom safe status text"],
+                }
+            }
+        },
         "whatsapp",
     )
 

@@ -25,7 +25,9 @@ from tools.registry import registry
 _workspace_callback: Optional[Callable[[str, str, str], None]] = None
 
 
-def set_project_workspace_callback(fn: Optional[Callable[[str, str, str], None]]) -> None:
+def set_project_workspace_callback(
+    fn: Optional[Callable[[str, str, str], None]],
+) -> None:
     global _workspace_callback
     _workspace_callback = fn
 
@@ -88,7 +90,9 @@ def project_list(task_id: Optional[str] = None) -> str:
     })
 
 
-def project_create(name: str, path: Optional[str] = None, task_id: Optional[str] = None) -> str:
+def project_create(
+    name: str, path: Optional[str] = None, task_id: Optional[str] = None
+) -> str:
     name = (name or "").strip()
     if not name:
         return json.dumps({"success": False, "error": "name is required"})
@@ -101,7 +105,12 @@ def project_create(name: str, path: Optional[str] = None, task_id: Optional[str]
 
     try:
         with pdb.connect_closing() as conn:
-            pid = pdb.create_project(conn, name=name, folders=[folder] if folder else [], primary_path=folder or None)
+            pid = pdb.create_project(
+                conn,
+                name=name,
+                folders=[folder] if folder else [],
+                primary_path=folder or None,
+            )
             pdb.set_active(conn, pid)
             proj = pdb.get_project(conn, pid)
     except ValueError as exc:
@@ -113,7 +122,13 @@ def project_create(name: str, path: Optional[str] = None, task_id: Optional[str]
     primary = _primary_path(proj)
     _apply_workspace(task_id, primary, proj.name)
 
-    return json.dumps({"success": True, "id": proj.id, "slug": proj.slug, "name": proj.name, "primary_path": primary})
+    return json.dumps({
+        "success": True,
+        "id": proj.id,
+        "slug": proj.slug,
+        "name": proj.name,
+        "primary_path": primary,
+    })
 
 
 def project_switch(project: str, task_id: Optional[str] = None) -> str:
@@ -122,13 +137,22 @@ def project_switch(project: str, task_id: Optional[str] = None) -> str:
     with pdb.connect_closing() as conn:
         proj = _resolve(conn, project)
         if proj is None:
-            return json.dumps({"success": False, "error": f"no project matching '{project}'"})
+            return json.dumps({
+                "success": False,
+                "error": f"no project matching '{project}'",
+            })
         pdb.set_active(conn, proj.id)
 
     primary = _primary_path(proj)
     _apply_workspace(task_id, primary, proj.name)
 
-    return json.dumps({"success": True, "id": proj.id, "slug": proj.slug, "name": proj.name, "primary_path": primary})
+    return json.dumps({
+        "success": True,
+        "id": proj.id,
+        "slug": proj.slug,
+        "name": proj.name,
+        "primary_path": primary,
+    })
 
 
 registry.register(
@@ -156,8 +180,14 @@ registry.register(
         "parameters": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Human name, e.g. 'Aurora Demo'"},
-                "path": {"type": "string", "description": "Primary repo/folder to anchor the project to"},
+                "name": {
+                    "type": "string",
+                    "description": "Human name, e.g. 'Aurora Demo'",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Primary repo/folder to anchor the project to",
+                },
             },
             "required": ["name"],
         },
@@ -180,10 +210,15 @@ registry.register(
         "parameters": {
             "type": "object",
             "properties": {
-                "project": {"type": "string", "description": "Project name, slug, or id"},
+                "project": {
+                    "type": "string",
+                    "description": "Project name, slug, or id",
+                },
             },
             "required": ["project"],
         },
     },
-    handler=lambda args, **kw: project_switch(project=args.get("project", ""), task_id=kw.get("task_id")),
+    handler=lambda args, **kw: project_switch(
+        project=args.get("project", ""), task_id=kw.get("task_id")
+    ),
 )

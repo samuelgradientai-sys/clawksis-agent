@@ -317,7 +317,9 @@ def save_url_image(
     # Infer extension from the response content-type, falling back to the
     # URL suffix when xAI / OpenAI omit a precise type (some CDNs return
     # ``application/octet-stream``).  Defaults to ``png``.
-    content_type = (response.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+    content_type = (
+        (response.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+    )
     extension = _URL_IMAGE_CONTENT_TYPES.get(content_type)
     if extension is None:
         url_path = url.split("?", 1)[0].lower()

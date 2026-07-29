@@ -33,6 +33,7 @@ def cron_env(tmp_path, monkeypatch):
 
     # Clear cached module-level paths
     import cron.jobs as jobs_mod
+
     monkeypatch.setattr(jobs_mod, "CLAWK_DIR", clawk_home)
     monkeypatch.setattr(jobs_mod, "CRON_DIR", clawk_home / "cron")
     monkeypatch.setattr(jobs_mod, "JOBS_FILE", clawk_home / "cron" / "jobs.json")
@@ -135,12 +136,14 @@ class TestRunJobScript:
         from cron.scheduler import _run_job_script
 
         script = cron_env / "scripts" / "fail.py"
-        script.write_text(textwrap.dedent("""\
+        script.write_text(
+            textwrap.dedent("""\
             import sys
             print("partial output")
             print("error info", file=sys.stderr)
             sys.exit(1)
-        """))
+        """)
+        )
 
         success, output = _run_job_script(str(script))
         assert success is False
@@ -172,7 +175,9 @@ class TestRunJobScript:
         assert success is True
         assert output == "ABSENT"
 
-    def test_windows_uv_venv_python_script_bypasses_launcher(self, cron_env, tmp_path, monkeypatch):
+    def test_windows_uv_venv_python_script_bypasses_launcher(
+        self, cron_env, tmp_path, monkeypatch
+    ):
         from cron import scheduler as sched_mod
         from cron.scheduler import _run_job_script
 
@@ -190,7 +195,9 @@ class TestRunJobScript:
         base_python = base / "python.exe"
         venv_python.write_text("", encoding="utf-8")
         base_python.write_text("", encoding="utf-8")
-        (venv / "pyvenv.cfg").write_text(f"home = {base}\nuv = true\n", encoding="utf-8")
+        (venv / "pyvenv.cfg").write_text(
+            f"home = {base}\nuv = true\n", encoding="utf-8"
+        )
 
         captured = {}
 
@@ -214,7 +221,9 @@ class TestRunJobScript:
         assert env["VIRTUAL_ENV"] == str(venv)
         assert str(site_packages) in env["PYTHONPATH"]
 
-    def test_windows_pythonw_script_uses_sibling_python_for_captured_output(self, cron_env, tmp_path, monkeypatch):
+    def test_windows_pythonw_script_uses_sibling_python_for_captured_output(
+        self, cron_env, tmp_path, monkeypatch
+    ):
         from cron import scheduler as sched_mod
         from cron.scheduler import _run_job_script
 
@@ -249,7 +258,9 @@ class TestRunJobScript:
         assert captured["kwargs"]["encoding"] == "utf-8"
         assert captured["kwargs"]["errors"] == "replace"
 
-    def test_non_windows_script_preserves_default_text_decoding(self, cron_env, monkeypatch):
+    def test_non_windows_script_preserves_default_text_decoding(
+        self, cron_env, monkeypatch
+    ):
         from cron import scheduler as sched_mod
         from cron.scheduler import _run_job_script
 
@@ -305,11 +316,13 @@ class TestRunJobScript:
         from cron.scheduler import _run_job_script
 
         script = cron_env / "scripts" / "json_out.py"
-        script.write_text(textwrap.dedent("""\
+        script.write_text(
+            textwrap.dedent("""\
             import json
             data = {"new_prs": [{"number": 42, "title": "Fix bug"}]}
             print(json.dumps(data, indent=2))
-        """))
+        """)
+        )
 
         success, output = _run_job_script(str(script))
         assert success is True
@@ -356,7 +369,6 @@ class TestBuildJobPromptWithScript:
         assert "Simple job." in prompt
 
 
-
 class TestCronjobToolScript:
     """Test the cronjob tool's script parameter."""
 
@@ -364,12 +376,14 @@ class TestCronjobToolScript:
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         from tools.cronjob_tools import cronjob
 
-        result = json.loads(cronjob(
-            action="create",
-            schedule="every 1h",
-            prompt="Monitor things",
-            script="monitor.py",
-        ))
+        result = json.loads(
+            cronjob(
+                action="create",
+                schedule="every 1h",
+                prompt="Monitor things",
+                script="monitor.py",
+            )
+        )
         assert result["success"] is True
         assert result["job"]["script"] == "monitor.py"
 
@@ -377,18 +391,22 @@ class TestCronjobToolScript:
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         from tools.cronjob_tools import cronjob
 
-        create_result = json.loads(cronjob(
-            action="create",
-            schedule="every 1h",
-            prompt="Monitor things",
-        ))
+        create_result = json.loads(
+            cronjob(
+                action="create",
+                schedule="every 1h",
+                prompt="Monitor things",
+            )
+        )
         job_id = create_result["job_id"]
 
-        update_result = json.loads(cronjob(
-            action="update",
-            job_id=job_id,
-            script="new_script.py",
-        ))
+        update_result = json.loads(
+            cronjob(
+                action="update",
+                job_id=job_id,
+                script="new_script.py",
+            )
+        )
         assert update_result["success"] is True
         assert update_result["job"]["script"] == "new_script.py"
 
@@ -396,19 +414,23 @@ class TestCronjobToolScript:
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         from tools.cronjob_tools import cronjob
 
-        create_result = json.loads(cronjob(
-            action="create",
-            schedule="every 1h",
-            prompt="Monitor things",
-            script="some_script.py",
-        ))
+        create_result = json.loads(
+            cronjob(
+                action="create",
+                schedule="every 1h",
+                prompt="Monitor things",
+                script="some_script.py",
+            )
+        )
         job_id = create_result["job_id"]
 
-        update_result = json.loads(cronjob(
-            action="update",
-            job_id=job_id,
-            script="",
-        ))
+        update_result = json.loads(
+            cronjob(
+                action="update",
+                job_id=job_id,
+                script="",
+            )
+        )
         assert update_result["success"] is True
         assert "script" not in update_result["job"]
 
@@ -544,51 +566,68 @@ class TestCronjobToolScriptValidation:
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         from tools.cronjob_tools import cronjob
 
-        result = json.loads(cronjob(
-            action="create",
-            schedule="every 1h",
-            prompt="Monitor things",
-            script="/home/user/evil.py",
-        ))
+        result = json.loads(
+            cronjob(
+                action="create",
+                schedule="every 1h",
+                prompt="Monitor things",
+                script="/home/user/evil.py",
+            )
+        )
         assert result["success"] is False
-        assert "relative" in result["error"].lower() or "absolute" in result["error"].lower()
+        assert (
+            "relative" in result["error"].lower()
+            or "absolute" in result["error"].lower()
+        )
 
     def test_create_with_tilde_script_rejected(self, cron_env, monkeypatch):
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         from tools.cronjob_tools import cronjob
 
-        result = json.loads(cronjob(
-            action="create",
-            schedule="every 1h",
-            prompt="Monitor things",
-            script="~/monitor.py",
-        ))
+        result = json.loads(
+            cronjob(
+                action="create",
+                schedule="every 1h",
+                prompt="Monitor things",
+                script="~/monitor.py",
+            )
+        )
         assert result["success"] is False
-        assert "relative" in result["error"].lower() or "absolute" in result["error"].lower()
+        assert (
+            "relative" in result["error"].lower()
+            or "absolute" in result["error"].lower()
+        )
 
     def test_create_with_traversal_script_rejected(self, cron_env, monkeypatch):
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         from tools.cronjob_tools import cronjob
 
-        result = json.loads(cronjob(
-            action="create",
-            schedule="every 1h",
-            prompt="Monitor things",
-            script="../../etc/passwd",
-        ))
+        result = json.loads(
+            cronjob(
+                action="create",
+                schedule="every 1h",
+                prompt="Monitor things",
+                script="../../etc/passwd",
+            )
+        )
         assert result["success"] is False
-        assert "escapes" in result["error"].lower() or "traversal" in result["error"].lower()
+        assert (
+            "escapes" in result["error"].lower()
+            or "traversal" in result["error"].lower()
+        )
 
     def test_create_with_relative_script_allowed(self, cron_env, monkeypatch):
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         from tools.cronjob_tools import cronjob
 
-        result = json.loads(cronjob(
-            action="create",
-            schedule="every 1h",
-            prompt="Monitor things",
-            script="monitor.py",
-        ))
+        result = json.loads(
+            cronjob(
+                action="create",
+                schedule="every 1h",
+                prompt="Monitor things",
+                script="monitor.py",
+            )
+        )
         assert result["success"] is True
         assert result["job"]["script"] == "monitor.py"
 
@@ -596,39 +635,50 @@ class TestCronjobToolScriptValidation:
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         from tools.cronjob_tools import cronjob
 
-        create_result = json.loads(cronjob(
-            action="create",
-            schedule="every 1h",
-            prompt="Monitor things",
-        ))
+        create_result = json.loads(
+            cronjob(
+                action="create",
+                schedule="every 1h",
+                prompt="Monitor things",
+            )
+        )
         job_id = create_result["job_id"]
 
-        update_result = json.loads(cronjob(
-            action="update",
-            job_id=job_id,
-            script="/tmp/evil.py",
-        ))
+        update_result = json.loads(
+            cronjob(
+                action="update",
+                job_id=job_id,
+                script="/tmp/evil.py",
+            )
+        )
         assert update_result["success"] is False
-        assert "relative" in update_result["error"].lower() or "absolute" in update_result["error"].lower()
+        assert (
+            "relative" in update_result["error"].lower()
+            or "absolute" in update_result["error"].lower()
+        )
 
     def test_update_clear_script_allowed(self, cron_env, monkeypatch):
         """Clearing a script (empty string) should always be permitted."""
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         from tools.cronjob_tools import cronjob
 
-        create_result = json.loads(cronjob(
-            action="create",
-            schedule="every 1h",
-            prompt="Monitor things",
-            script="monitor.py",
-        ))
+        create_result = json.loads(
+            cronjob(
+                action="create",
+                schedule="every 1h",
+                prompt="Monitor things",
+                script="monitor.py",
+            )
+        )
         job_id = create_result["job_id"]
 
-        update_result = json.loads(cronjob(
-            action="update",
-            job_id=job_id,
-            script="",
-        ))
+        update_result = json.loads(
+            cronjob(
+                action="update",
+                job_id=job_id,
+                script="",
+            )
+        )
         assert update_result["success"] is True
         assert "script" not in update_result["job"]
 
@@ -636,12 +686,14 @@ class TestCronjobToolScriptValidation:
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         from tools.cronjob_tools import cronjob
 
-        result = json.loads(cronjob(
-            action="create",
-            schedule="every 1h",
-            prompt="Monitor things",
-            script="C:\\Users\\evil\\script.py",
-        ))
+        result = json.loads(
+            cronjob(
+                action="create",
+                schedule="every 1h",
+                prompt="Monitor things",
+                script="C:\\Users\\evil\\script.py",
+            )
+        )
         assert result["success"] is False
 
 

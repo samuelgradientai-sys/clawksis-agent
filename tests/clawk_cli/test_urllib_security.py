@@ -37,9 +37,10 @@ class _RecordingHandler(BaseHTTPRequestHandler):
     requests: list[tuple[str, dict[str, str]]] = []
 
     def _record(self) -> None:
-        type(self).requests.append(
-            (self.command, {name.lower(): value for name, value in self.headers.items()})
-        )
+        type(self).requests.append((
+            self.command,
+            {name.lower(): value for name, value in self.headers.items()},
+        ))
 
     def do_GET(self):
         if self.path.startswith("/redirect"):
@@ -278,9 +279,7 @@ def test_installed_custom_opener_policy_is_preserved(monkeypatch):
 
     from clawk_cli.urllib_security import _secure_opener_from_installed_policy
 
-    secured = _secure_opener_from_installed_policy(
-        "foo://models.example.test/catalog"
-    )
+    secured = _secure_opener_from_installed_policy("foo://models.example.test/catalog")
     assert secured.addheaders == []
     assert getattr(secured, "_clawk_initial_addheaders") == installed.addheaders
 
@@ -289,9 +288,7 @@ def test_installed_custom_opener_policy_is_preserved(monkeypatch):
     )
     with open_credentialed_url(request, timeout=3) as response:
         assert response.read() == b"custom"
-    request_headers = {
-        name.lower(): value for name, value in request.header_items()
-    }
+    request_headers = {name.lower(): value for name, value in request.header_items()}
     assert request_headers["x-trace-policy"] == "installed"
     assert request_headers["user-agent"] == "enterprise-client"
     assert opened == ["foo://models.example.test/catalog"]
@@ -370,9 +367,7 @@ def test_multihop_redirects_never_resurrect_credentials():
         "https://a.example.test/step-two",
     )
     assert same_origin is not None
-    same_headers = {
-        name.lower(): value for name, value in same_origin.header_items()
-    }
+    same_headers = {name.lower(): value for name, value in same_origin.header_items()}
     assert "authorization" in same_headers
 
     cross_origin = handler.redirect_request(
@@ -384,9 +379,7 @@ def test_multihop_redirects_never_resurrect_credentials():
         "https://b.example.test/step-three",
     )
     assert cross_origin is not None
-    cross_headers = {
-        name.lower(): value for name, value in cross_origin.header_items()
-    }
+    cross_headers = {name.lower(): value for name, value in cross_origin.header_items()}
     assert "authorization" not in cross_headers
     assert "cf-access-client-secret" not in cross_headers
 
@@ -399,9 +392,7 @@ def test_multihop_redirects_never_resurrect_credentials():
         "https://a.example.test/final",
     )
     assert returned is not None
-    returned_headers = {
-        name.lower(): value for name, value in returned.header_items()
-    }
+    returned_headers = {name.lower(): value for name, value in returned.header_items()}
     assert "authorization" not in returned_headers
     assert "cf-access-client-secret" not in returned_headers
 

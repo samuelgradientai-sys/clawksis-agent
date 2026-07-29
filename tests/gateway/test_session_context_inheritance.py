@@ -25,6 +25,7 @@ to ``_UNSET`` at the top of the per-message handler (``GatewayRunner._handle_mes
 strips safe instead of leaking the sibling's. The handler then binds its own
 session a few steps later.
 """
+
 import asyncio
 from contextvars import copy_context
 
@@ -155,7 +156,11 @@ def test_reset_session_vars_closes_inheritance_leak():
     captured = asyncio.run(_child_turn(reset_first=True))
 
     window = captured["window"]
-    for var in ("CLAWK_SESSION_CHAT_ID", "CLAWK_SESSION_THREAD_ID", "CLAWK_SESSION_KEY"):
+    for var in (
+        "CLAWK_SESSION_CHAT_ID",
+        "CLAWK_SESSION_THREAD_ID",
+        "CLAWK_SESSION_KEY",
+    ):
         assert window[var] is None, (
             f"{var} leaked the parent session after reset: {window[var]!r}"
         )

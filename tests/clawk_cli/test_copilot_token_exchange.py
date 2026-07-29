@@ -13,6 +13,7 @@ import pytest
 def _clear_jwt_cache():
     """Reset the module-level JWT cache before each test."""
     import clawk_cli.copilot_auth as mod
+
     mod._jwt_cache.clear()
     yield
     mod._jwt_cache.clear()
@@ -21,7 +22,9 @@ def _clear_jwt_cache():
 class TestExchangeCopilotToken:
     """Tests for exchange_copilot_token()."""
 
-    def _mock_urlopen(self, token="tid=abc;exp=123;sku=copilot_individual", expires_at=None):
+    def _mock_urlopen(
+        self, token="tid=abc;exp=123;sku=copilot_individual", expires_at=None
+    ):
         """Create a mock urlopen context manager returning a token response."""
         if expires_at is None:
             expires_at = time.time() + 1800
@@ -63,7 +66,11 @@ class TestExchangeCopilotToken:
 
     @patch("urllib.request.urlopen")
     def test_refreshes_expired_cache(self, mock_urlopen):
-        from clawk_cli.copilot_auth import exchange_copilot_token, _jwt_cache, _token_fingerprint
+        from clawk_cli.copilot_auth import (
+            exchange_copilot_token,
+            _jwt_cache,
+            _token_fingerprint,
+        )
 
         # Seed cache with expired entry
         fp = _token_fingerprint("gho_test123")
@@ -111,7 +118,9 @@ class TestGetCopilotApiToken:
         assert api_token == "exchanged_jwt"
         assert base_url is None
 
-    @patch("clawk_cli.copilot_auth.exchange_copilot_token", side_effect=ValueError("fail"))
+    @patch(
+        "clawk_cli.copilot_auth.exchange_copilot_token", side_effect=ValueError("fail")
+    )
     def test_falls_back_to_raw_token(self, mock_exchange):
         from clawk_cli.copilot_auth import get_copilot_api_token
 
@@ -153,8 +162,14 @@ class TestTokenFingerprint:
 class TestCallerIntegration:
     """Test that callers correctly use token exchange."""
 
-    @patch("clawk_cli.copilot_auth.resolve_copilot_token", return_value=("gho_raw", "GH_TOKEN"))
-    @patch("clawk_cli.copilot_auth.get_copilot_api_token", return_value=("exchanged_jwt", None))
+    @patch(
+        "clawk_cli.copilot_auth.resolve_copilot_token",
+        return_value=("gho_raw", "GH_TOKEN"),
+    )
+    @patch(
+        "clawk_cli.copilot_auth.get_copilot_api_token",
+        return_value=("exchanged_jwt", None),
+    )
     def test_auth_resolve_uses_exchange(self, mock_exchange, mock_resolve):
         from clawk_cli.auth import _resolve_api_key_provider_secret
 
@@ -173,7 +188,10 @@ class TestDeriveBaseUrlFromProxyEp:
         from clawk_cli.copilot_auth import _derive_base_url_from_proxy_ep
 
         token = "tid=abc;exp=999;proxy-ep=proxy.enterprise.githubcopilot.com;sku=copilot_enterprise"
-        assert _derive_base_url_from_proxy_ep(token) == "https://api.enterprise.githubcopilot.com"
+        assert (
+            _derive_base_url_from_proxy_ep(token)
+            == "https://api.enterprise.githubcopilot.com"
+        )
 
     def test_returns_none_without_proxy_ep(self):
         from clawk_cli.copilot_auth import _derive_base_url_from_proxy_ep
@@ -185,13 +203,19 @@ class TestDeriveBaseUrlFromProxyEp:
         from clawk_cli.copilot_auth import _derive_base_url_from_proxy_ep
 
         token = "proxy-ep=https://proxy.enterprise.githubcopilot.com/"
-        assert _derive_base_url_from_proxy_ep(token) == "https://api.enterprise.githubcopilot.com"
+        assert (
+            _derive_base_url_from_proxy_ep(token)
+            == "https://api.enterprise.githubcopilot.com"
+        )
 
     def test_no_proxy_prefix(self):
         from clawk_cli.copilot_auth import _derive_base_url_from_proxy_ep
 
         token = "proxy-ep=custom.copilot.example.com"
-        assert _derive_base_url_from_proxy_ep(token) == "https://custom.copilot.example.com"
+        assert (
+            _derive_base_url_from_proxy_ep(token)
+            == "https://custom.copilot.example.com"
+        )
 
     @patch("urllib.request.urlopen")
     def test_exchange_returns_enterprise_base_url(self, mock_urlopen, _clear_jwt_cache):
@@ -200,7 +224,10 @@ class TestDeriveBaseUrlFromProxyEp:
 
         token_with_ep = "tid=abc;exp=999;proxy-ep=proxy.enterprise.githubcopilot.com"
         expires_at = time.time() + 1800
-        resp_data = json.dumps({"token": token_with_ep, "expires_at": expires_at}).encode()
+        resp_data = json.dumps({
+            "token": token_with_ep,
+            "expires_at": expires_at,
+        }).encode()
         mock_resp = MagicMock()
         mock_resp.read.return_value = resp_data
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
@@ -211,13 +238,18 @@ class TestDeriveBaseUrlFromProxyEp:
         assert base_url == "https://api.enterprise.githubcopilot.com"
 
     @patch("urllib.request.urlopen")
-    def test_exchange_returns_none_base_url_for_individual(self, mock_urlopen, _clear_jwt_cache):
+    def test_exchange_returns_none_base_url_for_individual(
+        self, mock_urlopen, _clear_jwt_cache
+    ):
         """exchange_copilot_token returns None base_url for individual accounts."""
         from clawk_cli.copilot_auth import exchange_copilot_token
 
         token_no_ep = "tid=abc;exp=999;sku=copilot_individual"
         expires_at = time.time() + 1800
-        resp_data = json.dumps({"token": token_no_ep, "expires_at": expires_at}).encode()
+        resp_data = json.dumps({
+            "token": token_no_ep,
+            "expires_at": expires_at,
+        }).encode()
         mock_resp = MagicMock()
         mock_resp.read.return_value = resp_data
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)

@@ -163,7 +163,9 @@ class TestGetSystemPromptForChannel:
                 Platform.DISCORD: PlatformConfig(
                     enabled=True,
                     channel_overrides={
-                        "chan_1": ChannelOverride(system_prompt="You are a coding assistant."),
+                        "chan_1": ChannelOverride(
+                            system_prompt="You are a coding assistant."
+                        ),
                     },
                 ),
             },
@@ -209,22 +211,27 @@ class TestResolveSessionAgentRuntimePriority:
             chat_id="chan_1",
             user_id="u1",
         )
-        with patch("gateway.run._resolve_gateway_model", return_value="global/model"), \
-             patch("gateway.run._resolve_runtime_agent_kwargs", return_value={
-                 "provider": "anthropic",
-                 "api_key": "k",
-                 "base_url": "https://api.anthropic.com",
-                 "api_mode": "chat_completions",
-             }), \
-             patch(
-                 "gateway.run._resolve_runtime_agent_kwargs_for_provider",
-                 return_value={
-                     "provider": "openrouter",
-                     "api_key": "k2",
-                     "base_url": "https://openrouter.ai/api/v1",
-                     "api_mode": "chat_completions",
-                 },
-             ):
+        with (
+            patch("gateway.run._resolve_gateway_model", return_value="global/model"),
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs",
+                return_value={
+                    "provider": "anthropic",
+                    "api_key": "k",
+                    "base_url": "https://api.anthropic.com",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs_for_provider",
+                return_value={
+                    "provider": "openrouter",
+                    "api_key": "k2",
+                    "base_url": "https://openrouter.ai/api/v1",
+                    "api_mode": "chat_completions",
+                },
+            ),
+        ):
             model, runtime = runner._resolve_session_agent_runtime(
                 source=source,
                 user_config={"model": {"default": "global/model"}},
@@ -257,13 +264,18 @@ class TestResolveSessionAgentRuntimePriority:
             chat_type="channel",
             user_id="u1",
         )
-        with patch("gateway.run._resolve_gateway_model", return_value="global/model"), \
-             patch("gateway.run._resolve_runtime_agent_kwargs", return_value={
-                 "provider": "openrouter",
-                 "api_key": "k",
-                 "base_url": "https://openrouter.ai/api/v1",
-                 "api_mode": "chat_completions",
-             }):
+        with (
+            patch("gateway.run._resolve_gateway_model", return_value="global/model"),
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs",
+                return_value={
+                    "provider": "openrouter",
+                    "api_key": "k",
+                    "base_url": "https://openrouter.ai/api/v1",
+                    "api_mode": "chat_completions",
+                },
+            ),
+        ):
             model, runtime = runner._resolve_session_agent_runtime(
                 source=source,
                 session_key=session_key,
@@ -291,12 +303,17 @@ class TestResolveSessionAgentRuntimePriority:
             parent_chat_id="parent_chan",
             user_id="u1",
         )
-        with patch("gateway.run._resolve_gateway_model", return_value="global/model"), \
-             patch("gateway.run._resolve_runtime_agent_kwargs", return_value={
-                 "provider": "anthropic",
-                 "api_key": "k",
-                 "base_url": "https://api.anthropic.com",
-                 "api_mode": "chat_completions",
-             }):
+        with (
+            patch("gateway.run._resolve_gateway_model", return_value="global/model"),
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs",
+                return_value={
+                    "provider": "anthropic",
+                    "api_key": "k",
+                    "base_url": "https://api.anthropic.com",
+                    "api_mode": "chat_completions",
+                },
+            ),
+        ):
             model, _runtime = runner._resolve_session_agent_runtime(source=source)
         assert model == "parent/model"

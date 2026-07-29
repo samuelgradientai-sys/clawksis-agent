@@ -3,6 +3,7 @@
 Each broker is one JSON file for clean diffs/PRs. Files beginning with `_` are
 ignored (reserved for notes/scratch).
 """
+
 from __future__ import annotations
 
 import json
@@ -51,7 +52,12 @@ def load_all(directory: Path | None = None, include_live: bool = True) -> list[d
             if bid and bid not in merged:
                 merged[bid] = b
     out = list(merged.values())
-    out.sort(key=lambda b: (PRIORITY_ORDER.get(b.get("priority", "standard"), 9), b.get("id", "")))
+    out.sort(
+        key=lambda b: (
+            PRIORITY_ORDER.get(b.get("priority", "standard"), 9),
+            b.get("id", ""),
+        )
+    )
     return out
 
 
@@ -64,7 +70,9 @@ def get(broker_id: str, directory: Path | None = None) -> dict | None:
 
 def by_priority(*levels: str, directory: Path | None = None) -> list[dict]:
     wanted = set(levels) if levels else None
-    return [b for b in load_all(directory) if wanted is None or b.get("priority") in wanted]
+    return [
+        b for b in load_all(directory) if wanted is None or b.get("priority") in wanted
+    ]
 
 
 def clusters(directory: Path | None = None) -> dict[str, list[str]]:

@@ -52,9 +52,7 @@ class TestRecoverTerminalAfterInterrupt:
         never leave the renderer un-repainted.
         """
         bare_cli._force_full_redraw = MagicMock()
-        with patch(
-            "clawk_cli.curses_ui.flush_stdin", side_effect=OSError("no tty")
-        ):
+        with patch("clawk_cli.curses_ui.flush_stdin", side_effect=OSError("no tty")):
             bare_cli._recover_terminal_after_interrupt()  # must not raise
 
         bare_cli._force_full_redraw.assert_called_once()

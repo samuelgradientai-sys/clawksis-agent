@@ -34,9 +34,13 @@ def test_fal_family_catalog():
 
     expected = {
         # cheap
-        "ltx-2.3", "pixverse-v6",
+        "ltx-2.3",
+        "pixverse-v6",
         # premium
-        "veo3.1", "seedance-2.0", "kling-v3-4k", "happy-horse",
+        "veo3.1",
+        "seedance-2.0",
+        "kling-v3-4k",
+        "happy-horse",
     }
     assert expected.issubset(set(FAL_FAMILIES.keys())), (
         f"missing families: {expected - set(FAL_FAMILIES.keys())}"
@@ -45,9 +49,7 @@ def test_fal_family_catalog():
         assert meta.get("text_endpoint"), f"{fid} missing text_endpoint"
         assert meta.get("image_endpoint"), f"{fid} missing image_endpoint"
         assert meta["text_endpoint"] != meta["image_endpoint"]
-        assert meta.get("tier") in {"cheap", "premium"}, (
-            f"{fid} has invalid tier"
-        )
+        assert meta.get("tier") in {"cheap", "premium"}, f"{fid} has invalid tier"
 
 
 def test_kling_4k_uses_start_image_url():
@@ -134,15 +136,18 @@ class TestFamilyRouting:
                 return {"video": {"url": "https://fake/out.mp4"}}
 
         fake = types.ModuleType("fal_client")
+
         def _submit(endpoint, arguments=None, headers=None):
             captured["endpoint"] = endpoint
             captured["arguments"] = arguments
             return FakeHandle()
+
         fake.submit = _submit  # type: ignore
         monkeypatch.setitem(sys.modules, "fal_client", fake)
 
         # Reset the lazy global so it picks up our stub
         from plugins.video_gen import fal as fal_plugin
+
         fal_plugin._fal_client = None
         # Also reset the managed client cache
         fal_plugin._managed_fal_video_client = None
@@ -150,7 +155,9 @@ class TestFamilyRouting:
 
         monkeypatch.setenv("FAL_KEY", "test")
         # Force direct mode — no managed gateway
-        monkeypatch.setattr(fal_plugin, "_resolve_managed_fal_video_gateway", lambda: None)
+        monkeypatch.setattr(
+            fal_plugin, "_resolve_managed_fal_video_gateway", lambda: None
+        )
         return captured
 
     def test_text_to_video_routes_to_text_endpoint(self, with_fake_fal):
@@ -181,7 +188,11 @@ class TestFamilyRouting:
 
     def test_default_family_text_routing(self, with_fake_fal):
         """No model arg → DEFAULT_MODEL → text-to-video endpoint."""
-        from plugins.video_gen.fal import FALVideoGenProvider, FAL_FAMILIES, DEFAULT_MODEL
+        from plugins.video_gen.fal import (
+            FALVideoGenProvider,
+            FAL_FAMILIES,
+            DEFAULT_MODEL,
+        )
 
         result = FALVideoGenProvider().generate("a dog")
         assert result["success"] is True
@@ -189,7 +200,11 @@ class TestFamilyRouting:
         assert with_fake_fal["endpoint"] == expected_endpoint
 
     def test_default_family_image_routing(self, with_fake_fal):
-        from plugins.video_gen.fal import FALVideoGenProvider, FAL_FAMILIES, DEFAULT_MODEL
+        from plugins.video_gen.fal import (
+            FALVideoGenProvider,
+            FAL_FAMILIES,
+            DEFAULT_MODEL,
+        )
 
         result = FALVideoGenProvider().generate(
             "animate this",
@@ -200,7 +215,11 @@ class TestFamilyRouting:
         assert with_fake_fal["endpoint"] == expected_endpoint
 
     def test_unknown_family_falls_back_to_default(self, with_fake_fal):
-        from plugins.video_gen.fal import FALVideoGenProvider, FAL_FAMILIES, DEFAULT_MODEL
+        from plugins.video_gen.fal import (
+            FALVideoGenProvider,
+            FAL_FAMILIES,
+            DEFAULT_MODEL,
+        )
 
         result = FALVideoGenProvider().generate(
             "x",
@@ -235,7 +254,10 @@ class TestFamilyRouting:
         )
         assert result["success"] is True
         assert with_fake_fal["endpoint"] == "fal-ai/kling-video/v3/4k/image-to-video"
-        assert with_fake_fal["arguments"].get("start_image_url") == "https://example.com/frame.png"
+        assert (
+            with_fake_fal["arguments"].get("start_image_url")
+            == "https://example.com/frame.png"
+        )
         assert "image_url" not in with_fake_fal["arguments"]
 
 
@@ -249,7 +271,7 @@ class TestPayloadBuilder:
             meta,
             prompt="x",
             image_url=None,
-            duration=12,           # not in enum (4,6,8) — snap to 8
+            duration=12,  # not in enum (4,6,8) — snap to 8
             aspect_ratio="16:9",
             resolution="720p",
             negative_prompt="ugly",
@@ -272,7 +294,7 @@ class TestPayloadBuilder:
             meta,
             prompt="x",
             image_url="https://i.png",
-            duration=99,        # over max → 15
+            duration=99,  # over max → 15
             aspect_ratio="16:9",
             resolution="540p",
             negative_prompt=None,
@@ -289,7 +311,7 @@ class TestPayloadBuilder:
             meta,
             prompt="x",
             image_url="https://i.png",
-            duration=1,         # below min (3) → 3
+            duration=1,  # below min (3) → 3
             aspect_ratio="16:9",
             resolution="720p",
             negative_prompt=None,

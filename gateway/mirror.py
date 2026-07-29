@@ -114,6 +114,7 @@ def _find_session_id(
     # Primary: state.db
     try:
         from clawk_state import SessionDB
+
         db = SessionDB()
         try:
             finder = getattr(db, "find_session_by_origin", None)
@@ -167,7 +168,8 @@ def _find_session_id(
 
     if user_id:
         exact_user_matches = [
-            entry for entry in candidates
+            entry
+            for entry in candidates
             if str((entry.get("origin") or {}).get("user_id") or "") == str(user_id)
         ]
         if exact_user_matches:
@@ -187,12 +189,12 @@ def _find_session_id(
     return best_entry.get("session_id")
 
 
-
 def _append_to_sqlite(session_id: str, message: dict) -> None:
     """Append a message to the SQLite session database."""
     db = None
     try:
         from clawk_state import SessionDB
+
         db = SessionDB()
         db.append_message(
             session_id=session_id,

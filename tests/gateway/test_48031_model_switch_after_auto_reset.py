@@ -18,6 +18,7 @@ The fix consumes `was_auto_reset` at two sites:
 These are AST invariants — load-bearing pins that fail if either consume is
 removed (mirrors test_35809_auto_reset_clean_context.py's approach).
 """
+
 from __future__ import annotations
 
 import ast
@@ -64,7 +65,9 @@ def test_run_consumes_was_auto_reset_in_cleanup_block():
         }
         # The cleanup block routes through the conversation-scope funnel —
         # fingerprint of the transient-state cleanup.
-        if "_clear_conversation_scope" in calls and _assigns_false(node, "was_auto_reset"):
+        if "_clear_conversation_scope" in calls and _assigns_false(
+            node, "was_auto_reset"
+        ):
             found = True
             break
     assert found, (

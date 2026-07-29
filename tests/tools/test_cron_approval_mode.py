@@ -26,59 +26,96 @@ def _clear_approval_state():
 # _get_cron_approval_mode() config parsing
 # ---------------------------------------------------------------------------
 
+
 class TestCronApprovalModeParsing:
     def test_default_is_deny(self):
         """When no config is set, cron_mode defaults to 'deny'."""
         from unittest.mock import patch as mock_patch
+
         with mock_patch("clawk_cli.config.load_config", return_value={"approvals": {}}):
             assert _get_cron_approval_mode() == "deny"
 
     def test_explicit_deny(self):
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config", return_value={"approvals": {"cron_mode": "deny"}}):
+
+        with mock_patch(
+            "clawk_cli.config.load_config",
+            return_value={"approvals": {"cron_mode": "deny"}},
+        ):
             assert _get_cron_approval_mode() == "deny"
 
     def test_explicit_approve(self):
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config", return_value={"approvals": {"cron_mode": "approve"}}):
+
+        with mock_patch(
+            "clawk_cli.config.load_config",
+            return_value={"approvals": {"cron_mode": "approve"}},
+        ):
             assert _get_cron_approval_mode() == "approve"
 
     def test_off_maps_to_approve(self):
         """'off' is an alias for 'approve' (matches --yolo semantics)."""
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config", return_value={"approvals": {"cron_mode": "off"}}):
+
+        with mock_patch(
+            "clawk_cli.config.load_config",
+            return_value={"approvals": {"cron_mode": "off"}},
+        ):
             assert _get_cron_approval_mode() == "approve"
 
     def test_allow_maps_to_approve(self):
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config", return_value={"approvals": {"cron_mode": "allow"}}):
+
+        with mock_patch(
+            "clawk_cli.config.load_config",
+            return_value={"approvals": {"cron_mode": "allow"}},
+        ):
             assert _get_cron_approval_mode() == "approve"
 
     def test_yes_maps_to_approve(self):
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config", return_value={"approvals": {"cron_mode": "yes"}}):
+
+        with mock_patch(
+            "clawk_cli.config.load_config",
+            return_value={"approvals": {"cron_mode": "yes"}},
+        ):
             assert _get_cron_approval_mode() == "approve"
 
     def test_case_insensitive(self):
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config", return_value={"approvals": {"cron_mode": "APPROVE"}}):
+
+        with mock_patch(
+            "clawk_cli.config.load_config",
+            return_value={"approvals": {"cron_mode": "APPROVE"}},
+        ):
             assert _get_cron_approval_mode() == "approve"
 
     def test_unknown_value_defaults_to_deny(self):
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config", return_value={"approvals": {"cron_mode": "maybe"}}):
+
+        with mock_patch(
+            "clawk_cli.config.load_config",
+            return_value={"approvals": {"cron_mode": "maybe"}},
+        ):
             assert _get_cron_approval_mode() == "deny"
 
     def test_config_load_failure_defaults_to_deny(self):
         """If config loading fails entirely, default to deny (safe)."""
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config", side_effect=RuntimeError("config broken")):
+
+        with mock_patch(
+            "clawk_cli.config.load_config", side_effect=RuntimeError("config broken")
+        ):
             assert _get_cron_approval_mode() == "deny"
 
     def test_yaml_boolean_false_maps_to_deny(self):
         """YAML 1.1 parses bare 'off' as False. Ensure it maps to deny."""
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config", return_value={"approvals": {"cron_mode": False}}):
+
+        with mock_patch(
+            "clawk_cli.config.load_config",
+            return_value={"approvals": {"cron_mode": False}},
+        ):
             # str(False) = "False", which is not in the approve set, so deny
             assert _get_cron_approval_mode() == "deny"
 
@@ -86,6 +123,7 @@ class TestCronApprovalModeParsing:
 # ---------------------------------------------------------------------------
 # check_dangerous_command() with cron session
 # ---------------------------------------------------------------------------
+
 
 class TestCronDenyMode:
     """When CLAWK_CRON_SESSION is set and cron_mode=deny, dangerous commands are blocked."""
@@ -97,6 +135,7 @@ class TestCronDenyMode:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
+
         with mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"):
             result = check_dangerous_command("rm -rf /tmp/stuff", "local")
             assert not result["approved"]
@@ -111,6 +150,7 @@ class TestCronDenyMode:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
+
         with mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"):
             result = check_dangerous_command("ls -la", "local")
             assert result["approved"]
@@ -130,6 +170,7 @@ class TestCronDenyMode:
         ]
 
         from unittest.mock import patch as mock_patch
+
         with mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"):
             for cmd in dangerous_commands:
                 is_dangerous, _, _ = detect_dangerous_command(cmd)
@@ -146,11 +187,15 @@ class TestCronDenyMode:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
+
         with mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"):
             result = check_dangerous_command("rm -rf /tmp/stuff", "local")
             assert not result["approved"]
             # Should contain the description of what was flagged
-            assert "dangerous" in result["message"].lower() or "delete" in result["message"].lower()
+            assert (
+                "dangerous" in result["message"].lower()
+                or "delete" in result["message"].lower()
+            )
 
 
 class TestCronApproveMode:
@@ -163,7 +208,10 @@ class TestCronApproveMode:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
-        with mock_patch("tools.approval._get_cron_approval_mode", return_value="approve"):
+
+        with mock_patch(
+            "tools.approval._get_cron_approval_mode", return_value="approve"
+        ):
             result = check_dangerous_command("rm -rf /tmp/stuff", "local")
             assert result["approved"]
 
@@ -171,6 +219,7 @@ class TestCronApproveMode:
 # ---------------------------------------------------------------------------
 # check_all_command_guards() with cron session
 # ---------------------------------------------------------------------------
+
 
 class TestCronDenyModeAllGuards:
     """The combined guard function also respects cron_mode."""
@@ -183,6 +232,7 @@ class TestCronDenyModeAllGuards:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
+
         with mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"):
             result = check_all_command_guards("rm -rf /tmp/stuff", "local")
             assert not result["approved"]
@@ -196,6 +246,7 @@ class TestCronDenyModeAllGuards:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
+
         with mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"):
             result = check_all_command_guards("echo hello", "local")
             assert result["approved"]
@@ -208,7 +259,10 @@ class TestCronDenyModeAllGuards:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
-        with mock_patch("tools.approval._get_cron_approval_mode", return_value="approve"):
+
+        with mock_patch(
+            "tools.approval._get_cron_approval_mode", return_value="approve"
+        ):
             result = check_all_command_guards("rm -rf /tmp/stuff", "local")
             assert result["approved"]
 
@@ -224,22 +278,33 @@ class TestCronDenyModeAllGuards:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
+
         # A tirith "block" result while detect_dangerous_command reports safe:
         # proves the block comes from the tirith path, not the regex path.
         fake_tirith = {
             "action": "block",
-            "findings": [{"severity": "HIGH", "title": "Homograph URL",
-                          "description": "URL contains Cyrillic lookalike chars"}],
+            "findings": [
+                {
+                    "severity": "HIGH",
+                    "title": "Homograph URL",
+                    "description": "URL contains Cyrillic lookalike chars",
+                }
+            ],
             "summary": "homograph url",
         }
         with (
             mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"),
-            mock_patch("tools.approval.detect_dangerous_command",
-                       return_value=(False, None, None)),
-            mock_patch("tools.tirith_security.check_command_security",
-                       return_value=fake_tirith),
+            mock_patch(
+                "tools.approval.detect_dangerous_command",
+                return_value=(False, None, None),
+            ),
+            mock_patch(
+                "tools.tirith_security.check_command_security", return_value=fake_tirith
+            ),
         ):
-            result = check_all_command_guards("curl http://xn--e1afmkfd.example/x", "local")
+            result = check_all_command_guards(
+                "curl http://xn--e1afmkfd.example/x", "local"
+            )
             assert not result["approved"]
             assert "BLOCKED" in result["message"]
 
@@ -255,6 +320,7 @@ class TestCronDenyModeAllGuards:
 
         from unittest.mock import patch as mock_patch
         import builtins
+
         _real_import = builtins.__import__
 
         def _blocked_import(name, *a, **k):
@@ -264,11 +330,16 @@ class TestCronDenyModeAllGuards:
 
         with (
             mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"),
-            mock_patch("tools.approval.detect_dangerous_command",
-                       return_value=(False, None, None)),
-            mock_patch("clawk_cli.config.load_config",
-                       return_value={"security": {"tirith_enabled": True,
-                                                   "tirith_fail_open": False}}),
+            mock_patch(
+                "tools.approval.detect_dangerous_command",
+                return_value=(False, None, None),
+            ),
+            mock_patch(
+                "clawk_cli.config.load_config",
+                return_value={
+                    "security": {"tirith_enabled": True, "tirith_fail_open": False}
+                },
+            ),
             mock_patch.object(builtins, "__import__", _blocked_import),
         ):
             result = check_all_command_guards("echo hi", "local")
@@ -286,6 +357,7 @@ class TestCronDenyModeAllGuards:
 
         from unittest.mock import patch as mock_patch
         import builtins
+
         _real_import = builtins.__import__
 
         def _blocked_import(name, *a, **k):
@@ -295,11 +367,16 @@ class TestCronDenyModeAllGuards:
 
         with (
             mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"),
-            mock_patch("tools.approval.detect_dangerous_command",
-                       return_value=(False, None, None)),
-            mock_patch("clawk_cli.config.load_config",
-                       return_value={"security": {"tirith_enabled": True,
-                                                   "tirith_fail_open": True}}),
+            mock_patch(
+                "tools.approval.detect_dangerous_command",
+                return_value=(False, None, None),
+            ),
+            mock_patch(
+                "clawk_cli.config.load_config",
+                return_value={
+                    "security": {"tirith_enabled": True, "tirith_fail_open": True}
+                },
+            ),
             mock_patch.object(builtins, "__import__", _blocked_import),
         ):
             result = check_all_command_guards("echo hi", "local")
@@ -309,6 +386,7 @@ class TestCronDenyModeAllGuards:
 # ---------------------------------------------------------------------------
 # Edge cases: cron mode interaction with other approval mechanisms
 # ---------------------------------------------------------------------------
+
 
 class TestCronModeInteractions:
     """Cron mode should NOT interfere with other approval bypass mechanisms."""
@@ -321,6 +399,7 @@ class TestCronModeInteractions:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
+
         with mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"):
             result = check_dangerous_command("rm -rf /", "docker")
             assert result["approved"]
@@ -340,6 +419,7 @@ class TestCronModeInteractions:
         # with CLAWK_YOLO_MODE=1.
         from unittest.mock import patch as mock_patch
         import tools.approval
+
         with (
             mock_patch.object(tools.approval, "_YOLO_MODE_FROZEN", True),
             mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"),
@@ -380,10 +460,14 @@ class TestCronWithGatewayOrigin:
         monkeypatch.delenv("CLAWK_EXEC_ASK", raising=False)
 
         from gateway.session_context import set_session_vars, clear_session_vars
+
         tokens = set_session_vars(platform="telegram", chat_id="123")
         try:
             from unittest.mock import patch as mock_patch
-            with mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"):
+
+            with mock_patch(
+                "tools.approval._get_cron_approval_mode", return_value="deny"
+            ):
                 result = check_dangerous_command("rm -rf /tmp/stuff", "local")
                 # Cron-mode path: BLOCKED message, NOT pending/approval_required.
                 assert not result["approved"]
@@ -402,10 +486,14 @@ class TestCronWithGatewayOrigin:
         monkeypatch.delenv("CLAWK_EXEC_ASK", raising=False)
 
         from gateway.session_context import set_session_vars, clear_session_vars
+
         tokens = set_session_vars(platform="discord", chat_id="456")
         try:
             from unittest.mock import patch as mock_patch
-            with mock_patch("tools.approval._get_cron_approval_mode", return_value="approve"):
+
+            with mock_patch(
+                "tools.approval._get_cron_approval_mode", return_value="approve"
+            ):
                 result = check_dangerous_command("rm -rf /tmp/stuff", "local")
                 assert result["approved"]
                 # Should NOT be a gateway-approval response.
@@ -422,10 +510,14 @@ class TestCronWithGatewayOrigin:
         monkeypatch.delenv("CLAWK_EXEC_ASK", raising=False)
 
         from gateway.session_context import set_session_vars, clear_session_vars
+
         tokens = set_session_vars(platform="telegram", chat_id="789")
         try:
             from unittest.mock import patch as mock_patch
-            with mock_patch("tools.approval._get_cron_approval_mode", return_value="deny"):
+
+            with mock_patch(
+                "tools.approval._get_cron_approval_mode", return_value="deny"
+            ):
                 result = check_all_command_guards("rm -rf /tmp/stuff", "local")
                 assert not result["approved"]
                 assert "BLOCKED" in result["message"]
@@ -441,6 +533,7 @@ class TestCronWithGatewayOrigin:
 # with no listener and the terminal tool returns a never-resolving
 # "pending_approval" (exit_code -1), hanging the job.
 # ---------------------------------------------------------------------------
+
 
 class TestCronInsideGatewayProcessDoesNotHang:
     """CLAWK_CRON_SESSION + CLAWK_EXEC_ASK (the real gateway runtime) must apply

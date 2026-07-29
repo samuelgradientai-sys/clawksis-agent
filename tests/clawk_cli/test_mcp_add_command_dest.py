@@ -55,9 +55,13 @@ class TestMcpAddCommandDest:
         dispatcher into the chat fallback.
         """
         parser = _build_parser()
-        args = parser.parse_args(
-            ["mcp", "add", "foo", "--url", "https://example.com/mcp"]
-        )
+        args = parser.parse_args([
+            "mcp",
+            "add",
+            "foo",
+            "--url",
+            "https://example.com/mcp",
+        ])
 
         assert args.command == "mcp"
         assert args.mcp_action == "add"
@@ -68,9 +72,7 @@ class TestMcpAddCommandDest:
     def test_command_flag_writes_to_mcp_command_dest(self):
         """`--command npx` must populate args.mcp_command, not args.command."""
         parser = _build_parser()
-        args = parser.parse_args(
-            ["mcp", "add", "github", "--command", "npx"]
-        )
+        args = parser.parse_args(["mcp", "add", "github", "--command", "npx"])
 
         assert args.command == "mcp"
         assert args.mcp_command == "npx"
@@ -91,17 +93,15 @@ class TestMcpAddCommandDest:
     def test_connect_timeout_flag_sets_probe_timeout(self):
         """`--connect-timeout` exposes the per-server discovery timeout."""
         parser = _build_parser()
-        args = parser.parse_args(
-            [
-                "mcp",
-                "add",
-                "slow",
-                "--url",
-                "https://example.com/mcp",
-                "--connect-timeout",
-                "180",
-            ]
-        )
+        args = parser.parse_args([
+            "mcp",
+            "add",
+            "slow",
+            "--url",
+            "https://example.com/mcp",
+            "--connect-timeout",
+            "180",
+        ])
 
         assert args.command == "mcp"
         assert args.mcp_action == "add"
@@ -110,21 +110,19 @@ class TestMcpAddCommandDest:
     def test_args_passthrough_keeps_nested_option_flags(self):
         """`--args` must keep command flags like Docker MCP's --profile."""
         parser = _build_parser()
-        args = parser.parse_args(
-            [
-                "mcp",
-                "add",
-                "docker-research",
-                "--command",
-                "docker",
-                "--args",
-                "mcp",
-                "gateway",
-                "run",
-                "--profile",
-                "research",
-            ]
-        )
+        args = parser.parse_args([
+            "mcp",
+            "add",
+            "docker-research",
+            "--command",
+            "docker",
+            "--args",
+            "mcp",
+            "gateway",
+            "run",
+            "--profile",
+            "research",
+        ])
 
         assert args.command == "mcp"
         assert args.mcp_command == "docker"

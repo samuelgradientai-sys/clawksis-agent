@@ -4,6 +4,7 @@ The conversation root is the Nous Portal ``conversation=`` tag value: one
 stable id per user-facing conversation, surviving context-compression
 session rotation and covering delegate subagent trees.
 """
+
 import pytest
 
 from clawk_state import SessionDB

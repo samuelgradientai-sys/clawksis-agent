@@ -6,6 +6,7 @@ RED before the refactor: test_refs_expand_concurrently asserts that N URL refs
 asyncio.gather it passes. The output-contract test guards that concurrency does
 NOT change ordering, warnings, blocks, or token accounting.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,7 +29,10 @@ async def test_refs_expand_concurrently(tmp_path):
     msg = "see @url:https://a.example/x @url:https://b.example/y @url:https://c.example/z please"
     t0 = time.perf_counter()
     res = await preprocess_context_references_async(
-        msg, cwd=tmp_path, context_length=100_000, url_fetcher=_slow_fetcher,
+        msg,
+        cwd=tmp_path,
+        context_length=100_000,
+        url_fetcher=_slow_fetcher,
     )
     elapsed = time.perf_counter() - t0
     # Serial would be ~0.6s (3×0.2). Concurrent ~0.2s. Assert well under 2× one fetch.
@@ -36,8 +40,9 @@ async def test_refs_expand_concurrently(tmp_path):
     # All three blocks present, in order.
     assert res.expanded
     body = res.message
-    assert body.index("a.example") < body.index("b.example") < body.index("c.example"), \
-        "reference blocks must stay in original order"
+    assert (
+        body.index("a.example") < body.index("b.example") < body.index("c.example")
+    ), "reference blocks must stay in original order"
 
 
 @pytest.mark.asyncio
@@ -45,7 +50,10 @@ async def test_concurrent_preserves_output_contract(tmp_path):
     """Concurrency must not change which blocks/warnings appear or their order."""
     msg = "@url:https://one.example/p @url:https://two.example/q"
     res = await preprocess_context_references_async(
-        msg, cwd=tmp_path, context_length=100_000, url_fetcher=_slow_fetcher,
+        msg,
+        cwd=tmp_path,
+        context_length=100_000,
+        url_fetcher=_slow_fetcher,
     )
     assert "CONTENT[https://one.example/p]" in res.message
     assert "CONTENT[https://two.example/q]" in res.message

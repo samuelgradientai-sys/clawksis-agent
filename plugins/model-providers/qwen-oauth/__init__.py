@@ -1,4 +1,5 @@
 """Qwen Portal provider profile."""
+
 from typing import Any
 
 from providers import register_provider
@@ -9,7 +10,9 @@ class QwenProfile(ProviderProfile):
     """Qwen Portal — message normalization, vl_high_resolution, metadata top-level."""
 
     @staticmethod
-    def _copy_part_if_request_mutable(part: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    def _copy_part_if_request_mutable(
+        part: dict[str, Any],
+    ) -> tuple[dict[str, Any], bool]:
         image_url = part.get("image_url")
         if isinstance(image_url, dict):
             copied = dict(part)
@@ -48,7 +51,9 @@ class QwenProfile(ProviderProfile):
                         normalized_parts.append({"type": "text", "text": part})
                         changed = True
                     elif isinstance(part, dict):
-                        normalized_part, copied = self._copy_part_if_request_mutable(part)
+                        normalized_part, copied = self._copy_part_if_request_mutable(
+                            part
+                        )
                         normalized_parts.append(normalized_part)
                         changed = changed or copied
                     else:

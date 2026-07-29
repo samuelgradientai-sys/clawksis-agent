@@ -19,6 +19,7 @@ These tests use a synthetic Python script that mirrors the cli.py signal
 handler shape so we can exercise the exit-path contract without booting the
 full CLI (which needs a real provider config).
 """
+
 from __future__ import annotations
 
 import os
@@ -210,9 +211,7 @@ def test_real_handler_uses_os_exit_for_kanban_workers():
     """
     import pathlib
 
-    cli_path = (
-        pathlib.Path(__file__).resolve().parent.parent.parent / "cli.py"
-    )
+    cli_path = pathlib.Path(__file__).resolve().parent.parent.parent / "cli.py"
     src = cli_path.read_text()
     # Locate the handler body.
     start = src.find("def _signal_handler_q(signum, frame):")

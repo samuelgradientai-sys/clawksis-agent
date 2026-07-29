@@ -88,8 +88,7 @@ def _strip_console_status_footer(text: str) -> str:
     last = _strip_ansi(lines[-1]).strip()
     prev = _strip_ansi(lines[-2]).strip()
     if not (
-        prev.startswith("Run 'clawk doctor'")
-        and last.startswith("Run 'clawk setup'")
+        prev.startswith("Run 'clawk doctor'") and last.startswith("Run 'clawk setup'")
     ):
         return text.rstrip()
 
@@ -152,7 +151,9 @@ def _parser_root() -> tuple[_ArgumentParser, argparse._SubParsersAction]:
     return parser, subparsers
 
 
-def _subparser_actions(parser: argparse.ArgumentParser) -> list[argparse._SubParsersAction]:
+def _subparser_actions(
+    parser: argparse.ArgumentParser,
+) -> list[argparse._SubParsersAction]:
     return [
         action
         for action in parser._actions
@@ -162,7 +163,10 @@ def _subparser_actions(parser: argparse.ArgumentParser) -> list[argparse._SubPar
 
 def _choice_help(action: argparse._SubParsersAction, name: str) -> str:
     for choice in action._choices_actions:
-        if getattr(choice, "dest", None) == name or getattr(choice, "metavar", None) == name:
+        if (
+            getattr(choice, "dest", None) == name
+            or getattr(choice, "metavar", None) == name
+        ):
             help_text = getattr(choice, "help", None)
             if help_text and help_text is not argparse.SUPPRESS:
                 return str(help_text)
@@ -182,7 +186,9 @@ def _clean_summary(text: str | None) -> str:
     return summary
 
 
-def _summaries_from_parser(parser: argparse.ArgumentParser) -> dict[tuple[str, ...], str]:
+def _summaries_from_parser(
+    parser: argparse.ArgumentParser,
+) -> dict[tuple[str, ...], str]:
     summaries: dict[tuple[str, ...], str] = {}
 
     def walk(current: argparse.ArgumentParser, path: tuple[str, ...]) -> None:
@@ -456,7 +462,9 @@ def _register_command_family(
     *,
     root: str,
     paths: Iterable[Sequence[str]],
-    handler_factory: Callable[[Sequence[str]], Callable[["ClawksisConsoleEngine", list[str]], str]],
+    handler_factory: Callable[
+        [Sequence[str]], Callable[["ClawksisConsoleEngine", list[str]], str]
+    ],
     mutating: Iterable[Sequence[str]] = (),
     summary: str = "",
     summaries: dict[tuple[str, ...], str] | None = None,
@@ -467,7 +475,9 @@ def _register_command_family(
         child_key = tuple(child_path)
         full_path = (root, *tuple(child_path))
         usage = " ".join(full_path)
-        command_summary = summary or (summaries or {}).get(full_path) or f"Run `clawk {usage}`."
+        command_summary = (
+            summary or (summaries or {}).get(full_path) or f"Run `clawk {usage}`."
+        )
         engine.register(
             full_path,
             usage,
@@ -540,24 +550,45 @@ class ClawksisConsoleEngine:
         ]
         for command in sorted(self.commands.values(), key=lambda c: c.usage):
             marker = " *" if command.mutating else "  "
-            lines.append(f"{marker} {command.usage:<32} {_table_summary(command.summary)}")
-        lines.extend(
-            [
-                "",
-                "* requires confirmation",
-                "Built-ins: help, help <command>, history, clear, exit, quit",
-            ]
-        )
+            lines.append(
+                f"{marker} {command.usage:<32} {_table_summary(command.summary)}"
+            )
+        lines.extend([
+            "",
+            "* requires confirmation",
+            "Built-ins: help, help <command>, history, clear, exit, quit",
+        ])
         return "\n".join(lines)
 
     def _register_defaults(self) -> None:
         self.register(("status",), "status", "Show Clawksis component status.", _status)
-        self.register(("doctor",), "doctor", "Run diagnostics without auto-fix.", _doctor)
-        self.register(("logs",), "logs [name] [-n N]", "Show recent Clawksis logs.", _logs)
-        self.register(("sessions", "list"), "sessions list [--limit N]", "List recent sessions.", _sessions_list)
-        self.register(("sessions", "stats"), "sessions stats", "Show session store statistics.", _sessions_stats)
-        self.register(("config", "show"), "config show", "Show current configuration.", _config_show)
-        self.register(("config", "path"), "config path", "Print config.yaml path.", _config_path)
+        self.register(
+            ("doctor",), "doctor", "Run diagnostics without auto-fix.", _doctor
+        )
+        self.register(
+            ("logs",), "logs [name] [-n N]", "Show recent Clawksis logs.", _logs
+        )
+        self.register(
+            ("sessions", "list"),
+            "sessions list [--limit N]",
+            "List recent sessions.",
+            _sessions_list,
+        )
+        self.register(
+            ("sessions", "stats"),
+            "sessions stats",
+            "Show session store statistics.",
+            _sessions_stats,
+        )
+        self.register(
+            ("config", "show"),
+            "config show",
+            "Show current configuration.",
+            _config_show,
+        )
+        self.register(
+            ("config", "path"), "config path", "Print config.yaml path.", _config_path
+        )
         self.register(
             ("config", "set"),
             "config set <key> <value>",
@@ -566,8 +597,15 @@ class ClawksisConsoleEngine:
             mutating=True,
             confirmation="Update Clawksis configuration?",
         )
-        self.register(("cron", "list"), "cron list [--all]", "List scheduled jobs.", _cron_list)
-        self.register(("cron", "status"), "cron status", "Show cron scheduler status.", _cron_status)
+        self.register(
+            ("cron", "list"), "cron list [--all]", "List scheduled jobs.", _cron_list
+        )
+        self.register(
+            ("cron", "status"),
+            "cron status",
+            "Show cron scheduler status.",
+            _cron_status,
+        )
         self.register(
             ("cron", "pause"),
             "cron pause <job>",
@@ -672,7 +710,14 @@ class ClawksisConsoleEngine:
                 "clawk_cli.subcommands.plugins",
                 "build_plugins_parser",
                 "cmd_plugins",
-                [("list",), ("enable",), ("disable",), ("install",), ("update",), ("remove",)],
+                [
+                    ("list",),
+                    ("enable",),
+                    ("disable",),
+                    ("install",),
+                    ("update",),
+                    ("remove",),
+                ],
                 {("enable",), ("disable",), ("install",), ("update",), ("remove",)},
             ),
             "skills": (
@@ -848,13 +893,15 @@ class ClawksisConsoleEngine:
                 paths=paths,
                 mutating=mutating,
                 summaries=summaries,
-                handler_factory=lambda fixed, root=root, module=module, builder=builder, main_handler=main_handler: _extracted_handler(
-                    root,
-                    fixed,
-                    module,
-                    builder,
-                    main_handler,
-                    namespace_update=_apply_confirmed_defaults,
+                handler_factory=lambda fixed, root=root, module=module, builder=builder, main_handler=main_handler: (
+                    _extracted_handler(
+                        root,
+                        fixed,
+                        module,
+                        builder,
+                        main_handler,
+                        namespace_update=_apply_confirmed_defaults,
+                    )
                 ),
             )
 
@@ -1084,11 +1131,26 @@ class ClawksisConsoleEngine:
                 "clawk_cli.pets",
                 "register_cli",
                 None,
-                [("list",), ("install",), ("select",), ("show",), ("off",), ("scale",), ("remove",), ("doctor",)],
+                [
+                    ("list",),
+                    ("install",),
+                    ("select",),
+                    ("show",),
+                    ("off",),
+                    ("scale",),
+                    ("remove",),
+                    ("doctor",),
+                ],
                 {("install",), ("select",), ("off",), ("scale",), ("remove",)},
             ),
         }
-        for root, (module, register, handler_name, paths, mutating) in registered.items():
+        for root, (
+            module,
+            register,
+            handler_name,
+            paths,
+            mutating,
+        ) in registered.items():
             summaries = _registered_summaries(root, module, register)
             _register_command_family(
                 self,
@@ -1096,13 +1158,15 @@ class ClawksisConsoleEngine:
                 paths=paths,
                 mutating=mutating,
                 summaries=summaries,
-                handler_factory=lambda fixed, root=root, module=module, register=register, handler_name=handler_name: _registered_handler(
-                    root,
-                    fixed,
-                    module,
-                    register,
-                    handler_name=handler_name,
-                    namespace_update=_apply_confirmed_defaults,
+                handler_factory=lambda fixed, root=root, module=module, register=register, handler_name=handler_name: (
+                    _registered_handler(
+                        root,
+                        fixed,
+                        module,
+                        register,
+                        handler_name=handler_name,
+                        namespace_update=_apply_confirmed_defaults,
+                    )
                 ),
             )
 
@@ -1126,7 +1190,6 @@ class ClawksisConsoleEngine:
             confirmation=confirmation,
         )
 
-
     def _execute_builtin(self, tokens: list[str]) -> ConsoleResult | None:
         head = tokens[0]
         if head == "help":
@@ -1136,7 +1199,9 @@ class ClawksisConsoleEngine:
             except ConsoleCommandError as exc:
                 return ConsoleResult("error", output=str(exc))
         if head == "history":
-            output = "\n".join(f"{idx + 1}: {cmd}" for idx, cmd in enumerate(self.history))
+            output = "\n".join(
+                f"{idx + 1}: {cmd}" for idx, cmd in enumerate(self.history)
+            )
             return ConsoleResult("ok", output=output or "No history yet.")
         if head == "clear":
             return ConsoleResult("clear", output="\033[2J\033[H")
@@ -1144,7 +1209,9 @@ class ClawksisConsoleEngine:
             return ConsoleResult("exit")
         return None
 
-    def _resolve_command(self, tokens: Sequence[str]) -> tuple[ConsoleCommand, list[str]]:
+    def _resolve_command(
+        self, tokens: Sequence[str]
+    ) -> tuple[ConsoleCommand, list[str]]:
         rejected = self._rejection_for(tokens)
         if rejected:
             raise ConsoleCommandError(rejected)
@@ -1159,7 +1226,9 @@ class ClawksisConsoleEngine:
         probe = " ".join(tokens[:2]) if len(tokens) > 1 else tokens[0]
         suggestions = difflib.get_close_matches(probe, available, n=3, cutoff=0.45)
         suffix = f" Did you mean: {', '.join(suggestions)}?" if suggestions else ""
-        raise ConsoleCommandError(f"Unsupported Clawksis Console command: {probe}.{suffix}")
+        raise ConsoleCommandError(
+            f"Unsupported Clawksis Console command: {probe}.{suffix}"
+        )
 
     def _rejection_for(self, tokens: Sequence[str]) -> str:
         first = tokens[0]
@@ -1192,20 +1261,62 @@ class ClawksisConsoleEngine:
         if first in blocked_top:
             return f"`clawk {first}` is not available in Clawksis Console."
         blocked_pairs = {
-            ("config", "edit"): "`config edit` opens an editor and is not available in Clawksis Console.",
-            ("mcp", "serve"): "`mcp serve` starts a server and is not available in Clawksis Console.",
-            ("profile", "alias"): "`profile alias` creates shell wrappers and is not available in Clawksis Console.",
-            ("skills", "config"): "`skills config` is interactive and is not available in Clawksis Console.",
-            ("skills", "publish"): "`skills publish` is not available in Clawksis Console.",
-            ("portal", "login"): "`portal login` is interactive and is not available in Clawksis Console.",
-            ("portal", "open"): "`portal open` opens a browser and is not available in Clawksis Console.",
-            ("kanban", "tail"): "`kanban tail` streams output and is not available in Clawksis Console.",
-            ("kanban", "watch"): "`kanban watch` streams output and is not available in Clawksis Console.",
-            ("kanban", "daemon"): "`kanban daemon` starts a service and is not available in Clawksis Console.",
-            ("kanban", "dispatcher"): "`kanban dispatcher` starts a worker and is not available in Clawksis Console.",
-            ("kanban", "swarm"): "`kanban swarm` starts agent work and is not available in Clawksis Console.",
-            ("kanban", "decompose"): "`kanban decompose` starts agent work and is not available in Clawksis Console.",
-            ("kanban", "specify"): "`kanban specify` starts agent work and is not available in Clawksis Console.",
+            (
+                "config",
+                "edit",
+            ): "`config edit` opens an editor and is not available in Clawksis Console.",
+            (
+                "mcp",
+                "serve",
+            ): "`mcp serve` starts a server and is not available in Clawksis Console.",
+            (
+                "profile",
+                "alias",
+            ): "`profile alias` creates shell wrappers and is not available in Clawksis Console.",
+            (
+                "skills",
+                "config",
+            ): "`skills config` is interactive and is not available in Clawksis Console.",
+            (
+                "skills",
+                "publish",
+            ): "`skills publish` is not available in Clawksis Console.",
+            (
+                "portal",
+                "login",
+            ): "`portal login` is interactive and is not available in Clawksis Console.",
+            (
+                "portal",
+                "open",
+            ): "`portal open` opens a browser and is not available in Clawksis Console.",
+            (
+                "kanban",
+                "tail",
+            ): "`kanban tail` streams output and is not available in Clawksis Console.",
+            (
+                "kanban",
+                "watch",
+            ): "`kanban watch` streams output and is not available in Clawksis Console.",
+            (
+                "kanban",
+                "daemon",
+            ): "`kanban daemon` starts a service and is not available in Clawksis Console.",
+            (
+                "kanban",
+                "dispatcher",
+            ): "`kanban dispatcher` starts a worker and is not available in Clawksis Console.",
+            (
+                "kanban",
+                "swarm",
+            ): "`kanban swarm` starts agent work and is not available in Clawksis Console.",
+            (
+                "kanban",
+                "decompose",
+            ): "`kanban decompose` starts agent work and is not available in Clawksis Console.",
+            (
+                "kanban",
+                "specify",
+            ): "`kanban specify` starts agent work and is not available in Clawksis Console.",
             ("kanban", "gc"): "`kanban gc` is not available in Clawksis Console.",
         }
         if len(tokens) >= 2:
@@ -1223,7 +1334,7 @@ class ClawksisConsoleEngine:
         if len(output) <= self.output_limit:
             return output
         omitted = len(output) - self.output_limit
-        return f"{output[:self.output_limit]}\n... output truncated ({omitted} bytes omitted)"
+        return f"{output[: self.output_limit]}\n... output truncated ({omitted} bytes omitted)"
 
 
 def _expect_no_args(args: Sequence[str], usage: str) -> None:
@@ -1247,7 +1358,9 @@ def _apply_confirmed_defaults(args: argparse.Namespace) -> None:
     if getattr(args, "auth_action", None) == "add":
         auth_type = getattr(args, "auth_type", None)
         if auth_type in {"api-key", "api_key"} and not getattr(args, "api_key", None):
-            raise ConsoleCommandError("auth add --type api-key requires --api-key in Clawksis Console.")
+            raise ConsoleCommandError(
+                "auth add --type api-key requires --api-key in Clawksis Console."
+            )
     if getattr(args, "import_name", None) is not None:
         # profile import has no prompt flag; leave it alone.
         return
@@ -1268,7 +1381,9 @@ def _status(_engine: ClawksisConsoleEngine, args: list[str]) -> str:
 
     from clawk_cli.status import show_status
 
-    output = _capture_output(lambda: show_status(SimpleNamespace(all=False, deep=False)))
+    output = _capture_output(
+        lambda: show_status(SimpleNamespace(all=False, deep=False))
+    )
     return _strip_console_status_footer(output)
 
 
@@ -1483,7 +1598,11 @@ def _sessions_repair(_engine: ClawksisConsoleEngine, args: list[str]) -> str:
     ns = parser.parse_args(args)
 
     def _run() -> None:
-        from clawk_state import DEFAULT_DB_PATH, _db_opens_cleanly, repair_state_db_schema
+        from clawk_state import (
+            DEFAULT_DB_PATH,
+            _db_opens_cleanly,
+            repair_state_db_schema,
+        )
 
         db_path = DEFAULT_DB_PATH
         if not db_path.exists():
@@ -1595,7 +1714,9 @@ def run_console_repl(
 
     engine = ClawksisConsoleEngine()
     if interactive:
-        print("Clawksis Console. Type `help` for commands, `exit` to quit.", file=stdout)
+        print(
+            "Clawksis Console. Type `help` for commands, `exit` to quit.", file=stdout
+        )
 
     while True:
         if interactive:
@@ -1614,7 +1735,9 @@ def run_console_repl(
                     file=stderr,
                 )
                 return 1
-            print(f"{result.confirmation_message} [y/N] ", end="", file=stdout, flush=True)
+            print(
+                f"{result.confirmation_message} [y/N] ", end="", file=stdout, flush=True
+            )
             answer = stdin.readline()
             if answer.strip().lower() not in {"y", "yes"}:
                 print("Cancelled.", file=stdout)

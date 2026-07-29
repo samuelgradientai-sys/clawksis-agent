@@ -38,7 +38,9 @@ def _configured_hybrid_config() -> _FakeHonchoConfig:
     )
 
 
-def _configured_tools_config(*, init_on_session_start: bool = False) -> _FakeHonchoConfig:
+def _configured_tools_config(
+    *, init_on_session_start: bool = False
+) -> _FakeHonchoConfig:
     cfg = _configured_hybrid_config()
     cfg.recall_mode = "tools"
     cfg.init_on_session_start = init_on_session_start
@@ -222,7 +224,6 @@ def test_first_turn_base_wait_is_shared_by_init_and_context_fetch():
         provider._init_thread.join(timeout=10)
 
 
-
 def test_honcho_sync_turn_does_not_start_network_write_before_session_init():
     """Session-end sync must not create a blocking writer before init finishes."""
     provider = HonchoMemoryProvider()
@@ -293,8 +294,12 @@ def test_honcho_sync_turn_waits_for_full_background_startup(monkeypatch):
         "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
         lambda: cfg,
     )
-    monkeypatch.setattr("plugins.memory.honcho.client.get_honcho_client", lambda cfg: object())
-    monkeypatch.setattr("plugins.memory.honcho.session.HonchoSessionManager", StartupManager)
+    monkeypatch.setattr(
+        "plugins.memory.honcho.client.get_honcho_client", lambda cfg: object()
+    )
+    monkeypatch.setattr(
+        "plugins.memory.honcho.session.HonchoSessionManager", StartupManager
+    )
 
     provider.initialize("session-1", platform="cli")
     try:

@@ -36,7 +36,7 @@ def parse_session_listing_args(raw_args: str) -> tuple[bool, bool, str, str | No
                 include_unnamed = True
                 continue
             if lower in {"search", "find"}:
-                query = " ".join(parts[i + 1:]).strip()
+                query = " ".join(parts[i + 1 :]).strip()
                 return include_all, include_unnamed, "", query
         target_parts.append(part)
     return include_all, include_unnamed, " ".join(target_parts).strip(), None
@@ -106,7 +106,9 @@ def format_gateway_session_listing(
         source = str(row.get("source") or "")
         source_part = f" `{source}`" if include_source and source else ""
         preview_part = f" — _{preview}_" if preview else ""
-        lines.append(f"{idx}. **{title_text}**{source_part} — `{session_id}`{preview_part}")
+        lines.append(
+            f"{idx}. **{title_text}**{source_part} — `{session_id}`{preview_part}"
+        )
     lines.append("")
     lines.append("Resume: `/resume <session id>` or `/resume <number>` from `/resume`.")
     lines.append("More: `/sessions all`, `/sessions full`, `/sessions search <query>`.")

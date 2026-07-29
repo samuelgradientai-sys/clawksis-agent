@@ -36,8 +36,9 @@ class TestIndentDumperShape:
         # The list item should be at column 0 (no leading spaces)
         lines = out.strip().split("\n")
         list_lines = [l for l in lines if l.lstrip().startswith("- ")]
-        assert all(not l.startswith("  - ") for l in list_lines), \
+        assert all(not l.startswith("  - ") for l in list_lines), (
             f"Expected 0-indent list (buggy baseline), got:\n{out}"
+        )
 
     def test_indent_dumper_matches_ruamel_layout(self):
         """IndentDumper output should match ruamel.yaml's list-under-mapping layout."""
@@ -55,8 +56,9 @@ class TestIndentDumperShape:
         # The key check: list items are NOT at column 0
         lines = pyyaml_out.strip().split("\n")
         list_lines = [l for l in lines if l.lstrip().startswith("- ")]
-        assert all(l.startswith("  - ") for l in list_lines), \
+        assert all(l.startswith("  - ") for l in list_lines), (
             f"List items not 2-indent:\n{pyyaml_out}"
+        )
 
 
 class TestAtomicYamlWriteUsesIndentDumper:
@@ -73,8 +75,7 @@ class TestAtomicYamlWriteUsesIndentDumper:
         atomic_yaml_write(path, data)
 
         content = path.read_text(encoding="utf-8")
-        assert "  - " in content, \
-            f"Expected 2-indent list in file, got:\n{content}"
+        assert "  - " in content, f"Expected 2-indent list in file, got:\n{content}"
 
     def test_atomic_yaml_write_preserves_unicode(self, tmp_path):
         """allow_unicode=True should write real UTF-8, not escape sequences."""
@@ -114,6 +115,7 @@ class TestRoundtripConsistency:
         atomic_yaml_write(path, data)
 
         from ruamel.yaml import YAML
+
         yaml_rt = YAML(typ="rt")
         loaded = yaml_rt.load(path.read_text(encoding="utf-8"))
         assert loaded["custom_providers"][0]["name"] == "Provider A"

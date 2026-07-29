@@ -57,7 +57,9 @@ class WhatsAppBehaviorMixin:
     DEFAULT_REPLY_PREFIX: str = "∇ *Clawksis*\n────────────\n"
 
     _OUTBOUND_INVISIBLE_CHARS_RE = re.compile(r"[\u200b\u2060\u2063\ufeff]")
-    _OUTBOUND_ODD_SPACE_RE = re.compile(r"[\u00a0\u1680\u180e\u2000-\u200a\u202f\u205f\u3000]")
+    _OUTBOUND_ODD_SPACE_RE = re.compile(
+        r"[\u00a0\u1680\u180e\u2000-\u200a\u202f\u205f\u3000]"
+    )
 
     @classmethod
     def _sanitize_outbound_text(cls, content: str) -> str:
@@ -340,9 +342,7 @@ class WhatsAppBehaviorMixin:
         for bot_id in bot_ids:
             bare_id = bot_id.split("@", 1)[0]
             if bare_id:
-                cleaned = re.sub(
-                    rf"@{re.escape(bare_id)}\b[,:\-]*\s*", "", cleaned
-                )
+                cleaned = re.sub(rf"@{re.escape(bare_id)}\b[,:\-]*\s*", "", cleaned)
         return cleaned.strip() or text
 
     def _should_process_message(self, data: Dict[str, Any]) -> bool:
@@ -441,9 +441,7 @@ class WhatsAppBehaviorMixin:
                 inner = inner[1:-1].strip()
             return f"*{inner}*"
 
-        result = re.sub(
-            r"^#{1,6}\s+(.+)$", _header_to_bold, result, flags=re.MULTILINE
-        )
+        result = re.sub(r"^#{1,6}\s+(.+)$", _header_to_bold, result, flags=re.MULTILINE)
 
         # --- 5. Convert markdown links: [text](url) → text (url) ---
         result = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", result)
@@ -461,6 +459,7 @@ class WhatsAppBehaviorMixin:
 # Shared bridge directory resolution for CLI and adapter
 # ---------------------------------------------------------------------------
 
+
 def resolve_whatsapp_bridge_dir() -> Path:
     """Resolve the WhatsApp bridge directory, mirroring to CLAWK_HOME if needed.
 
@@ -475,7 +474,10 @@ def resolve_whatsapp_bridge_dir() -> Path:
 
     # Default location in install tree (may be read-only)
     from clawk_constants import get_clawk_home
-    install_bridge = _Path(__file__).resolve().parents[2] / "scripts" / "whatsapp-bridge"
+
+    install_bridge = (
+        _Path(__file__).resolve().parents[2] / "scripts" / "whatsapp-bridge"
+    )
 
     # Try CLAWK_HOME location first
     clawk_home = get_clawk_home()

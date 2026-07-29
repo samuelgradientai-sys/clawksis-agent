@@ -12487,7 +12487,9 @@ class ClawksisCLI(CLICommandsMixin):
             "api_mode": self.api_mode,
             "agent_primary_runtime": copy.deepcopy(
                 getattr(agent, "_primary_runtime", None)
-            ) if agent is not None else None,
+            )
+            if agent is not None
+            else None,
         }
 
     def _restore_model_runtime_snapshot(self, snapshot: dict | None) -> None:
@@ -12520,7 +12522,10 @@ class ClawksisCLI(CLICommandsMixin):
                 if agent._restore_primary_runtime():
                     return
             except Exception:
-                logger.debug("CLI one-turn model restore via primary runtime failed", exc_info=True)
+                logger.debug(
+                    "CLI one-turn model restore via primary runtime failed",
+                    exc_info=True,
+                )
 
         if hasattr(agent, "switch_model"):
             try:
@@ -12829,7 +12834,9 @@ class ClawksisCLI(CLICommandsMixin):
         # model.persist_switch_by_default (defaults to False so /model is
         # session-scoped unless the user opts in).
         persist_global = resolve_persist_behavior(
-            is_global_flag, is_session, is_once=one_turn,
+            is_global_flag,
+            is_session,
+            is_once=one_turn,
             explicit_provider=explicit_provider,
         )
 
@@ -12839,6 +12846,7 @@ class ClawksisCLI(CLICommandsMixin):
         if force_refresh:
             try:
                 from clawk_cli.models import clear_provider_models_cache
+
                 clear_provider_models_cache()
                 _cprint("  Cleared model picker cache. Refreshing...")
             except Exception:
@@ -12883,11 +12891,19 @@ class ClawksisCLI(CLICommandsMixin):
             if not providers:
                 _cprint("  No authenticated providers found.")
                 _cprint("")
-                _cprint("  /model <name>                        switch model (persists)")
-                _cprint("  /model <name> --once                 switch for the next turn only")
-                _cprint("  /model <name> --session              switch for this session only")
+                _cprint(
+                    "  /model <name>                        switch model (persists)"
+                )
+                _cprint(
+                    "  /model <name> --once                 switch for the next turn only"
+                )
+                _cprint(
+                    "  /model <name> --session              switch for this session only"
+                )
                 _cprint("  /model --provider <slug>             switch provider")
-                _cprint("  /model --refresh                     re-fetch live model lists")
+                _cprint(
+                    "  /model --refresh                     re-fetch live model lists"
+                )
                 return
 
             self._open_model_picker(
@@ -12918,13 +12934,17 @@ class ClawksisCLI(CLICommandsMixin):
 
         if self.agent is not None:
             try:
-                from clawk_cli.context_switch_guard import merge_preflight_compression_warning
+                from clawk_cli.context_switch_guard import (
+                    merge_preflight_compression_warning,
+                )
 
                 merge_preflight_compression_warning(
                     result,
                     agent=self.agent,
                     messages=list(self.conversation_history or []),
-                    config_context_length=getattr(self.agent, "_config_context_length", None),
+                    config_context_length=getattr(
+                        self.agent, "_config_context_length", None
+                    ),
                 )
             except Exception as exc:
                 logger.debug("preflight-compression switch warning failed: %s", exc)
@@ -12937,7 +12957,9 @@ class ClawksisCLI(CLICommandsMixin):
         # Update requested_provider so _ensure_runtime_credentials() doesn't
         # overwrite the switch on the next turn (it re-resolves from this).
         old_model = self.model
-        _one_turn_restore_snapshot = self._snapshot_model_runtime() if one_turn else None
+        _one_turn_restore_snapshot = (
+            self._snapshot_model_runtime() if one_turn else None
+        )
         # Snapshot CLI-level fields before mutation so a failed in-place swap
         # rolls the whole CLI back to the old working model (#50163).
         _cli_snapshot = {
@@ -12990,6 +13012,7 @@ class ClawksisCLI(CLICommandsMixin):
         # knows a switch occurred (avoids injecting system messages mid-history
         # which breaks providers and prompt caching).
         from clawk_cli.model_switch import format_model_for_display
+
         _display_old = format_model_for_display(old_model)
         _display_new = format_model_for_display(result.new_model)
 
@@ -13014,14 +13037,19 @@ class ClawksisCLI(CLICommandsMixin):
         # (e.g. gpt-5.5 is 1.05M on openai but 272K on Codex OAuth).
         mi = result.model_info
         from clawk_cli.model_switch import resolve_display_context_length
+
         ctx = resolve_display_context_length(
             result.new_model,
             result.target_provider,
             base_url=result.base_url or self.base_url or "",
             api_key=result.api_key or self.api_key or "",
             model_info=mi,
-            config_context_length=getattr(self.agent, "_config_context_length", None) if self.agent else None,
-            custom_providers=getattr(self.agent, "_custom_providers", None) if self.agent else None,
+            config_context_length=getattr(self.agent, "_config_context_length", None)
+            if self.agent
+            else None,
+            custom_providers=getattr(self.agent, "_custom_providers", None)
+            if self.agent
+            else None,
         )
         if ctx:
             _cprint(f"    Context: {ctx:,} tokens")
@@ -13032,9 +13060,9 @@ class ClawksisCLI(CLICommandsMixin):
 
         # Cache notice
         cache_enabled = (
-            (base_url_host_matches(result.base_url or "", "openrouter.ai") and "claude" in result.new_model.lower())
-            or result.api_mode == "anthropic_messages"
-        )
+            base_url_host_matches(result.base_url or "", "openrouter.ai")
+            and "claude" in result.new_model.lower()
+        ) or result.api_mode == "anthropic_messages"
         if cache_enabled:
             _cprint("    Prompt caching: enabled")
 

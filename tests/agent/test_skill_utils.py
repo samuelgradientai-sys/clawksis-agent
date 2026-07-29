@@ -95,13 +95,7 @@ def test_iter_skill_index_files_prunes_dependency_dirs(tmp_path):
     (nested / "SKILL.md").write_text("---\nname: typer\n---\n", encoding="utf-8")
 
     node_module = (
-        tmp_path
-        / "web-skill"
-        / "node_modules"
-        / "dep"
-        / ".agents"
-        / "skills"
-        / "dep"
+        tmp_path / "web-skill" / "node_modules" / "dep" / ".agents" / "skills" / "dep"
     )
     node_module.mkdir(parents=True)
     (node_module / "SKILL.md").write_text("---\nname: dep\n---\n", encoding="utf-8")
@@ -169,6 +163,7 @@ def test_skill_config_raw_cache_invalidates_on_config_edit(tmp_path, monkeypatch
 
     config_path.write_text("skills:\n  disabled: [new-skill]\n", encoding="utf-8")
     import os
+
     os.utime(config_path, None)
 
     assert get_disabled_skill_names() == {"new-skill"}
@@ -209,7 +204,9 @@ def test_iter_skill_index_files_prunes_skill_support_dirs(tmp_path):
 
     script_package = real / "scripts" / "helper-skill"
     script_package.mkdir(parents=True)
-    (script_package / "SKILL.md").write_text("---\nname: helper\n---\n", encoding="utf-8")
+    (script_package / "SKILL.md").write_text(
+        "---\nname: helper\n---\n", encoding="utf-8"
+    )
 
     found = list(iter_skill_index_files(tmp_path, "SKILL.md"))
     desc_found = list(iter_skill_index_files(tmp_path, "DESCRIPTION.md"))
@@ -256,8 +253,9 @@ class TestSkillMatchesPlatformTermux:
     def test_no_platforms_field_matches_everywhere(self):
         # Backward-compat default — skills without a platforms tag load
         # on any OS, Termux included.
-        with patch("agent.skill_utils.sys.platform", "android"), patch(
-            "agent.skill_utils.is_termux", return_value=True
+        with (
+            patch("agent.skill_utils.sys.platform", "android"),
+            patch("agent.skill_utils.is_termux", return_value=True),
         ):
             assert skill_matches_platform({}) is True
             assert skill_matches_platform({"name": "foo"}) is True
@@ -265,8 +263,9 @@ class TestSkillMatchesPlatformTermux:
     def test_linux_skill_loads_on_termux_android_platform(self):
         # Python 3.13+ on Termux reports sys.platform == "android".
         fm = {"platforms": ["linux"]}
-        with patch("agent.skill_utils.sys.platform", "android"), patch(
-            "agent.skill_utils.is_termux", return_value=True
+        with (
+            patch("agent.skill_utils.sys.platform", "android"),
+            patch("agent.skill_utils.is_termux", return_value=True),
         ):
             assert skill_matches_platform(fm) is True
             assert skill_matches_platform_list(fm["platforms"]) is True
@@ -275,8 +274,9 @@ class TestSkillMatchesPlatformTermux:
         # The common "[linux, macos, windows]" tag used by github-*,
         # productivity, mlops, etc.
         fm = {"platforms": ["linux", "macos", "windows"]}
-        with patch("agent.skill_utils.sys.platform", "android"), patch(
-            "agent.skill_utils.is_termux", return_value=True
+        with (
+            patch("agent.skill_utils.sys.platform", "android"),
+            patch("agent.skill_utils.is_termux", return_value=True),
         ):
             assert skill_matches_platform(fm) is True
             assert skill_matches_platform_list(fm["platforms"]) is True
@@ -285,8 +285,9 @@ class TestSkillMatchesPlatformTermux:
         # Pre-3.13 Termux reports sys.platform == "linux" already — this
         # works without the Termux escape hatch but must still pass.
         fm = {"platforms": ["linux"]}
-        with patch("agent.skill_utils.sys.platform", "linux"), patch(
-            "agent.skill_utils.is_termux", return_value=True
+        with (
+            patch("agent.skill_utils.sys.platform", "linux"),
+            patch("agent.skill_utils.is_termux", return_value=True),
         ):
             assert skill_matches_platform(fm) is True
             assert skill_matches_platform_list(fm["platforms"]) is True
@@ -295,16 +296,18 @@ class TestSkillMatchesPlatformTermux:
         # macOS-only skills (apple-notes, imessage, ...) should NOT load
         # on Termux. The Termux fallback only widens platforms:[linux,...].
         fm = {"platforms": ["macos"]}
-        with patch("agent.skill_utils.sys.platform", "android"), patch(
-            "agent.skill_utils.is_termux", return_value=True
+        with (
+            patch("agent.skill_utils.sys.platform", "android"),
+            patch("agent.skill_utils.is_termux", return_value=True),
         ):
             assert skill_matches_platform(fm) is False
             assert skill_matches_platform_list(fm["platforms"]) is False
 
     def test_windows_only_skill_still_excluded_on_termux(self):
         fm = {"platforms": ["windows"]}
-        with patch("agent.skill_utils.sys.platform", "android"), patch(
-            "agent.skill_utils.is_termux", return_value=True
+        with (
+            patch("agent.skill_utils.sys.platform", "android"),
+            patch("agent.skill_utils.is_termux", return_value=True),
         ):
             assert skill_matches_platform(fm) is False
             assert skill_matches_platform_list(fm["platforms"]) is False
@@ -312,8 +315,9 @@ class TestSkillMatchesPlatformTermux:
     def test_explicit_termux_or_android_tag_matches(self):
         # Skills can also opt in explicitly via platforms:[termux] or
         # platforms:[android] — both should match a Termux session.
-        with patch("agent.skill_utils.sys.platform", "android"), patch(
-            "agent.skill_utils.is_termux", return_value=True
+        with (
+            patch("agent.skill_utils.sys.platform", "android"),
+            patch("agent.skill_utils.is_termux", return_value=True),
         ):
             assert skill_matches_platform({"platforms": ["termux"]}) is True
             assert skill_matches_platform({"platforms": ["android"]}) is True
@@ -324,8 +328,9 @@ class TestSkillMatchesPlatformTermux:
         # If we're somehow on a plain Android Python (not Termux), don't
         # silently load Linux skills — Termux is the supported environment.
         fm = {"platforms": ["linux"]}
-        with patch("agent.skill_utils.sys.platform", "android"), patch(
-            "agent.skill_utils.is_termux", return_value=False
+        with (
+            patch("agent.skill_utils.sys.platform", "android"),
+            patch("agent.skill_utils.is_termux", return_value=False),
         ):
             assert skill_matches_platform(fm) is False
             assert skill_matches_platform_list(fm["platforms"]) is False
@@ -333,16 +338,18 @@ class TestSkillMatchesPlatformTermux:
     def test_linux_skill_on_real_linux_unaffected(self):
         # The non-Termux Linux path must not change.
         fm = {"platforms": ["linux"]}
-        with patch("agent.skill_utils.sys.platform", "linux"), patch(
-            "agent.skill_utils.is_termux", return_value=False
+        with (
+            patch("agent.skill_utils.sys.platform", "linux"),
+            patch("agent.skill_utils.is_termux", return_value=False),
         ):
             assert skill_matches_platform(fm) is True
             assert skill_matches_platform_list(fm["platforms"]) is True
 
     def test_macos_skill_on_real_macos_unaffected(self):
         fm = {"platforms": ["macos"]}
-        with patch("agent.skill_utils.sys.platform", "darwin"), patch(
-            "agent.skill_utils.is_termux", return_value=False
+        with (
+            patch("agent.skill_utils.sys.platform", "darwin"),
+            patch("agent.skill_utils.is_termux", return_value=False),
         ):
             assert skill_matches_platform(fm) is True
             assert skill_matches_platform_list(fm["platforms"]) is True
@@ -366,7 +373,9 @@ class TestNormalizeSkillLookupName:
         monkeypatch.setattr("tools.skills_tool.SKILLS_DIR", skills_dir)
         assert normalize_skill_lookup_name(str(skill_dir)) == "category/my-skill"
 
-    def test_absolute_via_symlink_uses_lexical_relative_path(self, tmp_path, monkeypatch):
+    def test_absolute_via_symlink_uses_lexical_relative_path(
+        self, tmp_path, monkeypatch
+    ):
         from agent.skill_utils import normalize_skill_lookup_name
 
         skills_dir = tmp_path / "skills"
@@ -385,7 +394,9 @@ class TestNormalizeSkillLookupName:
         from agent.skill_utils import normalize_skill_lookup_name
 
         monkeypatch.setattr("tools.skills_tool.SKILLS_DIR", tmp_path / "skills")
-        monkeypatch.setattr("agent.skill_utils.get_skills_dir", lambda: tmp_path / "skills")
+        monkeypatch.setattr(
+            "agent.skill_utils.get_skills_dir", lambda: tmp_path / "skills"
+        )
         outside = str(tmp_path / "outside" / "skill")
         assert normalize_skill_lookup_name(outside) == outside
 
@@ -449,8 +460,9 @@ class TestParseFrontmatterBOM:
         # The concrete harm: a macOS-only skill must stay hidden on non-macOS
         # whether or not the file carries a BOM. Empty frontmatter (the bug)
         # reads as "no platform restriction" and leaks the skill everywhere.
-        with patch("agent.skill_utils.sys.platform", "win32"), patch(
-            "agent.skill_utils.is_termux", return_value=False
+        with (
+            patch("agent.skill_utils.sys.platform", "win32"),
+            patch("agent.skill_utils.is_termux", return_value=False),
         ):
             plain_fm, _ = parse_frontmatter(self.SKILL)
             bom_fm, _ = parse_frontmatter("\ufeff" + self.SKILL)

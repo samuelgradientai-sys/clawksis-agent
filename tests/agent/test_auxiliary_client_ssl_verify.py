@@ -32,7 +32,9 @@ def test_build_keepalive_http_client_forwards_verify_context(clean_tls_env):
     assert client._transport._pool._ssl_context is ctx
 
 
-def test_build_keepalive_http_client_verify_false_disables_hostname_check(clean_tls_env):
+def test_build_keepalive_http_client_verify_false_disables_hostname_check(
+    clean_tls_env,
+):
     client = build_keepalive_http_client("https://ollama.example.com/v1", verify=False)
     assert isinstance(client, httpx.Client)
     assert client._transport._pool._ssl_context.check_hostname is False
@@ -68,7 +70,9 @@ def test_resolve_aux_verify_ssl_verify_false(clean_tls_env, monkeypatch):
         "get_custom_provider_tls_settings",
         lambda *a, **k: {"ssl_verify": False},
     )
-    assert auxiliary_client._resolve_aux_verify("https://ollama.example.com/v1") is False
+    assert (
+        auxiliary_client._resolve_aux_verify("https://ollama.example.com/v1") is False
+    )
 
 
 def test_resolve_aux_verify_no_match_defaults_true(clean_tls_env, monkeypatch):

@@ -15,16 +15,35 @@ from tui_gateway.server import _finalize_session, _is_gateway_owned_source
 
 class TestIsGatewayOwnedSource:
     def test_builtin_gateway_platforms_are_owned(self):
-        for src in ("telegram", "discord", "whatsapp", "slack", "signal",
-                    "matrix", "mattermost", "bluebubbles", "sms", "email"):
+        for src in (
+            "telegram",
+            "discord",
+            "whatsapp",
+            "slack",
+            "signal",
+            "matrix",
+            "mattermost",
+            "bluebubbles",
+            "sms",
+            "email",
+        ):
             assert _is_gateway_owned_source(src) is True, src
 
     def test_case_and_whitespace_normalized(self):
         assert _is_gateway_owned_source(" Telegram ") is True
 
     def test_tui_owned_sources_are_not(self):
-        for src in ("tui", "cli", "webui", "desktop", "cron", "subagent",
-                    "test", "acp", ""):
+        for src in (
+            "tui",
+            "cli",
+            "webui",
+            "desktop",
+            "cron",
+            "subagent",
+            "test",
+            "acp",
+            "",
+        ):
             assert _is_gateway_owned_source(src) is False, src
 
     def test_local_and_server_endpoints_are_not(self):

@@ -51,7 +51,9 @@ CODE_ACK = "Let me inspect the repository files first."
 
 
 def test_auto_is_codex_only():
-    assert intent_ack_continuation_mode(_agent("auto", "codex_responses")) == "codex_only"
+    assert (
+        intent_ack_continuation_mode(_agent("auto", "codex_responses")) == "codex_only"
+    )
     assert intent_ack_continuation_mode(_agent("auto", "chat_completions")) == "off"
     assert intent_ack_continuation_mode(_agent("auto", "anthropic")) == "off"
 
@@ -70,23 +72,36 @@ def test_false_is_off_even_for_codex():
 
 
 def test_list_matches_model_substring():
-    assert intent_ack_continuation_mode(
-        _agent(["gemini", "qwen"], "chat_completions", "google/gemini-3-pro")
-    ) == "all"
-    assert intent_ack_continuation_mode(
-        _agent(["gemini", "qwen"], "chat_completions", "anthropic/claude-sonnet-4")
-    ) == "off"
+    assert (
+        intent_ack_continuation_mode(
+            _agent(["gemini", "qwen"], "chat_completions", "google/gemini-3-pro")
+        )
+        == "all"
+    )
+    assert (
+        intent_ack_continuation_mode(
+            _agent(["gemini", "qwen"], "chat_completions", "anthropic/claude-sonnet-4")
+        )
+        == "off"
+    )
 
 
 def test_unrecognised_value_falls_back_to_auto():
-    assert intent_ack_continuation_mode(_agent("garbage", "codex_responses")) == "codex_only"
+    assert (
+        intent_ack_continuation_mode(_agent("garbage", "codex_responses"))
+        == "codex_only"
+    )
     assert intent_ack_continuation_mode(_agent("garbage", "chat_completions")) == "off"
 
 
 def test_missing_attr_defaults_to_auto():
-    bare = SimpleNamespace(api_mode="chat_completions", model="x", _strip_think_blocks=lambda c: c)
+    bare = SimpleNamespace(
+        api_mode="chat_completions", model="x", _strip_think_blocks=lambda c: c
+    )
     assert intent_ack_continuation_mode(bare) == "off"
-    bare_codex = SimpleNamespace(api_mode="codex_responses", model="x", _strip_think_blocks=lambda c: c)
+    bare_codex = SimpleNamespace(
+        api_mode="codex_responses", model="x", _strip_think_blocks=lambda c: c
+    )
     assert intent_ack_continuation_mode(bare_codex) == "codex_only"
 
 
@@ -104,7 +119,9 @@ def test_codex_only_path_requires_workspace():
     a = _agent("auto", "codex_responses")
     msgs = [{"role": "user", "content": CODE_USER}]
     # codebase ack matches workspace markers → fires
-    assert looks_like_codex_intermediate_ack(a, CODE_USER, CODE_ACK, msgs, require_workspace=True)
+    assert looks_like_codex_intermediate_ack(
+        a, CODE_USER, CODE_ACK, msgs, require_workspace=True
+    )
     # server-ops ack has no filesystem reference → does NOT fire (historical scope)
     repro_msgs = [{"role": "user", "content": REPRO_USER}]
     assert not looks_like_codex_intermediate_ack(
@@ -151,7 +168,9 @@ def test_real_final_answer_does_not_fire():
     a = _agent(True, "chat_completions")
     final = "Done. The server is healthy and there are no critical errors in the logs."
     msgs = [{"role": "user", "content": REPRO_USER}]
-    assert not looks_like_codex_intermediate_ack(a, REPRO_USER, final, msgs, require_workspace=False)
+    assert not looks_like_codex_intermediate_ack(
+        a, REPRO_USER, final, msgs, require_workspace=False
+    )
 
 
 def test_conversational_reply_without_action_verb_does_not_fire():

@@ -50,6 +50,7 @@ def _make_bare_runner():
     use this pattern (see AGENTS.md pitfall #17).
     """
     from gateway.run import GatewayRunner
+
     runner = object.__new__(GatewayRunner)
     # _is_user_authorized reads self.pairing_store.is_approved(...) before
     # any allowlist check succeeds; stub it to never approve so we exercise
@@ -198,7 +199,9 @@ def test_discord_role_config_does_not_bypass_gateway_allowlist(monkeypatch):
     assert runner._is_user_authorized(source) is False
 
 
-def test_discord_user_allowlist_still_authorizes_when_role_is_also_configured(monkeypatch):
+def test_discord_user_allowlist_still_authorizes_when_role_is_also_configured(
+    monkeypatch,
+):
     """Sanity: DISCORD_ALLOWED_USERS still authorizes users on the list,
     independent of DISCORD_ALLOWED_ROLES.  This guards against a future
     regression that ties the user-allowlist check to the (now-removed)

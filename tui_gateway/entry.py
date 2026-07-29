@@ -110,6 +110,7 @@ def _log_signal(signum: int, frame) -> None:
             # All live threads — signal may have been triggered by a
             # background thread (write to broken stdout from TTS, etc.).
             import threading as _threading
+
             for tid, th in _threading._active.items():
                 f.write(f"\n--- thread {th.name} (id={tid}) ---\n")
                 f.write("".join(traceback.format_stack(sys._current_frames().get(tid))))
@@ -321,6 +322,7 @@ def main():
     # off the path entirely for the common case.
     try:
         from clawk_cli.config import read_raw_config
+
         _mcp_servers = (read_raw_config() or {}).get("mcp_servers")
         _has_mcp_servers = isinstance(_mcp_servers, dict) and len(_mcp_servers) > 0
     except Exception:
@@ -328,6 +330,7 @@ def main():
         # discovery (still backgrounded, so it can't block startup).
         _has_mcp_servers = True
     if _has_mcp_servers:
+
         def _discover_mcp_background() -> None:
             try:
                 from clawk_cli.mcp_startup import (
@@ -336,11 +339,10 @@ def main():
 
                 _discover_mcp_tools_without_interactive_oauth()
             except Exception:
-                logger.warning(
-                    "Background MCP tool discovery failed", exc_info=True
-                )
+                logger.warning("Background MCP tool discovery failed", exc_info=True)
 
         import threading as _mcp_threading
+
         _mcp_thread = _mcp_threading.Thread(
             target=_discover_mcp_background,
             name="tui-mcp-discovery",
@@ -376,7 +378,11 @@ def main():
         try:
             req = json.loads(line)
         except json.JSONDecodeError:
-            if not write_json({"jsonrpc": "2.0", "error": {"code": -32700, "message": "parse error"}, "id": None}):
+            if not write_json({
+                "jsonrpc": "2.0",
+                "error": {"code": -32700, "message": "parse error"},
+                "id": None,
+            }):
                 _log_exit("parse-error-response write failed (broken stdout pipe)")
                 sys.exit(0)
             continue
@@ -385,7 +391,9 @@ def main():
         resp = dispatch(req)
         if resp is not None:
             if not write_json(resp):
-                _log_exit(f"response write failed for method={method!r} (broken stdout pipe)")
+                _log_exit(
+                    f"response write failed for method={method!r} (broken stdout pipe)"
+                )
                 sys.exit(0)
 
 

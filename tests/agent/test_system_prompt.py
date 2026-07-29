@@ -32,7 +32,9 @@ def _captured_context_cwd(agent):
     captured = {}
 
     def fake_context_files(
-        cwd=None, skip_soul=False, context_length=None,
+        cwd=None,
+        skip_soul=False,
+        context_length=None,
         allow_install_tree_fallback=False,
     ):
         captured["cwd"] = cwd

@@ -11,7 +11,9 @@ from run_agent import AIAgent
 from agent.context_compressor import ContextCompressor
 
 
-def _make_agent_with_compressor(provider="copilot", base_url="https://api.githubcopilot.com") -> AIAgent:
+def _make_agent_with_compressor(
+    provider="copilot", base_url="https://api.githubcopilot.com"
+) -> AIAgent:
     """Build a minimal AIAgent with a context_compressor, skipping __init__."""
     agent = AIAgent.__new__(AIAgent)
 
@@ -43,10 +45,14 @@ def _make_agent_with_compressor(provider="copilot", base_url="https://api.github
 def test_switch_model_rejects_stale_base_url_on_provider_change(mock_ctx_len):
     """A provider change with no resolved base_url must fail loud instead of
     silently keeping the previous provider's endpoint (#47828)."""
-    agent = _make_agent_with_compressor(provider="copilot", base_url="https://api.githubcopilot.com")
+    agent = _make_agent_with_compressor(
+        provider="copilot", base_url="https://api.githubcopilot.com"
+    )
 
     with pytest.raises(ValueError, match="no base_url resolved"):
-        agent.switch_model("MiniMax-M3", "custom:minimax", api_key="sk-minimax", base_url="")
+        agent.switch_model(
+            "MiniMax-M3", "custom:minimax", api_key="sk-minimax", base_url=""
+        )
 
     # Rollback must leave the agent fully on the old (provider, base_url) pair —
     # not a mismatched new-model/old-endpoint hybrid.
@@ -59,7 +65,9 @@ def test_switch_model_rejects_stale_base_url_on_provider_change(mock_ctx_len):
 def test_switch_model_allows_empty_base_url_for_same_provider(mock_ctx_len):
     """Re-selecting the SAME provider (e.g. a credential-only refresh) with no
     new base_url must keep the current URL — this is not a provider change."""
-    agent = _make_agent_with_compressor(provider="openrouter", base_url="https://openrouter.ai/api/v1")
+    agent = _make_agent_with_compressor(
+        provider="openrouter", base_url="https://openrouter.ai/api/v1"
+    )
 
     agent.switch_model("new-model", "openrouter", api_key="sk-new", base_url="")
 
@@ -72,10 +80,15 @@ def test_switch_model_allows_empty_base_url_for_same_provider(mock_ctx_len):
 def test_switch_model_applies_new_base_url_on_provider_change(mock_ctx_len):
     """The normal, resolved-correctly path must still work: new provider +
     new base_url is applied as-is."""
-    agent = _make_agent_with_compressor(provider="copilot", base_url="https://api.githubcopilot.com")
+    agent = _make_agent_with_compressor(
+        provider="copilot", base_url="https://api.githubcopilot.com"
+    )
 
     agent.switch_model(
-        "MiniMax-M3", "custom:minimax", api_key="sk-minimax", base_url="https://api.minimax.io/v1"
+        "MiniMax-M3",
+        "custom:minimax",
+        api_key="sk-minimax",
+        base_url="https://api.minimax.io/v1",
     )
 
     assert agent.provider == "custom:minimax"

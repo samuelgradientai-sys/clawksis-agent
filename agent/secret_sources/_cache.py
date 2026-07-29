@@ -67,8 +67,6 @@ class CachedFetch:
         return (time.time() - self.fetched_at) < ttl_seconds
 
 
-
-
 # ---------------------------------------------------------------------------
 # Disk cache
 # ---------------------------------------------------------------------------
@@ -150,7 +148,9 @@ class DiskCache(Generic[K]):
         # JSON permits non-string values; env vars need strings, so coerce by
         # dropping anything that isn't a str→str pair.
         typed: Dict[str, str] = {
-            k: v for k, v in secrets.items() if isinstance(k, str) and isinstance(v, str)
+            k: v
+            for k, v in secrets.items()
+            if isinstance(k, str) and isinstance(v, str)
         }
         entry = CachedFetch(secrets=typed, fetched_at=float(fetched_at))
         if not entry.is_fresh(ttl_seconds):

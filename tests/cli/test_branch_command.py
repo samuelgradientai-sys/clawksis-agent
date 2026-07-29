@@ -22,6 +22,7 @@ def session_db(tmp_path):
     os.environ["CLAWK_HOME"] = str(tmp_path / ".clawk")
     os.makedirs(tmp_path / ".clawk", exist_ok=True)
     from clawk_state import SessionDB
+
     db = SessionDB(db_path=tmp_path / ".clawk" / "test_sessions.db")
     yield db
     db.close()
@@ -88,6 +89,7 @@ class TestBranchCommandCLI:
     def test_branch_preserves_parent_link(self, cli_instance, session_db):
         """The new session should reference the original as parent."""
         from cli import ClawksisCLI
+
         original_id = cli_instance.session_id
 
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
@@ -98,6 +100,7 @@ class TestBranchCommandCLI:
     def test_branch_ends_original_session(self, cli_instance, session_db):
         """The original session should be marked as ended with 'branched' reason."""
         from cli import ClawksisCLI
+
         original_id = cli_instance.session_id
 
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
@@ -126,6 +129,7 @@ class TestBranchCommandCLI:
     def test_branch_empty_conversation(self, cli_instance, session_db):
         """Branching with no history should show an error."""
         from cli import ClawksisCLI
+
         cli_instance.conversation_history = []
 
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
@@ -136,6 +140,7 @@ class TestBranchCommandCLI:
     def test_branch_no_session_db(self, cli_instance):
         """Branching without a session DB should show an error."""
         from cli import ClawksisCLI
+
         cli_instance._session_db = None
 
         ClawksisCLI._handle_branch_command(cli_instance, "/branch")
@@ -166,7 +171,9 @@ class TestBranchCommandCLI:
 
         assert cli_instance._resumed is True
 
-    def test_branch_rotates_clawk_session_id_env_and_context(self, cli_instance, session_db):
+    def test_branch_rotates_clawk_session_id_env_and_context(
+        self, cli_instance, session_db
+    ):
         """Branching must update process-local session-id readers too."""
         from cli import ClawksisCLI
         from gateway.session_context import _UNSET, _VAR_MAP, get_session_env
@@ -215,6 +222,7 @@ class TestBranchCommandCLI:
     def test_fork_alias(self):
         """The /fork alias should resolve to 'branch'."""
         from clawk_cli.commands import resolve_command
+
         result = resolve_command("fork")
         assert result is not None
         assert result.name == "branch"
@@ -226,18 +234,21 @@ class TestBranchCommandDef:
     def test_branch_in_registry(self):
         """The branch command should be in the command registry."""
         from clawk_cli.commands import COMMAND_REGISTRY
+
         names = [c.name for c in COMMAND_REGISTRY]
         assert "branch" in names
 
     def test_branch_has_fork_alias(self):
         """The branch command should have 'fork' as an alias."""
         from clawk_cli.commands import COMMAND_REGISTRY
+
         branch = next(c for c in COMMAND_REGISTRY if c.name == "branch")
         assert "fork" in branch.aliases
 
     def test_branch_in_session_category(self):
         """The branch command should be in the Session category."""
         from clawk_cli.commands import COMMAND_REGISTRY
+
         branch = next(c for c in COMMAND_REGISTRY if c.name == "branch")
         assert branch.category == "Session"
 

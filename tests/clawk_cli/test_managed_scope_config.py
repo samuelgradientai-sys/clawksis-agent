@@ -1,4 +1,5 @@
 """Config integration tests — managed scope wins over user config at the leaf."""
+
 import textwrap
 
 import pytest

@@ -67,7 +67,9 @@ class _FakeAgent:
 
 def _build(arguments):
     tc = _FakeToolCall("call_1", "terminal", arguments)
-    msg = build_assistant_message(_FakeAgent(), _FakeAssistantMsg("ok", [tc]), "tool_calls")
+    msg = build_assistant_message(
+        _FakeAgent(), _FakeAssistantMsg("ok", [tc]), "tool_calls"
+    )
     return msg["tool_calls"][0]["function"]["arguments"]
 
 

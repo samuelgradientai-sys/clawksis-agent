@@ -17,6 +17,7 @@ ticker. Alternative providers (e.g. Chronos, a NAS-mediated managed-cron
 provider for scale-to-zero deployments) live under plugins/cron_providers/<name>/ and are
 selected via the `cron.provider` config key (empty = built-in).
 """
+
 from __future__ import annotations
 
 import threading
@@ -134,6 +135,7 @@ def resolve_cron_scheduler() -> "CronScheduler":
     name = ""
     try:
         from clawk_cli.config import cfg_get, load_config
+
         name = (cfg_get(load_config(), "cron", "provider", default="") or "").strip()
     except Exception:
         pass
@@ -143,12 +145,15 @@ def resolve_cron_scheduler() -> "CronScheduler":
 
     try:
         from plugins.cron_providers import load_cron_scheduler
+
         provider = load_cron_scheduler(name)
         if provider is None:
             logger.warning("cron.provider '%s' not found; using built-in ticker", name)
             return InProcessCronScheduler()
         if not provider.is_available():
-            logger.warning("cron.provider '%s' not available; using built-in ticker", name)
+            logger.warning(
+                "cron.provider '%s' not available; using built-in ticker", name
+            )
             return InProcessCronScheduler()
         logger.info("Using cron scheduler provider: %s", provider.name)
         return provider
@@ -173,7 +178,9 @@ class InProcessCronScheduler(CronScheduler):
     def name(self) -> str:
         return "builtin"
 
-    def start(self, stop_event, *, adapters=None, loop=None, interval=60, can_dispatch=None):
+    def start(
+        self, stop_event, *, adapters=None, loop=None, interval=60, can_dispatch=None
+    ):
         import logging
         from cron.scheduler import tick as cron_tick
         from cron.jobs import record_ticker_heartbeat
@@ -193,7 +200,9 @@ class InProcessCronScheduler(CronScheduler):
             ok = False
             try:
                 if can_dispatch is not None and not can_dispatch():
-                    logger.debug("Cron dispatch paused while gateway drains existing work")
+                    logger.debug(
+                        "Cron dispatch paused while gateway drains existing work"
+                    )
                 else:
                     cron_tick(
                         verbose=False,

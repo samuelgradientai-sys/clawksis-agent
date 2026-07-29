@@ -6,6 +6,7 @@ applied in BOTH places or the interactive CLI/TUI surface (skin, display prefs)
 silently ignores administrator-pinned values while `clawk config`/`doctor`
 honor them. This locks the cli.py path.
 """
+
 import importlib
 
 import pytest
@@ -47,7 +48,9 @@ def test_cli_config_honors_managed_skin(homes):
     """A managed display.skin must reach CLI_CONFIG (the TUI's source)."""
     home, managed = homes
     (home / "config.yaml").write_text("display:\n  skin: user_skin\n", encoding="utf-8")
-    (managed / "config.yaml").write_text("display:\n  skin: charizard\n", encoding="utf-8")
+    (managed / "config.yaml").write_text(
+        "display:\n  skin: charizard\n", encoding="utf-8"
+    )
     from clawk_cli import managed_scope
 
     managed_scope.invalidate_managed_cache()
@@ -61,7 +64,9 @@ def test_cli_config_managed_leaf_preserves_user_siblings(homes):
     (home / "config.yaml").write_text(
         "display:\n  skin: user_skin\n  show_reasoning: true\n", encoding="utf-8"
     )
-    (managed / "config.yaml").write_text("display:\n  skin: charizard\n", encoding="utf-8")
+    (managed / "config.yaml").write_text(
+        "display:\n  skin: charizard\n", encoding="utf-8"
+    )
     from clawk_cli import managed_scope
 
     managed_scope.invalidate_managed_cache()

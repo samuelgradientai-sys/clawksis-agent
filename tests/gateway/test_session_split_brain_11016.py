@@ -64,16 +64,12 @@ def _make_adapter():
 
 
 def _make_event(text="hello", chat_id="12345"):
-    source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"
-    )
+    source = SessionSource(platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm")
     return MessageEvent(text=text, message_type=MessageType.TEXT, source=source)
 
 
 def _session_key(chat_id="12345"):
-    source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"
-    )
+    source = SessionSource(platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm")
     return build_session_key(source)
 
 
@@ -211,10 +207,16 @@ class TestAdapterSessionCancellation:
         await asyncio.sleep(0)
         await asyncio.sleep(0)
 
-        assert sk in adapter._active_sessions, "guard must stay active while /new is still running"
-        assert sk in adapter._pending_messages, "follow-up should stay queued until /new finishes"
+        assert sk in adapter._active_sessions, (
+            "guard must stay active while /new is still running"
+        )
+        assert sk in adapter._pending_messages, (
+            "follow-up should stay queued until /new finishes"
+        )
         assert not follow_up_processed.is_set(), "follow-up ran before /new completed"
-        assert "original:cancelled" not in call_order, "old task was cancelled before runner completed /new"
+        assert "original:cancelled" not in call_order, (
+            "old task was cancelled before runner completed /new"
+        )
 
         allow_command_finish.set()
         await command_task
@@ -222,7 +224,9 @@ class TestAdapterSessionCancellation:
 
         assert any("handled:new" in r for r in adapter.sent_responses)
         assert call_order.index("command:end") < call_order.index("original:cancelled")
-        assert call_order.index("original:cancelled") < call_order.index("followup:processed")
+        assert call_order.index("original:cancelled") < call_order.index(
+            "followup:processed"
+        )
         assert sk not in adapter._pending_messages
 
 
@@ -314,6 +318,7 @@ class TestStaleSessionLockSelfHeal:
 
         # Simulate: task recorded with guard=event_a
         event_a = asyncio.Event()
+
         async def _done():
             return None
 
@@ -369,7 +374,9 @@ class TestStaleSessionLockSelfHeal:
         adapter._cleanup_finished_session_task(sk, event_a)
 
         assert sk not in adapter._active_sessions, "guard must be released on match"
-        assert sk not in adapter._session_tasks, "task entry must be dropped after release"
+        assert sk not in adapter._session_tasks, (
+            "task entry must be dropped after release"
+        )
 
 
 # ===========================================================================

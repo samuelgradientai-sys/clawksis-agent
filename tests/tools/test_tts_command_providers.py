@@ -47,19 +47,21 @@ from tools.tts_tool import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _python_copy_command(output_placeholder: str = "{output_path}") -> str:
     """Return a cross-platform shell command that copies {input_path} -> output."""
     interpreter = sys.executable
     return (
         f'"{interpreter}" -c "import shutil, sys; '
         f'shutil.copyfile(sys.argv[1], sys.argv[2])" '
-        f'{{input_path}} {output_placeholder}'
+        f"{{input_path}} {output_placeholder}"
     )
 
 
 # ---------------------------------------------------------------------------
 # _resolve_command_provider_config / built-in precedence
 # ---------------------------------------------------------------------------
+
 
 class TestResolveCommandProviderConfig:
     def test_builtin_names_are_never_command_providers(self):
@@ -92,7 +94,9 @@ class TestResolveCommandProviderConfig:
         assert resolved is not None
 
     def test_other_type_values_reject(self):
-        cfg = {"providers": {"piper-cli": {"type": "python", "command": "piper-cli foo"}}}
+        cfg = {
+            "providers": {"piper-cli": {"type": "python", "command": "piper-cli foo"}}
+        }
         assert _resolve_command_provider_config("piper-cli", cfg) is None
 
     def test_empty_command_rejects(self):
@@ -116,14 +120,17 @@ class TestResolveCommandProviderConfig:
 
 class TestGetNamedProviderConfig:
     def test_providers_block_wins(self):
-        cfg = {"providers": {"voxcpm": {"command": "new"}},
-               "voxcpm": {"command": "legacy"}}
+        cfg = {
+            "providers": {"voxcpm": {"command": "new"}},
+            "voxcpm": {"command": "legacy"},
+        }
         assert _get_named_provider_config(cfg, "voxcpm") == {"command": "new"}
 
     def test_legacy_tts_name_block_still_resolves(self):
         cfg = {"voxcpm": {"type": "command", "command": "legacy"}}
         assert _get_named_provider_config(cfg, "voxcpm") == {
-            "type": "command", "command": "legacy"
+            "type": "command",
+            "command": "legacy",
         }
 
     def test_builtin_names_do_not_leak_through_legacy_path(self):
@@ -147,6 +154,7 @@ class TestIsCommandProviderConfig:
 # ---------------------------------------------------------------------------
 # _iter_command_providers / _has_any_command_tts_provider
 # ---------------------------------------------------------------------------
+
 
 class TestIterCommandProviders:
     def test_iterates_only_user_command_providers(self):
@@ -174,19 +182,28 @@ class TestIterCommandProviders:
 # config getters
 # ---------------------------------------------------------------------------
 
+
 class TestConfigGetters:
     def test_timeout_defaults(self):
-        assert _get_command_tts_timeout({}) == float(DEFAULT_COMMAND_TTS_TIMEOUT_SECONDS)
+        assert _get_command_tts_timeout({}) == float(
+            DEFAULT_COMMAND_TTS_TIMEOUT_SECONDS
+        )
 
     def test_timeout_coerces_string(self):
         assert _get_command_tts_timeout({"timeout": "45"}) == 45.0
 
     def test_timeout_rejects_non_positive(self):
-        assert _get_command_tts_timeout({"timeout": 0}) == float(DEFAULT_COMMAND_TTS_TIMEOUT_SECONDS)
-        assert _get_command_tts_timeout({"timeout": -1}) == float(DEFAULT_COMMAND_TTS_TIMEOUT_SECONDS)
+        assert _get_command_tts_timeout({"timeout": 0}) == float(
+            DEFAULT_COMMAND_TTS_TIMEOUT_SECONDS
+        )
+        assert _get_command_tts_timeout({"timeout": -1}) == float(
+            DEFAULT_COMMAND_TTS_TIMEOUT_SECONDS
+        )
 
     def test_timeout_rejects_garbage(self):
-        assert _get_command_tts_timeout({"timeout": "fast"}) == float(DEFAULT_COMMAND_TTS_TIMEOUT_SECONDS)
+        assert _get_command_tts_timeout({"timeout": "fast"}) == float(
+            DEFAULT_COMMAND_TTS_TIMEOUT_SECONDS
+        )
 
     def test_timeout_seconds_alias(self):
         assert _get_command_tts_timeout({"timeout_seconds": 90}) == 90.0
@@ -198,10 +215,15 @@ class TestConfigGetters:
         assert _get_command_tts_output_format({}, "/tmp/clip.wav") == "wav"
 
     def test_output_format_unknown_path_falls_back_to_config(self):
-        assert _get_command_tts_output_format({"format": "ogg"}, "/tmp/clip.xyz") == "ogg"
+        assert (
+            _get_command_tts_output_format({"format": "ogg"}, "/tmp/clip.xyz") == "ogg"
+        )
 
     def test_output_format_rejects_unknown(self):
-        assert _get_command_tts_output_format({"format": "m4a"}) == DEFAULT_COMMAND_TTS_OUTPUT_FORMAT
+        assert (
+            _get_command_tts_output_format({"format": "m4a"})
+            == DEFAULT_COMMAND_TTS_OUTPUT_FORMAT
+        )
 
     def test_output_format_supported_set(self):
         assert COMMAND_TTS_OUTPUT_FORMATS == frozenset({"mp3", "wav", "ogg", "flac"})
@@ -222,17 +244,31 @@ class TestConfigGetters:
 # _resolve_max_text_length for command providers
 # ---------------------------------------------------------------------------
 
+
 class TestMaxTextLengthForCommandProviders:
     def test_default_for_command_provider(self):
         cfg = {"providers": {"piper-cli": {"type": "command", "command": "x"}}}
-        assert _resolve_max_text_length("piper-cli", cfg) == DEFAULT_COMMAND_TTS_MAX_TEXT_LENGTH
+        assert (
+            _resolve_max_text_length("piper-cli", cfg)
+            == DEFAULT_COMMAND_TTS_MAX_TEXT_LENGTH
+        )
 
     def test_override_under_providers(self):
-        cfg = {"providers": {"piper-cli": {"type": "command", "command": "x", "max_text_length": 2500}}}
+        cfg = {
+            "providers": {
+                "piper-cli": {
+                    "type": "command",
+                    "command": "x",
+                    "max_text_length": 2500,
+                }
+            }
+        }
         assert _resolve_max_text_length("piper-cli", cfg) == 2500
 
     def test_override_under_legacy_tts_name_block(self):
-        cfg = {"piper-cli": {"type": "command", "command": "x", "max_text_length": 7777}}
+        cfg = {
+            "piper-cli": {"type": "command", "command": "x", "max_text_length": 7777}
+        }
         assert _resolve_max_text_length("piper-cli", cfg) == 7777
 
     def test_non_command_unknown_provider_still_falls_back(self):
@@ -243,9 +279,10 @@ class TestMaxTextLengthForCommandProviders:
 # _shell_quote_context / template rendering
 # ---------------------------------------------------------------------------
 
+
 class TestShellQuoteContext:
     def test_bare_context(self):
-        tpl = 'tts {output_path}'
+        tpl = "tts {output_path}"
         pos = tpl.index("{output_path}")
         assert _shell_quote_context(tpl, pos) is None
 
@@ -303,9 +340,13 @@ class TestRenderCommandTtsTemplate:
 
     def test_literal_braces_survive(self):
         placeholders = {
-            "input_path": "/tmp/in.txt", "text_path": "/tmp/in.txt",
-            "output_path": "/tmp/out.mp3", "format": "mp3",
-            "voice": "", "model": "", "speed": "1.0",
+            "input_path": "/tmp/in.txt",
+            "text_path": "/tmp/in.txt",
+            "output_path": "/tmp/out.mp3",
+            "format": "mp3",
+            "voice": "",
+            "model": "",
+            "speed": "1.0",
         }
         rendered = _render_command_tts_template(
             "echo '{{not a placeholder}}' && tts --in {input_path}",
@@ -316,10 +357,13 @@ class TestRenderCommandTtsTemplate:
     def test_injection_is_neutralized(self):
         """Embedded shell metacharacters in a placeholder value must be quoted."""
         placeholders = {
-            "input_path": "/tmp/in.txt", "text_path": "/tmp/in.txt",
+            "input_path": "/tmp/in.txt",
+            "text_path": "/tmp/in.txt",
             "output_path": "/tmp/out; rm -rf /",
             "format": "mp3",
-            "voice": "$(whoami)", "model": "", "speed": "1.0",
+            "voice": "$(whoami)",
+            "model": "",
+            "speed": "1.0",
         }
         rendered = _render_command_tts_template(
             "tts --voice {voice} --out {output_path}",
@@ -330,14 +374,19 @@ class TestRenderCommandTtsTemplate:
         if os.name != "nt":
             assert "'$(whoami)'" in rendered or "'\\''" in rendered
             assert "; rm -rf /" not in rendered.replace(
-                "'/tmp/out; rm -rf /'", "",
+                "'/tmp/out; rm -rf /'",
+                "",
             )
 
     def test_preserves_shell_quoting_style(self):
         placeholders = {
-            "input_path": "/tmp/in.txt", "text_path": "/tmp/in.txt",
-            "output_path": "/tmp/out.mp3", "format": "mp3",
-            "voice": "bob's voice", "model": "", "speed": "1.0",
+            "input_path": "/tmp/in.txt",
+            "text_path": "/tmp/in.txt",
+            "output_path": "/tmp/out.mp3",
+            "format": "mp3",
+            "voice": "bob's voice",
+            "model": "",
+            "speed": "1.0",
         }
         # When the template wraps the placeholder in double quotes we must
         # escape for that context, not collapse to single-quoted form.
@@ -351,6 +400,7 @@ class TestRenderCommandTtsTemplate:
 # ---------------------------------------------------------------------------
 # End-to-end: _generate_command_tts
 # ---------------------------------------------------------------------------
+
 
 class TestGenerateCommandTts:
     def test_writes_output_file(self, tmp_path):
@@ -421,6 +471,7 @@ class TestGenerateCommandTts:
 # ---------------------------------------------------------------------------
 # text_to_speech_tool integration
 # ---------------------------------------------------------------------------
+
 
 class TestTextToSpeechToolWithCommandProvider:
     def test_command_provider_dispatches_end_to_end(self, tmp_path):

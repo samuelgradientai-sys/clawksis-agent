@@ -347,7 +347,9 @@ def test_cli_close_preflush_resumed_prefix_is_not_duplicated(tmp_path, monkeypat
     ]
 
 
-def test_cli_close_preserves_unflushed_tail_after_prior_prefix_flush(tmp_path, monkeypatch):
+def test_cli_close_preserves_unflushed_tail_after_prior_prefix_flush(
+    tmp_path, monkeypatch
+):
     """Marker-only alias close writes only a new tail after a prior flush."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
 
@@ -451,7 +453,9 @@ def test_cli_chat_staging_does_not_mutate_live_agent_snapshot():
     ]
 
 
-def test_cli_close_persists_pending_user_when_agent_snapshot_is_empty(tmp_path, monkeypatch):
+def test_cli_close_persists_pending_user_when_agent_snapshot_is_empty(
+    tmp_path, monkeypatch
+):
     """Close before worker startup persists only the CLI-staged user input."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
 
@@ -492,7 +496,9 @@ def test_cli_close_persists_pending_user_when_agent_snapshot_is_empty(tmp_path, 
     assert staged["_db_persisted"] is True
 
 
-def test_cli_close_uses_clean_override_for_shortened_pending_snapshot(tmp_path, monkeypatch):
+def test_cli_close_uses_clean_override_for_shortened_pending_snapshot(
+    tmp_path, monkeypatch
+):
     """Close retains the clean user text when its snapshot omits the prefix."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
 
@@ -537,7 +543,9 @@ def test_cli_close_uses_clean_override_for_shortened_pending_snapshot(tmp_path, 
     assert staged["_db_persisted"] is True
 
 
-def test_cli_close_preserves_clean_staged_user_across_noted_worker_turn(tmp_path, monkeypatch):
+def test_cli_close_preserves_clean_staged_user_across_noted_worker_turn(
+    tmp_path, monkeypatch
+):
     """A noted API-only turn reuses the close-marked clean staged user row."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
 
@@ -581,7 +589,9 @@ def test_cli_close_preserves_clean_staged_user_across_noted_worker_turn(tmp_path
     agent.disabled_toolsets = None
     agent._skip_mcp_refresh = True
     agent.compression_enabled = False
-    agent.context_compressor = types.SimpleNamespace(protect_first_n=2, protect_last_n=2)
+    agent.context_compressor = types.SimpleNamespace(
+        protect_first_n=2, protect_last_n=2
+    )
     agent._memory_store = None
     agent._memory_manager = None
     agent._memory_nudge_interval = 0
@@ -629,7 +639,9 @@ def test_cli_close_preserves_clean_staged_user_across_noted_worker_turn(tmp_path
     ]
 
 
-def test_cli_close_builds_prompt_before_creating_first_session_row(tmp_path, monkeypatch):
+def test_cli_close_builds_prompt_before_creating_first_session_row(
+    tmp_path, monkeypatch
+):
     """First-turn close persistence must not leave a NULL prompt snapshot."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
 

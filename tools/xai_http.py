@@ -53,7 +53,9 @@ def has_xai_credentials() -> bool:
             return True
         # Pool-only grants (multi-account ``auth add``) never write the
         # providers singleton; still count as present credentials.
-        credential_pool = store.get("credential_pool") if isinstance(store, dict) else None
+        credential_pool = (
+            store.get("credential_pool") if isinstance(store, dict) else None
+        )
         entries = (
             credential_pool.get("xai-oauth")
             if isinstance(credential_pool, dict)
@@ -265,9 +267,7 @@ def resolve_xai_http_credentials(
 
         pool = load_pool("xai-oauth")
         entry = (
-            pool.try_refresh_matching(api_key_hint)
-            if force_refresh
-            else pool.select()
+            pool.try_refresh_matching(api_key_hint) if force_refresh else pool.select()
         )
         if force_refresh and entry is None:
             # A rejected refresh may quarantine the issuing entry. Continue
@@ -278,16 +278,24 @@ def resolve_xai_http_credentials(
             getattr(entry, "runtime_api_key", None)
             or getattr(entry, "access_token", "")
         ).strip()
-        fallback_base_url = str(
-            getattr(entry, "runtime_base_url", None)
-            or getattr(entry, "base_url", "")
-            or auth_mod.DEFAULT_XAI_OAUTH_BASE_URL
-        ).strip().rstrip("/")
-        override_base_url = str(
-            get_env_value("CLAWK_XAI_BASE_URL")
-            or get_env_value("XAI_BASE_URL")
-            or ""
-        ).strip().rstrip("/")
+        fallback_base_url = (
+            str(
+                getattr(entry, "runtime_base_url", None)
+                or getattr(entry, "base_url", "")
+                or auth_mod.DEFAULT_XAI_OAUTH_BASE_URL
+            )
+            .strip()
+            .rstrip("/")
+        )
+        override_base_url = (
+            str(
+                get_env_value("CLAWK_XAI_BASE_URL")
+                or get_env_value("XAI_BASE_URL")
+                or ""
+            )
+            .strip()
+            .rstrip("/")
+        )
         base_url = auth_mod._xai_validate_inference_base_url(
             override_base_url,
             fallback=fallback_base_url,
@@ -302,7 +310,9 @@ def resolve_xai_http_credentials(
         pass
 
     api_key = str(get_env_value("XAI_API_KEY") or "").strip()
-    base_url = str(get_env_value("XAI_BASE_URL") or "https://api.x.ai/v1").strip().rstrip("/")
+    base_url = (
+        str(get_env_value("XAI_BASE_URL") or "https://api.x.ai/v1").strip().rstrip("/")
+    )
     return {
         "provider": "xai",
         "api_key": api_key,

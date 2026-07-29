@@ -16,18 +16,25 @@ import time
 import os
 
 # Force stderr logging so redirect_stdout doesn't swallow it
-logging.basicConfig(level=logging.DEBUG, stream=sys.stderr,
-                    format="%(asctime)s [%(threadName)s] %(message)s")
+logging.basicConfig(
+    level=logging.DEBUG,
+    stream=sys.stderr,
+    format="%(asctime)s [%(threadName)s] %(message)s",
+)
 log = logging.getLogger("interrupt_test")
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 
 from unittest.mock import MagicMock, patch
 from run_agent import AIAgent, IterationBudget
 from tools.interrupt import set_interrupt
 
+
 def make_slow_response(delay=2.0):
     """API response that takes a while."""
+
     def create(**kwargs):
         log.info(f"   🌐 Mock API call starting (will take {delay}s)...")
         time.sleep(delay)
@@ -43,6 +50,7 @@ def make_slow_response(delay=2.0):
         resp.usage.total_tokens = 110
         resp.usage.prompt_tokens_details = None
         return resp
+
     return create
 
 
@@ -84,7 +92,9 @@ def main() -> int:
         log.info(f"🔴 parent.interrupt() called with: {message!r}")
         log.info(f"   _active_children count: {len(self._active_children)}")
         _original_interrupt(self, message)
-        log.info(f"   After interrupt: _interrupt_requested={self._interrupt_requested}")
+        log.info(
+            f"   After interrupt: _interrupt_requested={self._interrupt_requested}"
+        )
         for i, child in enumerate(self._active_children):
             log.info(f"   Child {i}._interrupt_requested={child._interrupt_requested}")
 
@@ -134,10 +144,14 @@ def main() -> int:
                     override_api_mode="chat_completions",
                 )
                 agent_result[0] = result
-                log.info(f"🟢 agent_thread finished. Result status: {result.get('status')}")
+                log.info(
+                    f"🟢 agent_thread finished. Result status: {result.get('status')}"
+                )
 
     # ─── Start agent thread (like chat() does) ───
-    agent_thread = threading.Thread(target=agent_thread_func, name="agent_thread", daemon=True)
+    agent_thread = threading.Thread(
+        target=agent_thread_func, name="agent_thread", daemon=True
+    )
     agent_thread.start()
 
     # ─── Wait for child to start ───
@@ -187,7 +201,10 @@ def main() -> int:
             print("✅ PASS: Interrupt worked correctly!", file=sys.stderr)
             set_interrupt(False)
             return 0
-        print(f"❌ FAIL: status={result['status']}, elapsed={elapsed:.2f}s", file=sys.stderr)
+        print(
+            f"❌ FAIL: status={result['status']}, elapsed={elapsed:.2f}s",
+            file=sys.stderr,
+        )
         set_interrupt(False)
         return 1
 

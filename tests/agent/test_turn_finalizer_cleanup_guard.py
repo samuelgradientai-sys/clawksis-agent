@@ -155,11 +155,7 @@ def test_single_cleanup_step_raises_does_not_skip_others(step):
     assert result["final_response"] == "PARTIAL SUMMARY FROM MODEL"
     # Exactly the failing step is recorded; the others ran without error.
     assert result["cleanup_errors"] == [
-        next(
-            e
-            for e in result["cleanup_errors"]
-            if e.startswith(step)
-        )
+        next(e for e in result["cleanup_errors"] if e.startswith(step))
     ]
     assert len(result["cleanup_errors"]) == 1
 

@@ -183,7 +183,9 @@ class TestGatewayNotRunningWarning:
         assert "Created job" in out
         assert "Gateway is not running" in out
 
-    def test_create_silent_when_gateway_running(self, tmp_cron_dir, capsys, monkeypatch):
+    def test_create_silent_when_gateway_running(
+        self, tmp_cron_dir, capsys, monkeypatch
+    ):
         monkeypatch.setattr("clawk_cli.gateway.find_gateway_pids", lambda: [4242])
         cron_command(
             Namespace(
@@ -329,7 +331,9 @@ def test_cron_status_reports_running_gateway(monkeypatch, capsys):
 
 def test_cron_tick_invokes_scheduler_tick_with_verbose(monkeypatch):
     calls = []
-    monkeypatch.setattr("cron.scheduler.tick", lambda verbose=False: calls.append(verbose))
+    monkeypatch.setattr(
+        "cron.scheduler.tick", lambda verbose=False: calls.append(verbose)
+    )
 
     cron_cli.cron_tick()
 
@@ -382,7 +386,9 @@ def test_cron_create_success_prints_job_details(monkeypatch, capsys):
 
 
 def test_cron_create_failure_returns_nonzero(monkeypatch, capsys):
-    monkeypatch.setattr(cron_cli, "_cron_api", lambda **kwargs: {"success": False, "error": "boom"})
+    monkeypatch.setattr(
+        cron_cli, "_cron_api", lambda **kwargs: {"success": False, "error": "boom"}
+    )
 
     args = SimpleNamespace(
         schedule="every day",

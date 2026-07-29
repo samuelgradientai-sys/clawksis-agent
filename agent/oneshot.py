@@ -91,7 +91,9 @@ PROMPT_TEMPLATES: Dict[str, PromptTemplate] = {
 }
 
 
-def render_template(name: str, variables: Optional[Dict[str, Any]] = None) -> Tuple[str, str]:
+def render_template(
+    name: str, variables: Optional[Dict[str, Any]] = None
+) -> Tuple[str, str]:
     """Resolve a registered template into (instructions, user_input).
 
     Raises KeyError if the template name is unknown so callers fail loudly

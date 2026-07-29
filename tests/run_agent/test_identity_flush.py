@@ -216,8 +216,10 @@ class TestIdentityFlush:
                 agent._flushed_db_message_ids = {id(new_assistant)}
 
                 agent._flush_messages_to_session_db(
-                    [{"role": "user", "content": "u1", "_db_persisted": True},
-                     new_assistant],
+                    [
+                        {"role": "user", "content": "u1", "_db_persisted": True},
+                        new_assistant,
+                    ],
                     [],
                 )
 

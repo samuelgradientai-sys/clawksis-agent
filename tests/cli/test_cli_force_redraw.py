@@ -44,7 +44,9 @@ class TestForceFullRedraw:
         out.cursor_goto.side_effect = lambda *_: events.append("home")
         out.flush.side_effect = lambda: events.append("flush")
         app.renderer.reset.side_effect = lambda **_: events.append("renderer_reset")
-        monkeypatch.setattr(cli_mod, "_replay_output_history", lambda: events.append("replay"))
+        monkeypatch.setattr(
+            cli_mod, "_replay_output_history", lambda: events.append("replay")
+        )
         app.invalidate.side_effect = lambda: events.append("invalidate")
 
         bare_cli._force_full_redraw()
@@ -71,7 +73,9 @@ class TestForceFullRedraw:
             "invalidate",
         ]
 
-    def test_resize_recovery_skips_clear_when_width_unchanged(self, bare_cli, monkeypatch):
+    def test_resize_recovery_skips_clear_when_width_unchanged(
+        self, bare_cli, monkeypatch
+    ):
         """A rows-only resize (same width) must NOT clear the screen.
 
         prompt_toolkit's built-in Application._on_resize() starts with
@@ -91,7 +95,9 @@ class TestForceFullRedraw:
         bare_cli._last_resize_width = 120
         # Same width on this resize → rows-only change.
         monkeypatch.setattr(bare_cli, "_get_tui_terminal_width", lambda: 120)
-        monkeypatch.setattr(bare_cli, "_schedule_status_bar_unsuppress", lambda *_: None)
+        monkeypatch.setattr(
+            bare_cli, "_schedule_status_bar_unsuppress", lambda *_: None
+        )
 
         bare_cli._recover_after_resize(app, original_on_resize)
 
@@ -105,7 +111,9 @@ class TestForceFullRedraw:
         # Status bar / input rules must be suppressed until the next prompt.
         assert bare_cli._status_bar_suppressed_after_resize is True
 
-    def test_resize_recovery_clears_viewport_on_width_change(self, bare_cli, monkeypatch):
+    def test_resize_recovery_clears_viewport_on_width_change(
+        self, bare_cli, monkeypatch
+    ):
         """A WIDTH change must wipe the visible viewport (CSI 2J) and replay.
 
         On column shrink the terminal reflows the old full-width chrome into
@@ -117,14 +125,20 @@ class TestForceFullRedraw:
         app = MagicMock()
         events = []
         app.renderer.output.erase_screen.side_effect = lambda: events.append("erase")
-        app.renderer.output.write_raw.side_effect = lambda *_: events.append("scrollback_wipe")
+        app.renderer.output.write_raw.side_effect = lambda *_: events.append(
+            "scrollback_wipe"
+        )
         original_on_resize = lambda: events.append("original_resize")
 
         bare_cli._status_bar_suppressed_after_resize = False
         bare_cli._last_resize_width = 200
         monkeypatch.setattr(bare_cli, "_get_tui_terminal_width", lambda: 90)
-        monkeypatch.setattr(bare_cli, "_schedule_status_bar_unsuppress", lambda *_: None)
-        monkeypatch.setattr(cli_mod, "_replay_output_history", lambda: events.append("replay"))
+        monkeypatch.setattr(
+            bare_cli, "_schedule_status_bar_unsuppress", lambda *_: None
+        )
+        monkeypatch.setattr(
+            cli_mod, "_replay_output_history", lambda: events.append("replay")
+        )
 
         bare_cli._recover_after_resize(app, original_on_resize)
 
@@ -138,7 +152,9 @@ class TestForceFullRedraw:
         assert bare_cli._last_resize_width == 90
         assert bare_cli._status_bar_suppressed_after_resize is True
 
-    def test_force_redraw_uses_full_screen_clear_without_scrollback_clear(self, bare_cli):
+    def test_force_redraw_uses_full_screen_clear_without_scrollback_clear(
+        self, bare_cli
+    ):
         app = MagicMock()
         bare_cli._app = app
 

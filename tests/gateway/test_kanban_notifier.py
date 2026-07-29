@@ -257,7 +257,10 @@ def test_notifier_owning_profile_adapter_no_default_fallback(tmp_path, monkeypat
         tid = kb.create_task(conn, title="owned by beta", assignee="worker")
         # Subscription is owned by profile "beta".
         kb.add_notify_sub(
-            conn, task_id=tid, platform="telegram", chat_id="chat-beta",
+            conn,
+            task_id=tid,
+            platform="telegram",
+            chat_id="chat-beta",
             notifier_profile="beta",
         )
         kb.complete_task(conn, tid, summary="done")
@@ -291,7 +294,9 @@ def test_notifier_owning_profile_adapter_no_default_fallback(tmp_path, monkeypat
     )
     # The claim is rewound (adapter resolved to None → treated as disconnected),
     # so the event is still unseen and will deliver once beta's adapter connects.
-    assert [ev.kind for ev in _unseen_terminal_events_for(tid, "chat-beta")] == ["completed"]
+    assert [ev.kind for ev in _unseen_terminal_events_for(tid, "chat-beta")] == [
+        "completed"
+    ]
 
 
 def _unseen_terminal_events_for(tid, chat_id):

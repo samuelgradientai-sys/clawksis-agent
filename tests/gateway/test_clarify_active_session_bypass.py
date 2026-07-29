@@ -74,8 +74,12 @@ async def test_active_session_routes_typed_choice_clarify_reply_to_runner_not_bu
     event = _event("None of those are valid options")
     session_key = build_session_key(
         event.source,
-        group_sessions_per_user=adapter.config.extra.get("group_sessions_per_user", True),
-        thread_sessions_per_user=adapter.config.extra.get("thread_sessions_per_user", False),
+        group_sessions_per_user=adapter.config.extra.get(
+            "group_sessions_per_user", True
+        ),
+        thread_sessions_per_user=adapter.config.extra.get(
+            "thread_sessions_per_user", False
+        ),
     )
     adapter._active_sessions[session_key] = asyncio.Event()
     cm.register("clarify-1", session_key, "Pick one", ["A", "B"])

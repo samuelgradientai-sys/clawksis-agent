@@ -76,6 +76,7 @@ class SpillIfOversizedTests(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def _cfg(self, **overrides):
@@ -198,6 +199,7 @@ class SpillIfOversizedTests(unittest.TestCase):
             self.assertTrue(existing, f"No spill dir found in {candidates}")
         finally:
             import shutil
+
             shutil.rmtree(test_home, ignore_errors=True)
 
 

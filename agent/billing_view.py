@@ -142,7 +142,9 @@ class BillingState:
     org_id: Optional[str] = None
     org_slug: Optional[str] = None
     org_name: Optional[str] = None
-    role: Optional[str] = None  # "OWNER" | "ADMIN" | "FINANCE_ADMIN" | "SECURITY_ADMIN" | "MEMBER"
+    role: Optional[str] = (
+        None  # "OWNER" | "ADMIN" | "FINANCE_ADMIN" | "SECURITY_ADMIN" | "MEMBER"
+    )
     can_change_plan_raw: Optional[bool] = None
     balance_usd: Optional[Decimal] = None
     cli_billing_enabled: bool = False
@@ -236,7 +238,9 @@ def _parse_auto_reload_card(raw: Any) -> Optional[AutoReloadCard]:
     last4 = raw.get("last4")
     return AutoReloadCard(
         kind=kind,
-        payment_method_id=payment_method_id if isinstance(payment_method_id, str) else None,
+        payment_method_id=payment_method_id
+        if isinstance(payment_method_id, str)
+        else None,
         brand=brand if isinstance(brand, str) else None,
         last4=last4 if isinstance(last4, str) else None,
     )
@@ -381,7 +385,9 @@ def _dev_fixture_billing_state() -> Optional[BillingState]:
         portal_url=portal,
     )
     card = CardInfo(brand="Visa", last4="4242")
-    autoreload_on = AutoReload(enabled=True, threshold_usd=Decimal("5"), reload_to_usd=Decimal("25"))
+    autoreload_on = AutoReload(
+        enabled=True, threshold_usd=Decimal("5"), reload_to_usd=Decimal("25")
+    )
 
     if name in ("logged-out", "logged_out", "loggedout"):
         return BillingState(logged_in=False)
@@ -394,7 +400,9 @@ def _dev_fixture_billing_state() -> Optional[BillingState]:
         _sub_card = CardInfo(brand="Visa", last4="4242", resolved_via="subPin")
         return BillingState(logged_in=True, card=_sub_card, **common)
     if name in ("card-autoreload", "card_autoreload", "autoreload"):
-        return BillingState(logged_in=True, card=card, auto_reload=autoreload_on, **common)
+        return BillingState(
+            logged_in=True, card=card, auto_reload=autoreload_on, **common
+        )
     if name in ("notadmin", "not-admin", "member"):
         opts = {**common, "role": "MEMBER"}
         return BillingState(logged_in=True, card=card, **opts)
@@ -403,7 +411,9 @@ def _dev_fixture_billing_state() -> Optional[BillingState]:
         return BillingState(logged_in=True, card=None, **opts)
 
     # Unknown name → logged-out so the misconfiguration is visible.
-    return BillingState(logged_in=False, error=f"unknown CLAWK_DEV_BILLING_FIXTURE: {name}")
+    return BillingState(
+        logged_in=False, error=f"unknown CLAWK_DEV_BILLING_FIXTURE: {name}"
+    )
 
 
 # =============================================================================

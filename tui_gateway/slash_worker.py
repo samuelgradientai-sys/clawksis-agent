@@ -30,6 +30,7 @@ from cli import ClawksisCLI
 from tui_gateway._stdin_recovery import handle_spurious_eof
 from rich.console import Console
 
+
 # Env-overridable so the integration test can drive sub-second timing.
 def _env_float(name: str, default: float) -> float:
     """Parse a float env knob, falling back to ``default`` on absent/malformed
@@ -138,8 +139,16 @@ def main():
     _start_parent_death_watchdog(orig_ppid)
     _prepare_slash_worker_runtime()
 
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-        cli = ClawksisCLI(model=args.model or None, compact=True, resume=args.session_key, verbose=False)
+    with (
+        contextlib.redirect_stdout(io.StringIO()),
+        contextlib.redirect_stderr(io.StringIO()),
+    ):
+        cli = ClawksisCLI(
+            model=args.model or None,
+            compact=True,
+            resume=args.session_key,
+            verbose=False,
+        )
 
     # Spurious stdin-EOF recovery (same O_NONBLOCK shared file-description
     # issue as the gateway entry point — any child inheriting fd 0 can flip
@@ -169,7 +178,9 @@ def main():
             sys.stdout.write(json.dumps({"id": rid, "ok": True, "output": out}) + "\n")
             sys.stdout.flush()
         except Exception as e:
-            sys.stdout.write(json.dumps({"id": rid, "ok": False, "error": str(e)}) + "\n")
+            sys.stdout.write(
+                json.dumps({"id": rid, "ok": False, "error": str(e)}) + "\n"
+            )
             sys.stdout.flush()
         finally:
             _in_flight.clear()

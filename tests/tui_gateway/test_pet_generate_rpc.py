@@ -48,7 +48,16 @@ def test_pet_generate_rejects_oversized_reference_image(monkeypatch):
 def test_pet_generate_returns_token_and_previews(monkeypatch, tmp_path):
     import agent.pet.generate as gen
 
-    def fake_drafts(prompt, *, n=4, style="auto", reference_images=None, provider=None, on_draft=None, is_cancelled=None):
+    def fake_drafts(
+        prompt,
+        *,
+        n=4,
+        style="auto",
+        reference_images=None,
+        provider=None,
+        on_draft=None,
+        is_cancelled=None,
+    ):
         paths = []
         for i in range(n):
             p = tmp_path / f"d{i}.png"
@@ -64,7 +73,9 @@ def test_pet_generate_returns_token_and_previews(monkeypatch, tmp_path):
     result = resp["result"]
     assert result["ok"]
     assert len(result["drafts"]) == 4
-    assert all(d["dataUri"].startswith("data:image/png;base64,") for d in result["drafts"])
+    assert all(
+        d["dataUri"].startswith("data:image/png;base64,") for d in result["drafts"]
+    )
 
     # Drafts are staged on disk under the returned token.
     staged = server._pet_gen_root() / result["token"] / "draft-0.png"
@@ -83,12 +94,26 @@ def test_pet_generate_cancel_stops_run(monkeypatch, tmp_path):
 
     def cap_emit(event, sid, payload=None):
         # Capture the token from the up-front init event so we can cancel it.
-        if event == "pet.generate.progress" and payload and payload.get("token") and not payload.get("dataUri"):
+        if (
+            event == "pet.generate.progress"
+            and payload
+            and payload.get("token")
+            and not payload.get("dataUri")
+        ):
             seen["token"] = payload["token"]
 
     monkeypatch.setattr(server, "_emit", cap_emit)
 
-    def fake_drafts(prompt, *, n=4, style="auto", reference_images=None, provider=None, on_draft=None, is_cancelled=None):
+    def fake_drafts(
+        prompt,
+        *,
+        n=4,
+        style="auto",
+        reference_images=None,
+        provider=None,
+        on_draft=None,
+        is_cancelled=None,
+    ):
         # Simulate a Stop landing mid-run: the cooperative flag must read True.
         server._pet_cancel_request(seen["token"])
         assert is_cancelled() is True
@@ -105,17 +130,30 @@ def test_pet_generate_cancel_stops_run(monkeypatch, tmp_path):
 
 def test_pet_hatch_validates_params():
     assert "error" in server._methods["pet.hatch"]("r1", {"name": "x"})  # missing token
-    assert "error" in server._methods["pet.hatch"]("r2", {"token": "abc"})  # missing name
+    assert "error" in server._methods["pet.hatch"](
+        "r2", {"token": "abc"}
+    )  # missing name
 
 
 def test_pet_hatch_expired_draft():
-    resp = server._methods["pet.hatch"]("r3", {"token": "nope", "index": 0, "name": "Ghost"})
+    resp = server._methods["pet.hatch"](
+        "r3", {"token": "nope", "index": 0, "name": "Ghost"}
+    )
     assert "error" in resp
     assert "expired" in resp["error"]["message"]
 
 
 def _fake_drafts_factory(tmp_path):
-    def fake_drafts(prompt, *, n=4, style="auto", reference_images=None, provider=None, on_draft=None, is_cancelled=None):
+    def fake_drafts(
+        prompt,
+        *,
+        n=4,
+        style="auto",
+        reference_images=None,
+        provider=None,
+        on_draft=None,
+        is_cancelled=None,
+    ):
         paths = []
         for i in range(n):
             p = tmp_path / f"d{i}.png"
@@ -133,7 +171,18 @@ def _fake_hatch_factory(captured):
     import agent.pet.generate as gen
     from agent.pet import store
 
-    def fake_hatch(*, base_image, slug, display_name="", description="", concept="", style="auto", on_progress=None, provider=None, is_cancelled=None):
+    def fake_hatch(
+        *,
+        base_image,
+        slug,
+        display_name="",
+        description="",
+        concept="",
+        style="auto",
+        on_progress=None,
+        provider=None,
+        is_cancelled=None,
+    ):
         captured["base_image"] = str(base_image)
         captured["slug"] = slug
         pet = store.register_local_pet(
@@ -161,7 +210,9 @@ def test_pet_generate_then_hatch_previews_without_activating(monkeypatch, tmp_pa
     monkeypatch.setattr(gen, "generate_base_drafts", _fake_drafts_factory(tmp_path))
     monkeypatch.setattr(gen, "hatch_pet", _fake_hatch_factory(captured))
 
-    token = server._methods["pet.generate"]("r1", {"prompt": "a fox"})["result"]["token"]
+    token = server._methods["pet.generate"]("r1", {"prompt": "a fox"})["result"][
+        "token"
+    ]
 
     resp = server._methods["pet.hatch"](
         "r2",
@@ -180,7 +231,10 @@ def test_pet_generate_then_hatch_previews_without_activating(monkeypatch, tmp_pa
     assert store.load_pet("my-fox") is not None
     assert result["pet"]["slug"] == "my-fox"
     assert result["pet"]["spritesheetBase64"]
-    assert server._methods["pet.info"]("r3", {}).get("result", {}).get("enabled") in (False, None)
+    assert server._methods["pet.info"]("r3", {}).get("result", {}).get("enabled") in (
+        False,
+        None,
+    )
 
 
 def test_pet_hatch_then_adopt_activates(monkeypatch, tmp_path):
@@ -191,10 +245,16 @@ def test_pet_hatch_then_adopt_activates(monkeypatch, tmp_path):
     monkeypatch.setattr(gen, "hatch_pet", _fake_hatch_factory(captured))
 
     activated = {}
-    monkeypatch.setattr("clawk_cli.pets._set_active", lambda slug: activated.setdefault("slug", slug))
+    monkeypatch.setattr(
+        "clawk_cli.pets._set_active", lambda slug: activated.setdefault("slug", slug)
+    )
 
-    token = server._methods["pet.generate"]("r1", {"prompt": "a fox"})["result"]["token"]
-    hatched = server._methods["pet.hatch"]("r2", {"token": token, "index": 0, "name": "My Fox"})["result"]
+    token = server._methods["pet.generate"]("r1", {"prompt": "a fox"})["result"][
+        "token"
+    ]
+    hatched = server._methods["pet.hatch"](
+        "r2", {"token": token, "index": 0, "name": "My Fox"}
+    )["result"]
 
     # Adoption is the existing pet.select path, against the now-installed slug.
     adopt = server._methods["pet.select"]("r3", {"slug": hatched["slug"]})["result"]
@@ -206,13 +266,17 @@ def test_pet_sprite_payload_includes_concrete_row_counts():
     from agent.pet import constants, store
 
     cols, rows = 8, 9
-    sheet = Image.new("RGBA", (constants.FRAME_W * cols, constants.FRAME_H * rows), (0, 0, 0, 0))
+    sheet = Image.new(
+        "RGBA", (constants.FRAME_W * cols, constants.FRAME_H * rows), (0, 0, 0, 0)
+    )
     # Current Codex rows can have more/fewer frames than Clawksis' generic
     # FRAMES_PER_STATE. The desktop preview needs the concrete row count.
     real = {0: 6, 1: 8, 3: 4, 4: 5, 7: 6}
     for row, count in real.items():
         for col in range(count):
-            block = Image.new("RGBA", (constants.FRAME_W, constants.FRAME_H), (80, 120, 220, 255))
+            block = Image.new(
+                "RGBA", (constants.FRAME_W, constants.FRAME_H), (80, 120, 220, 255)
+            )
             sheet.paste(block, (col * constants.FRAME_W, row * constants.FRAME_H))
 
     pet = store.register_local_pet(sheet, slug="row-counts", display_name="Row Counts")
@@ -228,7 +292,9 @@ def test_pet_info_meta_avoids_full_payload(monkeypatch):
     import clawk_cli.config as cli_config
     from agent.pet import constants, store
 
-    sheet = Image.new("RGBA", (constants.FRAME_W * 8, constants.FRAME_H * 9), (80, 120, 220, 255))
+    sheet = Image.new(
+        "RGBA", (constants.FRAME_W * 8, constants.FRAME_H * 9), (80, 120, 220, 255)
+    )
     pet = store.register_local_pet(sheet, slug="meta-pet", display_name="Meta Pet")
     monkeypatch.setattr(
         cli_config,

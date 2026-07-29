@@ -65,8 +65,7 @@ def strip_interrupted_tool_tails(
                 tool_results.append(agent_history[j])
                 j += 1
             if tool_results and any(
-                is_interrupted_tool_result(m.get("content", ""))
-                for m in tool_results
+                is_interrupted_tool_result(m.get("content", "")) for m in tool_results
             ):
                 calls = msg.get("tool_calls") or []
                 if any(
@@ -83,11 +82,15 @@ def strip_interrupted_tool_tails(
                     }
                     cleaned.append(msg)
                     for tool_result in tool_results:
-                        if not is_interrupted_tool_result(tool_result.get("content", "")):
+                        if not is_interrupted_tool_result(
+                            tool_result.get("content", "")
+                        ):
                             cleaned.append(tool_result)
                             continue
                         recovered = dict(tool_result)
-                        name = call_names.get(str(tool_result.get("tool_call_id") or ""), "")
+                        name = call_names.get(
+                            str(tool_result.get("tool_call_id") or ""), ""
+                        )
                         recovered["effect_disposition"] = (
                             "unknown" if tool_may_have_side_effect(name) else "none"
                         )
@@ -103,11 +106,15 @@ def strip_interrupted_tool_tails(
                 logger.debug(
                     "Stripping interrupted read-only assistant→tool replay block "
                     "(indices %d–%d, tool_results=%d)",
-                    i, j - 1, len(tool_results),
+                    i,
+                    j - 1,
+                    len(tool_results),
                 )
                 i = j
                 continue
-        if msg.get("role") == "tool" and is_interrupted_tool_result(msg.get("content", "")):
+        if msg.get("role") == "tool" and is_interrupted_tool_result(
+            msg.get("content", "")
+        ):
             logger.debug("Stripping orphan interrupted tool result from replay history")
             i += 1
             continue
@@ -154,9 +161,7 @@ def strip_dangling_tool_call_tail(
 
     tool_calls = last.get("tool_calls") or []
     if any(
-        tool_may_have_side_effect(
-            str((call.get("function") or {}).get("name") or "")
-        )
+        tool_may_have_side_effect(str((call.get("function") or {}).get("name") or ""))
         for call in tool_calls
     ):
         recovered = list(agent_history)
@@ -171,9 +176,14 @@ def strip_dangling_tool_call_tail(
                 if disposition == "unknown"
                 else "[Orphan recovery: this read-only tool did not complete and had no effect.]"
             )
-            recovered.append(make_tool_result_message(
-                name, content, call_id, effect_disposition=disposition,
-            ))
+            recovered.append(
+                make_tool_result_message(
+                    name,
+                    content,
+                    call_id,
+                    effect_disposition=disposition,
+                )
+            )
         logger.warning(
             "Recovered dangling side-effecting tool call(s) as UNKNOWN instead of erasing them"
         )

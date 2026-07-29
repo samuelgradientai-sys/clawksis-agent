@@ -28,9 +28,13 @@ def deny_config(monkeypatch):
 @pytest.fixture
 def clean_env(monkeypatch):
     """Non-interactive, non-gateway, non-cron, non-yolo baseline."""
-    for var in ("CLAWK_YOLO_MODE", "CLAWK_GATEWAY_SESSION",
-                "CLAWK_CRON_SESSION", "CLAWK_INTERACTIVE",
-                "CLAWK_EXEC_ASK"):
+    for var in (
+        "CLAWK_YOLO_MODE",
+        "CLAWK_GATEWAY_SESSION",
+        "CLAWK_CRON_SESSION",
+        "CLAWK_INTERACTIVE",
+        "CLAWK_EXEC_ASK",
+    ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(mod, "_YOLO_MODE_FROZEN", False)
 
@@ -46,7 +50,10 @@ class TestMatchUserDenyRule:
 
     def test_simple_glob_matches(self, deny_config):
         deny_config(["git push --force*"])
-        assert mod._match_user_deny_rule("git push --force origin main") == "git push --force*"
+        assert (
+            mod._match_user_deny_rule("git push --force origin main")
+            == "git push --force*"
+        )
 
     def test_non_matching_command_passes(self, deny_config):
         deny_config(["git push --force*"])
@@ -69,6 +76,7 @@ class TestMatchUserDenyRule:
     def test_config_load_failure_fails_open(self, monkeypatch):
         def boom():
             raise RuntimeError("config unavailable")
+
         monkeypatch.setattr(mod, "_get_approval_config", boom)
         assert mod._match_user_deny_rule("git push --force") is None
 
@@ -104,7 +112,8 @@ class TestDenyBeatsYolo:
         assert result.get("user_deny") is True
 
     def test_non_matching_command_still_bypassed_by_yolo(
-            self, deny_config, clean_env, monkeypatch):
+        self, deny_config, clean_env, monkeypatch
+    ):
         deny_config(["git push --force*"])
         monkeypatch.setattr(mod, "_YOLO_MODE_FROZEN", True)
 
@@ -113,7 +122,8 @@ class TestDenyBeatsYolo:
         assert result["approved"] is True
 
     def test_empty_deny_list_preserves_yolo_behavior(
-            self, deny_config, clean_env, monkeypatch):
+        self, deny_config, clean_env, monkeypatch
+    ):
         deny_config([])
         monkeypatch.setattr(mod, "_YOLO_MODE_FROZEN", True)
 
@@ -133,8 +143,7 @@ class TestDenyOrdering:
     def test_deny_beats_permanent_allowlist(self, deny_config, clean_env, monkeypatch):
         """Deny is checked before the command_allowlist shortcut."""
         deny_config(["git push --force*"])
-        monkeypatch.setattr(
-            mod, "_command_matches_permanent_allowlist", lambda c: True)
+        monkeypatch.setattr(mod, "_command_matches_permanent_allowlist", lambda c: True)
 
         result = mod.check_dangerous_command("git push --force origin main", "local")
         assert result["approved"] is False

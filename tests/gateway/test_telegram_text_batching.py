@@ -54,7 +54,9 @@ def _make_event(text: str, chat_id: str = "12345") -> MessageEvent:
     return MessageEvent(
         text=text,
         message_type=MessageType.TEXT,
-        source=SessionSource(platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"),
+        source=SessionSource(
+            platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"
+        ),
     )
 
 
@@ -238,7 +240,9 @@ class TestTextBatching:
         assert adapter._pending_photo_batch_tasks == {}
 
     @pytest.mark.asyncio
-    async def test_disconnected_adapter_drops_pending_media_group_flush_before_dispatch(self):
+    async def test_disconnected_adapter_drops_pending_media_group_flush_before_dispatch(
+        self,
+    ):
         """A pending media group should not dispatch after disconnect starts."""
         from plugins.platforms.telegram.adapter import TelegramAdapter
 

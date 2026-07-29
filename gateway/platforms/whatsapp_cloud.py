@@ -105,11 +105,11 @@ INTERACTIVE_STATE_CACHE_SIZE = 1000
 # error instead of round-tripping to Graph just to be rejected.
 # https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media
 _MEDIA_SIZE_LIMITS = {
-    "image": 5 * 1024 * 1024,        # 5 MB (JPEG, PNG)
-    "video": 16 * 1024 * 1024,       # 16 MB
-    "audio": 16 * 1024 * 1024,       # 16 MB (MP3, AAC, AMR, OGG opus)
-    "document": 100 * 1024 * 1024,   # 100 MB
-    "sticker": 100 * 1024,           # 100 KB animated, 500 KB static
+    "image": 5 * 1024 * 1024,  # 5 MB (JPEG, PNG)
+    "video": 16 * 1024 * 1024,  # 16 MB
+    "audio": 16 * 1024 * 1024,  # 16 MB (MP3, AAC, AMR, OGG opus)
+    "document": 100 * 1024 * 1024,  # 100 MB
+    "sticker": 100 * 1024,  # 100 KB animated, 500 KB static
 }
 
 # Default mime types when we can't guess from the path's extension.
@@ -175,7 +175,9 @@ def _ext_for_mime(mime: str) -> Optional[str]:
 
 # Inbound media cache lives under the user's clawk dir so it survives
 # restarts and gateway reloads — same convention the Baileys bridge uses.
-_INBOUND_MEDIA_CACHE = Path(get_clawk_dir("platforms/whatsapp_cloud/media", "whatsapp_cloud/media"))
+_INBOUND_MEDIA_CACHE = Path(
+    get_clawk_dir("platforms/whatsapp_cloud/media", "whatsapp_cloud/media")
+)
 
 
 def check_whatsapp_cloud_requirements() -> bool:
@@ -257,20 +259,29 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             os.getenv("WHATSAPP_CLOUD_ALLOW_ALL_USERS", "")
         ).strip().lower() in {"true", "1", "yes"}
         _default_dm_policy = (
-            "open" if _allow_all_optin
+            "open"
+            if _allow_all_optin
             else ("allowlist" if self._allow_from else "open")
         )
-        self._dm_policy: str = str(
-            extra.get("dm_policy")
-            or os.getenv("WHATSAPP_CLOUD_DM_POLICY")
-            or os.getenv("WHATSAPP_DM_POLICY")
-            or _default_dm_policy
-        ).strip().lower()
-        self._group_policy: str = str(
-            extra.get("group_policy")
-            or os.getenv("WHATSAPP_CLOUD_GROUP_POLICY")
-            or os.getenv("WHATSAPP_GROUP_POLICY", "open")
-        ).strip().lower()
+        self._dm_policy: str = (
+            str(
+                extra.get("dm_policy")
+                or os.getenv("WHATSAPP_CLOUD_DM_POLICY")
+                or os.getenv("WHATSAPP_DM_POLICY")
+                or _default_dm_policy
+            )
+            .strip()
+            .lower()
+        )
+        self._group_policy: str = (
+            str(
+                extra.get("group_policy")
+                or os.getenv("WHATSAPP_CLOUD_GROUP_POLICY")
+                or os.getenv("WHATSAPP_GROUP_POLICY", "open")
+            )
+            .strip()
+            .lower()
+        )
         self._group_allow_from: set[str] = self._normalize_allow_ids(
             self._coerce_allow_list(
                 extra.get("group_allow_from")
@@ -383,7 +394,11 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
         WHATSAPP_ALLOW_ALL_USERS; the Cloud adapter's documented open-access
         opt-in is WHATSAPP_CLOUD_ALLOW_ALL_USERS, so honor it here too.
         """
-        if str(os.getenv("WHATSAPP_CLOUD_ALLOW_ALL_USERS", "")).strip().lower() in {"true", "1", "yes"}:
+        if str(os.getenv("WHATSAPP_CLOUD_ALLOW_ALL_USERS", "")).strip().lower() in {
+            "true",
+            "1",
+            "yes",
+        }:
             return True
         return super()._open_dm_opted_in()
 
@@ -620,12 +635,14 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             if code == 131009:
                 logger.info(
                     "[whatsapp_cloud] typing/read indicator rejected: "
-                    "wamid %s likely older than 30 days", wamid,
+                    "wamid %s likely older than 30 days",
+                    wamid,
                 )
             else:
                 logger.debug(
                     "[whatsapp_cloud] typing/read indicator returned %d (%s)",
-                    resp.status_code, code,
+                    resp.status_code,
+                    code,
                 )
 
     # ------------------------------------------------------------------ interactive messages
@@ -690,7 +707,8 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             error_msg = self._format_graph_error(body, resp.status_code)
             logger.warning(
                 "[whatsapp_cloud] interactive rejected (status=%d): %s",
-                resp.status_code, error_msg,
+                resp.status_code,
+                error_msg,
             )
             return SendResult(success=False, error=error_msg)
 
@@ -761,9 +779,7 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
         # Truncate choices to MAX_CHOICES (4) — the tool layer enforces
         # this already, but be defensive.
         choices_list = [str(c).strip() for c in choices[:10] if str(c).strip()]
-        option_lines = "\n".join(
-            f"{i + 1}. {c}" for i, c in enumerate(choices_list)
-        )
+        option_lines = "\n".join(f"{i + 1}. {c}" for i, c in enumerate(choices_list))
         body_text = self._truncate_body(f"❓ {question}\n\n{option_lines}")
 
         if len(choices_list) <= 3:
@@ -841,7 +857,11 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             f"⚠️ *Command Approval Required*\n\n"
             f"```\n{cmd_preview}\n```\n\n"
             f"Reason: {description}"
-            + ("\n\nSmart DENY: owner override applies to this one operation only." if smart_denied else "")
+            + (
+                "\n\nSmart DENY: owner override applies to this one operation only."
+                if smart_denied
+                else ""
+            )
         )
 
         approval_id = uuid.uuid4().hex[:12]
@@ -854,7 +874,10 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
                 "buttons": [
                     {
                         "type": "reply",
-                        "reply": {"id": f"appr:{approval_id}:approve", "title": "✅ Approve"},
+                        "reply": {
+                            "id": f"appr:{approval_id}:approve",
+                            "title": "✅ Approve",
+                        },
                     },
                     {
                         "type": "reply",
@@ -898,15 +921,24 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
                 "buttons": [
                     {
                         "type": "reply",
-                        "reply": {"id": f"sc:once:{confirm_id}", "title": "✅ Approve Once"},
+                        "reply": {
+                            "id": f"sc:once:{confirm_id}",
+                            "title": "✅ Approve Once",
+                        },
                     },
                     {
                         "type": "reply",
-                        "reply": {"id": f"sc:always:{confirm_id}", "title": "🔒 Always"},
+                        "reply": {
+                            "id": f"sc:always:{confirm_id}",
+                            "title": "🔒 Always",
+                        },
                     },
                     {
                         "type": "reply",
-                        "reply": {"id": f"sc:cancel:{confirm_id}", "title": "❌ Cancel"},
+                        "reply": {
+                            "id": f"sc:cancel:{confirm_id}",
+                            "title": "❌ Cancel",
+                        },
                     },
                 ],
             },
@@ -1065,7 +1097,9 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             error_msg = self._format_graph_error(body, resp.status_code)
             logger.warning(
                 "[whatsapp_cloud] media send rejected (status=%d, kind=%s): %s",
-                resp.status_code, media_kind, error_msg,
+                resp.status_code,
+                media_kind,
+                error_msg,
             )
             return SendResult(success=False, error=error_msg)
 
@@ -1189,8 +1223,11 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             if opus_path:
                 try:
                     result = await self._send_media_from_path_or_link(
-                        chat_id, opus_path, "audio",
-                        caption=caption, reply_to=reply_to,
+                        chat_id,
+                        opus_path,
+                        "audio",
+                        caption=caption,
+                        reply_to=reply_to,
                         mime_type="audio/ogg; codecs=opus",
                     )
                 finally:
@@ -1207,8 +1244,12 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             mime_type = "audio/mpeg"
 
         return await self._send_media_from_path_or_link(
-            chat_id, source, "audio",
-            caption=caption, reply_to=reply_to, mime_type=mime_type,
+            chat_id,
+            source,
+            "audio",
+            caption=caption,
+            reply_to=reply_to,
+            mime_type=mime_type,
         )
 
     async def send_document(
@@ -1222,7 +1263,9 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
     ) -> SendResult:
         """Send a document attachment with optional filename + caption."""
         return await self._send_media_from_path_or_link(
-            chat_id, file_path, "document",
+            chat_id,
+            file_path,
+            "document",
             caption=caption,
             filename=file_name or os.path.basename(file_path),
             reply_to=reply_to,
@@ -1247,9 +1290,19 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
         out_path = mp3_path.rsplit(".", 1)[0] + ".ogg"
         try:
             proc = await asyncio.create_subprocess_exec(
-                _FFMPEG_PATH, "-y", "-i", mp3_path,
-                "-c:a", "libopus", "-b:a", "32k", "-vbr", "on",
-                "-application", "voip", out_path,
+                _FFMPEG_PATH,
+                "-y",
+                "-i",
+                mp3_path,
+                "-c:a",
+                "libopus",
+                "-b:a",
+                "32k",
+                "-vbr",
+                "on",
+                "-application",
+                "voip",
+                out_path,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -1323,7 +1376,8 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
         if meta_resp.status_code != 200:
             logger.warning(
                 "[whatsapp_cloud] media metadata fetch failed (id=%s, status=%d)",
-                media_id, meta_resp.status_code,
+                media_id,
+                meta_resp.status_code,
             )
             return None, None
 
@@ -1348,7 +1402,8 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
         if blob_resp.status_code != 200:
             logger.warning(
                 "[whatsapp_cloud] media bytes fetch failed (id=%s, status=%d)",
-                media_id, blob_resp.status_code,
+                media_id,
+                blob_resp.status_code,
             )
             return None, None
 
@@ -1374,23 +1429,20 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
 
         return str(out_path), mime or None
 
-
     # ------------------------------------------------------------------ inbound
     async def _handle_health(self, request: "web.Request") -> "web.Response":
-        return web.json_response(
-            {
-                "status": "ok",
-                "platform": self.platform.value,
-                "phone_number_id": self._phone_number_id,
-                "webhook_path": self._webhook_path,
-                "verify_token_configured": bool(self._verify_token),
-                "app_secret_configured": bool(self._app_secret),
-                "ffmpeg_present": _FFMPEG_PATH is not None,
-                "accepted": self._accepted_count,
-                "duplicates": self._duplicate_count,
-                "rejected_signature": self._rejected_signature_count,
-            }
-        )
+        return web.json_response({
+            "status": "ok",
+            "platform": self.platform.value,
+            "phone_number_id": self._phone_number_id,
+            "webhook_path": self._webhook_path,
+            "verify_token_configured": bool(self._verify_token),
+            "app_secret_configured": bool(self._app_secret),
+            "ffmpeg_present": _FFMPEG_PATH is not None,
+            "accepted": self._accepted_count,
+            "duplicates": self._duplicate_count,
+            "rejected_signature": self._rejected_signature_count,
+        })
 
     async def _handle_verify(self, request: "web.Request") -> "web.Response":
         """Meta subscription verification handshake.
@@ -1502,7 +1554,7 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             return False
         if not header.startswith("sha256="):
             return False
-        expected_hex = header[len("sha256="):].strip()
+        expected_hex = header[len("sha256=") :].strip()
         if not expected_hex:
             return False
         computed = hmac.new(
@@ -1704,6 +1756,7 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
                 # current task" loop.
                 try:
                     from tools.clarify_gateway import mark_awaiting_text
+
                     flipped = mark_awaiting_text(clarify_id)
                 except Exception:
                     logger.exception(
@@ -1757,7 +1810,8 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
                 # timed out). Fall through to text dispatch.
                 logger.info(
                     "[whatsapp_cloud] clarify resolver reported no waiter "
-                    "(clarify_id=%s) — falling back to text", clarify_id,
+                    "(clarify_id=%s) — falling back to text",
+                    clarify_id,
                 )
                 return False
             return True
@@ -1782,9 +1836,7 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             try:
                 from tools.approval import resolve_gateway_approval
             except ImportError:
-                logger.warning(
-                    "[whatsapp_cloud] approval resolver unavailable"
-                )
+                logger.warning("[whatsapp_cloud] approval resolver unavailable")
                 return False
             count = resolve_gateway_approval(session_key, choice)
             if not count:
@@ -1795,9 +1847,7 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
                 )
             # Send confirmation message — paralleling Telegram's UX.
             try:
-                confirm_text = (
-                    "✅ Approved." if choice == "approve" else "❌ Denied."
-                )
+                confirm_text = "✅ Approved." if choice == "approve" else "❌ Denied."
                 await self.send(str(raw_message.get("from") or ""), confirm_text)
             except Exception:
                 logger.exception("[whatsapp_cloud] approval confirm failed")
@@ -1813,7 +1863,8 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             if not session_key:
                 logger.info(
                     "[whatsapp_cloud] slash_confirm tap with no matching state "
-                    "(confirm_id=%s) — likely stale", confirm_id,
+                    "(confirm_id=%s) — likely stale",
+                    confirm_id,
                 )
                 return False
             if choice not in ("once", "always", "cancel"):
@@ -1822,9 +1873,7 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             try:
                 from tools import slash_confirm as _slash_confirm_mod
             except ImportError:
-                logger.warning(
-                    "[whatsapp_cloud] slash_confirm resolver unavailable"
-                )
+                logger.warning("[whatsapp_cloud] slash_confirm resolver unavailable")
                 return False
             try:
                 result_text = await _slash_confirm_mod.resolve(
@@ -1892,7 +1941,14 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
                 # button_reply / list_reply both expose ``title``
                 inner = inter.get("button_reply") or inter.get("list_reply") or {}
                 body = str(inner.get("title") or "")
-        elif msg_type_str in {"image", "video", "audio", "voice", "document", "sticker"}:
+        elif msg_type_str in {
+            "image",
+            "video",
+            "audio",
+            "voice",
+            "document",
+            "sticker",
+        }:
             # Captions live on image / video / document. Other media types
             # don't carry a caption in Meta's spec, but be defensive.
             inner = raw_message.get(msg_type_str) or {}
@@ -1929,7 +1985,8 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
                 "[whatsapp_cloud] received group-shaped message (chat=%s, "
                 "wamid=%s) — group support is not yet implemented; dropping. "
                 "Use the Baileys whatsapp adapter for group chats.",
-                chat_field, raw_message.get("id"),
+                chat_field,
+                raw_message.get("id"),
             )
             return None
 
@@ -1963,16 +2020,20 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
                 )
                 if local_path:
                     media_urls.append(local_path)
-                    media_types.append(dl_mime or inbound_mime or "application/octet-stream")
+                    media_types.append(
+                        dl_mime or inbound_mime or "application/octet-stream"
+                    )
                     logger.info(
                         "[whatsapp_cloud] cached inbound %s media: %s",
-                        msg_type_str, local_path,
+                        msg_type_str,
+                        local_path,
                     )
                 else:
                     logger.warning(
                         "[whatsapp_cloud] failed to download inbound %s (id=%s) — "
                         "agent will see message metadata but not the binary",
-                        msg_type_str, media_id,
+                        msg_type_str,
+                        media_id,
                     )
                 # Document: original filename for the agent's UX.
                 if msg_type_str == "document":
@@ -1989,8 +2050,19 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             for doc_path in media_urls:
                 ext = Path(doc_path).suffix.lower()
                 if ext in {
-                    ".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml",
-                    ".log", ".py", ".js", ".ts", ".html", ".css",
+                    ".txt",
+                    ".md",
+                    ".csv",
+                    ".json",
+                    ".xml",
+                    ".yaml",
+                    ".yml",
+                    ".log",
+                    ".py",
+                    ".js",
+                    ".ts",
+                    ".html",
+                    ".css",
                 }:
                     try:
                         file_size = Path(doc_path).stat().st_size
@@ -1998,7 +2070,9 @@ class WhatsAppCloudAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
                             logger.info(
                                 "[whatsapp_cloud] skipping text injection for %s "
                                 "(%d bytes > %d)",
-                                doc_path, file_size, MAX_TEXT_INJECT_BYTES,
+                                doc_path,
+                                file_size,
+                                MAX_TEXT_INJECT_BYTES,
                             )
                             continue
                         content = Path(doc_path).read_text(

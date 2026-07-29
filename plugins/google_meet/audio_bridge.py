@@ -180,9 +180,7 @@ class AudioBridge:
                 "system_profiler not found (macOS-only command)"
             ) from exc
         except subprocess.CalledProcessError as exc:
-            raise RuntimeError(
-                f"system_profiler failed: {exc.output}"
-            ) from exc
+            raise RuntimeError(f"system_profiler failed: {exc.output}") from exc
 
         if "BlackHole" not in out:
             raise RuntimeError(

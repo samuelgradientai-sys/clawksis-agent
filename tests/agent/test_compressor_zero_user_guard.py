@@ -54,18 +54,16 @@ def compressor():
 def _tool_turns(start: int, n: int) -> list[dict]:
     out: list[dict] = []
     for i in range(start, start + n):
-        out.append(
-            {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [
-                    {
-                        "id": f"c{i}",
-                        "function": {"name": "read_task", "arguments": "{}"},
-                    }
-                ],
-            }
-        )
+        out.append({
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": f"c{i}",
+                    "function": {"name": "read_task", "arguments": "{}"},
+                }
+            ],
+        })
         out.append({"role": "tool", "content": "x" * 300, "tool_call_id": f"c{i}"})
     return out
 
@@ -147,9 +145,9 @@ class TestCompressAlwaysKeepsAUserTurn:
             out = c.compress(messages, current_tokens=90_000)
 
         for prev, cur in zip(out, out[1:]):
-            assert not (
-                prev.get("role") == "user" and cur.get("role") == "user"
-            ), "compression introduced consecutive user-role messages"
+            assert not (prev.get("role") == "user" and cur.get("role") == "user"), (
+                "compression introduced consecutive user-role messages"
+            )
 
     def test_preserved_tail_user_is_not_overridden(self, compressor):
         """When a genuine user message survives in the tail, the guard

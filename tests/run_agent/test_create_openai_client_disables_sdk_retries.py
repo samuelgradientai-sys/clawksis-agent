@@ -8,6 +8,7 @@ adaptive + jittered), so every primary OpenAI/aggregator client must be built
 with ``max_retries=0``. This is the OpenAI-path twin of the Anthropic adapter
 fix in tests/agent/test_anthropic_adapter.py.
 """
+
 from unittest.mock import MagicMock, patch
 
 from run_agent import AIAgent
@@ -34,7 +35,8 @@ def test_create_openai_client_disables_sdk_retries(mock_openai):
     # Find the construction call that carries our base_url (AIAgent() also
     # builds a client during init; the assertion targets the explicit call).
     matching = [
-        c for c in mock_openai.call_args_list
+        c
+        for c in mock_openai.call_args_list
         if c.kwargs.get("base_url") == "https://openrouter.ai/api/v1"
     ]
     assert matching, "OpenAI was never constructed with the expected base_url"
@@ -71,7 +73,8 @@ def test_create_openai_client_honors_explicit_max_retries(mock_openai):
     )
 
     matching = [
-        c for c in mock_openai.call_args_list
+        c
+        for c in mock_openai.call_args_list
         if c.kwargs.get("base_url") == "https://explicit.example.com/v1"
     ]
     assert matching, "OpenAI was never constructed with the explicit base_url"

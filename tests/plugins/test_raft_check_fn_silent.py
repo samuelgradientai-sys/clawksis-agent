@@ -26,8 +26,10 @@ def raft_check():
 
 def test_check_returns_false_when_raft_cli_missing(raft_check):
     """check_fn returns False when raft CLI is not in PATH."""
-    with patch("plugins.platforms.raft.adapter.shutil.which", return_value=None), \
-         patch("plugins.platforms.raft.adapter.AIOHTTP_AVAILABLE", True):
+    with (
+        patch("plugins.platforms.raft.adapter.shutil.which", return_value=None),
+        patch("plugins.platforms.raft.adapter.AIOHTTP_AVAILABLE", True),
+    ):
         assert raft_check() is False
 
 
@@ -39,8 +41,12 @@ def test_check_returns_false_when_aiohttp_missing(raft_check):
 
 def test_check_returns_true_when_all_deps_present(raft_check):
     """check_fn returns True when all dependencies are available."""
-    with patch("plugins.platforms.raft.adapter.shutil.which", return_value="/usr/bin/raft"), \
-         patch("plugins.platforms.raft.adapter.AIOHTTP_AVAILABLE", True):
+    with (
+        patch(
+            "plugins.platforms.raft.adapter.shutil.which", return_value="/usr/bin/raft"
+        ),
+        patch("plugins.platforms.raft.adapter.AIOHTTP_AVAILABLE", True),
+    ):
         assert raft_check() is True
 
 
@@ -50,8 +56,10 @@ def test_check_silent_when_raft_cli_missing(raft_check, caplog):
     This is the regression guard for issue #49234 — logging inside check_fn
     causes log spam because the function is called on every config load.
     """
-    with patch("plugins.platforms.raft.adapter.shutil.which", return_value=None), \
-         patch("plugins.platforms.raft.adapter.AIOHTTP_AVAILABLE", True):
+    with (
+        patch("plugins.platforms.raft.adapter.shutil.which", return_value=None),
+        patch("plugins.platforms.raft.adapter.AIOHTTP_AVAILABLE", True),
+    ):
         with caplog.at_level(logging.WARNING, logger="plugins.platforms.raft.adapter"):
             raft_check()
 

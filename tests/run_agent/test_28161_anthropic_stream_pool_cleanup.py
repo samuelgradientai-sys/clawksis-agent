@@ -20,6 +20,7 @@ Tests cover:
 
 Fixes #28161. Extends #67142.
 """
+
 import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -73,9 +74,7 @@ def _good_stream_cm():
 def _failing_stream_cm():
     """Context manager whose __enter__ raises ConnectError immediately."""
     cm = MagicMock()
-    cm.__enter__ = MagicMock(
-        side_effect=httpx.ConnectError("connection reset by peer")
-    )
+    cm.__enter__ = MagicMock(side_effect=httpx.ConnectError("connection reset by peer"))
     return cm
 
 
@@ -88,9 +87,7 @@ class TestAnthropicStreamPoolCleanup:
     """Anthropic cleanup must never touch the OpenAI primary or the shared
     Anthropic client, and must not hang (#28161 / #67142)."""
 
-    @pytest.mark.filterwarnings(
-        "ignore::pytest.PytestUnhandledThreadExceptionWarning"
-    )
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     def test_stream_retry_closes_request_client_not_openai(self):
         """Connection error during stream retry → close the request-local
         Anthropic client (worker-owned) and retry; never rebuild the shared
@@ -108,9 +105,7 @@ class TestAnthropicStreamPoolCleanup:
         agent._anthropic_client.messages.stream.side_effect = _stream_side_effect
 
         with patch.object(agent, "_rebuild_anthropic_client") as mock_rebuild:
-            with patch.object(
-                agent, "_replace_primary_openai_client"
-            ) as mock_replace:
+            with patch.object(agent, "_replace_primary_openai_client") as mock_replace:
                 agent._interruptible_streaming_api_call({})
 
         mock_replace.assert_not_called()
@@ -120,9 +115,7 @@ class TestAnthropicStreamPoolCleanup:
         agent._anthropic_client.close.assert_called()
         assert attempt_count[0] == 2  # retried once, then succeeded
 
-    @pytest.mark.filterwarnings(
-        "ignore::pytest.PytestUnhandledThreadExceptionWarning"
-    )
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     def test_stale_stream_aborts_request_client_not_openai(self, monkeypatch):
         """Stale-stream outer-poll detector → abort the request-local client's
         socket (unblocking the worker) and retry; never _replace_primary_openai
@@ -161,9 +154,7 @@ class TestAnthropicStreamPoolCleanup:
         agent._abort_request_anthropic_client = lambda *a, **k: unblock.set()
 
         with patch.object(agent, "_rebuild_anthropic_client") as mock_rebuild:
-            with patch.object(
-                agent, "_replace_primary_openai_client"
-            ) as mock_replace:
+            with patch.object(agent, "_replace_primary_openai_client") as mock_replace:
                 agent._interruptible_streaming_api_call({})
 
         mock_replace.assert_not_called()

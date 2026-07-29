@@ -9,7 +9,9 @@ def _provider_row(configured_models, *, max_models=None):
     with (
         patch(
             "agent.models_dev.fetch_models_dev",
-            return_value={"deepseek": {"env": ["DEEPSEEK_API_KEY"], "name": "DeepSeek"}},
+            return_value={
+                "deepseek": {"env": ["DEEPSEEK_API_KEY"], "name": "DeepSeek"}
+            },
         ),
         patch(
             "agent.models_dev.PROVIDER_TO_MODELS_DEV",

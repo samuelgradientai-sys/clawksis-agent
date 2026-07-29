@@ -14,14 +14,17 @@ from clawk_cli import runtime_provider as rp
 # Tests for list_authenticated_providers including full models list
 # =============================================================================
 
-def test_list_authenticated_providers_includes_full_models_list_from_user_providers(monkeypatch):
+
+def test_list_authenticated_providers_includes_full_models_list_from_user_providers(
+    monkeypatch,
+):
     """User-defined providers should expose both default_model and full models list.
-    
+
     Regression test: previously only default_model was shown in /model picker.
     """
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", lambda: {})
     monkeypatch.setattr("clawk_cli.providers.CLAWK_OVERLAYS", {})
-    
+
     user_providers = {
         "local-ollama": {
             "name": "Local Ollama",
@@ -35,22 +38,28 @@ def test_list_authenticated_providers_includes_full_models_list_from_user_provid
             ],
         }
     }
-    
+
     providers = list_authenticated_providers(
         current_provider="local-ollama",
         user_providers=user_providers,
         custom_providers=[],
         max_models=50,
     )
-    
+
     # Find our user provider
     user_prov = next(
-        (p for p in providers if p.get("is_user_defined") and p["slug"] == "local-ollama"),
-        None
+        (
+            p
+            for p in providers
+            if p.get("is_user_defined") and p["slug"] == "local-ollama"
+        ),
+        None,
     )
-    
+
     assert user_prov is not None, "User provider 'local-ollama' should be in results"
-    assert user_prov["total_models"] == 4, f"Expected 4 models, got {user_prov['total_models']}"
+    assert user_prov["total_models"] == 4, (
+        f"Expected 4 models, got {user_prov['total_models']}"
+    )
     assert "minimax-m2.7:cloud" in user_prov["models"]
     assert "kimi-k2.5:cloud" in user_prov["models"]
     assert "glm-5.1:cloud" in user_prov["models"]
@@ -61,7 +70,7 @@ def test_list_authenticated_providers_dedupes_models_when_default_in_list(monkey
     """When default_model is also in models list, don't duplicate."""
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", lambda: {})
     monkeypatch.setattr("clawk_cli.providers.CLAWK_OVERLAYS", {})
-    
+
     user_providers = {
         "my-provider": {
             "api": "http://example.com/v1",
@@ -69,18 +78,15 @@ def test_list_authenticated_providers_dedupes_models_when_default_in_list(monkey
             "models": ["model-a", "model-b", "model-c"],
         }
     }
-    
+
     providers = list_authenticated_providers(
         current_provider="my-provider",
         user_providers=user_providers,
         custom_providers=[],
     )
-    
-    user_prov = next(
-        (p for p in providers if p.get("is_user_defined")),
-        None
-    )
-    
+
+    user_prov = next((p for p in providers if p.get("is_user_defined")), None)
+
     assert user_prov is not None
     assert user_prov["total_models"] == 3, "Should have 3 unique models, not 4"
     assert user_prov["models"].count("model-a") == 1, "model-a should not be duplicated"
@@ -118,7 +124,11 @@ def test_list_authenticated_providers_enumerates_dict_format_models(monkeypatch)
     )
 
     user_prov = next(
-        (p for p in providers if p.get("is_user_defined") and p["slug"] == "local-ollama"),
+        (
+            p
+            for p in providers
+            if p.get("is_user_defined") and p["slug"] == "local-ollama"
+        ),
         None,
     )
 
@@ -170,7 +180,11 @@ def test_list_authenticated_providers_uses_live_models_for_user_provider(monkeyp
     )
 
     user_prov = next(
-        (p for p in providers if p.get("is_user_defined") and p["slug"] == "crs-henkee"),
+        (
+            p
+            for p in providers
+            if p.get("is_user_defined") and p["slug"] == "crs-henkee"
+        ),
         None,
     )
 
@@ -254,7 +268,11 @@ def test_list_authenticated_providers_dict_models_without_default_model(monkeypa
     )
 
     user_prov = next(
-        (p for p in providers if p.get("is_user_defined") and p["slug"] == "multimodel"),
+        (
+            p
+            for p in providers
+            if p.get("is_user_defined") and p["slug"] == "multimodel"
+        ),
         None,
     )
 
@@ -413,7 +431,7 @@ def test_list_authenticated_providers_fallback_to_default_only(monkeypatch):
     """When no models array is provided, should fall back to default_model."""
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", lambda: {})
     monkeypatch.setattr("clawk_cli.providers.CLAWK_OVERLAYS", {})
-    
+
     user_providers = {
         "simple-provider": {
             "name": "Simple Provider",
@@ -422,18 +440,15 @@ def test_list_authenticated_providers_fallback_to_default_only(monkeypatch):
             # No 'models' key
         }
     }
-    
+
     providers = list_authenticated_providers(
         current_provider="",
         user_providers=user_providers,
         custom_providers=[],
     )
-    
-    user_prov = next(
-        (p for p in providers if p.get("is_user_defined")),
-        None
-    )
-    
+
+    user_prov = next((p for p in providers if p.get("is_user_defined")), None)
+
     assert user_prov is not None
     assert user_prov["total_models"] == 1
     assert user_prov["models"] == ["single-model"]
@@ -566,8 +581,7 @@ def test_list_authenticated_providers_no_duplicate_labels_across_schemas(monkeyp
         for name, url in shared_entries
     }
     custom_providers = [
-        {"name": name, "base_url": url, "model": "m1"}
-        for name, url in shared_entries
+        {"name": name, "base_url": url, "model": "m1"} for name, url in shared_entries
     ]
 
     providers = list_authenticated_providers(
@@ -591,7 +605,9 @@ def test_list_authenticated_providers_no_duplicate_labels_across_schemas(monkeyp
     )
 
 
-def test_list_authenticated_providers_hides_custom_shadowing_builtin_endpoint(monkeypatch):
+def test_list_authenticated_providers_hides_custom_shadowing_builtin_endpoint(
+    monkeypatch,
+):
     """#16970: a custom_providers entry whose ``base_url`` matches a built-in
     provider's endpoint should be hidden. The built-in row already represents
     that endpoint with its canonical slug, curated model list, and auth wiring.
@@ -633,9 +649,7 @@ def test_list_authenticated_providers_hides_custom_shadowing_builtin_endpoint(mo
 
     slugs = [p["slug"] for p in providers]
     # Built-in alibaba row should be present.
-    assert "alibaba" in slugs, (
-        f"Expected built-in alibaba row, got slugs: {slugs}"
-    )
+    assert "alibaba" in slugs, f"Expected built-in alibaba row, got slugs: {slugs}"
     # Custom shadow row should be hidden — its base_url matches the built-in's.
     assert not any("my-alibaba" in s for s in slugs), (
         f"Custom my-alibaba should have been dedup'd against the built-in "
@@ -731,6 +745,7 @@ def test_list_authenticated_providers_dedup_honors_base_url_env_override(monkeyp
 # Tests for _get_named_custom_provider with providers: dict
 # =============================================================================
 
+
 def test_get_named_custom_provider_finds_user_providers_by_key(monkeypatch, tmp_path):
     """Should resolve providers from providers: dict (new-style), not just custom_providers."""
     config = {
@@ -742,15 +757,16 @@ def test_get_named_custom_provider_finds_user_providers_by_key(monkeypatch, tmp_
             }
         }
     }
-    
+
     import yaml
+
     config_file = tmp_path / "config.yaml"
     config_file.write_text(yaml.dump(config))
-    
+
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    
+
     result = rp._get_named_custom_provider("local-localhost:11434")
-    
+
     assert result is not None
     assert result["base_url"] == "http://localhost:11434/v1"
     assert result["name"] == "Local (localhost:11434)"
@@ -767,16 +783,17 @@ def test_get_named_custom_provider_finds_by_display_name(monkeypatch, tmp_path):
             }
         }
     }
-    
+
     import yaml
+
     config_file = tmp_path / "config.yaml"
     config_file.write_text(yaml.dump(config))
-    
+
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    
+
     # Should find by display name (normalized)
     result = rp._get_named_custom_provider("my-production-ollama")
-    
+
     assert result is not None
     assert result["base_url"] == "http://ollama.example.com/v1"
 
@@ -790,17 +807,18 @@ def test_get_named_custom_provider_falls_back_to_legacy_format(monkeypatch, tmp_
                 "name": "Custom Endpoint",
                 "base_url": "http://custom.example.com/v1",
             }
-        ]
+        ],
     }
-    
+
     import yaml
+
     config_file = tmp_path / "config.yaml"
     config_file.write_text(yaml.dump(config))
-    
+
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    
+
     result = rp._get_named_custom_provider("custom-endpoint")
-    
+
     assert result is not None
 
 
@@ -813,15 +831,16 @@ def test_get_named_custom_provider_returns_none_for_unknown(monkeypatch, tmp_pat
             }
         }
     }
-    
+
     import yaml
+
     config_file = tmp_path / "config.yaml"
     config_file.write_text(yaml.dump(config))
-    
+
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    
+
     result = rp._get_named_custom_provider("other-provider")
-    
+
     # "unknown-provider" partial-matches "known-provider" because "unknown" doesn't match
     # but our matching is loose (substring). Let's verify a truly non-matching provider
     result = rp._get_named_custom_provider("completely-different-name")
@@ -838,15 +857,16 @@ def test_get_named_custom_provider_skips_empty_base_url(monkeypatch, tmp_path):
             }
         }
     }
-    
+
     import yaml
+
     config_file = tmp_path / "config.yaml"
     config_file.write_text(yaml.dump(config))
-    
+
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    
+
     result = rp._get_named_custom_provider("incomplete-provider")
-    
+
     assert result is None
 
 
@@ -854,10 +874,11 @@ def test_get_named_custom_provider_skips_empty_base_url(monkeypatch, tmp_path):
 # Integration test for switch_model with user providers
 # =============================================================================
 
+
 def test_switch_model_resolves_user_provider_credentials(monkeypatch, tmp_path):
     """/model switch should resolve credentials for providers: dict providers."""
     import yaml
-    
+
     config = {
         "providers": {
             "local-ollama": {
@@ -867,17 +888,22 @@ def test_switch_model_resolves_user_provider_credentials(monkeypatch, tmp_path):
             }
         }
     }
-    
+
     config_file = tmp_path / "config.yaml"
     config_file.write_text(yaml.dump(config))
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    
+
     # Mock validation to pass
     monkeypatch.setattr(
         "clawk_cli.models.validate_requested_model",
-        lambda *a, **k: {"accepted": True, "persist": True, "recognized": True, "message": None}
+        lambda *a, **k: {
+            "accepted": True,
+            "persist": True,
+            "recognized": True,
+            "message": None,
+        },
     )
-    
+
     result = switch_model(
         raw_input="kimi-k2.5:cloud",
         current_provider="local-ollama",
@@ -1017,14 +1043,29 @@ def _run_user_provider_override_case(
         }
     }
 
-    with patch("clawk_cli.model_switch.resolve_alias", return_value=None), \
-         patch("clawk_cli.model_switch.list_provider_models", return_value=[]), \
-         patch("clawk_cli.model_switch.normalize_model_for_provider", side_effect=lambda model, provider: model), \
-         patch("clawk_cli.models.validate_requested_model", return_value=_REJECTED_VALIDATION), \
-         patch("clawk_cli.models.detect_provider_for_model", return_value=None), \
-         patch("clawk_cli.model_switch.get_model_info", return_value=None), \
-         patch("clawk_cli.model_switch.get_model_capabilities", return_value=None), \
-         patch("clawk_cli.runtime_provider.resolve_runtime_provider", return_value={"api_key": "***", "base_url": base_url, "api_mode": "anthropic_messages"}):
+    with (
+        patch("clawk_cli.model_switch.resolve_alias", return_value=None),
+        patch("clawk_cli.model_switch.list_provider_models", return_value=[]),
+        patch(
+            "clawk_cli.model_switch.normalize_model_for_provider",
+            side_effect=lambda model, provider: model,
+        ),
+        patch(
+            "clawk_cli.models.validate_requested_model",
+            return_value=_REJECTED_VALIDATION,
+        ),
+        patch("clawk_cli.models.detect_provider_for_model", return_value=None),
+        patch("clawk_cli.model_switch.get_model_info", return_value=None),
+        patch("clawk_cli.model_switch.get_model_capabilities", return_value=None),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider",
+            return_value={
+                "api_key": "***",
+                "base_url": base_url,
+                "api_mode": "anthropic_messages",
+            },
+        ),
+    ):
         return switch_model(
             raw_input=raw_input,
             current_provider=slug,
@@ -1128,6 +1169,7 @@ def test_user_provider_override_rejects_mangled_private_models(
 # Section 3 no-auth live discovery (PR #29575)
 # =============================================================================
 
+
 def test_section3_probes_no_key_endpoint_without_explicit_models(monkeypatch):
     """A providers: entry with no api_key and no explicit models: list should
     still probe /v1/models for live discovery — mirroring section 4's policy.
@@ -1220,9 +1262,11 @@ def test_current_custom_model_is_surfaced_in_builtin_provider_row(monkeypatch):
     # Pin a small curated catalog so the assertion is deterministic.
     monkeypatch.setattr(
         "clawk_cli.models.cached_provider_model_ids",
-        lambda slug, **kw: ["anthropic/claude-opus-4.8", "openai/gpt-5.5"]
-        if slug == "openrouter"
-        else [],
+        lambda slug, **kw: (
+            ["anthropic/claude-opus-4.8", "openai/gpt-5.5"]
+            if slug == "openrouter"
+            else []
+        ),
     )
 
     custom = "some-vendor/totally-custom-model-v9"

@@ -21,7 +21,9 @@ class TestGatewayPerModelReasoningConfig:
                 },
             },
         }
-        monkeypatch.setattr(gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg)
+        monkeypatch.setattr(
+            gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg
+        )
 
         result = gateway_run.GatewayRunner._load_reasoning_config()
         assert result is not None
@@ -39,7 +41,9 @@ class TestGatewayPerModelReasoningConfig:
                 },
             },
         }
-        monkeypatch.setattr(gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg)
+        monkeypatch.setattr(
+            gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg
+        )
 
         result = gateway_run.GatewayRunner._load_reasoning_config()
         assert result is not None
@@ -56,7 +60,9 @@ class TestGatewayPerModelReasoningConfig:
                 },
             },
         }
-        monkeypatch.setattr(gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg)
+        monkeypatch.setattr(
+            gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg
+        )
 
         result = gateway_run.GatewayRunner._load_reasoning_config()
         assert result is not None
@@ -70,7 +76,9 @@ class TestGatewayPerModelReasoningConfig:
                 "reasoning_effort": "low",
             },
         }
-        monkeypatch.setattr(gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg)
+        monkeypatch.setattr(
+            gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg
+        )
 
         result = gateway_run.GatewayRunner._load_reasoning_config()
         assert result is not None
@@ -85,7 +93,9 @@ class TestGatewayPerModelReasoningConfig:
                 "reasoning_overrides": {},
             },
         }
-        monkeypatch.setattr(gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg)
+        monkeypatch.setattr(
+            gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg
+        )
 
         result = gateway_run.GatewayRunner._load_reasoning_config()
         assert result is not None
@@ -104,7 +114,9 @@ class TestGatewayPerModelReasoningConfig:
                 "reasoning_effort": False,  # YAML boolean, not string
             },
         }
-        monkeypatch.setattr(gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg)
+        monkeypatch.setattr(
+            gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg
+        )
 
         result = gateway_run.GatewayRunner._load_reasoning_config()
         assert result is not None
@@ -131,7 +143,9 @@ class TestGatewaySessionEffectiveModel:
                 },
             },
         }
-        monkeypatch.setattr(gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg)
+        monkeypatch.setattr(
+            gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg
+        )
 
         # Session switched (session-only) to claude-opus-4.5 — its override
         # must win over the config default model's override.
@@ -154,7 +168,9 @@ class TestGatewaySessionEffectiveModel:
                 "reasoning_overrides": {"claude-opus-4.5": "xhigh"},
             },
         }
-        monkeypatch.setattr(gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg)
+        monkeypatch.setattr(
+            gateway_run, "_load_gateway_runtime_config", lambda: fake_cfg
+        )
 
         runner = object.__new__(gateway_run.GatewayRunner)
         runner._session_reasoning_overrides = {}

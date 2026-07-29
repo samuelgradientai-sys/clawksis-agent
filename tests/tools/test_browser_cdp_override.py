@@ -21,7 +21,9 @@ class TestResolveCdpOverride:
         response.raise_for_status.return_value = None
         response.json.return_value = {"webSocketDebuggerUrl": WS_URL}
 
-        with patch("tools.browser_tool.requests.get", return_value=response) as mock_get:
+        with patch(
+            "tools.browser_tool.requests.get", return_value=response
+        ) as mock_get:
             resolved = _resolve_cdp_override(HTTP_URL)
 
         assert resolved == WS_URL
@@ -34,7 +36,9 @@ class TestResolveCdpOverride:
         response.raise_for_status.return_value = None
         response.json.return_value = {"webSocketDebuggerUrl": WS_URL}
 
-        with patch("tools.browser_tool.requests.get", return_value=response) as mock_get:
+        with patch(
+            "tools.browser_tool.requests.get", return_value=response
+        ) as mock_get:
             resolved = _resolve_cdp_override(f"ws://{HOST}:{PORT}")
 
         assert resolved == WS_URL
@@ -50,14 +54,18 @@ class TestResolveCdpOverride:
         from tools.browser_tool import _resolve_cdp_override
 
         raw = "https://cdp.example/json/version?access_token=super-secret-token-123456"
-        resolved_ws = "wss://cdp.example/devtools/browser/abc?token=super-secret-token-123456"
+        resolved_ws = (
+            "wss://cdp.example/devtools/browser/abc?token=super-secret-token-123456"
+        )
 
         response = Mock()
         response.raise_for_status.return_value = None
         response.json.return_value = {"webSocketDebuggerUrl": resolved_ws}
 
-        with patch("tools.browser_tool.requests.get", return_value=response), \
-                patch("tools.browser_tool.logger.info") as mock_info:
+        with (
+            patch("tools.browser_tool.requests.get", return_value=response),
+            patch("tools.browser_tool.logger.info") as mock_info,
+        ):
             resolved = _resolve_cdp_override(raw)
 
         assert resolved == resolved_ws
@@ -76,8 +84,10 @@ class TestResolveCdpOverride:
             "upstream rejected https://cdp.example/json/version?access_token=super-secret-token-123456"
         )
 
-        with patch("tools.browser_tool.requests.get", side_effect=secret_error), \
-                patch("tools.browser_tool.logger.warning") as mock_warning:
+        with (
+            patch("tools.browser_tool.requests.get", side_effect=secret_error),
+            patch("tools.browser_tool.logger.warning") as mock_warning,
+        ):
             resolved = _resolve_cdp_override(raw)
 
         assert resolved == raw
@@ -91,7 +101,9 @@ class TestResolveCdpOverride:
         assert "access_token=***" in logged_error
         assert logged_version_url.startswith("https://cdp.example")
 
-    def test_normalizes_provider_returned_http_cdp_url_when_creating_session(self, monkeypatch):
+    def test_normalizes_provider_returned_http_cdp_url_when_creating_session(
+        self, monkeypatch
+    ):
         import tools.browser_tool as browser_tool
 
         provider = Mock()
@@ -109,11 +121,15 @@ class TestResolveCdpOverride:
         monkeypatch.setattr(browser_tool, "_active_sessions", {})
         monkeypatch.setattr(browser_tool, "_session_last_activity", {})
         monkeypatch.setattr(browser_tool, "_start_browser_cleanup_thread", lambda: None)
-        monkeypatch.setattr(browser_tool, "_update_session_activity", lambda task_id: None)
+        monkeypatch.setattr(
+            browser_tool, "_update_session_activity", lambda task_id: None
+        )
         monkeypatch.setattr(browser_tool, "_get_cdp_override", lambda: "")
         monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: provider)
 
-        with patch("tools.browser_tool.requests.get", return_value=response) as mock_get:
+        with patch(
+            "tools.browser_tool.requests.get", return_value=response
+        ) as mock_get:
             session_info = browser_tool._get_session_info("task-browser-use")
 
         assert session_info["cdp_url"] == WS_URL
@@ -140,7 +156,9 @@ class TestGetCdpOverride:
         response.raise_for_status.return_value = None
         response.json.return_value = {"webSocketDebuggerUrl": WS_URL}
 
-        with patch("tools.browser_tool.requests.get", return_value=response) as mock_get:
+        with patch(
+            "tools.browser_tool.requests.get", return_value=response
+        ) as mock_get:
             resolved = browser_tool._get_cdp_override()
 
         assert resolved == WS_URL
@@ -155,8 +173,13 @@ class TestGetCdpOverride:
         response.raise_for_status.return_value = None
         response.json.return_value = {"webSocketDebuggerUrl": WS_URL}
 
-        with patch("clawk_cli.config.read_raw_config", return_value={"browser": {"cdp_url": HTTP_URL}}), \
-             patch("tools.browser_tool.requests.get", return_value=response) as mock_get:
+        with (
+            patch(
+                "clawk_cli.config.read_raw_config",
+                return_value={"browser": {"cdp_url": HTTP_URL}},
+            ),
+            patch("tools.browser_tool.requests.get", return_value=response) as mock_get,
+        ):
             resolved = browser_tool._get_cdp_override()
 
         assert resolved == WS_URL
@@ -178,14 +201,17 @@ class TestGetCdpOverride:
             assert bc.is_camofox_mode() is True
 
         # A config-only CDP override suppresses camofox.
-        with patch("clawk_cli.config.read_raw_config",
-                   return_value={"browser": {"cdp_url": HTTP_URL}}):
+        with patch(
+            "clawk_cli.config.read_raw_config",
+            return_value={"browser": {"cdp_url": HTTP_URL}},
+        ):
             assert bc.is_camofox_mode() is False
 
         # The env override still suppresses camofox.
         monkeypatch.setenv("BROWSER_CDP_URL", HTTP_URL)
         with patch("clawk_cli.config.read_raw_config", return_value={}):
             assert bc.is_camofox_mode() is False
+
 
 class TestCreateCdpSession:
     """_create_cdp_session() must sanitize the CDP URL before logging.
@@ -200,12 +226,16 @@ class TestCreateCdpSession:
     def test_redacts_token_in_session_creation_log(self):
         from tools.browser_tool import _create_cdp_session
 
-        cdp_url_with_token = "wss://cdp.example/devtools/browser/abc?token=super-secret-token-999"
+        cdp_url_with_token = (
+            "wss://cdp.example/devtools/browser/abc?token=super-secret-token-999"
+        )
 
         with patch("tools.browser_tool.logger.info") as mock_info:
             result = _create_cdp_session("task-1", cdp_url_with_token)
 
-        assert result["cdp_url"] == cdp_url_with_token, "raw URL must be stored unmodified"
+        assert result["cdp_url"] == cdp_url_with_token, (
+            "raw URL must be stored unmodified"
+        )
 
         mock_info.assert_called_once()
         logged_args = " ".join(str(a) for a in mock_info.call_args.args)
@@ -324,7 +354,10 @@ class TestCDPSupervisorStartErrorRedaction:
             fake.is_alive.return_value = False
             return fake
 
-        with patch("threading.Thread", side_effect=_fake_thread), patch.object(sup, "stop"):
+        with (
+            patch("threading.Thread", side_effect=_fake_thread),
+            patch.object(sup, "stop"),
+        ):
             sup.start(timeout=5.0)
 
     def test_start_error_redacts_query_token(self):

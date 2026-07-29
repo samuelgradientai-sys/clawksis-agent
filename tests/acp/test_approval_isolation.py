@@ -16,7 +16,6 @@ Both fixed together by:
 import threading
 
 
-
 class TestThreadLocalApprovalCallback:
     """GHSA-qg5c-hvr5-hjgr: set_approval_callback must be per-thread so
     concurrent ACP sessions don't stomp on each other's handlers."""
@@ -48,12 +47,14 @@ class TestThreadLocalApprovalCallback:
             set_approval_callback(cb_a)
             # Pause so thread B has time to set its own callback
             import time
+
             time.sleep(0.05)
             seen_in_a.append(_get_approval_callback())
 
         def thread_b():
             set_approval_callback(cb_b)
             import time
+
             time.sleep(0.05)
             seen_in_b.append(_get_approval_callback())
 
@@ -179,9 +180,13 @@ class TestThreadLocalApprovalCallback:
             return session_id
 
         try:
-            executor.submit(_run_in_fresh_context, "acp-session-A", "alpha-secret").result()
+            executor.submit(
+                _run_in_fresh_context, "acp-session-A", "alpha-secret"
+            ).result()
             # Same thread. Without the fix B would see "alpha-secret".
-            executor.submit(_run_in_fresh_context, "acp-session-B", "bravo-secret").result()
+            executor.submit(
+                _run_in_fresh_context, "acp-session-B", "bravo-secret"
+            ).result()
         finally:
             executor.shutdown(wait=True)
             _reset_cached_sudo_passwords()
@@ -221,7 +226,9 @@ class TestAcpExecAskGate:
 
         # Without CLAWK_INTERACTIVE: takes auto-approve path, callback NOT called
         result = check_all_command_guards(
-            "rm -rf /tmp/test-exec-ask", "local", approval_callback=fake_cb,
+            "rm -rf /tmp/test-exec-ask",
+            "local",
+            approval_callback=fake_cb,
         )
         assert result["approved"] is True
         assert called_with == [], (
@@ -233,7 +240,9 @@ class TestAcpExecAskGate:
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         called_with.clear()
         result = check_all_command_guards(
-            "rm -rf /tmp/test-exec-ask", "local", approval_callback=fake_cb,
+            "rm -rf /tmp/test-exec-ask",
+            "local",
+            approval_callback=fake_cb,
         )
         assert called_with, (
             "with CLAWK_INTERACTIVE the approval path should consult the "
@@ -243,7 +252,8 @@ class TestAcpExecAskGate:
         assert result["approved"] is True
 
     def test_interactive_context_var_routes_to_callback_without_env(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ):
         """Context-local interactive flag must work without touching os.environ.
 

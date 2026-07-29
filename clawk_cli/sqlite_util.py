@@ -11,7 +11,9 @@ import contextlib
 import sqlite3
 
 
-def add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> bool:
+def add_column_if_missing(
+    conn: sqlite3.Connection, table: str, column: str, ddl: str
+) -> bool:
     """``ALTER TABLE <table> ADD COLUMN <ddl>``, idempotent across races.
 
     Returns ``True`` when this call added the column. Swallows the

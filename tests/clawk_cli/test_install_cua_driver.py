@@ -28,29 +28,40 @@ class TestInstallCuaDriverUpgrade:
     def test_upgrade_on_unsupported_platform_is_silent_noop(self):
         from clawk_cli import tools_config
 
-        with patch.object(tools_config, "_print_warning") as warn, \
-             patch("platform.system", return_value="FreeBSD"):
+        with (
+            patch.object(tools_config, "_print_warning") as warn,
+            patch("platform.system", return_value="FreeBSD"),
+        ):
             assert tools_config.install_cua_driver(upgrade=True) is False
             warn.assert_not_called()
 
     def test_non_upgrade_on_unsupported_platform_warns(self):
         from clawk_cli import tools_config
 
-        with patch.object(tools_config, "_print_warning") as warn, \
-             patch("platform.system", return_value="FreeBSD"):
+        with (
+            patch.object(tools_config, "_print_warning") as warn,
+            patch("platform.system", return_value="FreeBSD"),
+        ):
             assert tools_config.install_cua_driver(upgrade=False) is False
             warn.assert_called()
 
     def test_upgrade_on_macos_with_binary_runs_installer(self):
         from clawk_cli import tools_config
 
-        with patch("platform.system", return_value="Darwin"), \
-             patch.object(tools_config.shutil, "which",
-                          side_effect=lambda n: "/usr/local/bin/" + n
-                                                 if n in {"cua-driver", "curl"} else None), \
-             patch.object(tools_config, "_run_cua_driver_installer",
-                          return_value=True) as runner, \
-             patch("subprocess.run"):
+        with (
+            patch("platform.system", return_value="Darwin"),
+            patch.object(
+                tools_config.shutil,
+                "which",
+                side_effect=lambda n: (
+                    "/usr/local/bin/" + n if n in {"cua-driver", "curl"} else None
+                ),
+            ),
+            patch.object(
+                tools_config, "_run_cua_driver_installer", return_value=True
+            ) as runner,
+            patch("subprocess.run"),
+        ):
             assert tools_config.install_cua_driver(upgrade=True) is True
             runner.assert_called_once()
             kwargs = runner.call_args.kwargs
@@ -59,25 +70,38 @@ class TestInstallCuaDriverUpgrade:
     def test_upgrade_on_macos_without_binary_runs_installer(self):
         from clawk_cli import tools_config
 
-        with patch("platform.system", return_value="Darwin"), \
-             patch.object(tools_config.shutil, "which",
-                          side_effect=lambda n: "/usr/bin/curl" if n == "curl" else None), \
-             patch.object(tools_config, "_run_cua_driver_installer",
-                          return_value=True) as runner:
+        with (
+            patch("platform.system", return_value="Darwin"),
+            patch.object(
+                tools_config.shutil,
+                "which",
+                side_effect=lambda n: "/usr/bin/curl" if n == "curl" else None,
+            ),
+            patch.object(
+                tools_config, "_run_cua_driver_installer", return_value=True
+            ) as runner,
+        ):
             assert tools_config.install_cua_driver(upgrade=True) is True
             runner.assert_called_once()
 
     def test_upgrade_on_macos_non_writable_applications_skips_refresh(self):
         from clawk_cli import tools_config
 
-        with patch("platform.system", return_value="Darwin"), \
-             patch.object(tools_config.shutil, "which",
-                          side_effect=lambda n: "/usr/local/bin/" + n
-                                                 if n in {"cua-driver", "curl"} else None), \
-             patch.object(tools_config, "_cua_install_target_writable",
-                          return_value=False), \
-             patch.object(tools_config, "_run_cua_driver_installer") as runner, \
-             patch.object(tools_config, "_print_info") as info:
+        with (
+            patch("platform.system", return_value="Darwin"),
+            patch.object(
+                tools_config.shutil,
+                "which",
+                side_effect=lambda n: (
+                    "/usr/local/bin/" + n if n in {"cua-driver", "curl"} else None
+                ),
+            ),
+            patch.object(
+                tools_config, "_cua_install_target_writable", return_value=False
+            ),
+            patch.object(tools_config, "_run_cua_driver_installer") as runner,
+            patch.object(tools_config, "_print_info") as info,
+        ):
             assert tools_config.install_cua_driver(upgrade=True) is True
             runner.assert_not_called()
             assert any(
@@ -88,13 +112,19 @@ class TestInstallCuaDriverUpgrade:
     def test_fresh_install_on_macos_non_writable_applications_skips_install(self):
         from clawk_cli import tools_config
 
-        with patch("platform.system", return_value="Darwin"), \
-             patch.object(tools_config.shutil, "which",
-                          side_effect=lambda n: "/usr/bin/curl" if n == "curl" else None), \
-             patch.object(tools_config, "_cua_install_target_writable",
-                          return_value=False), \
-             patch.object(tools_config, "_run_cua_driver_installer") as runner, \
-             patch.object(tools_config, "_print_info") as info:
+        with (
+            patch("platform.system", return_value="Darwin"),
+            patch.object(
+                tools_config.shutil,
+                "which",
+                side_effect=lambda n: "/usr/bin/curl" if n == "curl" else None,
+            ),
+            patch.object(
+                tools_config, "_cua_install_target_writable", return_value=False
+            ),
+            patch.object(tools_config, "_run_cua_driver_installer") as runner,
+            patch.object(tools_config, "_print_info") as info,
+        ):
             assert tools_config.install_cua_driver(upgrade=False) is False
             runner.assert_not_called()
             assert any(
@@ -105,23 +135,35 @@ class TestInstallCuaDriverUpgrade:
     def test_non_upgrade_on_macos_with_binary_skips_install(self):
         from clawk_cli import tools_config
 
-        with patch("platform.system", return_value="Darwin"), \
-             patch.object(tools_config.shutil, "which",
-                          side_effect=lambda n: "/usr/local/bin/" + n
-                                                 if n in {"cua-driver", "curl"} else None), \
-             patch.object(tools_config, "_run_cua_driver_installer") as runner, \
-             patch("subprocess.run"):
+        with (
+            patch("platform.system", return_value="Darwin"),
+            patch.object(
+                tools_config.shutil,
+                "which",
+                side_effect=lambda n: (
+                    "/usr/local/bin/" + n if n in {"cua-driver", "curl"} else None
+                ),
+            ),
+            patch.object(tools_config, "_run_cua_driver_installer") as runner,
+            patch("subprocess.run"),
+        ):
             assert tools_config.install_cua_driver(upgrade=False) is True
             runner.assert_not_called()
 
     def test_non_upgrade_on_macos_without_binary_runs_installer(self):
         from clawk_cli import tools_config
 
-        with patch("platform.system", return_value="Darwin"), \
-             patch.object(tools_config.shutil, "which",
-                          side_effect=lambda n: "/usr/bin/curl" if n == "curl" else None), \
-             patch.object(tools_config, "_run_cua_driver_installer",
-                          return_value=True) as runner:
+        with (
+            patch("platform.system", return_value="Darwin"),
+            patch.object(
+                tools_config.shutil,
+                "which",
+                side_effect=lambda n: "/usr/bin/curl" if n == "curl" else None,
+            ),
+            patch.object(
+                tools_config, "_run_cua_driver_installer", return_value=True
+            ) as runner,
+        ):
             assert tools_config.install_cua_driver(upgrade=False) is True
             runner.assert_called_once()
 
@@ -149,6 +191,7 @@ class TestArchProbeRemoval:
 
     def test_probe_function_is_gone(self):
         from clawk_cli import tools_config
+
         assert not hasattr(tools_config, "_check_cua_driver_asset_for_arch")
         assert not hasattr(tools_config, "_latest_cua_driver_rs_release")
 
@@ -160,12 +203,18 @@ class TestArchProbeRemoval:
         """
         from clawk_cli import tools_config
 
-        with patch("platform.system", return_value="Darwin"), \
-             patch.object(tools_config.shutil, "which",
-                          side_effect=lambda n: "/usr/bin/curl" if n == "curl" else None), \
-             patch("urllib.request.urlopen") as urlopen, \
-             patch.object(tools_config, "_run_cua_driver_installer",
-                          return_value=True) as runner:
+        with (
+            patch("platform.system", return_value="Darwin"),
+            patch.object(
+                tools_config.shutil,
+                "which",
+                side_effect=lambda n: "/usr/bin/curl" if n == "curl" else None,
+            ),
+            patch("urllib.request.urlopen") as urlopen,
+            patch.object(
+                tools_config, "_run_cua_driver_installer", return_value=True
+            ) as runner,
+        ):
             assert tools_config.install_cua_driver(upgrade=False) is True
             runner.assert_called_once()
             urlopen.assert_not_called()
@@ -180,14 +229,21 @@ class TestArchProbeRemoval:
         """
         from clawk_cli import tools_config
 
-        with patch("platform.system", return_value="Darwin"), \
-             patch.object(tools_config.shutil, "which",
-                          side_effect=lambda n: "/usr/local/bin/" + n
-                                                 if n in ("cua-driver", "curl") else None), \
-             patch("urllib.request.urlopen") as urlopen, \
-             patch("subprocess.run"), \
-             patch.object(tools_config, "_run_cua_driver_installer",
-                          return_value=True) as runner:
+        with (
+            patch("platform.system", return_value="Darwin"),
+            patch.object(
+                tools_config.shutil,
+                "which",
+                side_effect=lambda n: (
+                    "/usr/local/bin/" + n if n in ("cua-driver", "curl") else None
+                ),
+            ),
+            patch("urllib.request.urlopen") as urlopen,
+            patch("subprocess.run"),
+            patch.object(
+                tools_config, "_run_cua_driver_installer", return_value=True
+            ) as runner,
+        ):
             assert tools_config.install_cua_driver(upgrade=True) is True
             runner.assert_called_once()
             # Probe deleted — no direct GitHub API call from Python.
@@ -201,6 +257,7 @@ class TestStaleInstallLockClear:
 
     def _make_lock(self, tmp_path, pid=None):
         import os
+
         home = tmp_path / ".cua-driver"
         lock = home / "packages" / ".install.lock.d"
         lock.mkdir(parents=True)
@@ -211,6 +268,7 @@ class TestStaleInstallLockClear:
 
     def teardown_method(self):
         import os
+
         os.environ.pop("CUA_DRIVER_RS_HOME", None)
 
     def test_dead_holder_lock_is_cleared(self, tmp_path):
@@ -251,8 +309,10 @@ class TestStaleInstallLockClear:
 
     def test_no_lock_is_noop(self, tmp_path):
         import os
+
         os.environ["CUA_DRIVER_RS_HOME"] = str(tmp_path / ".cua-driver")
         from clawk_cli import tools_config
+
         tools_config._clear_stale_cua_install_lock()  # must not raise
 
 
@@ -282,15 +342,19 @@ class TestInstallerTimeoutKillsProcessGroup:
             killed["pgid"] = pgid
             killed["sig"] = sig
 
-        with patch("platform.system", return_value="Linux"), \
-             patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")), \
-             patch("subprocess.Popen", return_value=fake_proc), \
-             patch.object(tools_config.os, "getpgid", return_value=99999), \
-             patch.object(tools_config.os, "killpg", side_effect=fake_killpg), \
-             patch.object(tools_config, "_clear_stale_cua_install_lock"), \
-             patch.object(tools_config, "_print_warning"), \
-             patch.object(tools_config, "_print_info"):
-            ok = tools_config._run_cua_driver_installer(label="Refreshing", verbose=False)
+        with (
+            patch("platform.system", return_value="Linux"),
+            patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")),
+            patch("subprocess.Popen", return_value=fake_proc),
+            patch.object(tools_config.os, "getpgid", return_value=99999),
+            patch.object(tools_config.os, "killpg", side_effect=fake_killpg),
+            patch.object(tools_config, "_clear_stale_cua_install_lock"),
+            patch.object(tools_config, "_print_warning"),
+            patch.object(tools_config, "_print_info"),
+        ):
+            ok = tools_config._run_cua_driver_installer(
+                label="Refreshing", verbose=False
+            )
 
         assert ok is False
         assert killed.get("pgid") == 99999
@@ -300,6 +364,7 @@ class TestInstallerTimeoutKillsProcessGroup:
 
     def test_timeout_ceiling_exceeds_upstream_lock_window(self):
         from clawk_cli import tools_config
+
         # The upstream installer waits up to 600s before reclaiming a stale
         # lock; our ceiling must give that window room to complete.
         assert tools_config._CUA_INSTALLER_TIMEOUT > tools_config._CUA_LOCK_STALE_AFTER
@@ -319,12 +384,14 @@ class TestInstallerTimeoutKillsProcessGroup:
             captured.update(kwargs)
             return fake_proc
 
-        with patch("platform.system", return_value="Linux"), \
-             patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")), \
-             patch("subprocess.Popen", side_effect=fake_popen), \
-             patch.object(tools_config, "_clear_stale_cua_install_lock"), \
-             patch.object(tools_config, "_print_warning"), \
-             patch.object(tools_config, "_print_info"):
+        with (
+            patch("platform.system", return_value="Linux"),
+            patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")),
+            patch("subprocess.Popen", side_effect=fake_popen),
+            patch.object(tools_config, "_clear_stale_cua_install_lock"),
+            patch.object(tools_config, "_print_warning"),
+            patch.object(tools_config, "_print_info"),
+        ):
             tools_config._run_cua_driver_installer(label="Refreshing", verbose=False)
 
         assert captured.get("start_new_session") is True
@@ -358,15 +425,21 @@ class TestInstallerNoShell:
             calls.append(("popen", cmd, kw))
             return fake_proc
 
-        with patch("platform.system", return_value="Linux"), \
-             patch("subprocess.run", side_effect=fake_run), \
-             patch("subprocess.Popen", side_effect=fake_popen), \
-             patch.object(tools_config.shutil, "which", return_value="/usr/local/bin/cua-driver"), \
-             patch.object(tools_config, "_clear_stale_cua_install_lock"), \
-             patch.object(tools_config, "_print_warning"), \
-             patch.object(tools_config, "_print_info"), \
-             patch.object(tools_config, "_print_success"):
-            ok = tools_config._run_cua_driver_installer(label="Refreshing", verbose=False)
+        with (
+            patch("platform.system", return_value="Linux"),
+            patch("subprocess.run", side_effect=fake_run),
+            patch("subprocess.Popen", side_effect=fake_popen),
+            patch.object(
+                tools_config.shutil, "which", return_value="/usr/local/bin/cua-driver"
+            ),
+            patch.object(tools_config, "_clear_stale_cua_install_lock"),
+            patch.object(tools_config, "_print_warning"),
+            patch.object(tools_config, "_print_info"),
+            patch.object(tools_config, "_print_success"),
+        ):
+            ok = tools_config._run_cua_driver_installer(
+                label="Refreshing", verbose=False
+            )
         return ok, calls
 
     def test_posix_path_downloads_then_execs_argv_list(self):
@@ -391,6 +464,7 @@ class TestInstallerNoShell:
 
     def test_temp_script_removed_after_run(self, tmp_path):
         import os
+
         captured = {}
         import subprocess
         from unittest.mock import MagicMock
@@ -402,21 +476,27 @@ class TestInstallerNoShell:
         fake_proc.communicate.return_value = ("", None)
 
         def fake_run(cmd, **kw):
-            m = MagicMock(); m.returncode = 0; m.stderr = ""
+            m = MagicMock()
+            m.returncode = 0
+            m.stderr = ""
             return m
 
         def fake_popen(cmd, **kw):
             captured["script"] = cmd[1]
             return fake_proc
 
-        with patch("platform.system", return_value="Linux"), \
-             patch("subprocess.run", side_effect=fake_run), \
-             patch("subprocess.Popen", side_effect=fake_popen), \
-             patch.object(tools_config.shutil, "which", return_value="/usr/local/bin/cua-driver"), \
-             patch.object(tools_config, "_clear_stale_cua_install_lock"), \
-             patch.object(tools_config, "_print_warning"), \
-             patch.object(tools_config, "_print_info"), \
-             patch.object(tools_config, "_print_success"):
+        with (
+            patch("platform.system", return_value="Linux"),
+            patch("subprocess.run", side_effect=fake_run),
+            patch("subprocess.Popen", side_effect=fake_popen),
+            patch.object(
+                tools_config.shutil, "which", return_value="/usr/local/bin/cua-driver"
+            ),
+            patch.object(tools_config, "_clear_stale_cua_install_lock"),
+            patch.object(tools_config, "_print_warning"),
+            patch.object(tools_config, "_print_info"),
+            patch.object(tools_config, "_print_success"),
+        ):
             tools_config._run_cua_driver_installer(label="Refreshing", verbose=False)
 
         assert "script" in captured

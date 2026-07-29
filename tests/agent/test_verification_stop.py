@@ -98,7 +98,9 @@ def test_verify_on_stop_auto_off_on_gateway_messaging_platform(clear_verify_env)
     "platform",
     ["discord", "whatsapp_cloud", "signal", "slack", "matrix", "email", "sms"],
 )
-def test_verify_on_stop_auto_off_for_each_messaging_platform(clear_verify_env, platform):
+def test_verify_on_stop_auto_off_for_each_messaging_platform(
+    clear_verify_env, platform
+):
     clear_verify_env.setenv("CLAWK_SESSION_PLATFORM", platform)
     assert verify_on_stop_enabled({"agent": {"verify_on_stop": "auto"}}) is False
 
@@ -323,18 +325,22 @@ def test_nudge_attempts_are_bounded(tmp_path, monkeypatch):
     changed = str(tmp_path / "src" / "app.ts")
     mark_workspace_edited(session_id="s1", cwd=tmp_path, paths=[changed])
 
-    assert build_verify_on_stop_nudge(
-        session_id="s1",
-        changed_paths=[changed],
-        attempts=2,
-        max_attempts=2,
-    ) is None
+    assert (
+        build_verify_on_stop_nudge(
+            session_id="s1",
+            changed_paths=[changed],
+            attempts=2,
+            max_attempts=2,
+        )
+        is None
+    )
 
 
 # ---------------------------------------------------------------------------
 # Fix C: documentation/prose edits carry no verifiable behavior and must never
 # trip the nudge, even on an unverified workspace.
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "doc_name",
@@ -367,9 +373,7 @@ def test_mixed_doc_and_code_edit_still_nudges(tmp_path, monkeypatch):
     code = str(tmp_path / "src" / "app.ts")
     mark_workspace_edited(session_id="s1", cwd=tmp_path, paths=[code])
 
-    nudge = build_verify_on_stop_nudge(
-        session_id="s1", changed_paths=[doc, code]
-    )
+    nudge = build_verify_on_stop_nudge(session_id="s1", changed_paths=[doc, code])
     assert nudge is not None
     # The doc path is filtered out of the reported set; the code path remains.
     assert code in nudge
@@ -380,7 +384,9 @@ def test_is_non_code_path_classification():
     from agent.verification_stop import _is_non_code_path
 
     assert _is_non_code_path("docs/SKILL.md") is True
-    assert _is_non_code_path("README") is False  # README has no extension and isn't in the prose-filename set
+    assert (
+        _is_non_code_path("README") is False
+    )  # README has no extension and isn't in the prose-filename set
     assert _is_non_code_path("LICENSE") is True
     assert _is_non_code_path("src/app.ts") is False
     assert _is_non_code_path("config.yaml") is False

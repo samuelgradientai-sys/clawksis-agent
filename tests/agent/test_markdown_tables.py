@@ -46,16 +46,16 @@ def test_split_strips_outer_pipes_and_trims():
 def test_is_table_divider_handles_alignment_colons():
     assert is_table_divider("|---|---|")
     assert is_table_divider("| :--- | ---: | :---: |")
-    assert not is_table_divider("| - | - |")          # 1 dash is not a divider
+    assert not is_table_divider("| - | - |")  # 1 dash is not a divider
     assert not is_table_divider("| a | b |")
-    assert not is_table_divider("---")                # single column, no pipes
+    assert not is_table_divider("---")  # single column, no pipes
 
 
 def test_looks_like_table_row():
     assert looks_like_table_row("| a | b |")
-    assert looks_like_table_row("a | b | c")          # no leading pipe, ≥2 pipes
+    assert looks_like_table_row("a | b | c")  # no leading pipe, ≥2 pipes
     assert not looks_like_table_row("not a table")
-    assert not looks_like_table_row("a | b")          # one pipe, no leading pipe
+    assert not looks_like_table_row("a | b")  # one pipe, no leading pipe
     assert not looks_like_table_row("")
 
 
@@ -92,8 +92,7 @@ def test_cjk_table_pipes_align_across_rows():
     # columns — that's the alignment guarantee.
     offsets = [_column_offsets(row) for row in out]
     assert all(o == offsets[0] for o in offsets), (
-        "rebuilt table rows do not share pipe column offsets:\n"
-        + "\n".join(out)
+        "rebuilt table rows do not share pipe column offsets:\n" + "\n".join(out)
     )
     # And we expect 7 pipes per row (6 columns + outer borders).
     assert len(offsets[0]) == 7

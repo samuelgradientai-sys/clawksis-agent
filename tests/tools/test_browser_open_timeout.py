@@ -19,7 +19,9 @@ def _reset_browser_caches():
 class TestOpenCommandTimeout:
     def test_first_open_uses_longer_floor(self, monkeypatch):
         monkeypatch.setattr(bt, "_get_command_timeout", lambda: 30)
-        assert bt._get_open_command_timeout(first_open=True) == bt.MIN_FIRST_OPEN_TIMEOUT
+        assert (
+            bt._get_open_command_timeout(first_open=True) == bt.MIN_FIRST_OPEN_TIMEOUT
+        )
         assert bt._get_open_command_timeout(first_open=False) == bt.MIN_OPEN_TIMEOUT
 
     def test_respects_config_above_floor(self, monkeypatch):
@@ -84,7 +86,9 @@ class TestReadCommandOutputFiles:
         stderr_path = tmp_path / "err"
         stdout_path.write_text("ok", encoding="utf-8")
         stderr_path.write_text("warn", encoding="utf-8")
-        stdout, stderr = bt._read_command_output_files(str(stdout_path), str(stderr_path))
+        stdout, stderr = bt._read_command_output_files(
+            str(stdout_path), str(stderr_path)
+        )
         assert stdout == "ok"
         assert stderr == "warn"
 
@@ -96,11 +100,20 @@ class TestBrowserNavigateOpenTimeout:
         def fake_run(task_id, command, args, timeout=None):
             if command == "open":
                 captured["timeout"] = timeout
-            return {"success": True, "data": {"title": "t", "url": args[0] if args else ""}}
+            return {
+                "success": True,
+                "data": {"title": "t", "url": args[0] if args else ""},
+            }
 
-        monkeypatch.setattr(bt, "_get_open_command_timeout", lambda first_open=False: 120 if first_open else 60)
+        monkeypatch.setattr(
+            bt,
+            "_get_open_command_timeout",
+            lambda first_open=False: 120 if first_open else 60,
+        )
         monkeypatch.setattr(bt, "_run_browser_command", fake_run)
-        monkeypatch.setattr(bt, "_get_session_info", lambda key: {"_first_nav": True, "features": {}})
+        monkeypatch.setattr(
+            bt, "_get_session_info", lambda key: {"_first_nav": True, "features": {}}
+        )
         monkeypatch.setattr(bt, "_is_camofox_mode", lambda: False)
         monkeypatch.setattr(bt, "_is_local_backend", lambda: True)
         monkeypatch.setattr(bt, "_is_local_sidecar_key", lambda key: False)

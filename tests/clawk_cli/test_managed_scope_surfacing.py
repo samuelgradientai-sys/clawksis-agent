@@ -1,4 +1,5 @@
 """Surfacing tests — managed scope shown in `config show` and `clawk doctor`."""
+
 import pytest
 
 
@@ -10,7 +11,9 @@ def homes(tmp_path, monkeypatch):
     managed.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(managed))
-    (home / "config.yaml").write_text("model:\n  default: user/model\n", encoding="utf-8")
+    (home / "config.yaml").write_text(
+        "model:\n  default: user/model\n", encoding="utf-8"
+    )
     (managed / "config.yaml").write_text(
         "model:\n  default: managed/model\n", encoding="utf-8"
     )
@@ -39,7 +42,9 @@ def test_config_show_no_managed_scope_silent(tmp_path, monkeypatch, capsys):
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(tmp_path / "nope"))
-    (home / "config.yaml").write_text("model:\n  default: user/model\n", encoding="utf-8")
+    (home / "config.yaml").write_text(
+        "model:\n  default: user/model\n", encoding="utf-8"
+    )
     import clawk_cli.config as cfg
     from clawk_cli import managed_scope
 

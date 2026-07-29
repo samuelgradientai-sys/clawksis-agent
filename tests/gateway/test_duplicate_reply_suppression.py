@@ -30,6 +30,7 @@ from gateway.session import SessionSource, build_session_key
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class StubAdapter(BasePlatformAdapter):
     """Minimal concrete adapter for testing."""
 
@@ -70,6 +71,7 @@ def _make_event(text="hello", chat_id="c1", user_id="u1"):
 # ===================================================================
 # Test 1: base.py — stale response suppressed on interrupt (#8221)
 # ===================================================================
+
 
 class TestBaseInterruptSuppression:
     @pytest.mark.asyncio
@@ -165,6 +167,7 @@ class TestBaseInterruptSuppression:
 # Test 2: run.py — partial streamed output must not suppress final send
 # ===================================================================
 
+
 class TestOnlyFinalStreamDeliverySuppressesFinalSend:
     """The gateway should suppress the fallback final send only when the
     stream consumer confirmed the final assistant reply was delivered.
@@ -182,7 +185,9 @@ class TestOnlyFinalStreamDeliverySuppressesFinalSend:
 
     def test_partial_stream_output_does_not_set_already_sent(self):
         """already_sent=True alone must NOT suppress final delivery."""
-        sc = self._make_mock_stream_consumer(already_sent=True, final_response_sent=False)
+        sc = self._make_mock_stream_consumer(
+            already_sent=True, final_response_sent=False
+        )
         response = {"final_response": "text", "response_previewed": False}
 
         if sc and isinstance(response, dict) and not response.get("failed"):
@@ -198,7 +203,9 @@ class TestOnlyFinalStreamDeliverySuppressesFinalSend:
     def test_already_sent_not_set_when_nothing_sent(self):
         """When stream consumer hasn't sent anything, already_sent should
         not be set on the response."""
-        sc = self._make_mock_stream_consumer(already_sent=False, final_response_sent=False)
+        sc = self._make_mock_stream_consumer(
+            already_sent=False, final_response_sent=False
+        )
         response = {"final_response": "text", "response_previewed": False}
 
         if sc and isinstance(response, dict) and not response.get("failed"):
@@ -213,7 +220,9 @@ class TestOnlyFinalStreamDeliverySuppressesFinalSend:
 
     def test_already_sent_set_on_final_response_sent(self):
         """final_response_sent=True should suppress duplicate final sends."""
-        sc = self._make_mock_stream_consumer(already_sent=False, final_response_sent=True)
+        sc = self._make_mock_stream_consumer(
+            already_sent=False, final_response_sent=True
+        )
         response = {"final_response": "text"}
 
         if sc and isinstance(response, dict) and not response.get("failed"):
@@ -229,7 +238,9 @@ class TestOnlyFinalStreamDeliverySuppressesFinalSend:
     def test_already_sent_not_set_on_failed_response(self):
         """Failed responses should never be suppressed — user needs to see
         the error message even if streaming sent earlier partial output."""
-        sc = self._make_mock_stream_consumer(already_sent=True, final_response_sent=False)
+        sc = self._make_mock_stream_consumer(
+            already_sent=True, final_response_sent=False
+        )
         response = {"final_response": "Error: something broke", "failed": True}
 
         if sc and isinstance(response, dict) and not response.get("failed"):
@@ -246,6 +257,7 @@ class TestOnlyFinalStreamDeliverySuppressesFinalSend:
 # ===================================================================
 # Test 2b: run.py — empty response never suppressed (#10xxx)
 # ===================================================================
+
 
 class TestEmptyResponseNotSuppressed:
     """When the model returns '(empty)' after tool calls (e.g. mimo-v2-pro
@@ -275,21 +287,27 @@ class TestEmptyResponseNotSuppressed:
     def test_empty_sentinel_not_suppressed_with_already_sent(self):
         """'(empty)' final_response should NOT be suppressed even when
         streaming sent intermediate content."""
-        sc = self._make_mock_stream_consumer(already_sent=True, final_response_sent=True)
+        sc = self._make_mock_stream_consumer(
+            already_sent=True, final_response_sent=True
+        )
         response = {"final_response": "(empty)"}
         self._apply_suppression_logic(response, sc)
         assert "already_sent" not in response
 
     def test_empty_string_not_suppressed_with_already_sent(self):
         """Empty string final_response should NOT be suppressed."""
-        sc = self._make_mock_stream_consumer(already_sent=True, final_response_sent=True)
+        sc = self._make_mock_stream_consumer(
+            already_sent=True, final_response_sent=True
+        )
         response = {"final_response": ""}
         self._apply_suppression_logic(response, sc)
         assert "already_sent" not in response
 
     def test_none_response_not_suppressed_with_already_sent(self):
         """None final_response should NOT be suppressed."""
-        sc = self._make_mock_stream_consumer(already_sent=True, final_response_sent=True)
+        sc = self._make_mock_stream_consumer(
+            already_sent=True, final_response_sent=True
+        )
         response = {"final_response": None}
         self._apply_suppression_logic(response, sc)
         assert "already_sent" not in response
@@ -297,17 +315,22 @@ class TestEmptyResponseNotSuppressed:
     def test_real_response_still_suppressed_only_when_final_delivery_confirmed(self):
         """Normal non-empty response should be suppressed only when the final
         response was actually streamed."""
-        sc = self._make_mock_stream_consumer(already_sent=True, final_response_sent=True)
+        sc = self._make_mock_stream_consumer(
+            already_sent=True, final_response_sent=True
+        )
         response = {"final_response": "Here are the search results..."}
         self._apply_suppression_logic(response, sc)
         assert response.get("already_sent") is True
 
     def test_failed_empty_response_never_suppressed(self):
         """Failed responses are never suppressed regardless of content."""
-        sc = self._make_mock_stream_consumer(already_sent=True, final_response_sent=True)
+        sc = self._make_mock_stream_consumer(
+            already_sent=True, final_response_sent=True
+        )
         response = {"final_response": "(empty)", "failed": True}
         self._apply_suppression_logic(response, sc)
         assert "already_sent" not in response
+
 
 class TestQueuedMessageAlreadyStreamed:
     """The queued-message path should skip the first response only when the
@@ -324,9 +347,7 @@ class TestQueuedMessageAlreadyStreamed:
         before the queued follow-up is processed."""
         _sc = self._make_mock_sc(already_sent=True, final_response_sent=False)
 
-        _already_streamed = bool(
-            _sc and getattr(_sc, "final_response_sent", False)
-        )
+        _already_streamed = bool(_sc and getattr(_sc, "final_response_sent", False))
 
         assert _already_streamed is False
 
@@ -360,9 +381,7 @@ class TestQueuedMessageAlreadyStreamed:
         processing the queued message."""
         _sc = self._make_mock_sc(already_sent=False, final_response_sent=False)
 
-        _already_streamed = bool(
-            _sc and getattr(_sc, "final_response_sent", False)
-        )
+        _already_streamed = bool(_sc and getattr(_sc, "final_response_sent", False))
 
         assert _already_streamed is False
 
@@ -370,9 +389,7 @@ class TestQueuedMessageAlreadyStreamed:
         """No stream consumer at all (streaming disabled) — not streamed."""
         _sc = None
 
-        _already_streamed = bool(
-            _sc and getattr(_sc, "final_response_sent", False)
-        )
+        _already_streamed = bool(_sc and getattr(_sc, "final_response_sent", False))
 
         assert _already_streamed is False
 
@@ -380,6 +397,7 @@ class TestQueuedMessageAlreadyStreamed:
 # ===================================================================
 # Test 4: stream_consumer.py — cancellation handler delivery confirmation
 # ===================================================================
+
 
 class TestCancellationHandlerDeliveryConfirmation:
     """The stream consumer's cancellation handler should only set

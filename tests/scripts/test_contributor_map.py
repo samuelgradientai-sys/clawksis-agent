@@ -128,9 +128,16 @@ def test_cli_entrypoint_end_to_end(tmp_path):
     # Minimal stub release.py so the legacy lookup import works
     (scripts / "release.py").write_text("LEGACY_AUTHOR_MAP = {}\n")
     proc = subprocess.run(
-        [sys.executable, str(scripts / "add_contributor.py"),
-         "cli@example.com", "cliperson", "via subprocess"],
-        cwd=tmp_path, capture_output=True, text=True,
+        [
+            sys.executable,
+            str(scripts / "add_contributor.py"),
+            "cli@example.com",
+            "cliperson",
+            "via subprocess",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
     )
     assert proc.returncode == 0, proc.stderr
     out = (tmp_path / "contributors" / "emails" / "cli@example.com").read_text()

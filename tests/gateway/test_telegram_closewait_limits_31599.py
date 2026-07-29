@@ -86,9 +86,7 @@ def _drive_connect(monkeypatch, *, proxy_url):
         return []
 
     monkeypatch.setattr(tg_adapter, "discover_fallback_ips", _no_fallback)
-    monkeypatch.setattr(
-        tg_adapter, "resolve_proxy_url", lambda *a, **k: proxy_url
-    )
+    monkeypatch.setattr(tg_adapter, "resolve_proxy_url", lambda *a, **k: proxy_url)
     # Replace the real HTTPXRequest with our recorder.
     monkeypatch.setattr(tg_adapter, "HTTPXRequest", _RecordingHTTPXRequest)
 

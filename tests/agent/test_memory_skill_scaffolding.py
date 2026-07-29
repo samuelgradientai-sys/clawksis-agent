@@ -72,7 +72,9 @@ class _RecordingProvider(MemoryProvider):
     def queue_prefetch(self, query, *, session_id: str = "") -> None:
         self.queued.append(query)
 
-    def sync_turn(self, user_content, assistant_content, *, session_id: str = "", messages=None) -> None:
+    def sync_turn(
+        self, user_content, assistant_content, *, session_id: str = "", messages=None
+    ) -> None:
         self.synced.append(user_content)
 
     def get_tool_schemas(self):
@@ -93,7 +95,10 @@ class TestExtractUserInstruction:
         assert extract_user_instruction_from_skill_message([{"text": "hi"}]) is None
 
     def test_plain_message_passes_through(self):
-        assert extract_user_instruction_from_skill_message("just a message") == "just a message"
+        assert (
+            extract_user_instruction_from_skill_message("just a message")
+            == "just a message"
+        )
 
     def test_single_skill_with_instruction(self):
         assert (

@@ -91,9 +91,7 @@ class TestAppendModelSwitchMarkerRole:
             "history_version": 7,
             "agent": SimpleNamespace(_session_db=db),
         }
-        _append_model_switch_marker(
-            session, model="qwen3.6-35b", provider="vllm"
-        )
+        _append_model_switch_marker(session, model="qwen3.6-35b", provider="vllm")
         marker = session["history"][-1]
         assert marker["role"] == "user"
         assert session["history_version"] == 8

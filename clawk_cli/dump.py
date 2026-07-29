@@ -42,7 +42,7 @@ def _dotenv_key_names() -> set[str]:
         if not line or line.startswith("#") or "=" not in line:
             continue
         if line.lower().startswith("export "):
-            line = line[len("export "):].lstrip()
+            line = line[len("export ") :].lstrip()
         name, _, value = line.partition("=")
         name = name.strip()
         # A bare `KEY=` (empty value) is effectively unset for the backend.
@@ -64,7 +64,9 @@ def _get_git_commit(project_root: Path) -> str:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short=8", "HEAD"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
             cwd=str(project_root),
         )
         if result.returncode == 0:
@@ -79,6 +81,7 @@ def _get_git_commit(project_root: Path) -> str:
     # stays cheap on non-dump code paths.
     try:
         from clawk_cli.build_info import get_build_sha
+
         baked = get_build_sha(short=8)
         if baked:
             return baked
@@ -99,7 +102,9 @@ def _get_git_commit_date(project_root: Path) -> str:
     try:
         result = subprocess.run(
             ["git", "log", "-1", "--format=%cd", "--date=short", "HEAD"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
             cwd=str(project_root),
         )
         if result.returncode == 0:
@@ -120,6 +125,7 @@ def _redact(value: str) -> str:
     ``clawk dump`` formats empty values as blank, not as ``"(not set)"``).
     """
     from agent.redact import mask_secret
+
     return mask_secret(value)
 
 
@@ -212,7 +218,12 @@ def _get_model_and_provider(config: dict) -> tuple[str, str]:
     """Extract model and provider from config."""
     model_cfg = config.get("model", "")
     if isinstance(model_cfg, dict):
-        model = model_cfg.get("default") or model_cfg.get("model") or model_cfg.get("name") or "(not set)"
+        model = (
+            model_cfg.get("default")
+            or model_cfg.get("model")
+            or model_cfg.get("name")
+            or "(not set)"
+        )
         provider = model_cfg.get("provider") or "(auto)"
     elif isinstance(model_cfg, str):
         model = model_cfg or "(not set)"
@@ -225,7 +236,7 @@ def _get_model_and_provider(config: dict) -> tuple[str, str]:
 
 def _config_overrides(config: dict) -> dict[str, str]:
     """Find non-default config values worth reporting.
-    
+
     Returns a flat dict of dotpath -> value for interesting overrides.
     """
     from clawk_cli.config import DEFAULT_CONFIG
@@ -306,6 +317,7 @@ def run_dump(args):
     # Profile
     try:
         from clawk_cli.profiles import get_active_profile_name
+
         profile = get_active_profile_name() or "(default)"
     except Exception:
         profile = "(default)"
@@ -332,6 +344,7 @@ def run_dump(args):
     # OpenAI SDK version
     try:
         import openai
+
         openai_ver = openai.__version__
     except ImportError:
         openai_ver = "not installed"
@@ -403,7 +416,9 @@ def run_dump(args):
         # "set". Flag it so support doesn't chase a phantom "key is configured"
         # (the actual cause of gated tools like web_search going missing).
         if val and env_var not in dotenv_keys:
-            display += " (shell only — not in .env; managed/desktop backend may not see it)"
+            display += (
+                " (shell only — not in .env; managed/desktop backend may not see it)"
+            )
         # A credential added via `clawk auth add openrouter` lives in the
         # credential pool, not as an env var — surface it so the dump doesn't
         # misleadingly read "not set" while `clawk auth list` shows it (#42130).
@@ -422,13 +437,17 @@ def run_dump(args):
     lines.append("features:")
 
     toolsets = config.get("toolsets", ["clawk-cli"])
-    lines.append(f"  toolsets:           {', '.join(toolsets) if toolsets else '(default)'}")
+    lines.append(
+        f"  toolsets:           {', '.join(toolsets) if toolsets else '(default)'}"
+    )
     lines.append(f"  mcp_servers:        {_count_mcp_servers(config)}")
     lines.append(f"  memory_provider:    {_memory_provider(config)}")
     lines.append(f"  gateway:            {_gateway_status()}")
 
     platforms = _configured_platforms()
-    lines.append(f"  platforms:          {', '.join(platforms) if platforms else 'none'}")
+    lines.append(
+        f"  platforms:          {', '.join(platforms) if platforms else 'none'}"
+    )
     lines.append(f"  cron_jobs:          {_cron_summary(clawk_home)}")
     lines.append(f"  skills:             {_count_skills(clawk_home)}")
 

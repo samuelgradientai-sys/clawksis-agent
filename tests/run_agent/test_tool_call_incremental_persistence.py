@@ -181,7 +181,9 @@ def test_execute_tool_calls_sequential_flushes_each_tool_result_before_next_disp
         agent._execute_tool_calls_sequential(assistant_message, messages, "task-1")
 
     # The mock proves we exercised the REAL sequential dispatch surface.
-    assert disp.call_count == 2, "sequential path did not dispatch via handle_function_call"
+    assert disp.call_count == 2, (
+        "sequential path did not dispatch via handle_function_call"
+    )
 
     # Both tool results landed, in order.
     assert [m["role"] for m in messages] == ["tool", "tool"]
@@ -214,7 +216,9 @@ def test_execute_tool_calls_concurrent_flushes_each_tool_result_in_order():
 
     invoked_ids: list = []
 
-    def _fake_invoke(function_name, function_args, effective_task_id, tool_call_id, **kwargs):
+    def _fake_invoke(
+        function_name, function_args, effective_task_id, tool_call_id, **kwargs
+    ):
         invoked_ids.append(tool_call_id)
         return f"result-{tool_call_id}"
 
@@ -225,7 +229,9 @@ def test_execute_tool_calls_concurrent_flushes_each_tool_result_in_order():
 
     def _record_flush(flush_messages, conversation_history=None):
         flushed_tool_ids.append(flush_messages[-1]["tool_call_id"])
-        flush_lengths.append(len([m for m in flush_messages if m.get("role") == "tool"]))
+        flush_lengths.append(
+            len([m for m in flush_messages if m.get("role") == "tool"])
+        )
 
     agent._flush_messages_to_session_db = MagicMock(side_effect=_record_flush)
 

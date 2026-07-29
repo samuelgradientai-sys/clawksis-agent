@@ -5,7 +5,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-
 class TestResolvePath:
     """Verify _resolve_path respects TERMINAL_CWD for worktree isolation."""
 

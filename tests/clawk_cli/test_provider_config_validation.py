@@ -114,7 +114,9 @@ class TestNormalizeCustomProviderEntry:
         with caplog.at_level(logging.WARNING):
             result = _normalize_custom_provider_entry(entry, provider_key="onyx-6000")
         assert result is not None
-        assert not any("unknown config keys" in r.message.lower() for r in caplog.records)
+        assert not any(
+            "unknown config keys" in r.message.lower() for r in caplog.records
+        )
 
     def test_unknown_keys_warned_once_per_signature(self, caplog):
         """Repeated normalization of the same entry (as happens on every
@@ -127,12 +129,9 @@ class TestNormalizeCustomProviderEntry:
         }
         with caplog.at_level(logging.WARNING):
             for _ in range(5):
-                _normalize_custom_provider_entry(
-                    dict(entry), provider_key="test"
-                )
+                _normalize_custom_provider_entry(dict(entry), provider_key="test")
         unknown_warnings = [
-            r for r in caplog.records
-            if "unknown config keys" in r.message.lower()
+            r for r in caplog.records if "unknown config keys" in r.message.lower()
         ]
         assert len(unknown_warnings) == 1
 
@@ -147,7 +146,9 @@ class TestNormalizeCustomProviderEntry:
         with caplog.at_level(logging.WARNING):
             result = _normalize_custom_provider_entry(entry, provider_key="test")
         assert result is not None
-        assert not any("unknown config keys" in r.message.lower() for r in caplog.records)
+        assert not any(
+            "unknown config keys" in r.message.lower() for r in caplog.records
+        )
 
     def test_camel_case_warning_logged(self, caplog):
         """camelCase alias mapping should produce a warning."""
@@ -158,7 +159,11 @@ class TestNormalizeCustomProviderEntry:
         with caplog.at_level(logging.WARNING):
             result = _normalize_custom_provider_entry(entry, provider_key="test")
         assert result is not None
-        camel_warnings = [r for r in caplog.records if "camelcase" in r.message.lower() or "auto-mapped" in r.message.lower()]
+        camel_warnings = [
+            r
+            for r in caplog.records
+            if "camelcase" in r.message.lower() or "auto-mapped" in r.message.lower()
+        ]
         assert len(camel_warnings) >= 1
 
     def test_snake_case_takes_precedence_over_camel(self):

@@ -111,13 +111,38 @@ class TestExecuteCodeIntegration:
 
     def test_secret_substring_blocked_by_default(self):
         """TENOR_API_KEY should be blocked without passthrough."""
-        _SAFE_ENV_PREFIXES = ("PATH", "HOME", "USER", "LANG", "LC_", "TERM",
-                              "TMPDIR", "TMP", "TEMP", "SHELL", "LOGNAME",
-                              "XDG_", "PYTHONPATH", "VIRTUAL_ENV", "CONDA")
-        _SECRET_SUBSTRINGS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL",
-                              "PASSWD", "AUTH")
+        _SAFE_ENV_PREFIXES = (
+            "PATH",
+            "HOME",
+            "USER",
+            "LANG",
+            "LC_",
+            "TERM",
+            "TMPDIR",
+            "TMP",
+            "TEMP",
+            "SHELL",
+            "LOGNAME",
+            "XDG_",
+            "PYTHONPATH",
+            "VIRTUAL_ENV",
+            "CONDA",
+        )
+        _SECRET_SUBSTRINGS = (
+            "KEY",
+            "TOKEN",
+            "SECRET",
+            "PASSWORD",
+            "CREDENTIAL",
+            "PASSWD",
+            "AUTH",
+        )
 
-        test_env = {"PATH": "/usr/bin", "TENOR_API_KEY": "test123", "HOME": "/home/user"}
+        test_env = {
+            "PATH": "/usr/bin",
+            "TENOR_API_KEY": "test123",
+            "HOME": "/home/user",
+        }
         child_env = {}
         for k, v in test_env.items():
             if is_env_passthrough(k):
@@ -134,15 +159,40 @@ class TestExecuteCodeIntegration:
 
     def test_passthrough_allows_secret_through(self):
         """TENOR_API_KEY should pass through when registered."""
-        _SAFE_ENV_PREFIXES = ("PATH", "HOME", "USER", "LANG", "LC_", "TERM",
-                              "TMPDIR", "TMP", "TEMP", "SHELL", "LOGNAME",
-                              "XDG_", "PYTHONPATH", "VIRTUAL_ENV", "CONDA")
-        _SECRET_SUBSTRINGS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL",
-                              "PASSWD", "AUTH")
+        _SAFE_ENV_PREFIXES = (
+            "PATH",
+            "HOME",
+            "USER",
+            "LANG",
+            "LC_",
+            "TERM",
+            "TMPDIR",
+            "TMP",
+            "TEMP",
+            "SHELL",
+            "LOGNAME",
+            "XDG_",
+            "PYTHONPATH",
+            "VIRTUAL_ENV",
+            "CONDA",
+        )
+        _SECRET_SUBSTRINGS = (
+            "KEY",
+            "TOKEN",
+            "SECRET",
+            "PASSWORD",
+            "CREDENTIAL",
+            "PASSWD",
+            "AUTH",
+        )
 
         register_env_passthrough(["TENOR_API_KEY"])
 
-        test_env = {"PATH": "/usr/bin", "TENOR_API_KEY": "test123", "HOME": "/home/user"}
+        test_env = {
+            "PATH": "/usr/bin",
+            "TENOR_API_KEY": "test123",
+            "HOME": "/home/user",
+        }
         child_env = {}
         for k, v in test_env.items():
             if is_env_passthrough(k):
@@ -163,7 +213,10 @@ class TestTerminalIntegration:
     """Verify that the passthrough is checked in terminal's env sanitizers."""
 
     def test_blocklisted_var_blocked_by_default(self):
-        from tools.environments.local import _sanitize_subprocess_env, _CLAWK_PROVIDER_ENV_BLOCKLIST
+        from tools.environments.local import (
+            _sanitize_subprocess_env,
+            _CLAWK_PROVIDER_ENV_BLOCKLIST,
+        )
 
         # Pick a var we know is in the blocklist
         blocked_var = next(iter(_CLAWK_PROVIDER_ENV_BLOCKLIST))

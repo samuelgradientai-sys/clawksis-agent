@@ -143,6 +143,7 @@ class WSTransport:
         # scheduled INSIDE the lock so the on-the-wire order matches the buffer
         # order even if the coalesce timer fires on the loop at the same moment.
         from agent.async_utils import safe_schedule_threadsafe
+
         with self._token_lock:
             self._pending_tokens.append(line)
             batch = self._pending_tokens
@@ -151,9 +152,7 @@ class WSTransport:
                 # Fire-and-forget — don't block the loop waiting on itself.
                 self._loop.create_task(self._safe_send_many(batch))
                 return True
-            fut = safe_schedule_threadsafe(
-                self._safe_send_many(batch), self._loop
-            )
+            fut = safe_schedule_threadsafe(self._safe_send_many(batch), self._loop)
             if fut is None:
                 self._closed = True
                 return False
@@ -171,14 +170,17 @@ class WSTransport:
             # latches on a real socket error when the frame actually fails.
             _log.warning(
                 "ws write slow (loop stalled >%ss) peer=%s — frame left in flight",
-                _WS_WRITE_TIMEOUT_S, self._peer,
+                _WS_WRITE_TIMEOUT_S,
+                self._peer,
             )
             return not self._closed
         except Exception as exc:
             self._closed = True
             _log.warning(
                 "ws write failed peer=%s error_type=%s error=%s",
-                self._peer, type(exc).__name__, exc,
+                self._peer,
+                type(exc).__name__,
+                exc,
             )
             return False
 
@@ -227,7 +229,9 @@ class WSTransport:
             self._closed = True
             _log.warning(
                 "ws send failed peer=%s error_type=%s error=%s",
-                self._peer, type(exc).__name__, exc,
+                self._peer,
+                type(exc).__name__,
+                exc,
             )
 
     async def _safe_send_many(self, lines: list[str]) -> None:
@@ -239,7 +243,9 @@ class WSTransport:
             self._closed = True
             _log.warning(
                 "ws send failed peer=%s error_type=%s error=%s",
-                self._peer, type(exc).__name__, exc,
+                self._peer,
+                type(exc).__name__,
+                exc,
             )
 
     def close(self) -> None:
@@ -272,7 +278,9 @@ def _disable_nagle(ws: Any) -> None:
     """
     try:
         scope = getattr(ws, "scope", None) or {}
-        transport = (scope.get("extensions") or {}).get("transport") or getattr(ws, "transport", None)
+        transport = (scope.get("extensions") or {}).get("transport") or getattr(
+            ws, "transport", None
+        )
         sock = transport.get_extra_info("socket") if transport is not None else None
         if sock is not None:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -316,16 +324,14 @@ async def handle_ws(ws: Any) -> None:
             thread_name="tui-ws-mcp-discovery",
         )
 
-        ready_ok = await transport.write_async(
-            {
-                "jsonrpc": "2.0",
-                "method": "event",
-                "params": {
-                    "type": "gateway.ready",
-                    "payload": {"skin": server.resolve_skin()},
-                },
-            }
-        )
+        ready_ok = await transport.write_async({
+            "jsonrpc": "2.0",
+            "method": "event",
+            "params": {
+                "type": "gateway.ready",
+                "payload": {"skin": server.resolve_skin()},
+            },
+        })
         if not ready_ok:
             disconnect_reason = "ready_send_failed"
             send_failures += 1
@@ -363,13 +369,11 @@ async def handle_ws(ws: Any) -> None:
                     exc,
                     line[:_WS_LOG_PAYLOAD_PREVIEW],
                 )
-                ok = await transport.write_async(
-                    {
-                        "jsonrpc": "2.0",
-                        "error": {"code": -32700, "message": "parse error"},
-                        "id": None,
-                    }
-                )
+                ok = await transport.write_async({
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32700, "message": "parse error"},
+                    "id": None,
+                })
                 if not ok:
                     disconnect_reason = "send_failed_after_parse_error"
                     send_failures += 1
@@ -394,13 +398,11 @@ async def handle_ws(ws: Any) -> None:
                     req_id,
                     req_method,
                 )
-                ok = await transport.write_async(
-                    {
-                        "jsonrpc": "2.0",
-                        "error": {"code": -32603, "message": "internal error"},
-                        "id": req_id if req_id is not None else None,
-                    }
-                )
+                ok = await transport.write_async({
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32603, "message": "internal error"},
+                    "id": req_id if req_id is not None else None,
+                })
                 if not ok:
                     disconnect_reason = "send_failed_after_dispatch_crash"
                     send_failures += 1

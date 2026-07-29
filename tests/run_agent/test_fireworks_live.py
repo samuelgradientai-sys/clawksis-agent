@@ -50,7 +50,9 @@ def test_fireworks_basic_chat_through_runtime():
 
     response = client.chat.completions.create(
         model=model,
-        messages=[{"role": "user", "content": "Say exactly the word 'pong' and nothing else."}],
+        messages=[
+            {"role": "user", "content": "Say exactly the word 'pong' and nothing else."}
+        ],
         timeout=60,
     )
 

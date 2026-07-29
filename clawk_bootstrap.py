@@ -147,8 +147,10 @@ def harden_import_path(src_root: str | None = None) -> None:
     repository root for every shipped entry point, so the guard is
     self-sufficient and does not depend on the spawner exporting an env var.
     """
-    root = src_root or os.environ.get("CLAWK_PYTHON_SRC_ROOT") or os.path.dirname(
-        os.path.abspath(__file__)
+    root = (
+        src_root
+        or os.environ.get("CLAWK_PYTHON_SRC_ROOT")
+        or os.path.dirname(os.path.abspath(__file__))
     )
 
     sys.path[:] = [p for p in sys.path if p not in ("", ".")]
@@ -176,6 +178,7 @@ def activate_durable_lazy_target() -> None:
         return
     try:
         from tools import lazy_deps
+
         lazy_deps.activate_durable_lazy_target()
     except Exception:
         # Bootstrap must never crash an entry point. If activation fails the

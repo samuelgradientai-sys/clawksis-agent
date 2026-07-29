@@ -67,7 +67,10 @@ def _config_refresh_lock(path: Path):
 
             fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
     except Exception:
-        logger.debug("Honcho OAuth cross-process lock unavailable; in-process only", exc_info=True)
+        logger.debug(
+            "Honcho OAuth cross-process lock unavailable; in-process only",
+            exc_info=True,
+        )
         if fh is not None:
             fh.close()
             fh = None
@@ -88,6 +91,7 @@ def _config_refresh_lock(path: Path):
             except Exception:
                 pass
             fh.close()
+
 
 # In-memory expiry cache keyed by (config path, host) → (expires_at, access).
 # Lets the hot path (every memory access calls this) skip the honcho.json read

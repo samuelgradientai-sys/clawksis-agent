@@ -6,7 +6,11 @@ import yaml
 
 from tests.tools.conftest import register_all_web_providers
 
-from tools.website_policy import WebsitePolicyError, check_website_access, load_website_blocklist
+from tools.website_policy import (
+    WebsitePolicyError,
+    check_website_access,
+    load_website_blocklist,
+)
 
 
 def test_load_website_blocklist_merges_config_and_shared_file(tmp_path):
@@ -58,7 +62,9 @@ def test_check_website_access_matches_parent_domain_subdomains(tmp_path):
         encoding="utf-8",
     )
 
-    blocked = check_website_access("https://docs.example.com/page", config_path=config_path)
+    blocked = check_website_access(
+        "https://docs.example.com/page", config_path=config_path
+    )
 
     assert blocked is not None
     assert blocked["host"] == "docs.example.com"
@@ -82,9 +88,18 @@ def test_check_website_access_supports_wildcard_subdomains_only(tmp_path):
         encoding="utf-8",
     )
 
-    assert check_website_access("https://a.tracking.example", config_path=config_path) is not None
-    assert check_website_access("https://www.tracking.example", config_path=config_path) is not None
-    assert check_website_access("https://tracking.example", config_path=config_path) is None
+    assert (
+        check_website_access("https://a.tracking.example", config_path=config_path)
+        is not None
+    )
+    assert (
+        check_website_access("https://www.tracking.example", config_path=config_path)
+        is not None
+    )
+    assert (
+        check_website_access("https://tracking.example", config_path=config_path)
+        is None
+    )
 
 
 def test_default_config_exposes_website_blocklist_shape():
@@ -98,7 +113,10 @@ def test_default_config_exposes_website_blocklist_shape():
 
 def test_load_website_blocklist_uses_enabled_default_when_section_missing(tmp_path):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml.safe_dump({"display": {"tool_progress": "all"}}, sort_keys=False), encoding="utf-8")
+    config_path.write_text(
+        yaml.safe_dump({"display": {"tool_progress": "all"}}, sort_keys=False),
+        encoding="utf-8",
+    )
 
     policy = load_website_blocklist(config_path)
 
@@ -122,11 +140,15 @@ def test_load_website_blocklist_raises_clean_error_for_invalid_domains_type(tmp_
         encoding="utf-8",
     )
 
-    with pytest.raises(WebsitePolicyError, match="security.website_blocklist.domains must be a list"):
+    with pytest.raises(
+        WebsitePolicyError, match="security.website_blocklist.domains must be a list"
+    ):
         load_website_blocklist(config_path)
 
 
-def test_load_website_blocklist_raises_clean_error_for_invalid_shared_files_type(tmp_path):
+def test_load_website_blocklist_raises_clean_error_for_invalid_shared_files_type(
+    tmp_path,
+):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
@@ -143,13 +165,20 @@ def test_load_website_blocklist_raises_clean_error_for_invalid_shared_files_type
         encoding="utf-8",
     )
 
-    with pytest.raises(WebsitePolicyError, match="security.website_blocklist.shared_files must be a list"):
+    with pytest.raises(
+        WebsitePolicyError,
+        match="security.website_blocklist.shared_files must be a list",
+    ):
         load_website_blocklist(config_path)
 
 
-def test_load_website_blocklist_raises_clean_error_for_invalid_top_level_config_type(tmp_path):
+def test_load_website_blocklist_raises_clean_error_for_invalid_top_level_config_type(
+    tmp_path,
+):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml.safe_dump(["not", "a", "mapping"], sort_keys=False), encoding="utf-8")
+    config_path.write_text(
+        yaml.safe_dump(["not", "a", "mapping"], sort_keys=False), encoding="utf-8"
+    )
 
     with pytest.raises(WebsitePolicyError, match="config root must be a mapping"):
         load_website_blocklist(config_path)
@@ -157,13 +186,17 @@ def test_load_website_blocklist_raises_clean_error_for_invalid_top_level_config_
 
 def test_load_website_blocklist_raises_clean_error_for_invalid_security_type(tmp_path):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml.safe_dump({"security": []}, sort_keys=False), encoding="utf-8")
+    config_path.write_text(
+        yaml.safe_dump({"security": []}, sort_keys=False), encoding="utf-8"
+    )
 
     with pytest.raises(WebsitePolicyError, match="security must be a mapping"):
         load_website_blocklist(config_path)
 
 
-def test_load_website_blocklist_raises_clean_error_for_invalid_website_blocklist_type(tmp_path):
+def test_load_website_blocklist_raises_clean_error_for_invalid_website_blocklist_type(
+    tmp_path,
+):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
@@ -177,7 +210,9 @@ def test_load_website_blocklist_raises_clean_error_for_invalid_website_blocklist
         encoding="utf-8",
     )
 
-    with pytest.raises(WebsitePolicyError, match="security.website_blocklist must be a mapping"):
+    with pytest.raises(
+        WebsitePolicyError, match="security.website_blocklist must be a mapping"
+    ):
         load_website_blocklist(config_path)
 
 
@@ -197,7 +232,9 @@ def test_load_website_blocklist_raises_clean_error_for_invalid_enabled_type(tmp_
         encoding="utf-8",
     )
 
-    with pytest.raises(WebsitePolicyError, match="security.website_blocklist.enabled must be a boolean"):
+    with pytest.raises(
+        WebsitePolicyError, match="security.website_blocklist.enabled must be a boolean"
+    ):
         load_website_blocklist(config_path)
 
 
@@ -265,6 +302,7 @@ def test_check_website_access_uses_dynamic_clawk_home(monkeypatch, tmp_path):
     # A prior test may have cached a default policy (enabled=False) under the
     # old CLAWK_HOME set by the autouse _isolate_clawk_home fixture.
     from tools.website_policy import invalidate_cache
+
     invalidate_cache()
 
     blocked = check_website_access("https://dynamic.example/path")
@@ -315,7 +353,9 @@ def test_browser_navigate_returns_policy_block(monkeypatch):
     monkeypatch.setattr(
         browser_tool,
         "_run_browser_command",
-        lambda *args, **kwargs: pytest.fail("browser command should not run for blocked URL"),
+        lambda *args, **kwargs: pytest.fail(
+            "browser command should not run for blocked URL"
+        ),
     )
 
     result = json.loads(browser_tool.browser_navigate("https://blocked.test"))
@@ -364,6 +404,7 @@ class TestWebToolPolicy:
         self._register_providers()
         yield
         from agent.web_search_registry import _reset_for_tests
+
         _reset_for_tests()
 
     @pytest.mark.asyncio
@@ -440,7 +481,9 @@ class TestWebToolPolicy:
         # After the web-provider migration, the per-URL gate + firecrawl client
         # live in the plugin. Patch both at the plugin location.
         monkeypatch.setattr(firecrawl_provider, "check_website_access", fake_check)
-        monkeypatch.setattr(firecrawl_provider, "_get_firecrawl_client", lambda: FakeFirecrawlClient())
+        monkeypatch.setattr(
+            firecrawl_provider, "_get_firecrawl_client", lambda: FakeFirecrawlClient()
+        )
         monkeypatch.setattr("tools.interrupt.is_interrupted", lambda: False)
         monkeypatch.setenv("FIRECRAWL_API_KEY", "fake-key")
 
@@ -484,7 +527,9 @@ class TestWebToolPolicy:
                 }
 
         monkeypatch.setattr(firecrawl_provider, "check_website_access", fake_check)
-        monkeypatch.setattr(firecrawl_provider, "_get_firecrawl_client", lambda: FakeFirecrawlClient())
+        monkeypatch.setattr(
+            firecrawl_provider, "_get_firecrawl_client", lambda: FakeFirecrawlClient()
+        )
         monkeypatch.setattr("tools.interrupt.is_interrupted", lambda: False)
         monkeypatch.setenv("FIRECRAWL_API_KEY", "fake-key")
 
@@ -508,6 +553,7 @@ def test_check_website_access_fails_open_on_malformed_config(tmp_path, monkeypat
     # Simulate default path by pointing CLAWK_HOME to tmp_path
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     from tools import website_policy
+
     website_policy.invalidate_cache()
 
     # With default path, errors are caught and fail open

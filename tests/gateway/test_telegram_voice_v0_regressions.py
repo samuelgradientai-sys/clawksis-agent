@@ -14,7 +14,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import BasePlatformAdapter, MessageEvent, MessageType, SendResult
+from gateway.platforms.base import (
+    BasePlatformAdapter,
+    MessageEvent,
+    MessageType,
+    SendResult,
+)
 from plugins.platforms.telegram.adapter import TelegramAdapter
 from gateway.run import GatewayRunner
 from gateway.session import SessionSource
@@ -84,10 +89,14 @@ class _PendingVoiceAgent:
         self._interrupt_message = message
         self._interrupted.set()
 
-    def run_conversation(self, message, conversation_history=None, task_id=None, **kwargs):
+    def run_conversation(
+        self, message, conversation_history=None, task_id=None, **kwargs
+    ):
         type(self).messages.append(message)
         if len(type(self).messages) == 1:
-            assert self._interrupted.wait(timeout=3), "pending voice interrupt was not delivered"
+            assert self._interrupted.wait(timeout=3), (
+                "pending voice interrupt was not delivered"
+            )
             return {
                 "final_response": "interrupted",
                 "messages": [],
@@ -138,7 +147,10 @@ async def test_pending_voice_interrupt_reuses_transcript_and_echo():
         "tools.transcription_tools.transcribe_audio",
         return_value={"success": True, "transcript": "hello once", "provider": "mock"},
     ) as mock_transcribe:
-        interrupt_text, interrupt_transcripts = await runner._transcribe_pending_audio_event_once(
+        (
+            interrupt_text,
+            interrupt_transcripts,
+        ) = await runner._transcribe_pending_audio_event_once(
             event,
             event.text,
         )
@@ -149,7 +161,10 @@ async def test_pending_voice_interrupt_reuses_transcript_and_echo():
             interrupt_transcripts,
         )
 
-        drain_text, drain_transcripts = await runner._transcribe_pending_audio_event_once(
+        (
+            drain_text,
+            drain_transcripts,
+        ) = await runner._transcribe_pending_audio_event_once(
             event,
             event.text,
         )
@@ -178,8 +193,12 @@ async def test_monitor_to_drain_transcribes_and_echoes_pending_voice_once(
 ):
     monkeypatch.setenv("CLAWK_TOOL_PROGRESS_MODE", "off")
     monkeypatch.setenv("CLAWK_GATEWAY_NOTIFY_INTERVAL", "0")
-    monkeypatch.setitem(sys.modules, "dotenv", types.SimpleNamespace(load_dotenv=lambda: None))
-    monkeypatch.setitem(sys.modules, "run_agent", types.SimpleNamespace(AIAgent=_PendingVoiceAgent))
+    monkeypatch.setitem(
+        sys.modules, "dotenv", types.SimpleNamespace(load_dotenv=lambda: None)
+    )
+    monkeypatch.setitem(
+        sys.modules, "run_agent", types.SimpleNamespace(AIAgent=_PendingVoiceAgent)
+    )
 
     adapter = _PendingVoiceAdapter()
     runner = _run_agent_runner(adapter)
@@ -199,10 +218,17 @@ async def test_monitor_to_drain_transcribes_and_echoes_pending_voice_once(
 
     with (
         patch("gateway.run._clawk_home", tmp_path),
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "fake"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs",
+            return_value={"api_key": "fake"},
+        ),
         patch(
             "tools.transcription_tools.transcribe_audio",
-            return_value={"success": True, "transcript": "hello once", "provider": "mock"},
+            return_value={
+                "success": True,
+                "transcript": "hello once",
+                "provider": "mock",
+            },
         ) as mock_transcribe,
     ):
         result = await runner._run_agent(
@@ -249,11 +275,18 @@ async def test_busy_voice_interrupt_transcribes_before_pending_drain(monkeypatch
         patch("tools.approval.has_blocking_approval", return_value=False),
         patch(
             "tools.transcription_tools.transcribe_audio",
-            return_value={"success": True, "transcript": "interrupt me", "provider": "mock"},
+            return_value={
+                "success": True,
+                "transcript": "interrupt me",
+                "provider": "mock",
+            },
         ) as mock_transcribe,
     ):
         handled = await runner._handle_active_session_busy_message(event, session_key)
-        drain_text, drain_transcripts = await runner._transcribe_pending_audio_event_once(
+        (
+            drain_text,
+            drain_transcripts,
+        ) = await runner._transcribe_pending_audio_event_once(
             adapter._pending_messages[session_key],
             event.text,
         )
@@ -295,10 +328,12 @@ async def test_telegram_video_size_gate_rejects_oversized_media_before_download(
     adapter = object.__new__(TelegramAdapter)
     adapter._max_doc_bytes = 1024
     adapter._should_process_message = lambda _message: True
-    adapter._build_message_event = lambda _message, _type, update_id=None: SimpleNamespace(
-        text="caption",
-        media_urls=[],
-        media_types=[],
+    adapter._build_message_event = lambda _message, _type, update_id=None: (
+        SimpleNamespace(
+            text="caption",
+            media_urls=[],
+            media_types=[],
+        )
     )
     adapter._apply_telegram_group_observe_attribution = lambda event: event
 

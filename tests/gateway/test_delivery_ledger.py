@@ -45,9 +45,16 @@ def _row(oid):
                FROM delivery_obligations WHERE obligation_id=?""",
             (oid,),
         ).fetchone()
-    return None if r is None else {
-        "state": r[0], "attempts": r[1], "owner_pid": r[2], "content": r[3],
-    }
+    return (
+        None
+        if r is None
+        else {
+            "state": r[0],
+            "attempts": r[1],
+            "owner_pid": r[2],
+            "content": r[3],
+        }
+    )
 
 
 def _orphan(oid):
@@ -275,8 +282,9 @@ class TestGatewayRedeliverySweep:
         _orphan("ob-1")
         adapter = self._adapter()
         runner = self._runner(adapter)
-        with patch.object(dl, "ledger_enabled", return_value=False), patch(
-            "gateway.delivery_ledger.ledger_enabled", return_value=False
+        with (
+            patch.object(dl, "ledger_enabled", return_value=False),
+            patch("gateway.delivery_ledger.ledger_enabled", return_value=False),
         ):
             n = await runner._redeliver_pending_obligations()
         assert n == 0
@@ -309,7 +317,8 @@ class TestAttemptsOnlySpentOnRealSends:
         with dl._connect() as conn:
             state, attempts = conn.execute(
                 "SELECT state, attempts FROM delivery_obligations "
-                "WHERE obligation_id=?", ("ob-1",),
+                "WHERE obligation_id=?",
+                ("ob-1",),
             ).fetchone()
         assert attempts == 0, "an unsendable boot must not spend the budget"
         assert state == "attempting"
@@ -342,9 +351,7 @@ class TestAttemptsOnlySpentOnRealSends:
         _record(platform="telegram")
         _orphan("ob-1")
         future = time.time() + dl.STALE_AFTER_SECONDS + 10
-        assert dl.sweep_recoverable(
-            now=future, deliverable_platforms={"discord"}
-        ) == []
+        assert dl.sweep_recoverable(now=future, deliverable_platforms={"discord"}) == []
         with dl._connect() as conn:
             state = conn.execute(
                 "SELECT state FROM delivery_obligations WHERE obligation_id=?",

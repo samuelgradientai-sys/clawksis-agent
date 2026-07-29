@@ -7,7 +7,9 @@ import sys
 def _make_discord_adapter():
     """Construct a DiscordAdapter with discord.py stubbed out."""
     fake_discord = types.ModuleType("discord")
-    fake_discord.Intents = type("Intents", (), {"default": classmethod(lambda cls: cls())})
+    fake_discord.Intents = type(
+        "Intents", (), {"default": classmethod(lambda cls: cls())}
+    )
     fake_discord.Message = object
     fake_ext = types.ModuleType("discord.ext")
     fake_commands = types.ModuleType("discord.ext.commands")
@@ -18,12 +20,12 @@ def _make_discord_adapter():
     sys.modules.setdefault("discord.ext.commands", fake_commands)
 
     from plugins.platforms.discord.adapter import DiscordAdapter
+
     adapter = object.__new__(DiscordAdapter)
     return adapter
 
 
 class TestDiscordFormatMessage:
-
     def test_table_converted_to_bullets(self):
         adapter = _make_discord_adapter()
         text = (

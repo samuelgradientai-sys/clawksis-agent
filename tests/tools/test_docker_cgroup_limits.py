@@ -6,6 +6,7 @@ to ``docker run`` fails every container start with OCI runtime error / exit 126.
 ``_cgroup_limits_available`` probes once and the resource flags are gated on it,
 so the sandbox degrades gracefully instead of failing.
 """
+
 import subprocess
 
 import pytest
@@ -51,7 +52,9 @@ def test_probe_returns_false_and_warns_on_oci_error(monkeypatch, caplog):
 
     def _run(cmd, *a, **k):
         return subprocess.CompletedProcess(
-            cmd, 126, stdout="",
+            cmd,
+            126,
+            stdout="",
             stderr="crun: controller `pids` is not available",
         )
 
@@ -70,7 +73,8 @@ def test_probe_returns_false_on_empty_image(monkeypatch):
     """An empty image string must not be probed (would be a malformed run)."""
     monkeypatch.setattr(docker_env, "find_docker", lambda: "/usr/bin/docker")
     monkeypatch.setattr(
-        docker_env.subprocess, "run",
+        docker_env.subprocess,
+        "run",
         lambda *a, **k: pytest.fail("should not probe with empty image"),
     )
     assert docker_env._cgroup_limits_available("") is False

@@ -113,6 +113,7 @@ Subclass `ProviderProfile` for non-trivial quirks:
 from typing import Any
 from providers.base import ProviderProfile
 
+
 class AcmeProfile(ProviderProfile):
     def prepare_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Provider-specific message preprocessing. Runs after codex
@@ -165,14 +166,16 @@ Say you want to point `gmi` at your private staging endpoint for testing. Create
 from providers import register_provider
 from providers.base import ProviderProfile
 
-register_provider(ProviderProfile(
-    name="gmi",
-    aliases=("gmi-cloud", "gmicloud"),
-    env_vars=("GMI_API_KEY",),
-    base_url="https://gmi-staging.internal.example.com/v1",
-    auth_type="api_key",
-    default_aux_model="google/gemini-3.1-flash-lite-preview",
-))
+register_provider(
+    ProviderProfile(
+        name="gmi",
+        aliases=("gmi-cloud", "gmicloud"),
+        env_vars=("GMI_API_KEY",),
+        base_url="https://gmi-staging.internal.example.com/v1",
+        auth_type="api_key",
+        default_aux_model="google/gemini-3.1-flash-lite-preview",
+    )
+)
 ```
 
 Next session, `get_provider_profile("gmi").base_url` returns the staging URL. No repo patch, no rebuild. Because user plugins are discovered after bundled ones, the user `register_provider()` call wins.
@@ -216,6 +219,7 @@ For programmatic inspection:
 
 ```python
 from providers import list_providers
+
 for p in list_providers():
     print(p.name, p.base_url, p.api_mode)
 ```

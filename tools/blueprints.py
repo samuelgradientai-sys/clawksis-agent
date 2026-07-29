@@ -234,7 +234,11 @@ def register_blueprint_suggestion(spec: BlueprintSpec) -> Optional[Dict[str, Any
         title=f"Schedule '{spec.skill_name}'",
         description=(
             f"The '{spec.skill_name}' blueprint runs on schedule {spec.schedule}"
-            + (f", delivering to {spec.deliver}" if spec.deliver and spec.deliver != "origin" else "")
+            + (
+                f", delivering to {spec.deliver}"
+                if spec.deliver and spec.deliver != "origin"
+                else ""
+            )
             + "."
         ),
         source="blueprint",
@@ -243,7 +247,9 @@ def register_blueprint_suggestion(spec: BlueprintSpec) -> Optional[Dict[str, Any
     )
 
 
-def export_blueprint(job: Dict[str, Any], body: str, *, blueprint_name: Optional[str] = None) -> str:
+def export_blueprint(
+    job: Dict[str, Any], body: str, *, blueprint_name: Optional[str] = None
+) -> str:
     """Render a shareable blueprint SKILL.md from an existing cron job dict.
 
     The inverse of ``create_blueprint_job``: take a cron job a user already built

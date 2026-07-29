@@ -81,6 +81,7 @@ class TestDownloadUrlSSRF:
         monkeypatch.setattr(ym, "is_safe_url", lambda u: True, raising=False)
         # is_safe_url is imported inside the function, so patch the source too
         from tools import url_safety
+
         monkeypatch.setattr(url_safety, "is_safe_url", lambda u: True)
         monkeypatch.setattr(ym.httpx, "AsyncClient", _FakeClient)
 

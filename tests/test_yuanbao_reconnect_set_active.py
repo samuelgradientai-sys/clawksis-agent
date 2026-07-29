@@ -57,7 +57,11 @@ async def test_do_reconnect_calls_set_active_on_success():
             new_callable=AsyncMock,
             return_value={"bot_id": "test_bot", "token": "test_token"},
         ),
-        patch("gateway.platforms.yuanbao.websockets.connect", new_callable=AsyncMock, return_value=mock_ws),
+        patch(
+            "gateway.platforms.yuanbao.websockets.connect",
+            new_callable=AsyncMock,
+            return_value=mock_ws,
+        ),
         patch.object(cm, "_authenticate", new_callable=AsyncMock, return_value=True),
         patch.object(cm, "_heartbeat_loop", new_callable=AsyncMock),
         patch.object(cm, "_receive_loop", new_callable=AsyncMock),

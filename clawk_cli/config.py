@@ -800,7 +800,9 @@ def recommended_update_command() -> str:
 # banner, the TUI/desktop session info panel, and ``clawk update``. NixOS
 # stays fully supported (Tier 2) and must never hit this path.
 
-PLATFORM_SUPPORT_DOCS_URL = "https://github.com/samuelgradientai-sys/clawksis-agent#installation"
+PLATFORM_SUPPORT_DOCS_URL = (
+    "https://github.com/samuelgradientai-sys/clawksis-agent#installation"
+)
 
 _UNSUPPORTED_INSTALL_METHODS = frozenset({"pip", "homebrew"})
 
@@ -4957,7 +4959,9 @@ def apply_custom_provider_extra_headers_to_client_kwargs(
 
     SECURITY: values may carry credentials — never log them.
     """
-    extra_headers = get_custom_provider_extra_headers(base_url, custom_providers, config)
+    extra_headers = get_custom_provider_extra_headers(
+        base_url, custom_providers, config
+    )
     if not extra_headers:
         return
     merged = dict(client_kwargs.get("default_headers") or {})
@@ -5147,29 +5151,29 @@ def check_config_version() -> Tuple[int, int]:
 
 _EXTRA_KNOWN_ROOT_KEYS = {
     "custom_providers",  # legacy list form; modern equivalent is providers: {}
-    "fallback_model",    # optional single dict or chain list; omitted when disabled
-    "mcp_servers",       # MCP server definitions written by setup/tools flows
+    "fallback_model",  # optional single dict or chain list; omitted when disabled
+    "mcp_servers",  # MCP server definitions written by setup/tools flows
     # Roots read from the raw user YAML (or written by our own flows) that are
     # intentionally absent from DEFAULT_CONFIG:
-    "image_gen",         # image-generation provider config (agent/image_gen_registry.py)
-    "video_gen",         # video-generation provider config (agent/video_gen_registry.py)
-    "plugins",           # plugin enable/disable lists (clawk_cli/plugins_cmd.py)
-    "smart_model_routing",   # written by the setup wizard (clawk_cli/setup.py)
-    "platform_toolsets",     # written by the setup wizard (clawk_cli/setup.py)
-    "known_plugin_toolsets", # written/read by clawk_cli/tools_config.py toolset-save flow
-    "session_reset",         # top-level form read by gateway/config.py + setup
-    "group_sessions_per_user",   # top-level form bridged by gateway/config.py
+    "image_gen",  # image-generation provider config (agent/image_gen_registry.py)
+    "video_gen",  # video-generation provider config (agent/video_gen_registry.py)
+    "plugins",  # plugin enable/disable lists (clawk_cli/plugins_cmd.py)
+    "smart_model_routing",  # written by the setup wizard (clawk_cli/setup.py)
+    "platform_toolsets",  # written by the setup wizard (clawk_cli/setup.py)
+    "known_plugin_toolsets",  # written/read by clawk_cli/tools_config.py toolset-save flow
+    "session_reset",  # top-level form read by gateway/config.py + setup
+    "group_sessions_per_user",  # top-level form bridged by gateway/config.py
     "thread_sessions_per_user",  # top-level form bridged by gateway/config.py
-    "stt_echo_transcripts",      # top-level form bridged by gateway/config.py
-    "reset_triggers",            # top-level form bridged by gateway/config.py
-    "always_log_local",          # top-level form bridged by gateway/config.py
+    "stt_echo_transcripts",  # top-level form bridged by gateway/config.py
+    "reset_triggers",  # top-level form bridged by gateway/config.py
+    "always_log_local",  # top-level form bridged by gateway/config.py
     "filter_silence_narration",  # top-level form bridged by gateway/config.py
-    "multiplex_profiles",    # top-level form accepted alongside gateway.multiplex_profiles
-    "profile_routes",        # top-level form accepted alongside gateway.profile_routes
-    "platforms",             # top-level per-platform map merged by gateway/config.py
-    "require_mention",       # top-level convenience form honored by the gateway (#3979)
+    "multiplex_profiles",  # top-level form accepted alongside gateway.multiplex_profiles
+    "profile_routes",  # top-level form accepted alongside gateway.profile_routes
+    "platforms",  # top-level per-platform map merged by gateway/config.py
+    "require_mention",  # top-level convenience form honored by the gateway (#3979)
     "unauthorized_dm_behavior",  # top-level form read by gateway/config.py
-    "signal",            # Signal settings bridged to env vars by gateway/config.py
+    "signal",  # Signal settings bridged to env vars by gateway/config.py
 }
 _KNOWN_ROOT_KEYS = frozenset(DEFAULT_CONFIG.keys()) | _EXTRA_KNOWN_ROOT_KEYS
 
@@ -8607,11 +8611,25 @@ _OPEN_DICT_TOP_LEVEL_KEYS = frozenset({
 # etc.). For these we validate the FIRST segment but accept anything below.
 _SCHEMA_DEFINED_DICT_KEYS = frozenset({
     # Platform configs — PlatformConfig dataclass + dynamic extras
-    "discord", "telegram", "slack", "whatsapp", "signal", "mattermost",
-    "matrix", "feishu", "wecom", "weixin", "bluebubbles", "qqbot", "yuanbao",
-    "email", "sms", "dingtalk",
+    "discord",
+    "telegram",
+    "slack",
+    "whatsapp",
+    "signal",
+    "mattermost",
+    "matrix",
+    "feishu",
+    "wecom",
+    "weixin",
+    "bluebubbles",
+    "qqbot",
+    "yuanbao",
+    "email",
+    "sms",
+    "dingtalk",
     # MCP server template / dynamic auth dicts
-    "sessions", "checkpoints",
+    "sessions",
+    "checkpoints",
 })
 
 # Top-level keys that can be ANY user-supplied name (platform/provider dict
@@ -9393,6 +9411,7 @@ def _inject_platform_plugin_env_vars() -> None:
 
 _inject_platform_plugin_env_vars()
 
+
 def require_readable_config_before_write(config_path: Optional[Path] = None) -> None:
     """Refuse to replace an existing config.yaml that cannot be read."""
     if config_path is None:
@@ -9415,6 +9434,7 @@ def require_readable_config_before_write(config_path: Optional[Path] = None) -> 
             f"Refusing to overwrite {config_path}: existing config.yaml cannot be read "
             f"({exc}). Fix the file permissions or move it aside first."
         ) from exc
+
 
 def atomic_config_write(config_path: Path, data: Any, **kwargs: Any) -> None:
     """Fail-closed atomic write for ``config.yaml``.
@@ -9471,6 +9491,7 @@ def clear_model_endpoint_credentials(
 
 _MISSING = object()
 
+
 def _explicit_config_paths(config: Dict[str, Any]) -> Set[Tuple[str, ...]]:
     """Return leaf paths explicitly present in a raw config dict.
 
@@ -9494,6 +9515,7 @@ def _explicit_config_paths(config: Dict[str, Any]) -> Set[Tuple[str, ...]]:
 
     _walk(config, ())
     return paths
+
 
 def _persist_migration(config: Dict[str, Any]) -> None:
     """Persist a migrated config under the migration write invariant.

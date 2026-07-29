@@ -61,9 +61,12 @@ class TestIsUnusableContainerCwd:
         assert "/Users/" in tt._HOST_CWD_PREFIXES
 
     def test_container_backends_set(self):
-        assert tt._CONTAINER_BACKENDS == frozenset(
-            {"docker", "singularity", "modal", "daytona"}
-        )
+        assert tt._CONTAINER_BACKENDS == frozenset({
+            "docker",
+            "singularity",
+            "modal",
+            "daytona",
+        })
 
 
 class TestOverrideCwdSanitizedAtCallSite:
@@ -154,8 +157,9 @@ class TestFileOpsCwdSanitizedAtCallSite:
     ``docker run -w`` and ``search_files`` returns an empty workspace (#54447).
     """
 
-    def _run_and_capture_cwd(self, monkeypatch, override_cwd, env_type="docker",
-                             config_cwd="/workspace"):
+    def _run_and_capture_cwd(
+        self, monkeypatch, override_cwd, env_type="docker", config_cwd="/workspace"
+    ):
         """Drive ``_get_file_ops()`` on a container backend with a host-path cwd
         override registered, and return the cwd that reached
         ``_create_environment`` (i.e. the cwd passed to ``docker run -w``).
@@ -248,10 +252,12 @@ class TestFileOpsCwdSanitizedAtCallSite:
 
     def test_host_override_sanitized_on_singularity(self, monkeypatch):
         cwd = self._run_and_capture_cwd(
-            monkeypatch, "/Users/me/workspace", env_type="singularity")
+            monkeypatch, "/Users/me/workspace", env_type="singularity"
+        )
         assert cwd == "/workspace"
 
     def test_host_override_sanitized_on_modal(self, monkeypatch):
         cwd = self._run_and_capture_cwd(
-            monkeypatch, "/Users/me/workspace", env_type="modal")
+            monkeypatch, "/Users/me/workspace", env_type="modal"
+        )
         assert cwd == "/workspace"

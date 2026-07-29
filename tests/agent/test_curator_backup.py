@@ -24,8 +24,10 @@ def backup_env(monkeypatch, tmp_path):
 
     # Reload so get_clawk_home picks up the env var fresh.
     import clawk_constants
+
     importlib.reload(clawk_constants)
     from agent import curator_backup
+
     importlib.reload(curator_backup)
     return {"home": home, "skills": home / "skills", "cb": curator_backup}
 
@@ -43,6 +45,7 @@ def _write_skill(skills_dir: Path, name: str, body: str = "body") -> Path:
 # ---------------------------------------------------------------------------
 # snapshot_skills
 # ---------------------------------------------------------------------------
+
 
 def test_snapshot_creates_tarball_and_manifest(backup_env):
     cb = backup_env["cb"]
@@ -123,7 +126,9 @@ def test_snapshot_prunes_to_keep_count(backup_env, monkeypatch):
         monkeypatch.setattr(cb, "_utc_id", lambda now=None, _f=fid: _f)
         cb.snapshot_skills(reason=f"n{i}")
 
-    remaining = sorted(p.name for p in (backup_env["skills"] / ".curator_backups").iterdir())
+    remaining = sorted(
+        p.name for p in (backup_env["skills"] / ".curator_backups").iterdir()
+    )
     # Newest 3 kept (lex order == date order for this id format)
     assert remaining == ids[2:], f"expected newest 3, got {remaining}"
 
@@ -131,6 +136,7 @@ def test_snapshot_prunes_to_keep_count(backup_env, monkeypatch):
 # ---------------------------------------------------------------------------
 # list_backups / _resolve_backup
 # ---------------------------------------------------------------------------
+
 
 def test_list_backups_empty(backup_env):
     cb = backup_env["cb"]
@@ -172,6 +178,7 @@ def test_resolve_backup_unknown_id_returns_none(backup_env):
 # rollback
 # ---------------------------------------------------------------------------
 
+
 def test_rollback_restores_deleted_skill(backup_env):
     """The whole point of this feature: user loses a skill, rollback
     brings it back."""
@@ -182,6 +189,7 @@ def test_rollback_restores_deleted_skill(backup_env):
 
     # Simulate curator archiving it out of existence
     import shutil as _sh
+
     _sh.rmtree(user_skill)
     assert not user_skill.exists()
 
@@ -204,6 +212,7 @@ def test_rollback_is_itself_undoable(backup_env):
 
     # Overwrite with a new skill state
     import shutil as _sh
+
     _sh.rmtree(skills / "v1")
     _write_skill(skills, "v2")
 
@@ -213,14 +222,18 @@ def test_rollback_is_itself_undoable(backup_env):
 
     # list_backups should show a safety snapshot tagged "pre-rollback to <target-id>"
     rows = cb.list_backups()
-    pre_rollback_entries = [r for r in rows if "pre-rollback" in (r.get("reason") or "")]
+    pre_rollback_entries = [
+        r for r in rows if "pre-rollback" in (r.get("reason") or "")
+    ]
     assert len(pre_rollback_entries) >= 1, (
         f"expected a pre-rollback safety snapshot in list_backups(), got: "
         f"{[(r.get('id'), r.get('reason')) for r in rows]}"
     )
     # And the transient staging dir must be gone (it's implementation detail)
     backups_dir = skills / ".curator_backups"
-    staging_dirs = [p for p in backups_dir.iterdir() if p.name.startswith(".rollback-staging-")]
+    staging_dirs = [
+        p for p in backups_dir.iterdir() if p.name.startswith(".rollback-staging-")
+    ]
     assert staging_dirs == [], (
         f"staging dir should be cleaned up on success, got: {staging_dirs}"
     )
@@ -263,6 +276,7 @@ def test_rollback_rejects_unsafe_tarball(backup_env, monkeypatch):
 # Integration with run_curator_review
 # ---------------------------------------------------------------------------
 
+
 def test_real_run_takes_pre_snapshot(backup_env, monkeypatch):
     """A real (non-dry) curator pass must snapshot the tree before calling
     apply_automatic_transitions. This is the safety net #18373 asked for."""
@@ -272,18 +286,32 @@ def test_real_run_takes_pre_snapshot(backup_env, monkeypatch):
 
     # Reload curator module against the freshly-env'd clawk_constants
     from agent import curator
+
     importlib.reload(curator)
 
     # Stub out LLM review and auto transitions — we only care about the
     # snapshot side-effect.
     monkeypatch.setattr(
-        curator, "_run_llm_review",
-        lambda p: {"final": "", "summary": "s", "model": "", "provider": "",
-                   "tool_calls": [], "error": None},
+        curator,
+        "_run_llm_review",
+        lambda p: {
+            "final": "",
+            "summary": "s",
+            "model": "",
+            "provider": "",
+            "tool_calls": [],
+            "error": None,
+        },
     )
     monkeypatch.setattr(
-        curator, "apply_automatic_transitions",
-        lambda now=None: {"checked": 1, "marked_stale": 0, "archived": 0, "reactivated": 0},
+        curator,
+        "apply_automatic_transitions",
+        lambda now=None: {
+            "checked": 1,
+            "marked_stale": 0,
+            "archived": 0,
+            "reactivated": 0,
+        },
     )
 
     curator.run_curator_review(synchronous=True)
@@ -302,11 +330,19 @@ def test_dry_run_skips_snapshot(backup_env, monkeypatch):
     _write_skill(skills, "alpha")
 
     from agent import curator
+
     importlib.reload(curator)
     monkeypatch.setattr(
-        curator, "_run_llm_review",
-        lambda p: {"final": "", "summary": "s", "model": "", "provider": "",
-                   "tool_calls": [], "error": None},
+        curator,
+        "_run_llm_review",
+        lambda p: {
+            "final": "",
+            "summary": "s",
+            "model": "",
+            "provider": "",
+            "tool_calls": [],
+            "error": None,
+        },
     )
 
     curator.run_curator_review(synchronous=True, dry_run=True)
@@ -338,13 +374,16 @@ def _write_cron_jobs(home: Path, jobs: list) -> Path:
 def _reload_cron_jobs(home: Path):
     """Reload cron.jobs so its module-level CLAWK_DIR picks up the tmp HOME."""
     import clawk_constants
+
     importlib.reload(clawk_constants)
     if "cron.jobs" in sys.modules:
         import cron.jobs as _cj
+
         importlib.reload(_cj)
     else:
         import cron.jobs as _cj  # noqa: F401
     import cron.jobs as cj
+
     return cj
 
 
@@ -352,10 +391,13 @@ def test_snapshot_includes_cron_jobs(backup_env):
     """With a cron/jobs.json present, snapshot writes cron-jobs.json and records it in manifest."""
     cb = backup_env["cb"]
     _write_skill(backup_env["skills"], "alpha")
-    _write_cron_jobs(backup_env["home"], [
-        {"id": "job-a", "name": "a", "schedule": "every 1h", "skills": ["alpha"]},
-        {"id": "job-b", "name": "b", "schedule": "every 2h", "skill": "alpha"},
-    ])
+    _write_cron_jobs(
+        backup_env["home"],
+        [
+            {"id": "job-a", "name": "a", "schedule": "every 1h", "skills": ["alpha"]},
+            {"id": "job-b", "name": "b", "schedule": "every 2h", "skill": "alpha"},
+        ],
+    )
 
     snap = cb.snapshot_skills(reason="test")
     assert snap is not None
@@ -435,8 +477,9 @@ def test_rollback_restores_cron_skill_links(backup_env):
     _write_skill(backup_env["skills"], "umbrella")
 
     cj = _reload_cron_jobs(home)
-    cj.create_job(name="weekly", prompt="p", schedule="every 7d",
-                  skills=["alpha", "beta"])
+    cj.create_job(
+        name="weekly", prompt="p", schedule="every 7d", skills=["alpha", "beta"]
+    )
 
     snap = cb.snapshot_skills(reason="pre-curator-run")
     assert snap is not None
@@ -468,15 +511,20 @@ def test_rollback_only_touches_skill_fields(backup_env):
 
     # Hand-rolled jobs.json with varied fields (no real create_job — we want
     # exact field control).
-    _write_cron_jobs(home, [{
-        "id": "stable-id",
-        "name": "original-name",
-        "prompt": "original prompt",
-        "schedule": "every 1h",
-        "skills": ["alpha"],
-        "enabled": True,
-        "last_run_at": "2026-04-01T00:00:00Z",
-    }])
+    _write_cron_jobs(
+        home,
+        [
+            {
+                "id": "stable-id",
+                "name": "original-name",
+                "prompt": "original prompt",
+                "schedule": "every 1h",
+                "skills": ["alpha"],
+                "enabled": True,
+                "last_run_at": "2026-04-01T00:00:00Z",
+            }
+        ],
+    )
     snap = cb.snapshot_skills(reason="pre-curator-run")
     assert snap is not None
 
@@ -511,10 +559,23 @@ def test_rollback_skips_jobs_the_user_deleted(backup_env):
     home = backup_env["home"]
     _write_skill(backup_env["skills"], "alpha")
 
-    _write_cron_jobs(home, [
-        {"id": "keep-me", "name": "keep", "schedule": "every 1h", "skills": ["alpha"]},
-        {"id": "delete-me", "name": "gone", "schedule": "every 1h", "skills": ["alpha"]},
-    ])
+    _write_cron_jobs(
+        home,
+        [
+            {
+                "id": "keep-me",
+                "name": "keep",
+                "schedule": "every 1h",
+                "skills": ["alpha"],
+            },
+            {
+                "id": "delete-me",
+                "name": "gone",
+                "schedule": "every 1h",
+                "skills": ["alpha"],
+            },
+        ],
+    )
     snap = cb.snapshot_skills(reason="pre-curator-run")
 
     # User deletes one job after the snapshot
@@ -535,15 +596,27 @@ def test_rollback_leaves_new_jobs_untouched(backup_env):
     cb = backup_env["cb"]
     home = backup_env["home"]
     _write_skill(backup_env["skills"], "alpha")
-    _write_cron_jobs(home, [
-        {"id": "original", "name": "o", "schedule": "every 1h", "skills": ["alpha"]},
-    ])
+    _write_cron_jobs(
+        home,
+        [
+            {
+                "id": "original",
+                "name": "o",
+                "schedule": "every 1h",
+                "skills": ["alpha"],
+            },
+        ],
+    )
     snap = cb.snapshot_skills(reason="pre-curator-run")
 
     cj = _reload_cron_jobs(home)
     jobs = cj.load_jobs()
-    jobs.append({"id": "new-after-snapshot", "name": "new",
-                 "schedule": "every 15m", "skills": ["brand-new-skill"]})
+    jobs.append({
+        "id": "new-after-snapshot",
+        "name": "new",
+        "schedule": "every 15m",
+        "skills": ["brand-new-skill"],
+    })
     cj.save_jobs(jobs)
 
     ok, _, _ = cb.rollback(backup_id=snap.name)
@@ -571,9 +644,12 @@ def test_rollback_with_snapshot_missing_cron_succeeds(backup_env):
     assert not (snap / cb.CRON_JOBS_FILENAME).exists()
 
     # Later the user created a cron job
-    _write_cron_jobs(home, [
-        {"id": "later-job", "name": "l", "schedule": "every 1h", "skills": ["x"]},
-    ])
+    _write_cron_jobs(
+        home,
+        [
+            {"id": "later-job", "name": "l", "schedule": "every 1h", "skills": ["x"]},
+        ],
+    )
 
     ok, msg, _ = cb.rollback(backup_id=snap.name)
     # Main rollback still succeeds; cron report notes the missing file.
@@ -594,18 +670,34 @@ def test_restore_cron_skill_links_standalone(backup_env):
     # Prime a snapshot dir manually with cron-jobs.json
     backups_dir = home / "skills" / ".curator_backups" / "fake-id"
     backups_dir.mkdir(parents=True)
-    (backups_dir / cb.CRON_JOBS_FILENAME).write_text(json.dumps([
-        {"id": "job-1", "name": "one", "skills": ["narrow-a", "narrow-b"]},
-        {"id": "job-2", "name": "two", "skill": "legacy-single"},
-        {"id": "job-gone", "name": "deleted", "skills": ["whatever"]},
-    ]), encoding="utf-8")
+    (backups_dir / cb.CRON_JOBS_FILENAME).write_text(
+        json.dumps([
+            {"id": "job-1", "name": "one", "skills": ["narrow-a", "narrow-b"]},
+            {"id": "job-2", "name": "two", "skill": "legacy-single"},
+            {"id": "job-gone", "name": "deleted", "skills": ["whatever"]},
+        ]),
+        encoding="utf-8",
+    )
 
     # Live jobs: job-1 got rewritten, job-2 unchanged, job-gone deleted
-    _write_cron_jobs(home, [
-        {"id": "job-1", "name": "one", "skills": ["umbrella"], "schedule": "every 1h"},
-        {"id": "job-2", "name": "two", "skill": "legacy-single", "schedule": "every 1h"},
-        {"id": "job-new", "name": "new", "skills": ["x"], "schedule": "every 1h"},
-    ])
+    _write_cron_jobs(
+        home,
+        [
+            {
+                "id": "job-1",
+                "name": "one",
+                "skills": ["umbrella"],
+                "schedule": "every 1h",
+            },
+            {
+                "id": "job-2",
+                "name": "two",
+                "skill": "legacy-single",
+                "schedule": "every 1h",
+            },
+            {"id": "job-new", "name": "new", "skills": ["x"], "schedule": "every 1h"},
+        ],
+    )
     _reload_cron_jobs(home)
 
     report = cb._restore_cron_skill_links(backups_dir)
@@ -623,6 +715,7 @@ def test_restore_cron_skill_links_standalone(backup_env):
 # Rollback must not let the pre-rollback safety snapshot prune the target
 # (regression: restoring the oldest snapshot at the keep limit destroyed it)
 # ---------------------------------------------------------------------------
+
 
 def _three_ordered_snapshots(cb, skills, monkeypatch):
     """Create snapshots 05-01 / 05-02 / 05-03 capturing growing trees, with
@@ -658,10 +751,14 @@ def test_rollback_to_oldest_snapshot_at_keep_limit_succeeds(backup_env, monkeypa
     assert ok is True, f"rollback to oldest snapshot should succeed, got: {msg}"
     # 05-01 only contained 'pristine'; a real restore reflects exactly that.
     assert (skills / "pristine" / "SKILL.md").exists()
-    assert not (skills / "extra3").exists(), "tree was not restored to the oldest snapshot"
+    assert not (skills / "extra3").exists(), (
+        "tree was not restored to the oldest snapshot"
+    )
 
 
-def test_rollback_does_not_delete_the_snapshot_it_restores_from(backup_env, monkeypatch):
+def test_rollback_does_not_delete_the_snapshot_it_restores_from(
+    backup_env, monkeypatch
+):
     """The snapshot a rollback restores from must still exist afterwards — the
     safety snapshot's prune must never delete the target."""
     cb = backup_env["cb"]

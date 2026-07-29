@@ -17,6 +17,7 @@ dying (issue #50185):
 
 No Node sidecar is spawned and no ports are bound.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -36,6 +37,7 @@ def _make_adapter(monkeypatch: pytest.MonkeyPatch) -> PhotonAdapter:
 
 # -- Gap 1: retryable classification of overflow errors ---------------------
 
+
 @pytest.mark.parametrize(
     "error",
     [
@@ -52,7 +54,9 @@ def test_overflow_strings_classified_retryable(error: str) -> None:
 
 def test_unrelated_error_not_retryable() -> None:
     # A genuine permanent failure must NOT be retried.
-    assert PhotonAdapter._is_retryable_error("400 bad request: invalid spaceId") is False
+    assert (
+        PhotonAdapter._is_retryable_error("400 bad request: invalid spaceId") is False
+    )
     assert PhotonAdapter._is_retryable_error(None) is False
 
 
@@ -63,6 +67,7 @@ def test_base_network_patterns_still_match() -> None:
 
 
 # -- Gap 2: typing-indicator cooldown ---------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_typing_cooldown_suppresses_rapid_repeats(
@@ -131,6 +136,7 @@ async def test_stop_typing_resets_cooldown(
 
 
 # -- Gap 3: sidecar crash detection -----------------------------------------
+
 
 class _EofStdout:
     """A proc.stdout whose readline() reports immediate EOF (dead sidecar)."""

@@ -26,6 +26,7 @@ from tools.file_operations import (
 # Write deny list
 # =========================================================================
 
+
 class TestIsWriteDenied:
     def test_ssh_authorized_keys_denied(self):
         path = os.path.join(str(Path.home()), ".ssh", "authorized_keys")
@@ -77,6 +78,7 @@ class TestIsWriteDenied:
     def test_oauth_mcp_tokens_and_pairing_denied(self, path):
         """PKCE creds, mcp-tokens, and pairing entries must be write-denied."""
         from clawk_constants import get_clawk_home
+
         clawk_home = get_clawk_home()
         full_path = str(clawk_home / path)
         assert _is_write_denied(full_path) is True
@@ -99,6 +101,7 @@ class TestIsWriteDenied:
     def test_oauth_traversal_denied(self, path):
         """Path traversal attempts to protected OAuth files must be blocked."""
         from clawk_constants import get_clawk_home
+
         clawk_home = get_clawk_home()
         full_path = str(clawk_home / path)
         assert _is_write_denied(full_path) is True
@@ -130,7 +133,9 @@ class TestIsWriteDenied:
         "name",
         ["auth.json", "config.yaml", "webhook_subscriptions.json"],
     )
-    def test_control_files_requested_writable_in_profile_mode(self, tmp_path, monkeypatch, name):
+    def test_control_files_requested_writable_in_profile_mode(
+        self, tmp_path, monkeypatch, name
+    ):
         root = tmp_path / "clawk"
         profile = root / "profiles" / "coder"
         profile.mkdir(parents=True)
@@ -166,25 +171,32 @@ class TestIsWriteDenied:
         monkeypatch.setenv("CLAWK_HOME", str(profile))
 
         # Active profile pairing entries
-        assert _is_write_denied(str(profile / "pairing" / "telegram-approved.json")) is True
-        assert _is_write_denied(str(profile / "pairing" / "discord-pending.json")) is True
+        assert (
+            _is_write_denied(str(profile / "pairing" / "telegram-approved.json"))
+            is True
+        )
+        assert (
+            _is_write_denied(str(profile / "pairing" / "discord-pending.json")) is True
+        )
         # The directory itself
         assert _is_write_denied(str(profile / "pairing")) is True
         # Root pairing entries (profile mode — same shape as mcp-tokens gap)
-        assert _is_write_denied(str(root / "pairing" / "telegram-approved.json")) is True
+        assert (
+            _is_write_denied(str(root / "pairing" / "telegram-approved.json")) is True
+        )
         assert _is_write_denied(str(root / "pairing")) is True
-
 
 
 # =========================================================================
 # Result dataclasses
 # =========================================================================
 
+
 class TestReadResult:
     def test_to_dict_omits_defaults(self):
         r = ReadResult()
         d = r.to_dict()
-        assert "error" not in d    # None omitted
+        assert "error" not in d  # None omitted
         assert "similar_files" not in d  # empty list omitted
 
     def test_to_dict_preserves_empty_content(self):
@@ -285,13 +297,17 @@ class TestSearchResultDensify:
         for p in paths:
             for _ in range(per):
                 ln += 1
-                out.append(SearchMatch(path=p, line_number=ln,
-                                       content=f"line content {ln}"))
+                out.append(
+                    SearchMatch(path=p, line_number=ln, content=f"line content {ln}")
+                )
         # pad remainder onto the last path
         while len(out) < n:
             ln += 1
-            out.append(SearchMatch(path=paths[-1], line_number=ln,
-                                   content=f"line content {ln}"))
+            out.append(
+                SearchMatch(
+                    path=paths[-1], line_number=ln, content=f"line content {ln}"
+                )
+            )
         return out
 
     def test_densify_off_by_default(self):
@@ -311,8 +327,9 @@ class TestSearchResultDensify:
         assert "matches_text" not in d
 
     def test_densify_emits_path_grouped_text(self):
-        r = SearchResult(matches=self._matches(6, paths=["a.py", "b.py"]),
-                         total_count=6)
+        r = SearchResult(
+            matches=self._matches(6, paths=["a.py", "b.py"]), total_count=6
+        )
         d = r.to_dict(densify=True)
         assert "matches" not in d
         assert "matches_text" in d
@@ -326,6 +343,7 @@ class TestSearchResultDensify:
         # Every path, line number, and content byte must be recoverable from
         # the dense form.
         import re
+
         matches = [
             SearchMatch(path="src/x.py", line_number=12, content="    def foo():"),
             SearchMatch(path="src/x.py", line_number=45, content="        return bar"),
@@ -354,25 +372,31 @@ class TestSearchResultDensify:
 
     def test_densify_smaller_than_verbose(self):
         import json
+
         matches = self._matches(40, paths=["pkg/module_one.py", "pkg/module_two.py"])
         r = SearchResult(matches=matches, total_count=40)
         verbose = json.dumps(r.to_dict(densify=False), ensure_ascii=False)
         dense = json.dumps(r.to_dict(densify=True), ensure_ascii=False)
         assert len(dense) < len(verbose)
 
-    @pytest.mark.parametrize("content", [
-        "x = {'k': 1, 'url': 'http://h:8080'}",   # colons in content
-        "        deeply.indented(call)",          # leading indentation preserved
-        "# \u65e5\u672c\u8a9e comment \U0001f525",  # unicode + emoji
-        "",                                        # empty content
-        "trailing spaces   ",                     # rstrip'd (see note below)
-        'mix "quotes" and , commas',              # punctuation that breaks naive CSV
-    ])
+    @pytest.mark.parametrize(
+        "content",
+        [
+            "x = {'k': 1, 'url': 'http://h:8080'}",  # colons in content
+            "        deeply.indented(call)",  # leading indentation preserved
+            "# \u65e5\u672c\u8a9e comment \U0001f525",  # unicode + emoji
+            "",  # empty content
+            "trailing spaces   ",  # rstrip'd (see note below)
+            'mix "quotes" and , commas',  # punctuation that breaks naive CSV
+        ],
+    )
     def test_densify_content_is_lossless(self, content):
         # Every realistic single-line match content must round-trip exactly
         # (trailing whitespace is the one documented transform — rstrip).
-        matches = [SearchMatch(path=f"f{i}.py", line_number=i + 1, content=content)
-                   for i in range(6)]
+        matches = [
+            SearchMatch(path=f"f{i}.py", line_number=i + 1, content=content)
+            for i in range(6)
+        ]
         r = SearchResult(matches=matches, total_count=6)
         text = r.to_dict(densify=True)["matches_text"]
         recovered = []
@@ -394,17 +418,25 @@ class TestSearchResultDensify:
         # a (synthetic, never-produced-by-rg) multiline content would split
         # across rows. If search ever emits multiline content, densify must
         # escape newlines first.
-        matches = [SearchMatch(path="a.py", line_number=i + 1, content="single line")
-                   for i in range(6)]
-        text = SearchResult(matches=matches, total_count=6).to_dict(densify=True)["matches_text"]
+        matches = [
+            SearchMatch(path="a.py", line_number=i + 1, content="single line")
+            for i in range(6)
+        ]
+        text = SearchResult(matches=matches, total_count=6).to_dict(densify=True)[
+            "matches_text"
+        ]
         # one header + six rows == 7 lines, no row spans multiple lines
         body_rows = [ln for ln in text.split("\n") if re.match(r"^  \d+: ", ln)]
         assert len(body_rows) == 6
 
     def test_densify_paths_with_spaces(self):
-        matches = [SearchMatch(path="my dir/a b.py", line_number=i + 1, content=f"x{i}")
-                   for i in range(6)]
-        text = SearchResult(matches=matches, total_count=6).to_dict(densify=True)["matches_text"]
+        matches = [
+            SearchMatch(path="my dir/a b.py", line_number=i + 1, content=f"x{i}")
+            for i in range(6)
+        ]
+        text = SearchResult(matches=matches, total_count=6).to_dict(densify=True)[
+            "matches_text"
+        ]
         # path with spaces survives as a header line verbatim
         assert "my dir/a b.py" in text.split("\n")[0]
 
@@ -431,6 +463,7 @@ class TestLintResult:
 # =========================================================================
 # ShellFileOperations helpers
 # =========================================================================
+
 
 @pytest.fixture()
 def mock_env():
@@ -467,13 +500,18 @@ class TestShellFileOpsHelpers:
         # Should be safely escaped
         assert result.count("'") >= 4  # wrapping + escaping
 
-    def test_escape_shell_arg_rewrites_windows_drive_paths_to_msys(self, monkeypatch, file_ops):
+    def test_escape_shell_arg_rewrites_windows_drive_paths_to_msys(
+        self, monkeypatch, file_ops
+    ):
         # bash eats backslashes and MSYS mangles ``C:\...``; the Git Bash
         # ``/c/...`` form is the reliable one (reuses _windows_to_msys_path).
         import tools.environments.local as local_mod
 
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
-        assert file_ops._escape_shell_arg(r"C:\Users\alice\notes.txt") == "'/c/Users/alice/notes.txt'"
+        assert (
+            file_ops._escape_shell_arg(r"C:\Users\alice\notes.txt")
+            == "'/c/Users/alice/notes.txt'"
+        )
         # Non-drive paths are untouched.
         assert file_ops._escape_shell_arg("/tmp/foo") == "'/tmp/foo'"
 
@@ -486,13 +524,16 @@ class TestShellFileOpsHelpers:
             "'/c/Users/Alexander/Documents/NewTEST/readme.txt'"
         )
 
-    def test_escape_shell_arg_rewrites_forward_slash_native_paths(self, monkeypatch, file_ops):
+    def test_escape_shell_arg_rewrites_forward_slash_native_paths(
+        self, monkeypatch, file_ops
+    ):
         import tools.environments.local as local_mod
 
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
-        assert file_ops._escape_shell_arg(
-            "C:/Users/alice/notes.txt"
-        ) == "'/c/Users/alice/notes.txt'"
+        assert (
+            file_ops._escape_shell_arg("C:/Users/alice/notes.txt")
+            == "'/c/Users/alice/notes.txt'"
+        )
 
     def test_read_file_uses_bash_safe_windows_paths(self, mock_env, monkeypatch):
         import tools.environments.local as local_mod
@@ -638,12 +679,14 @@ class TestSearchPathValidation:
 
     def test_search_nonexistent_path_returns_error(self, mock_env):
         """search() should return an error when the path doesn't exist."""
+
         def side_effect(command, **kwargs):
             if "test -e" in command:
                 return {"output": "not_found", "returncode": 1}
             if "command -v" in command:
                 return {"output": "yes", "returncode": 0}
             return {"output": "", "returncode": 0}
+
         mock_env.execute.side_effect = side_effect
         ops = ShellFileOperations(mock_env)
         result = ops.search("pattern", path="/nonexistent/path")
@@ -652,12 +695,14 @@ class TestSearchPathValidation:
 
     def test_search_nonexistent_path_files_mode(self, mock_env):
         """search(target='files') should also return error for bad paths."""
+
         def side_effect(command, **kwargs):
             if "test -e" in command:
                 return {"output": "not_found", "returncode": 1}
             if "command -v" in command:
                 return {"output": "yes", "returncode": 0}
             return {"output": "", "returncode": 0}
+
         mock_env.execute.side_effect = side_effect
         ops = ShellFileOperations(mock_env)
         result = ops.search("*.py", path="/nonexistent/path", target="files")
@@ -666,6 +711,7 @@ class TestSearchPathValidation:
 
     def test_search_existing_path_proceeds(self, mock_env):
         """search() should proceed normally when the path exists."""
+
         def side_effect(command, **kwargs):
             if "test -e" in command:
                 return {"output": "exists", "returncode": 0}
@@ -673,6 +719,7 @@ class TestSearchPathValidation:
                 return {"output": "yes", "returncode": 0}
             # rg returns exit 1 (no matches) with empty output
             return {"output": "", "returncode": 1}
+
         mock_env.execute.side_effect = side_effect
         ops = ShellFileOperations(mock_env)
         result = ops.search("pattern", path="/existing/path")
@@ -682,6 +729,7 @@ class TestSearchPathValidation:
     def test_search_rg_error_exit_code(self, mock_env):
         """search() should report error when rg returns exit code 2."""
         call_count = {"n": 0}
+
         def side_effect(command, **kwargs):
             call_count["n"] += 1
             if "test -e" in command:
@@ -690,6 +738,7 @@ class TestSearchPathValidation:
                 return {"output": "yes", "returncode": 0}
             # rg returns exit 2 (error) with empty output
             return {"output": "", "returncode": 2}
+
         mock_env.execute.side_effect = side_effect
         ops = ShellFileOperations(mock_env)
         result = ops.search("pattern", path="/some/path")
@@ -717,7 +766,9 @@ class TestSearchFilesFallbackHiddenPaths:
         env.execute = execute
         return env
 
-    def test_hidden_root_with_hidden_ancestor_includes_files(self, tmp_path, monkeypatch):
+    def test_hidden_root_with_hidden_ancestor_includes_files(
+        self, tmp_path, monkeypatch
+    ):
         """Fallback find should include visible files when path is inside hidden root."""
         root = tmp_path / ".clawk" / "logs"
         root.mkdir(parents=True)
@@ -726,7 +777,12 @@ class TestSearchFilesFallbackHiddenPaths:
         nested_hidden_file = root / "nested" / ".secret.log"
         visible_nested_file = root / "nested" / "visible.log"
 
-        for p in [visible_file, nested_hidden_file, visible_nested_file, hidden_dir_file]:
+        for p in [
+            visible_file,
+            nested_hidden_file,
+            visible_nested_file,
+            hidden_dir_file,
+        ]:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text("x")
 
@@ -784,7 +840,10 @@ class TestShellFileOpsWriteDenied:
         assert "denied" in result.error.lower()
 
     def test_move_file_failure_path(self, mock_env):
-        mock_env.execute.return_value = {"output": "No such file or directory", "returncode": 1}
+        mock_env.execute.return_value = {
+            "output": "No such file or directory",
+            "returncode": 1,
+        }
         ops = ShellFileOperations(mock_env)
         result = ops.move_file("/tmp/nonexistent.txt", "/tmp/dest.txt")
         assert result.error is not None
@@ -819,7 +878,10 @@ class TestPatchReplacePostWriteVerification:
             if command.startswith("wc -c"):
                 for path in file_contents:
                     if path in command:
-                        return {"output": str(len(file_contents[path].encode())), "returncode": 0}
+                        return {
+                            "output": str(len(file_contents[path].encode())),
+                            "returncode": 0,
+                        }
                 return {"output": "0", "returncode": 0}
             # Everything else (including the write itself) pretends to succeed
             # but DOESN'T update file_contents — simulates silent failure
@@ -860,7 +922,9 @@ class TestPatchReplacePostWriteVerification:
         result = ops.patch_replace("/tmp/test/a.py", "hello", "hi")
         assert result.error is None, f"Unexpected error: {result.error}"
         assert result.success is True
-        assert state["content"] == "hi world\n", f"File not actually updated: {state['content']!r}"
+        assert state["content"] == "hi world\n", (
+            f"File not actually updated: {state['content']!r}"
+        )
 
     def test_patch_replace_fails_when_verify_read_errors(self, mock_env):
         """If the verify-read step itself fails (exit code != 0), return an error."""
@@ -894,6 +958,7 @@ class TestPatchReplacePostWriteVerification:
 # Git baseline check for write_file warning
 # =========================================================================
 
+
 class _DeletedTestGitBaselineCheck:
     """Removed May 2026 — these tests asserted on a ``_check_git_baseline``
     method that doesn't exist on ``ShellFileOperations`` (regression intro
@@ -902,4 +967,5 @@ class _DeletedTestGitBaselineCheck:
     instruction to keep CI green; reinstate them when the underlying
     helper is restored or replaced.
     """
+
     pass

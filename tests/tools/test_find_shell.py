@@ -119,7 +119,9 @@ class TestFindBashUnchanged:
 class TestFindBashSkipsBrokenCustomPath:
     """Stale CLAWK_GIT_BASH_PATH must not brick Windows terminal startup."""
 
-    def test_falls_through_to_portable_when_custom_fails_probe(self, tmp_path, monkeypatch):
+    def test_falls_through_to_portable_when_custom_fails_probe(
+        self, tmp_path, monkeypatch
+    ):
         import tools.environments.local as local_mod
 
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
@@ -212,6 +214,7 @@ class TestMacosLoginShellSwallowRegression:
 
     def _spawn_like_registry(self, shell, command, home, tmp_path):
         import subprocess
+
         env = dict(os.environ)
         env["HOME"] = str(home)
         # Mirror process_registry.spawn_local: [shell, "-lic", "set +m; <cmd>"]
@@ -238,7 +241,9 @@ class TestMacosLoginShellSwallowRegression:
         marker_zsh = tmp_path / "zsh_ran"
 
         # /bin/bash login shell: command is swallowed (file NOT created).
-        self._spawn_like_registry("/bin/bash", f"echo x > {marker_bash}", home, tmp_path)
+        self._spawn_like_registry(
+            "/bin/bash", f"echo x > {marker_bash}", home, tmp_path
+        )
         # zsh (the $SHELL _find_shell prefers): command runs (file created).
         self._spawn_like_registry(zsh, f"echo x > {marker_zsh}", home, tmp_path)
 
@@ -266,6 +271,8 @@ class TestMacosLoginShellSwallowRegression:
         marker = tmp_path / "ok_marker"
         subprocess.run(
             [shell, "-lic", f"set +m; echo ok > {marker}"],
-            stdin=subprocess.DEVNULL, capture_output=True, text=True,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
         )
         assert marker.exists(), f"_find_shell()={shell} swallowed the command"

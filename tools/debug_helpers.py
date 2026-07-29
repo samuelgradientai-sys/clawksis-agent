@@ -50,8 +50,9 @@ class DebugSession:
 
         if self.enabled:
             self.log_dir.mkdir(parents=True, exist_ok=True)
-            logger.debug("%s debug mode enabled - Session ID: %s",
-                         tool_name, self.session_id)
+            logger.debug(
+                "%s debug mode enabled - Session ID: %s", tool_name, self.session_id
+            )
 
     @property
     def active(self) -> bool:
@@ -100,6 +101,8 @@ class DebugSession:
         return {
             "enabled": True,
             "session_id": self.session_id,
-            "log_path": str(self.log_dir / f"{self.tool_name}_debug_{self.session_id}.json"),
+            "log_path": str(
+                self.log_dir / f"{self.tool_name}_debug_{self.session_id}.json"
+            ),
             "total_calls": len(self._calls),
         }

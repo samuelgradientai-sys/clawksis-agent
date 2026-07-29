@@ -358,7 +358,9 @@ def _candidate_node_command_names(command: str) -> list[str]:
 
 _CLAWK_NODE_TARGET_MAJOR = int(os.environ.get("CLAWK_NODE_TARGET_MAJOR", "22"))
 _managed_node_heal_attempted = False
-_NODE_BOOTSTRAP_SCRIPT = Path(__file__).resolve().parent / "scripts" / "lib" / "node-bootstrap.sh"
+_NODE_BOOTSTRAP_SCRIPT = (
+    Path(__file__).resolve().parent / "scripts" / "lib" / "node-bootstrap.sh"
+)
 
 
 def node_tool_runnable(path: str | None) -> bool:
@@ -422,7 +424,10 @@ def _heal_managed_node_windows() -> bool:
     import urllib.request
     import zipfile
 
-    arch = (os.environ.get("PROCESSOR_ARCHITEW6432") or os.environ.get("PROCESSOR_ARCHITECTURE", "")).lower()
+    arch = (
+        os.environ.get("PROCESSOR_ARCHITEW6432")
+        or os.environ.get("PROCESSOR_ARCHITECTURE", "")
+    ).lower()
     if arch in ("amd64", "x86_64"):
         node_arch = "x64"
     elif arch == "arm64":
@@ -750,7 +755,11 @@ def _norm_home_path(path: str | None) -> str:
 
 def _profile_home_path(env: dict[str, str] | None = None) -> str | None:
     """Return ``{CLAWK_HOME}/home`` when the profile-home directory exists."""
-    clawk_home = get_clawk_home_override() or (env or {}).get("CLAWK_HOME") or os.getenv("CLAWK_HOME")
+    clawk_home = (
+        get_clawk_home_override()
+        or (env or {}).get("CLAWK_HOME")
+        or os.getenv("CLAWK_HOME")
+    )
     if not clawk_home:
         return None
     profile_home = os.path.join(clawk_home, "home")
@@ -760,14 +769,20 @@ def _profile_home_path(env: dict[str, str] | None = None) -> str | None:
 
 
 def _is_profile_home(candidate: str | None, profile_home: str | None) -> bool:
-    return bool(candidate and profile_home and _norm_home_path(candidate) == _norm_home_path(profile_home))
+    return bool(
+        candidate
+        and profile_home
+        and _norm_home_path(candidate) == _norm_home_path(profile_home)
+    )
 
 
 def _iter_real_home_candidates(env: dict[str, str] | None = None) -> list[str]:
     """Return likely OS-user home candidates in trust order."""
     env = env or {}
     candidates: list[str] = []
-    explicit = str(env.get("CLAWK_REAL_HOME") or os.getenv("CLAWK_REAL_HOME", "")).strip()
+    explicit = str(
+        env.get("CLAWK_REAL_HOME") or os.getenv("CLAWK_REAL_HOME", "")
+    ).strip()
     if explicit:
         candidates.append(explicit)
     home = str(env.get("HOME") or os.getenv("HOME", "")).strip()
@@ -776,7 +791,9 @@ def _iter_real_home_candidates(env: dict[str, str] | None = None) -> list[str]:
     try:
         import pwd
 
-        pw_home = pwd.getpwuid(os.getuid()).pw_dir.strip()  # windows-footgun: ok — POSIX-only module inside try/except
+        pw_home = pwd.getpwuid(
+            os.getuid()
+        ).pw_dir.strip()  # windows-footgun: ok — POSIX-only module inside try/except
         if pw_home:
             candidates.append(pw_home)
     except Exception:
@@ -787,7 +804,11 @@ def _iter_real_home_candidates(env: dict[str, str] | None = None) -> list[str]:
     drive = str(env.get("HOMEDRIVE") or os.getenv("HOMEDRIVE", "")).strip()
     path = str(env.get("HOMEPATH") or os.getenv("HOMEPATH", "")).strip()
     if drive and path:
-        candidates.append(f"{drive}{path}" if path.startswith(("\\", "/")) else os.path.join(drive, path))
+        candidates.append(
+            f"{drive}{path}"
+            if path.startswith(("\\", "/"))
+            else os.path.join(drive, path)
+        )
     expanded = os.path.expanduser("~")
     if expanded and expanded != "~":
         candidates.append(expanded)
@@ -829,7 +850,12 @@ def get_subprocess_home(env: dict[str, str] | None = None) -> str | None:
     """
     env = env or {}
     profile_home = _profile_home_path(env)
-    mode = str(env.get("TERMINAL_HOME_MODE") or os.getenv("TERMINAL_HOME_MODE", "profile")).strip().lower() or "profile"
+    mode = (
+        str(env.get("TERMINAL_HOME_MODE") or os.getenv("TERMINAL_HOME_MODE", "profile"))
+        .strip()
+        .lower()
+        or "profile"
+    )
     if mode in {"isolated", "profile_home", "profile-home"}:
         mode = "profile"
     if mode in {"host", "user", "real_home", "real-home"}:
@@ -841,12 +867,20 @@ def get_subprocess_home(env: dict[str, str] | None = None) -> str | None:
     real_home = get_real_home(env)
     current_home = str(env.get("HOME") or os.getenv("HOME", "")).strip()
     if mode == "real":
-        return real_home if _norm_home_path(real_home) != _norm_home_path(current_home) else None
+        return (
+            real_home
+            if _norm_home_path(real_home) != _norm_home_path(current_home)
+            else None
+        )
 
     if profile_home and is_container():
         return profile_home
     if _is_profile_home(current_home, profile_home):
-        return real_home if _norm_home_path(real_home) != _norm_home_path(current_home) else None
+        return (
+            real_home
+            if _norm_home_path(real_home) != _norm_home_path(current_home)
+            else None
+        )
     return None
 
 
@@ -861,7 +895,13 @@ def apply_subprocess_home_env(env: dict[str, str]) -> None:
 
 
 VALID_REASONING_EFFORTS = (
-    "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+    "ultra",
 )
 
 
@@ -922,8 +962,8 @@ def _canonical_model_variants(model: str) -> list[str]:
     import re
 
     # Version-dot regexes — digit-separator-digit interconversion
-    _dash_to_dot = lambda s: re.sub(r'(\d)-(\d)', r'\1.\2', s)
-    _dot_to_dash = lambda s: re.sub(r'(\d)\.(\d)', r'\1-\2', s)
+    _dash_to_dot = lambda s: re.sub(r"(\d)-(\d)", r"\1.\2", s)
+    _dot_to_dash = lambda s: re.sub(r"(\d)\.(\d)", r"\1-\2", s)
 
     seen = set()
     variants = []
@@ -936,9 +976,9 @@ def _canonical_model_variants(model: str) -> list[str]:
     def _add_with_derivatives(s):
         """Add s plus its dots↔dashes and version-dot derivatives."""
         _add(s)
-        all_dashed = s.replace('.', '-')
+        all_dashed = s.replace(".", "-")
         _add(all_dashed)
-        all_dotted = s.replace('-', '.')
+        all_dotted = s.replace("-", ".")
         _add(all_dotted)
         # Version-dot recovery on each base form
         _add(_dash_to_dot(s))
@@ -950,7 +990,7 @@ def _canonical_model_variants(model: str) -> list[str]:
     _add_with_derivatives(model)
 
     # Split by / to handle provider prefix
-    parts = model.split('/')
+    parts = model.split("/")
 
     # 4. Bare model variants (strip provider/aggregator prefix)
     if len(parts) >= 2:
@@ -960,21 +1000,31 @@ def _canonical_model_variants(model: str) -> list[str]:
     # Strip aggregator only (3+ parts)
     # e.g. "openrouter/anthropic/claude-opus-4.5" → "anthropic/claude-opus-4.5"
     if len(parts) >= 3:
-        _add_with_derivatives('/'.join(parts[1:]))
+        _add_with_derivatives("/".join(parts[1:]))
 
     # 5. Prepend known provider prefixes to bare variants
     known_providers = (
-        'anthropic', 'openai', 'google', 'openrouter', 'groq', 'mistral',
-        'xai', 'cohere', 'perplexity', 'together', 'fireworks', 'deepseek',
+        "anthropic",
+        "openai",
+        "google",
+        "openrouter",
+        "groq",
+        "mistral",
+        "xai",
+        "cohere",
+        "perplexity",
+        "together",
+        "fireworks",
+        "deepseek",
     )
-    bare_variants = [v for v in variants if '/' not in v]
+    bare_variants = [v for v in variants if "/" not in v]
     for v in bare_variants:
         for provider in known_providers:
             _add(f"{provider}/{v}")
 
     # Prepend aggregator to single-slash variants
-    single_slash_variants = [v for v in variants if v.count('/') == 1]
-    known_aggregators = ('openrouter', 'opencode', 'fireworks', 'groq', 'together')
+    single_slash_variants = [v for v in variants if v.count("/") == 1]
+    known_aggregators = ("openrouter", "opencode", "fireworks", "groq", "together")
     for v in single_slash_variants:
         for agg in known_aggregators:
             _add(f"{agg}/{v}")
@@ -982,7 +1032,9 @@ def _canonical_model_variants(model: str) -> list[str]:
     return variants
 
 
-def resolve_per_model_reasoning_effort(model: str, overrides: dict | None) -> dict | None:
+def resolve_per_model_reasoning_effort(
+    model: str, overrides: dict | None
+) -> dict | None:
     """Lookup a per-model reasoning_effort override with spelling-tolerance.
 
     Args:
@@ -1072,6 +1124,7 @@ def resolve_reasoning_config(cfg: dict | None, model: str = "") -> dict | None:
     result = parse_reasoning_effort(effort)
     if effort and str(effort).strip() and result is None:
         import logging
+
         logging.getLogger(__name__).warning(
             "Unknown reasoning_effort '%s', using default (medium)", effort
         )
@@ -1127,7 +1180,9 @@ def wsl_unc_path_to_posix(path: str) -> str | None:
     import re
 
     normalized = str(path or "").strip().replace("/", "\\")
-    match = re.match(r"^\\\\wsl(?:\.localhost|\$)\\[^\\]+\\(.*)$", normalized, re.IGNORECASE)
+    match = re.match(
+        r"^\\\\wsl(?:\.localhost|\$)\\[^\\]+\\(.*)$", normalized, re.IGNORECASE
+    )
     if not match:
         return None
     tail = match.group(1).replace("\\", "/")
@@ -1199,7 +1254,9 @@ def is_container() -> bool:
     try:
         with open("/proc/self/mountinfo", "r", encoding="utf-8") as f:
             mountinfo = f.read()
-            if any(marker in mountinfo for marker in ("kubepods", "containerd", "crio")):
+            if any(
+                marker in mountinfo for marker in ("kubepods", "containerd", "crio")
+            ):
                 _container_detected = True
                 return True
     except OSError:
@@ -1223,7 +1280,6 @@ def get_config_path() -> Path:
 def get_skills_dir() -> Path:
     """Return the path to the skills directory under CLAWK_HOME."""
     return get_clawk_home() / "skills"
-
 
 
 def get_env_path() -> Path:

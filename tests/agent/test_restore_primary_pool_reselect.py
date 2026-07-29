@@ -136,8 +136,13 @@ class TestRestorePrimaryPoolReselect:
     def test_restore_uses_freshest_available_entry(self):
         """When multiple entries are available, restore should select the pool's best pick."""
         entries = [
-            _make_entry("entry-1", "key-1", priority=0,
-                         last_status="exhausted", last_status_at=time.time() + 3600),
+            _make_entry(
+                "entry-1",
+                "key-1",
+                priority=0,
+                last_status="exhausted",
+                last_status_at=time.time() + 3600,
+            ),
             _make_entry("entry-2", "key-2", priority=1),
             _make_entry("entry-3", "key-3", priority=2),
         ]
@@ -162,8 +167,13 @@ class TestRestorePrimaryPoolReselect:
     def test_restore_with_empty_pool_uses_snapshot(self):
         """When pool exists but has no available entries, use snapshot key."""
         entries = [
-            _make_entry("entry-1", "key-1", priority=0,
-                         last_status="exhausted", last_status_at=time.time() + 3600),
+            _make_entry(
+                "entry-1",
+                "key-1",
+                priority=0,
+                last_status="exhausted",
+                last_status_at=time.time() + 3600,
+            ),
         ]
         pool = _build_mock_pool(entries)
 

@@ -109,18 +109,16 @@ def test_gateway_lifecycle_accepts_legacy_platform_flag():
 
 def test_gateway_enroll_dispatch():
     p = _gateway_parser()
-    ns = p.parse_args(
-        [
-            "gateway",
-            "enroll",
-            "--token",
-            "tok",
-            "--connector-url",
-            "wss://connector.example.com/relay",
-            "--gateway-id",
-            "gw-1",
-        ]
-    )
+    ns = p.parse_args([
+        "gateway",
+        "enroll",
+        "--token",
+        "tok",
+        "--connector-url",
+        "wss://connector.example.com/relay",
+        "--gateway-id",
+        "gw-1",
+    ])
     assert ns.command == "gateway"
     assert ns.gateway_command == "enroll"
     assert ns.func is _h_gateway_enroll

@@ -21,7 +21,9 @@ def _build_banner_with_skills(skills_by_category, term_width=160):
         patch.object(banner, "get_available_skills", return_value=skills_by_category),
         patch.object(banner, "get_update_result", return_value=None),
         patch.object(tools.mcp_tool, "get_mcp_status", return_value=[]),
-        patch("shutil.get_terminal_size", return_value=os.terminal_size((term_width, 50))),
+        patch(
+            "shutil.get_terminal_size", return_value=os.terminal_size((term_width, 50))
+        ),
     ):
         console = Console(
             record=True, force_terminal=False, color_system=None, width=term_width

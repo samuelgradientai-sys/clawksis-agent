@@ -45,20 +45,22 @@ Focus on recent developments and key players.
 Behind the scenes, Clawksis uses:
 
 ```python
-delegate_task(tasks=[
-    {
-        "goal": "Research WebAssembly outside the browser in 2025",
-        "context": "Focus on: runtimes (Wasmtime, Wasmer), cloud/edge use cases, WASI progress"
-    },
-    {
-        "goal": "Research RISC-V server chip adoption",
-        "context": "Focus on: server chips shipping, cloud providers adopting, software ecosystem"
-    },
-    {
-        "goal": "Research practical quantum computing applications",
-        "context": "Focus on: error correction breakthroughs, real-world use cases, key companies"
-    }
-])
+delegate_task(
+    tasks=[
+        {
+            "goal": "Research WebAssembly outside the browser in 2025",
+            "context": "Focus on: runtimes (Wasmtime, Wasmer), cloud/edge use cases, WASI progress",
+        },
+        {
+            "goal": "Research RISC-V server chip adoption",
+            "context": "Focus on: server chips shipping, cloud providers adopting, software ecosystem",
+        },
+        {
+            "goal": "Research practical quantum computing applications",
+            "context": "Focus on: error correction breakthroughs, real-world use cases, key companies",
+        },
+    ]
+)
 ```
 
 All three run concurrently. Each subagent searches the web independently and returns a summary. The parent agent then synthesizes them into a coherent briefing.
@@ -84,7 +86,7 @@ delegate_task(
     Auth files: src/auth/login.py, src/auth/jwt.py, src/auth/middleware.py
     Test command: pytest tests/auth/ -v
     Focus on: SQL injection, JWT validation, password hashing, session management.
-    Fix issues found and verify tests pass."""
+    Fix issues found and verify tests pass.""",
 )
 ```
 
@@ -118,32 +120,34 @@ Each subagent researches one option independently. Because they're isolated, the
 Split a large refactoring task across parallel subagents, each handling a different part of the codebase:
 
 ```python
-delegate_task(tasks=[
-    {
-        "goal": "Refactor all API endpoint handlers to use the new response format",
-        "context": """Project at /home/user/api-server.
+delegate_task(
+    tasks=[
+        {
+            "goal": "Refactor all API endpoint handlers to use the new response format",
+            "context": """Project at /home/user/api-server.
         Files: src/handlers/users.py, src/handlers/auth.py, src/handlers/billing.py
         Old format: return {"data": result, "status": "ok"}
         New format: return APIResponse(data=result, status=200).to_dict()
         Import: from src.responses import APIResponse
-        Run tests after: pytest tests/handlers/ -v"""
-    },
-    {
-        "goal": "Update all client SDK methods to handle the new response format",
-        "context": """Project at /home/user/api-server.
+        Run tests after: pytest tests/handlers/ -v""",
+        },
+        {
+            "goal": "Update all client SDK methods to handle the new response format",
+            "context": """Project at /home/user/api-server.
         Files: sdk/python/client.py, sdk/python/models.py
         Old parsing: result = response.json()["data"]
         New parsing: result = response.json()["data"] (same key, but add status code checking)
-        Also update sdk/python/tests/test_client.py"""
-    },
-    {
-        "goal": "Update API documentation to reflect the new response format",
-        "context": """Project at /home/user/api-server.
+        Also update sdk/python/tests/test_client.py""",
+        },
+        {
+            "goal": "Update API documentation to reflect the new response format",
+            "context": """Project at /home/user/api-server.
         Docs at: docs/api/. Format: Markdown with code examples.
         Update all response examples from old format to new format.
-        Add a 'Response Format' section to docs/api/overview.md explaining the schema."""
-    }
-])
+        Add a 'Response Format' section to docs/api/overview.md explaining the schema.""",
+        },
+    ]
+)
 ```
 
 :::tip
@@ -184,7 +188,7 @@ delegate_task(
     context="""Raw data at /tmp/ai-funding-data.json contains search results and
     extracted web pages about AI funding, acquisitions, and IPOs in Q1 2026.
     Write a structured market report: key deals, trends, notable players,
-    and outlook. Focus on deals over $100M."""
+    and outlook. Focus on deals over $100M.""",
 )
 ```
 

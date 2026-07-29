@@ -32,6 +32,7 @@ def _capture_run(captured, stdout=""):
         captured["cmd"] = cmd
         captured["env"] = kwargs.get("env")
         return _fake_completed_process(stdout)
+
     return fake_run
 
 
@@ -53,7 +54,9 @@ def test_resolve_mcp_invocation_sanitizes_env(monkeypatch):
     from tools.computer_use import cua_backend
 
     captured = {}
-    manifest = json.dumps({"mcp_invocation": {"command": "cua-driver", "args": ["mcp"]}})
+    manifest = json.dumps({
+        "mcp_invocation": {"command": "cua-driver", "args": ["mcp"]}
+    })
     monkeypatch.setattr(
         cua_backend.subprocess, "run", _capture_run(captured, stdout=manifest)
     )

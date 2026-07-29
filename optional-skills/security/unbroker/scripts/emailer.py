@@ -16,6 +16,7 @@ Anti-misuse: `send()` refuses a recipient that is not the broker record's own
 opt-out/privacy address - this module cannot be repurposed to email arbitrary people.
 All network calls live behind small functions that the hermetic tests monkeypatch.
 """
+
 from __future__ import annotations
 
 import email as _email
@@ -79,10 +80,14 @@ def imap_settings(env: dict | None = None) -> dict | None:
 
 
 def available(env: dict | None = None) -> dict:
-    return {"smtp": smtp_settings(env) is not None, "imap": imap_settings(env) is not None}
+    return {
+        "smtp": smtp_settings(env) is not None,
+        "imap": imap_settings(env) is not None,
+    }
 
 
 # --- sending ------------------------------------------------------------------
+
 
 def broker_addresses(broker: dict) -> list[str]:
     """Every address the broker record itself declares (the ONLY valid recipients).
@@ -93,7 +98,7 @@ def broker_addresses(broker: dict) -> list[str]:
     opt = broker.get("optout") or {}
     out = [a for a in [opt.get("email"), (opt.get("deletion") or {}).get("email")] if a]
     for link in opt.get("links") or []:
-        url = (link.get("url") or "")
+        url = link.get("url") or ""
         if url.lower().startswith("mailto:"):
             out.append(url[7:].split("?")[0])
     seen: set[str] = set()
@@ -123,7 +128,9 @@ def browser_send_payload(broker: dict, body_text: str, to: str | None = None) ->
     """
     allowed = broker_addresses(broker)
     if not allowed:
-        raise RuntimeError(f"broker {broker.get('id')!r} declares no opt-out email address")
+        raise RuntimeError(
+            f"broker {broker.get('id')!r} declares no opt-out email address"
+        )
     recipient = to or allowed[0]
     if recipient.lower() not in {a.lower() for a in allowed}:
         raise PermissionError(
@@ -163,14 +170,26 @@ def _respect_rate_limit(min_interval: float, sleep, now, state_path=None) -> Non
 
 
 # SMTP errors that are permanent (don't retry) vs transient (retry with backoff).
-_SMTP_PERMANENT = (smtplib.SMTPAuthenticationError, smtplib.SMTPRecipientsRefused,
-                   smtplib.SMTPSenderRefused, smtplib.SMTPDataError)
+_SMTP_PERMANENT = (
+    smtplib.SMTPAuthenticationError,
+    smtplib.SMTPRecipientsRefused,
+    smtplib.SMTPSenderRefused,
+    smtplib.SMTPDataError,
+)
 
 
-def send(broker: dict, body_text: str, to: str | None = None,
-         env: dict | None = None, _smtp_factory=None,
-         min_interval: float = 0.0, max_retries: int = 3,
-         _sleep=time.sleep, _now=time.time, _rate_state=None) -> dict:
+def send(
+    broker: dict,
+    body_text: str,
+    to: str | None = None,
+    env: dict | None = None,
+    _smtp_factory=None,
+    min_interval: float = 0.0,
+    max_retries: int = 3,
+    _sleep=time.sleep,
+    _now=time.time,
+    _rate_state=None,
+) -> dict:
     """Send an opt-out/legal request to the broker's own opt-out address.
 
     Recipient is locked to an address the broker record declares (PermissionError
@@ -189,7 +208,9 @@ def send(broker: dict, body_text: str, to: str | None = None,
         )
     allowed = broker_addresses(broker)
     if not allowed:
-        raise RuntimeError(f"broker {broker.get('id')!r} declares no opt-out email address")
+        raise RuntimeError(
+            f"broker {broker.get('id')!r} declares no opt-out email address"
+        )
     recipient = to or allowed[0]
     if recipient.lower() not in {a.lower() for a in allowed}:
         raise PermissionError(
@@ -227,15 +248,23 @@ def send(broker: dict, body_text: str, to: str | None = None,
             raise  # auth / recipient refused: retrying won't help
         except (smtplib.SMTPException, OSError) as exc:
             if attempts > max_retries:
-                raise RuntimeError(f"SMTP send failed after {attempts} attempts: {exc}") from exc
+                raise RuntimeError(
+                    f"SMTP send failed after {attempts} attempts: {exc}"
+                ) from exc
             _sleep(min(2 ** (attempts - 1), 30))  # 1s, 2s, 4s... capped
-    return {"to": recipient, "subject": subject, "message_id": msg["Message-ID"],
-            "from": settings["address"], "attempts": attempts,
-            "delivery_note": "SMTP accepted; not proof of delivery - a bounce would arrive as "
-                             "inbound mail. The due-queue re-scan is the real confirmation."}
+    return {
+        "to": recipient,
+        "subject": subject,
+        "message_id": msg["Message-ID"],
+        "from": settings["address"],
+        "attempts": attempts,
+        "delivery_note": "SMTP accepted; not proof of delivery - a bounce would arrive as "
+        "inbound mail. The due-queue re-scan is the real confirmation.",
+    }
 
 
 # --- inbox polling ------------------------------------------------------------
+
 
 def _decode_part(part) -> str:
     try:
@@ -276,15 +305,21 @@ def _broker_domains(broker: dict) -> list[str]:
     return sorted(tails)
 
 
-def fetch_recent(env: dict | None = None, since_days: int = 3, limit: int = 30,
-                 _imap_factory=None) -> list[dict]:
+def fetch_recent(
+    env: dict | None = None, since_days: int = 3, limit: int = 30, _imap_factory=None
+) -> list[dict]:
     """Fetch recent inbox messages: [{from, subject, date, text}], newest first."""
     settings = imap_settings(env)
     if not settings:
-        raise RuntimeError("IMAP not configured (need EMAIL_ADDRESS + EMAIL_PASSWORD, and "
-                           "EMAIL_IMAP_HOST for non-mainstream providers)")
+        raise RuntimeError(
+            "IMAP not configured (need EMAIL_ADDRESS + EMAIL_PASSWORD, and "
+            "EMAIL_IMAP_HOST for non-mainstream providers)"
+        )
     import datetime as _dt
-    since = (_dt.date.today() - _dt.timedelta(days=max(0, since_days))).strftime("%d-%b-%Y")
+
+    since = (_dt.date.today() - _dt.timedelta(days=max(0, since_days))).strftime(
+        "%d-%b-%Y"
+    )
 
     factory = _imap_factory or imaplib.IMAP4_SSL
     conn = factory(settings["host"], settings["port"])
@@ -330,13 +365,18 @@ def link_from_messages(messages: list[dict], broker: dict) -> dict | None:
             continue
         link = email_modes.extract_verification_link(text, broker)
         if link:
-            return {"link": link, "from": m.get("from"), "subject": m.get("subject"),
-                    "date": m.get("date")}
+            return {
+                "link": link,
+                "from": m.get("from"),
+                "subject": m.get("subject"),
+                "date": m.get("date"),
+            }
     return None
 
 
-def find_verification_link(broker: dict, env: dict | None = None, since_days: int = 3,
-                           _imap_factory=None) -> dict | None:
+def find_verification_link(
+    broker: dict, env: dict | None = None, since_days: int = 3, _imap_factory=None
+) -> dict | None:
     """Poll the inbox and return the broker's verification link (or None yet)."""
     messages = fetch_recent(env, since_days=since_days, _imap_factory=_imap_factory)
     return link_from_messages(messages, broker)

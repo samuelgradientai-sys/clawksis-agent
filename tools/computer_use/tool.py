@@ -81,17 +81,25 @@ _SAFE_ACTIONS = frozenset({"capture", "wait", "list_apps"})
 
 # Actions that mutate user-visible state. Go through approval.
 _DESTRUCTIVE_ACTIONS = frozenset({
-    "click", "double_click", "right_click", "middle_click",
-    "drag", "scroll", "type", "key", "set_value", "focus_app",
+    "click",
+    "double_click",
+    "right_click",
+    "middle_click",
+    "drag",
+    "scroll",
+    "type",
+    "key",
+    "set_value",
+    "focus_app",
 })
 
 # Hard-blocked key combinations. Mirrored from #4562 — these are destructive
 # regardless of approval level (e.g. logout kills the session Clawksis runs in).
 _BLOCKED_KEY_COMBOS = {
-    frozenset({"cmd", "shift", "backspace"}),   # empty trash
-    frozenset({"cmd", "option", "backspace"}),   # force delete
-    frozenset({"cmd", "ctrl", "q"}),             # lock screen
-    frozenset({"cmd", "shift", "q"}),            # log out
+    frozenset({"cmd", "shift", "backspace"}),  # empty trash
+    frozenset({"cmd", "option", "backspace"}),  # force delete
+    frozenset({"cmd", "ctrl", "q"}),  # lock screen
+    frozenset({"cmd", "shift", "q"}),  # log out
     frozenset({"cmd", "option", "shift", "q"}),  # force log out
     # Windows secure/session shortcuts. The Windows driver accepts Win-key
     # combos, and Alt is canonicalized to option below, so block the
@@ -103,8 +111,14 @@ _BLOCKED_KEY_COMBOS = {
 }
 
 _KEY_ALIASES = {
-    "command": "cmd", "control": "ctrl", "alt": "option", "⌘": "cmd", "⌥": "option",
-    "windows": "win", "super": "win", "meta": "win",
+    "command": "cmd",
+    "control": "ctrl",
+    "alt": "option",
+    "⌘": "cmd",
+    "⌥": "option",
+    "windows": "win",
+    "super": "win",
+    "meta": "win",
 }
 
 
@@ -158,11 +172,14 @@ def _get_backend() -> ComputerUseBackend:
             backend_name = os.environ.get("CLAWK_COMPUTER_USE_BACKEND", "cua").lower()
             if backend_name in {"cua", "cua-driver", ""}:
                 from tools.computer_use.cua_backend import CuaDriverBackend
+
                 _backend = CuaDriverBackend()
             elif backend_name == "noop":  # pragma: no cover
                 _backend = _NoopBackend()
             else:
-                raise RuntimeError(f"Unknown CLAWK_COMPUTER_USE_BACKEND={backend_name!r}")
+                raise RuntimeError(
+                    f"Unknown CLAWK_COMPUTER_USE_BACKEND={backend_name!r}"
+                )
             try:
                 _backend.start()
             except Exception:
@@ -197,9 +214,14 @@ class _NoopBackend(ComputerUseBackend):  # pragma: no cover
         self.calls: List[Tuple[str, Dict[str, Any]]] = []
         self._started = False
 
-    def start(self) -> None: self._started = True
-    def stop(self) -> None: self._started = False
-    def is_available(self) -> bool: return True
+    def start(self) -> None:
+        self._started = True
+
+    def stop(self) -> None:
+        self._started = False
+
+    def is_available(self) -> bool:
+        return True
 
     def capture(
         self,
@@ -212,8 +234,15 @@ class _NoopBackend(ComputerUseBackend):  # pragma: no cover
             "capture",
             {"mode": mode, "app": app, "pid": pid, "window_id": window_id},
         ))
-        return CaptureResult(mode=mode, width=1024, height=768, png_b64=None,
-                             elements=[], app=app or "", window_title="")
+        return CaptureResult(
+            mode=mode,
+            width=1024,
+            height=768,
+            png_b64=None,
+            elements=[],
+            app=app or "",
+            window_title="",
+        )
 
     def click(self, **kw) -> ActionResult:
         self.calls.append(("click", kw))
@@ -255,6 +284,7 @@ class _NoopBackend(ComputerUseBackend):  # pragma: no cover
 # ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
+
 
 def handle_computer_use(args: Dict[str, Any], **kwargs) -> Any:
     """Main entry point — dispatched by tools.registry.
@@ -301,7 +331,7 @@ def handle_computer_use(args: Dict[str, Any], **kwargs) -> Any:
         return json.dumps({
             "error": f"computer_use backend unavailable: {e}",
             "hint": "If the cua-driver binary is missing, run `clawk computer-use install`. "
-                    "If a Python dependency is missing, the error above shows the exact install command.",
+            "If a Python dependency is missing, the error above shows the exact install command.",
         })
 
     try:
@@ -311,8 +341,9 @@ def handle_computer_use(args: Dict[str, Any], **kwargs) -> Any:
         return json.dumps({"error": f"{action} failed: {e}"})
 
 
-def _request_approval(action: str, args: Dict[str, Any],
-                      session_id: str = "") -> Optional[str]:
+def _request_approval(
+    action: str, args: Dict[str, Any], session_id: str = ""
+) -> Optional[str]:
     """Return None if approved, or a JSON error string if denied.
 
     Approval is scoped by (action, delivery_mode) AND by session_id.
@@ -354,8 +385,11 @@ def _request_approval(action: str, args: Dict[str, Any],
 
 
 def _summarize_action(action: str, args: Dict[str, Any]) -> str:
-    fg = " [FOREGROUND — briefly raises the window / changes focus]" \
-        if args.get("delivery_mode") == "foreground" else ""
+    fg = (
+        " [FOREGROUND — briefly raises the window / changes focus]"
+        if args.get("delivery_mode") == "foreground"
+        else ""
+    )
     if action in {"click", "double_click", "right_click", "middle_click"}:
         if args.get("element") is not None:
             return f"{action} element #{args['element']}{fg}"
@@ -375,7 +409,9 @@ def _summarize_action(action: str, args: Dict[str, Any]) -> str:
     if action == "key":
         return f"key {args.get('keys', '')!r}{fg}"
     if action == "focus_app":
-        return f"focus {args.get('app', '')!r}" + (" (raise)" if args.get("raise_window") else "")
+        return f"focus {args.get('app', '')!r}" + (
+            " (raise)" if args.get("raise_window") else ""
+        )
     return action + fg
 
 
@@ -393,7 +429,9 @@ def _dispatch(backend: ComputerUseBackend, action: str, args: Dict[str, Any]) ->
                 "window_id": args.get("window_id"),
             })
         cap = backend.capture(**capture_kwargs)
-        return _capture_response(cap, max_elements=_coerce_max_elements(args.get("max_elements")))
+        return _capture_response(
+            cap, max_elements=_coerce_max_elements(args.get("max_elements"))
+        )
 
     if action == "wait":
         seconds = float(args.get("seconds", 1.0))
@@ -436,14 +474,20 @@ def _dispatch(backend: ComputerUseBackend, action: str, args: Dict[str, Any]) ->
         x, y = (coord[0], coord[1]) if coord and coord[0] is not None else (None, None)
         res = backend.click(
             element=element if element is not None else None,
-            x=x, y=y, button=button or "left", click_count=click_count,
+            x=x,
+            y=y,
+            button=button or "left",
+            click_count=click_count,
             modifiers=args.get("modifiers"),
-            delivery_mode=delivery_mode, bring_to_front=bring_to_front,
+            delivery_mode=delivery_mode,
+            bring_to_front=bring_to_front,
         )
         return _maybe_follow_capture(backend, res, capture_after)
 
     if action == "drag":
-        has_elements = args.get("from_element") is not None and args.get("to_element") is not None
+        has_elements = (
+            args.get("from_element") is not None and args.get("to_element") is not None
+        )
         has_coords = args.get("from_coordinate") and args.get("to_coordinate")
         if not has_elements and not has_coords:
             return json.dumps({
@@ -452,11 +496,14 @@ def _dispatch(backend: ComputerUseBackend, action: str, args: Dict[str, Any]) ->
         res = backend.drag(
             from_element=args.get("from_element"),
             to_element=args.get("to_element"),
-            from_xy=tuple(args["from_coordinate"]) if args.get("from_coordinate") else None,
+            from_xy=tuple(args["from_coordinate"])
+            if args.get("from_coordinate")
+            else None,
             to_xy=tuple(args["to_coordinate"]) if args.get("to_coordinate") else None,
             button=args.get("button", "left"),
             modifiers=args.get("modifiers"),
-            delivery_mode=delivery_mode, bring_to_front=bring_to_front,
+            delivery_mode=delivery_mode,
+            bring_to_front=bring_to_front,
         )
         return _maybe_follow_capture(backend, res, capture_after)
 
@@ -469,18 +516,25 @@ def _dispatch(backend: ComputerUseBackend, action: str, args: Dict[str, Any]) ->
             x=coord[0] if coord and coord[0] is not None else None,
             y=coord[1] if coord and coord[1] is not None else None,
             modifiers=args.get("modifiers"),
-            delivery_mode=delivery_mode, bring_to_front=bring_to_front,
+            delivery_mode=delivery_mode,
+            bring_to_front=bring_to_front,
         )
         return _maybe_follow_capture(backend, res, capture_after)
 
     if action == "type":
-        res = backend.type_text(args.get("text", ""),
-                                delivery_mode=delivery_mode, bring_to_front=bring_to_front)
+        res = backend.type_text(
+            args.get("text", ""),
+            delivery_mode=delivery_mode,
+            bring_to_front=bring_to_front,
+        )
         return _maybe_follow_capture(backend, res, capture_after)
 
     if action == "key":
-        res = backend.key(args.get("keys", ""),
-                          delivery_mode=delivery_mode, bring_to_front=bring_to_front)
+        res = backend.key(
+            args.get("keys", ""),
+            delivery_mode=delivery_mode,
+            bring_to_front=bring_to_front,
+        )
         return _maybe_follow_capture(backend, res, capture_after)
 
     if action == "set_value":
@@ -496,6 +550,7 @@ def _dispatch(backend: ComputerUseBackend, action: str, args: Dict[str, Any]) ->
 # ---------------------------------------------------------------------------
 # Response shaping
 # ---------------------------------------------------------------------------
+
 
 def _text_response(res: ActionResult) -> str:
     payload: Dict[str, Any] = {"ok": res.ok, "action": res.action}
@@ -576,15 +631,30 @@ def _image_dimensions_from_b64(image_b64: str) -> Optional[Tuple[int, int]]:
                 break
             if i + 2 > len(raw):
                 break
-            segment_len = int.from_bytes(raw[i:i + 2], "big")
+            segment_len = int.from_bytes(raw[i : i + 2], "big")
             if segment_len < 2 or i + segment_len > len(raw):
                 break
-            if marker in {
-                0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
-                0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF,
-            } and segment_len >= 7:
-                height = int.from_bytes(raw[i + 3:i + 5], "big")
-                width = int.from_bytes(raw[i + 5:i + 7], "big")
+            if (
+                marker
+                in {
+                    0xC0,
+                    0xC1,
+                    0xC2,
+                    0xC3,
+                    0xC5,
+                    0xC6,
+                    0xC7,
+                    0xC9,
+                    0xCA,
+                    0xCB,
+                    0xCD,
+                    0xCE,
+                    0xCF,
+                }
+                and segment_len >= 7
+            ):
+                height = int.from_bytes(raw[i + 3 : i + 5], "big")
+                width = int.from_bytes(raw[i + 5 : i + 7], "big")
                 return int(width), int(height)
             i += segment_len
     return None
@@ -612,11 +682,15 @@ def _coerce_max_elements(value: Any) -> int:
     return n
 
 
-def _capture_response(cap: CaptureResult, max_elements: int = _DEFAULT_MAX_ELEMENTS) -> Any:
+def _capture_response(
+    cap: CaptureResult, max_elements: int = _DEFAULT_MAX_ELEMENTS
+) -> Any:
     total_elements = len(cap.elements)
     visible_elements = cap.elements[:max_elements]
     truncated_elements = max(0, total_elements - len(visible_elements))
-    image_dimensions = _image_dimensions_from_b64(cap.png_b64 or "") if cap.png_b64 else None
+    image_dimensions = (
+        _image_dimensions_from_b64(cap.png_b64 or "") if cap.png_b64 else None
+    )
     response_width = image_dimensions[0] if image_dimensions else cap.width
     response_height = image_dimensions[1] if image_dimensions else cap.height
     image_too_small = bool(
@@ -712,12 +786,19 @@ def _capture_response(cap: CaptureResult, max_elements: int = _DEFAULT_MAX_ELEME
             "_multimodal": True,
             "content": [
                 {"type": "text", "text": summary},
-                {"type": "image_url",
-                 "image_url": {"url": f"data:{_mime};base64,{cap.png_b64}"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{_mime};base64,{cap.png_b64}"},
+                },
             ],
             "text_summary": summary,
-            "meta": {"mode": cap.mode, "width": response_width, "height": response_height,
-                     "elements": total_elements, "png_bytes": cap.png_bytes_len},
+            "meta": {
+                "mode": cap.mode,
+                "width": response_width,
+                "height": response_height,
+                "elements": total_elements,
+                "png_bytes": cap.png_bytes_len,
+            },
         }
     # AX-only (or image-missing fallback): text path actually carries the
     # `elements` array, so the truncation note applies here.
@@ -752,8 +833,9 @@ def _capture_response(cap: CaptureResult, max_elements: int = _DEFAULT_MAX_ELEME
 _MAX_VISION_DIM = 1456
 
 
-def _shrink_capture_for_vision(raw: bytes, ext: str,
-                               max_dim: int = _MAX_VISION_DIM) -> bytes:
+def _shrink_capture_for_vision(
+    raw: bytes, ext: str, max_dim: int = _MAX_VISION_DIM
+) -> bytes:
     """Downscale encoded image bytes so the longest side is <= max_dim.
 
     Returns the original bytes unchanged when the image already fits or when
@@ -762,6 +844,7 @@ def _shrink_capture_for_vision(raw: bytes, ext: str,
     try:
         from io import BytesIO
         from PIL import Image
+
         img = Image.open(BytesIO(raw))
         if max(img.size) <= max_dim:
             return raw
@@ -772,6 +855,7 @@ def _shrink_capture_for_vision(raw: bytes, ext: str,
     except Exception as exc:
         logger.debug("computer_use: vision downscale skipped: %s", exc)
         return raw
+
 
 def _should_route_through_aux_vision() -> bool:
     """Return True when ``_capture_response`` should hand the PNG to aux vision.
@@ -848,7 +932,9 @@ def _route_capture_through_aux_vision(
         # MIME sniffing returns the right content-type.
         # Surface 7: prefer the explicit MIME type cua-driver supplied.
         _mime_for_ext = cap.image_mime_type or ""
-        if _mime_for_ext == "image/jpeg" or (not _mime_for_ext and cap.png_b64[:8].startswith("/9j/")):
+        if _mime_for_ext == "image/jpeg" or (
+            not _mime_for_ext and cap.png_b64[:8].startswith("/9j/")
+        ):
             ext = ".jpg"
         else:
             ext = ".png"
@@ -868,9 +954,7 @@ def _route_capture_through_aux_vision(
             f"AX/SOM index for cross-reference:\n{summary}"
         )
 
-        result_json = _run_async(
-            vision_analyze_tool(str(temp_image_path), prompt)
-        )
+        result_json = _run_async(vision_analyze_tool(str(temp_image_path), prompt))
     except Exception as exc:
         logger.warning(
             "computer_use: auxiliary.vision pre-analysis failed (%s); "
@@ -911,7 +995,9 @@ def _route_capture_through_aux_vision(
 
 
 def _maybe_follow_capture(
-    backend: ComputerUseBackend, res: ActionResult, do_capture: bool,
+    backend: ComputerUseBackend,
+    res: ActionResult,
+    do_capture: bool,
 ) -> Any:
     if not do_capture:
         return _text_response(res)
@@ -937,7 +1023,9 @@ def _maybe_follow_capture(
     # Combine action summary with the capture.
     resp = _capture_response(cap)
     if isinstance(resp, dict) and resp.get("_multimodal"):
-        prefix = f"[{res.action}] ok={res.ok}" + (f" — {res.message}" if res.message else "")
+        prefix = f"[{res.action}] ok={res.ok}" + (
+            f" — {res.message}" if res.message else ""
+        )
         resp["content"][0]["text"] = prefix + "\n\n" + resp["content"][0]["text"]
         resp["text_summary"] = prefix + "\n\n" + resp["text_summary"]
         return resp
@@ -957,10 +1045,14 @@ def _format_elements(elements: List[UIElement], max_lines: int = 40) -> List[str
     out: List[str] = []
     for e in elements[:max_lines]:
         label = e.label.replace("\n", " ")[:60]
-        out.append(f"  #{e.index} {e.role} {label!r} @ {e.bounds}"
-                   + (f" [{e.app}]" if e.app else ""))
+        out.append(
+            f"  #{e.index} {e.role} {label!r} @ {e.bounds}"
+            + (f" [{e.app}]" if e.app else "")
+        )
     if len(elements) > max_lines:
-        out.append(f"  ... +{len(elements) - max_lines} more (call capture with app= to narrow)")
+        out.append(
+            f"  ... +{len(elements) - max_lines} more (call capture with app= to narrow)"
+        )
     return out
 
 
@@ -978,6 +1070,7 @@ def _element_to_dict(e: UIElement) -> Dict[str, Any]:
 # Availability check (used by the tool registry check_fn)
 # ---------------------------------------------------------------------------
 
+
 def check_computer_use_requirements() -> bool:
     """Return True iff computer_use can run on this host.
 
@@ -991,9 +1084,11 @@ def check_computer_use_requirements() -> bool:
     if sys.platform not in ("darwin", "win32", "linux"):
         return False
     from tools.computer_use.cua_backend import cua_driver_binary_available
+
     return cua_driver_binary_available()
 
 
 def get_computer_use_schema() -> Dict[str, Any]:
     from tools.computer_use.schema import COMPUTER_USE_SCHEMA
+
     return COMPUTER_USE_SCHEMA

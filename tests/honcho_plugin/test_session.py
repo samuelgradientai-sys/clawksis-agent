@@ -136,7 +136,9 @@ class TestFormatMigrationTranscript:
             {"role": "user", "content": "Hello", "timestamp": "2026-01-01T00:00:00"},
             {"role": "assistant", "content": "Hi!", "timestamp": "2026-01-01T00:01:00"},
         ]
-        result = HonchoSessionManager._format_migration_transcript("telegram:123", messages)
+        result = HonchoSessionManager._format_migration_transcript(
+            "telegram:123", messages
+        )
         assert isinstance(result, bytes)
         text = result.decode("utf-8")
         assert "<prior_conversation_history>" in text
@@ -167,7 +169,9 @@ class TestManagerCacheOps:
     def test_delete_cached_session(self):
         mgr = HonchoSessionManager()
         session = HonchoSession(
-            key="test", user_peer_id="u", assistant_peer_id="a",
+            key="test",
+            user_peer_id="u",
+            assistant_peer_id="a",
             honcho_session_id="s",
         )
         mgr._cache["test"] = session
@@ -180,8 +184,12 @@ class TestManagerCacheOps:
 
     def test_list_sessions(self):
         mgr = HonchoSessionManager()
-        s1 = HonchoSession(key="k1", user_peer_id="u", assistant_peer_id="a", honcho_session_id="s1")
-        s2 = HonchoSession(key="k2", user_peer_id="u", assistant_peer_id="a", honcho_session_id="s2")
+        s1 = HonchoSession(
+            key="k1", user_peer_id="u", assistant_peer_id="a", honcho_session_id="s1"
+        )
+        s2 = HonchoSession(
+            key="k2", user_peer_id="u", assistant_peer_id="a", honcho_session_id="s2"
+        )
         s1.add_message("user", "hi")
         mgr._cache["k1"] = s1
         mgr._cache["k2"] = s2
@@ -245,17 +253,33 @@ class TestPeerLookupHelpers:
         result = mgr.set_peer_card(session.key, ["Role: user"])
 
         assert result == ["Role: user"]
-        assistant_peer.set_card.assert_called_once_with(["Role: user"], target=session.user_peer_id)
+        assistant_peer.set_card.assert_called_once_with(
+            ["Role: user"], target=session.user_peer_id
+        )
 
     def test_search_context_uses_peer_perspective_message_search(self):
         """Search spans the target peer's sessions instead of its representation."""
         mgr, session = self._make_cached_manager()
         honcho_client = MagicMock()
         honcho_client.search.return_value = [
-            SimpleNamespace(content="Robert runs neuralancer", peer_id="clawk", session_id="s-old", id="m1"),
-            SimpleNamespace(content="I founded neuralancer in 2019", peer_id="robert", session_id="s-old", id="m2"),
+            SimpleNamespace(
+                content="Robert runs neuralancer",
+                peer_id="clawk",
+                session_id="s-old",
+                id="m1",
+            ),
+            SimpleNamespace(
+                content="I founded neuralancer in 2019",
+                peer_id="robert",
+                session_id="s-old",
+                id="m2",
+            ),
         ]
-        with patch.object(HonchoSessionManager, "honcho", new_callable=lambda: property(lambda s: honcho_client)):
+        with patch.object(
+            HonchoSessionManager,
+            "honcho",
+            new_callable=lambda: property(lambda s: honcho_client),
+        ):
             result = mgr.search_context(session.key, "neuralancer")
 
         # Returns the actual message content, ranked.
@@ -273,10 +297,18 @@ class TestPeerLookupHelpers:
         mgr, session = self._make_cached_manager()
         honcho_client = MagicMock()
         honcho_client.search.return_value = [
-            SimpleNamespace(content="Assistant note", peer_id="clawk", session_id="s1", id="m1"),
+            SimpleNamespace(
+                content="Assistant note", peer_id="clawk", session_id="s1", id="m1"
+            ),
         ]
-        with patch.object(HonchoSessionManager, "honcho", new_callable=lambda: property(lambda s: honcho_client)):
-            result = mgr.search_context(session.key, "assistant", peer=session.assistant_peer_id)
+        with patch.object(
+            HonchoSessionManager,
+            "honcho",
+            new_callable=lambda: property(lambda s: honcho_client),
+        ):
+            result = mgr.search_context(
+                session.key, "assistant", peer=session.assistant_peer_id
+            )
 
         assert "Assistant note" in result
         _args, kwargs = honcho_client.search.call_args
@@ -285,7 +317,11 @@ class TestPeerLookupHelpers:
     def test_search_context_empty_query_returns_empty(self):
         mgr, session = self._make_cached_manager()
         honcho_client = MagicMock()
-        with patch.object(HonchoSessionManager, "honcho", new_callable=lambda: property(lambda s: honcho_client)):
+        with patch.object(
+            HonchoSessionManager,
+            "honcho",
+            new_callable=lambda: property(lambda s: honcho_client),
+        ):
             assert mgr.search_context(session.key, "   ") == ""
 
         honcho_client.search.assert_not_called()
@@ -320,11 +356,17 @@ class TestPeerLookupHelpers:
         honcho_client.search.side_effect = RuntimeError("peer_perspective unsupported")
         peer_obj = MagicMock()
         peer_obj.search.return_value = [
-            SimpleNamespace(content="fallback hit", peer_id="robert", session_id="s1", id="m1"),
+            SimpleNamespace(
+                content="fallback hit", peer_id="robert", session_id="s1", id="m1"
+            ),
         ]
         mgr._get_or_create_peer = MagicMock(return_value=peer_obj)
 
-        with patch.object(HonchoSessionManager, "honcho", new_callable=lambda: property(lambda s: honcho_client)):
+        with patch.object(
+            HonchoSessionManager,
+            "honcho",
+            new_callable=lambda: property(lambda s: honcho_client),
+        ):
             result = mgr.search_context(session.key, "anything")
 
         assert "fallback hit" in result
@@ -340,11 +382,13 @@ class TestPeerLookupHelpers:
         ai_peer = MagicMock()
         ai_peer.context.side_effect = lambda **kwargs: SimpleNamespace(
             representation=(
-                "AI representation" if kwargs.get("target") == session.assistant_peer_id
+                "AI representation"
+                if kwargs.get("target") == session.assistant_peer_id
                 else "Mixed representation"
             ),
             peer_card=(
-                ["Role: Assistant"] if kwargs.get("target") == session.assistant_peer_id
+                ["Role: Assistant"]
+                if kwargs.get("target") == session.assistant_peer_id
                 else ["Name: Robert"]
             ),
         )
@@ -361,7 +405,9 @@ class TestPeerLookupHelpers:
         user_peer.context.assert_called_once_with(target=session.user_peer_id)
         ai_peer.context.assert_called_once_with(target=session.assistant_peer_id)
 
-    def test_get_prefetch_context_uses_assistant_observer_for_user_when_ai_observe_others(self):
+    def test_get_prefetch_context_uses_assistant_observer_for_user_when_ai_observe_others(
+        self,
+    ):
         """With ai_observe_others enabled, get_prefetch_context must query
         the user context through the assistant observer, not the user peer."""
         mgr, session = self._make_cached_manager()
@@ -404,11 +450,13 @@ class TestPeerLookupHelpers:
         ai_peer = MagicMock()
         ai_peer.context.side_effect = lambda **kwargs: SimpleNamespace(
             representation=(
-                "AI representation" if kwargs.get("target") == session.assistant_peer_id
+                "AI representation"
+                if kwargs.get("target") == session.assistant_peer_id
                 else "Mixed representation"
             ),
             peer_card=(
-                ["Role: Assistant"] if kwargs.get("target") == session.assistant_peer_id
+                ["Role: Assistant"]
+                if kwargs.get("target") == session.assistant_peer_id
                 else ["Name: Robert"]
             ),
         )
@@ -433,10 +481,12 @@ class TestPeerLookupHelpers:
 
         assert ok is True
         assistant_peer.conclusions_of.assert_called_once_with(session.user_peer_id)
-        scope.create.assert_called_once_with([{
-            "content": "User prefers dark mode",
-            "session_id": session.honcho_session_id,
-        }])
+        scope.create.assert_called_once_with([
+            {
+                "content": "User prefers dark mode",
+                "session_id": session.honcho_session_id,
+            }
+        ])
 
     def test_create_conclusion_can_target_ai_peer(self):
         mgr, session = self._make_cached_manager()
@@ -445,14 +495,18 @@ class TestPeerLookupHelpers:
         assistant_peer.conclusions_of.return_value = scope
         mgr._get_or_create_peer = MagicMock(return_value=assistant_peer)
 
-        ok = mgr.create_conclusion(session.key, "Assistant prefers terse summaries", peer="ai")
+        ok = mgr.create_conclusion(
+            session.key, "Assistant prefers terse summaries", peer="ai"
+        )
 
         assert ok is True
         assistant_peer.conclusions_of.assert_called_once_with(session.assistant_peer_id)
-        scope.create.assert_called_once_with([{
-            "content": "Assistant prefers terse summaries",
-            "session_id": session.honcho_session_id,
-        }])
+        scope.create.assert_called_once_with([
+            {
+                "content": "Assistant prefers terse summaries",
+                "session_id": session.honcho_session_id,
+            }
+        ])
 
     def test_create_conclusion_accepts_explicit_user_peer_id(self):
         mgr, session = self._make_cached_manager()
@@ -461,14 +515,18 @@ class TestPeerLookupHelpers:
         assistant_peer.conclusions_of.return_value = scope
         mgr._get_or_create_peer = MagicMock(return_value=assistant_peer)
 
-        ok = mgr.create_conclusion(session.key, "Robert prefers vinyl", peer=session.user_peer_id)
+        ok = mgr.create_conclusion(
+            session.key, "Robert prefers vinyl", peer=session.user_peer_id
+        )
 
         assert ok is True
         assistant_peer.conclusions_of.assert_called_once_with(session.user_peer_id)
-        scope.create.assert_called_once_with([{
-            "content": "Robert prefers vinyl",
-            "session_id": session.honcho_session_id,
-        }])
+        scope.create.assert_called_once_with([
+            {
+                "content": "Robert prefers vinyl",
+                "session_id": session.honcho_session_id,
+            }
+        ])
 
     def test_list_conclusions_uses_query_when_query_given(self):
         mgr, session = self._make_cached_manager()
@@ -521,6 +579,7 @@ class TestConcludeToolDispatch:
     def test_conclude_schema_has_no_anyof(self):
         """anyOf/oneOf/allOf breaks Anthropic and Fireworks APIs — schema must be plain object."""
         from plugins.memory.honcho import CONCLUDE_SCHEMA
+
         params = CONCLUDE_SCHEMA["parameters"]
         assert params["type"] == "object"
         assert "conclusion" in params["properties"]
@@ -582,7 +641,9 @@ class TestConcludeToolDispatch:
         )
 
         assert "Role: Assistant" in result
-        provider._manager.get_peer_card.assert_called_once_with("telegram:123", peer="clawk")
+        provider._manager.get_peer_card.assert_called_once_with(
+            "telegram:123", peer="clawk"
+        )
 
     def test_honcho_search_can_target_explicit_peer_id(self):
         provider = HonchoMemoryProvider()
@@ -607,6 +668,7 @@ class TestConcludeToolDispatch:
     def test_honcho_search_rejects_whitespace_only_query(self):
         """Whitespace-only query must not hit Honcho search API."""
         import json
+
         provider = HonchoMemoryProvider()
         provider._session_initialized = True
         provider._session_key = "telegram:123"
@@ -641,6 +703,7 @@ class TestConcludeToolDispatch:
     def test_honcho_reasoning_rejects_whitespace_only_query(self):
         """Whitespace-only query must not hit Honcho dialectic API."""
         import json
+
         provider = HonchoMemoryProvider()
         provider._session_initialized = True
         provider._session_key = "telegram:123"
@@ -654,6 +717,7 @@ class TestConcludeToolDispatch:
     def test_honcho_conclude_missing_both_params_returns_error(self):
         """Calling honcho_conclude with neither conclusion nor delete_id returns a tool error."""
         import json
+
         provider = HonchoMemoryProvider()
         provider._session_initialized = True
         provider._session_key = "telegram:123"
@@ -662,13 +726,16 @@ class TestConcludeToolDispatch:
         result = provider.handle_tool_call("honcho_conclude", {})
 
         parsed = json.loads(result)
-        assert parsed == {"error": "Exactly one of conclusion, delete_id, or list must be provided."}
+        assert parsed == {
+            "error": "Exactly one of conclusion, delete_id, or list must be provided."
+        }
         provider._manager.create_conclusion.assert_not_called()
         provider._manager.delete_conclusion.assert_not_called()
 
     def test_honcho_conclude_rejects_both_params_at_once(self):
         """Sending both conclusion and delete_id should be rejected."""
         import json
+
         provider = HonchoMemoryProvider()
         provider._session_initialized = True
         provider._session_key = "telegram:123"
@@ -678,7 +745,9 @@ class TestConcludeToolDispatch:
             {"conclusion": "User prefers dark mode", "delete_id": "conc-123"},
         )
         parsed = json.loads(result)
-        assert parsed == {"error": "Exactly one of conclusion, delete_id, or list must be provided."}
+        assert parsed == {
+            "error": "Exactly one of conclusion, delete_id, or list must be provided."
+        }
         provider._manager.create_conclusion.assert_not_called()
         provider._manager.delete_conclusion.assert_not_called()
 
@@ -695,38 +764,43 @@ class TestConcludeToolDispatch:
             {"conclusion": "User prefers dark mode", "query": "preferences"},
         )
 
-        assert json.loads(result) == {
-            "error": "query is only valid when list is true."
-        }
+        assert json.loads(result) == {"error": "query is only valid when list is true."}
         provider._manager.create_conclusion.assert_not_called()
 
     def test_honcho_conclude_rejects_whitespace_only_conclusion(self):
         """Whitespace-only conclusion should be treated as empty."""
         import json
+
         provider = HonchoMemoryProvider()
         provider._session_initialized = True
         provider._session_key = "telegram:123"
         provider._manager = MagicMock()
         result = provider.handle_tool_call("honcho_conclude", {"conclusion": "   "})
         parsed = json.loads(result)
-        assert parsed == {"error": "Exactly one of conclusion, delete_id, or list must be provided."}
+        assert parsed == {
+            "error": "Exactly one of conclusion, delete_id, or list must be provided."
+        }
         provider._manager.create_conclusion.assert_not_called()
 
     def test_honcho_conclude_rejects_whitespace_only_delete_id(self):
         """Whitespace-only delete_id should be treated as empty."""
         import json
+
         provider = HonchoMemoryProvider()
         provider._session_initialized = True
         provider._session_key = "telegram:123"
         provider._manager = MagicMock()
         result = provider.handle_tool_call("honcho_conclude", {"delete_id": "  "})
         parsed = json.loads(result)
-        assert parsed == {"error": "Exactly one of conclusion, delete_id, or list must be provided."}
+        assert parsed == {
+            "error": "Exactly one of conclusion, delete_id, or list must be provided."
+        }
         provider._manager.delete_conclusion.assert_not_called()
 
     def test_honcho_conclude_list_mode_dispatches_to_manager(self):
         """list=true with a query should return conclusions (with ids) via list_conclusions."""
         import json
+
         provider = HonchoMemoryProvider()
         provider._session_initialized = True
         provider._session_key = "telegram:123"
@@ -735,10 +809,14 @@ class TestConcludeToolDispatch:
             {"id": "nano1", "content": "User prefers dark mode"},
         ]
 
-        result = provider.handle_tool_call("honcho_conclude", {"list": True, "query": "dark mode"})
+        result = provider.handle_tool_call(
+            "honcho_conclude", {"list": True, "query": "dark mode"}
+        )
 
         parsed = json.loads(result)
-        assert parsed == {"conclusions": [{"id": "nano1", "content": "User prefers dark mode"}]}
+        assert parsed == {
+            "conclusions": [{"id": "nano1", "content": "User prefers dark mode"}]
+        }
         provider._manager.list_conclusions.assert_called_once_with(
             "telegram:123",
             query="dark mode",
@@ -748,6 +826,7 @@ class TestConcludeToolDispatch:
     def test_honcho_conclude_list_mode_omits_query_when_not_given(self):
         """list=true without a query should list recent conclusions (query=None)."""
         import json
+
         provider = HonchoMemoryProvider()
         provider._session_initialized = True
         provider._session_key = "telegram:123"
@@ -766,6 +845,7 @@ class TestConcludeToolDispatch:
     def test_honcho_conclude_rejects_list_with_conclusion(self):
         """list=true combined with conclusion violates exactly-one-of and is rejected."""
         import json
+
         provider = HonchoMemoryProvider()
         provider._session_initialized = True
         provider._session_key = "telegram:123"
@@ -777,7 +857,9 @@ class TestConcludeToolDispatch:
         )
 
         parsed = json.loads(result)
-        assert parsed == {"error": "Exactly one of conclusion, delete_id, or list must be provided."}
+        assert parsed == {
+            "error": "Exactly one of conclusion, delete_id, or list must be provided."
+        }
         provider._manager.list_conclusions.assert_not_called()
         provider._manager.create_conclusion.assert_not_called()
 
@@ -812,7 +894,10 @@ class TestConcludeToolDispatch:
         provider._sync_thread.join(timeout=1.0)
 
         assert session.add_message.call_args_list[0].args == ("user", "hello")
-        assert session.add_message.call_args_list[1].args == ("assistant", "Visible answer")
+        assert session.add_message.call_args_list[1].args == (
+            "assistant",
+            "Visible answer",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -828,8 +913,14 @@ class TestConcludeToolDispatch:
 class TestToolsModeInitBehavior:
     """Verify initOnSessionStart controls session init timing in tools mode."""
 
-    def _make_provider_with_config(self, recall_mode="tools", init_on_session_start=False,
-                                    peer_name=None, user_id=None, user_id_alt=None):
+    def _make_provider_with_config(
+        self,
+        recall_mode="tools",
+        init_on_session_start=False,
+        peer_name=None,
+        user_id=None,
+        user_id_alt=None,
+    ):
         """Create a HonchoMemoryProvider with mocked config and dependencies."""
         from plugins.memory.honcho.client import HonchoClientConfig
 
@@ -857,10 +948,21 @@ class TestToolsModeInitBehavior:
         if user_id_alt:
             init_kwargs["user_id_alt"] = user_id_alt
 
-        with patch("plugins.memory.honcho.client.HonchoClientConfig.from_global_config", return_value=cfg), \
-             patch("plugins.memory.honcho.client.get_honcho_client", return_value=MagicMock()), \
-             patch("plugins.memory.honcho.session.HonchoSessionManager", return_value=mock_manager) as mock_manager_cls, \
-             patch("clawk_constants.get_clawk_home", return_value=MagicMock()):
+        with (
+            patch(
+                "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
+                return_value=cfg,
+            ),
+            patch(
+                "plugins.memory.honcho.client.get_honcho_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "plugins.memory.honcho.session.HonchoSessionManager",
+                return_value=mock_manager,
+            ) as mock_manager_cls,
+            patch("clawk_constants.get_clawk_home", return_value=MagicMock()),
+        ):
             provider.initialize(session_id="test-session-001", **init_kwargs)
 
         return provider, cfg, mock_manager_cls
@@ -868,7 +970,8 @@ class TestToolsModeInitBehavior:
     def test_tools_lazy_default(self):
         """tools + initOnSessionStart=false → session NOT initialized after initialize()."""
         provider, _, _ = self._make_provider_with_config(
-            recall_mode="tools", init_on_session_start=False,
+            recall_mode="tools",
+            init_on_session_start=False,
         )
         assert provider._session_initialized is False
         assert provider._manager is None
@@ -877,7 +980,8 @@ class TestToolsModeInitBehavior:
     def test_tools_eager_init(self):
         """tools + initOnSessionStart=true → session IS initialized after initialize()."""
         provider, _, _ = self._make_provider_with_config(
-            recall_mode="tools", init_on_session_start=True,
+            recall_mode="tools",
+            init_on_session_start=True,
         )
         assert provider._session_initialized is True
         assert provider._manager is not None
@@ -885,42 +989,56 @@ class TestToolsModeInitBehavior:
     def test_tools_eager_prefetch_still_empty(self):
         """tools mode with eager init still returns empty from prefetch() (no auto-injection)."""
         provider, _, _ = self._make_provider_with_config(
-            recall_mode="tools", init_on_session_start=True,
+            recall_mode="tools",
+            init_on_session_start=True,
         )
         assert provider.prefetch("test query") == ""
 
     def test_tools_lazy_prefetch_empty(self):
         """tools mode with lazy init also returns empty from prefetch()."""
         provider, _, _ = self._make_provider_with_config(
-            recall_mode="tools", init_on_session_start=False,
+            recall_mode="tools",
+            init_on_session_start=False,
         )
         assert provider.prefetch("test query") == ""
 
     def test_explicit_peer_name_not_overridden_by_user_id(self):
         """Explicit peerName in config must not be replaced by gateway user_id."""
         _, cfg, _ = self._make_provider_with_config(
-            recall_mode="tools", init_on_session_start=True,
-            peer_name="Kathie", user_id="8439114563",
+            recall_mode="tools",
+            init_on_session_start=True,
+            peer_name="Kathie",
+            user_id="8439114563",
         )
         assert cfg.peer_name == "Kathie"
 
     def test_user_id_used_when_no_peer_name(self):
         """Gateway user_id is passed separately from config peer_name."""
         _, cfg, mock_manager_cls = self._make_provider_with_config(
-            recall_mode="tools", init_on_session_start=True,
-            peer_name=None, user_id="8439114563",
+            recall_mode="tools",
+            init_on_session_start=True,
+            peer_name=None,
+            user_id="8439114563",
         )
         assert cfg.peer_name is None
-        assert mock_manager_cls.call_args.kwargs["runtime_user_peer_name"] == "8439114563"
+        assert (
+            mock_manager_cls.call_args.kwargs["runtime_user_peer_name"] == "8439114563"
+        )
 
     def test_user_id_alt_is_passed_to_session_manager(self):
         """Gateway alternate user IDs are available for Honcho alias matching."""
         _, _, mock_manager_cls = self._make_provider_with_config(
-            recall_mode="tools", init_on_session_start=True,
-            peer_name=None, user_id="open-id", user_id_alt="union-id",
+            recall_mode="tools",
+            init_on_session_start=True,
+            peer_name=None,
+            user_id="open-id",
+            user_id_alt="union-id",
         )
         assert mock_manager_cls.call_args.kwargs["runtime_user_peer_name"] == "open-id"
-        assert mock_manager_cls.call_args.kwargs["runtime_user_peer_name_alt"] == "union-id"
+        assert (
+            mock_manager_cls.call_args.kwargs["runtime_user_peer_name_alt"]
+            == "union-id"
+        )
 
 
 class TestPerSessionMigrateGuard:
@@ -952,10 +1070,21 @@ class TestPerSessionMigrateGuard:
         mock_session.messages = []  # empty = new session → triggers migration path
         mock_manager.get_or_create.return_value = mock_session
 
-        with patch("plugins.memory.honcho.client.HonchoClientConfig.from_global_config", return_value=cfg), \
-             patch("plugins.memory.honcho.client.get_honcho_client", return_value=MagicMock()), \
-             patch("plugins.memory.honcho.session.HonchoSessionManager", return_value=mock_manager), \
-             patch("clawk_constants.get_clawk_home", return_value=MagicMock()):
+        with (
+            patch(
+                "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
+                return_value=cfg,
+            ),
+            patch(
+                "plugins.memory.honcho.client.get_honcho_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "plugins.memory.honcho.session.HonchoSessionManager",
+                return_value=mock_manager,
+            ),
+            patch("clawk_constants.get_clawk_home", return_value=MagicMock()),
+        ):
             provider.initialize(session_id="test-session-001")
 
         return provider, mock_manager
@@ -1095,7 +1224,9 @@ class TestDialecticInputGuard:
 
         # Create a cached session so dialectic_query doesn't bail early
         session = HonchoSession(
-            key="test", user_peer_id="u", assistant_peer_id="a",
+            key="test",
+            user_peer_id="u",
+            assistant_peer_id="a",
             honcho_session_id="s",
         )
         mgr._cache["test"] = session
@@ -1124,7 +1255,9 @@ class TestDialecticInjectionCap:
         mgr._dialectic_max_chars = 50
 
         session = HonchoSession(
-            key="test", user_peer_id="u", assistant_peer_id="a",
+            key="test",
+            user_peer_id="u",
+            assistant_peer_id="a",
             honcho_session_id="s",
         )
         mgr._cache["test"] = session
@@ -1198,10 +1331,21 @@ class TestDialecticCadenceDefaults:
         mock_session.messages = []
         mock_manager.get_or_create.return_value = mock_session
 
-        with patch("plugins.memory.honcho.client.HonchoClientConfig.from_global_config", return_value=cfg), \
-             patch("plugins.memory.honcho.client.get_honcho_client", return_value=MagicMock()), \
-             patch("plugins.memory.honcho.session.HonchoSessionManager", return_value=mock_manager), \
-             patch("clawk_constants.get_clawk_home", return_value=MagicMock()):
+        with (
+            patch(
+                "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
+                return_value=cfg,
+            ),
+            patch(
+                "plugins.memory.honcho.client.get_honcho_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "plugins.memory.honcho.session.HonchoSessionManager",
+                return_value=mock_manager,
+            ),
+            patch("clawk_constants.get_clawk_home", return_value=MagicMock()),
+        ):
             provider.initialize(session_id="test-session-001")
 
         _settle_prewarm(provider)
@@ -1255,7 +1399,9 @@ class TestBaseContextSummary:
         }
         formatted = provider._format_first_turn_context(ctx)
         assert "## Session Summary" in formatted
-        assert formatted.index("Session Summary") < formatted.index("User Representation")
+        assert formatted.index("Session Summary") < formatted.index(
+            "User Representation"
+        )
 
     def test_format_without_summary(self):
         """No summary key means no summary section."""
@@ -1285,11 +1431,11 @@ class TestBaseContextSummary:
             return {"representation": "late user context", "card": ""}
 
         manager.get_prefetch_context.side_effect = get_context
-        manager.set_context_result.side_effect = (
-            lambda session_key, result: cached.__setitem__(session_key, result)
+        manager.set_context_result.side_effect = lambda session_key, result: (
+            cached.__setitem__(session_key, result)
         )
-        manager.pop_context_result.side_effect = (
-            lambda session_key: cached.pop(session_key, {})
+        manager.pop_context_result.side_effect = lambda session_key: cached.pop(
+            session_key, {}
         )
 
         provider = HonchoMemoryProvider()
@@ -1358,10 +1504,21 @@ class TestDialecticDepth:
         mock_session.messages = []
         mock_manager.get_or_create.return_value = mock_session
 
-        with patch("plugins.memory.honcho.client.HonchoClientConfig.from_global_config", return_value=cfg), \
-             patch("plugins.memory.honcho.client.get_honcho_client", return_value=MagicMock()), \
-             patch("plugins.memory.honcho.session.HonchoSessionManager", return_value=mock_manager), \
-             patch("clawk_constants.get_clawk_home", return_value=MagicMock()):
+        with (
+            patch(
+                "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
+                return_value=cfg,
+            ),
+            patch(
+                "plugins.memory.honcho.client.get_honcho_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "plugins.memory.honcho.session.HonchoSessionManager",
+                return_value=mock_manager,
+            ),
+            patch("clawk_constants.get_clawk_home", return_value=MagicMock()),
+        ):
             provider.initialize(session_id="test-session-001")
 
         _settle_prewarm(provider)
@@ -1389,10 +1546,12 @@ class TestDialecticDepth:
 
     def test_depth_levels_from_config(self):
         """dialecticDepthLevels array is read from config."""
-        provider = self._make_provider(cfg_extra={
-            "dialectic_depth": 2,
-            "dialectic_depth_levels": ["minimal", "high"],
-        })
+        provider = self._make_provider(
+            cfg_extra={
+                "dialectic_depth": 2,
+                "dialectic_depth_levels": ["minimal", "high"],
+            }
+        )
         assert provider._dialectic_depth_levels == ["minimal", "high"]
 
     def test_depth_levels_none_by_default(self):
@@ -1402,27 +1561,33 @@ class TestDialecticDepth:
 
     def test_resolve_pass_level_uses_depth_levels(self):
         """Per-pass levels from dialecticDepthLevels override proportional."""
-        provider = self._make_provider(cfg_extra={
-            "dialectic_depth": 2,
-            "dialectic_depth_levels": ["minimal", "high"],
-        })
+        provider = self._make_provider(
+            cfg_extra={
+                "dialectic_depth": 2,
+                "dialectic_depth_levels": ["minimal", "high"],
+            }
+        )
         assert provider._resolve_pass_level(0) == "minimal"
         assert provider._resolve_pass_level(1) == "high"
 
     def test_resolve_pass_level_proportional_depth_1(self):
         """Depth 1 pass 0 uses the base reasoning level."""
-        provider = self._make_provider(cfg_extra={
-            "dialectic_depth": 1,
-            "dialectic_reasoning_level": "medium",
-        })
+        provider = self._make_provider(
+            cfg_extra={
+                "dialectic_depth": 1,
+                "dialectic_reasoning_level": "medium",
+            }
+        )
         assert provider._resolve_pass_level(0) == "medium"
 
     def test_resolve_pass_level_proportional_depth_2(self):
         """Depth 2: pass 0 is minimal, pass 1 is base level."""
-        provider = self._make_provider(cfg_extra={
-            "dialectic_depth": 2,
-            "dialectic_reasoning_level": "high",
-        })
+        provider = self._make_provider(
+            cfg_extra={
+                "dialectic_depth": 2,
+                "dialectic_reasoning_level": "high",
+            }
+        )
         assert provider._resolve_pass_level(0) == "minimal"
         assert provider._resolve_pass_level(1) == "high"
 
@@ -1448,7 +1613,10 @@ class TestDialecticDepth:
 
     def test_signal_sufficient_structured_response(self):
         """Structured responses with bullets/headers are sufficient."""
-        result = "## Current State\n- Working on Honcho PR\n- Testing dialectic depth\n" + "x" * 50
+        result = (
+            "## Current State\n- Working on Honcho PR\n- Testing dialectic depth\n"
+            + "x" * 50
+        )
         assert HonchoMemoryProvider._signal_sufficient(result)
 
     def test_signal_sufficient_long_unstructured(self):
@@ -1458,6 +1626,7 @@ class TestDialecticDepth:
     def test_run_dialectic_depth_single_pass(self):
         """Depth 1 makes exactly one .chat() call."""
         from unittest.mock import MagicMock
+
         provider = self._make_provider(cfg_extra={"dialectic_depth": 1})
         provider._manager = MagicMock()
         provider._manager.dialectic_query.return_value = "user prefers zero-fluff"
@@ -1471,11 +1640,13 @@ class TestDialecticDepth:
     def test_run_dialectic_depth_two_passes(self):
         """Depth 2 makes two .chat() calls when pass 1 signal is weak."""
         from unittest.mock import MagicMock
+
         provider = self._make_provider(cfg_extra={"dialectic_depth": 2})
         provider._manager = MagicMock()
         provider._manager.dialectic_query.side_effect = [
             "thin response",  # pass 0: weak signal
-            "## Synthesis\n- Grounded in evidence\n- Current PR work\n" + "x" * 100,  # pass 1: strong
+            "## Synthesis\n- Grounded in evidence\n- Current PR work\n"
+            + "x" * 100,  # pass 1: strong
         ]
         provider._session_key = "test"
         provider._base_context_cache = "existing context"
@@ -1487,10 +1658,12 @@ class TestDialecticDepth:
     def test_run_dialectic_depth_bails_early_on_strong_signal(self):
         """Depth 2 skips pass 1 when pass 0 returns strong signal."""
         from unittest.mock import MagicMock
+
         provider = self._make_provider(cfg_extra={"dialectic_depth": 2})
         provider._manager = MagicMock()
         provider._manager.dialectic_query.return_value = (
-            "## Full Assessment\n- Strong structured response\n- With evidence\n" + "x" * 200
+            "## Full Assessment\n- Strong structured response\n- With evidence\n"
+            + "x" * 200
         )
         provider._session_key = "test"
         provider._base_context_cache = "existing context"
@@ -1520,21 +1693,48 @@ class TestTrivialPromptHeuristic:
         mock_session.messages = []
         mock_manager.get_or_create.return_value = mock_session
 
-        with patch("plugins.memory.honcho.client.HonchoClientConfig.from_global_config", return_value=cfg), \
-             patch("plugins.memory.honcho.client.get_honcho_client", return_value=MagicMock()), \
-             patch("plugins.memory.honcho.session.HonchoSessionManager", return_value=mock_manager), \
-             patch("clawk_constants.get_clawk_home", return_value=MagicMock()):
+        with (
+            patch(
+                "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
+                return_value=cfg,
+            ),
+            patch(
+                "plugins.memory.honcho.client.get_honcho_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "plugins.memory.honcho.session.HonchoSessionManager",
+                return_value=mock_manager,
+            ),
+            patch("clawk_constants.get_clawk_home", return_value=MagicMock()),
+        ):
             provider.initialize(session_id="test-session-trivial")
         _settle_prewarm(provider)
         return provider
 
     def test_classifier_catches_common_trivial_forms(self):
-        for t in ("ok", "OK", " ok ", "y", "yes", "sure", "thanks", "lgtm", "/help", "", "   "):
-            assert HonchoMemoryProvider._is_trivial_prompt(t), f"expected trivial: {t!r}"
+        for t in (
+            "ok",
+            "OK",
+            " ok ",
+            "y",
+            "yes",
+            "sure",
+            "thanks",
+            "lgtm",
+            "/help",
+            "",
+            "   ",
+        ):
+            assert HonchoMemoryProvider._is_trivial_prompt(t), (
+                f"expected trivial: {t!r}"
+            )
 
     def test_classifier_lets_substantive_prompts_through(self):
         for t in ("hello world", "what's my name", "explain this", "ok so what's next"):
-            assert not HonchoMemoryProvider._is_trivial_prompt(t), f"expected non-trivial: {t!r}"
+            assert not HonchoMemoryProvider._is_trivial_prompt(t), (
+                f"expected non-trivial: {t!r}"
+            )
 
     def test_prefetch_skips_on_trivial_prompt(self):
         provider = self._make_provider()
@@ -1589,7 +1789,9 @@ class TestTrivialPromptHeuristic:
         provider._base_context_cache = ""
         provider._dialectic_cadence = 4  # stale_limit = 4 * 2 = 8
         provider._last_dialectic_turn = 1
-        provider._turn_count = 1 + 4 * provider._STALE_RESULT_MULTIPLIER + 1  # 10 → stale
+        provider._turn_count = (
+            1 + 4 * provider._STALE_RESULT_MULTIPLIER + 1
+        )  # 10 → stale
         with provider._prefetch_lock:
             provider._prefetch_result = "STALE_DIALECTIC"
             provider._prefetch_result_fired_at = 1
@@ -1612,7 +1814,10 @@ class TestDialecticCadenceAdvancesOnSuccess:
         from plugins.memory.honcho.client import HonchoClientConfig
 
         cfg = HonchoClientConfig(
-            api_key="test-key", enabled=True, recall_mode="hybrid", dialectic_depth=1,
+            api_key="test-key",
+            enabled=True,
+            recall_mode="hybrid",
+            dialectic_depth=1,
         )
         provider = HonchoMemoryProvider()
         mock_manager = MagicMock()
@@ -1620,10 +1825,21 @@ class TestDialecticCadenceAdvancesOnSuccess:
         mock_session.messages = []
         mock_manager.get_or_create.return_value = mock_session
 
-        with patch("plugins.memory.honcho.client.HonchoClientConfig.from_global_config", return_value=cfg), \
-             patch("plugins.memory.honcho.client.get_honcho_client", return_value=MagicMock()), \
-             patch("plugins.memory.honcho.session.HonchoSessionManager", return_value=mock_manager), \
-             patch("clawk_constants.get_clawk_home", return_value=MagicMock()):
+        with (
+            patch(
+                "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
+                return_value=cfg,
+            ),
+            patch(
+                "plugins.memory.honcho.client.get_honcho_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "plugins.memory.honcho.session.HonchoSessionManager",
+                return_value=mock_manager,
+            ),
+            patch("clawk_constants.get_clawk_home", return_value=MagicMock()),
+        ):
             provider.initialize(session_id="test-session-retry")
         _settle_prewarm(provider)
         return provider
@@ -1661,6 +1877,7 @@ class TestDialecticCadenceAdvancesOnSuccess:
     def test_in_flight_thread_is_not_stacked(self):
         import threading as _threading
         import time as _time
+
         provider = self._make_provider()
         provider._session_key = "test"
         provider._turn_count = 10
@@ -1704,10 +1921,21 @@ class TestSessionStartDialecticPrewarm:
         mock_manager.pop_context_result.return_value = None
         mock_manager.dialectic_query.return_value = dialectic_result
 
-        with patch("plugins.memory.honcho.client.HonchoClientConfig.from_global_config", return_value=cfg), \
-             patch("plugins.memory.honcho.client.get_honcho_client", return_value=MagicMock()), \
-             patch("plugins.memory.honcho.session.HonchoSessionManager", return_value=mock_manager), \
-             patch("clawk_constants.get_clawk_home", return_value=MagicMock()):
+        with (
+            patch(
+                "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
+                return_value=cfg,
+            ),
+            patch(
+                "plugins.memory.honcho.client.get_honcho_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "plugins.memory.honcho.session.HonchoSessionManager",
+                return_value=mock_manager,
+            ),
+            patch("clawk_constants.get_clawk_home", return_value=MagicMock()),
+        ):
             provider.initialize(session_id="test-prewarm")
         return provider
 
@@ -1782,7 +2010,9 @@ class TestDialecticLiveness:
         from unittest.mock import patch, MagicMock
         from plugins.memory.honcho.client import HonchoClientConfig
 
-        defaults = dict(api_key="test-key", enabled=True, recall_mode="hybrid", timeout=2.0)
+        defaults = dict(
+            api_key="test-key", enabled=True, recall_mode="hybrid", timeout=2.0
+        )
         if cfg_extra:
             defaults.update(cfg_extra)
         cfg = HonchoClientConfig(**defaults)
@@ -1793,10 +2023,21 @@ class TestDialecticLiveness:
         mock_manager.pop_context_result.return_value = None
         mock_manager.dialectic_query.return_value = ""  # default: silent
 
-        with patch("plugins.memory.honcho.client.HonchoClientConfig.from_global_config", return_value=cfg), \
-             patch("plugins.memory.honcho.client.get_honcho_client", return_value=MagicMock()), \
-             patch("plugins.memory.honcho.session.HonchoSessionManager", return_value=mock_manager), \
-             patch("clawk_constants.get_clawk_home", return_value=MagicMock()):
+        with (
+            patch(
+                "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
+                return_value=cfg,
+            ),
+            patch(
+                "plugins.memory.honcho.client.get_honcho_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "plugins.memory.honcho.session.HonchoSessionManager",
+                return_value=mock_manager,
+            ),
+            patch("clawk_constants.get_clawk_home", return_value=MagicMock()),
+        ):
             provider.initialize(session_id="test-liveness")
         _settle_prewarm(provider)
         return provider
@@ -1804,6 +2045,7 @@ class TestDialecticLiveness:
     def test_stale_thread_is_treated_as_dead(self):
         """A thread older than timeout × multiplier no longer blocks new fires."""
         import threading as _threading
+
         p = self._make_provider()
         p._session_key = "test"
         p._turn_count = 10
@@ -1908,8 +2150,13 @@ class TestDialecticLiveness:
         p = self._make_provider()
         snap = p.liveness_snapshot()
         for key in (
-            "turn_count", "last_dialectic_turn", "pending_result_fired_at",
-            "empty_streak", "effective_cadence", "thread_alive", "thread_age_seconds",
+            "turn_count",
+            "last_dialectic_turn",
+            "pending_result_fired_at",
+            "empty_streak",
+            "effective_cadence",
+            "thread_alive",
+            "thread_age_seconds",
         ):
             assert key in snap
 
@@ -1925,9 +2172,13 @@ class TestDialecticLifecycleSmoke:
         from plugins.memory.honcho.client import HonchoClientConfig
 
         defaults = dict(
-            api_key="test-key", enabled=True, recall_mode="hybrid",
-            dialectic_reasoning_level="low", reasoning_heuristic=True,
-            reasoning_level_cap="high", dialectic_depth=1,
+            api_key="test-key",
+            enabled=True,
+            recall_mode="hybrid",
+            dialectic_reasoning_level="low",
+            reasoning_heuristic=True,
+            reasoning_level_cap="high",
+            dialectic_depth=1,
         )
         if cfg_extra:
             defaults.update(cfg_extra)
@@ -1940,10 +2191,21 @@ class TestDialecticLifecycleSmoke:
         mock_manager.get_prefetch_context.return_value = None
         mock_manager.pop_context_result.return_value = None
 
-        with patch("plugins.memory.honcho.client.HonchoClientConfig.from_global_config", return_value=cfg), \
-             patch("plugins.memory.honcho.client.get_honcho_client", return_value=MagicMock()), \
-             patch("plugins.memory.honcho.session.HonchoSessionManager", return_value=mock_manager), \
-             patch("clawk_constants.get_clawk_home", return_value=MagicMock()):
+        with (
+            patch(
+                "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
+                return_value=cfg,
+            ),
+            patch(
+                "plugins.memory.honcho.client.get_honcho_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "plugins.memory.honcho.session.HonchoSessionManager",
+                return_value=mock_manager,
+            ),
+            patch("clawk_constants.get_clawk_home", return_value=MagicMock()),
+        ):
             return provider, mock_manager, cfg
 
     def _await_thread(self, provider):
@@ -1968,31 +2230,41 @@ class TestDialecticLifecycleSmoke:
         other. Trivial + slash skips apply independent of cadence.
         """
         from unittest.mock import patch, MagicMock
-        provider, mgr, cfg = self._make_provider(
-            cfg_extra={"dialectic_cadence": 3}
-        )
+
+        provider, mgr, cfg = self._make_provider(cfg_extra={"dialectic_cadence": 3})
 
         # Program the dialectic responses in the exact order they'll be requested.
         # An extra or missing call fails the test — strong smoke signal.
         responses = iter([
-            "prewarm: user is eri, works on clawk",      # session-start prewarm
-            "cadence fire: long query synthesis",         # turn 4 queue_prefetch
-            "",                                           # turn 7 fire: silent failure
-            "retry success: fresh synthesis",             # turn 8 queue_prefetch retry
+            "prewarm: user is eri, works on clawk",  # session-start prewarm
+            "cadence fire: long query synthesis",  # turn 4 queue_prefetch
+            "",  # turn 7 fire: silent failure
+            "retry success: fresh synthesis",  # turn 8 queue_prefetch retry
         ])
         mgr.dialectic_query.side_effect = lambda *a, **kw: next(responses)
 
         # ---- init: prewarm fires ----
-        with patch("plugins.memory.honcho.client.HonchoClientConfig.from_global_config", return_value=cfg), \
-             patch("plugins.memory.honcho.client.get_honcho_client", return_value=MagicMock()), \
-             patch("plugins.memory.honcho.session.HonchoSessionManager", return_value=mgr), \
-             patch("clawk_constants.get_clawk_home", return_value=MagicMock()):
+        with (
+            patch(
+                "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
+                return_value=cfg,
+            ),
+            patch(
+                "plugins.memory.honcho.client.get_honcho_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "plugins.memory.honcho.session.HonchoSessionManager", return_value=mgr
+            ),
+            patch("clawk_constants.get_clawk_home", return_value=MagicMock()),
+        ):
             provider.initialize(session_id="smoke-test")
 
         self._await_thread(provider)
         with provider._prefetch_lock:
-            assert provider._prefetch_result.startswith("prewarm"), \
+            assert provider._prefetch_result.startswith("prewarm"), (
                 "session-start prewarm must land in _prefetch_result"
+            )
         assert provider._last_dialectic_turn == 0, "prewarm marks turn 0"
         assert mgr.dialectic_query.call_count == 1
 
@@ -2003,18 +2275,23 @@ class TestDialecticLifecycleSmoke:
         provider.sync_turn("hey", "hi there")
         provider.queue_prefetch("hey")  # cadence gate: (1-0)<3 → skip
         self._await_thread(provider)
-        assert mgr.dialectic_query.call_count == 1, \
+        assert mgr.dialectic_query.call_count == 1, (
             "turn 1 must not fire — prewarm covered it and cadence skips"
+        )
 
         # ---- turn 2: trivial 'ok' → skip everything ----
         mgr.prefetch_context.reset_mock()
         provider.on_turn_start(2, "ok")
-        assert provider.prefetch("ok") == "", "trivial prompt must short-circuit injection"
+        assert provider.prefetch("ok") == "", (
+            "trivial prompt must short-circuit injection"
+        )
         provider.sync_turn("ok", "cool")
         provider.queue_prefetch("ok")
         self._await_thread(provider)
         assert mgr.dialectic_query.call_count == 1, "trivial must not fire dialectic"
-        assert mgr.prefetch_context.call_count == 0, "trivial must not fire context refresh"
+        assert mgr.prefetch_context.call_count == 0, (
+            "trivial must not fire context refresh"
+        )
 
         # ---- turn 3: slash '/help' → also skip ----
         provider.on_turn_start(3, "/help")
@@ -2031,8 +2308,9 @@ class TestDialecticLifecycleSmoke:
         self._await_thread(provider)
         assert mgr.dialectic_query.call_count == 2, "turn 4 cadence fire"
         _, kwargs = mgr.dialectic_query.call_args
-        assert kwargs.get("reasoning_level") in {"medium", "high"}, \
+        assert kwargs.get("reasoning_level") in {"medium", "high"}, (
             f"long query must bump reasoning level above 'low'; got {kwargs.get('reasoning_level')}"
+        )
         assert provider._last_dialectic_turn == 4, "cadence tracker advances on success"
 
         # ---- turns 5–6: cadence cooldown, no fires ----
@@ -2040,22 +2318,26 @@ class TestDialecticLifecycleSmoke:
             provider.on_turn_start(t, "tell me more")
             provider.queue_prefetch("tell me more")
             self._await_thread(provider)
-        assert mgr.dialectic_query.call_count == 2, "turns 5–6 blocked by cadence window"
+        assert mgr.dialectic_query.call_count == 2, (
+            "turns 5–6 blocked by cadence window"
+        )
 
         # ---- turn 7: fires but silent failure (empty dialectic) ----
         provider.on_turn_start(7, "and then what")
         provider.queue_prefetch("and then what")  # (7-4)≥3 → fires
         self._await_thread(provider)
         assert mgr.dialectic_query.call_count == 3, "turn 7 fires"
-        assert provider._last_dialectic_turn == 4, \
+        assert provider._last_dialectic_turn == 4, (
             "silent failure must NOT burn the cadence window"
+        )
 
         # ---- turn 8: retries because cadence didn't advance ----
         provider.on_turn_start(8, "try again")
         provider.queue_prefetch("try again")  # (8-4)≥3 → fires again
         self._await_thread(provider)
-        assert mgr.dialectic_query.call_count == 4, \
+        assert mgr.dialectic_query.call_count == 4, (
             "turn 8 retries because turn 7's empty result didn't advance cadence"
+        )
         assert provider._last_dialectic_turn == 8, "retry success advances"
 
         # ---- session end: flush messages ----
@@ -2073,8 +2355,11 @@ class TestReasoningHeuristic:
         from plugins.memory.honcho.client import HonchoClientConfig
 
         defaults = dict(
-            api_key="test-key", enabled=True, recall_mode="hybrid",
-            dialectic_reasoning_level="low", reasoning_heuristic=True,
+            api_key="test-key",
+            enabled=True,
+            recall_mode="hybrid",
+            dialectic_reasoning_level="low",
+            reasoning_heuristic=True,
             reasoning_level_cap="high",
         )
         if cfg_extra:
@@ -2083,10 +2368,21 @@ class TestReasoningHeuristic:
         provider = HonchoMemoryProvider()
         mock_manager = MagicMock()
         mock_manager.get_or_create.return_value = MagicMock(messages=[])
-        with patch("plugins.memory.honcho.client.HonchoClientConfig.from_global_config", return_value=cfg), \
-             patch("plugins.memory.honcho.client.get_honcho_client", return_value=MagicMock()), \
-             patch("plugins.memory.honcho.session.HonchoSessionManager", return_value=mock_manager), \
-             patch("clawk_constants.get_clawk_home", return_value=MagicMock()):
+        with (
+            patch(
+                "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
+                return_value=cfg,
+            ),
+            patch(
+                "plugins.memory.honcho.client.get_honcho_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "plugins.memory.honcho.session.HonchoSessionManager",
+                return_value=mock_manager,
+            ),
+            patch("clawk_constants.get_clawk_home", return_value=MagicMock()),
+        ):
             provider.initialize(session_id="test-heuristic")
         _settle_prewarm(provider)
         return provider
@@ -2163,6 +2459,7 @@ class TestSetPeerCardNoneGuard:
     def test_returns_none_when_peer_resolves_to_none(self):
         """set_peer_card returns None when _resolve_peer_id returns None."""
         from unittest.mock import patch
+
         mgr = self._make_manager()
 
         session = HonchoSession(
@@ -2193,7 +2490,9 @@ class TestSetPeerCardNoneGuard:
 class TestGetSessionContextFallback:
     """get_session_context fallback must honour the peer param when honcho_session is absent."""
 
-    def _make_manager_with_session(self, user_peer_id="user-peer", assistant_peer_id="ai-peer"):
+    def _make_manager_with_session(
+        self, user_peer_id="user-peer", assistant_peer_id="ai-peer"
+    ):
         from plugins.memory.honcho.client import HonchoClientConfig
         from plugins.memory.honcho.session import HonchoSessionManager
 

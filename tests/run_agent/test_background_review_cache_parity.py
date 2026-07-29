@@ -34,6 +34,7 @@ def _make_agent_stub(agent_cls):
         "for prefix-cache parity"
     )
     import datetime as _dt
+
     agent.session_start = _dt.datetime(2026, 1, 1, 12, 0, 0)
     agent._MEMORY_REVIEW_PROMPT = "review memory"
     agent._SKILL_REVIEW_PROMPT = "review skills"
@@ -93,9 +94,7 @@ def _make_recorder_class(captured=None, record_on_run=()):
             if captured is not None:
                 for _name in record_on_run:
                     captured[_name] = getattr(self, _name)
-            raise RuntimeError(
-                "stop after recording — don't actually call the API"
-            )
+            raise RuntimeError("stop after recording — don't actually call the API")
 
         def shutdown_memory_provider(self):
             pass
@@ -123,8 +122,10 @@ def test_review_fork_inherits_parent_cached_system_prompt():
 
     _Recorder = _make_recorder_class()
 
-    with patch.object(run_agent, "AIAgent", _Recorder), \
-         patch("threading.Thread", _SyncThread):
+    with (
+        patch.object(run_agent, "AIAgent", _Recorder),
+        patch("threading.Thread", _SyncThread),
+    ):
         # The production code assigns _cached_system_prompt AFTER __init__,
         # so wrap the recorder's __setattr__ to see that post-construction
         # write from _spawn_background_review.
@@ -169,8 +170,10 @@ def test_review_fork_pins_session_start_and_session_id():
         captured, record_on_run=("session_start", "session_id")
     )
 
-    with patch.object(run_agent, "AIAgent", _Recorder), \
-         patch("threading.Thread", _SyncThread):
+    with (
+        patch.object(run_agent, "AIAgent", _Recorder),
+        patch("threading.Thread", _SyncThread),
+    ):
         agent._spawn_background_review(
             messages_snapshot=[],
             review_memory=True,
@@ -196,8 +199,10 @@ def test_review_fork_inherits_parent_toolset_config():
     captured = {}
     _Recorder = _make_recorder_class(captured)
 
-    with patch.object(run_agent, "AIAgent", _Recorder), \
-         patch("threading.Thread", _SyncThread):
+    with (
+        patch.object(run_agent, "AIAgent", _Recorder),
+        patch("threading.Thread", _SyncThread),
+    ):
         agent._spawn_background_review(
             messages_snapshot=[],
             review_memory=True,
@@ -229,8 +234,10 @@ def test_review_fork_inherits_parent_reasoning_config():
     captured = {}
     _Recorder = _make_recorder_class(captured)
 
-    with patch.object(run_agent, "AIAgent", _Recorder), \
-         patch("threading.Thread", _SyncThread):
+    with (
+        patch.object(run_agent, "AIAgent", _Recorder),
+        patch("threading.Thread", _SyncThread),
+    ):
         agent._spawn_background_review(
             messages_snapshot=[],
             review_memory=True,
@@ -278,10 +285,11 @@ def test_routed_review_fork_does_not_inherit_reasoning_config():
         "routed": True,
     }
 
-    with patch.object(run_agent, "AIAgent", _Recorder), \
-         patch.object(bg_review, "_resolve_review_runtime",
-                      return_value=routed_runtime), \
-         patch("threading.Thread", _SyncThread):
+    with (
+        patch.object(run_agent, "AIAgent", _Recorder),
+        patch.object(bg_review, "_resolve_review_runtime", return_value=routed_runtime),
+        patch("threading.Thread", _SyncThread),
+    ):
         agent_stub._spawn_background_review(
             messages_snapshot=[],
             review_memory=True,

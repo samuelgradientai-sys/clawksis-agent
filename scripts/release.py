@@ -2094,7 +2094,8 @@ def git(*args, cwd=None):
     """Run a git command and return stdout."""
     result = subprocess.run(
         ["git"] + list(args),
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
         cwd=cwd or str(REPO_ROOT),
     )
     if result.returncode != 0:
@@ -2298,13 +2299,25 @@ def categorize_commit(subject: str) -> str:
         "breaking": [r"^breaking[\s:(]", r"^!:", r"BREAKING CHANGE"],
         "features": [r"^feat[\s:(]", r"^feature[\s:(]", r"^add[\s:(]"],
         "fixes": [r"^fix[\s:(]", r"^bugfix[\s:(]", r"^bug[\s:(]", r"^hotfix[\s:(]"],
-        "improvements": [r"^improve[\s:(]", r"^perf[\s:(]", r"^enhance[\s:(]",
-                         r"^refactor[\s:(]", r"^cleanup[\s:(]", r"^clean[\s:(]",
-                         r"^update[\s:(]", r"^optimize[\s:(]"],
+        "improvements": [
+            r"^improve[\s:(]",
+            r"^perf[\s:(]",
+            r"^enhance[\s:(]",
+            r"^refactor[\s:(]",
+            r"^cleanup[\s:(]",
+            r"^clean[\s:(]",
+            r"^update[\s:(]",
+            r"^optimize[\s:(]",
+        ],
         "docs": [r"^doc[\s:(]", r"^docs[\s:(]"],
         "tests": [r"^test[\s:(]", r"^tests[\s:(]"],
-        "chore": [r"^chore[\s:(]", r"^ci[\s:(]", r"^build[\s:(]",
-                  r"^deps[\s:(]", r"^bump[\s:(]"],
+        "chore": [
+            r"^chore[\s:(]",
+            r"^ci[\s:(]",
+            r"^build[\s:(]",
+            r"^deps[\s:(]",
+            r"^bump[\s:(]",
+        ],
     }
 
     for category, regexes in patterns.items():
@@ -2326,7 +2339,12 @@ def categorize_commit(subject: str) -> str:
 def clean_subject(subject: str) -> str:
     """Clean up a commit subject for display."""
     # Remove conventional commit prefix
-    cleaned = re.sub(r"^(feat|fix|docs|chore|refactor|test|perf|ci|build|improve|add|update|cleanup|hotfix|breaking|enhance|optimize|bugfix|bug|feature|tests|deps|bump)[\s:(!]+\s*", "", subject, flags=re.IGNORECASE)
+    cleaned = re.sub(
+        r"^(feat|fix|docs|chore|refactor|test|perf|ci|build|improve|add|update|cleanup|hotfix|breaking|enhance|optimize|bugfix|bug|feature|tests|deps|bump)[\s:(!]+\s*",
+        "",
+        subject,
+        flags=re.IGNORECASE,
+    )
     # Remove trailing issue refs that are redundant with PR links
     cleaned = cleaned.strip()
     # Capitalize first letter
@@ -2344,9 +2362,16 @@ def parse_coauthors(body: str) -> list:
     if not body:
         return []
     # AI/bot emails to ignore in co-author trailers
-    _ignored_emails = {"noreply@anthropic.com", "noreply@github.com",
-                       "cursoragent@cursor.com", "clawk@nousresearch.com"}
-    _ignored_names = re.compile(r"^(Claude|Copilot|Cursor Agent|GitHub Actions?|dependabot|renovate)", re.IGNORECASE)
+    _ignored_emails = {
+        "noreply@anthropic.com",
+        "noreply@github.com",
+        "cursoragent@cursor.com",
+        "clawk@nousresearch.com",
+    }
+    _ignored_names = re.compile(
+        r"^(Claude|Copilot|Cursor Agent|GitHub Actions?|dependabot|renovate)",
+        re.IGNORECASE,
+    )
     pattern = re.compile(r"Co-authored-by:\s*(.+?)\s*<([^>]+)>", re.IGNORECASE)
     results = []
     for m in pattern.finditer(body):
@@ -2367,7 +2392,8 @@ def get_commits(since_tag=None):
     # Format: hash<US>author_name<US>author_email<US>subject\0body
     # Using %x1f (unit separator) to avoid conflict with | in author names
     log = git(
-        "log", range_spec,
+        "log",
+        range_spec,
         "--format=%H%x1f%an%x1f%ae%x1f%s%x00%b%x00",
         "--no-merges",
     )
@@ -2417,8 +2443,14 @@ def get_pr_number(subject: str) -> str | None:
     return None
 
 
-def generate_changelog(commits, tag_name, semver, repo_url="https://github.com/samuelgradientai-sys/clawksis-agent",
-                       prev_tag=None, first_release=False):
+def generate_changelog(
+    commits,
+    tag_name,
+    semver,
+    repo_url="https://github.com/samuelgradientai-sys/clawksis-agent",
+    prev_tag=None,
+    first_release=False,
+):
     """Generate markdown changelog from categorized commits."""
     lines = []
 
@@ -2431,8 +2463,12 @@ def generate_changelog(commits, tag_name, semver, repo_url="https://github.com/s
     lines.append("")
 
     if first_release:
-        lines.append("> 🎉 **First official release!** This marks the beginning of regular weekly releases")
-        lines.append("> for Clawksis. See below for everything included in this initial release.")
+        lines.append(
+            "> 🎉 **First official release!** This marks the beginning of regular weekly releases"
+        )
+        lines.append(
+            "> for Clawksis. See below for everything included in this initial release."
+        )
         lines.append("")
 
     # Group commits by category
@@ -2479,7 +2515,9 @@ def generate_changelog(commits, tag_name, semver, repo_url="https://github.com/s
             if pr_num:
                 parts.append(f"([#{pr_num}]({repo_url}/pull/{pr_num}))")
             else:
-                parts.append(f"([`{commit['short_sha']}`]({repo_url}/commit/{commit['sha']}))")
+                parts.append(
+                    f"([`{commit['short_sha']}`]({repo_url}/commit/{commit['sha']}))"
+                )
 
             if author not in teknium_aliases:
                 parts.append(f"— {author}")
@@ -2513,7 +2551,9 @@ def generate_changelog(commits, tag_name, semver, repo_url="https://github.com/s
 
     # Full changelog link
     if prev_tag:
-        lines.append(f"**Full Changelog**: [{prev_tag}...{tag_name}]({repo_url}/compare/{prev_tag}...{tag_name})")
+        lines.append(
+            f"**Full Changelog**: [{prev_tag}...{tag_name}]({repo_url}/compare/{prev_tag}...{tag_name})"
+        )
     else:
         lines.append(f"**Full Changelog**: [{tag_name}]({repo_url}/commits/{tag_name})")
     lines.append("")
@@ -2523,16 +2563,27 @@ def generate_changelog(commits, tag_name, semver, repo_url="https://github.com/s
 
 def main():
     parser = argparse.ArgumentParser(description="Clawksis Release Tool")
-    parser.add_argument("--bump", choices=["major", "minor", "patch"],
-                        help="Which semver component to bump")
-    parser.add_argument("--publish", action="store_true",
-                        help="Actually create the tag and GitHub release (otherwise dry run)")
-    parser.add_argument("--date", type=str,
-                        help="Override CalVer date (format: YYYY.M.D)")
-    parser.add_argument("--first-release", action="store_true",
-                        help="Mark as first release (no previous tag expected)")
-    parser.add_argument("--output", type=str,
-                        help="Write changelog to file instead of stdout")
+    parser.add_argument(
+        "--bump",
+        choices=["major", "minor", "patch"],
+        help="Which semver component to bump",
+    )
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="Actually create the tag and GitHub release (otherwise dry run)",
+    )
+    parser.add_argument(
+        "--date", type=str, help="Override CalVer date (format: YYYY.M.D)"
+    )
+    parser.add_argument(
+        "--first-release",
+        action="store_true",
+        help="Mark as first release (no previous tag expected)",
+    )
+    parser.add_argument(
+        "--output", type=str, help="Write changelog to file instead of stdout"
+    )
     args = parser.parse_args()
 
     # Determine CalVer date
@@ -2569,21 +2620,23 @@ def main():
         if not args.first_release:
             return
 
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print("  Clawksis Release Preview")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  CalVer tag:      {tag_name}")
     print(f"  SemVer:          v{current_version} → v{new_version}")
     print(f"  Previous tag:    {prev_tag or '(none — first release)'}")
     print(f"  Commits:         {len(commits)}")
     print(f"  Unique authors:  {len({c['github_author'] for c in commits})}")
     print(f"  Mode:            {'PUBLISH' if args.publish else 'DRY RUN'}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print()
 
     # Generate changelog
     changelog = generate_changelog(
-        commits, tag_name, new_version,
+        commits,
+        tag_name,
+        new_version,
         prev_tag=prev_tag,
         first_release=args.first_release,
     )
@@ -2595,9 +2648,9 @@ def main():
         print(changelog)
 
     if args.publish:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("  Publishing release...")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Update version files
         if args.bump:
@@ -2617,14 +2670,19 @@ def main():
                 "commit", "-m", f"chore: bump version to v{new_version} ({calver_date})"
             )
             if commit_result.returncode != 0:
-                print(f"  ✗ Failed to commit version bump: {commit_result.stderr.strip()}")
+                print(
+                    f"  ✗ Failed to commit version bump: {commit_result.stderr.strip()}"
+                )
                 return
             print("  ✓ Committed version bump")
 
         # Create annotated tag
         tag_result = git_result(
-            "tag", "-a", tag_name, "-m",
-            f"Clawksis v{new_version} ({calver_date})\n\nWeekly release"
+            "tag",
+            "-a",
+            tag_name,
+            "-m",
+            f"Clawksis v{new_version} ({calver_date})\n\nWeekly release",
         )
         if tag_result.returncode != 0:
             print(f"  ✗ Failed to create tag {tag_name}: {tag_result.stderr.strip()}")
@@ -2653,9 +2711,14 @@ def main():
         changelog_file.write_text(changelog, encoding="utf-8")
 
         gh_cmd = [
-            "gh", "release", "create", tag_name,
-            "--title", f"Clawksis v{new_version} ({calver_date})",
-            "--notes-file", str(changelog_file),
+            "gh",
+            "release",
+            "create",
+            tag_name,
+            "--title",
+            f"Clawksis v{new_version} ({calver_date})",
+            "--notes-file",
+            str(changelog_file),
         ]
         gh_cmd.extend(str(path) for path in artifacts)
 
@@ -2663,7 +2726,8 @@ def main():
         if gh_bin:
             result = subprocess.run(
                 gh_cmd,
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
                 cwd=str(REPO_ROOT),
             )
         else:
@@ -2684,12 +2748,14 @@ def main():
                 f"    gh release create {tag_name} --title 'Clawksis v{new_version} ({calver_date})' "
                 f"--notes-file .release_notes.md {' '.join(str(path) for path in artifacts)}"
             )
-            print(f"\n  ✓ Release artifacts prepared for manual publish: v{new_version} ({tag_name})")
+            print(
+                f"\n  ✓ Release artifacts prepared for manual publish: v{new_version} ({tag_name})"
+            )
     else:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("  Dry run complete. To publish, add --publish")
         print("  Example: python scripts/release.py --bump minor --publish")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":

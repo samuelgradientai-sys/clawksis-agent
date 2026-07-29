@@ -103,11 +103,15 @@ def compute_session_context_breakdown(
     skills_index = skills_match.group(0) if skills_match else ""
 
     memory_block, user_block = _memory_blocks(agent)
-    memory_text = "\n\n".join(part for part in (memory_block, user_block) if part).strip()
+    memory_text = "\n\n".join(
+        part for part in (memory_block, user_block) if part
+    ).strip()
 
     system_core = _strip_blocks(stable, skills_index)
     system_tail = _strip_blocks(volatile, memory_block, user_block)
-    system_prompt_text = "\n\n".join(part for part in (system_core, system_tail) if part).strip()
+    system_prompt_text = "\n\n".join(
+        part for part in (system_core, system_tail) if part
+    ).strip()
 
     tools = list(getattr(agent, "tools", None) or [])
     builtin_tools, mcp_tools, subagent_tools = _split_tools(tools)
@@ -132,9 +136,7 @@ def compute_session_context_breakdown(
     measured_used = int(getattr(comp, "last_prompt_tokens", 0) or 0) if comp else 0
     context_used = measured_used if measured_used > 0 else estimated_total
     context_percent = (
-        max(0, min(100, round(context_used / context_max * 100)))
-        if context_max
-        else 0
+        max(0, min(100, round(context_used / context_max * 100))) if context_max else 0
     )
 
     return {

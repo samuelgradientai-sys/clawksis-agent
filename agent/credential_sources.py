@@ -152,7 +152,7 @@ def _remove_env_source(provider: str, removed) -> RemovalResult:
     from clawk_cli.config import get_env_path, remove_env_value
 
     result = RemovalResult()
-    env_var = removed.source[len("env:"):]
+    env_var = removed.source[len("env:") :]
     if not env_var:
         return result
 
@@ -197,11 +197,13 @@ def _remove_claude_code(provider: str, removed) -> RemovalResult:
     We don't delete it — the user's Claude Code install still needs to
     work.  We just suppress it so Clawksis stops reading it.
     """
-    return RemovalResult(hints=[
-        "Suppressed claude_code credential — it will not be re-seeded.",
-        "Note: Claude Code credentials still live in ~/.claude/.credentials.json",
-        "Run `clawk auth add anthropic` to re-enable if needed.",
-    ])
+    return RemovalResult(
+        hints=[
+            "Suppressed claude_code credential — it will not be re-seeded.",
+            "Note: Claude Code credentials still live in ~/.claude/.credentials.json",
+            "Run `clawk auth add anthropic` to re-enable if needed.",
+        ]
+    )
 
 
 def _remove_clawk_pkce(provider: str, removed) -> RemovalResult:
@@ -325,11 +327,13 @@ def _remove_qwen_cli(provider: str, removed) -> RemovalResult:
     Same pattern as claude_code — suppress, don't delete.  The user's
     Qwen CLI install still reads from that file.
     """
-    return RemovalResult(hints=[
-        "Suppressed qwen-cli credential — it will not be re-seeded.",
-        "Note: Qwen CLI credentials still live in ~/.qwen/oauth_creds.json",
-        "Run `clawk auth add qwen-oauth` to re-enable if needed.",
-    ])
+    return RemovalResult(
+        hints=[
+            "Suppressed qwen-cli credential — it will not be re-seeded.",
+            "Note: Qwen CLI credentials still live in ~/.qwen/oauth_creds.json",
+            "Run `clawk auth add qwen-oauth` to re-enable if needed.",
+        ]
+    )
 
 
 def _remove_copilot_gh(provider: str, removed) -> RemovalResult:
@@ -350,15 +354,18 @@ def _remove_copilot_gh(provider: str, removed) -> RemovalResult:
     # ALSO suppress removed.source, but it's idempotent so double-calling
     # is harmless.
     from clawk_cli.auth import suppress_credential_source
+
     suppress_credential_source(provider, "gh_cli")
     for env_var in ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"):
         suppress_credential_source(provider, f"env:{env_var}")
 
-    return RemovalResult(hints=[
-        "Suppressed all copilot token sources (gh_cli + env vars) — they will not be re-seeded.",
-        "Note: Your gh CLI / shell environment is unchanged.",
-        "Run `clawk auth add copilot` to re-enable if needed.",
-    ])
+    return RemovalResult(
+        hints=[
+            "Suppressed all copilot token sources (gh_cli + env vars) — they will not be re-seeded.",
+            "Note: Your gh CLI / shell environment is unchanged.",
+            "Run `clawk auth add copilot` to re-enable if needed.",
+        ]
+    )
 
 
 def _remove_custom_config(provider: str, removed) -> RemovalResult:
@@ -368,11 +375,13 @@ def _remove_custom_config(provider: str, removed) -> RemovalResult:
     config.yaml if they want to remove the key from disk entirely.
     """
     source_label = removed.source
-    return RemovalResult(hints=[
-        f"Suppressed {source_label} — it will not be re-seeded.",
-        "Note: The underlying value in config.yaml is unchanged.  Edit it "
-        "directly if you want to remove the credential from disk.",
-    ])
+    return RemovalResult(
+        hints=[
+            f"Suppressed {source_label} — it will not be re-seeded.",
+            "Note: The underlying value in config.yaml is unchanged.  Edit it "
+            "directly if you want to remove the credential from disk.",
+        ]
+    )
 
 
 def _register_all_sources() -> None:
@@ -384,60 +393,90 @@ def _register_all_sources() -> None:
     doesn't touch the user's shell), not the generic env-var removal
     (which would try to clear .env).
     """
-    register(RemovalStep(
-        provider="copilot", source_id="gh_cli",
-        match_fn=lambda src: src == "gh_cli" or src.startswith("env:"),
-        remove_fn=_remove_copilot_gh,
-        description="gh auth token / COPILOT_GITHUB_TOKEN / GH_TOKEN",
-    ))
-    register(RemovalStep(
-        provider="*", source_id="env:",
-        match_fn=lambda src: src.startswith("env:"),
-        remove_fn=_remove_env_source,
-        description="Any env-seeded credential (XAI_API_KEY, DEEPSEEK_API_KEY, etc.)",
-    ))
-    register(RemovalStep(
-        provider="anthropic", source_id="claude_code",
-        remove_fn=_remove_claude_code,
-        description="~/.claude/.credentials.json",
-    ))
-    register(RemovalStep(
-        provider="anthropic", source_id="clawk_pkce",
-        remove_fn=_remove_clawk_pkce,
-        description="~/.clawksis/.anthropic_oauth.json",
-    ))
-    register(RemovalStep(
-        provider="nous", source_id="device_code",
-        remove_fn=_remove_nous_device_code,
-        description="auth.json providers.nous",
-    ))
-    register(RemovalStep(
-        provider="openai-codex", source_id="device_code",
-        match_fn=lambda src: src == "device_code" or src.endswith(":device_code"),
-        remove_fn=_remove_codex_device_code,
-        description="auth.json providers.openai-codex + ~/.codex/auth.json",
-    ))
-    register(RemovalStep(
-        provider="xai-oauth", source_id="device_code",
-        remove_fn=_remove_xai_oauth_device_code,
-        description="auth.json providers.xai-oauth",
-    ))
-    register(RemovalStep(
-        provider="qwen-oauth", source_id="qwen-cli",
-        remove_fn=_remove_qwen_cli,
-        description="~/.qwen/oauth_creds.json",
-    ))
-    register(RemovalStep(
-        provider="minimax-oauth", source_id="oauth",
-        remove_fn=_remove_minimax_oauth,
-        description="auth.json providers.minimax-oauth",
-    ))
-    register(RemovalStep(
-        provider="*", source_id="config:",
-        match_fn=lambda src: src.startswith("config:") or src == "model_config",
-        remove_fn=_remove_custom_config,
-        description="Custom provider config.yaml api_key field",
-    ))
+    register(
+        RemovalStep(
+            provider="copilot",
+            source_id="gh_cli",
+            match_fn=lambda src: src == "gh_cli" or src.startswith("env:"),
+            remove_fn=_remove_copilot_gh,
+            description="gh auth token / COPILOT_GITHUB_TOKEN / GH_TOKEN",
+        )
+    )
+    register(
+        RemovalStep(
+            provider="*",
+            source_id="env:",
+            match_fn=lambda src: src.startswith("env:"),
+            remove_fn=_remove_env_source,
+            description="Any env-seeded credential (XAI_API_KEY, DEEPSEEK_API_KEY, etc.)",
+        )
+    )
+    register(
+        RemovalStep(
+            provider="anthropic",
+            source_id="claude_code",
+            remove_fn=_remove_claude_code,
+            description="~/.claude/.credentials.json",
+        )
+    )
+    register(
+        RemovalStep(
+            provider="anthropic",
+            source_id="clawk_pkce",
+            remove_fn=_remove_clawk_pkce,
+            description="~/.clawksis/.anthropic_oauth.json",
+        )
+    )
+    register(
+        RemovalStep(
+            provider="nous",
+            source_id="device_code",
+            remove_fn=_remove_nous_device_code,
+            description="auth.json providers.nous",
+        )
+    )
+    register(
+        RemovalStep(
+            provider="openai-codex",
+            source_id="device_code",
+            match_fn=lambda src: src == "device_code" or src.endswith(":device_code"),
+            remove_fn=_remove_codex_device_code,
+            description="auth.json providers.openai-codex + ~/.codex/auth.json",
+        )
+    )
+    register(
+        RemovalStep(
+            provider="xai-oauth",
+            source_id="device_code",
+            remove_fn=_remove_xai_oauth_device_code,
+            description="auth.json providers.xai-oauth",
+        )
+    )
+    register(
+        RemovalStep(
+            provider="qwen-oauth",
+            source_id="qwen-cli",
+            remove_fn=_remove_qwen_cli,
+            description="~/.qwen/oauth_creds.json",
+        )
+    )
+    register(
+        RemovalStep(
+            provider="minimax-oauth",
+            source_id="oauth",
+            remove_fn=_remove_minimax_oauth,
+            description="auth.json providers.minimax-oauth",
+        )
+    )
+    register(
+        RemovalStep(
+            provider="*",
+            source_id="config:",
+            match_fn=lambda src: src.startswith("config:") or src == "model_config",
+            remove_fn=_remove_custom_config,
+            description="Custom provider config.yaml api_key field",
+        )
+    )
 
 
 _register_all_sources()

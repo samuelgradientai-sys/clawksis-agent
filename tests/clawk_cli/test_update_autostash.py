@@ -30,7 +30,9 @@ _HAS_DISCARD_SETTING = hasattr(clawk_main, "_discard_stashed_changes")
 _HAS_LOCKFILE_PAIR_GUARD = _has_source(
     clawk_main._discard_lockfile_churn, "dirty_package_dirs"
 )
-_HAS_SCOPED_FETCH = _has_source(clawk_main._cmd_update_impl, '"fetch", "origin", branch')
+_HAS_SCOPED_FETCH = _has_source(
+    clawk_main._cmd_update_impl, '"fetch", "origin", branch'
+)
 _GITIGNORES_BOOTSTRAP_MARKER = ".clawk-bootstrap-complete" in (
     Path(clawk_main.__file__).resolve().parents[1] / ".gitignore"
 ).read_text(encoding="utf-8", errors="replace")
@@ -80,12 +82,20 @@ def _patch_managed_uv(request):
     def _fake_update_managed_uv():
         return None  # never actually self-update in tests
 
-    with patch("clawk_cli.managed_uv.resolve_uv", side_effect=_fake_resolve_uv), \
-         patch("clawk_cli.managed_uv.ensure_uv", side_effect=_fake_ensure_uv), \
-         patch("clawk_cli.managed_uv.update_managed_uv", side_effect=_fake_update_managed_uv):
+    with (
+        patch("clawk_cli.managed_uv.resolve_uv", side_effect=_fake_resolve_uv),
+        patch("clawk_cli.managed_uv.ensure_uv", side_effect=_fake_ensure_uv),
+        patch(
+            "clawk_cli.managed_uv.update_managed_uv",
+            side_effect=_fake_update_managed_uv,
+        ),
+    ):
         yield
 
-def test_stash_local_changes_if_needed_returns_none_when_tree_clean(monkeypatch, tmp_path):
+
+def test_stash_local_changes_if_needed_returns_none_when_tree_clean(
+    monkeypatch, tmp_path
+):
     calls = []
 
     def fake_run(cmd, **kwargs):
@@ -102,13 +112,17 @@ def test_stash_local_changes_if_needed_returns_none_when_tree_clean(monkeypatch,
     assert [cmd[-2:] for cmd, _ in calls] == [["status", "--porcelain"]]
 
 
-def test_stash_local_changes_if_needed_returns_specific_stash_commit(monkeypatch, tmp_path):
+def test_stash_local_changes_if_needed_returns_specific_stash_commit(
+    monkeypatch, tmp_path
+):
     calls = []
 
     def fake_run(cmd, **kwargs):
         calls.append((cmd, kwargs))
         if cmd[-2:] == ["status", "--porcelain"]:
-            return SimpleNamespace(stdout=" M clawk_cli/main.py\n?? notes.txt\n", returncode=0)
+            return SimpleNamespace(
+                stdout=" M clawk_cli/main.py\n?? notes.txt\n", returncode=0
+            )
         if cmd[-2:] == ["ls-files", "--unmerged"]:
             return SimpleNamespace(stdout="", returncode=0)
         if cmd[1:4] == ["stash", "push", "--include-untracked"]:
@@ -137,8 +151,9 @@ def test_resolve_stash_selector_returns_matching_entry(monkeypatch, tmp_path):
 
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-    assert clawk_main._resolve_stash_selector(["git"], tmp_path, "abc123") == "stash@{1}"
-
+    assert (
+        clawk_main._resolve_stash_selector(["git"], tmp_path, "abc123") == "stash@{1}"
+    )
 
 
 def test_restore_stashed_changes_prompts_before_applying(monkeypatch, tmp_path, capsys):
@@ -159,7 +174,9 @@ def test_restore_stashed_changes_prompts_before_applying(monkeypatch, tmp_path, 
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
     monkeypatch.setattr("builtins.input", lambda: "")
 
-    restored = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=True)
+    restored = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=True
+    )
 
     assert restored is True
     assert calls[0][0] == ["git", "stash", "apply", "abc123"]
@@ -173,7 +190,9 @@ def test_restore_stashed_changes_prompts_before_applying(monkeypatch, tmp_path, 
     assert "git status" in out
 
 
-def test_restore_stashed_changes_can_skip_restore_and_keep_stash(monkeypatch, tmp_path, capsys):
+def test_restore_stashed_changes_can_skip_restore_and_keep_stash(
+    monkeypatch, tmp_path, capsys
+):
     calls = []
 
     def fake_run(cmd, **kwargs):
@@ -183,7 +202,9 @@ def test_restore_stashed_changes_can_skip_restore_and_keep_stash(monkeypatch, tm
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
     monkeypatch.setattr("builtins.input", lambda: "n")
 
-    restored = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=True)
+    restored = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=True
+    )
 
     assert restored is False
     assert calls == []
@@ -193,7 +214,9 @@ def test_restore_stashed_changes_can_skip_restore_and_keep_stash(monkeypatch, tm
     assert "git stash apply abc123" in out
 
 
-def test_restore_stashed_changes_applies_without_prompt_when_disabled(monkeypatch, tmp_path, capsys):
+def test_restore_stashed_changes_applies_without_prompt_when_disabled(
+    monkeypatch, tmp_path, capsys
+):
     calls = []
 
     def fake_run(cmd, **kwargs):
@@ -210,7 +233,9 @@ def test_restore_stashed_changes_applies_without_prompt_when_disabled(monkeypatc
 
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-    restored = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=False)
+    restored = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=False
+    )
 
     assert restored is True
     assert calls[0][0] == ["git", "stash", "apply", "abc123"]
@@ -218,7 +243,6 @@ def test_restore_stashed_changes_applies_without_prompt_when_disabled(monkeypatc
     assert calls[2][0] == ["git", "stash", "list", "--format=%gd %H"]
     assert calls[3][0] == ["git", "stash", "drop", "stash@{0}"]
     assert "Restore local changes now?" not in capsys.readouterr().out
-
 
 
 def test_print_stash_cleanup_guidance_with_selector(capsys):
@@ -230,8 +254,9 @@ def test_print_stash_cleanup_guidance_with_selector(capsys):
     assert "git stash drop stash@{2}" in out
 
 
-
-def test_restore_stashed_changes_keeps_going_when_stash_entry_cannot_be_resolved(monkeypatch, tmp_path, capsys):
+def test_restore_stashed_changes_keeps_going_when_stash_entry_cannot_be_resolved(
+    monkeypatch, tmp_path, capsys
+):
     calls = []
 
     def fake_run(cmd, **kwargs):
@@ -246,12 +271,23 @@ def test_restore_stashed_changes_keeps_going_when_stash_entry_cannot_be_resolved
 
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-    restored = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=False)
+    restored = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=False
+    )
 
     assert restored is True
-    assert calls[0] == (["git", "stash", "apply", "abc123"], {"cwd": tmp_path, "capture_output": True, "text": True})
-    assert calls[1] == (["git", "diff", "--name-only", "--diff-filter=U"], {"cwd": tmp_path, "capture_output": True, "text": True})
-    assert calls[2] == (["git", "stash", "list", "--format=%gd %H"], {"cwd": tmp_path, "capture_output": True, "text": True, "check": True})
+    assert calls[0] == (
+        ["git", "stash", "apply", "abc123"],
+        {"cwd": tmp_path, "capture_output": True, "text": True},
+    )
+    assert calls[1] == (
+        ["git", "diff", "--name-only", "--diff-filter=U"],
+        {"cwd": tmp_path, "capture_output": True, "text": True},
+    )
+    assert calls[2] == (
+        ["git", "stash", "list", "--format=%gd %H"],
+        {"cwd": tmp_path, "capture_output": True, "text": True, "check": True},
+    )
     out = capsys.readouterr().out
     assert "couldn't find the stash entry to drop" in out
     assert "stash was left in place" in out
@@ -260,8 +296,9 @@ def test_restore_stashed_changes_keeps_going_when_stash_entry_cannot_be_resolved
     assert "Look for commit abc123" in out
 
 
-
-def test_restore_stashed_changes_keeps_going_when_drop_fails(monkeypatch, tmp_path, capsys):
+def test_restore_stashed_changes_keeps_going_when_drop_fails(
+    monkeypatch, tmp_path, capsys
+):
     calls = []
 
     def fake_run(cmd, **kwargs):
@@ -278,7 +315,9 @@ def test_restore_stashed_changes_keeps_going_when_drop_fails(monkeypatch, tmp_pa
 
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-    restored = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=False)
+    restored = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=False
+    )
 
     assert restored is True
     assert calls[3][0] == ["git", "stash", "drop", "stash@{0}"]
@@ -290,7 +329,9 @@ def test_restore_stashed_changes_keeps_going_when_drop_fails(monkeypatch, tmp_pa
     assert "git stash drop stash@{0}" in out
 
 
-def test_restore_stashed_changes_always_resets_on_conflict(monkeypatch, tmp_path, capsys):
+def test_restore_stashed_changes_always_resets_on_conflict(
+    monkeypatch, tmp_path, capsys
+):
     """Conflicts always auto-reset (no prompt) and return False, even interactively.
 
     Leaving conflict markers in source files makes clawk unrunnable (SyntaxError).
@@ -301,9 +342,13 @@ def test_restore_stashed_changes_always_resets_on_conflict(monkeypatch, tmp_path
     def fake_run(cmd, **kwargs):
         calls.append((cmd, kwargs))
         if cmd[1:3] == ["stash", "apply"]:
-            return SimpleNamespace(stdout="conflict output\n", stderr="conflict stderr\n", returncode=1)
+            return SimpleNamespace(
+                stdout="conflict output\n", stderr="conflict stderr\n", returncode=1
+            )
         if cmd[1:3] == ["diff", "--name-only"]:
-            return SimpleNamespace(stdout="clawk_cli/main.py\n", stderr="", returncode=0)
+            return SimpleNamespace(
+                stdout="clawk_cli/main.py\n", stderr="", returncode=0
+            )
         if cmd[1:3] == ["reset", "--hard"]:
             return SimpleNamespace(stdout="", stderr="", returncode=0)
         raise AssertionError(f"unexpected command: {cmd}")
@@ -311,7 +356,9 @@ def test_restore_stashed_changes_always_resets_on_conflict(monkeypatch, tmp_path
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
     monkeypatch.setattr("builtins.input", lambda: "y")
 
-    result = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=True)
+    result = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=True
+    )
 
     assert result is False
     out = capsys.readouterr().out
@@ -324,7 +371,9 @@ def test_restore_stashed_changes_always_resets_on_conflict(monkeypatch, tmp_path
     assert len(reset_calls) == 1
 
 
-def test_restore_stashed_changes_auto_resets_non_interactive(monkeypatch, tmp_path, capsys):
+def test_restore_stashed_changes_auto_resets_non_interactive(
+    monkeypatch, tmp_path, capsys
+):
     """Non-interactive mode auto-resets without prompting and returns False
     instead of sys.exit(1) so the update can continue (gateway /update path)."""
     calls = []
@@ -341,7 +390,9 @@ def test_restore_stashed_changes_auto_resets_non_interactive(monkeypatch, tmp_pa
 
     monkeypatch.setattr(clawk_main.subprocess, "run", fake_run)
 
-    result = clawk_main._restore_stashed_changes(["git"], tmp_path, "abc123", prompt_user=False)
+    result = clawk_main._restore_stashed_changes(
+        ["git"], tmp_path, "abc123", prompt_user=False
+    )
 
     assert result is False
     out = capsys.readouterr().out
@@ -350,7 +401,9 @@ def test_restore_stashed_changes_auto_resets_non_interactive(monkeypatch, tmp_pa
     assert len(reset_calls) == 1
 
 
-def test_stash_local_changes_if_needed_raises_when_stash_ref_missing(monkeypatch, tmp_path):
+def test_stash_local_changes_if_needed_raises_when_stash_ref_missing(
+    monkeypatch, tmp_path
+):
     def fake_run(cmd, **kwargs):
         if cmd[-2:] == ["status", "--porcelain"]:
             return SimpleNamespace(stdout=" M clawk_cli/main.py\n", returncode=0)
@@ -433,25 +486,42 @@ def test_discard_lockfile_churn_restores_lock_when_package_json_clean(tmp_path):
 # Update uses .[all] with fallback to .
 # ---------------------------------------------------------------------------
 
+
 def _setup_update_mocks(monkeypatch, tmp_path):
     """Common setup for cmd_update tests."""
     (tmp_path / ".git").mkdir()
     monkeypatch.setattr(clawk_main, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(clawk_main, "_stash_local_changes_if_needed", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        clawk_main, "_stash_local_changes_if_needed", lambda *a, **kw: None
+    )
     monkeypatch.setattr(clawk_main, "_restore_stashed_changes", lambda *a, **kw: True)
-    monkeypatch.setattr(clawk_config, "get_missing_env_vars", lambda required_only=True: [])
+    monkeypatch.setattr(
+        clawk_config, "get_missing_env_vars", lambda required_only=True: []
+    )
     monkeypatch.setattr(clawk_config, "get_missing_config_fields", lambda: [])
     monkeypatch.setattr(clawk_config, "check_config_version", lambda: (5, 5))
-    monkeypatch.setattr(clawk_config, "migrate_config", lambda **kw: {"env_added": [], "config_added": []})
+    monkeypatch.setattr(
+        clawk_config,
+        "migrate_config",
+        lambda **kw: {"env_added": [], "config_added": []},
+    )
     monkeypatch.setattr(clawk_main, "_refresh_active_lazy_features", lambda: None)
 
 
-def test_cmd_update_retries_optional_extras_individually_when_all_fails(monkeypatch, tmp_path, capsys):
+def test_cmd_update_retries_optional_extras_individually_when_all_fails(
+    monkeypatch, tmp_path, capsys
+):
     """When .[all] fails, update should keep base deps and retry extras individually."""
     _setup_update_mocks(monkeypatch, tmp_path)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
     monkeypatch.setattr(clawk_main, "_is_termux_env", lambda env=None: False)
-    monkeypatch.setattr(clawk_main, "_load_installable_optional_extras", lambda group="all": ["matrix", "mcp"])
+    monkeypatch.setattr(
+        clawk_main,
+        "_load_installable_optional_extras",
+        lambda group="all": ["matrix", "mcp"],
+    )
 
     recorded = []
 
@@ -499,7 +569,9 @@ def test_cmd_update_retries_optional_extras_individually_when_all_fails(monkeypa
 def test_cmd_update_succeeds_with_extras(monkeypatch, tmp_path):
     """When .[all] succeeds, no fallback should be attempted."""
     _setup_update_mocks(monkeypatch, tmp_path)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
     monkeypatch.setattr(clawk_main, "_is_termux_env", lambda env=None: False)
 
     recorded = []
@@ -540,7 +612,9 @@ def test_install_with_optional_fallback_honors_custom_group(monkeypatch):
             raise CalledProcessError(returncode=1, cmd=cmd)
         return None
 
-    monkeypatch.setattr(clawk_main, "_run_install_with_heartbeat", fake_run_with_heartbeat)
+    monkeypatch.setattr(
+        clawk_main, "_run_install_with_heartbeat", fake_run_with_heartbeat
+    )
 
     clawk_main._install_python_dependencies_with_optional_fallback(
         ["/usr/bin/uv", "pip"],
@@ -555,7 +629,9 @@ def test_install_with_optional_fallback_honors_custom_group(monkeypatch):
     ]
 
 
-def test_install_heartbeat_prints_when_dependency_install_is_silent(monkeypatch, capsys):
+def test_install_heartbeat_prints_when_dependency_install_is_silent(
+    monkeypatch, capsys
+):
     """Long quiet installs should emit periodic heartbeat lines."""
 
     def fake_run(cmd, **kwargs):
@@ -577,6 +653,7 @@ def test_install_heartbeat_prints_when_dependency_install_is_silent(monkeypatch,
 # ff-only fallback to reset --hard on diverged history
 # ---------------------------------------------------------------------------
 
+
 def _make_update_side_effect(
     current_branch="main",
     commit_count="3",
@@ -596,7 +673,9 @@ def _make_update_side_effect(
                 return SimpleNamespace(stdout="", stderr=fetch_stderr, returncode=128)
             return SimpleNamespace(stdout="", stderr="", returncode=0)
         if "rev-parse" in joined and "--abbrev-ref" in joined:
-            return SimpleNamespace(stdout=f"{current_branch}\n", stderr="", returncode=0)
+            return SimpleNamespace(
+                stdout=f"{current_branch}\n", stderr="", returncode=0
+            )
         if "checkout" in joined and "main" in joined:
             return SimpleNamespace(stdout="", stderr="", returncode=0)
         if "rev-list" in joined:
@@ -608,20 +687,30 @@ def _make_update_side_effect(
                     stderr="fatal: Not possible to fast-forward, aborting.\n",
                     returncode=128,
                 )
-            return SimpleNamespace(stdout="Updating abc..def\n", stderr="", returncode=0)
+            return SimpleNamespace(
+                stdout="Updating abc..def\n", stderr="", returncode=0
+            )
         if "reset" in joined and "--hard" in joined:
             if reset_fails:
-                return SimpleNamespace(stdout="", stderr="error: unable to write\n", returncode=1)
-            return SimpleNamespace(stdout="HEAD is now at abc123\n", stderr="", returncode=0)
+                return SimpleNamespace(
+                    stdout="", stderr="error: unable to write\n", returncode=1
+                )
+            return SimpleNamespace(
+                stdout="HEAD is now at abc123\n", stderr="", returncode=0
+            )
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     return side_effect, recorded
 
 
-def test_cmd_update_falls_back_to_reset_when_ff_only_fails(monkeypatch, tmp_path, capsys):
+def test_cmd_update_falls_back_to_reset_when_ff_only_fails(
+    monkeypatch, tmp_path, capsys
+):
     """When --ff-only fails (diverged history), update resets to origin/{branch}."""
     _setup_update_mocks(monkeypatch, tmp_path)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     side_effect, recorded = _make_update_side_effect(ff_only_fails=True)
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
@@ -639,7 +728,9 @@ def test_cmd_update_falls_back_to_reset_when_ff_only_fails(monkeypatch, tmp_path
 def test_cmd_update_no_reset_when_ff_only_succeeds(monkeypatch, tmp_path):
     """When --ff-only succeeds, no reset is attempted."""
     _setup_update_mocks(monkeypatch, tmp_path)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     side_effect, recorded = _make_update_side_effect()
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
@@ -654,10 +745,13 @@ def test_cmd_update_no_reset_when_ff_only_succeeds(monkeypatch, tmp_path):
 # Non-main branch → auto-checkout main
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_update_switches_to_main_from_feature_branch(monkeypatch, tmp_path, capsys):
     """When on a feature branch, update checks out main before pulling."""
     _setup_update_mocks(monkeypatch, tmp_path)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     side_effect, recorded = _make_update_side_effect(current_branch="fix/something")
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
@@ -675,7 +769,9 @@ def test_cmd_update_switches_to_main_from_feature_branch(monkeypatch, tmp_path, 
 def test_cmd_update_switches_to_main_from_detached_head(monkeypatch, tmp_path, capsys):
     """When in detached HEAD state, update checks out main before pulling."""
     _setup_update_mocks(monkeypatch, tmp_path)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     side_effect, recorded = _make_update_side_effect(current_branch="HEAD")
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
@@ -689,14 +785,19 @@ def test_cmd_update_switches_to_main_from_detached_head(monkeypatch, tmp_path, c
     assert "detached HEAD" in out
 
 
-def test_cmd_update_restores_stash_and_branch_when_already_up_to_date(monkeypatch, tmp_path, capsys):
+def test_cmd_update_restores_stash_and_branch_when_already_up_to_date(
+    monkeypatch, tmp_path, capsys
+):
     """When on a feature branch with no updates, stash is restored and branch switched back."""
     _setup_update_mocks(monkeypatch, tmp_path)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     # Enable stash so it returns a ref
     monkeypatch.setattr(
-        clawk_main, "_stash_local_changes_if_needed",
+        clawk_main,
+        "_stash_local_changes_if_needed",
         lambda *a, **kw: "abc123deadbeef",
     )
     # Fork: force the stash path (not the managed-clone clean path) so this test
@@ -705,12 +806,14 @@ def test_cmd_update_restores_stash_and_branch_when_already_up_to_date(monkeypatc
     monkeypatch.setattr(clawk_main, "_clean_managed_worktree", lambda *a, **kw: False)
     restore_calls = []
     monkeypatch.setattr(
-        clawk_main, "_restore_stashed_changes",
+        clawk_main,
+        "_restore_stashed_changes",
         lambda *a, **kw: restore_calls.append(1) or True,
     )
 
     side_effect, recorded = _make_update_side_effect(
-        current_branch="fix/something", commit_count="0",
+        current_branch="fix/something",
+        commit_count="0",
     )
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
 
@@ -730,7 +833,9 @@ def test_cmd_update_restores_stash_and_branch_when_already_up_to_date(monkeypatc
 def test_cmd_update_no_checkout_when_already_on_main(monkeypatch, tmp_path):
     """When already on main, no checkout is needed."""
     _setup_update_mocks(monkeypatch, tmp_path)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     side_effect, recorded = _make_update_side_effect()
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
@@ -750,7 +855,9 @@ def test_cmd_update_fetch_is_scoped_to_target_branch(monkeypatch, tmp_path):
     pulls every ref, and this repo has thousands of auto-generated branches, so
     an unscoped fetch can stall for minutes on a non-single-branch checkout."""
     _setup_update_mocks(monkeypatch, tmp_path)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     side_effect, recorded = _make_update_side_effect()
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
@@ -782,7 +889,9 @@ def test_cmd_update_managed_clone_cleans_instead_of_stashing(monkeypatch, tmp_pa
     git-artifact dirt away and pull cleanly.
     """
     _setup_update_mocks(monkeypatch, tmp_path)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     # Official origin → not a fork.
     monkeypatch.setattr(
@@ -827,7 +936,9 @@ def test_cmd_update_fork_still_uses_stash(monkeypatch, tmp_path):
     """A fork (non-official origin) keeps the stash machinery so the user's
     intentional local edits survive the update."""
     _setup_update_mocks(monkeypatch, tmp_path)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
 
     monkeypatch.setattr(
         clawk_main,
@@ -850,7 +961,9 @@ def test_cmd_update_fork_still_uses_stash(monkeypatch, tmp_path):
     )
 
     monkeypatch.setattr(clawk_main, "_restore_stashed_changes", lambda *a, **kw: True)
-    monkeypatch.setattr(clawk_main, "_sync_with_upstream_if_needed", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        clawk_main, "_sync_with_upstream_if_needed", lambda *a, **kw: None
+    )
 
     side_effect, _ = _make_update_side_effect(commit_count="0")
     monkeypatch.setattr(clawk_main.subprocess, "run", side_effect)
@@ -865,6 +978,7 @@ def test_cmd_update_fork_still_uses_stash(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 # Fetch failure — friendly error messages
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_update_network_error_shows_friendly_message(monkeypatch, tmp_path, capsys):
     """Network failures during fetch show a user-friendly message."""
@@ -904,12 +1018,14 @@ def test_cmd_update_auth_error_shows_friendly_message(monkeypatch, tmp_path, cap
 # reset --hard failure — don't attempt stash restore
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_update_skips_stash_restore_when_reset_fails(monkeypatch, tmp_path, capsys):
     """When reset --hard fails, stash restore is skipped with a helpful message."""
     _setup_update_mocks(monkeypatch, tmp_path)
     # Re-enable stash so it actually returns a ref
     monkeypatch.setattr(
-        clawk_main, "_stash_local_changes_if_needed",
+        clawk_main,
+        "_stash_local_changes_if_needed",
         lambda *a, **kw: "abc123deadbeef",
     )
     # Fork: force the stash path so this test exercises the reset-failure
@@ -917,7 +1033,8 @@ def test_cmd_update_skips_stash_restore_when_reset_fails(monkeypatch, tmp_path, 
     monkeypatch.setattr(clawk_main, "_clean_managed_worktree", lambda *a, **kw: False)
     restore_calls = []
     monkeypatch.setattr(
-        clawk_main, "_restore_stashed_changes",
+        clawk_main,
+        "_restore_stashed_changes",
         lambda *a, **kw: restore_calls.append(1) or True,
     )
 
@@ -941,28 +1058,35 @@ def test_cmd_update_skips_stash_restore_when_reset_fails(monkeypatch, tmp_path, 
 # and always go through the restore path.
 # ---------------------------------------------------------------------------
 
+
 def _setup_setting_test(monkeypatch, tmp_path, mode):
     """Common wiring: real stash returns a ref, restore + discard are
     recorded, and load_config reports the given non_interactive_local_changes
     mode."""
     _setup_update_mocks(monkeypatch, tmp_path)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None)
     monkeypatch.setattr(
-        clawk_main, "_stash_local_changes_if_needed",
+        "shutil.which", lambda name: "/usr/bin/uv" if name == "uv" else None
+    )
+    monkeypatch.setattr(
+        clawk_main,
+        "_stash_local_changes_if_needed",
         lambda *a, **kw: "abc123deadbeef",
     )
     restore_calls = []
     discard_calls = []
     monkeypatch.setattr(
-        clawk_main, "_restore_stashed_changes",
+        clawk_main,
+        "_restore_stashed_changes",
         lambda *a, **kw: restore_calls.append(1) or True,
     )
     monkeypatch.setattr(
-        clawk_main, "_discard_stashed_changes",
+        clawk_main,
+        "_discard_stashed_changes",
         lambda *a, **kw: discard_calls.append(1) or True,
     )
     monkeypatch.setattr(
-        clawk_config, "load_config",
+        clawk_config,
+        "load_config",
         lambda *a, **kw: {"updates": {"non_interactive_local_changes": mode}},
     )
     side_effect, recorded = _make_update_side_effect()
@@ -976,7 +1100,9 @@ def _setup_setting_test(monkeypatch, tmp_path, mode):
 )
 def test_non_interactive_discard_throws_changes_away(monkeypatch, tmp_path):
     """Gateway/chat-app update with discard mode drops the stash, never restores."""
-    restore_calls, discard_calls, _ = _setup_setting_test(monkeypatch, tmp_path, "discard")
+    restore_calls, discard_calls, _ = _setup_setting_test(
+        monkeypatch, tmp_path, "discard"
+    )
 
     clawk_main.cmd_update(SimpleNamespace(gateway=True))
 
@@ -990,7 +1116,9 @@ def test_non_interactive_discard_throws_changes_away(monkeypatch, tmp_path):
 )
 def test_non_interactive_stash_restores_changes(monkeypatch, tmp_path):
     """Gateway/chat-app update with the default stash mode restores, never discards."""
-    restore_calls, discard_calls, _ = _setup_setting_test(monkeypatch, tmp_path, "stash")
+    restore_calls, discard_calls, _ = _setup_setting_test(
+        monkeypatch, tmp_path, "stash"
+    )
 
     clawk_main.cmd_update(SimpleNamespace(gateway=True))
 
@@ -1005,7 +1133,9 @@ def test_non_interactive_stash_restores_changes(monkeypatch, tmp_path):
 def test_interactive_update_ignores_discard_setting(monkeypatch, tmp_path):
     """An interactive (TTY) terminal update always restores — the discard
     setting only governs non-interactive updates."""
-    restore_calls, discard_calls, _ = _setup_setting_test(monkeypatch, tmp_path, "discard")
+    restore_calls, discard_calls, _ = _setup_setting_test(
+        monkeypatch, tmp_path, "discard"
+    )
     # Force an interactive TTY so _non_interactive_update is False even though
     # the config says discard.
     monkeypatch.setattr(clawk_main.sys.stdin, "isatty", lambda: True)
@@ -1023,7 +1153,9 @@ def test_interactive_update_ignores_discard_setting(monkeypatch, tmp_path):
 )
 def test_non_interactive_defaults_to_stash_when_setting_absent(monkeypatch, tmp_path):
     """A config with no update section falls back to stash (safe default)."""
-    restore_calls, discard_calls, _ = _setup_setting_test(monkeypatch, tmp_path, "stash")
+    restore_calls, discard_calls, _ = _setup_setting_test(
+        monkeypatch, tmp_path, "stash"
+    )
     # Override load_config to return a config with NO update section at all.
     monkeypatch.setattr(clawk_config, "load_config", lambda *a, **kw: {"model": {}})
 

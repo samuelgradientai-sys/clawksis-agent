@@ -5,6 +5,7 @@ can enter a wedged state where ``bot.send_message()`` returns a valid Message
 but nothing reaches the recipient.  ``_send_path_degraded`` short-circuits
 ``send()`` so cron's live-adapter branch falls through to standalone HTTP.
 """
+
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -78,7 +79,8 @@ async def test_get_me_success_without_polling_progress_does_not_heal(monkeypatch
     recovery = MagicMock()
     monkeypatch.setattr(adapter, "_schedule_polling_recovery", recovery)
     monkeypatch.setattr(
-        "plugins.platforms.telegram.adapter._POLLING_PROGRESS_TIMEOUT", 0,
+        "plugins.platforms.telegram.adapter._POLLING_PROGRESS_TIMEOUT",
+        0,
         raising=False,
     )
     await adapter._verify_polling_after_reconnect(generation, progress)
@@ -103,7 +105,9 @@ async def test_successful_reconnect_waits_for_get_updates_progress(monkeypatch):
     monkeypatch.setattr(
         "plugins.platforms.telegram.adapter.Update", MagicMock(ALL_TYPES=[])
     )
-    with patch("plugins.platforms.telegram.adapter.asyncio.sleep", new_callable=AsyncMock):
+    with patch(
+        "plugins.platforms.telegram.adapter.asyncio.sleep", new_callable=AsyncMock
+    ):
         await adapter._handle_polling_network_error(OSError("Bad Gateway"))
 
     verifier = adapter._polling_progress_verifier_task

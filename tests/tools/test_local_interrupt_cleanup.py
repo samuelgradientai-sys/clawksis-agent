@@ -11,6 +11,7 @@ to the python process, sleep 300 survived with PPID=1 for the full 300 s
 because _wait_for_process never got to call _kill_process before python
 died.  See commit message for full context.
 """
+
 import os
 import signal
 import subprocess
@@ -150,12 +151,15 @@ def test_wait_for_process_kills_subprocess_on_keyboardinterrupt():
         # does init_session() (one spawn) before the real command, so we need
         # to wait until a sleep 30 is visible.  Use pgrep-style lookup via
         # /proc to find the bash process running our sleep.
-        deadline = time.monotonic() + 20.0  # generous: init_session + spawn dilate under CI load
+        deadline = (
+            time.monotonic() + 20.0
+        )  # generous: init_session + spawn dilate under CI load
         target_pid = None
         while time.monotonic() < deadline:
             # Walk our children and grand-children to find one running 'sleep 30'
             try:
                 import psutil  # optional — fall back if absent
+
                 for p in psutil.Process(os.getpid()).children(recursive=True):
                     try:
                         if "sleep 30" in " ".join(p.cmdline()):
@@ -166,7 +170,9 @@ def test_wait_for_process_kills_subprocess_on_keyboardinterrupt():
             except ImportError:
                 # Fall back to ps
                 ps = subprocess.run(
-                    ["ps", "-eo", "pid,ppid,pgid,cmd"], capture_output=True, text=True,
+                    ["ps", "-eo", "pid,ppid,pgid,cmd"],
+                    capture_output=True,
+                    text=True,
                 )
                 for line in ps.stdout.splitlines():
                     if "sleep 30" in line and "grep" not in line:
@@ -188,12 +194,14 @@ def test_wait_for_process_kills_subprocess_on_keyboardinterrupt():
         # way CPython's signal machinery would.  We use ctypes.PyThreadState_SetAsyncExc
         # which is how signal delivery to non-main threads is simulated.
         import ctypes
+
         # py-thread-state exception targets need the ident, not the Thread
         tid = t.ident
         assert tid is not None
         # Fire KeyboardInterrupt into the worker thread
         ret = ctypes.pythonapi.PyThreadState_SetAsyncExc(
-            ctypes.c_ulong(tid), ctypes.py_object(KeyboardInterrupt),
+            ctypes.c_ulong(tid),
+            ctypes.py_object(KeyboardInterrupt),
         )
         assert ret == 1, f"SetAsyncExc returned {ret}, expected 1"
 

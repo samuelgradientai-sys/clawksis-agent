@@ -1,4 +1,5 @@
 """Phase 3: secondary-profile adapter registry + same-token conflict detection."""
+
 import logging
 import asyncio
 from contextlib import contextmanager
@@ -25,7 +26,9 @@ class TestCredentialFingerprint:
     def test_stable_and_log_safe(self):
         a = _FakeAdapter(token="secret-bot-token")
         fp1 = GatewayRunner._adapter_credential_fingerprint(a)
-        fp2 = GatewayRunner._adapter_credential_fingerprint(_FakeAdapter(token="secret-bot-token"))
+        fp2 = GatewayRunner._adapter_credential_fingerprint(
+            _FakeAdapter(token="secret-bot-token")
+        )
         assert fp1 == fp2  # stable
         assert "secret-bot-token" not in (fp1 or "")  # never the raw token
         assert len(fp1) == 16
@@ -39,6 +42,7 @@ class TestCredentialFingerprint:
         class _AltAdapter:
             def __init__(self):
                 self.bot_token = "alt-token"
+
         assert GatewayRunner._adapter_credential_fingerprint(_AltAdapter()) is not None
 
     def test_reads_platform_config_token(self):
@@ -52,7 +56,6 @@ class TestCredentialFingerprint:
         assert fp is not None
         assert "config-token" not in fp
 
-
     def test_reads_config_token(self):
         """Adapters like Discord store token on `config`, not on self.
 
@@ -61,10 +64,13 @@ class TestCredentialFingerprint:
         check is silently skipped — N adapters start polling the same bot
         token and race on every inbound message.
         """
+
         class _Config:
             token = "discord-bot-token"
+
         class _ConfigBackedAdapter:
             config = _Config()
+
         fp = GatewayRunner._adapter_credential_fingerprint(_ConfigBackedAdapter())
         assert fp is not None
         assert "discord-bot-token" not in fp
@@ -73,12 +79,16 @@ class TestCredentialFingerprint:
     def test_distinct_config_tokens_distinct_fp(self):
         class _CfgA:
             token = "tok-A"
+
         class _CfgB:
             token = "tok-B"
+
         class _A:
             config = _CfgA()
+
         class _B:
             config = _CfgB()
+
         a = GatewayRunner._adapter_credential_fingerprint(_A())
         b = GatewayRunner._adapter_credential_fingerprint(_B())
         assert a is not None and b is not None
@@ -86,22 +96,29 @@ class TestCredentialFingerprint:
 
     def test_direct_token_takes_precedence_over_config(self):
         """If both `adapter.token` and `adapter.config.token` exist, direct wins."""
+
         class _Cfg:
             token = "from-config"
+
         class _Both:
             token = "from-direct"
             config = _Cfg()
+
         fp = GatewayRunner._adapter_credential_fingerprint(_Both())
         import hashlib
+
         expected = hashlib.sha256(b"clawk-mux:from-direct").hexdigest()[:16]
         assert fp == expected
 
     def test_config_without_token_returns_none(self):
         """config present but no token attribute → None (no false positive)."""
+
         class _Cfg:
             pass
+
         class _Adapter:
             config = _Cfg()
+
         assert GatewayRunner._adapter_credential_fingerprint(_Adapter()) is None
 
 
@@ -199,7 +216,9 @@ def _secondary_recovery_runner(*, running=True):
     return runner
 
 
-def _install_secondary_reconnect_context(monkeypatch, runner, adapter, scoped_homes=None):
+def _install_secondary_reconnect_context(
+    monkeypatch, runner, adapter, scoped_homes=None
+):
     @contextmanager
     def fake_scope(profile_home):
         if scoped_homes is not None:
@@ -215,9 +234,7 @@ def _install_secondary_reconnect_context(monkeypatch, runner, adapter, scoped_ho
         lambda: GatewayConfig(
             multiplex_profiles=True,
             platforms={
-                Platform.DISCORD: PlatformConfig(
-                    enabled=True, token="profile-token"
-                )
+                Platform.DISCORD: PlatformConfig(enabled=True, token="profile-token")
             },
         ),
     )
@@ -287,7 +304,9 @@ class TestSecondaryProfileFatalRecovery:
         assert runner._profile_failed_platforms == {}
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("connect_result", [True, False], ids=["success", "failure"])
+    @pytest.mark.parametrize(
+        "connect_result", [True, False], ids=["success", "failure"]
+    )
     async def test_secondary_reconnect_does_not_publish_after_shutdown(
         self, monkeypatch, connect_result
     ):
@@ -348,7 +367,9 @@ class TestSecondaryProfileFatalRecovery:
         adapter = _SecondaryRecoveryAdapter()
         runner._profile_adapters = {"reviewer": {Platform.DISCORD: adapter}}
         scheduled = []
-        runner._schedule_secondary_profile_reconnect = lambda *args: scheduled.append(args)
+        runner._schedule_secondary_profile_reconnect = lambda *args: scheduled.append(
+            args
+        )
 
         await runner._handle_profile_adapter_fatal_error(
             "reviewer", Platform.DISCORD, adapter
@@ -406,9 +427,7 @@ class TestSecondaryProfileConfigHandling:
         reviewer_cfg.platforms = {
             Platform.WEBHOOK: PlatformConfig(enabled=True, extra={"port": 8644}),
         }
-        monkeypatch.setattr(
-            "gateway.config.load_gateway_config", lambda: reviewer_cfg
-        )
+        monkeypatch.setattr("gateway.config.load_gateway_config", lambda: reviewer_cfg)
 
         with pytest.raises(SecondaryPortBindingConfigError) as ei:
             await runner._start_one_profile_adapters("reviewer", "/tmp/x", {})
@@ -436,9 +455,7 @@ class TestSecondaryProfileConfigHandling:
             Platform.WEBHOOK: PlatformConfig(enabled=True, extra={"port": 8644}),
             Platform.TELEGRAM: PlatformConfig(enabled=True, token="t"),
         }
-        monkeypatch.setattr(
-            "gateway.config.load_gateway_config", lambda: reviewer_cfg
-        )
+        monkeypatch.setattr("gateway.config.load_gateway_config", lambda: reviewer_cfg)
 
         with pytest.raises(SecondaryPortBindingConfigError) as ei:
             await runner._start_one_profile_adapters("reviewer", "/tmp/x", {})
@@ -449,7 +466,9 @@ class TestSecondaryProfileConfigHandling:
         assert "reviewer" not in runner._profile_adapters
 
     @pytest.mark.asyncio
-    async def test_multiplexer_skips_bad_profile_and_continues(self, monkeypatch, caplog):
+    async def test_multiplexer_skips_bad_profile_and_continues(
+        self, monkeypatch, caplog
+    ):
         from pathlib import Path
         from gateway.config import GatewayConfig
 
@@ -461,6 +480,7 @@ class TestSecondaryProfileConfigHandling:
         async def fake_start_one(profile_name, profile_home, claimed):
             if profile_name == "bad":
                 from gateway.run import SecondaryPortBindingConfigError
+
                 raise SecondaryPortBindingConfigError("bad enables webhook")
             runner._profile_adapters[profile_name] = {}
             return 2
@@ -566,9 +586,7 @@ class TestSecondaryProfileConfigHandling:
         reviewer_cfg.platforms = {
             Platform.TELEGRAM: PlatformConfig(enabled=True, token="t"),
         }
-        monkeypatch.setattr(
-            "gateway.config.load_gateway_config", lambda: reviewer_cfg
-        )
+        monkeypatch.setattr("gateway.config.load_gateway_config", lambda: reviewer_cfg)
         # _create_adapter returns None here (no real telegram token wiring), so
         # the loop simply connects nothing — the key assertion is NO raise.
         monkeypatch.setattr(runner, "_create_adapter", lambda p, c: None)
@@ -619,9 +637,7 @@ class TestSecondaryProfileConfigHandling:
             Platform.RELAY: PlatformConfig(enabled=True),
             Platform.TELEGRAM: PlatformConfig(enabled=True, token="reviewer-token"),
         }
-        monkeypatch.setattr(
-            "gateway.config.load_gateway_config", lambda: reviewer_cfg
-        )
+        monkeypatch.setattr("gateway.config.load_gateway_config", lambda: reviewer_cfg)
 
         direct = _DirectAdapter()
         factory_calls = []
@@ -641,9 +657,7 @@ class TestSecondaryProfileConfigHandling:
         monkeypatch.setattr(runner, "_create_adapter", _create_adapter)
         monkeypatch.setattr(runner, "_connect_adapter_with_timeout", _connect)
 
-        connected = await runner._start_one_profile_adapters(
-            "reviewer", "/tmp/x", {}
-        )
+        connected = await runner._start_one_profile_adapters("reviewer", "/tmp/x", {})
 
         assert connected == 1
         assert factory_calls == [Platform.TELEGRAM]
@@ -709,9 +723,7 @@ class TestSecondaryProfileConfigHandling:
         monkeypatch.setattr(runner, "_create_adapter", _create_adapter)
         monkeypatch.setattr(runner, "_connect_adapter_with_timeout", _connect)
 
-        connected = await runner._start_one_profile_adapters(
-            "reviewer", "/tmp/x", {}
-        )
+        connected = await runner._start_one_profile_adapters("reviewer", "/tmp/x", {})
 
         assert connected == 1
         assert factory_calls == [Platform.RELAY]
@@ -751,9 +763,7 @@ class TestSecondaryProfileConfigHandling:
             ): "default"
         }
 
-        monkeypatch.setattr(
-            "gateway.config.load_gateway_config", lambda: reviewer_cfg
-        )
+        monkeypatch.setattr("gateway.config.load_gateway_config", lambda: reviewer_cfg)
         monkeypatch.setattr(runner, "_create_adapter", lambda p, c: duplicate)
         monkeypatch.setattr(runner, "_adapter_disconnect_timeout_secs", lambda: 0)
 
@@ -767,6 +777,7 @@ class TestSecondaryProfileConfigHandling:
 
     def test_port_binding_set_covers_known_listeners(self):
         from gateway.run import _PORT_BINDING_PLATFORM_VALUES
+
         # Every adapter that binds a TCP port must be in the guard set.
         for p in (
             "webhook",
@@ -780,7 +791,6 @@ class TestSecondaryProfileConfigHandling:
             "line",
         ):
             assert p in _PORT_BINDING_PLATFORM_VALUES
-
 
 
 class TestFeishuPortBindingConditional:
@@ -800,7 +810,11 @@ class TestFeishuPortBindingConditional:
         reviewer_cfg.platforms = {
             Platform.FEISHU: PlatformConfig(
                 enabled=True,
-                extra={"app_id": "cli_xxx", "app_secret": "sec", "connection_mode": "websocket"},
+                extra={
+                    "app_id": "cli_xxx",
+                    "app_secret": "sec",
+                    "connection_mode": "websocket",
+                },
             ),
         }
         monkeypatch.setattr("gateway.config.load_gateway_config", lambda: reviewer_cfg)
@@ -823,7 +837,11 @@ class TestFeishuPortBindingConditional:
         reviewer_cfg.platforms = {
             Platform.FEISHU: PlatformConfig(
                 enabled=True,
-                extra={"app_id": "cli_xxx", "app_secret": "sec", "connection_mode": "webhook"},
+                extra={
+                    "app_id": "cli_xxx",
+                    "app_secret": "sec",
+                    "connection_mode": "webhook",
+                },
             ),
         }
         monkeypatch.setattr("gateway.config.load_gateway_config", lambda: reviewer_cfg)

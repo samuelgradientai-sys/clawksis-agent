@@ -3,6 +3,7 @@
 Every test here must keep passing through all later phases when NO managed scope
 is present. They are the 'managed scope is invisible when absent' contract.
 """
+
 import os
 import textwrap
 

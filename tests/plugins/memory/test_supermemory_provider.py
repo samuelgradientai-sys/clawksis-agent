@@ -17,8 +17,14 @@ from plugins.memory.supermemory import (
 
 
 class FakeClient:
-    def __init__(self, api_key: str, timeout: float, container_tag: str, search_mode: str = "hybrid",
-                 base_url: str = ""):
+    def __init__(
+        self,
+        api_key: str,
+        timeout: float,
+        container_tag: str,
+        search_mode: str = "hybrid",
+        base_url: str = "",
+    ):
         self.api_key = api_key
         self.timeout = timeout
         self.container_tag = container_tag
@@ -31,8 +37,15 @@ class FakeClient:
         self.forgotten_ids = []
         self.forget_by_query_response = {"success": True, "message": "Forgot"}
 
-    def add_memory(self, content, metadata=None, *, entity_context="",
-                   container_tag=None, custom_id=None):
+    def add_memory(
+        self,
+        content,
+        metadata=None,
+        *,
+        entity_context="",
+        container_tag=None,
+        custom_id=None,
+    ):
         self.add_calls.append({
             "content": content,
             "metadata": metadata,
@@ -55,7 +68,11 @@ class FakeClient:
         return self.forget_by_query_response
 
     def ingest_conversation(self, session_id, messages, metadata=None):
-        self.ingest_calls.append({"session_id": session_id, "messages": messages, "metadata": metadata})
+        self.ingest_calls.append({
+            "session_id": session_id,
+            "messages": messages,
+            "metadata": metadata,
+        })
 
 
 @pytest.fixture
@@ -84,6 +101,7 @@ def test_is_available_true_when_import_missing_but_key_set(monkeypatch):
     monkeypatch.setenv("SUPERMEMORY_API_KEY", "test-key")
 
     import builtins
+
     real_import = builtins.__import__
 
     def fake_import(name, *args, **kwargs):
@@ -103,7 +121,9 @@ def test_is_available_false_without_key(monkeypatch):
 
 
 def test_load_and_save_config_round_trip(tmp_path):
-    _save_supermemory_config({"container_tag": "demo-tag", "auto_capture": False}, str(tmp_path))
+    _save_supermemory_config(
+        {"container_tag": "demo-tag", "auto_capture": False}, str(tmp_path)
+    )
     cfg = _load_supermemory_config(str(tmp_path))
     # container_tag is kept raw — sanitization happens in initialize() after template resolution
     assert cfg["container_tag"] == "demo-tag"
@@ -132,7 +152,9 @@ def test_prefetch_includes_profile_on_first_turn(provider):
     provider._client.profile_response = {
         "static": ["Jordan prefers short answers"],
         "dynamic": ["Current project is Supermemory provider"],
-        "search_results": [{"memory": "Working on Clawksis memory provider", "similarity": 0.88}],
+        "search_results": [
+            {"memory": "Working on Clawksis memory provider", "similarity": 0.88}
+        ],
     }
     provider.on_turn_start(1, "start")
     result = provider.prefetch("what am I working on?")
@@ -145,7 +167,9 @@ def test_prefetch_skips_profile_between_frequency(provider):
     provider._client.profile_response = {
         "static": ["Jordan prefers short answers"],
         "dynamic": ["Current project is Supermemory provider"],
-        "search_results": [{"memory": "Working on Clawksis memory provider", "similarity": 0.88}],
+        "search_results": [
+            {"memory": "Working on Clawksis memory provider", "similarity": 0.88}
+        ],
     }
     provider.on_turn_start(2, "next")
     result = provider.prefetch("what am I working on?")
@@ -227,8 +251,9 @@ def test_shutdown_joins_threads_and_flushes_buffer(provider, monkeypatch):
     started = threading.Event()
     release = threading.Event()
 
-    def slow_add_memory(content, metadata=None, *, entity_context="",
-                        container_tag=None, custom_id=None):
+    def slow_add_memory(
+        content, metadata=None, *, entity_context="", container_tag=None, custom_id=None
+    ):
         started.set()
         release.wait(timeout=1)
         provider._client.add_calls.append({
@@ -272,7 +297,11 @@ def test_shutdown_joins_threads_and_flushes_buffer(provider, monkeypatch):
 
 
 def test_store_tool_returns_saved_payload(provider):
-    result = json.loads(provider.handle_tool_call("supermemory_store", {"content": "Jordan likes concise docs"}))
+    result = json.loads(
+        provider.handle_tool_call(
+            "supermemory_store", {"content": "Jordan likes concise docs"}
+        )
+    )
     assert result["saved"] is True
     assert result["id"] == "mem_123"
 
@@ -281,7 +310,9 @@ def test_search_tool_formats_results(provider):
     provider._client.search_results = [
         {"id": "m1", "memory": "Jordan likes concise docs", "similarity": 0.92}
     ]
-    result = json.loads(provider.handle_tool_call("supermemory_search", {"query": "concise docs"}))
+    result = json.loads(
+        provider.handle_tool_call("supermemory_search", {"query": "concise docs"})
+    )
     assert result["count"] == 1
     assert result["results"][0]["similarity"] == 92
 
@@ -293,8 +324,14 @@ def test_forget_tool_by_id(provider):
 
 
 def test_forget_tool_by_query(provider):
-    provider._client.forget_by_query_response = {"success": True, "message": "Forgot one", "id": "m7"}
-    result = json.loads(provider.handle_tool_call("supermemory_forget", {"query": "that thing"}))
+    provider._client.forget_by_query_response = {
+        "success": True,
+        "message": "Forgot one",
+        "id": "m7",
+    }
+    result = json.loads(
+        provider.handle_tool_call("supermemory_forget", {"query": "that thing"})
+    )
     assert result["success"] is True
     assert result["id"] == "m7"
 
@@ -491,10 +528,13 @@ def test_multi_container_enabled_adds_schema_param(monkeypatch, tmp_path):
     """When enabled, tool schemas include container_tag parameter."""
     monkeypatch.setenv("SUPERMEMORY_API_KEY", "test-key")
     monkeypatch.setattr("plugins.memory.supermemory._SupermemoryClient", FakeClient)
-    _save_supermemory_config({
-        "enable_custom_container_tags": True,
-        "custom_containers": ["project-alpha", "shared"],
-    }, str(tmp_path))
+    _save_supermemory_config(
+        {
+            "enable_custom_container_tags": True,
+            "custom_containers": ["project-alpha", "shared"],
+        },
+        str(tmp_path),
+    )
     p = SupermemoryMemoryProvider()
     p.initialize("s1", clawk_home=str(tmp_path), platform="cli")
     assert p._enable_custom_containers is True
@@ -508,16 +548,24 @@ def test_multi_container_tool_store_with_custom_tag(monkeypatch, tmp_path):
     """supermemory_store uses the resolved container_tag when multi-container is enabled."""
     monkeypatch.setenv("SUPERMEMORY_API_KEY", "test-key")
     monkeypatch.setattr("plugins.memory.supermemory._SupermemoryClient", FakeClient)
-    _save_supermemory_config({
-        "enable_custom_container_tags": True,
-        "custom_containers": ["project-alpha"],
-    }, str(tmp_path))
+    _save_supermemory_config(
+        {
+            "enable_custom_container_tags": True,
+            "custom_containers": ["project-alpha"],
+        },
+        str(tmp_path),
+    )
     p = SupermemoryMemoryProvider()
     p.initialize("s1", clawk_home=str(tmp_path), platform="cli")
-    result = json.loads(p.handle_tool_call("supermemory_store", {
-        "content": "test memory",
-        "container_tag": "project-alpha",
-    }))
+    result = json.loads(
+        p.handle_tool_call(
+            "supermemory_store",
+            {
+                "content": "test memory",
+                "container_tag": "project-alpha",
+            },
+        )
+    )
     assert result["saved"] is True
     assert result["container_tag"] == "project_alpha"
     assert p._client.add_calls[-1]["container_tag"] == "project_alpha"
@@ -527,16 +575,24 @@ def test_multi_container_rejects_unlisted_tag(monkeypatch, tmp_path):
     """Tool calls with a non-whitelisted container_tag return an error."""
     monkeypatch.setenv("SUPERMEMORY_API_KEY", "test-key")
     monkeypatch.setattr("plugins.memory.supermemory._SupermemoryClient", FakeClient)
-    _save_supermemory_config({
-        "enable_custom_container_tags": True,
-        "custom_containers": ["allowed-tag"],
-    }, str(tmp_path))
+    _save_supermemory_config(
+        {
+            "enable_custom_container_tags": True,
+            "custom_containers": ["allowed-tag"],
+        },
+        str(tmp_path),
+    )
     p = SupermemoryMemoryProvider()
     p.initialize("s1", clawk_home=str(tmp_path), platform="cli")
-    result = json.loads(p.handle_tool_call("supermemory_store", {
-        "content": "test",
-        "container_tag": "forbidden-tag",
-    }))
+    result = json.loads(
+        p.handle_tool_call(
+            "supermemory_store",
+            {
+                "content": "test",
+                "container_tag": "forbidden-tag",
+            },
+        )
+    )
     assert "error" in result
     assert "not allowed" in result["error"]
 
@@ -545,11 +601,14 @@ def test_multi_container_system_prompt_includes_instructions(monkeypatch, tmp_pa
     """system_prompt_block includes container list and instructions when multi-container is enabled."""
     monkeypatch.setenv("SUPERMEMORY_API_KEY", "test-key")
     monkeypatch.setattr("plugins.memory.supermemory._SupermemoryClient", FakeClient)
-    _save_supermemory_config({
-        "enable_custom_container_tags": True,
-        "custom_containers": ["docs"],
-        "custom_container_instructions": "Use docs for documentation context.",
-    }, str(tmp_path))
+    _save_supermemory_config(
+        {
+            "enable_custom_container_tags": True,
+            "custom_containers": ["docs"],
+            "custom_container_instructions": "Use docs for documentation context.",
+        },
+        str(tmp_path),
+    )
     p = SupermemoryMemoryProvider()
     p.initialize("s1", clawk_home=str(tmp_path), platform="cli")
     block = p.system_prompt_block()

@@ -27,7 +27,9 @@ def test_vertex_aliases_resolve(alias):
     assert get_provider_profile(alias).name == "vertex"
 
 
-@pytest.mark.parametrize("alias", ["google-vertex", "vertex-ai", "gcp-vertex", "vertexai"])
+@pytest.mark.parametrize(
+    "alias", ["google-vertex", "vertex-ai", "gcp-vertex", "vertexai"]
+)
 def test_alias_canonicalizes_to_vertex(alias):
     from clawk_cli.models import _PROVIDER_ALIASES
 
@@ -47,8 +49,12 @@ def test_resolve_runtime_provider_mints_token(monkeypatch):
     from clawk_cli import runtime_provider as rp
 
     monkeypatch.setattr(
-        va, "get_vertex_config",
-        lambda: ("ya29.TOKEN", "https://aiplatform.googleapis.com/v1beta1/projects/p/locations/global/endpoints/openapi"),
+        va,
+        "get_vertex_config",
+        lambda: (
+            "ya29.TOKEN",
+            "https://aiplatform.googleapis.com/v1beta1/projects/p/locations/global/endpoints/openapi",
+        ),
     )
     rt = rp.resolve_runtime_provider(requested="vertex")
     assert rt["provider"] == "vertex"
@@ -62,7 +68,14 @@ def test_resolve_runtime_provider_alias(monkeypatch):
     import agent.vertex_adapter as va
     from clawk_cli import runtime_provider as rp
 
-    monkeypatch.setattr(va, "get_vertex_config", lambda: ("t", "https://aiplatform.googleapis.com/v1beta1/projects/p/locations/global/endpoints/openapi"))
+    monkeypatch.setattr(
+        va,
+        "get_vertex_config",
+        lambda: (
+            "t",
+            "https://aiplatform.googleapis.com/v1beta1/projects/p/locations/global/endpoints/openapi",
+        ),
+    )
     rt = rp.resolve_runtime_provider(requested="google-vertex")
     assert rt["provider"] == "vertex"
 

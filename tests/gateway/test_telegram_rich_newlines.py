@@ -51,11 +51,7 @@ class TestRichMessageNewlineNormalization:
     def test_mixed_single_and_double_newlines(self, adapter):
         """Content with both list items and paragraph breaks must be handled correctly."""
         content = (
-            "Header\n\n"
-            "`/new` -- Start\n"
-            "`/model` -- Switch\n"
-            "`/reset` -- Reset\n\n"
-            "Footer"
+            "Header\n\n`/new` -- Start\n`/model` -- Switch\n`/reset` -- Reset\n\nFooter"
         )
         payload = adapter._rich_message_payload(content)
         md = payload["markdown"]
@@ -114,7 +110,9 @@ class TestRichMessageNewlineNormalization:
 
     def test_skip_entity_detection_flag_preserved(self, adapter):
         """The skip_entity_detection flag must still work after normalization."""
-        payload = adapter._rich_message_payload("Line 1\nLine 2", skip_entity_detection=True)
+        payload = adapter._rich_message_payload(
+            "Line 1\nLine 2", skip_entity_detection=True
+        )
         assert payload.get("skip_entity_detection") is True
 
 

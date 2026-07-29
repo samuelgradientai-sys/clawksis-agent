@@ -214,7 +214,8 @@ class CodexAppServerSession:
         self._codex_bin = codex_bin
         self._codex_home = codex_home
         self._permission_profile = (
-            permission_profile or _CLAWK_TO_CODEX_PERMISSION_PROFILE.get(
+            permission_profile
+            or _CLAWK_TO_CODEX_PERMISSION_PROFILE.get(
                 os.environ.get("CLAWK_TERMINAL_SECURITY_MODE", "auto"),
                 "workspace-write",
             )
@@ -429,9 +430,7 @@ class CodexAppServerSession:
                 # via `codex login` between turns).
                 result.should_retire = True
             else:
-                result.error = self._format_error_with_stderr(
-                    "turn/start failed", exc
-                )
+                result.error = self._format_error_with_stderr("turn/start failed", exc)
             return result
         except TimeoutError as exc:
             # turn/start hanging is a strong signal the subprocess is wedged.
@@ -481,7 +480,7 @@ class CodexAppServerSession:
             if (
                 last_tool_completion_at is not None
                 and (time.monotonic() - last_tool_completion_at)
-                    > post_tool_quiet_timeout
+                > post_tool_quiet_timeout
             ):
                 self._issue_interrupt(result.turn_id)
                 result.interrupted = True
@@ -516,9 +515,7 @@ class CodexAppServerSession:
                         try:
                             self._on_event(pending)
                         except Exception:  # pragma: no cover - display callback
-                            logger.debug(
-                                "on_event callback raised", exc_info=True
-                            )
+                            logger.debug("on_event callback raised", exc_info=True)
                     _apply_token_usage_notification(result, pending)
                     _apply_compaction_notification(result, pending)
                     self._track_pending_file_change(pending)
@@ -533,19 +530,14 @@ class CodexAppServerSession:
                         if _has_turn_aborted_marker(proj.final_text):
                             turn_complete = True
                             result.interrupted = True
-                            result.error = (
-                                result.error
-                                or "codex reported turn_aborted"
-                            )
+                            result.error = result.error or "codex reported turn_aborted"
                 self._handle_server_request(sreq)
                 # Activity counts as live signal — reset the post-tool
                 # quiet timer so an approval round-trip doesn't trip it.
                 last_tool_completion_at = None
                 continue
 
-            note = self._client.take_notification(
-                timeout=notification_poll_timeout
-            )
+            note = self._client.take_notification(timeout=notification_poll_timeout)
             if note is None:
                 continue
 
@@ -591,27 +583,23 @@ class CodexAppServerSession:
                 if _has_turn_aborted_marker(projection.final_text):
                     turn_complete = True
                     result.interrupted = True
-                    result.error = (
-                        result.error or "codex reported turn_aborted"
-                    )
+                    result.error = result.error or "codex reported turn_aborted"
 
             if method == "turn/completed":
                 turn_complete = True
-                turn_status = (
-                    (note.get("params") or {}).get("turn") or {}
-                ).get("status")
+                turn_status = ((note.get("params") or {}).get("turn") or {}).get(
+                    "status"
+                )
                 if turn_status and turn_status not in {"completed", "interrupted"}:
-                    err_obj = (
-                        (note.get("params") or {}).get("turn") or {}
-                    ).get("error")
+                    err_obj = ((note.get("params") or {}).get("turn") or {}).get(
+                        "error"
+                    )
                     if err_obj:
                         err_msg = _format_responses_error(err_obj, str(turn_status))
                         # If the turn failed for an auth/refresh reason,
                         # rewrite the error into a re-auth hint AND mark
                         # the session for retirement.
-                        stderr_blob = "\n".join(
-                            self._client.stderr_tail(40)
-                        )
+                        stderr_blob = "\n".join(self._client.stderr_tail(40))
                         hint = _classify_oauth_failure(err_msg, stderr_blob)
                         if hint is not None:
                             result.error = hint
@@ -730,9 +718,7 @@ class CodexAppServerSession:
                 self._handle_server_request(sreq)
                 continue
 
-            note = self._client.take_notification(
-                timeout=notification_poll_timeout
-            )
+            note = self._client.take_notification(timeout=notification_poll_timeout)
             if note is None:
                 continue
 
@@ -757,9 +743,7 @@ class CodexAppServerSession:
                 if _has_turn_aborted_marker(projection.final_text):
                     turn_complete = True
                     result.interrupted = True
-                    result.error = (
-                        result.error or "codex reported turn_aborted"
-                    )
+                    result.error = result.error or "codex reported turn_aborted"
 
             if method == "turn/started":
                 turn_obj = (note.get("params") or {}).get("turn") or {}
@@ -920,8 +904,10 @@ class CodexAppServerSession:
                 else "Codex requests to apply a patch"
             )
             command_label = (
-                f"apply_patch: {change_summary}" if change_summary
-                else f"apply_patch: {reason}" if reason
+                f"apply_patch: {change_summary}"
+                if change_summary
+                else f"apply_patch: {reason}"
+                if reason
                 else "apply_patch"
             )
             try:
@@ -1051,7 +1037,9 @@ def _approval_choice_to_codex_decision(choice: str) -> str:
     (verified against codex-rs/app-server-protocol/src/protocol/v2/item.rs
     on codex 0.130.0).
     """
-    if choice in {"once",}:
+    if choice in {
+        "once",
+    }:
         return "accept"
     if choice in {"session", "always"}:
         return "acceptForSession"

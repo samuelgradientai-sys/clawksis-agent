@@ -48,6 +48,7 @@ def hooks_command(args) -> None:
 # list
 # ---------------------------------------------------------------------------
 
+
 def _cmd_list(_args) -> None:
     from clawk_cli.config import load_config
     from agent import shell_hooks
@@ -228,7 +229,8 @@ def _cmd_test(args) -> None:
 
     if getattr(args, "for_tool", None):
         specs = [
-            s for s in specs
+            s
+            for s in specs
             if s.event not in {"pre_tool_call", "post_tool_call"}
             or s.matches_tool(args.for_tool)
         ]
@@ -281,6 +283,7 @@ def _truncate(s: str, n: int) -> str:
 # revoke
 # ---------------------------------------------------------------------------
 
+
 def _cmd_revoke(args) -> None:
     from agent import shell_hooks
 
@@ -298,6 +301,7 @@ def _cmd_revoke(args) -> None:
 # ---------------------------------------------------------------------------
 # doctor
 # ---------------------------------------------------------------------------
+
 
 def _cmd_doctor(_args) -> None:
     from clawk_cli.config import load_config
@@ -331,8 +335,10 @@ def _doctor_one(spec, shell_hooks) -> int:
         print("      ✓ script exists and is executable")
     else:
         problems += 1
-        print("      ✗ script missing or not executable "
-              "(chmod +x the file, or fix the path)")
+        print(
+            "      ✗ script missing or not executable "
+            "(chmod +x the file, or fix the path)"
+        )
 
     # 2. Allowlist status
     entry = shell_hooks.allowlist_entry_for(spec.event, spec.command)
@@ -340,8 +346,10 @@ def _doctor_one(spec, shell_hooks) -> int:
         print(f"      ✓ allowlisted (approved {entry.get('approved_at', '?')})")
     else:
         problems += 1
-        print("      ✗ not allowlisted — hook will NOT fire at runtime "
-              "(run with --accept-hooks once, or confirm at the TTY prompt)")
+        print(
+            "      ✗ not allowlisted — hook will NOT fire at runtime "
+            "(run with --accept-hooks once, or confirm at the TTY prompt)"
+        )
 
     # 3. Mtime drift
     if entry and entry.get("script_mtime_at_approval"):
@@ -349,9 +357,11 @@ def _doctor_one(spec, shell_hooks) -> int:
         mtime_at = entry["script_mtime_at_approval"]
         if mtime_now and mtime_at and mtime_now > mtime_at:
             problems += 1
-            print(f"      ⚠ script modified since approval "
-                  f"(was {mtime_at}, now {mtime_now}) — review changes, "
-                  f"then `clawk hooks revoke` + re-approve to refresh")
+            print(
+                f"      ⚠ script modified since approval "
+                f"(was {mtime_at}, now {mtime_now}) — review changes, "
+                f"then `clawk hooks revoke` + re-approve to refresh"
+            )
         elif mtime_now and mtime_at and mtime_now == mtime_at:
             print("      ✓ script unchanged since approval")
 
@@ -361,16 +371,20 @@ def _doctor_one(spec, shell_hooks) -> int:
     # reviewed them, which directly contradicts the documented workflow
     # ("spot newly-added hooks *before they register*").
     if not entry:
-        print("      ℹ skipped JSON smoke test — not allowlisted yet. "
-              "Approve the hook first (via TTY prompt or --accept-hooks), "
-              "then re-run `clawk hooks doctor`.")
+        print(
+            "      ℹ skipped JSON smoke test — not allowlisted yet. "
+            "Approve the hook first (via TTY prompt or --accept-hooks), "
+            "then re-run `clawk hooks doctor`."
+        )
     elif shell_hooks.script_is_executable(spec.command):
         payload = _DEFAULT_PAYLOADS.get(spec.event, {"extra": {}})
         result = shell_hooks.run_once(spec, payload)
         if result.get("timed_out"):
             problems += 1
-            print(f"      ✗ timed out after {result['elapsed_seconds']}s "
-                  f"on synthetic payload (timeout={spec.timeout}s)")
+            print(
+                f"      ✗ timed out after {result['elapsed_seconds']}s "
+                f"on synthetic payload (timeout={spec.timeout}s)"
+            )
         elif result.get("error"):
             problems += 1
             print(f"      ✗ execution error: {result['error']}")
@@ -381,14 +395,20 @@ def _doctor_one(spec, shell_hooks) -> int:
             if stdout:
                 try:
                     json.loads(stdout)
-                    print(f"      ✓ produced valid JSON on synthetic payload "
-                          f"(exit={rc}, {elapsed}s)")
+                    print(
+                        f"      ✓ produced valid JSON on synthetic payload "
+                        f"(exit={rc}, {elapsed}s)"
+                    )
                 except json.JSONDecodeError:
                     problems += 1
-                    print(f"      ✗ stdout was not valid JSON (exit={rc}, "
-                          f"{elapsed}s): {_truncate(stdout, 120)}")
+                    print(
+                        f"      ✗ stdout was not valid JSON (exit={rc}, "
+                        f"{elapsed}s): {_truncate(stdout, 120)}"
+                    )
             else:
-                print(f"      ✓ ran clean with empty stdout "
-                      f"(exit={rc}, {elapsed}s) — hook is observer-only")
+                print(
+                    f"      ✓ ran clean with empty stdout "
+                    f"(exit={rc}, {elapsed}s) — hook is observer-only"
+                )
 
     return problems

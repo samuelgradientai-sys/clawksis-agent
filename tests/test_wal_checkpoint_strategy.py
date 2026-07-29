@@ -51,9 +51,7 @@ class TestTryWalCheckpointPassive:
         assert len(passive_calls) == 1, (
             f"Expected 1 PASSIVE checkpoint call, got {len(passive_calls)}"
         )
-        assert len(truncate_calls) == 0, (
-            "Periodic checkpoint should NOT use TRUNCATE"
-        )
+        assert len(truncate_calls) == 0, "Periodic checkpoint should NOT use TRUNCATE"
 
     def test_checkpoint_logs_warning_on_failure(self, db, caplog):
         """Failed PASSIVE checkpoint logs a warning instead of silent pass."""
@@ -64,9 +62,9 @@ class TestTryWalCheckpointPassive:
         with caplog.at_level(logging.WARNING):
             db._try_wal_checkpoint()
 
-        assert any("WAL checkpoint (PASSIVE) failed" in r.message for r in caplog.records), (
-            f"Expected warning log about PASSIVE checkpoint failure, got: {caplog.text}"
-        )
+        assert any(
+            "WAL checkpoint (PASSIVE) failed" in r.message for r in caplog.records
+        ), f"Expected warning log about PASSIVE checkpoint failure, got: {caplog.text}"
 
     def test_checkpoint_returns_result_on_success(self, db):
         """Successful PASSIVE checkpoint does not raise."""
@@ -105,9 +103,10 @@ class TestCloseUsesTruncate:
         with caplog.at_level(logging.DEBUG):
             db.close()
 
-        assert any("WAL checkpoint (TRUNCATE) at close failed" in r.message for r in caplog.records), (
-            f"Expected debug log about TRUNCATE failure at close, got: {caplog.text}"
-        )
+        assert any(
+            "WAL checkpoint (TRUNCATE) at close failed" in r.message
+            for r in caplog.records
+        ), f"Expected debug log about TRUNCATE failure at close, got: {caplog.text}"
 
 
 class TestCheckpointFrequency:
@@ -127,11 +126,14 @@ class TestCheckpointFrequency:
         # Write exactly _CHECKPOINT_EVERY_N_WRITES sessions to trigger one checkpoint
         n = db._CHECKPOINT_EVERY_N_WRITES
         import time as _time
+
         for i in range(n):
-            db._execute_write(lambda conn, _i=i: conn.execute(
-                "INSERT INTO sessions (id, source, started_at) VALUES (?, ?, ?)",
-                (f"sess_{_i}", "test", _time.time()),
-            ))
+            db._execute_write(
+                lambda conn, _i=i: conn.execute(
+                    "INSERT INTO sessions (id, source, started_at) VALUES (?, ?, ?)",
+                    (f"sess_{_i}", "test", _time.time()),
+                )
+            )
 
         assert call_count[0] == 1, (
             f"Expected 1 checkpoint after {n} writes, got {call_count[0]}"

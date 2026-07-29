@@ -40,28 +40,35 @@ def _hanging_session_db(never_set: threading.Event):
 
 
 class TestSessionDbInitTimeout:
-    def test_run_job_does_not_hang_when_sessiondb_init_wedges(self, tmp_path, monkeypatch):
+    def test_run_job_does_not_hang_when_sessiondb_init_wedges(
+        self, tmp_path, monkeypatch
+    ):
         """run_job returns promptly even if SessionDB() never returns."""
         monkeypatch.setenv("CLAWK_CRON_SESSION_DB_TIMEOUT", "0.2")
         never_set = threading.Event()
         job = {"id": "wedged-sessiondb", "name": "test", "prompt": "hello"}
 
         try:
-            with patch("cron.scheduler._clawk_home", tmp_path), \
-                 patch("cron.scheduler._resolve_origin", return_value=None), \
-                 patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-                 patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-                 patch("clawk_state.SessionDB", side_effect=lambda: _hanging_session_db(never_set)), \
-                 patch(
-                     "clawk_cli.runtime_provider.resolve_runtime_provider",
-                     return_value={
-                         "api_key": "test-key",
-                         "base_url": "https://example.invalid/v1",
-                         "provider": "openrouter",
-                         "api_mode": "chat_completions",
-                     },
-                 ), \
-                 patch("run_agent.AIAgent") as mock_agent_cls:
+            with (
+                patch("cron.scheduler._clawk_home", tmp_path),
+                patch("cron.scheduler._resolve_origin", return_value=None),
+                patch("clawk_cli.env_loader.load_clawk_dotenv"),
+                patch("clawk_cli.env_loader.reset_secret_source_cache"),
+                patch(
+                    "clawk_state.SessionDB",
+                    side_effect=lambda: _hanging_session_db(never_set),
+                ),
+                patch(
+                    "clawk_cli.runtime_provider.resolve_runtime_provider",
+                    return_value={
+                        "api_key": "test-key",
+                        "base_url": "https://example.invalid/v1",
+                        "provider": "openrouter",
+                        "api_mode": "chat_completions",
+                    },
+                ),
+                patch("run_agent.AIAgent") as mock_agent_cls,
+            ):
                 mock_agent = MagicMock()
                 mock_agent.run_conversation.return_value = {"final_response": "ok"}
                 mock_agent_cls.return_value = mock_agent
@@ -81,28 +88,32 @@ class TestSessionDbInitTimeout:
         kwargs = mock_agent_cls.call_args.kwargs
         assert kwargs["session_db"] is None
 
-    def test_invalid_timeout_env_falls_back_to_default(self, tmp_path, monkeypatch, caplog):
+    def test_invalid_timeout_env_falls_back_to_default(
+        self, tmp_path, monkeypatch, caplog
+    ):
         """A malformed CLAWK_CRON_SESSION_DB_TIMEOUT logs a warning and still
         bounds the call (mirrors CLAWK_CRON_TIMEOUT's own fallback)."""
         monkeypatch.setenv("CLAWK_CRON_SESSION_DB_TIMEOUT", "not-a-number")
         fake_db = MagicMock()
         job = {"id": "bad-timeout-env", "name": "test", "prompt": "hello"}
 
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-             patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 return_value={
-                     "api_key": "test-key",
-                     "base_url": "https://example.invalid/v1",
-                     "provider": "openrouter",
-                     "api_mode": "chat_completions",
-                 },
-             ), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("clawk_cli.env_loader.load_clawk_dotenv"),
+            patch("clawk_cli.env_loader.reset_secret_source_cache"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "api_key": "test-key",
+                    "base_url": "https://example.invalid/v1",
+                    "provider": "openrouter",
+                    "api_mode": "chat_completions",
+                },
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -117,9 +128,10 @@ class TestSessionDbInitTimeout:
         # is observable — otherwise it silently falls back and operators can't
         # diagnose why their custom timeout isn't taking effect.
         assert any(
-            "CLAWK_CRON_SESSION_DB_TIMEOUT" in rec.message
-            for rec in caplog.records
-        ), f"Expected warning about invalid timeout env var; got: {[r.message for r in caplog.records]}"
+            "CLAWK_CRON_SESSION_DB_TIMEOUT" in rec.message for rec in caplog.records
+        ), (
+            f"Expected warning about invalid timeout env var; got: {[r.message for r in caplog.records]}"
+        )
 
     def test_timeout_resolved_from_config_yaml(self, tmp_path, monkeypatch):
         """cron.session_db_timeout_seconds in config.yaml is respected when
@@ -135,21 +147,26 @@ class TestSessionDbInitTimeout:
         job = {"id": "config-timeout", "name": "test", "prompt": "hello"}
 
         try:
-            with patch("cron.scheduler._clawk_home", tmp_path), \
-                 patch("cron.scheduler._resolve_origin", return_value=None), \
-                 patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-                 patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-                 patch("clawk_state.SessionDB", side_effect=lambda: _hanging_session_db(never_set)), \
-                 patch(
-                     "clawk_cli.runtime_provider.resolve_runtime_provider",
-                     return_value={
-                         "api_key": "test-key",
-                         "base_url": "https://example.invalid/v1",
-                         "provider": "openrouter",
-                         "api_mode": "chat_completions",
-                     },
-                 ), \
-                 patch("run_agent.AIAgent") as mock_agent_cls:
+            with (
+                patch("cron.scheduler._clawk_home", tmp_path),
+                patch("cron.scheduler._resolve_origin", return_value=None),
+                patch("clawk_cli.env_loader.load_clawk_dotenv"),
+                patch("clawk_cli.env_loader.reset_secret_source_cache"),
+                patch(
+                    "clawk_state.SessionDB",
+                    side_effect=lambda: _hanging_session_db(never_set),
+                ),
+                patch(
+                    "clawk_cli.runtime_provider.resolve_runtime_provider",
+                    return_value={
+                        "api_key": "test-key",
+                        "base_url": "https://example.invalid/v1",
+                        "provider": "openrouter",
+                        "api_mode": "chat_completions",
+                    },
+                ),
+                patch("run_agent.AIAgent") as mock_agent_cls,
+            ):
                 mock_agent = MagicMock()
                 mock_agent.run_conversation.return_value = {"final_response": "ok"}
                 mock_agent_cls.return_value = mock_agent
@@ -170,7 +187,9 @@ class TestDispatchGuardReleasedAfterHang:
     """End-to-end: the real bug symptom was every later tick silently
     skipping the job forever. Confirm the fix actually clears that path."""
 
-    def test_guard_is_released_and_job_refires_after_sessiondb_hang(self, tmp_path, monkeypatch):
+    def test_guard_is_released_and_job_refires_after_sessiondb_hang(
+        self, tmp_path, monkeypatch
+    ):
         import cron.scheduler as sched
 
         monkeypatch.setenv("CLAWK_CRON_SESSION_DB_TIMEOUT", "0.2")
@@ -190,26 +209,31 @@ class TestDispatchGuardReleasedAfterHang:
         }
 
         try:
-            with patch("cron.scheduler._clawk_home", tmp_path), \
-                 patch("cron.scheduler._resolve_origin", return_value=None), \
-                 patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-                 patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-                 patch("clawk_state.SessionDB", side_effect=lambda: _hanging_session_db(never_set)), \
-                 patch(
-                     "clawk_cli.runtime_provider.resolve_runtime_provider",
-                     return_value={
-                         "api_key": "test-key",
-                         "base_url": "https://example.invalid/v1",
-                         "provider": "openrouter",
-                         "api_mode": "chat_completions",
-                     },
-                 ), \
-                 patch("run_agent.AIAgent") as mock_agent_cls, \
-                 patch.object(sched, "get_due_jobs", return_value=[job]), \
-                 patch.object(sched, "advance_next_run"), \
-                 patch.object(sched, "save_job_output", return_value="/tmp/out"), \
-                 patch.object(sched, "mark_job_run"), \
-                 patch.object(sched, "_deliver_result", return_value=None):
+            with (
+                patch("cron.scheduler._clawk_home", tmp_path),
+                patch("cron.scheduler._resolve_origin", return_value=None),
+                patch("clawk_cli.env_loader.load_clawk_dotenv"),
+                patch("clawk_cli.env_loader.reset_secret_source_cache"),
+                patch(
+                    "clawk_state.SessionDB",
+                    side_effect=lambda: _hanging_session_db(never_set),
+                ),
+                patch(
+                    "clawk_cli.runtime_provider.resolve_runtime_provider",
+                    return_value={
+                        "api_key": "test-key",
+                        "base_url": "https://example.invalid/v1",
+                        "provider": "openrouter",
+                        "api_mode": "chat_completions",
+                    },
+                ),
+                patch("run_agent.AIAgent") as mock_agent_cls,
+                patch.object(sched, "get_due_jobs", return_value=[job]),
+                patch.object(sched, "advance_next_run"),
+                patch.object(sched, "save_job_output", return_value="/tmp/out"),
+                patch.object(sched, "mark_job_run"),
+                patch.object(sched, "_deliver_result", return_value=None),
+            ):
                 mock_agent = MagicMock()
                 mock_agent.run_conversation.return_value = {"final_response": "ok"}
                 mock_agent_cls.return_value = mock_agent

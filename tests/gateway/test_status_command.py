@@ -1,4 +1,5 @@
 from clawk_state import AsyncSessionDB
+
 """Tests for gateway /status behavior and token persistence."""
 
 from datetime import datetime
@@ -31,7 +32,9 @@ def _make_event(text: str, *, platform: Platform = Platform.TELEGRAM) -> Message
     )
 
 
-def _make_runner(session_entry: SessionEntry, *, platform: Platform = Platform.TELEGRAM):
+def _make_runner(
+    session_entry: SessionEntry, *, platform: Platform = Platform.TELEGRAM
+):
     from gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
@@ -217,7 +220,9 @@ async def test_status_command_includes_live_agent_model_and_context():
 
 
 @pytest.mark.asyncio
-async def test_status_command_includes_persisted_model_and_context_when_agent_not_running(monkeypatch):
+async def test_status_command_includes_persisted_model_and_context_when_agent_not_running(
+    monkeypatch,
+):
     session_entry = SessionEntry(
         session_key=build_session_key(_make_source()),
         session_id="sess-1",
@@ -239,7 +244,10 @@ async def test_status_command_includes_persisted_model_and_context_when_agent_no
         "billing_provider": "openai-codex",
         "billing_base_url": "https://example.invalid/v1",
     }
-    monkeypatch.setattr("gateway.run._load_gateway_config", lambda: {"model": {"context_length": 272_000}})
+    monkeypatch.setattr(
+        "gateway.run._load_gateway_config",
+        lambda: {"model": {"context_length": 272_000}},
+    )
 
     result = await runner._handle_message(_make_event("/status"))
 
@@ -358,7 +366,9 @@ async def test_handle_message_persists_agent_token_counts(monkeypatch):
         chat_type="dm",
     )
     runner = _make_runner(session_entry)
-    runner.session_store.load_transcript.return_value = [{"role": "user", "content": "earlier"}]
+    runner.session_store.load_transcript.return_value = [
+        {"role": "user", "content": "earlier"}
+    ]
     runner._run_agent = AsyncMock(
         return_value={
             "final_response": "ok",
@@ -372,7 +382,9 @@ async def test_handle_message_persists_agent_token_counts(monkeypatch):
         }
     )
 
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100000,
@@ -416,7 +428,9 @@ async def test_first_run_slack_home_channel_onboarding_uses_parent_command(monke
     )
 
     monkeypatch.delenv("SLACK_HOME_CHANNEL", raising=False)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100000,
@@ -432,7 +446,9 @@ async def test_first_run_slack_home_channel_onboarding_uses_parent_command(monke
 
 
 @pytest.mark.asyncio
-async def test_first_run_non_slack_home_channel_onboarding_keeps_direct_command(monkeypatch):
+async def test_first_run_non_slack_home_channel_onboarding_keeps_direct_command(
+    monkeypatch,
+):
     import gateway.run as gateway_run
 
     session_entry = SessionEntry(
@@ -460,13 +476,17 @@ async def test_first_run_non_slack_home_channel_onboarding_keeps_direct_command(
     )
 
     monkeypatch.delenv("TELEGRAM_HOME_CHANNEL", raising=False)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100000,
     )
 
-    result = await runner._handle_message(_make_event("hello", platform=Platform.TELEGRAM))
+    result = await runner._handle_message(
+        _make_event("hello", platform=Platform.TELEGRAM)
+    )
 
     assert result == "ok"
     runner.adapters[Platform.TELEGRAM].send.assert_awaited_once()
@@ -475,7 +495,9 @@ async def test_first_run_non_slack_home_channel_onboarding_keeps_direct_command(
 
 
 @pytest.mark.asyncio
-async def test_handle_message_discards_stale_result_after_session_invalidation(monkeypatch):
+async def test_handle_message_discards_stale_result_after_session_invalidation(
+    monkeypatch,
+):
     import gateway.run as gateway_run
 
     session_entry = SessionEntry(
@@ -487,12 +509,18 @@ async def test_handle_message_discards_stale_result_after_session_invalidation(m
         chat_type="dm",
     )
     runner = _make_runner(session_entry)
-    runner.session_store.load_transcript.return_value = [{"role": "user", "content": "earlier"}]
+    runner.session_store.load_transcript.return_value = [
+        {"role": "user", "content": "earlier"}
+    ]
     session_key = session_entry.session_key
-    runner.adapters[Platform.TELEGRAM]._post_delivery_callbacks = {session_key: object()}
+    runner.adapters[Platform.TELEGRAM]._post_delivery_callbacks = {
+        session_key: object()
+    }
 
     async def _stale_result(**kwargs):
-        runner._invalidate_session_run_generation(kwargs["session_key"], reason="test_stale_result")
+        runner._invalidate_session_run_generation(
+            kwargs["session_key"], reason="test_stale_result"
+        )
         return {
             "final_response": "late reply",
             "messages": [],
@@ -506,7 +534,9 @@ async def test_handle_message_discards_stale_result_after_session_invalidation(m
 
     runner._run_agent = AsyncMock(side_effect=_stale_result)
 
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100000,
@@ -517,7 +547,9 @@ async def test_handle_message_discards_stale_result_after_session_invalidation(m
     assert result is None
     runner.session_store.append_to_transcript.assert_not_called()
     runner.session_store.update_session.assert_not_called()
-    assert session_key not in runner.adapters[Platform.TELEGRAM]._post_delivery_callbacks
+    assert (
+        session_key not in runner.adapters[Platform.TELEGRAM]._post_delivery_callbacks
+    )
 
 
 @pytest.mark.asyncio
@@ -554,7 +586,9 @@ async def test_handle_message_stale_result_keeps_newer_generation_callback(monke
         chat_type="dm",
     )
     runner = _make_runner(session_entry)
-    runner.session_store.load_transcript.return_value = [{"role": "user", "content": "earlier"}]
+    runner.session_store.load_transcript.return_value = [
+        {"role": "user", "content": "earlier"}
+    ]
     session_key = session_entry.session_key
     adapter = _Adapter()
     runner.adapters[Platform.TELEGRAM] = adapter
@@ -576,7 +610,9 @@ async def test_handle_message_stale_result_keeps_newer_generation_callback(monke
 
     runner._run_agent = AsyncMock(side_effect=_stale_result)
 
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100000,
@@ -587,7 +623,6 @@ async def test_handle_message_stale_result_keeps_newer_generation_callback(monke
     assert result is None
     assert session_key in adapter._post_delivery_callbacks
     assert adapter._post_delivery_callbacks[session_key][0] == 2
-
 
 
 @pytest.mark.asyncio
@@ -612,10 +647,17 @@ async def test_status_command_bypasses_active_session_guard():
     class _ConcreteAdapter(BasePlatformAdapter):
         platform = Platform.TELEGRAM
 
-        async def connect(self, *, is_reconnect: bool = False): pass
-        async def disconnect(self): pass
-        async def send(self, chat_id, content, **kwargs): pass
-        async def get_chat_info(self, chat_id): return {}
+        async def connect(self, *, is_reconnect: bool = False):
+            pass
+
+        async def disconnect(self):
+            pass
+
+        async def send(self, chat_id, content, **kwargs):
+            pass
+
+        async def get_chat_info(self, chat_id):
+            return {}
 
     platform_config = PlatformConfig(enabled=True, token="***")
     adapter = _ConcreteAdapter(platform_config, Platform.TELEGRAM)
@@ -640,11 +682,17 @@ async def test_status_command_bypasses_active_session_guard():
     )
     await adapter.handle_message(event)
 
-    assert handler_called_with, "/status handler was never called (event was queued or dropped)"
+    assert handler_called_with, (
+        "/status handler was never called (event was queued or dropped)"
+    )
     assert sent, "/status response was never sent"
     assert "Agent Running" in sent[0]
-    assert not interrupt_event.is_set(), "/status incorrectly triggered an agent interrupt"
-    assert session_key not in adapter._pending_messages, "/status was incorrectly queued"
+    assert not interrupt_event.is_set(), (
+        "/status incorrectly triggered an agent interrupt"
+    )
+    assert session_key not in adapter._pending_messages, (
+        "/status was incorrectly queued"
+    )
 
 
 @pytest.mark.asyncio
@@ -704,7 +752,9 @@ async def test_profile_command_reports_source_stamped_profile(monkeypatch, tmp_p
 
 
 @pytest.mark.asyncio
-async def test_profile_command_ignores_stamp_when_multiplexing_off(monkeypatch, tmp_path):
+async def test_profile_command_ignores_stamp_when_multiplexing_off(
+    monkeypatch, tmp_path
+):
     """Without ``gateway.multiplex_profiles`` a stamped source is ignored:
     /profile keeps reporting the active profile and the default home,
     mirroring the multiplex gating in ``_run_agent`` and
@@ -779,10 +829,17 @@ async def test_post_delivery_callback_generation_snapshot_happens_after_bind():
     class _ConcreteAdapter(BasePlatformAdapter):
         platform = Platform.TELEGRAM
 
-        async def connect(self, *, is_reconnect: bool = False): pass
-        async def disconnect(self): pass
-        async def send(self, chat_id, content, **kwargs): pass
-        async def get_chat_info(self, chat_id): return {}
+        async def connect(self, *, is_reconnect: bool = False):
+            pass
+
+        async def disconnect(self):
+            pass
+
+        async def send(self, chat_id, content, **kwargs):
+            pass
+
+        async def get_chat_info(self, chat_id):
+            return {}
 
     adapter = _ConcreteAdapter(
         PlatformConfig(enabled=True, token="***"), Platform.TELEGRAM

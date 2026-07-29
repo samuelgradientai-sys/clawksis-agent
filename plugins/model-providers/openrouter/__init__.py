@@ -11,19 +11,27 @@ logger = logging.getLogger(__name__)
 _CACHE: list[str] | None = None
 
 
-
 # default *unknown* Anthropic models to "cannot disable" (the modern contract)
 # and keep only this explicit legacy allowlist of models that can. Mirrors the
 # default-to-newest philosophy in agent/anthropic_adapter._get_anthropic_max_output.
 _ANTHROPIC_REASONING_OPTIONAL_SUBSTRINGS = (
-    "claude-3",          # 3, 3.5, 3.7
-    "claude-opus-4-0", "claude-opus-4.0", "claude-opus-4-1", "claude-opus-4.1",
-    "claude-sonnet-4-0", "claude-sonnet-4.0",
-    "claude-opus-4-2025", "claude-sonnet-4-2025",  # date-stamped 4.0 IDs
-    "claude-opus-4-5", "claude-opus-4.5",
-    "claude-sonnet-4-5", "claude-sonnet-4.5",
-    "claude-haiku-4-5", "claude-haiku-4.5",
+    "claude-3",  # 3, 3.5, 3.7
+    "claude-opus-4-0",
+    "claude-opus-4.0",
+    "claude-opus-4-1",
+    "claude-opus-4.1",
+    "claude-sonnet-4-0",
+    "claude-sonnet-4.0",
+    "claude-opus-4-2025",
+    "claude-sonnet-4-2025",  # date-stamped 4.0 IDs
+    "claude-opus-4-5",
+    "claude-opus-4.5",
+    "claude-sonnet-4-5",
+    "claude-sonnet-4.5",
+    "claude-haiku-4-5",
+    "claude-haiku-4.5",
 )
+
 
 def _anthropic_reasoning_is_mandatory(model: str | None) -> bool:
     """Return True for Anthropic models that reject any disable-thinking form.
@@ -38,6 +46,7 @@ def _anthropic_reasoning_is_mandatory(model: str | None) -> bool:
     if not m.startswith(("anthropic/", "claude")) and "claude" not in m:
         return False
     return not any(sub in m for sub in _ANTHROPIC_REASONING_OPTIONAL_SUBSTRINGS)
+
 
 class OpenRouterProfile(ProviderProfile):
     """OpenRouter aggregator — provider preferences, reasoning config passthrough."""
@@ -125,7 +134,11 @@ class OpenRouterProfile(ProviderProfile):
                 cfg = reasoning_config or {}
                 effort = cfg.get("effort")
 
-                if cfg.get("enabled", True) is not False and effort and effort != "none":
+                if (
+                    cfg.get("enabled", True) is not False
+                    and effort
+                    and effort != "none"
+                ):
                     top_level["verbosity"] = effort
             elif reasoning_config is not None:
                 extra_body["reasoning"] = dict(reasoning_config)

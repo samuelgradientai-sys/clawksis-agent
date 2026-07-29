@@ -59,14 +59,18 @@ def test_collect_runtime_readiness_degrades_on_invalid_config_and_stopped_gatewa
     assert (home / "config.yaml").read_text(encoding="utf-8") == "model: [unterminated"
 
 
-def test_collect_runtime_readiness_marks_corrupt_state_db_degraded(tmp_path, monkeypatch):
+def test_collect_runtime_readiness_marks_corrupt_state_db_degraded(
+    tmp_path, monkeypatch
+):
     home = tmp_path / ".clawk"
     home.mkdir()
     (home / "config.yaml").write_text("{}\n", encoding="utf-8")
     (home / "state.db").write_bytes(b"not sqlite")
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
-    result = collect_runtime_readiness(configured_model="configured-model", runtime_status={})
+    result = collect_runtime_readiness(
+        configured_model="configured-model", runtime_status={}
+    )
 
     assert result["status"] == "degraded"
     assert result["checks"]["state_db"]["status"] == "degraded"

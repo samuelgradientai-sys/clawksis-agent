@@ -35,6 +35,7 @@ def kanban_home(tmp_path, monkeypatch):
 # DB layer
 # ---------------------------------------------------------------------------
 
+
 def test_goal_mode_defaults_off(kanban_home):
     with kb.connect() as conn:
         tid = kb.create_task(conn, title="plain task", assignee="worker")
@@ -59,9 +60,7 @@ def test_goal_mode_persists(kanban_home):
 
 def test_goal_mode_without_max_turns(kanban_home):
     with kb.connect() as conn:
-        tid = kb.create_task(
-            conn, title="t", assignee="worker", goal_mode=True
-        )
+        tid = kb.create_task(conn, title="t", assignee="worker", goal_mode=True)
         task = kb.get_task(conn, tid)
     assert task.goal_mode is True
     assert task.goal_max_turns is None
@@ -121,6 +120,7 @@ def test_legacy_db_migrates_goal_columns(tmp_path, monkeypatch):
 # Spawn env
 # ---------------------------------------------------------------------------
 
+
 def test_spawn_sets_goal_env_only_when_enabled(kanban_home, monkeypatch):
     captured = {}
 
@@ -174,6 +174,7 @@ def test_spawn_no_goal_env_for_plain_task(kanban_home, monkeypatch):
 # ---------------------------------------------------------------------------
 # Goal loop logic (callback-injected, no live model)
 # ---------------------------------------------------------------------------
+
 
 def _patch_judge(monkeypatch, verdicts):
     """Make judge_goal return a scripted sequence of verdicts."""
@@ -302,6 +303,7 @@ def test_loop_stops_if_task_reclaimed(monkeypatch):
 # CLI judge gate tests (clawk kanban complete bypass fix)
 # ---------------------------------------------------------------------------
 
+
 class TestCLIJudgeGate:
     """clawk kanban complete must apply the same goal_mode judge gate as the
     kanban_complete tool (Issue #38367 sibling gap).
@@ -310,8 +312,17 @@ class TestCLIJudgeGate:
     full kanban_db schema; the gate logic is the unit under test.
     """
 
-    def _run(self, monkeypatch, *, goal_mode=True, judge_available=True,
-             verdict="done", reason="", complete_ok=True, summary="done"):
+    def _run(
+        self,
+        monkeypatch,
+        *,
+        goal_mode=True,
+        judge_available=True,
+        verdict="done",
+        reason="",
+        complete_ok=True,
+        summary="done",
+    ):
         import argparse
         import types
         from unittest.mock import MagicMock
@@ -327,9 +338,11 @@ class TestCLIJudgeGate:
 
         def fake_connect_closing():
             from contextlib import contextmanager
+
             @contextmanager
             def _cm():
                 yield fake_conn
+
             return _cm()
 
         def fake_complete_task(conn, tid, **kw):
@@ -353,7 +366,9 @@ class TestCLIJudgeGate:
             lambda **kw: (verdict, reason, False, None, False),
         )
 
-        args = argparse.Namespace(task_ids=["t1"], summary=summary, result=None, metadata=None)
+        args = argparse.Namespace(
+            task_ids=["t1"], summary=summary, result=None, metadata=None
+        )
         return _cmd_complete(args), complete_calls
 
     def test_judge_rejects_premature_completion(self, monkeypatch):

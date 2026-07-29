@@ -20,6 +20,7 @@ and simply yields no finding):
 Cross-platform: the root and SSH checks are POSIX-only and no-op on Windows.
 Everything is best-effort and read-only.
 """
+
 from __future__ import annotations
 
 import logging
@@ -57,9 +58,7 @@ def _running_as_root() -> Optional[str]:
     )
 
 
-_SSHD_CONFIG_PATHS = (
-    "/etc/ssh/sshd_config",
-)
+_SSHD_CONFIG_PATHS = ("/etc/ssh/sshd_config",)
 _SSHD_CONFIG_DIR = "/etc/ssh/sshd_config.d"
 
 
@@ -140,7 +139,11 @@ def _path_is_mounted(path: Path) -> bool:
     except Exception:
         target = path
     try:
-        mounts = Path("/proc/mounts").read_text(encoding="utf-8", errors="replace").splitlines()
+        mounts = (
+            Path("/proc/mounts")
+            .read_text(encoding="utf-8", errors="replace")
+            .splitlines()
+        )
     except Exception:
         return True  # can't tell — fail safe (no warning)
     best = None
@@ -201,7 +204,7 @@ def _network_listener_without_auth(config: Optional[dict]) -> list[str]:
 
     # API server.
     try:
-        plats = (cfg.get("platforms") or {})
+        plats = cfg.get("platforms") or {}
         api = plats.get("api_server") if isinstance(plats, dict) else None
         if isinstance(api, dict) and api.get("enabled"):
             extra = api.get("extra") or {}

@@ -26,7 +26,9 @@ def _browser_mode(monkeypatch):
 )
 def test_private_page_blocks_state_changing_actions(monkeypatch, tool_call, args):
     monkeypatch.setattr(browser_tool, "_eval_ssrf_guard_active", lambda task_id: True)
-    monkeypatch.setattr(browser_tool, "_current_page_private_url", lambda task_id: PRIVATE_URL)
+    monkeypatch.setattr(
+        browser_tool, "_current_page_private_url", lambda task_id: PRIVATE_URL
+    )
 
     def fail_run(*_args, **_kwargs):
         raise AssertionError("browser command should not run on a private page")
@@ -69,7 +71,9 @@ def test_guard_inactive_does_not_block_or_probe(monkeypatch):
     monkeypatch.setattr(browser_tool, "_eval_ssrf_guard_active", lambda task_id: False)
 
     def fail_probe(task_id):
-        raise AssertionError("_current_page_private_url must not be probed when guard inactive")
+        raise AssertionError(
+            "_current_page_private_url must not be probed when guard inactive"
+        )
 
     monkeypatch.setattr(browser_tool, "_current_page_private_url", fail_probe)
 
@@ -99,7 +103,11 @@ def test_camofox_short_circuits_before_guard(monkeypatch):
 
     import tools.browser_camofox as camofox
 
-    monkeypatch.setattr(camofox, "camofox_click", lambda ref, task_id: '{"success": true, "camofox": true}')
+    monkeypatch.setattr(
+        camofox,
+        "camofox_click",
+        lambda ref, task_id: '{"success": true, "camofox": true}',
+    )
 
     out = json.loads(browser_tool.browser_click("@e1", task_id="task-1"))
 
@@ -118,9 +126,12 @@ def test_browser_back_blocks_when_landed_page_is_private(monkeypatch):
     browser_navigate preflight never saw — the same class of gap already
     closed for browser_snapshot/vision/console/eval and click/type/press."""
     monkeypatch.setattr(browser_tool, "_eval_ssrf_guard_active", lambda task_id: True)
-    monkeypatch.setattr(browser_tool, "_current_page_private_url", lambda task_id: PRIVATE_URL)
     monkeypatch.setattr(
-        browser_tool, "_run_browser_command",
+        browser_tool, "_current_page_private_url", lambda task_id: PRIVATE_URL
+    )
+    monkeypatch.setattr(
+        browser_tool,
+        "_run_browser_command",
         lambda task_id, command, args: {"success": True, "data": {"url": PRIVATE_URL}},
     )
 
@@ -138,8 +149,12 @@ def test_browser_back_returns_url_when_landed_page_is_public(monkeypatch):
     monkeypatch.setattr(browser_tool, "_eval_ssrf_guard_active", lambda task_id: True)
     monkeypatch.setattr(browser_tool, "_current_page_private_url", lambda task_id: None)
     monkeypatch.setattr(
-        browser_tool, "_run_browser_command",
-        lambda task_id, command, args: {"success": True, "data": {"url": "https://example.com/"}},
+        browser_tool,
+        "_run_browser_command",
+        lambda task_id, command, args: {
+            "success": True,
+            "data": {"url": "https://example.com/"},
+        },
     )
 
     out = json.loads(browser_tool.browser_back(task_id="task-1"))
@@ -153,12 +168,18 @@ def test_browser_back_guard_inactive_does_not_probe(monkeypatch):
     monkeypatch.setattr(browser_tool, "_eval_ssrf_guard_active", lambda task_id: False)
 
     def fail_probe(task_id):
-        raise AssertionError("_current_page_private_url must not be probed when guard inactive")
+        raise AssertionError(
+            "_current_page_private_url must not be probed when guard inactive"
+        )
 
     monkeypatch.setattr(browser_tool, "_current_page_private_url", fail_probe)
     monkeypatch.setattr(
-        browser_tool, "_run_browser_command",
-        lambda task_id, command, args: {"success": True, "data": {"url": "https://example.com/"}},
+        browser_tool,
+        "_run_browser_command",
+        lambda task_id, command, args: {
+            "success": True,
+            "data": {"url": "https://example.com/"},
+        },
     )
 
     out = json.loads(browser_tool.browser_back(task_id="task-1"))
@@ -176,7 +197,8 @@ def test_browser_back_failed_navigation_does_not_probe(monkeypatch):
 
     monkeypatch.setattr(browser_tool, "_current_page_private_url", fail_probe)
     monkeypatch.setattr(
-        browser_tool, "_run_browser_command",
+        browser_tool,
+        "_run_browser_command",
         lambda task_id, command, args: {"success": False, "error": "no history"},
     )
 
@@ -196,7 +218,9 @@ def test_browser_back_camofox_short_circuits_before_guard(monkeypatch):
 
     import tools.browser_camofox as camofox
 
-    monkeypatch.setattr(camofox, "camofox_back", lambda task_id: '{"success": true, "camofox": true}')
+    monkeypatch.setattr(
+        camofox, "camofox_back", lambda task_id: '{"success": true, "camofox": true}'
+    )
 
     out = json.loads(browser_tool.browser_back(task_id="task-1"))
 

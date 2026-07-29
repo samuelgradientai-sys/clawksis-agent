@@ -55,50 +55,58 @@ def _item_completed(item: dict) -> dict:
 
 class TestCodexItemToToolName:
     def test_command_execution_maps_to_exec_command(self):
-        assert _codex_item_to_tool_name(
-            {"type": "commandExecution"}
-        ) == "exec_command"
+        assert _codex_item_to_tool_name({"type": "commandExecution"}) == "exec_command"
 
     def test_file_change_maps_to_apply_patch(self):
-        assert _codex_item_to_tool_name(
-            {"type": "fileChange"}
-        ) == "apply_patch"
+        assert _codex_item_to_tool_name({"type": "fileChange"}) == "apply_patch"
 
     def test_mcp_tool_call_includes_server_and_tool(self):
-        assert _codex_item_to_tool_name(
-            {"type": "mcpToolCall", "server": "fs", "tool": "read_file"}
-        ) == "mcp.fs.read_file"
+        assert (
+            _codex_item_to_tool_name({
+                "type": "mcpToolCall",
+                "server": "fs",
+                "tool": "read_file",
+            })
+            == "mcp.fs.read_file"
+        )
 
     def test_mcp_tool_call_falls_back_when_fields_missing(self):
-        assert _codex_item_to_tool_name(
-            {"type": "mcpToolCall"}
-        ) == "mcp.mcp.unknown"
+        assert _codex_item_to_tool_name({"type": "mcpToolCall"}) == "mcp.mcp.unknown"
 
     def test_dynamic_tool_call_uses_tool_field(self):
-        assert _codex_item_to_tool_name(
-            {"type": "dynamicToolCall", "tool": "web_search"}
-        ) == "web_search"
+        assert (
+            _codex_item_to_tool_name({"type": "dynamicToolCall", "tool": "web_search"})
+            == "web_search"
+        )
 
     def test_clawk_tools_mcp_server_emits_bare_tool_name(self):
         """The clawk-tools MCP server wraps Clawksis' own tools for codex;
         the inner dispatch subprocess can't fire native progress events,
         so the codex-level event IS the display event — shown without the
         mcp.clawk-tools.* namespacing (from #26541 by @simpolism)."""
-        assert _codex_item_to_tool_name(
-            {"type": "mcpToolCall", "server": "clawk-tools", "tool": "web_search"}
-        ) == "web_search"
-        assert _codex_item_to_tool_name(
-            {"type": "mcpToolCall", "server": "clawk-tools", "tool": "browser_navigate"}
-        ) == "browser_navigate"
+        assert (
+            _codex_item_to_tool_name({
+                "type": "mcpToolCall",
+                "server": "clawk-tools",
+                "tool": "web_search",
+            })
+            == "web_search"
+        )
+        assert (
+            _codex_item_to_tool_name({
+                "type": "mcpToolCall",
+                "server": "clawk-tools",
+                "tool": "browser_navigate",
+            })
+            == "browser_navigate"
+        )
 
     def test_web_search_builtin_maps_to_web_search(self):
         """Codex's built-in webSearch tool gets a bubble too (#26541)."""
         assert _codex_item_to_tool_name({"type": "webSearch"}) == "web_search"
 
     def test_unknown_type_returns_type_string(self):
-        assert _codex_item_to_tool_name(
-            {"type": "plan"}
-        ) == "plan"
+        assert _codex_item_to_tool_name({"type": "plan"}) == "plan"
 
     def test_missing_type_returns_unknown_sentinel(self):
         assert _codex_item_to_tool_name({}) == "unknown"
@@ -130,14 +138,13 @@ class TestCodexItemToArgs:
         }
 
     def test_mcp_tool_call_returns_arguments_dict(self):
-        args = _codex_item_to_args({
-            "type": "mcpToolCall", "arguments": {"q": "x"}
-        })
+        args = _codex_item_to_args({"type": "mcpToolCall", "arguments": {"q": "x"}})
         assert args == {"q": "x"}
 
     def test_non_dict_arguments_get_wrapped(self):
         args = _codex_item_to_args({
-            "type": "dynamicToolCall", "arguments": ["a", "b"],
+            "type": "dynamicToolCall",
+            "arguments": ["a", "b"],
         })
         assert args == {"arguments": ["a", "b"]}
 
@@ -146,7 +153,8 @@ class TestCodexItemToPreview:
     def test_command_preview_truncated(self):
         long_cmd = "echo " + "x" * 500
         preview = _codex_item_to_preview({
-            "type": "commandExecution", "command": long_cmd
+            "type": "commandExecution",
+            "command": long_cmd,
         })
         assert preview is not None
         assert len(preview) <= 120
@@ -155,21 +163,19 @@ class TestCodexItemToPreview:
         preview = _codex_item_to_preview({
             "type": "fileChange",
             "changes": [
-                {"path": f"/p{i}.py", "kind": {"type": "update"}}
-                for i in range(5)
+                {"path": f"/p{i}.py", "kind": {"type": "update"}} for i in range(5)
             ],
         })
         assert "/p0.py" in preview and "/p2.py" in preview
         assert "+2 more" in preview
 
     def test_file_change_no_paths_returns_none(self):
-        assert _codex_item_to_preview({
-            "type": "fileChange", "changes": [{}]
-        }) is None
+        assert _codex_item_to_preview({"type": "fileChange", "changes": [{}]}) is None
 
     def test_mcp_args_preview_is_json(self):
         preview = _codex_item_to_preview({
-            "type": "mcpToolCall", "arguments": {"q": "hello"},
+            "type": "mcpToolCall",
+            "arguments": {"q": "hello"},
         })
         assert preview is not None
         assert "hello" in preview
@@ -231,10 +237,8 @@ class TestStreamDeltaDispatch:
     def test_agent_message_delta_fires_stream_delta(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge({"method": "item/agentMessage/delta",
-                "params": {"delta": "hello "}})
-        bridge({"method": "item/agentMessage/delta",
-                "params": {"delta": "world"}})
+        bridge({"method": "item/agentMessage/delta", "params": {"delta": "hello "}})
+        bridge({"method": "item/agentMessage/delta", "params": {"delta": "world"}})
         assert agent._fire_stream_delta.call_count == 2
         assert agent._fire_stream_delta.call_args_list[0].args == ("hello ",)
         assert agent._fire_stream_delta.call_args_list[1].args == ("world",)
@@ -249,15 +253,13 @@ class TestStreamDeltaDispatch:
     def test_text_field_used_when_delta_missing(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge({"method": "item/agentMessage/delta",
-                "params": {"text": "fallback"}})
+        bridge({"method": "item/agentMessage/delta", "params": {"text": "fallback"}})
         agent._fire_stream_delta.assert_called_once_with("fallback")
 
     def test_reasoning_delta_fires_reasoning_callback(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge({"method": "item/reasoning/delta",
-                "params": {"delta": "thinking..."}})
+        bridge({"method": "item/reasoning/delta", "params": {"delta": "thinking..."}})
         agent._fire_reasoning_delta.assert_called_once_with("thinking...")
         agent._fire_stream_delta.assert_not_called()
 
@@ -266,12 +268,14 @@ class TestToolProgressDispatch:
     def test_command_started_fires_tool_started(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_started({
-            "type": "commandExecution",
-            "id": "exec-1",
-            "command": "ls /tmp",
-            "cwd": "/tmp",
-        }))
+        bridge(
+            _item_started({
+                "type": "commandExecution",
+                "id": "exec-1",
+                "command": "ls /tmp",
+                "cwd": "/tmp",
+            })
+        )
         agent.tool_progress_callback.assert_called_once()
         call = agent.tool_progress_callback.call_args
         assert call.args[0] == "tool.started"
@@ -282,19 +286,23 @@ class TestToolProgressDispatch:
     def test_command_completed_fires_tool_completed_with_result(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_started({
-            "type": "commandExecution",
-            "id": "exec-2",
-            "command": "echo hi",
-            "cwd": "/tmp",
-        }))
-        bridge(_item_completed({
-            "type": "commandExecution",
-            "id": "exec-2",
-            "exitCode": 0,
-            "aggregatedOutput": "hi\n",
-            "durationMs": 42,
-        }))
+        bridge(
+            _item_started({
+                "type": "commandExecution",
+                "id": "exec-2",
+                "command": "echo hi",
+                "cwd": "/tmp",
+            })
+        )
+        bridge(
+            _item_completed({
+                "type": "commandExecution",
+                "id": "exec-2",
+                "exitCode": 0,
+                "aggregatedOutput": "hi\n",
+                "durationMs": 42,
+            })
+        )
         # tool.started then tool.completed
         assert agent.tool_progress_callback.call_count == 2
         completed = agent.tool_progress_callback.call_args_list[1]
@@ -309,12 +317,14 @@ class TestToolProgressDispatch:
     def test_nonzero_exit_marks_completion_error(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_completed({
-            "type": "commandExecution",
-            "id": "exec-3",
-            "exitCode": 127,
-            "aggregatedOutput": "not found",
-        }))
+        bridge(
+            _item_completed({
+                "type": "commandExecution",
+                "id": "exec-3",
+                "exitCode": 127,
+                "aggregatedOutput": "not found",
+            })
+        )
         call = agent.tool_progress_callback.call_args
         assert call.args[0] == "tool.completed"
         assert call.kwargs["is_error"] is True
@@ -323,23 +333,25 @@ class TestToolProgressDispatch:
     def test_apply_patch_started_and_completed(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_started({
-            "type": "fileChange",
-            "id": "fc-1",
-            "changes": [
-                {"path": "/a.py", "kind": {"type": "add"}},
-                {"path": "/b.py", "kind": {"type": "update"}},
-            ],
-        }))
-        bridge(_item_completed({
-            "type": "fileChange",
-            "id": "fc-1",
-            "status": "completed",
-            "changes": [{"path": "/a.py"}, {"path": "/b.py"}],
-        }))
-        names = [
-            c.args[1] for c in agent.tool_progress_callback.call_args_list
-        ]
+        bridge(
+            _item_started({
+                "type": "fileChange",
+                "id": "fc-1",
+                "changes": [
+                    {"path": "/a.py", "kind": {"type": "add"}},
+                    {"path": "/b.py", "kind": {"type": "update"}},
+                ],
+            })
+        )
+        bridge(
+            _item_completed({
+                "type": "fileChange",
+                "id": "fc-1",
+                "status": "completed",
+                "changes": [{"path": "/a.py"}, {"path": "/b.py"}],
+            })
+        )
+        names = [c.args[1] for c in agent.tool_progress_callback.call_args_list]
         assert names == ["apply_patch", "apply_patch"]
         completed = agent.tool_progress_callback.call_args_list[1]
         assert completed.kwargs["is_error"] is False
@@ -348,13 +360,15 @@ class TestToolProgressDispatch:
     def test_mcp_tool_uses_namespaced_tool_name(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_started({
-            "type": "mcpToolCall",
-            "id": "mcp-1",
-            "server": "fs",
-            "tool": "list_dir",
-            "arguments": {"path": "/tmp"},
-        }))
+        bridge(
+            _item_started({
+                "type": "mcpToolCall",
+                "id": "mcp-1",
+                "server": "fs",
+                "tool": "list_dir",
+                "arguments": {"path": "/tmp"},
+            })
+        )
         call = agent.tool_progress_callback.call_args
         assert call.args[1] == "mcp.fs.list_dir"
         # Preview should be a json render of the args
@@ -363,22 +377,24 @@ class TestToolProgressDispatch:
     def test_dynamic_tool_uses_tool_field_as_name(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_started({
-            "type": "dynamicToolCall",
-            "id": "dyn-1",
-            "tool": "web_search",
-            "arguments": {"query": "clawk"},
-        }))
-        bridge(_item_completed({
-            "type": "dynamicToolCall",
-            "id": "dyn-1",
-            "tool": "web_search",
-            "success": True,
-            "contentItems": [{"text": "results"}],
-        }))
-        names = [
-            c.args[1] for c in agent.tool_progress_callback.call_args_list
-        ]
+        bridge(
+            _item_started({
+                "type": "dynamicToolCall",
+                "id": "dyn-1",
+                "tool": "web_search",
+                "arguments": {"query": "clawk"},
+            })
+        )
+        bridge(
+            _item_completed({
+                "type": "dynamicToolCall",
+                "id": "dyn-1",
+                "tool": "web_search",
+                "success": True,
+                "contentItems": [{"text": "results"}],
+            })
+        )
+        names = [c.args[1] for c in agent.tool_progress_callback.call_args_list]
         assert names == ["web_search", "web_search"]
         completed = agent.tool_progress_callback.call_args_list[1]
         assert completed.kwargs["is_error"] is False
@@ -389,16 +405,20 @@ class TestToolProgressDispatch:
         with the query as preview and args (#26541)."""
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_started({
-            "type": "webSearch",
-            "id": "ws-1",
-            "query": "clawk agent docs",
-        }))
-        bridge(_item_completed({
-            "type": "webSearch",
-            "id": "ws-1",
-            "query": "clawk agent docs",
-        }))
+        bridge(
+            _item_started({
+                "type": "webSearch",
+                "id": "ws-1",
+                "query": "clawk agent docs",
+            })
+        )
+        bridge(
+            _item_completed({
+                "type": "webSearch",
+                "id": "ws-1",
+                "query": "clawk agent docs",
+            })
+        )
         calls = agent.tool_progress_callback.call_args_list
         assert [c.args[0] for c in calls] == ["tool.started", "tool.completed"]
         assert calls[0].args[1] == "web_search"
@@ -408,18 +428,22 @@ class TestToolProgressDispatch:
     def test_duration_falls_back_to_wall_time_when_codex_missing_ms(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_started({
-            "type": "commandExecution",
-            "id": "exec-4",
-            "command": "sleep 0",
-        }))
-        bridge(_item_completed({
-            "type": "commandExecution",
-            "id": "exec-4",
-            "exitCode": 0,
-            "aggregatedOutput": "",
-            # no durationMs
-        }))
+        bridge(
+            _item_started({
+                "type": "commandExecution",
+                "id": "exec-4",
+                "command": "sleep 0",
+            })
+        )
+        bridge(
+            _item_completed({
+                "type": "commandExecution",
+                "id": "exec-4",
+                "exitCode": 0,
+                "aggregatedOutput": "",
+                # no durationMs
+            })
+        )
         completed = agent.tool_progress_callback.call_args_list[1]
         assert completed.kwargs["duration"] is not None
         assert completed.kwargs["duration"] >= 0
@@ -435,32 +459,41 @@ class TestAgentMessageInterimDispatch:
     def test_completed_agent_message_emits_interim(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_completed({
-            "type": "agentMessage",
-            "id": "am-1",
-            "text": "I'll check the config first.",
-        }))
-        agent._emit_interim_assistant_message.assert_called_once_with(
-            {"role": "assistant", "content": "I'll check the config first."}
+        bridge(
+            _item_completed({
+                "type": "agentMessage",
+                "id": "am-1",
+                "text": "I'll check the config first.",
+            })
         )
+        agent._emit_interim_assistant_message.assert_called_once_with({
+            "role": "assistant",
+            "content": "I'll check the config first.",
+        })
 
     def test_empty_text_does_not_emit_interim(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_completed({
-            "type": "agentMessage", "id": "am-2", "text": "   ",
-        }))
-        bridge(_item_completed({
-            "type": "agentMessage", "id": "am-3", "text": ""
-        }))
+        bridge(
+            _item_completed({
+                "type": "agentMessage",
+                "id": "am-2",
+                "text": "   ",
+            })
+        )
+        bridge(_item_completed({"type": "agentMessage", "id": "am-3", "text": ""}))
         agent._emit_interim_assistant_message.assert_not_called()
 
     def test_completed_agent_message_does_not_fire_tool_progress(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_completed({
-            "type": "agentMessage", "id": "am-4", "text": "hi",
-        }))
+        bridge(
+            _item_completed({
+                "type": "agentMessage",
+                "id": "am-4",
+                "text": "hi",
+            })
+        )
         agent.tool_progress_callback.assert_not_called()
 
     def test_show_commentary_off_suppresses_interim(self):
@@ -470,14 +503,22 @@ class TestAgentMessageInterimDispatch:
         agent = _make_stub_agent()
         agent.show_commentary = False
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_completed({
-            "type": "agentMessage", "id": "am-5", "text": "I'll check config.",
-        }))
+        bridge(
+            _item_completed({
+                "type": "agentMessage",
+                "id": "am-5",
+                "text": "I'll check config.",
+            })
+        )
         agent._emit_interim_assistant_message.assert_not_called()
         # Tool progress is unaffected by the commentary toggle.
-        bridge(_item_started({
-            "type": "commandExecution", "id": "cmd-1", "command": "ls",
-        }))
+        bridge(
+            _item_started({
+                "type": "commandExecution",
+                "id": "cmd-1",
+                "command": "ls",
+            })
+        )
         agent.tool_progress_callback.assert_called_once()
 
 
@@ -507,40 +548,61 @@ class TestBridgeRobustness:
         agent._emit_interim_assistant_message.side_effect = RuntimeError("boom")
         bridge = make_codex_app_server_event_bridge(agent)
         # All three paths must swallow exceptions silently.
-        bridge(_item_started({
-            "type": "commandExecution", "id": "exec-x", "command": "ls",
-        }))
-        bridge({"method": "item/agentMessage/delta",
-                "params": {"delta": "x"}})
-        bridge(_item_completed({
-            "type": "agentMessage", "id": "am-x", "text": "hi",
-        }))
+        bridge(
+            _item_started({
+                "type": "commandExecution",
+                "id": "exec-x",
+                "command": "ls",
+            })
+        )
+        bridge({"method": "item/agentMessage/delta", "params": {"delta": "x"}})
+        bridge(
+            _item_completed({
+                "type": "agentMessage",
+                "id": "am-x",
+                "text": "hi",
+            })
+        )
 
     def test_agent_without_callbacks_is_a_noop(self):
         # Mirrors gateway-less / cron contexts where the agent never had
         # the display callbacks set. Bridge must not raise.
         agent = SimpleNamespace()  # bare — none of the callbacks exist
         bridge = make_codex_app_server_event_bridge(agent)
-        bridge(_item_started({
-            "type": "commandExecution", "id": "exec-y", "command": "ls",
-        }))
-        bridge(_item_completed({
-            "type": "commandExecution", "id": "exec-y",
-            "exitCode": 0, "aggregatedOutput": "",
-        }))
-        bridge({"method": "item/agentMessage/delta",
-                "params": {"delta": "x"}})
-        bridge({"method": "item/reasoning/delta",
-                "params": {"delta": "x"}})
-        bridge(_item_completed({
-            "type": "agentMessage", "id": "am", "text": "hi",
-        }))
+        bridge(
+            _item_started({
+                "type": "commandExecution",
+                "id": "exec-y",
+                "command": "ls",
+            })
+        )
+        bridge(
+            _item_completed({
+                "type": "commandExecution",
+                "id": "exec-y",
+                "exitCode": 0,
+                "aggregatedOutput": "",
+            })
+        )
+        bridge({"method": "item/agentMessage/delta", "params": {"delta": "x"}})
+        bridge({"method": "item/reasoning/delta", "params": {"delta": "x"}})
+        bridge(
+            _item_completed({
+                "type": "agentMessage",
+                "id": "am",
+                "text": "hi",
+            })
+        )
 
     def test_silent_methods_do_not_fire_anything(self):
         agent = _make_stub_agent()
         bridge = make_codex_app_server_event_bridge(agent)
-        for method in ("turn/started", "turn/completed", "thread/started",
-                       "item/commandExecution/outputDelta"):
+        for method in (
+            "turn/started",
+            "turn/completed",
+            "thread/started",
+            "item/commandExecution/outputDelta",
+        ):
             bridge({"method": method, "params": {}})
         agent.tool_progress_callback.assert_not_called()
         agent._fire_stream_delta.assert_not_called()
@@ -568,6 +630,7 @@ class TestBridgeWiredInRuntime:
 
             def run_turn(self, user_input, **_):
                 from agent.transports.codex_app_server_session import TurnResult
+
                 return TurnResult(
                     final_text="done",
                     projected_messages=[],
@@ -628,11 +691,13 @@ class TestBridgeWiredInRuntime:
 
         # And the bridge must actually drive the agent's callbacks when
         # fed a representative notification.
-        captured["on_event"](_item_started({
-            "type": "commandExecution",
-            "id": "wired-1",
-            "command": "ls",
-        }))
+        captured["on_event"](
+            _item_started({
+                "type": "commandExecution",
+                "id": "wired-1",
+                "command": "ls",
+            })
+        )
         agent.tool_progress_callback.assert_called_once()
         assert agent.tool_progress_callback.call_args.args[0] == "tool.started"
         assert agent.tool_progress_callback.call_args.args[1] == "exec_command"

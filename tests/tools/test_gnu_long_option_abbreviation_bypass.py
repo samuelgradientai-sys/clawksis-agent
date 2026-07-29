@@ -39,7 +39,9 @@ class TestChownRecursiveLongOptionAbbreviation:
 
     def test_chown_recurs_root_detected(self):
         dangerous, _, _ = detect_dangerous_command("chown --recurs root:root /var")
-        assert dangerous is True, "chown --recurs is a valid abbreviation of --recursive"
+        assert dangerous is True, (
+            "chown --recurs is a valid abbreviation of --recursive"
+        )
 
     def test_chown_recursi_root_detected(self):
         dangerous, _, _ = detect_dangerous_command("chown --recursi root /etc")

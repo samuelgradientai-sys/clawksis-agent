@@ -13,7 +13,10 @@ import pytest
 # it isn't installed (e.g. CI bare env). Tests that patch telegram.Bot
 # or call _send_telegram need it; tests for other platforms don't but
 # keeping the whole file consistent is simpler.
-_HAS_TELEGRAM = pytest.importorskip("telegram", reason="python-telegram-bot not installed") is not None
+_HAS_TELEGRAM = (
+    pytest.importorskip("telegram", reason="python-telegram-bot not installed")
+    is not None
+)
 
 
 @pytest.fixture(autouse=True)
@@ -21,9 +24,11 @@ def _reset_signal_scheduler():
     """Drop the process-wide attachment scheduler so each test gets a
     fresh token bucket."""
     from gateway.platforms.signal_rate_limit import _reset_scheduler
+
     _reset_scheduler()
     yield
     _reset_scheduler()
+
 
 from gateway.config import Platform
 from tools.send_message_tool import (
@@ -35,6 +40,7 @@ from tools.send_message_tool import (
     _send_to_platform,
     send_message_tool,
 )
+
 # Discord helpers moved to the plugin in #24325.  Import from the new path
 # and provide a thin ``_send_discord(token, ...)`` shim that mirrors the
 # pre-migration signature so the existing test bodies keep working.
@@ -93,8 +99,12 @@ class _StreamingAiohttpResponse:
         self.status = status
         self.content = _StreamingAiohttpContent(body)
         self.closed = False
-        self.json = AsyncMock(side_effect=AssertionError("resp.json() should not be used"))
-        self.text = AsyncMock(side_effect=AssertionError("resp.text() should not be used"))
+        self.json = AsyncMock(
+            side_effect=AssertionError("resp.json() should not be used")
+        )
+        self.text = AsyncMock(
+            side_effect=AssertionError("resp.text() should not be used")
+        )
 
     async def __aenter__(self):
         return self
@@ -123,6 +133,7 @@ def _discord_entry():
     discovery is forced exactly once and patches survive across tests."""
     from clawk_cli.plugins import discover_plugins
     from gateway.platform_registry import platform_registry
+
     discover_plugins()
     return platform_registry.get("discord")
 
@@ -146,14 +157,27 @@ class _patch_discord_sender:
         self._entry = None
         self._original = None
 
-    async def _adapter(self, pconfig, chat_id, message, *, thread_id=None, media_files=None, caption=None):
+    async def _adapter(
+        self,
+        pconfig,
+        chat_id,
+        message,
+        *,
+        thread_id=None,
+        media_files=None,
+        caption=None,
+    ):
         token = getattr(pconfig, "token", None)
         # Only forward caption= when set, so mocks written against the
         # pre-caption signature (no caption kwarg) keep working.
         extra = {"caption": caption} if caption is not None else {}
         return await self._mock(
-            token, chat_id, message,
-            thread_id=thread_id, media_files=media_files, **extra,
+            token,
+            chat_id,
+            message,
+            thread_id=thread_id,
+            media_files=media_files,
+            **extra,
         )
 
     def __enter__(self):
@@ -173,6 +197,7 @@ def _slack_entry():
     discovery is forced exactly once and patches survive across tests."""
     from clawk_cli.plugins import discover_plugins
     from gateway.platform_registry import platform_registry
+
     discover_plugins()
     return platform_registry.get("slack")
 
@@ -187,7 +212,9 @@ def _make_recording_slack_sender():
     as the real plugin ``_standalone_send`` does. Tests can then assert on
     ``send.await_args.args[2]`` (the formatted mrkdwn) as before.
     """
-    return AsyncMock(return_value={"success": True, "platform": "slack", "message_id": "1"})
+    return AsyncMock(
+        return_value={"success": True, "platform": "slack", "message_id": "1"}
+    )
 
 
 class _patch_slack_standalone_sender:
@@ -208,6 +235,7 @@ class _patch_slack_standalone_sender:
 
     async def _adapter(self, pconfig, chat_id, message, *, thread_id=None, **_kw):
         from plugins.platforms.slack.adapter import SlackAdapter
+
         formatted = message
         if message:
             try:
@@ -247,7 +275,9 @@ def _install_telegram_mock(monkeypatch, bot):
     # MessageEntity needed by #27865 mention-detection path; tests don't
     # inspect it but the import must succeed.
     _MessageEntity = lambda **_kw: SimpleNamespace(**_kw)
-    telegram_mod = SimpleNamespace(Bot=lambda token: bot, MessageEntity=_MessageEntity, constants=constants_mod)
+    telegram_mod = SimpleNamespace(
+        Bot=lambda token: bot, MessageEntity=_MessageEntity, constants=constants_mod
+    )
     monkeypatch.setitem(sys.modules, "telegram", telegram_mod)
     monkeypatch.setitem(sys.modules, "telegram.constants", constants_mod)
 
@@ -268,7 +298,10 @@ def _ensure_slack_mock(monkeypatch):
         ("slack_bolt.async_app", slack_bolt.async_app),
         ("slack_bolt.adapter", slack_bolt.adapter),
         ("slack_bolt.adapter.socket_mode", slack_bolt.adapter.socket_mode),
-        ("slack_bolt.adapter.socket_mode.async_handler", slack_bolt.adapter.socket_mode.async_handler),
+        (
+            "slack_bolt.adapter.socket_mode.async_handler",
+            slack_bolt.adapter.socket_mode.async_handler,
+        ),
         ("slack_sdk", slack_sdk),
         ("slack_sdk.web", slack_sdk.web),
         ("slack_sdk.web.async_client", slack_sdk.web.async_client),
@@ -286,26 +319,34 @@ class TestSendMessageTool:
 
     def test_ntfy_topic_target_bypasses_channel_directory(self):
         ntfy_platform = Platform("ntfy")
-        ntfy_cfg = SimpleNamespace(enabled=True, token=None, extra={"topic": "clawk-in"})
+        ntfy_cfg = SimpleNamespace(
+            enabled=True, token=None, extra={"topic": "clawk-in"}
+        )
         config = SimpleNamespace(
             platforms={ntfy_platform: ntfy_cfg},
             get_home_channel=lambda _platform: None,
         )
 
-        with patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("gateway.channel_directory.resolve_channel_name", side_effect=AssertionError("should not resolve ntfy topics")), \
-             patch("model_tools._run_async", side_effect=_run_async_immediately), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock, \
-             patch("gateway.mirror.mirror_to_session", return_value=True):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch(
+                "gateway.channel_directory.resolve_channel_name",
+                side_effect=AssertionError("should not resolve ntfy topics"),
+            ),
+            patch("model_tools._run_async", side_effect=_run_async_immediately),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+            patch("gateway.mirror.mirror_to_session", return_value=True),
+        ):
             result = json.loads(
-                send_message_tool(
-                    {
-                        "action": "send",
-                        "target": "ntfy:alerts-channel",
-                        "message": "done",
-                    }
-                )
+                send_message_tool({
+                    "action": "send",
+                    "target": "ntfy:alerts-channel",
+                    "message": "done",
+                })
             )
 
         assert result["success"] is True
@@ -324,27 +365,30 @@ class TestSendMessageTool:
         config, _telegram_cfg = _make_config()
         config.get_home_channel = lambda _platform: home
 
-        with patch.dict(
-            os.environ,
-            {
-                "CLAWK_CRON_AUTO_DELIVER_PLATFORM": "telegram",
-                "CLAWK_CRON_AUTO_DELIVER_CHAT_ID": "-1001",
-            },
-            clear=False,
-        ), \
-             patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("model_tools._run_async", side_effect=_run_async_immediately), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock, \
-             patch("gateway.mirror.mirror_to_session", return_value=True) as mirror_mock:
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "CLAWK_CRON_AUTO_DELIVER_PLATFORM": "telegram",
+                    "CLAWK_CRON_AUTO_DELIVER_CHAT_ID": "-1001",
+                },
+                clear=False,
+            ),
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch("model_tools._run_async", side_effect=_run_async_immediately),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+            patch("gateway.mirror.mirror_to_session", return_value=True) as mirror_mock,
+        ):
             result = json.loads(
-                send_message_tool(
-                    {
-                        "action": "send",
-                        "target": "telegram",
-                        "message": "hello",
-                    }
-                )
+                send_message_tool({
+                    "action": "send",
+                    "target": "telegram",
+                    "message": "hello",
+                })
             )
 
         assert result["success"] is True
@@ -357,20 +401,26 @@ class TestSendMessageTool:
     def test_resolved_telegram_topic_name_preserves_thread_id(self):
         config, telegram_cfg = _make_config()
 
-        with patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("gateway.channel_directory.resolve_channel_name", return_value="-1001:17585"), \
-             patch("model_tools._run_async", side_effect=_run_async_immediately), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock, \
-             patch("gateway.mirror.mirror_to_session", return_value=True):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch(
+                "gateway.channel_directory.resolve_channel_name",
+                return_value="-1001:17585",
+            ),
+            patch("model_tools._run_async", side_effect=_run_async_immediately),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+            patch("gateway.mirror.mirror_to_session", return_value=True),
+        ):
             result = json.loads(
-                send_message_tool(
-                    {
-                        "action": "send",
-                        "target": "telegram:Coaching Chat / topic 17585",
-                        "message": "hello",
-                    }
-                )
+                send_message_tool({
+                    "action": "send",
+                    "target": "telegram:Coaching Chat / topic 17585",
+                    "message": "hello",
+                })
             )
 
         assert result["success"] is True
@@ -387,29 +437,38 @@ class TestSendMessageTool:
     def test_display_label_target_resolves_via_channel_directory(self, tmp_path):
         config, telegram_cfg = _make_config()
         cache_file = tmp_path / "channel_directory.json"
-        cache_file.write_text(json.dumps({
-            "updated_at": "2026-01-01T00:00:00",
-            "platforms": {
-                "telegram": [
-                    {"id": "-1001:17585", "name": "Coaching Chat / topic 17585", "type": "group"}
-                ]
-            },
-        }))
+        cache_file.write_text(
+            json.dumps({
+                "updated_at": "2026-01-01T00:00:00",
+                "platforms": {
+                    "telegram": [
+                        {
+                            "id": "-1001:17585",
+                            "name": "Coaching Chat / topic 17585",
+                            "type": "group",
+                        }
+                    ]
+                },
+            })
+        )
 
-        with patch("gateway.channel_directory.DIRECTORY_PATH", cache_file), \
-             patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("model_tools._run_async", side_effect=_run_async_immediately), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock, \
-             patch("gateway.mirror.mirror_to_session", return_value=True):
+        with (
+            patch("gateway.channel_directory.DIRECTORY_PATH", cache_file),
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch("model_tools._run_async", side_effect=_run_async_immediately),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+            patch("gateway.mirror.mirror_to_session", return_value=True),
+        ):
             result = json.loads(
-                send_message_tool(
-                    {
-                        "action": "send",
-                        "target": "telegram:Coaching Chat / topic 17585 (group)",
-                        "message": "hello",
-                    }
-                )
+                send_message_tool({
+                    "action": "send",
+                    "target": "telegram:Coaching Chat / topic 17585 (group)",
+                    "message": "hello",
+                })
             )
 
         assert result["success"] is True
@@ -430,20 +489,26 @@ class TestSendMessageTool:
             get_home_channel=lambda _platform: None,
         )
 
-        with patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("gateway.channel_directory.resolve_channel_name", return_value="C123ABCDEF:171.000001"), \
-             patch("model_tools._run_async", side_effect=_run_async_immediately), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock, \
-             patch("gateway.mirror.mirror_to_session", return_value=True):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch(
+                "gateway.channel_directory.resolve_channel_name",
+                return_value="C123ABCDEF:171.000001",
+            ),
+            patch("model_tools._run_async", side_effect=_run_async_immediately),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+            patch("gateway.mirror.mirror_to_session", return_value=True),
+        ):
             result = json.loads(
-                send_message_tool(
-                    {
-                        "action": "send",
-                        "target": "slack:ops / topic 171.000001",
-                        "message": "hello",
-                    }
-                )
+                send_message_tool({
+                    "action": "send",
+                    "target": "slack:ops / topic 171.000001",
+                    "message": "hello",
+                })
             )
 
         assert result["success"] is True
@@ -468,23 +533,26 @@ class TestSendMessageTool:
             get_home_channel=lambda _platform: None,
         )
 
-        with patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch(
-                 "gateway.channel_directory.resolve_channel_name",
-                 return_value="!roomid:matrix.example.org:$thread123:matrix.example.org",
-             ), \
-             patch("model_tools._run_async", side_effect=_run_async_immediately), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock, \
-             patch("gateway.mirror.mirror_to_session", return_value=True):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch(
+                "gateway.channel_directory.resolve_channel_name",
+                return_value="!roomid:matrix.example.org:$thread123:matrix.example.org",
+            ),
+            patch("model_tools._run_async", side_effect=_run_async_immediately),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+            patch("gateway.mirror.mirror_to_session", return_value=True),
+        ):
             result = json.loads(
-                send_message_tool(
-                    {
-                        "action": "send",
-                        "target": "matrix:Ops / topic $thread123",
-                        "message": "hello",
-                    }
-                )
+                send_message_tool({
+                    "action": "send",
+                    "target": "matrix:Ops / topic $thread123",
+                    "message": "hello",
+                })
             )
 
         assert result["success"] is True
@@ -501,24 +569,27 @@ class TestSendMessageTool:
     def test_mirror_receives_current_session_user_id(self):
         config, _telegram_cfg = _make_config()
 
-        with patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("model_tools._run_async", side_effect=_run_async_immediately), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})), \
-             patch("gateway.session_context.get_session_env") as get_session_env_mock, \
-             patch("gateway.mirror.mirror_to_session", return_value=True) as mirror_mock:
+        with (
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch("model_tools._run_async", side_effect=_run_async_immediately),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("gateway.session_context.get_session_env") as get_session_env_mock,
+            patch("gateway.mirror.mirror_to_session", return_value=True) as mirror_mock,
+        ):
             get_session_env_mock.side_effect = lambda name, default="": {
                 "CLAWK_SESSION_PLATFORM": "telegram",
                 "CLAWK_SESSION_USER_ID": "user-123",
             }.get(name, default)
             result = json.loads(
-                send_message_tool(
-                    {
-                        "action": "send",
-                        "target": "telegram:12345",
-                        "message": "hello",
-                    }
-                )
+                send_message_tool({
+                    "action": "send",
+                    "target": "telegram:12345",
+                    "message": "hello",
+                })
             )
 
         assert result["success"] is True
@@ -543,19 +614,22 @@ class TestSendMessageTool:
         secret = tmp_path / "secret.pdf"
         secret.write_bytes(b"%PDF secret")
 
-        with patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("model_tools._run_async", side_effect=_run_async_immediately), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock, \
-             patch("gateway.mirror.mirror_to_session", return_value=True):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch("model_tools._run_async", side_effect=_run_async_immediately),
+            patch(
+                "tools.send_message_tool._send_to_platform",
+                new=AsyncMock(return_value={"success": True}),
+            ) as send_mock,
+            patch("gateway.mirror.mirror_to_session", return_value=True),
+        ):
             result = json.loads(
-                send_message_tool(
-                    {
-                        "action": "send",
-                        "target": "telegram:12345",
-                        "message": f"hello\nMEDIA:{secret}",
-                    }
-                )
+                send_message_tool({
+                    "action": "send",
+                    "target": "telegram:12345",
+                    "message": f"hello\nMEDIA:{secret}",
+                })
             )
 
         assert result["success"] is True
@@ -579,17 +653,17 @@ class TestSendMessageTool:
                 f"transport error: https://api.example.com/send?access_token={leaked}"
             )
 
-        with patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("model_tools._run_async", side_effect=_raise_and_close):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch("model_tools._run_async", side_effect=_raise_and_close),
+        ):
             result = json.loads(
-                send_message_tool(
-                    {
-                        "action": "send",
-                        "target": "telegram:-1001",
-                        "message": "hello",
-                    }
-                )
+                send_message_tool({
+                    "action": "send",
+                    "target": "telegram:-1001",
+                    "message": "hello",
+                })
             )
 
         assert "error" in result
@@ -721,7 +795,8 @@ class TestSendToPlatformChunking:
                 _send_to_platform(
                     Platform.DISCORD,
                     SimpleNamespace(enabled=True, token="***", extra={}),
-                    "ch", long_msg,
+                    "ch",
+                    long_msg,
                 )
             )
         assert result["success"] is True
@@ -801,6 +876,7 @@ class TestSendToPlatformChunking:
         """Pre-escaped HTML entities survive tool-layer formatting without double-escaping."""
         _ensure_slack_mock(monkeypatch)
         import plugins.platforms.slack.adapter as slack_mod
+
         monkeypatch.setattr(slack_mod, "SLACK_AVAILABLE", True)
         send = _make_recording_slack_sender()
         with _patch_slack_standalone_sender(send):
@@ -822,6 +898,7 @@ class TestSendToPlatformChunking:
         """Wikipedia-style URL with parens survives tool-layer formatting."""
         _ensure_slack_mock(monkeypatch)
         import plugins.platforms.slack.adapter as slack_mod
+
         monkeypatch.setattr(slack_mod, "SLACK_AVAILABLE", True)
         send = _make_recording_slack_sender()
         with _patch_slack_standalone_sender(send):
@@ -878,7 +955,9 @@ class TestSendToPlatformChunking:
         assert bot.send_message.await_count >= 2
         assert max(send_lengths) <= 4096
 
-    def test_telegram_media_attaches_after_long_text_chunks(self, tmp_path, monkeypatch):
+    def test_telegram_media_attaches_after_long_text_chunks(
+        self, tmp_path, monkeypatch
+    ):
         """Long text is split into multiple chunks, then media is attached."""
         image_path = tmp_path / "photo.png"
         image_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
@@ -912,12 +991,23 @@ class TestSendToPlatformChunking:
         doc_path.write_bytes(b"%PDF-1.4 test")
 
         try:
-            helper = AsyncMock(return_value={"success": True, "platform": "matrix", "chat_id": "!room:example.com", "message_id": "$evt"})
+            helper = AsyncMock(
+                return_value={
+                    "success": True,
+                    "platform": "matrix",
+                    "chat_id": "!room:example.com",
+                    "message_id": "$evt",
+                }
+            )
             with patch("tools.send_message_tool._send_matrix_via_adapter", helper):
                 result = asyncio.run(
                     _send_to_platform(
                         Platform.MATRIX,
-                        SimpleNamespace(enabled=True, token="tok", extra={"homeserver": "https://matrix.example.com"}),
+                        SimpleNamespace(
+                            enabled=True,
+                            token="tok",
+                            extra={"homeserver": "https://matrix.example.com"},
+                        ),
                         "!room:example.com",
                         "here you go",
                         media_files=[(str(doc_path), False)],
@@ -943,8 +1033,16 @@ class TestSendToPlatformChunking:
         available, encryption-aware ephemeral adapter otherwise)."""
         from clawk_cli.plugins import discover_plugins
         from gateway.platform_registry import platform_registry
+
         discover_plugins()
-        helper = AsyncMock(return_value={"success": True, "platform": "matrix", "chat_id": "!room:ex.com", "message_id": "$txt"})
+        helper = AsyncMock(
+            return_value={
+                "success": True,
+                "platform": "matrix",
+                "chat_id": "!room:ex.com",
+                "message_id": "$txt",
+            }
+        )
         standalone = AsyncMock()
         matrix_entry = platform_registry.get("matrix")
         original_sender = matrix_entry.standalone_sender_fn
@@ -954,7 +1052,11 @@ class TestSendToPlatformChunking:
                 result = asyncio.run(
                     _send_to_platform(
                         Platform.MATRIX,
-                        SimpleNamespace(enabled=True, token="tok", extra={"homeserver": "https://matrix.example.com"}),
+                        SimpleNamespace(
+                            enabled=True,
+                            token="tok",
+                            extra={"homeserver": "https://matrix.example.com"},
+                        ),
                         "!room:ex.com",
                         "just text, no files",
                     )
@@ -997,7 +1099,11 @@ class TestSendToPlatformChunking:
         with patch.dict(sys.modules, {"plugins.platforms.matrix.adapter": fake_module}):
             result = asyncio.run(
                 _send_matrix_via_adapter(
-                    SimpleNamespace(enabled=True, token="tok", extra={"homeserver": "https://matrix.example.com"}),
+                    SimpleNamespace(
+                        enabled=True,
+                        token="tok",
+                        extra={"homeserver": "https://matrix.example.com"},
+                    ),
                     "!room:example.com",
                     "report attached",
                     media_files=[(str(file_path), False)],
@@ -1040,15 +1146,16 @@ class TestMatrixMediaLiveAdapterReuse:
                 return SimpleNamespace(success=True, message_id="$img")
 
         live_adapter = LiveAdapter()
-        fake_runner = SimpleNamespace(
-            adapters={Platform.MATRIX: live_adapter}
-        )
+        fake_runner = SimpleNamespace(adapters={Platform.MATRIX: live_adapter})
 
-        with patch(
-            "gateway.run._gateway_runner_ref",
-            return_value=fake_runner,
-        ), patch.dict(
-            sys.modules, {"plugins.platforms.matrix.adapter": SimpleNamespace()}
+        with (
+            patch(
+                "gateway.run._gateway_runner_ref",
+                return_value=fake_runner,
+            ),
+            patch.dict(
+                sys.modules, {"plugins.platforms.matrix.adapter": SimpleNamespace()}
+            ),
         ):
             result = asyncio.run(
                 _send_matrix_via_adapter(
@@ -1096,9 +1203,10 @@ class TestMatrixMediaLiveAdapterReuse:
 
         fake_module = SimpleNamespace(MatrixAdapter=EphemeralAdapter)
 
-        with patch(
-            "gateway.run._gateway_runner_ref", return_value=None
-        ), patch.dict(sys.modules, {"plugins.platforms.matrix.adapter": fake_module}):
+        with (
+            patch("gateway.run._gateway_runner_ref", return_value=None),
+            patch.dict(sys.modules, {"plugins.platforms.matrix.adapter": fake_module}),
+        ):
             result = asyncio.run(
                 _send_matrix_via_adapter(
                     SimpleNamespace(enabled=True, token="tok", extra={}),
@@ -1140,10 +1248,13 @@ class TestMatrixMediaLiveAdapterReuse:
         fake_runner = SimpleNamespace(adapters={})
         fake_module = SimpleNamespace(MatrixAdapter=EphemeralAdapter)
 
-        with patch(
-            "gateway.run._gateway_runner_ref",
-            return_value=fake_runner,
-        ), patch.dict(sys.modules, {"plugins.platforms.matrix.adapter": fake_module}):
+        with (
+            patch(
+                "gateway.run._gateway_runner_ref",
+                return_value=fake_runner,
+            ),
+            patch.dict(sys.modules, {"plugins.platforms.matrix.adapter": fake_module}),
+        ):
             result = asyncio.run(
                 _send_matrix_via_adapter(
                     SimpleNamespace(enabled=True, token="tok", extra={}),
@@ -1169,9 +1280,17 @@ class TestSendToPlatformWhatsapp:
         before the #41112 plugin migration)."""
         from clawk_cli.plugins import discover_plugins
         from gateway.platform_registry import platform_registry
+
         discover_plugins()
         chat_id = "test-user@lid"
-        async_mock = AsyncMock(return_value={"success": True, "platform": "whatsapp", "chat_id": chat_id, "message_id": "abc123"})
+        async_mock = AsyncMock(
+            return_value={
+                "success": True,
+                "platform": "whatsapp",
+                "chat_id": chat_id,
+                "message_id": "abc123",
+            }
+        )
 
         wa_entry = platform_registry.get("whatsapp")
         original_sender = wa_entry.standalone_sender_fn
@@ -1180,7 +1299,9 @@ class TestSendToPlatformWhatsapp:
             result = asyncio.run(
                 _send_to_platform(
                     Platform.WHATSAPP,
-                    SimpleNamespace(enabled=True, token=None, extra={"bridge_port": 3000}),
+                    SimpleNamespace(
+                        enabled=True, token=None, extra={"bridge_port": 3000}
+                    ),
                     chat_id,
                     "hello from clawk",
                 )
@@ -1214,9 +1335,7 @@ class TestSendTelegramHtmlDetection:
         bot = self._make_bot()
         _install_telegram_mock(monkeypatch, bot)
 
-        asyncio.run(
-            _send_telegram("tok", "123", "<b>Hello</b> world")
-        )
+        asyncio.run(_send_telegram("tok", "123", "<b>Hello</b> world"))
 
         bot.send_message.assert_awaited_once()
         kwargs = bot.send_message.await_args.kwargs
@@ -1227,9 +1346,7 @@ class TestSendTelegramHtmlDetection:
         bot = self._make_bot()
         _install_telegram_mock(monkeypatch, bot)
 
-        asyncio.run(
-            _send_telegram("tok", "123", "Just plain text, no tags")
-        )
+        asyncio.run(_send_telegram("tok", "123", "Just plain text, no tags"))
 
         bot.send_message.assert_awaited_once()
         kwargs = bot.send_message.await_args.kwargs
@@ -1240,7 +1357,9 @@ class TestSendTelegramHtmlDetection:
         _install_telegram_mock(monkeypatch, bot)
 
         asyncio.run(
-            _send_telegram("tok", "123", "https://example.com", disable_link_previews=True)
+            _send_telegram(
+                "tok", "123", "https://example.com", disable_link_previews=True
+            )
         )
 
         kwargs = bot.send_message.await_args.kwargs
@@ -1376,14 +1495,14 @@ class TestSendTelegramThreadIdMapping:
         _install_telegram_mock(monkeypatch, bot)
 
         # First call raises thread-not-found, second succeeds
-        bot.send_message = AsyncMock(side_effect=[
-            Exception("Bad Request: message thread not found"),
-            SimpleNamespace(message_id=2),
-        ])
-
-        asyncio.run(
-            _send_telegram("tok", "-1001234567890", "hello", thread_id="17585")
+        bot.send_message = AsyncMock(
+            side_effect=[
+                Exception("Bad Request: message thread not found"),
+                SimpleNamespace(message_id=2),
+            ]
         )
+
+        asyncio.run(_send_telegram("tok", "-1001234567890", "hello", thread_id="17585"))
 
         assert bot.send_message.await_count == 2
         # First call: should include message_thread_id=17585
@@ -1393,14 +1512,18 @@ class TestSendTelegramThreadIdMapping:
         call2_kwargs = bot.send_message.await_args_list[1].kwargs
         assert "message_thread_id" not in call2_kwargs
 
-    def test_thread_not_found_for_media_retries_without_message_thread_id(self, monkeypatch, tmp_path):
+    def test_thread_not_found_for_media_retries_without_message_thread_id(
+        self, monkeypatch, tmp_path
+    ):
         """Media send with stale thread_id retries without it (#27012)."""
         bot = self._make_bot()
         # Mock send_document to fail with thread-not-found, then succeed
-        bot.send_document = AsyncMock(side_effect=[
-            Exception("Bad Request: message thread not found"),
-            SimpleNamespace(message_id=3),
-        ])
+        bot.send_document = AsyncMock(
+            side_effect=[
+                Exception("Bad Request: message thread not found"),
+                SimpleNamespace(message_id=3),
+            ]
+        )
         _install_telegram_mock(monkeypatch, bot)
 
         # Create a test file
@@ -1409,7 +1532,9 @@ class TestSendTelegramThreadIdMapping:
 
         asyncio.run(
             _send_telegram(
-                "tok", "-1001234567890", "",
+                "tok",
+                "-1001234567890",
+                "",
                 media_files=[(str(test_file), False)],
                 thread_id="17585",
             )
@@ -1434,7 +1559,9 @@ class TestParseTargetRefDiscord:
 
     def test_discord_chat_id_with_thread_id(self):
         """discord:chat_id:thread_id returns both values."""
-        chat_id, thread_id, is_explicit = _parse_target_ref("discord", "-1001234567890:17585")
+        chat_id, thread_id, is_explicit = _parse_target_ref(
+            "discord", "-1001234567890:17585"
+        )
         assert chat_id == "-1001234567890"
         assert thread_id == "17585"
         assert is_explicit is True
@@ -1455,7 +1582,9 @@ class TestParseTargetRefDiscord:
 
     def test_discord_channel_with_thread(self):
         """Full Discord format: channel:thread."""
-        chat_id, thread_id, is_explicit = _parse_target_ref("discord", "1003724596514:99999")
+        chat_id, thread_id, is_explicit = _parse_target_ref(
+            "discord", "1003724596514:99999"
+        )
         assert chat_id == "1003724596514"
         assert thread_id == "99999"
         assert is_explicit is True
@@ -1483,21 +1612,27 @@ class TestParseTargetRefMatrix:
 
     def test_matrix_room_id_is_explicit(self):
         """Matrix room IDs (!) are recognized as explicit targets."""
-        chat_id, thread_id, is_explicit = _parse_target_ref("matrix", "!HLOQwxYGgFPMPJUSNR:matrix.org")
+        chat_id, thread_id, is_explicit = _parse_target_ref(
+            "matrix", "!HLOQwxYGgFPMPJUSNR:matrix.org"
+        )
         assert chat_id == "!HLOQwxYGgFPMPJUSNR:matrix.org"
         assert thread_id is None
         assert is_explicit is True
 
     def test_matrix_user_mxid_is_explicit(self):
         """Matrix user MXIDs (@) are recognized as explicit targets."""
-        chat_id, thread_id, is_explicit = _parse_target_ref("matrix", "@clawk:matrix.org")
+        chat_id, thread_id, is_explicit = _parse_target_ref(
+            "matrix", "@clawk:matrix.org"
+        )
         assert chat_id == "@clawk:matrix.org"
         assert thread_id is None
         assert is_explicit is True
 
     def test_matrix_alias_is_not_explicit(self):
         """Matrix room aliases (#) are NOT explicit — they need resolution."""
-        chat_id, thread_id, is_explicit = _parse_target_ref("matrix", "#general:matrix.org")
+        chat_id, thread_id, is_explicit = _parse_target_ref(
+            "matrix", "#general:matrix.org"
+        )
         assert chat_id is None
         assert is_explicit is False
 
@@ -1521,7 +1656,9 @@ class TestParseTargetRefE164:
         assert is_explicit is True
 
     def test_signal_group_target_is_explicit(self):
-        chat_id, thread_id, is_explicit = _parse_target_ref("signal", "  group:abc123  ")
+        chat_id, thread_id, is_explicit = _parse_target_ref(
+            "signal", "  group:abc123  "
+        )
         assert chat_id == "group:abc123"
         assert thread_id is None
         assert is_explicit is True
@@ -1592,9 +1729,7 @@ class TestParseTargetRefWhatsAppJID:
         assert is_explicit is True
 
     def test_lid_jid_is_explicit(self):
-        chat_id, _, is_explicit = _parse_target_ref(
-            "whatsapp", "149606612619433@lid"
-        )
+        chat_id, _, is_explicit = _parse_target_ref("whatsapp", "149606612619433@lid")
         assert chat_id == "149606612619433@lid"
         assert is_explicit is True
 
@@ -1623,7 +1758,9 @@ class TestParseTargetRefSlack:
     """_parse_target_ref recognizes Slack channel/user IDs as explicit."""
 
     def test_thread_target_is_explicit(self):
-        chat_id, thread_id, is_explicit = _parse_target_ref("slack", "C0B0QV5434G:171.000001")
+        chat_id, thread_id, is_explicit = _parse_target_ref(
+            "slack", "C0B0QV5434G:171.000001"
+        )
         assert chat_id == "C0B0QV5434G"
         assert thread_id == "171.000001"
         assert is_explicit is True
@@ -1713,16 +1850,16 @@ class TestEmailHomeChannelErrorHint:
             platforms={Platform.EMAIL: email_cfg},
             get_home_channel=lambda _platform: None,
         )
-        with patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+        ):
             result = json.loads(
-                send_message_tool(
-                    {
-                        "action": "send",
-                        "target": "email",
-                        "message": "hi",
-                    }
-                )
+                send_message_tool({
+                    "action": "send",
+                    "target": "email",
+                    "message": "hi",
+                })
             )
         assert "EMAIL_HOME_ADDRESS" in result["error"]
         assert "EMAIL_HOME_CHANNEL" not in result["error"]
@@ -1733,16 +1870,16 @@ class TestEmailHomeChannelErrorHint:
             platforms={Platform.TELEGRAM: telegram_cfg},
             get_home_channel=lambda _platform: None,
         )
-        with patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False):
+        with (
+            patch("gateway.config.load_gateway_config", return_value=config),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+        ):
             result = json.loads(
-                send_message_tool(
-                    {
-                        "action": "send",
-                        "target": "telegram",
-                        "message": "hi",
-                    }
-                )
+                send_message_tool({
+                    "action": "send",
+                    "target": "telegram",
+                    "message": "hi",
+                })
             )
         assert "TELEGRAM_HOME_CHANNEL" in result["error"]
 
@@ -1819,7 +1956,10 @@ class TestSendDiscordThreadId:
 
         assert result["success"] is True
         assert result["message_id"] == "bounded-json"
-        assert response.content.read_sizes[0] == _DISCORD_STANDALONE_JSON_BODY_LIMIT_BYTES + 1
+        assert (
+            response.content.read_sizes[0]
+            == _DISCORD_STANDALONE_JSON_BODY_LIMIT_BYTES + 1
+        )
         response.json.assert_not_awaited()
         response.text.assert_not_awaited()
 
@@ -1834,7 +1974,10 @@ class TestSendDiscordThreadId:
 
         assert "error" in result
         assert "500" in result["error"]
-        assert response.content.read_sizes[0] == _DISCORD_STANDALONE_ERROR_BODY_LIMIT_BYTES + 1
+        assert (
+            response.content.read_sizes[0]
+            == _DISCORD_STANDALONE_ERROR_BODY_LIMIT_BYTES + 1
+        )
         assert response.closed is True
         response.json.assert_not_awaited()
         response.text.assert_not_awaited()
@@ -1947,7 +2090,12 @@ class TestSendDiscordMedia:
         mock_session, _ = self._build_mock(200, {"id": "txt_ok"})
         with patch("aiohttp.ClientSession", return_value=mock_session):
             result = asyncio.run(
-                _send_discord("tok", "333", "hello", media_files=[("/nonexistent/file.png", False)])
+                _send_discord(
+                    "tok",
+                    "333",
+                    "hello",
+                    media_files=[("/nonexistent/file.png", False)],
+                )
             )
 
         assert result["success"] is True
@@ -1993,9 +2141,7 @@ class TestSendDiscordMedia:
         """Empty text with no media returns error dict."""
         mock_session, _ = self._build_mock(200)
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            result = asyncio.run(
-                _send_discord("tok", "555", "", media_files=[])
-            )
+            result = asyncio.run(_send_discord("tok", "555", "", media_files=[]))
 
         # Text is empty but media_files is empty, so text POST fires
         # (the "skip text if media present" condition isn't met)
@@ -2011,9 +2157,12 @@ class TestSendDiscordMedia:
         mock_session, _ = self._build_mock(200, {"id": "last"})
         with patch("aiohttp.ClientSession", return_value=mock_session):
             result = asyncio.run(
-                _send_discord("tok", "666", "hi", media_files=[
-                    (str(img1), False), (str(img2), False)
-                ])
+                _send_discord(
+                    "tok",
+                    "666",
+                    "hi",
+                    media_files=[(str(img1), False), (str(img2), False)],
+                )
             )
 
         assert result["success"] is True
@@ -2028,9 +2177,16 @@ class TestSendToPlatformDiscordMedia:
         """Discord media_files are only passed on the final chunk."""
         call_log = []
 
-        async def mock_send_discord(token, chat_id, message, thread_id=None, media_files=None):
+        async def mock_send_discord(
+            token, chat_id, message, thread_id=None, media_files=None
+        ):
             call_log.append({"message": message, "media_files": media_files or []})
-            return {"success": True, "platform": "discord", "chat_id": chat_id, "message_id": "1"}
+            return {
+                "success": True,
+                "platform": "discord",
+                "chat_id": chat_id,
+                "message_id": "1",
+            }
 
         # A message long enough to get chunked (Discord limit is 2000)
         long_msg = "A" * 1900 + " " + "B" * 1900
@@ -2049,7 +2205,9 @@ class TestSendToPlatformDiscordMedia:
         assert result["success"] is True
         assert len(call_log) == 2  # Message was chunked
         assert call_log[0]["media_files"] == []  # First chunk: no media
-        assert call_log[1]["media_files"] == [("/fake/img.png", False)]  # Last chunk: media attached
+        assert call_log[1]["media_files"] == [
+            ("/fake/img.png", False)
+        ]  # Last chunk: media attached
 
     def test_single_chunk_gets_media(self):
         """Short message + single image rides as the media caption."""
@@ -2095,9 +2253,13 @@ class TestSendMatrixUrlEncoding:
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
             from plugins.platforms.matrix.adapter import _standalone_send
+
             result = asyncio.get_event_loop().run_until_complete(
                 _standalone_send(
-                    SimpleNamespace(token="test_token", extra={"homeserver": "https://matrix.example.org"}),
+                    SimpleNamespace(
+                        token="test_token",
+                        extra={"homeserver": "https://matrix.example.org"},
+                    ),
                     "!HLOQwxYGgFPMPJUSNR:matrix.org",
                     "hello",
                 )
@@ -2179,11 +2341,13 @@ class TestSendDiscordForum:
         }
         mock_session, _ = self._build_mock(200, response_data=thread_data)
 
-        with patch("aiohttp.ClientSession", return_value=mock_session), \
-             patch("gateway.channel_directory.lookup_channel_type", return_value="forum"):
-            result = asyncio.run(
-                _send_discord("tok", "forum_ch", "Hello forum")
-            )
+        with (
+            patch("aiohttp.ClientSession", return_value=mock_session),
+            patch(
+                "gateway.channel_directory.lookup_channel_type", return_value="forum"
+            ),
+        ):
+            result = asyncio.run(_send_discord("tok", "forum_ch", "Hello forum"))
 
         assert result["success"] is True
         assert result["thread_id"] == "t123"
@@ -2198,11 +2362,13 @@ class TestSendDiscordForum:
         thread_data = {"id": "t123", "message": {"id": "m456"}}
         mock_session, _ = self._build_mock(200, response_data=thread_data)
 
-        with patch("aiohttp.ClientSession", return_value=mock_session), \
-             patch("gateway.channel_directory.lookup_channel_type", return_value="forum"):
-            asyncio.run(
-                _send_discord("tok", "forum_ch", "Hello")
-            )
+        with (
+            patch("aiohttp.ClientSession", return_value=mock_session),
+            patch(
+                "gateway.channel_directory.lookup_channel_type", return_value="forum"
+            ),
+        ):
+            asyncio.run(_send_discord("tok", "forum_ch", "Hello"))
 
         # get() should never be called — directory resolved the type
         mock_session.get.assert_not_called()
@@ -2211,11 +2377,13 @@ class TestSendDiscordForum:
         """When directory says 'channel', sends via normal messages endpoint."""
         mock_session, _ = self._build_mock(200, response_data={"id": "msg1"})
 
-        with patch("aiohttp.ClientSession", return_value=mock_session), \
-             patch("gateway.channel_directory.lookup_channel_type", return_value="channel"):
-            result = asyncio.run(
-                _send_discord("tok", "ch1", "Hello")
-            )
+        with (
+            patch("aiohttp.ClientSession", return_value=mock_session),
+            patch(
+                "gateway.channel_directory.lookup_channel_type", return_value="channel"
+            ),
+        ):
+            result = asyncio.run(_send_discord("tok", "ch1", "Hello"))
 
         assert result["success"] is True
         call_url = mock_session.post.call_args.args[0]
@@ -2250,11 +2418,11 @@ class TestSendDiscordForum:
 
         session_iter = iter([probe_session, thread_session])
 
-        with patch("aiohttp.ClientSession", side_effect=lambda **kw: next(session_iter)), \
-             patch("gateway.channel_directory.lookup_channel_type", return_value=None):
-            result = asyncio.run(
-                _send_discord("tok", "forum_ch", "Hello probe")
-            )
+        with (
+            patch("aiohttp.ClientSession", side_effect=lambda **kw: next(session_iter)),
+            patch("gateway.channel_directory.lookup_channel_type", return_value=None),
+        ):
+            result = asyncio.run(_send_discord("tok", "forum_ch", "Hello probe"))
 
         assert result["success"] is True
         assert result["thread_id"] == "t999"
@@ -2263,11 +2431,14 @@ class TestSendDiscordForum:
         """When lookup_channel_type raises, falls through to API probe."""
         mock_session, _ = self._build_mock(200, response_data={"id": "msg1"})
 
-        with patch("aiohttp.ClientSession", return_value=mock_session), \
-             patch("gateway.channel_directory.lookup_channel_type", side_effect=Exception("io error")):
-            result = asyncio.run(
-                _send_discord("tok", "ch1", "Hello")
-            )
+        with (
+            patch("aiohttp.ClientSession", return_value=mock_session),
+            patch(
+                "gateway.channel_directory.lookup_channel_type",
+                side_effect=Exception("io error"),
+            ),
+        ):
+            result = asyncio.run(_send_discord("tok", "ch1", "Hello"))
 
         assert result["success"] is True
         # Falls through to probe (GET)
@@ -2277,15 +2448,16 @@ class TestSendDiscordForum:
         """Forum thread creation returning non-200/201 returns an error dict."""
         mock_session, _ = self._build_mock(403, response_text="Forbidden")
 
-        with patch("aiohttp.ClientSession", return_value=mock_session), \
-             patch("gateway.channel_directory.lookup_channel_type", return_value="forum"):
-            result = asyncio.run(
-                _send_discord("tok", "forum_ch", "Hello")
-            )
+        with (
+            patch("aiohttp.ClientSession", return_value=mock_session),
+            patch(
+                "gateway.channel_directory.lookup_channel_type", return_value="forum"
+            ),
+        ):
+            result = asyncio.run(_send_discord("tok", "forum_ch", "Hello"))
 
         assert "error" in result
         assert "403" in result["error"]
-
 
 
 class TestSendToPlatformDiscordForum:
@@ -2307,7 +2479,11 @@ class TestSendToPlatformDiscordForum:
 
         assert result["success"] is True
         send_mock.assert_awaited_once_with(
-            "tok", "forum_ch", "Hello forum", media_files=[], thread_id=None,
+            "tok",
+            "forum_ch",
+            "Hello forum",
+            media_files=[],
+            thread_id=None,
         )
 
     def test_send_to_platform_discord_with_thread_id(self):
@@ -2355,7 +2531,9 @@ class TestSendDiscordForumMedia:
         img = tmp_path / "photo.png"
         img.write_bytes(b"\x89PNGbytes")
 
-        monkeypatch.setattr(smt, "lookup_channel_type", lambda p, cid: "forum", raising=False)
+        monkeypatch.setattr(
+            smt, "lookup_channel_type", lambda p, cid: "forum", raising=False
+        )
         monkeypatch.setattr(
             "gateway.channel_directory.lookup_channel_type", lambda p, cid: "forum"
         )
@@ -2377,7 +2555,12 @@ class TestSendDiscordForumMedia:
 
         with patch("aiohttp.ClientSession", return_value=session):
             result = asyncio.run(
-                _send_discord("tok", "forum_ch", "Thread title\nbody", media_files=[(str(img), False)])
+                _send_discord(
+                    "tok",
+                    "forum_ch",
+                    "Thread title\nbody",
+                    media_files=[(str(img), False)],
+                )
             )
 
         assert result["success"] is True
@@ -2433,7 +2616,9 @@ class TestSendDiscordForumMedia:
         with patch("aiohttp.ClientSession", return_value=session):
             result = asyncio.run(
                 _send_discord(
-                    "tok", "forum_ch", "hi",
+                    "tok",
+                    "forum_ch",
+                    "hi",
                     media_files=[("/nonexistent/does-not-exist.png", False)],
                 )
             )
@@ -2453,6 +2638,7 @@ class TestForumProbeCache:
 
     def setup_method(self):
         from plugins.platforms.discord import adapter as discord_adapter
+
         discord_adapter._DISCORD_CHANNEL_TYPE_PROBE_CACHE.clear()
 
     def test_cache_round_trip(self):
@@ -2567,6 +2753,7 @@ def _install_signal_http(monkeypatch, fake):
     _send_signal picks it up.
     """
     import httpx
+
     monkeypatch.setattr(httpx, "AsyncClient", fake)
 
 
@@ -2580,6 +2767,7 @@ def _patch_sendmsg_sleep_and_time(monkeypatch, capture: list):
     capture list.
     """
     import asyncio as _aio
+
     _real_sleep = _aio.sleep
     offset = [0.0]
 
@@ -2590,9 +2778,7 @@ def _patch_sendmsg_sleep_and_time(monkeypatch, capture: list):
         else:
             await _real_sleep(0)
 
-    monkeypatch.setattr(
-        "gateway.platforms.signal_rate_limit.asyncio.sleep", fake_sleep
-    )
+    monkeypatch.setattr("gateway.platforms.signal_rate_limit.asyncio.sleep", fake_sleep)
     monkeypatch.setattr(
         "gateway.platforms.signal_rate_limit.time.monotonic", lambda: offset[0]
     )
@@ -2688,8 +2874,8 @@ class TestSendSignalChunking:
             paths.append((str(p), False))
 
         fake = _FakeSignalHttp([
-            {"result": {"timestamp": 1}},   # batch 0
-            {"result": {"timestamp": 2}},   # batch 1
+            {"result": {"timestamp": 1}},  # batch 0
+            {"result": {"timestamp": 2}},  # batch 1
         ])
         _install_signal_http(monkeypatch, fake)
 
@@ -2721,7 +2907,9 @@ class TestSendSignalChunking:
         assert "textStyle" not in second
         assert "textStyles" not in second
 
-    def test_caption_styles_only_apply_to_first_attachment_batch(self, tmp_path, monkeypatch):
+    def test_caption_styles_only_apply_to_first_attachment_batch(
+        self, tmp_path, monkeypatch
+    ):
         from gateway.platforms.signal_rate_limit import SIGNAL_MAX_ATTACHMENTS_PER_MSG
 
         paths = []
@@ -2777,9 +2965,9 @@ class TestSendSignalChunking:
             paths.append((str(p), False))
 
         fake = _FakeSignalHttp([
-            {"result": {"timestamp": 1}},   # batch 0
+            {"result": {"timestamp": 1}},  # batch 0
             {"result": {"timestamp": 99}},  # pacing notice
-            {"result": {"timestamp": 2}},   # batch 1
+            {"result": {"timestamp": 2}},  # batch 1
         ])
         _install_signal_http(monkeypatch, fake)
 
@@ -2855,7 +3043,9 @@ class TestSendSignalChunking:
     def test_429_without_retry_after_falls_back_to_default(self, tmp_path, monkeypatch):
         """Older signal-cli (< v0.14.3) doesn't surface Retry-After.
         The scheduler keeps its default rate (1 token / 4s)."""
-        from gateway.platforms.signal_rate_limit import SIGNAL_RATE_LIMIT_DEFAULT_RETRY_AFTER
+        from gateway.platforms.signal_rate_limit import (
+            SIGNAL_RATE_LIMIT_DEFAULT_RETRY_AFTER,
+        )
 
         p = tmp_path / "img.png"
         p.write_bytes(b"\x89PNG" + b"\x00" * 16)
@@ -2879,7 +3069,9 @@ class TestSendSignalChunking:
         )
 
         assert result["success"] is True
-        assert sleep_calls == [pytest.approx(SIGNAL_RATE_LIMIT_DEFAULT_RETRY_AFTER, abs=1.0)]
+        assert sleep_calls == [
+            pytest.approx(SIGNAL_RATE_LIMIT_DEFAULT_RETRY_AFTER, abs=1.0)
+        ]
 
     def test_429_retry_exhaust_continues_to_next_batch(self, tmp_path, monkeypatch):
         """Both attempts on batch 0 fail; batch 1 still gets a chance.
@@ -2909,9 +3101,9 @@ class TestSendSignalChunking:
         }
 
         fake = _FakeSignalHttp([
-            rate_limit_err,                  # batch 0, attempt 1
-            rate_limit_err,                  # batch 0, attempt 2 (exhaust)
-            {"result": {"timestamp": 9}},    # batch 1 succeeds
+            rate_limit_err,  # batch 0, attempt 1
+            rate_limit_err,  # batch 0, attempt 2 (exhaust)
+            {"result": {"timestamp": 9}},  # batch 1 succeeds
         ])
         _install_signal_http(monkeypatch, fake)
 
@@ -2969,7 +3161,10 @@ class TestSendSignalChunking:
                 {"http_url": "http://localhost:8080", "account": "+15551234567"},
                 "+15557654321",
                 "msg",
-                media_files=[(str(good), False), (str(tmp_path / "missing.png"), False)],
+                media_files=[
+                    (str(good), False),
+                    (str(tmp_path / "missing.png"), False),
+                ],
             )
         )
 
@@ -3086,8 +3281,15 @@ class TestSendViaAdapterStandaloneFallback:
 
         recorded = {}
 
-        async def fake_send(pconfig, chat_id, message, *, thread_id=None,
-                            media_files=None, force_document=False):
+        async def fake_send(
+            pconfig,
+            chat_id,
+            message,
+            *,
+            thread_id=None,
+            media_files=None,
+            force_document=False,
+        ):
             recorded["thread_id"] = thread_id
             recorded["media_files"] = media_files
             recorded["force_document"] = force_document
@@ -3138,7 +3340,9 @@ class TestSendViaAdapterStandaloneFallback:
         assert "standalone_sender_fn" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_standalone_sender_fn_raises_is_caught_and_formatted(self, monkeypatch):
+    async def test_standalone_sender_fn_raises_is_caught_and_formatted(
+        self, monkeypatch
+    ):
         """Hook raises: error dict has 'Plugin standalone send failed: ...'"""
         from tools.send_message_tool import _send_via_adapter
         from gateway.platform_registry import platform_registry
@@ -3168,7 +3372,11 @@ class TestSendViaAdapterStandaloneFallback:
         from gateway.platform_registry import platform_registry
 
         async def fake_send(pconfig, chat_id, message, **kwargs):
-            return {"success": True, "message_id": "abc-123", "extra_field": "preserved"}
+            return {
+                "success": True,
+                "message_id": "abc-123",
+                "extra_field": "preserved",
+            }
 
         platform_registry.register(self._make_entry(fake_send))
         try:
@@ -3192,6 +3400,7 @@ class TestSendViaAdapterStandaloneFallback:
 # _check_send_message — availability gating
 # ---------------------------------------------------------------------------
 
+
 class TestCheckSendMessage:
     """The tool's check_fn governs whether the model sees ``send_message`` as
     callable for a given session. The four passing conditions are:
@@ -3214,8 +3423,10 @@ class TestCheckSendMessage:
         monkeypatch.setenv("CLAWK_KANBAN_TASK", "t_abc12345")
         monkeypatch.delenv("CLAWK_SESSION_PLATFORM", raising=False)
 
-        with patch("gateway.session_context.get_session_env", return_value=""), \
-             patch("gateway.status.is_gateway_running", return_value=False):
+        with (
+            patch("gateway.session_context.get_session_env", return_value=""),
+            patch("gateway.status.is_gateway_running", return_value=False),
+        ):
             assert _check_send_message() is True
 
     def test_kanban_task_env_short_circuits_before_gateway_check(self, monkeypatch):
@@ -3226,12 +3437,20 @@ class TestCheckSendMessage:
 
         monkeypatch.setenv("CLAWK_KANBAN_TASK", "t_abc12345")
 
-        with patch("gateway.session_context.get_session_env",
-                   side_effect=AssertionError("session_context not consulted "
-                                              "when CLAWK_KANBAN_TASK is set")), \
-             patch("gateway.status.is_gateway_running",
-                   side_effect=AssertionError("gateway.status not consulted "
-                                              "when CLAWK_KANBAN_TASK is set")):
+        with (
+            patch(
+                "gateway.session_context.get_session_env",
+                side_effect=AssertionError(
+                    "session_context not consulted when CLAWK_KANBAN_TASK is set"
+                ),
+            ),
+            patch(
+                "gateway.status.is_gateway_running",
+                side_effect=AssertionError(
+                    "gateway.status not consulted when CLAWK_KANBAN_TASK is set"
+                ),
+            ),
+        ):
             assert _check_send_message() is True
 
     def test_messaging_platform_session_grants_access(self, monkeypatch):
@@ -3241,8 +3460,10 @@ class TestCheckSendMessage:
 
         monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
 
-        with patch("gateway.session_context.get_session_env", return_value="telegram"), \
-             patch("gateway.status.is_gateway_running", return_value=False):
+        with (
+            patch("gateway.session_context.get_session_env", return_value="telegram"),
+            patch("gateway.status.is_gateway_running", return_value=False),
+        ):
             assert _check_send_message() is True
 
     def test_local_platform_falls_through_to_gateway_check(self, monkeypatch):
@@ -3252,8 +3473,10 @@ class TestCheckSendMessage:
 
         monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
 
-        with patch("gateway.session_context.get_session_env", return_value="local"), \
-             patch("gateway.status.is_gateway_running", return_value=True) as gw_mock:
+        with (
+            patch("gateway.session_context.get_session_env", return_value="local"),
+            patch("gateway.status.is_gateway_running", return_value=True) as gw_mock,
+        ):
             assert _check_send_message() is True
             gw_mock.assert_called_once()
 
@@ -3264,8 +3487,10 @@ class TestCheckSendMessage:
 
         monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
 
-        with patch("gateway.session_context.get_session_env", return_value=""), \
-             patch("gateway.status.is_gateway_running", return_value=True):
+        with (
+            patch("gateway.session_context.get_session_env", return_value=""),
+            patch("gateway.status.is_gateway_running", return_value=True),
+        ):
             assert _check_send_message() is True
 
     def test_no_signals_means_unavailable(self, monkeypatch):
@@ -3274,8 +3499,10 @@ class TestCheckSendMessage:
 
         monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
 
-        with patch("gateway.session_context.get_session_env", return_value=""), \
-             patch("gateway.status.is_gateway_running", return_value=False):
+        with (
+            patch("gateway.session_context.get_session_env", return_value=""),
+            patch("gateway.status.is_gateway_running", return_value=False),
+        ):
             assert _check_send_message() is False
 
     def test_gateway_status_import_error_is_swallowed(self, monkeypatch):
@@ -3285,9 +3512,13 @@ class TestCheckSendMessage:
 
         monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
 
-        with patch("gateway.session_context.get_session_env", return_value=""), \
-             patch("gateway.status.is_gateway_running",
-                   side_effect=ImportError("simulated")):
+        with (
+            patch("gateway.session_context.get_session_env", return_value=""),
+            patch(
+                "gateway.status.is_gateway_running",
+                side_effect=ImportError("simulated"),
+            ),
+        ):
             assert _check_send_message() is False
 
 
@@ -3296,12 +3527,18 @@ class TestSendTelegramThreadNotFoundRetry:
 
     def test_is_thread_not_found_matches_expected_errors(self):
         """_is_telegram_thread_not_found should detect thread-not-found errors."""
+
         class FakeError(Exception):
             pass
 
-        assert _is_telegram_thread_not_found(FakeError("message thread not found")) is True
+        assert (
+            _is_telegram_thread_not_found(FakeError("message thread not found")) is True
+        )
         assert _is_telegram_thread_not_found(FakeError("THREAD NOT FOUND")) is True
-        assert _is_telegram_thread_not_found(FakeError("Bad Request: thread not found")) is True
+        assert (
+            _is_telegram_thread_not_found(FakeError("Bad Request: thread not found"))
+            is True
+        )
         assert _is_telegram_thread_not_found(FakeError("chat not found")) is False
         assert _is_telegram_thread_not_found(FakeError("parse error")) is False
         assert _is_telegram_thread_not_found(FakeError("")) is False
@@ -3326,7 +3563,9 @@ class TestSendTelegramThreadNotFoundRetry:
                 # the send path, not Bot itself (Bot import falls through
                 # normally since python-telegram-bot is installed).
                 return await _send_telegram(
-                    "fake-token", "-100123", "hello from topic 17585",
+                    "fake-token",
+                    "-100123",
+                    "hello from topic 17585",
                     thread_id="17585",
                 )
 
@@ -3337,8 +3576,9 @@ class TestSendTelegramThreadNotFoundRetry:
         # First call should have message_thread_id
         assert call_args[0].get("message_thread_id") is not None
         # Second call (retry) should NOT have message_thread_id
-        assert "message_thread_id" not in call_args[1], \
+        assert "message_thread_id" not in call_args[1], (
             "retry should drop message_thread_id after thread-not-found"
+        )
 
     def test_disable_web_page_preview_not_leaked_to_media_sends(self):
         """disable_web_page_preview must never leak into a media send.
@@ -3359,6 +3599,7 @@ class TestSendTelegramThreadNotFoundRetry:
                 return SimpleNamespace(message_id=2)
 
         import tempfile
+
         media_path = None
         try:
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tf:
@@ -3368,7 +3609,9 @@ class TestSendTelegramThreadNotFoundRetry:
             async def run_test():
                 with patch("telegram.Bot", return_value=FakeBot()):
                     return await _send_telegram(
-                        "fake-token", "-100123", "check preview",
+                        "fake-token",
+                        "-100123",
+                        "check preview",
                         media_files=[(media_path, False)],
                         disable_link_previews=True,
                     )
@@ -3378,8 +3621,9 @@ class TestSendTelegramThreadNotFoundRetry:
             # Caption rides the document bubble.
             assert media_kwargs_seen[0].get("caption") == "check preview"
             # Media send must NOT carry disable_web_page_preview.
-            assert "disable_web_page_preview" not in media_kwargs_seen[0], \
+            assert "disable_web_page_preview" not in media_kwargs_seen[0], (
                 "disable_web_page_preview leaked into send_document kwargs"
+            )
         finally:
             if media_path and os.path.exists(media_path):
                 os.unlink(media_path)

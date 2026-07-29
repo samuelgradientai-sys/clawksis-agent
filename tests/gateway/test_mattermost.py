@@ -1,4 +1,5 @@
 """Tests for Mattermost platform adapter."""
+
 import json
 import os
 import time
@@ -15,25 +16,34 @@ from gateway.run import (
 
 class TestMattermostProgressThreadRouting:
     def test_top_level_mattermost_progress_uses_event_message_id(self):
-        assert _resolve_progress_thread_id(
-            Platform.MATTERMOST,
-            source_thread_id=None,
-            event_message_id="top_post_123",
-        ) == "top_post_123"
+        assert (
+            _resolve_progress_thread_id(
+                Platform.MATTERMOST,
+                source_thread_id=None,
+                event_message_id="top_post_123",
+            )
+            == "top_post_123"
+        )
 
     def test_threaded_mattermost_progress_prefers_existing_thread_root(self):
-        assert _resolve_progress_thread_id(
-            Platform.MATTERMOST,
-            source_thread_id="root_post_123",
-            event_message_id="reply_post_456",
-        ) == "root_post_123"
+        assert (
+            _resolve_progress_thread_id(
+                Platform.MATTERMOST,
+                source_thread_id="root_post_123",
+                event_message_id="reply_post_456",
+            )
+            == "root_post_123"
+        )
 
     def test_telegram_progress_does_not_use_message_id_as_thread_id(self):
-        assert _resolve_progress_thread_id(
-            Platform.TELEGRAM,
-            source_thread_id=None,
-            event_message_id="12345",
-        ) is None
+        assert (
+            _resolve_progress_thread_id(
+                Platform.TELEGRAM,
+                source_thread_id=None,
+                event_message_id="12345",
+            )
+            is None
+        )
 
 
 class TestMattermostDisplayHygiene:
@@ -41,14 +51,17 @@ class TestMattermostDisplayHygiene:
         """Global interim commentary must not make Mattermost leak scratch notes."""
         user_config = {"display": {"interim_assistant_messages": True}}
 
-        assert _resolve_gateway_display_bool(
-            user_config,
-            "mattermost",
-            "interim_assistant_messages",
-            default=True,
-            platform=Platform.MATTERMOST,
-            require_platform_override_for={Platform.MATTERMOST},
-        ) is False
+        assert (
+            _resolve_gateway_display_bool(
+                user_config,
+                "mattermost",
+                "interim_assistant_messages",
+                default=True,
+                platform=Platform.MATTERMOST,
+                require_platform_override_for={Platform.MATTERMOST},
+            )
+            is False
+        )
 
     def test_mattermost_platform_opt_in_can_enable_interim_assistant_messages(self):
         """Mattermost can still opt into commentary explicitly per platform."""
@@ -61,40 +74,49 @@ class TestMattermostDisplayHygiene:
             }
         }
 
-        assert _resolve_gateway_display_bool(
-            user_config,
-            "mattermost",
-            "interim_assistant_messages",
-            default=True,
-            platform=Platform.MATTERMOST,
-            require_platform_override_for={Platform.MATTERMOST},
-        ) is True
+        assert (
+            _resolve_gateway_display_bool(
+                user_config,
+                "mattermost",
+                "interim_assistant_messages",
+                default=True,
+                platform=Platform.MATTERMOST,
+                require_platform_override_for={Platform.MATTERMOST},
+            )
+            is True
+        )
 
     def test_mattermost_requires_platform_opt_in_for_thinking_progress(self):
         """Global thinking_progress must not surface internal analysis in Mattermost."""
         user_config = {"display": {"thinking_progress": True}}
 
-        assert _resolve_gateway_display_bool(
-            user_config,
-            "mattermost",
-            "thinking_progress",
-            default=False,
-            platform=Platform.MATTERMOST,
-            require_platform_override_for={Platform.MATTERMOST},
-        ) is False
+        assert (
+            _resolve_gateway_display_bool(
+                user_config,
+                "mattermost",
+                "thinking_progress",
+                default=False,
+                platform=Platform.MATTERMOST,
+                require_platform_override_for={Platform.MATTERMOST},
+            )
+            is False
+        )
 
     def test_mattermost_requires_platform_opt_in_for_show_reasoning(self):
         """Global show_reasoning must not prepend scratch reasoning in Mattermost."""
         user_config = {"display": {"show_reasoning": True}}
 
-        assert _resolve_gateway_display_bool(
-            user_config,
-            "mattermost",
-            "show_reasoning",
-            default=False,
-            platform=Platform.MATTERMOST,
-            require_platform_override_for={Platform.MATTERMOST},
-        ) is False
+        assert (
+            _resolve_gateway_display_bool(
+                user_config,
+                "mattermost",
+                "show_reasoning",
+                default=False,
+                platform=Platform.MATTERMOST,
+                require_platform_override_for={Platform.MATTERMOST},
+            )
+            is False
+        )
 
     def test_mattermost_platform_opt_in_can_enable_show_reasoning(self):
         user_config = {
@@ -104,32 +126,39 @@ class TestMattermostDisplayHygiene:
             }
         }
 
-        assert _resolve_gateway_display_bool(
-            user_config,
-            "mattermost",
-            "show_reasoning",
-            default=False,
-            platform=Platform.MATTERMOST,
-            require_platform_override_for={Platform.MATTERMOST},
-        ) is True
+        assert (
+            _resolve_gateway_display_bool(
+                user_config,
+                "mattermost",
+                "show_reasoning",
+                default=False,
+                platform=Platform.MATTERMOST,
+                require_platform_override_for={Platform.MATTERMOST},
+            )
+            is True
+        )
 
     def test_global_thinking_progress_still_applies_to_other_platforms(self):
         """The Mattermost guard must not silently neuter Telegram/other chats."""
         user_config = {"display": {"thinking_progress": True}}
 
-        assert _resolve_gateway_display_bool(
-            user_config,
-            "telegram",
-            "thinking_progress",
-            default=False,
-            platform=Platform.TELEGRAM,
-            require_platform_override_for={Platform.MATTERMOST},
-        ) is True
+        assert (
+            _resolve_gateway_display_bool(
+                user_config,
+                "telegram",
+                "thinking_progress",
+                default=False,
+                platform=Platform.TELEGRAM,
+                require_platform_override_for={Platform.MATTERMOST},
+            )
+            is True
+        )
 
 
 # ---------------------------------------------------------------------------
 # Platform & Config
 # ---------------------------------------------------------------------------
+
 
 class TestMattermostConfigLoading:
     def test_apply_env_overrides_mattermost(self, monkeypatch):
@@ -137,6 +166,7 @@ class TestMattermostConfigLoading:
         monkeypatch.setenv("MATTERMOST_URL", "https://mm.example.com")
 
         from gateway.config import GatewayConfig, _apply_env_overrides
+
         config = GatewayConfig()
         _apply_env_overrides(config)
 
@@ -151,6 +181,7 @@ class TestMattermostConfigLoading:
         monkeypatch.delenv("MATTERMOST_URL", raising=False)
 
         from gateway.config import GatewayConfig, _apply_env_overrides
+
         config = GatewayConfig()
         _apply_env_overrides(config)
 
@@ -163,6 +194,7 @@ class TestMattermostConfigLoading:
         monkeypatch.setenv("MATTERMOST_HOME_CHANNEL_NAME", "General")
 
         from gateway.config import GatewayConfig, _apply_env_overrides
+
         config = GatewayConfig()
         _apply_env_overrides(config)
 
@@ -177,6 +209,7 @@ class TestMattermostConfigLoading:
         monkeypatch.delenv("MATTERMOST_URL", raising=False)
 
         from gateway.config import GatewayConfig, _apply_env_overrides
+
         config = GatewayConfig()
         _apply_env_overrides(config)
 
@@ -188,9 +221,11 @@ class TestMattermostConfigLoading:
 # Adapter format / truncate
 # ---------------------------------------------------------------------------
 
+
 def _make_adapter():
     """Create a MattermostAdapter with mocked config."""
     from plugins.platforms.mattermost.adapter import MattermostAdapter
+
     config = PlatformConfig(
         enabled=True,
         token="test-token",
@@ -210,7 +245,9 @@ class TestMattermostFormatMessage:
         assert result == "https://img.example.com/cat.png"
 
     def test_image_markdown_strips_alt_text(self):
-        result = self.adapter.format_message("Here: ![my image](https://x.com/a.jpg) done")
+        result = self.adapter.format_message(
+            "Here: ![my image](https://x.com/a.jpg) done"
+        )
         assert "![" not in result
         assert "https://x.com/a.jpg" in result
 
@@ -267,6 +304,7 @@ class TestMattermostTruncateMessage:
 # ---------------------------------------------------------------------------
 # Send
 # ---------------------------------------------------------------------------
+
 
 class TestMattermostSend:
     def setup_method(self):
@@ -356,12 +394,13 @@ class TestMattermostSend:
         payload = self.adapter._session.post.call_args[1]["json"]
         assert "root_id" not in payload
 
-
     @pytest.mark.asyncio
     async def test_send_uses_metadata_thread_id_for_progress_messages(self):
         """Progress/status messages pass Mattermost thread context via metadata."""
         self.adapter._reply_mode = "thread"
-        self.adapter._api_get = AsyncMock(return_value={"id": "root_post_123", "root_id": ""})
+        self.adapter._api_get = AsyncMock(
+            return_value={"id": "root_post_123", "root_id": ""}
+        )
         self.adapter._api_post = AsyncMock(return_value={"id": "progress_post"})
 
         result = await self.adapter.send(
@@ -378,9 +417,13 @@ class TestMattermostSend:
     async def test_progress_send_with_invalid_thread_root_never_falls_back_flat(self):
         """Tool/status/progress bubbles must stay quiet when the thread is broken."""
         self.adapter._reply_mode = "thread"
-        self.adapter._api_get = AsyncMock(return_value={"id": "bad_root", "root_id": ""})
+        self.adapter._api_get = AsyncMock(
+            return_value={"id": "bad_root", "root_id": ""}
+        )
         self.adapter._last_post_status = 400
-        self.adapter._last_post_error = "api.context.invalid_param.app_error: invalid root_id"
+        self.adapter._last_post_error = (
+            "api.context.invalid_param.app_error: invalid root_id"
+        )
         self.adapter._api_post = AsyncMock(return_value={})
 
         result = await self.adapter.send(
@@ -395,12 +438,18 @@ class TestMattermostSend:
         assert payload["root_id"] == "bad_root"
 
     @pytest.mark.asyncio
-    async def test_notify_send_with_invalid_thread_root_falls_back_flat_with_warning(self):
+    async def test_notify_send_with_invalid_thread_root_falls_back_flat_with_warning(
+        self,
+    ):
         """Notify-worthy replies may fall back flat so the answer is not lost."""
         self.adapter._reply_mode = "thread"
-        self.adapter._api_get = AsyncMock(return_value={"id": "bad_root", "root_id": ""})
+        self.adapter._api_get = AsyncMock(
+            return_value={"id": "bad_root", "root_id": ""}
+        )
         self.adapter._last_post_status = 400
-        self.adapter._last_post_error = "api.context.invalid_param.app_error: invalid root_id"
+        self.adapter._last_post_error = (
+            "api.context.invalid_param.app_error: invalid root_id"
+        )
         self.adapter._api_post = AsyncMock(side_effect=[{}, {"id": "flat_final"}])
 
         result = await self.adapter.send(
@@ -425,7 +474,9 @@ class TestMattermostSend:
     async def test_notify_send_with_server_error_does_not_fall_back_flat(self):
         """Notify fallback is only for broken thread roots, not generic API failures."""
         self.adapter._reply_mode = "thread"
-        self.adapter._api_get = AsyncMock(return_value={"id": "root_post", "root_id": ""})
+        self.adapter._api_get = AsyncMock(
+            return_value={"id": "root_post", "root_id": ""}
+        )
         self.adapter._last_post_status = 500
         self.adapter._last_post_error = "Internal Server Error"
         self.adapter._api_post = AsyncMock(return_value={})
@@ -446,7 +497,9 @@ class TestMattermostSend:
     async def test_progress_send_with_invalid_thread_root_never_falls_back_flat(self):
         """Tool/status/progress bubbles must stay quiet when the thread is broken."""
         self.adapter._reply_mode = "thread"
-        self.adapter._api_get = AsyncMock(return_value={"id": "bad_root", "root_id": ""})
+        self.adapter._api_get = AsyncMock(
+            return_value={"id": "bad_root", "root_id": ""}
+        )
         self.adapter._api_post = AsyncMock(return_value={})
 
         result = await self.adapter.send(
@@ -480,6 +533,7 @@ class TestMattermostSend:
 # ---------------------------------------------------------------------------
 # WebSocket event parsing
 # ---------------------------------------------------------------------------
+
 
 class TestMattermostWebSocketParsing:
     def setup_method(self):
@@ -681,6 +735,7 @@ class TestMattermostWebSocketParsing:
 # Mention behavior (require_mention + free_response_channels)
 # ---------------------------------------------------------------------------
 
+
 class TestMattermostMentionBehavior:
     def setup_method(self):
         self.adapter = _make_adapter()
@@ -723,9 +778,13 @@ class TestMattermostMentionBehavior:
     @pytest.mark.asyncio
     async def test_free_response_channel_responds_without_mention(self):
         """Messages in free-response channels don't need @mention."""
-        with patch.dict(os.environ, {"MATTERMOST_FREE_RESPONSE_CHANNELS": "chan_456,chan_789"}):
+        with patch.dict(
+            os.environ, {"MATTERMOST_FREE_RESPONSE_CHANNELS": "chan_456,chan_789"}
+        ):
             os.environ.pop("MATTERMOST_REQUIRE_MENTION", None)
-            await self.adapter._handle_ws_event(self._make_event("hello", channel_id="chan_456"))
+            await self.adapter._handle_ws_event(
+                self._make_event("hello", channel_id="chan_456")
+            )
             assert self.adapter.handle_message.called
 
     @pytest.mark.asyncio
@@ -733,7 +792,9 @@ class TestMattermostMentionBehavior:
         """Channels NOT in free-response list still require @mention."""
         with patch.dict(os.environ, {"MATTERMOST_FREE_RESPONSE_CHANNELS": "chan_789"}):
             os.environ.pop("MATTERMOST_REQUIRE_MENTION", None)
-            await self.adapter._handle_ws_event(self._make_event("hello", channel_id="chan_456"))
+            await self.adapter._handle_ws_event(
+                self._make_event("hello", channel_id="chan_456")
+            )
             assert not self.adapter.handle_message.called
 
     @pytest.mark.asyncio
@@ -741,7 +802,9 @@ class TestMattermostMentionBehavior:
         """DMs (channel_type=D) always respond regardless of mention settings."""
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MATTERMOST_REQUIRE_MENTION", None)
-            await self.adapter._handle_ws_event(self._make_event("hello", channel_type="D"))
+            await self.adapter._handle_ws_event(
+                self._make_event("hello", channel_type="D")
+            )
             assert self.adapter.handle_message.called
 
     @pytest.mark.asyncio
@@ -761,6 +824,7 @@ class TestMattermostMentionBehavior:
 # ---------------------------------------------------------------------------
 # File upload (send_image)
 # ---------------------------------------------------------------------------
+
 
 class TestMattermostFileUpload:
     def setup_method(self):
@@ -782,9 +846,9 @@ class TestMattermostFileUpload:
         # Mock the upload (POST to /files)
         mock_upload_resp = AsyncMock()
         mock_upload_resp.status = 200
-        mock_upload_resp.json = AsyncMock(return_value={
-            "file_infos": [{"id": "file_abc123"}]
-        })
+        mock_upload_resp.json = AsyncMock(
+            return_value={"file_infos": [{"id": "file_abc123"}]}
+        )
         mock_upload_resp.text = AsyncMock(return_value="")
         mock_upload_resp.__aenter__ = AsyncMock(return_value=mock_upload_resp)
         mock_upload_resp.__aexit__ = AsyncMock(return_value=False)
@@ -804,7 +868,9 @@ class TestMattermostFileUpload:
 
         def post_side_effect(*args, **kwargs):
             nonlocal post_call_count
-            resp = original_post_returns[min(post_call_count, len(original_post_returns) - 1)]
+            resp = original_post_returns[
+                min(post_call_count, len(original_post_returns) - 1)
+            ]
             post_call_count += 1
             return resp
 
@@ -821,6 +887,7 @@ class TestMattermostFileUpload:
 # ---------------------------------------------------------------------------
 # Dedup cache
 # ---------------------------------------------------------------------------
+
 
 class TestMattermostDedup:
     def setup_method(self):
@@ -905,23 +972,27 @@ class TestMattermostDedup:
 # Requirements check
 # ---------------------------------------------------------------------------
 
+
 class TestMattermostRequirements:
     def test_check_requirements_with_token_and_url(self, monkeypatch):
         monkeypatch.setenv("MATTERMOST_TOKEN", "test-token")
         monkeypatch.setenv("MATTERMOST_URL", "https://mm.example.com")
         from plugins.platforms.mattermost.adapter import check_mattermost_requirements
+
         assert check_mattermost_requirements() is True
 
     def test_check_requirements_without_token(self, monkeypatch):
         monkeypatch.delenv("MATTERMOST_TOKEN", raising=False)
         monkeypatch.delenv("MATTERMOST_URL", raising=False)
         from plugins.platforms.mattermost.adapter import check_mattermost_requirements
+
         assert check_mattermost_requirements() is True
 
     def test_check_requirements_without_url(self, monkeypatch):
         monkeypatch.setenv("MATTERMOST_TOKEN", "test-token")
         monkeypatch.delenv("MATTERMOST_URL", raising=False)
         from plugins.platforms.mattermost.adapter import check_mattermost_requirements
+
         assert check_mattermost_requirements() is True
 
     def test_validate_config_accepts_platform_values(self, monkeypatch):
@@ -947,6 +1018,7 @@ class TestMattermostRequirements:
 # ---------------------------------------------------------------------------
 # Media type propagation (MIME types, not bare strings)
 # ---------------------------------------------------------------------------
+
 
 class TestMattermostMediaTypes:
     """Verify that media_types contains actual MIME types (e.g. 'image/png')
@@ -989,7 +1061,10 @@ class TestMattermostMediaTypes:
         self.adapter._session = MagicMock()
         self.adapter._session.get = MagicMock(return_value=mock_resp)
 
-        with patch("gateway.platforms.base.cache_image_from_bytes", return_value="/tmp/photo.png"):
+        with patch(
+            "gateway.platforms.base.cache_image_from_bytes",
+            return_value="/tmp/photo.png",
+        ):
             await self.adapter._handle_ws_event(self._make_event(["file1"]))
 
         msg = self.adapter.handle_message.call_args[0][0]
@@ -1010,9 +1085,14 @@ class TestMattermostMediaTypes:
         self.adapter._session = MagicMock()
         self.adapter._session.get = MagicMock(return_value=mock_resp)
 
-        with patch("gateway.platforms.base.cache_audio_from_bytes", return_value="/tmp/voice.ogg"), \
-             patch("gateway.platforms.base.cache_image_from_bytes"), \
-             patch("gateway.platforms.base.cache_document_from_bytes"):
+        with (
+            patch(
+                "gateway.platforms.base.cache_audio_from_bytes",
+                return_value="/tmp/voice.ogg",
+            ),
+            patch("gateway.platforms.base.cache_image_from_bytes"),
+            patch("gateway.platforms.base.cache_document_from_bytes"),
+        ):
             await self.adapter._handle_ws_event(self._make_event(["file2"]))
 
         msg = self.adapter.handle_message.call_args[0][0]
@@ -1033,15 +1113,19 @@ class TestMattermostMediaTypes:
         self.adapter._session = MagicMock()
         self.adapter._session.get = MagicMock(return_value=mock_resp)
 
-        with patch("gateway.platforms.base.cache_document_from_bytes", return_value="/tmp/report.pdf"), \
-             patch("gateway.platforms.base.cache_image_from_bytes"):
+        with (
+            patch(
+                "gateway.platforms.base.cache_document_from_bytes",
+                return_value="/tmp/report.pdf",
+            ),
+            patch("gateway.platforms.base.cache_image_from_bytes"),
+        ):
             await self.adapter._handle_ws_event(self._make_event(["file3"]))
 
         msg = self.adapter.handle_message.call_args[0][0]
         assert msg.media_types == ["application/pdf"]
         assert not msg.media_types[0].startswith("image/")
         assert not msg.media_types[0].startswith("audio/")
-
 
 
 @pytest.mark.asyncio

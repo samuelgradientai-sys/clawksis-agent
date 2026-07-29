@@ -13,7 +13,9 @@ from run_agent import AIAgent
 from agent.context_compressor import ContextCompressor
 
 
-def _make_agent(provider="copilot", base_url="https://api.githubcopilot.com") -> AIAgent:
+def _make_agent(
+    provider="copilot", base_url="https://api.githubcopilot.com"
+) -> AIAgent:
     """Minimal AIAgent with a context_compressor, skipping __init__."""
     agent = AIAgent.__new__(AIAgent)
 

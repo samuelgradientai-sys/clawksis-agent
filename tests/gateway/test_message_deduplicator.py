@@ -30,8 +30,9 @@ class TestMessageDeduplicatorTTL:
 
         # Fast-forward time past TTL
         dedup._seen["msg-1"] = time.time() - 10  # 10s ago, TTL is 5s
-        assert dedup.is_duplicate("msg-1") is False, \
+        assert dedup.is_duplicate("msg-1") is False, (
             "Expired entry should not be treated as duplicate"
+        )
 
     def test_expired_entry_gets_refreshed(self):
         """After an expired entry is allowed through, it should be re-tracked."""

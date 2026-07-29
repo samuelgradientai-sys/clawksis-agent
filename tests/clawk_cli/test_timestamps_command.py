@@ -38,7 +38,10 @@ def test_timestamps_on_sets_and_persists(tmp_path, monkeypatch):
     s = _Stub()
     s._handle_timestamps_command("/timestamps on")
     assert s.show_timestamps is True
-    assert yaml.safe_load((hh / "config.yaml").read_text())["display"]["timestamps"] is True
+    assert (
+        yaml.safe_load((hh / "config.yaml").read_text())["display"]["timestamps"]
+        is True
+    )
 
 
 def test_timestamps_bare_toggles(tmp_path, monkeypatch):

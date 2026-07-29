@@ -40,7 +40,9 @@ class FakeVikingClient:
 
     def post(self, path, payload=None, **kwargs):
         self.calls.append((path, payload or {}))
-        response = self.responses.get((path, tuple(sorted((payload or {}).items()))), {})
+        response = self.responses.get(
+            (path, tuple(sorted((payload or {}).items()))), {}
+        )
         if isinstance(response, Exception):
             raise response
         return response
@@ -127,10 +129,28 @@ def wait_prefetch(provider, query="What should we recall?", session_id="session-
 
 class TestOpenVikingSummaryUriNormalization:
     def test_normalize_summary_uri_maps_pseudo_files_to_parent_directory(self):
-        assert OpenVikingMemoryProvider._normalize_summary_uri("viking://user/clawk/.overview.md") == "viking://user/clawk"
-        assert OpenVikingMemoryProvider._normalize_summary_uri("viking://resources/.abstract.md") == "viking://resources"
-        assert OpenVikingMemoryProvider._normalize_summary_uri("viking://") == "viking://"
-        assert OpenVikingMemoryProvider._normalize_summary_uri("viking://user/clawk/memories/profile.md") == "viking://user/clawk/memories/profile.md"
+        assert (
+            OpenVikingMemoryProvider._normalize_summary_uri(
+                "viking://user/clawk/.overview.md"
+            )
+            == "viking://user/clawk"
+        )
+        assert (
+            OpenVikingMemoryProvider._normalize_summary_uri(
+                "viking://resources/.abstract.md"
+            )
+            == "viking://resources"
+        )
+        assert (
+            OpenVikingMemoryProvider._normalize_summary_uri("viking://") == "viking://"
+        )
+        assert (
+            OpenVikingMemoryProvider._normalize_summary_uri(
+                "viking://user/clawk/memories/profile.md"
+            )
+            == "viking://user/clawk/memories/profile.md"
+        )
+
 
 class TestOpenVikingSkillQuerySafety:
     def test_derive_returns_empty_string_for_non_string_input(self):
@@ -308,7 +328,10 @@ class TestOpenVikingSkillQuerySafety:
                         {
                             "role": "user",
                             "parts": [
-                                {"type": "text", "text": "make a skill for release triage"},
+                                {
+                                    "type": "text",
+                                    "text": "make a skill for release triage",
+                                },
                             ],
                         },
                         {
@@ -370,9 +393,15 @@ class TestOpenVikingConfigSchema:
 class TestOpenVikingTurnConversion:
     def test_extract_current_turn_anchors_on_latest_matching_user_and_assistant(self):
         messages = [
-            {"role": "user", "content": "Please inspect the repository for assemble hooks."},
+            {
+                "role": "user",
+                "content": "Please inspect the repository for assemble hooks.",
+            },
             {"role": "assistant", "content": "Earlier answer."},
-            {"role": "user", "content": "Please inspect the repository for assemble hooks."},
+            {
+                "role": "user",
+                "content": "Please inspect the repository for assemble hooks.",
+            },
             {
                 "role": "assistant",
                 "content": "I will search the codebase.",
@@ -393,7 +422,10 @@ class TestOpenVikingTurnConversion:
                 "name": "shell_command",
                 "content": "agent/context_engine.py: no preassemble hook",
             },
-            {"role": "assistant", "content": "The current main does not expose assemble."},
+            {
+                "role": "assistant",
+                "content": "The current main does not expose assemble.",
+            },
         ]
 
         turn = OpenVikingMemoryProvider._extract_current_turn_messages(
@@ -406,7 +438,10 @@ class TestOpenVikingTurnConversion:
 
     def test_messages_to_openviking_batch_coalesces_tool_results(self):
         turn = [
-            {"role": "user", "content": "Please inspect the repository for assemble hooks."},
+            {
+                "role": "user",
+                "content": "Please inspect the repository for assemble hooks.",
+            },
             {
                 "role": "assistant",
                 "content": "I will search the codebase.",
@@ -427,14 +462,25 @@ class TestOpenVikingTurnConversion:
                 "name": "shell_command",
                 "content": "agent/context_engine.py: no preassemble hook",
             },
-            {"role": "assistant", "content": "The current main does not expose assemble."},
+            {
+                "role": "assistant",
+                "content": "The current main does not expose assemble.",
+            },
         ]
 
         batch = OpenVikingMemoryProvider._messages_to_openviking_batch(turn)
 
-        assert [message["role"] for message in batch] == ["user", "assistant", "assistant", "assistant"]
+        assert [message["role"] for message in batch] == [
+            "user",
+            "assistant",
+            "assistant",
+            "assistant",
+        ]
         assert batch[0]["parts"] == [
-            {"type": "text", "text": "Please inspect the repository for assemble hooks."}
+            {
+                "type": "text",
+                "text": "Please inspect the repository for assemble hooks.",
+            }
         ]
         assert batch[1]["parts"] == [
             {"type": "text", "text": "I will search the codebase."}
@@ -549,14 +595,28 @@ class TestOpenVikingTurnConversion:
                     },
                 ],
             },
-            {"role": "tool", "tool_call_id": "call_a", "name": "first_tool", "content": "a"},
-            {"role": "tool", "tool_call_id": "call_b", "name": "second_tool", "content": "b"},
+            {
+                "role": "tool",
+                "tool_call_id": "call_a",
+                "name": "first_tool",
+                "content": "a",
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call_b",
+                "name": "second_tool",
+                "content": "b",
+            },
             {"role": "assistant", "content": "Done."},
         ]
 
         batch = OpenVikingMemoryProvider._messages_to_openviking_batch(turn)
 
-        assert [message["role"] for message in batch] == ["user", "assistant", "assistant"]
+        assert [message["role"] for message in batch] == [
+            "user",
+            "assistant",
+            "assistant",
+        ]
         assert batch[1]["parts"] == [
             {
                 "type": "tool",
@@ -579,7 +639,10 @@ class TestOpenVikingTurnConversion:
     def test_messages_to_openviking_batch_skips_openviking_recall_tool_results(self):
         for recall_tool_name in ("viking_search", "viking_read", "viking_browse"):
             turn = [
-                {"role": "user", "content": "What did we decide about context assembly?"},
+                {
+                    "role": "user",
+                    "content": "What did we decide about context assembly?",
+                },
                 {
                     "role": "assistant",
                     "content": "",
@@ -589,7 +652,9 @@ class TestOpenVikingTurnConversion:
                             "type": "function",
                             "function": {
                                 "name": recall_tool_name,
-                                "arguments": json.dumps({"query": "context assembly decision"}),
+                                "arguments": json.dumps({
+                                    "query": "context assembly decision"
+                                }),
                             },
                         },
                         {
@@ -621,12 +686,19 @@ class TestOpenVikingTurnConversion:
                     "name": "shell_command",
                     "content": "plugins/memory/openviking/__init__.py",
                 },
-                {"role": "assistant", "content": "We decided to keep sync_turn scoped to ingestion."},
+                {
+                    "role": "assistant",
+                    "content": "We decided to keep sync_turn scoped to ingestion.",
+                },
             ]
 
             batch = OpenVikingMemoryProvider._messages_to_openviking_batch(turn)
 
-            assert [message["role"] for message in batch] == ["user", "assistant", "assistant"]
+            assert [message["role"] for message in batch] == [
+                "user",
+                "assistant",
+                "assistant",
+            ]
             assert batch[1]["parts"] == [
                 {
                     "type": "tool",
@@ -641,7 +713,9 @@ class TestOpenVikingTurnConversion:
             assert recall_tool_name not in batch_text
             assert "Old OpenViking memory content" not in batch_text
 
-    def test_messages_to_openviking_batch_empty_tool_id_does_not_drop_other_results(self):
+    def test_messages_to_openviking_batch_empty_tool_id_does_not_drop_other_results(
+        self,
+    ):
         # A recall tool result that arrives with an empty tool_call_id must not
         # poison the skip set with "" and silently drop unrelated tool results
         # that also lack an id. Empty tool_call_id is reachable in the canonical
@@ -689,7 +763,10 @@ class TestOpenVikingTurnConversion:
     def test_messages_to_openviking_batch_preserves_responses_text_parts(self):
         turn = [
             {"role": "user", "content": [{"type": "input_text", "text": "hello"}]},
-            {"role": "assistant", "content": [{"type": "output_text", "text": "answer"}]},
+            {
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "answer"}],
+            },
         ]
 
         batch = OpenVikingMemoryProvider._messages_to_openviking_batch(turn)
@@ -712,54 +789,68 @@ class TestOpenVikingTurnConversion:
 
         assert batch == [
             {"role": "user", "parts": [{"type": "text", "text": "hello"}]},
-            {"role": "assistant", "parts": [{"type": "text", "text": "answer"}], "peer_id": "clawk"},
+            {
+                "role": "assistant",
+                "parts": [{"type": "text", "text": "answer"}],
+                "peer_id": "clawk",
+            },
         ]
 
 
 class TestOpenVikingRead:
     def test_overview_read_normalizes_uri_and_unwraps_result(self):
         provider = OpenVikingMemoryProvider()
-        provider._client = FakeVikingClient(
-            {
-                (
-                    "/api/v1/content/overview",
-                    (("uri", "viking://user/clawk"),),
-                ): {"result": {"content": "overview text"}},
-            }
-        )
+        provider._client = FakeVikingClient({
+            (
+                "/api/v1/content/overview",
+                (("uri", "viking://user/clawk"),),
+            ): {"result": {"content": "overview text"}},
+        })
 
-        result = json.loads(provider._tool_read({"uri": "viking://user/clawk/.overview.md", "level": "overview"}))
+        result = json.loads(
+            provider._tool_read({
+                "uri": "viking://user/clawk/.overview.md",
+                "level": "overview",
+            })
+        )
 
         assert result["uri"] == "viking://user/clawk/.overview.md"
         assert result["resolved_uri"] == "viking://user/clawk"
         assert result["level"] == "overview"
         assert result["content"] == "overview text"
-        assert provider._client.calls == [(
-            "/api/v1/content/overview",
-            {"uri": "viking://user/clawk"},
-        )]
+        assert provider._client.calls == [
+            (
+                "/api/v1/content/overview",
+                {"uri": "viking://user/clawk"},
+            )
+        ]
 
     def test_full_read_keeps_original_uri(self):
         provider = OpenVikingMemoryProvider()
-        provider._client = FakeVikingClient(
-            {
-                (
-                    "/api/v1/content/read",
-                    (("uri", "viking://user/clawk/memories/profile.md"),),
-                ): {"result": "full text"},
-            }
-        )
+        provider._client = FakeVikingClient({
+            (
+                "/api/v1/content/read",
+                (("uri", "viking://user/clawk/memories/profile.md"),),
+            ): {"result": "full text"},
+        })
 
-        result = json.loads(provider._tool_read({"uri": "viking://user/clawk/memories/profile.md", "level": "full"}))
+        result = json.loads(
+            provider._tool_read({
+                "uri": "viking://user/clawk/memories/profile.md",
+                "level": "full",
+            })
+        )
 
         assert result["uri"] == "viking://user/clawk/memories/profile.md"
         assert result["resolved_uri"] == "viking://user/clawk/memories/profile.md"
         assert result["level"] == "full"
         assert result["content"] == "full text"
-        assert provider._client.calls == [(
-            "/api/v1/content/read",
-            {"uri": "viking://user/clawk/memories/profile.md"},
-        )]
+        assert provider._client.calls == [
+            (
+                "/api/v1/content/read",
+                {"uri": "viking://user/clawk/memories/profile.md"},
+            )
+        ]
 
     def test_read_accepts_uri_batch_and_caps_batch_full_content(self):
         provider = OpenVikingMemoryProvider()
@@ -769,22 +860,20 @@ class TestOpenVikingRead:
             "viking://user/clawk/memories/c.md",
             "viking://user/clawk/memories/d.md",
         ]
-        provider._client = FakeVikingClient(
-            {
-                (
-                    "/api/v1/content/read",
-                    (("uri", uris[0]),),
-                ): {"result": {"content": "a" * 3000}},
-                (
-                    "/api/v1/content/read",
-                    (("uri", uris[1]),),
-                ): {"result": {"content": "b content"}},
-                (
-                    "/api/v1/content/read",
-                    (("uri", uris[2]),),
-                ): {"result": {"content": "c content"}},
-            }
-        )
+        provider._client = FakeVikingClient({
+            (
+                "/api/v1/content/read",
+                (("uri", uris[0]),),
+            ): {"result": {"content": "a" * 3000}},
+            (
+                "/api/v1/content/read",
+                (("uri", uris[1]),),
+            ): {"result": {"content": "b content"}},
+            (
+                "/api/v1/content/read",
+                (("uri", uris[2]),),
+            ): {"result": {"content": "c content"}},
+        })
 
         result = json.loads(provider._tool_read({"uris": uris, "level": "full"}))
 
@@ -806,18 +895,16 @@ class TestOpenVikingRead:
         provider = OpenVikingMemoryProvider()
         ok_uri = "viking://user/clawk/memories/ok.md"
         bad_uri = "viking://user/clawk/memories/bad.md"
-        provider._client = FakeVikingClient(
-            {
-                (
-                    "/api/v1/content/read",
-                    (("uri", ok_uri),),
-                ): {"result": {"content": "ok content"}},
-                (
-                    "/api/v1/content/read",
-                    (("uri", bad_uri),),
-                ): RuntimeError("read failed"),
-            }
-        )
+        provider._client = FakeVikingClient({
+            (
+                "/api/v1/content/read",
+                (("uri", ok_uri),),
+            ): {"result": {"content": "ok content"}},
+            (
+                "/api/v1/content/read",
+                (("uri", bad_uri),),
+            ): RuntimeError("read failed"),
+        })
 
         result = json.loads(
             provider._tool_read({"uris": [ok_uri, ok_uri, bad_uri], "level": "full"})
@@ -837,18 +924,16 @@ class TestOpenVikingRead:
         """Pre-check via fs/stat: file URIs skip the directory-only endpoint entirely."""
         provider = OpenVikingMemoryProvider()
         file_uri = "viking://user/clawk/memories/entities/mem_abc.md"
-        provider._client = FakeVikingClient(
-            {
-                (
-                    "/api/v1/fs/stat",
-                    (("uri", file_uri),),
-                ): {"result": {"isDir": False}},
-                (
-                    "/api/v1/content/read",
-                    (("uri", file_uri),),
-                ): {"result": {"content": "full content"}},
-            }
-        )
+        provider._client = FakeVikingClient({
+            (
+                "/api/v1/fs/stat",
+                (("uri", file_uri),),
+            ): {"result": {"isDir": False}},
+            (
+                "/api/v1/content/read",
+                (("uri", file_uri),),
+            ): {"result": {"content": "full content"}},
+        })
 
         result = json.loads(provider._tool_read({"uri": file_uri, "level": "overview"}))
 
@@ -865,16 +950,19 @@ class TestOpenVikingRead:
     def test_overview_dir_uri_skips_stat_when_pseudo_summary(self):
         """Pseudo-URI path already resolves to dir, so no stat probe needed."""
         provider = OpenVikingMemoryProvider()
-        provider._client = FakeVikingClient(
-            {
-                (
-                    "/api/v1/content/overview",
-                    (("uri", "viking://user/clawk"),),
-                ): {"result": "overview"},
-            }
-        )
+        provider._client = FakeVikingClient({
+            (
+                "/api/v1/content/overview",
+                (("uri", "viking://user/clawk"),),
+            ): {"result": "overview"},
+        })
 
-        result = json.loads(provider._tool_read({"uri": "viking://user/clawk/.overview.md", "level": "overview"}))
+        result = json.loads(
+            provider._tool_read({
+                "uri": "viking://user/clawk/.overview.md",
+                "level": "overview",
+            })
+        )
 
         assert result["content"] == "overview"
         # No fs/stat call — normalization already determined it's a directory.
@@ -886,18 +974,16 @@ class TestOpenVikingRead:
         """Non-pseudo directory URI: stat → isDir=True → summary endpoint."""
         provider = OpenVikingMemoryProvider()
         dir_uri = "viking://user/clawk/memories"
-        provider._client = FakeVikingClient(
-            {
-                (
-                    "/api/v1/fs/stat",
-                    (("uri", dir_uri),),
-                ): {"result": {"isDir": True}},
-                (
-                    "/api/v1/content/overview",
-                    (("uri", dir_uri),),
-                ): {"result": "dir overview"},
-            }
-        )
+        provider._client = FakeVikingClient({
+            (
+                "/api/v1/fs/stat",
+                (("uri", dir_uri),),
+            ): {"result": {"isDir": True}},
+            (
+                "/api/v1/content/overview",
+                (("uri", dir_uri),),
+            ): {"result": "dir overview"},
+        })
 
         result = json.loads(provider._tool_read({"uri": dir_uri, "level": "overview"}))
 
@@ -912,22 +998,20 @@ class TestOpenVikingRead:
         """If fs/stat raises or returns unknown shape, legacy exception fallback still kicks in."""
         provider = OpenVikingMemoryProvider()
         file_uri = "viking://user/clawk/memories/entities/mem_abc.md"
-        provider._client = FakeVikingClient(
-            {
-                (
-                    "/api/v1/fs/stat",
-                    (("uri", file_uri),),
-                ): RuntimeError("stat unavailable"),
-                (
-                    "/api/v1/content/overview",
-                    (("uri", file_uri),),
-                ): RuntimeError("500 Internal Server Error"),
-                (
-                    "/api/v1/content/read",
-                    (("uri", file_uri),),
-                ): {"result": {"content": "fallback full content"}},
-            }
-        )
+        provider._client = FakeVikingClient({
+            (
+                "/api/v1/fs/stat",
+                (("uri", file_uri),),
+            ): RuntimeError("stat unavailable"),
+            (
+                "/api/v1/content/overview",
+                (("uri", file_uri),),
+            ): RuntimeError("500 Internal Server Error"),
+            (
+                "/api/v1/content/read",
+                (("uri", file_uri),),
+            ): {"result": {"content": "fallback full content"}},
+        })
 
         result = json.loads(provider._tool_read({"uri": file_uri, "level": "overview"}))
 
@@ -943,17 +1027,18 @@ class TestOpenVikingRead:
 
     def test_summary_uri_error_does_not_fallback_and_raises(self):
         provider = OpenVikingMemoryProvider()
-        provider._client = FakeVikingClient(
-            {
-                (
-                    "/api/v1/content/overview",
-                    (("uri", "viking://user/clawk"),),
-                ): RuntimeError("500 Internal Server Error"),
-            }
-        )
+        provider._client = FakeVikingClient({
+            (
+                "/api/v1/content/overview",
+                (("uri", "viking://user/clawk"),),
+            ): RuntimeError("500 Internal Server Error"),
+        })
 
         try:
-            provider._tool_read({"uri": "viking://user/clawk/.overview.md", "level": "overview"})
+            provider._tool_read({
+                "uri": "viking://user/clawk/.overview.md",
+                "level": "overview",
+            })
             assert False, "Expected summary endpoint error to be raised"
         except RuntimeError:
             pass
@@ -988,7 +1073,9 @@ class TestOpenVikingAutoRecallPrefetch:
                     query = parse_qs(parsed.query)
                     uri = query.get("uri", [""])[0]
                     records["reads"].append(uri)
-                    self._send_json({"result": {"content": "E2E full L2 memory content."}})
+                    self._send_json({
+                        "result": {"content": "E2E full L2 memory content."}
+                    })
                     return
                 self.send_error(404)
 
@@ -1040,7 +1127,9 @@ class TestOpenVikingAutoRecallPrefetch:
         provider = OpenVikingMemoryProvider()
         try:
             provider.initialize("e2e-session")
-            block = provider.prefetch("What should we recall?", session_id="e2e-session")
+            block = provider.prefetch(
+                "What should we recall?", session_id="e2e-session"
+            )
         finally:
             provider.shutdown()
             server.shutdown()
@@ -1063,11 +1152,21 @@ class TestOpenVikingAutoRecallPrefetch:
             {key.lower(): value for key, value in headers.items()}
             for headers in records["headers"]
         ]
-        assert all(headers.get("x-openviking-actor-peer") == "clawk" for headers in normalized_headers)
-        assert all(headers.get("x-openviking-account") == "acct" for headers in normalized_headers)
-        assert all(headers.get("x-openviking-user") == "user" for headers in normalized_headers)
+        assert all(
+            headers.get("x-openviking-actor-peer") == "clawk"
+            for headers in normalized_headers
+        )
+        assert all(
+            headers.get("x-openviking-account") == "acct"
+            for headers in normalized_headers
+        )
+        assert all(
+            headers.get("x-openviking-user") == "user" for headers in normalized_headers
+        )
 
-    def test_prefetch_searches_current_query_when_no_background_result(self, monkeypatch):
+    def test_prefetch_searches_current_query_when_no_background_result(
+        self, monkeypatch
+    ):
         responses = {
             (
                 "/api/v1/search/search",
@@ -1147,7 +1246,12 @@ class TestOpenVikingAutoRecallPrefetch:
 
     def test_prefetch_filters_low_score_items_with_local_threshold(self, monkeypatch):
         responses = {
-            ("/api/v1/search/search", "memory", "What should we recall?", "session-test"): {
+            (
+                "/api/v1/search/search",
+                "memory",
+                "What should we recall?",
+                "session-test",
+            ): {
                 "result": {
                     "memories": [
                         {
@@ -1175,7 +1279,11 @@ class TestOpenVikingAutoRecallPrefetch:
         assert block.startswith("## OpenViking Context\n")
         assert "Keep this relevant memory." in block
         assert "Drop this weak memory." not in block
-        search_payloads = [call[2] for call in FakeRecallClient.calls if call[:2] == ("post", "/api/v1/search/search")]
+        search_payloads = [
+            call[2]
+            for call in FakeRecallClient.calls
+            if call[:2] == ("post", "/api/v1/search/search")
+        ]
         assert len(search_payloads) == 1
         assert search_payloads[0]["context_type"] == "memory"
         assert "target_uri" not in search_payloads[0]
@@ -1187,7 +1295,12 @@ class TestOpenVikingAutoRecallPrefetch:
     def test_prefetch_skips_complete_entries_that_do_not_fit_budget(self, monkeypatch):
         long_memory = "X" * 120
         responses = {
-            ("/api/v1/search/search", "memory", "What should we recall?", "session-test"): {
+            (
+                "/api/v1/search/search",
+                "memory",
+                "What should we recall?",
+                "session-test",
+            ): {
                 "result": {
                     "memories": [
                         {
@@ -1222,7 +1335,12 @@ class TestOpenVikingAutoRecallPrefetch:
 
     def test_prefetch_reads_full_l2_content_by_default(self, monkeypatch):
         responses = {
-            ("/api/v1/search/search", "memory", "What should we recall?", "session-test"): {
+            (
+                "/api/v1/search/search",
+                "memory",
+                "What should we recall?",
+                "session-test",
+            ): {
                 "result": {
                     "memories": [
                         {
@@ -1253,7 +1371,12 @@ class TestOpenVikingAutoRecallPrefetch:
 
     def test_prefetch_prefer_abstract_does_not_read_l2_content(self, monkeypatch):
         responses = {
-            ("/api/v1/search/search", "memory", "What should we recall?", "session-test"): {
+            (
+                "/api/v1/search/search",
+                "memory",
+                "What should we recall?",
+                "session-test",
+            ): {
                 "result": {
                     "memories": [
                         {
@@ -1276,11 +1399,21 @@ class TestOpenVikingAutoRecallPrefetch:
         block = wait_prefetch(provider)
 
         assert "Use the abstract." in block
-        assert not any(call[:2] == ("get", "/api/v1/content/read") for call in FakeRecallClient.calls)
+        assert not any(
+            call[:2] == ("get", "/api/v1/content/read")
+            for call in FakeRecallClient.calls
+        )
 
-    def test_prefetch_honors_configured_limit_candidate_limit_and_resources(self, monkeypatch):
+    def test_prefetch_honors_configured_limit_candidate_limit_and_resources(
+        self, monkeypatch
+    ):
         responses = {
-            ("/api/v1/search/search", ("memory", "resource"), "What should we recall?", "session-test"): {
+            (
+                "/api/v1/search/search",
+                ("memory", "resource"),
+                "What should we recall?",
+                "session-test",
+            ): {
                 "result": {
                     "memories": [],
                     "resources": [
@@ -1291,7 +1424,7 @@ class TestOpenVikingAutoRecallPrefetch:
                             "category": "resource",
                             "abstract": "Resource recall enabled.",
                         }
-                    ]
+                    ],
                 }
             },
         }
@@ -1305,7 +1438,11 @@ class TestOpenVikingAutoRecallPrefetch:
         block = wait_prefetch(provider)
 
         assert "Resource recall enabled." in block
-        search_payloads = [call[2] for call in FakeRecallClient.calls if call[:2] == ("post", "/api/v1/search/search")]
+        search_payloads = [
+            call[2]
+            for call in FakeRecallClient.calls
+            if call[:2] == ("post", "/api/v1/search/search")
+        ]
         assert len(search_payloads) == 1
         assert search_payloads[0]["context_type"] == ["memory", "resource"]
         assert "target_uri" not in search_payloads[0]
@@ -1324,33 +1461,54 @@ class TestOpenVikingAutoRecallPrefetch:
 class TestOpenVikingBrowse:
     def test_list_browse_unwraps_and_normalizes_entry_shapes(self):
         provider = OpenVikingMemoryProvider()
-        provider._client = FakeVikingClient(
-            {
-                (
-                    "/api/v1/fs/ls",
-                    (("uri", "viking://user/clawk"),),
-                ): {
-                    "result": {
-                        "entries": [
-                            {"name": "memories", "uri": "viking://user/clawk/memories", "type": "dir"},
-                            {"rel_path": "profile.md", "uri": "viking://user/clawk/memories/profile.md", "isDir": False, "abstract": "Profile"},
-                        ]
-                    }
-                },
-            }
-        )
+        provider._client = FakeVikingClient({
+            (
+                "/api/v1/fs/ls",
+                (("uri", "viking://user/clawk"),),
+            ): {
+                "result": {
+                    "entries": [
+                        {
+                            "name": "memories",
+                            "uri": "viking://user/clawk/memories",
+                            "type": "dir",
+                        },
+                        {
+                            "rel_path": "profile.md",
+                            "uri": "viking://user/clawk/memories/profile.md",
+                            "isDir": False,
+                            "abstract": "Profile",
+                        },
+                    ]
+                }
+            },
+        })
 
-        result = json.loads(provider._tool_browse({"action": "list", "path": "viking://user/clawk"}))
+        result = json.loads(
+            provider._tool_browse({"action": "list", "path": "viking://user/clawk"})
+        )
 
         assert result["path"] == "viking://user/clawk"
         assert result["entries"] == [
-            {"name": "memories", "uri": "viking://user/clawk/memories", "type": "dir", "abstract": ""},
-            {"name": "profile.md", "uri": "viking://user/clawk/memories/profile.md", "type": "file", "abstract": "Profile"},
+            {
+                "name": "memories",
+                "uri": "viking://user/clawk/memories",
+                "type": "dir",
+                "abstract": "",
+            },
+            {
+                "name": "profile.md",
+                "uri": "viking://user/clawk/memories/profile.md",
+                "type": "file",
+                "abstract": "Profile",
+            },
         ]
-        assert provider._client.calls == [(
-            "/api/v1/fs/ls",
-            {"uri": "viking://user/clawk"},
-        )]
+        assert provider._client.calls == [
+            (
+                "/api/v1/fs/ls",
+                {"uri": "viking://user/clawk"},
+            )
+        ]
 
 
 class TestOpenVikingMemoryUriBuilder:
@@ -1383,6 +1541,7 @@ class TestOpenVikingMemoryUriBuilder:
     def test_uri_slug_is_twelve_hex_chars_and_unique(self):
         """Slug must be 12 hex chars and differ between calls."""
         import re
+
         p = self._make_provider()
         uri1 = p._build_memory_uri("preferences")
         uri2 = p._build_memory_uri("preferences")

@@ -5,6 +5,7 @@ with a network error, Telegram re-delivers the `/restart` message to the new
 gateway process.  Without a dedup guard, the new gateway would process
 `/restart` again and immediately restart — a self-perpetuating loop.
 """
+
 import json
 import time
 from unittest.mock import MagicMock
@@ -27,7 +28,9 @@ def _make_restart_event(update_id: int | None = 100) -> MessageEvent:
 
 
 @pytest.mark.asyncio
-async def test_restart_handler_writes_dedup_marker_with_update_id(tmp_path, monkeypatch):
+async def test_restart_handler_writes_dedup_marker_with_update_id(
+    tmp_path, monkeypatch
+):
     """First /restart writes .restart_last_processed.json with the triggering update_id."""
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     monkeypatch.delenv("INVOCATION_ID", raising=False)
@@ -48,18 +51,22 @@ async def test_restart_handler_writes_dedup_marker_with_update_id(tmp_path, monk
 
 
 @pytest.mark.asyncio
-async def test_redelivered_restart_with_same_update_id_is_ignored(tmp_path, monkeypatch):
+async def test_redelivered_restart_with_same_update_id_is_ignored(
+    tmp_path, monkeypatch
+):
     """A /restart with update_id <= recorded marker is silently ignored as a redelivery."""
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     monkeypatch.delenv("INVOCATION_ID", raising=False)
 
     # Previous gateway recorded update_id=12345 a few seconds ago
     marker = tmp_path / ".restart_last_processed.json"
-    marker.write_text(json.dumps({
-        "platform": "telegram",
-        "update_id": 12345,
-        "requested_at": time.time() - 5,
-    }))
+    marker.write_text(
+        json.dumps({
+            "platform": "telegram",
+            "update_id": 12345,
+            "requested_at": time.time() - 5,
+        })
+    )
 
     runner, _adapter = make_restart_runner()
     runner.request_restart = MagicMock()
@@ -72,24 +79,28 @@ async def test_redelivered_restart_with_same_update_id_is_ignored(tmp_path, monk
 
 
 @pytest.mark.asyncio
-async def test_redelivered_restart_with_older_update_id_is_ignored(tmp_path, monkeypatch):
+async def test_redelivered_restart_with_older_update_id_is_ignored(
+    tmp_path, monkeypatch
+):
     """update_id strictly LESS than the recorded one is also a redelivery."""
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     monkeypatch.delenv("INVOCATION_ID", raising=False)
 
     marker = tmp_path / ".restart_last_processed.json"
-    marker.write_text(json.dumps({
-        "platform": "telegram",
-        "update_id": 12345,
-        "requested_at": time.time() - 5,
-    }))
+    marker.write_text(
+        json.dumps({
+            "platform": "telegram",
+            "update_id": 12345,
+            "requested_at": time.time() - 5,
+        })
+    )
 
     runner, _adapter = make_restart_runner()
     runner.request_restart = MagicMock()
 
     event = _make_restart_event(update_id=12344)  # older update — shouldn't happen,
-                                                  # but if Telegram does re-deliver
-                                                  # something older, treat as stale
+    # but if Telegram does re-deliver
+    # something older, treat as stale
     result = await runner._handle_restart_command(event)
 
     assert result == ""
@@ -104,11 +115,13 @@ async def test_fresh_restart_with_higher_update_id_is_processed(tmp_path, monkey
 
     # Previous restart recorded update_id=12345
     marker = tmp_path / ".restart_last_processed.json"
-    marker.write_text(json.dumps({
-        "platform": "telegram",
-        "update_id": 12345,
-        "requested_at": time.time() - 5,
-    }))
+    marker.write_text(
+        json.dumps({
+            "platform": "telegram",
+            "update_id": 12345,
+            "requested_at": time.time() - 5,
+        })
+    )
 
     runner, _adapter = make_restart_runner()
     runner.request_restart = MagicMock(return_value=True)
@@ -131,11 +144,13 @@ async def test_stale_marker_older_than_5min_does_not_block(tmp_path, monkeypatch
     monkeypatch.delenv("INVOCATION_ID", raising=False)
 
     marker = tmp_path / ".restart_last_processed.json"
-    marker.write_text(json.dumps({
-        "platform": "telegram",
-        "update_id": 12345,
-        "requested_at": time.time() - 600,  # 10 minutes ago
-    }))
+    marker.write_text(
+        json.dumps({
+            "platform": "telegram",
+            "update_id": 12345,
+            "requested_at": time.time() - 600,  # 10 minutes ago
+        })
+    )
 
     runner, _adapter = make_restart_runner()
     runner.request_restart = MagicMock(return_value=True)
@@ -162,13 +177,11 @@ async def test_slow_service_restart_still_ignores_same_update(tmp_path, monkeypa
 
     marker = tmp_path / ".restart_last_processed.json"
     marker.write_text(
-        json.dumps(
-            {
-                "platform": "telegram",
-                "update_id": 12345,
-                "requested_at": time.time() - 1200,
-            }
-        )
+        json.dumps({
+            "platform": "telegram",
+            "update_id": 12345,
+            "requested_at": time.time() - 1200,
+        })
     )
 
     runner, _adapter = make_restart_runner()
@@ -176,9 +189,7 @@ async def test_slow_service_restart_still_ignores_same_update(tmp_path, monkeypa
     monkeypatch.setattr(runner, "request_restart", request_restart)
     runner._booted_from_restart = True
 
-    result = await runner._handle_restart_command(
-        _make_restart_event(update_id=12345)
-    )
+    result = await runner._handle_restart_command(_make_restart_event(update_id=12345))
 
     assert result == ""
     request_restart.assert_not_called()
@@ -227,11 +238,13 @@ async def test_event_without_update_id_bypasses_dedup(tmp_path, monkeypatch):
     monkeypatch.delenv("INVOCATION_ID", raising=False)
 
     marker = tmp_path / ".restart_last_processed.json"
-    marker.write_text(json.dumps({
-        "platform": "telegram",
-        "update_id": 999999,
-        "requested_at": time.time(),
-    }))
+    marker.write_text(
+        json.dumps({
+            "platform": "telegram",
+            "update_id": 999999,
+            "requested_at": time.time(),
+        })
+    )
 
     runner, _adapter = make_restart_runner()
     runner.request_restart = MagicMock(return_value=True)
@@ -254,11 +267,13 @@ async def test_different_platform_bypasses_dedup(tmp_path, monkeypatch):
     monkeypatch.delenv("INVOCATION_ID", raising=False)
 
     marker = tmp_path / ".restart_last_processed.json"
-    marker.write_text(json.dumps({
-        "platform": "telegram",
-        "update_id": 12345,
-        "requested_at": time.time(),
-    }))
+    marker.write_text(
+        json.dumps({
+            "platform": "telegram",
+            "update_id": 12345,
+            "requested_at": time.time(),
+        })
+    )
 
     runner, _adapter = make_restart_runner()
     runner.request_restart = MagicMock(return_value=True)
@@ -284,7 +299,9 @@ async def test_different_platform_bypasses_dedup(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_marker_missing_but_booted_from_restart_ignores_redelivery(tmp_path, monkeypatch):
+async def test_marker_missing_but_booted_from_restart_ignores_redelivery(
+    tmp_path, monkeypatch
+):
     """Missing marker + just booted from a /restart + young process → treat as stale.
 
     Reproduces the infinite-loop scenario (issue #18528): the dedup marker went
@@ -333,7 +350,9 @@ async def test_marker_missing_fresh_boot_allows_restart(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_marker_missing_booted_from_restart_but_old_process_allows(tmp_path, monkeypatch):
+async def test_marker_missing_booted_from_restart_but_old_process_allows(
+    tmp_path, monkeypatch
+):
     """Missing marker + booted from /restart but past the window → /restart proceeds.
 
     A /restart arriving long after boot is a genuine user action, not a boot-time

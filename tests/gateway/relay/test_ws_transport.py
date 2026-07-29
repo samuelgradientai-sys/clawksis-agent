@@ -19,7 +19,9 @@ import pytest_asyncio
 
 from gateway.relay.ws_transport import WebSocketRelayTransport, WEBSOCKETS_AVAILABLE
 
-pytestmark = pytest.mark.skipif(not WEBSOCKETS_AVAILABLE, reason="websockets not installed")
+pytestmark = pytest.mark.skipif(
+    not WEBSOCKETS_AVAILABLE, reason="websockets not installed"
+)
 
 if WEBSOCKETS_AVAILABLE:
     import websockets
@@ -71,7 +73,9 @@ class _StubConnectorServer:
     async def _on_frame(self, ws, frame):
         ftype = frame.get("type")
         if ftype == "hello":
-            await ws.send(json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n")
+            await ws.send(
+                json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n"
+            )
             # Deliver any queued inbound frames right after handshake.
             for f in self._to_push:
                 await ws.send(json.dumps(f) + "\n")
@@ -80,7 +84,11 @@ class _StubConnectorServer:
             # Echo a successful result correlated by requestId.
             result = {"success": True, "message_id": f"srv-{action.get('op')}"}
             await ws.send(
-                json.dumps({"type": "outbound_result", "requestId": frame["requestId"], "result": result})
+                json.dumps({
+                    "type": "outbound_result",
+                    "requestId": frame["requestId"],
+                    "result": result,
+                })
                 + "\n"
             )
 
@@ -117,7 +125,12 @@ async def test_inbound_frame_reaches_handler(server):
             "event": {
                 "text": "hello from connector",
                 "message_type": "text",
-                "source": {"platform": "discord", "chat_id": "chan1", "chat_type": "group", "scope_id": "guildA"},
+                "source": {
+                    "platform": "discord",
+                    "chat_id": "chan1",
+                    "chat_type": "group",
+                    "scope_id": "guildA",
+                },
             },
             "bufferId": "buf-1",
         }
@@ -143,7 +156,11 @@ async def test_outbound_round_trips_with_correlation(server):
     await t.connect()
     try:
         await t.handshake()
-        result = await t.send_outbound({"op": "send", "chat_id": "chan1", "content": "hi"})
+        result = await t.send_outbound({
+            "op": "send",
+            "chat_id": "chan1",
+            "content": "hi",
+        })
         assert result["success"] is True
         assert result["message_id"] == "srv-send"
     finally:
@@ -156,9 +173,12 @@ async def test_follow_up_round_trips(server):
     await t.connect()
     try:
         await t.handshake()
-        result = await t.send_follow_up(
-            {"op": "follow_up", "session_key": "s1", "kind": "discord.interaction_token", "content": "fu"}
-        )
+        result = await t.send_follow_up({
+            "op": "follow_up",
+            "session_key": "s1",
+            "kind": "discord.interaction_token",
+            "content": "fu",
+        })
         assert result["success"] is True
         assert result["message_id"] == "srv-follow_up"
         # The follow_up rode an outbound frame the connector saw.
@@ -170,7 +190,9 @@ async def test_follow_up_round_trips(server):
 
 @pytest.mark.asyncio
 async def test_disconnect_fails_pending_waiters_cleanly(server):
-    t = WebSocketRelayTransport(server.url, "discord", "appShared", outbound_timeout_s=5)
+    t = WebSocketRelayTransport(
+        server.url, "discord", "appShared", outbound_timeout_s=5
+    )
     await t.connect()
     await t.handshake()
     await t.disconnect()
@@ -233,7 +255,8 @@ class _Revoking4401Server:
                 if frame.get("type") == "hello":
                     if self._send_descriptor_first:
                         await ws.send(
-                            json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n"
+                            json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR})
+                            + "\n"
                         )
                         # Let the descriptor flush + be processed before the close.
                         await asyncio.sleep(0.05)
@@ -250,9 +273,13 @@ async def test_4401_after_handshake_is_terminal_no_reconnect():
     await srv.start()
     try:
         t = WebSocketRelayTransport(
-            srv.url, "discord", "appShared",
-            gateway_id="gw-x", upgrade_secret="secret-x",
-            reconnect=True, reconnect_backoff_s=0.05,
+            srv.url,
+            "discord",
+            "appShared",
+            gateway_id="gw-x",
+            upgrade_secret="secret-x",
+            reconnect=True,
+            reconnect_backoff_s=0.05,
         )
         await t.connect()
         await t.handshake()  # records _handshake_succeeded
@@ -280,9 +307,13 @@ async def test_4401_before_handshake_stays_retryable():
     await srv.start()
     try:
         t = WebSocketRelayTransport(
-            srv.url, "discord", "appShared",
-            gateway_id="gw-x", upgrade_secret="secret-x",
-            reconnect=True, reconnect_backoff_s=0.05,
+            srv.url,
+            "discord",
+            "appShared",
+            gateway_id="gw-x",
+            upgrade_secret="secret-x",
+            reconnect=True,
+            reconnect_backoff_s=0.05,
         )
         await t.connect()
         # No handshake ever succeeded; the 4401 must NOT latch auth_revoked.

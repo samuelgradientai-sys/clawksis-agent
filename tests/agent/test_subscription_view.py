@@ -36,19 +36,29 @@ def test_manage_url_attaches_org_and_path_to_portal_origin():
 
 
 def test_manage_url_omits_org_when_absent():
-    s = SubscriptionState(logged_in=True, org_id=None, portal_url="https://p.example.com/")
+    s = SubscriptionState(
+        logged_in=True, org_id=None, portal_url="https://p.example.com/"
+    )
     url = subscription_manage_url(s)
     assert url == "https://p.example.com/manage-subscription"
     assert "org_id" not in url
 
 
 def test_manage_url_none_without_portal():
-    assert subscription_manage_url(SubscriptionState(logged_in=True, portal_url=None)) is None
+    assert (
+        subscription_manage_url(SubscriptionState(logged_in=True, portal_url=None))
+        is None
+    )
 
 
 def test_manage_url_none_for_garbage_portal():
     # No scheme/netloc → can't build a deep-link; fail closed (None), not crash.
-    assert subscription_manage_url(SubscriptionState(logged_in=True, portal_url="not a url")) is None
+    assert (
+        subscription_manage_url(
+            SubscriptionState(logged_in=True, portal_url="not a url")
+        )
+        is None
+    )
 
 
 # ── payload parser ───────────────────────────────────────────────────
@@ -102,9 +112,7 @@ def test_parser_member_role_cannot_change_plan():
         ("MEMBER", None, False, False),
     ],
 )
-def test_parser_five_roles(
-    role, can_change_plan_raw, is_admin, can_change_plan
-):
+def test_parser_five_roles(role, can_change_plan_raw, is_admin, can_change_plan):
     payload = {"org": {"role": role}}
     if can_change_plan_raw is not None:
         payload["canChangePlan"] = can_change_plan_raw
@@ -130,9 +138,7 @@ def test_parser_can_change_plan_prefers_server_capability(role, server_capabilit
 
 
 def test_parser_can_change_plan_falls_back_to_legacy_role_check():
-    owner = subscription_state_from_payload(
-        {"org": {"role": "OWNER"}}, portal_url=None
-    )
+    owner = subscription_state_from_payload({"org": {"role": "OWNER"}}, portal_url=None)
     member = subscription_state_from_payload(
         {"org": {"role": "MEMBER"}}, portal_url=None
     )
@@ -179,7 +185,9 @@ def test_parser_maps_tiers_catalog():
     assert free.tier_id == "free" and free.tier_order == 0
     assert free.dollars_per_month == Decimal("0")
     assert plus.is_current is True
-    assert plus.dollars_per_month == Decimal("20") and plus.monthly_credits == Decimal("1000")
+    assert plus.dollars_per_month == Decimal("20") and plus.monthly_credits == Decimal(
+        "1000"
+    )
 
 
 def test_parser_tiers_absent_is_empty_tuple():
@@ -190,19 +198,17 @@ def test_parser_tiers_absent_is_empty_tuple():
 
 
 def test_preview_parser_charge_now():
-    p = subscription_change_preview_from_payload(
-        {
-            "effect": "charge_now",
-            "reason": None,
-            "currentTierId": "plus",
-            "currentTierName": "Plus",
-            "targetTierId": "ultra",
-            "targetTierName": "Ultra",
-            "monthlyCreditsDelta": "6000",
-            "amountDueNowCents": 1234,
-            "effectiveAt": None,
-        }
-    )
+    p = subscription_change_preview_from_payload({
+        "effect": "charge_now",
+        "reason": None,
+        "currentTierId": "plus",
+        "currentTierName": "Plus",
+        "targetTierId": "ultra",
+        "targetTierName": "Ultra",
+        "monthlyCreditsDelta": "6000",
+        "amountDueNowCents": 1234,
+        "effectiveAt": None,
+    })
     assert p.effect == "charge_now"
     assert p.amount_due_now_cents == 1234
     assert p.target_tier_name == "Ultra"
@@ -210,18 +216,21 @@ def test_preview_parser_charge_now():
 
 
 def test_preview_parser_scheduled_has_effective_at_and_no_charge():
-    p = subscription_change_preview_from_payload(
-        {"effect": "scheduled", "amountDueNowCents": None, "effectiveAt": "2026-08-01"}
-    )
+    p = subscription_change_preview_from_payload({
+        "effect": "scheduled",
+        "amountDueNowCents": None,
+        "effectiveAt": "2026-08-01",
+    })
     assert p.effect == "scheduled"
     assert p.amount_due_now_cents is None
     assert p.effective_at == "2026-08-01"
 
 
 def test_preview_parser_blocked_carries_reason():
-    p = subscription_change_preview_from_payload(
-        {"effect": "blocked", "reason": "Retract the cancellation before upgrading."}
-    )
+    p = subscription_change_preview_from_payload({
+        "effect": "blocked",
+        "reason": "Retract the cancellation before upgrading.",
+    })
     assert p.effect == "blocked"
     assert p.reason and "Retract" in p.reason
 
@@ -248,7 +257,10 @@ def test_no_fixture_when_env_unset(monkeypatch):
         ("mid", lambda s: s.current and s.current.tier_id == "plus"),
         ("top", lambda s: s.current and s.current.tier_id == "ultra"),
         ("not-admin", lambda s: s.role == "MEMBER" and not s.can_change_plan),
-        ("downgrade", lambda s: s.current and s.current.pending_downgrade_tier_name == "Plus"),
+        (
+            "downgrade",
+            lambda s: s.current and s.current.pending_downgrade_tier_name == "Plus",
+        ),
         ("cancel", lambda s: s.current and s.current.cancel_at_period_end),
         ("team", lambda s: s.context == "team" and s.current is None),
         ("logged-out", lambda s: not s.logged_in),

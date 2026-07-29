@@ -3,6 +3,7 @@
 Verifies that users get an immediate status response instead of total silence
 when the agent is working on a task. See PR fix for the @Lonely__MH report.
 """
+
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -36,6 +37,7 @@ from gateway.platforms.base import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_event(text="hello", chat_id="123", platform_val="telegram"):
     """Build a minimal MessageEvent."""
@@ -94,6 +96,7 @@ def _make_adapter(platform_val="telegram"):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestBusySessionAck:
     """User sends a message while agent is running — should get acknowledgment."""
@@ -266,7 +269,9 @@ class TestBusySessionAck:
         adapter._send_with_retry.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_steer_mode_calls_agent_steer_no_interrupt_no_queue(self, monkeypatch):
+    async def test_steer_mode_calls_agent_steer_no_interrupt_no_queue(
+        self, monkeypatch
+    ):
         """busy_input_mode='steer' injects via agent.steer() and skips queueing."""
         import gateway.run as _gr
 
@@ -302,7 +307,9 @@ class TestBusySessionAck:
         assert "Interrupting" not in content
 
     @pytest.mark.asyncio
-    async def test_steer_mode_can_suppress_visible_ack_without_disabling_steer(self, monkeypatch):
+    async def test_steer_mode_can_suppress_visible_ack_without_disabling_steer(
+        self, monkeypatch
+    ):
         """busy_steer_ack_enabled=false keeps steering but drops the echo bubble."""
         import gateway.run as _gr
 
@@ -310,7 +317,11 @@ class TestBusySessionAck:
         monkeypatch.setattr(
             _gr,
             "_load_gateway_config",
-            lambda: {"display": {"platforms": {"telegram": {"busy_steer_ack_enabled": False}}}},
+            lambda: {
+                "display": {
+                    "platforms": {"telegram": {"busy_steer_ack_enabled": False}}
+                }
+            },
         )
 
         runner, sentinel = _make_runner()
@@ -341,7 +352,9 @@ class TestBusySessionAck:
         monkeypatch.setattr(
             _gr,
             "_load_gateway_config",
-            lambda: {"display": {"platforms": {"telegram": {"busy_steer_ack_enabled": True}}}},
+            lambda: {
+                "display": {"platforms": {"telegram": {"busy_steer_ack_enabled": True}}}
+            },
         )
 
         runner, sentinel = _make_runner()
@@ -464,11 +477,17 @@ class TestBusySessionAck:
 
         def _evt(text):
             src = SessionSource(
-                platform=shared_platform, chat_id="123",
-                chat_type="dm", user_id="user1",
+                platform=shared_platform,
+                chat_id="123",
+                chat_type="dm",
+                user_id="user1",
             )
-            return MessageEvent(text=text, message_type=MessageType.TEXT,
-                                source=src, message_id=f"m-{text[:5]}")
+            return MessageEvent(
+                text=text,
+                message_type=MessageType.TEXT,
+                source=src,
+                message_id=f"m-{text[:5]}",
+            )
 
         first = _evt("first message")
         second = _evt("second message")
@@ -716,9 +735,12 @@ class TestBusySessionOnboardingHint:
 
         agent = MagicMock()
         agent.get_activity_summary.return_value = {
-            "api_call_count": 3, "max_iterations": 60,
-            "current_tool": None, "last_activity_ts": time.time(),
-            "last_activity_desc": "api", "seconds_since_activity": 0.1,
+            "api_call_count": 3,
+            "max_iterations": 60,
+            "current_tool": None,
+            "last_activity_ts": time.time(),
+            "last_activity_desc": "api",
+            "seconds_since_activity": 0.1,
         }
         runner._running_agents[sk] = agent
         runner._running_agents_ts[sk] = time.time() - 5
@@ -737,6 +759,7 @@ class TestBusySessionOnboardingHint:
 
         # The flag is now persisted to tmp_path/config.yaml
         import yaml
+
         cfg = yaml.safe_load((tmp_path / "config.yaml").read_text())
         assert cfg["onboarding"]["seen"]["busy_input_prompt"] is True
 
@@ -748,11 +771,14 @@ class TestBusySessionOnboardingHint:
 
         monkeypatch.setattr(_gr, "_clawk_home", tmp_path)
         # Pre-populate the config so is_seen() returns True from the start.
-        (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-            "onboarding": {"seen": {"busy_input_prompt": True}},
-        }))
+        (tmp_path / "config.yaml").write_text(
+            yaml.safe_dump({
+                "onboarding": {"seen": {"busy_input_prompt": True}},
+            })
+        )
         monkeypatch.setattr(
-            _gr, "_load_gateway_config",
+            _gr,
+            "_load_gateway_config",
             lambda: yaml.safe_load((tmp_path / "config.yaml").read_text()),
         )
 
@@ -765,9 +791,12 @@ class TestBusySessionOnboardingHint:
 
         agent = MagicMock()
         agent.get_activity_summary.return_value = {
-            "api_call_count": 3, "max_iterations": 60,
-            "current_tool": None, "last_activity_ts": time.time(),
-            "last_activity_desc": "api", "seconds_since_activity": 0.1,
+            "api_call_count": 3,
+            "max_iterations": 60,
+            "current_tool": None,
+            "last_activity_ts": time.time(),
+            "last_activity_desc": "api",
+            "seconds_since_activity": 0.1,
         }
         runner._running_agents[sk] = agent
         runner._running_agents_ts[sk] = time.time() - 5
@@ -828,9 +857,12 @@ class TestLongRunningNotificationOwnership:
         replacement_agent = MagicMock()
         runner._running_agents["sess"] = replacement_agent
 
-        assert runner._should_emit_long_running_notification(
-            "sess", original_agent, executor_task=None
-        ) is False
+        assert (
+            runner._should_emit_long_running_notification(
+                "sess", original_agent, executor_task=None
+            )
+            is False
+        )
 
     def test_notification_stops_after_executor_finishes(self):
         from gateway.run import GatewayRunner
@@ -842,9 +874,12 @@ class TestLongRunningNotificationOwnership:
         done_task = MagicMock()
         done_task.done.return_value = True
 
-        assert runner._should_emit_long_running_notification(
-            "sess", agent, executor_task=done_task
-        ) is False
+        assert (
+            runner._should_emit_long_running_notification(
+                "sess", agent, executor_task=done_task
+            )
+            is False
+        )
 
     def test_notification_stops_when_agent_is_gone(self):
         from gateway.run import GatewayRunner
@@ -852,9 +887,12 @@ class TestLongRunningNotificationOwnership:
         runner = object.__new__(GatewayRunner)
         runner._running_agents = {}
 
-        assert runner._should_emit_long_running_notification(
-            "sess", None, executor_task=None
-        ) is False
+        assert (
+            runner._should_emit_long_running_notification(
+                "sess", None, executor_task=None
+            )
+            is False
+        )
 
     def test_notification_continues_for_live_active_run(self):
         from gateway.run import GatewayRunner
@@ -866,6 +904,9 @@ class TestLongRunningNotificationOwnership:
         live_task = MagicMock()
         live_task.done.return_value = False
 
-        assert runner._should_emit_long_running_notification(
-            "sess", agent, executor_task=live_task
-        ) is True
+        assert (
+            runner._should_emit_long_running_notification(
+                "sess", agent, executor_task=live_task
+            )
+            is True
+        )

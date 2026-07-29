@@ -51,6 +51,7 @@ class TraceRedactionError(RuntimeError):
 # Conversion: Clawksis OpenAI-format messages -> Claude Code JSONL
 # ---------------------------------------------------------------------------
 
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
@@ -66,6 +67,7 @@ def _redact(text: Any, enabled: bool) -> Any:
         return text
     try:
         from agent.redact import redact_sensitive_text
+
         return redact_sensitive_text(text, force=True)
     except Exception as exc:
         logger.warning("Trace upload redaction failed; refusing upload", exc_info=True)
@@ -84,13 +86,19 @@ def _content_to_blocks(content: Any, redact: bool) -> List[Dict[str, Any]]:
             if isinstance(part, dict):
                 ptype = part.get("type")
                 if ptype == "text":
-                    blocks.append({"type": "text", "text": _redact(part.get("text", ""), redact)})
+                    blocks.append({
+                        "type": "text",
+                        "text": _redact(part.get("text", ""), redact),
+                    })
                 elif ptype in ("image_url", "image"):
                     # Keep a placeholder; the viewer renders text turns and we
                     # don't want to inline base64 blobs into a trace.
                     blocks.append({"type": "text", "text": "[image omitted]"})
                 else:
-                    blocks.append({"type": "text", "text": _redact(json.dumps(part), redact)})
+                    blocks.append({
+                        "type": "text",
+                        "text": _redact(json.dumps(part), redact),
+                    })
             else:
                 blocks.append({"type": "text", "text": _redact(str(part), redact)})
         return blocks
@@ -121,7 +129,9 @@ def _tool_calls_to_blocks(tool_calls: Any, redact: bool) -> List[Dict[str, Any]]
             try:
                 parsed = json.loads(_redact(json.dumps(parsed), redact))
             except (json.JSONDecodeError, ValueError):
-                logger.warning("Trace upload redacted tool arguments are not valid JSON; refusing upload")
+                logger.warning(
+                    "Trace upload redacted tool arguments are not valid JSON; refusing upload"
+                )
                 raise TraceRedactionError(_REDACTION_BLOCKED_MESSAGE)
         blocks.append({
             "type": "tool_use",
@@ -159,10 +169,14 @@ def build_trace_jsonl(
     git_branch = ""
     try:
         import subprocess
+
         if cwd:
             r = subprocess.run(
                 ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                capture_output=True, text=True, timeout=3, cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=3,
+                cwd=cwd,
             )
             if r.returncode == 0:
                 git_branch = r.stdout.strip()
@@ -207,7 +221,8 @@ def build_trace_jsonl(
         if role == "tool":
             tool_use_id = msg.get("tool_call_id") or msg.get("tool_name") or "tool"
             result_content = _redact(
-                msg.get("content") if isinstance(msg.get("content"), str)
+                msg.get("content")
+                if isinstance(msg.get("content"), str)
                 else json.dumps(msg.get("content")),
                 redact,
             )
@@ -215,11 +230,13 @@ def build_trace_jsonl(
             entry["type"] = "user"
             entry["message"] = {
                 "role": "user",
-                "content": [{
-                    "type": "tool_result",
-                    "tool_use_id": tool_use_id,
-                    "content": result_content,
-                }],
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": result_content,
+                    }
+                ],
             }
             lines.append(json.dumps(entry, ensure_ascii=False))
             parent = turn_uuid
@@ -244,9 +261,15 @@ def build_trace_jsonl(
 # Upload
 # ---------------------------------------------------------------------------
 
+
 def _resolve_hf_token() -> Optional[str]:
     """Return the user's Hugging Face token from the usual env vars."""
-    for var in ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACE_TOKEN"):
+    for var in (
+        "HF_TOKEN",
+        "HUGGINGFACE_HUB_TOKEN",
+        "HUGGING_FACE_HUB_TOKEN",
+        "HUGGINGFACE_TOKEN",
+    ):
         val = os.getenv(var)
         if val and val.strip():
             return val.strip()
@@ -257,7 +280,7 @@ _NO_TOKEN_MESSAGE = (
     "Can't upload — no Hugging Face token is available. To set it up:\n"
     "\n"
     "1. Create a token with WRITE access at https://huggingface.co/settings/tokens\n"
-    "   (New token -> type \"Write\" -> copy it).\n"
+    '   (New token -> type "Write" -> copy it).\n'
     "2. Add it to your environment as HF_TOKEN (e.g. in ~/.clawksis/.env):\n"
     "     HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxx\n"
     "3. Run /upload-trace again (or `clawk trace upload`)."
@@ -278,6 +301,7 @@ def _do_upload(
     """
     try:
         from tools import lazy_deps
+
         lazy_deps.ensure("tool.trace_upload", prompt=False)
     except Exception:
         # lazy-install unavailable/declined — fall through to the import,
@@ -286,8 +310,10 @@ def _do_upload(
     try:
         from huggingface_hub import HfApi
     except ImportError:
-        return ("Hugging Face upload needs the `huggingface_hub` package "
-                "(`pip install huggingface_hub`).")
+        return (
+            "Hugging Face upload needs the `huggingface_hub` package "
+            "(`pip install huggingface_hub`)."
+        )
 
     api = HfApi(token=token)
     try:
@@ -295,15 +321,20 @@ def _do_upload(
         user = who.get("name") if isinstance(who, dict) else None
     except Exception as e:
         logger.warning("HF whoami failed: %s", e)
-        return ("Your Hugging Face token was rejected (whoami failed). "
-                "Make sure it has WRITE access and isn't expired.")
+        return (
+            "Your Hugging Face token was rejected (whoami failed). "
+            "Make sure it has WRITE access and isn't expired."
+        )
     if not user:
         return "Could not resolve your Hugging Face username from the token."
 
     repo_id = f"{user}/{dataset_name}"
     try:
         api.create_repo(
-            repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True,
+            repo_id=repo_id,
+            repo_type="dataset",
+            private=private,
+            exist_ok=True,
         )
     except Exception as e:
         logger.warning("HF create_repo failed for %s: %s", repo_id, e)
@@ -322,8 +353,10 @@ def _do_upload(
         logger.warning("HF upload_file failed for %s: %s", repo_id, e)
         return f"Upload to Hugging Face failed: {e}"
 
-    return (f"Uploaded -> https://huggingface.co/datasets/{repo_id}/blob/main/{path_in_repo}\n"
-            f"View in the trace viewer: https://huggingface.co/datasets/{repo_id}")
+    return (
+        f"Uploaded -> https://huggingface.co/datasets/{repo_id}/blob/main/{path_in_repo}\n"
+        f"View in the trace viewer: https://huggingface.co/datasets/{repo_id}"
+    )
 
 
 def load_session_messages(
@@ -335,6 +368,7 @@ def load_session_messages(
     missing (messages may still be present for a live, untitled session).
     """
     from clawk_state import SessionDB
+
     db = SessionDB(db_path=db_path) if db_path else SessionDB()
     resolved = db.resolve_session_id(session_id) or session_id
     meta = db.get_session(resolved) or {}

@@ -29,10 +29,7 @@ def sample_repo(tmp_path: Path) -> Path:
 
     (repo / "src").mkdir()
     (repo / "src" / "main.py").write_text(
-        "def alpha():\n"
-        "    return 'a'\n\n"
-        "def beta():\n"
-        "    return 'b'\n",
+        "def alpha():\n    return 'a'\n\ndef beta():\n    return 'b'\n",
         encoding="utf-8",
     )
     (repo / "src" / "helper.py").write_text("VALUE = 1\n", encoding="utf-8")
@@ -43,10 +40,7 @@ def sample_repo(tmp_path: Path) -> Path:
     _git(repo, "commit", "-m", "initial")
 
     (repo / "src" / "main.py").write_text(
-        "def alpha():\n"
-        "    return 'changed'\n\n"
-        "def beta():\n"
-        "    return 'b'\n",
+        "def alpha():\n    return 'changed'\n\ndef beta():\n    return 'b'\n",
         encoding="utf-8",
     )
     (repo / "src" / "helper.py").write_text("VALUE = 2\n", encoding="utf-8")
@@ -305,7 +299,9 @@ def test_restricts_paths_to_allowed_root(tmp_path: Path):
     assert result.expanded
     assert "```\noutside\n```" not in result.message
     assert "inside" in result.message
-    assert any("outside the allowed workspace" in warning for warning in result.warnings)
+    assert any(
+        "outside the allowed workspace" in warning for warning in result.warnings
+    )
 
 
 def test_defaults_allowed_root_to_cwd(tmp_path: Path):
@@ -324,7 +320,9 @@ def test_defaults_allowed_root_to_cwd(tmp_path: Path):
 
     assert result.expanded
     assert "```\noutside\n```" not in result.message
-    assert any("outside the allowed workspace" in warning for warning in result.warnings)
+    assert any(
+        "outside the allowed workspace" in warning for warning in result.warnings
+    )
 
 
 @pytest.mark.asyncio
@@ -356,7 +354,9 @@ async def test_blocks_sensitive_home_and_clawk_paths(tmp_path: Path, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_blocks_canonical_read_denylist_credential_stores(tmp_path: Path, monkeypatch):
+async def test_blocks_canonical_read_denylist_credential_stores(
+    tmp_path: Path, monkeypatch
+):
     """@file expansion must honour the canonical read deny-list.
 
     The narrow in-module list historically missed the real credential stores
@@ -408,7 +408,9 @@ async def test_blocks_canonical_read_denylist_credential_stores(tmp_path: Path, 
 
 
 @pytest.mark.asyncio
-async def test_canonical_guard_fails_closed_when_lookup_raises(tmp_path: Path, monkeypatch):
+async def test_canonical_guard_fails_closed_when_lookup_raises(
+    tmp_path: Path, monkeypatch
+):
     """If the canonical read guard raises, the reference must fail CLOSED.
 
     The guard exists specifically to cover credential stores the narrow local

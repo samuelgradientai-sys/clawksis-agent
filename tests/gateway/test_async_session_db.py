@@ -56,6 +56,7 @@ class _SpyDB:
 # Facade behaviour
 # --------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_offloads_off_calling_thread():
     """A call must execute on a worker thread, not the caller's loop thread."""
@@ -181,14 +182,19 @@ class _RawCallVisitor:
         # (helper, lineno, enclosing_fn) for the contract test.
         self.bare_helper_calls = []
 
-        awaited = {id(n.value) for n in ast.walk(tree)
-                   if isinstance(n, ast.Await) and isinstance(n.value, ast.Call)}
+        awaited = {
+            id(n.value)
+            for n in ast.walk(tree)
+            if isinstance(n, ast.Await) and isinstance(n.value, ast.Call)
+        }
         alias_names = self._collect_alias_names(tree)
         # Map each node to the name of the function whose body lexically encloses
         # it, so DB calls inside an offloaded helper (which runs off-loop) are
         # exempt while bare on-loop calls are not.
         enclosing = self._enclosing_fn_map(tree)
-        ancestry = self._ancestor_fns(tree)  # id(node) -> frozenset of enclosing fn names
+        ancestry = self._ancestor_fns(
+            tree
+        )  # id(node) -> frozenset of enclosing fn names
 
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
@@ -202,12 +208,15 @@ class _RawCallVisitor:
             # offload passes the helper as an attribute arg, not a Call, so it
             # never lands here — exactly the distinction the contract test needs.
             if (
-                isinstance(func.value, ast.Name) and func.value.id == "self"
+                isinstance(func.value, ast.Name)
+                and func.value.id == "self"
                 and func.attr in _OFFLOADED_SYNC_HELPERS
             ):
-                self.bare_helper_calls.append(
-                    (func.attr, node.lineno, ancestry.get(id(node), frozenset()))
-                )
+                self.bare_helper_calls.append((
+                    func.attr,
+                    node.lineno,
+                    ancestry.get(id(node), frozenset()),
+                ))
             # alias.<method>(...)  -> aliased loop call (var bound to _session_db)
             if (
                 isinstance(func.value, ast.Name)
@@ -300,9 +309,12 @@ class _RawCallVisitor:
                 for tgt in node.targets:
                     if isinstance(tgt, ast.Name):
                         names.add(tgt.id)
-            elif isinstance(node, ast.AnnAssign) and node.value is not None \
-                    and cls._is_session_db_source(node.value) \
-                    and isinstance(node.target, ast.Name):
+            elif (
+                isinstance(node, ast.AnnAssign)
+                and node.value is not None
+                and cls._is_session_db_source(node.value)
+                and isinstance(node.target, ast.Name)
+            ):
                 names.add(node.target.id)
         return names
 
@@ -325,7 +337,9 @@ def test_no_raw_session_db_calls_on_gateway_loop():
     for rel in _GATEWAY_FILES:
         v = _scan(rel)
         violations.extend(f"{rel}:{ln} self._session_db.{m}(" for m, ln in v.raw_calls)
-        violations.extend(f"{rel}:{ln} <alias>.{m}( (binds _session_db)" for m, ln in v.alias_calls)
+        violations.extend(
+            f"{rel}:{ln} <alias>.{m}( (binds _session_db)" for m, ln in v.alias_calls
+        )
     assert not violations, (
         "Non-awaited SessionDB calls on the gateway loop — route through "
         "AsyncSessionDB (await ...):\n  " + "\n  ".join(violations)
@@ -378,6 +392,7 @@ def test_offloaded_helpers_never_called_bare_on_loop():
 # atomic operations (compare-and-set, INSERT OR IGNORE) to stay single-winner.
 # These pin that the defenses hold when driven concurrently through the facade.
 # --------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_concurrent_claim_handoff_single_winner(tmp_path):

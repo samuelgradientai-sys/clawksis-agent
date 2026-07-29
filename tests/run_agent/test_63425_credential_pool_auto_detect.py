@@ -4,6 +4,7 @@ When AIAgent is constructed with provider=None and a recognized endpoint URL,
 the provider auto-detection works but the credential pool is discarded because
 pool validation runs before URL-based provider inference.
 """
+
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
@@ -28,6 +29,7 @@ class TestCredentialPoolPreservedOnAutoDetect:
 
         # Build a minimal agent-like object (like tests use object.__new__)
         from run_agent import AIAgent
+
         agent = object.__new__(AIAgent)
         agent._base_url = ""
         agent._base_url_lower = ""
@@ -35,19 +37,29 @@ class TestCredentialPoolPreservedOnAutoDetect:
 
         pool = SimpleNamespace(provider="anthropic")
 
-        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(None, None)), \
-             patch("run_agent.get_tool_definitions", return_value=[]), \
-             patch('agent.anthropic_adapter.build_anthropic_client', return_value=MagicMock()), \
-             patch('agent.anthropic_adapter.resolve_anthropic_token', return_value=''), \
-             patch('agent.anthropic_adapter._is_oauth_token', return_value=False), \
-             patch('agent.azure_identity_adapter.is_token_provider', return_value=False), \
-             patch('clawk_cli.model_normalize.normalize_model_for_provider', return_value='test-model'), \
-             patch('agent.credential_pool.load_pool', return_value=MagicMock()), \
-             patch('clawk_cli.config.load_config', return_value={}), \
-             patch('clawk_cli.config.get_compatible_custom_providers', return_value=[]), \
-             patch('agent.iteration_budget.IterationBudget'), \
-             patch('clawk_cli.config.cfg_get', return_value=None):
-
+        with (
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(None, None),
+            ),
+            patch("run_agent.get_tool_definitions", return_value=[]),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
+            patch("agent.anthropic_adapter.resolve_anthropic_token", return_value=""),
+            patch("agent.anthropic_adapter._is_oauth_token", return_value=False),
+            patch("agent.azure_identity_adapter.is_token_provider", return_value=False),
+            patch(
+                "clawk_cli.model_normalize.normalize_model_for_provider",
+                return_value="test-model",
+            ),
+            patch("agent.credential_pool.load_pool", return_value=MagicMock()),
+            patch("clawk_cli.config.load_config", return_value={}),
+            patch("clawk_cli.config.get_compatible_custom_providers", return_value=[]),
+            patch("agent.iteration_budget.IterationBudget"),
+            patch("clawk_cli.config.cfg_get", return_value=None),
+        ):
             init_agent(
                 agent,
                 base_url="https://api.anthropic.com",
@@ -82,6 +94,7 @@ class TestCredentialPoolPreservedOnAutoDetect:
         passed credential_pool should remain attached."""
         from agent.agent_init import init_agent
         from run_agent import AIAgent
+
         agent = object.__new__(AIAgent)
         agent._base_url = ""
         agent._base_url_lower = ""
@@ -89,20 +102,33 @@ class TestCredentialPoolPreservedOnAutoDetect:
 
         pool = SimpleNamespace(provider="openai-codex")
 
-        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(_mock_client("key", "https://chatgpt.com/backend-api/codex"), None)), \
-             patch("run_agent.get_tool_definitions", return_value=[]), \
-             patch("run_agent.OpenAI", return_value=MagicMock()), \
-             patch('agent.anthropic_adapter.build_anthropic_client', return_value=MagicMock()), \
-             patch('agent.anthropic_adapter.resolve_anthropic_token', return_value=''), \
-             patch('agent.anthropic_adapter._is_oauth_token', return_value=False), \
-             patch('agent.azure_identity_adapter.is_token_provider', return_value=False), \
-             patch('clawk_cli.model_normalize.normalize_model_for_provider', return_value='test-model'), \
-             patch('agent.credential_pool.load_pool', return_value=MagicMock()), \
-             patch('clawk_cli.config.load_config', return_value={}), \
-             patch('clawk_cli.config.get_compatible_custom_providers', return_value=[]), \
-             patch('agent.iteration_budget.IterationBudget'), \
-             patch('clawk_cli.config.cfg_get', return_value=None):
-
+        with (
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(
+                    _mock_client("key", "https://chatgpt.com/backend-api/codex"),
+                    None,
+                ),
+            ),
+            patch("run_agent.get_tool_definitions", return_value=[]),
+            patch("run_agent.OpenAI", return_value=MagicMock()),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
+            patch("agent.anthropic_adapter.resolve_anthropic_token", return_value=""),
+            patch("agent.anthropic_adapter._is_oauth_token", return_value=False),
+            patch("agent.azure_identity_adapter.is_token_provider", return_value=False),
+            patch(
+                "clawk_cli.model_normalize.normalize_model_for_provider",
+                return_value="test-model",
+            ),
+            patch("agent.credential_pool.load_pool", return_value=MagicMock()),
+            patch("clawk_cli.config.load_config", return_value={}),
+            patch("clawk_cli.config.get_compatible_custom_providers", return_value=[]),
+            patch("agent.iteration_budget.IterationBudget"),
+            patch("clawk_cli.config.cfg_get", return_value=None),
+        ):
             init_agent(
                 agent,
                 base_url="https://chatgpt.com/backend-api/codex",
@@ -132,6 +158,7 @@ class TestCredentialPoolPreservedOnAutoDetect:
         credential_pool should remain attached."""
         from agent.agent_init import init_agent
         from run_agent import AIAgent
+
         agent = object.__new__(AIAgent)
         agent._base_url = ""
         agent._base_url_lower = ""
@@ -139,20 +166,30 @@ class TestCredentialPoolPreservedOnAutoDetect:
 
         pool = SimpleNamespace(provider="xai")
 
-        with patch("agent.auxiliary_client.resolve_provider_client", return_value=(_mock_client("key", "https://api.x.ai"), None)), \
-             patch("run_agent.get_tool_definitions", return_value=[]), \
-             patch("run_agent.OpenAI", return_value=MagicMock()), \
-             patch('agent.anthropic_adapter.build_anthropic_client', return_value=MagicMock()), \
-             patch('agent.anthropic_adapter.resolve_anthropic_token', return_value=''), \
-             patch('agent.anthropic_adapter._is_oauth_token', return_value=False), \
-             patch('agent.azure_identity_adapter.is_token_provider', return_value=False), \
-             patch('clawk_cli.model_normalize.normalize_model_for_provider', return_value='test-model'), \
-             patch('agent.credential_pool.load_pool', return_value=MagicMock()), \
-             patch('clawk_cli.config.load_config', return_value={}), \
-             patch('clawk_cli.config.get_compatible_custom_providers', return_value=[]), \
-             patch('agent.iteration_budget.IterationBudget'), \
-             patch('clawk_cli.config.cfg_get', return_value=None):
-
+        with (
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(_mock_client("key", "https://api.x.ai"), None),
+            ),
+            patch("run_agent.get_tool_definitions", return_value=[]),
+            patch("run_agent.OpenAI", return_value=MagicMock()),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                return_value=MagicMock(),
+            ),
+            patch("agent.anthropic_adapter.resolve_anthropic_token", return_value=""),
+            patch("agent.anthropic_adapter._is_oauth_token", return_value=False),
+            patch("agent.azure_identity_adapter.is_token_provider", return_value=False),
+            patch(
+                "clawk_cli.model_normalize.normalize_model_for_provider",
+                return_value="test-model",
+            ),
+            patch("agent.credential_pool.load_pool", return_value=MagicMock()),
+            patch("clawk_cli.config.load_config", return_value={}),
+            patch("clawk_cli.config.get_compatible_custom_providers", return_value=[]),
+            patch("agent.iteration_budget.IterationBudget"),
+            patch("clawk_cli.config.cfg_get", return_value=None),
+        ):
             init_agent(
                 agent,
                 base_url="https://api.x.ai",

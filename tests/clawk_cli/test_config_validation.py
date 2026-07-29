@@ -1,6 +1,5 @@
 """Tests for config.yaml structure validation (validate_config_structure)."""
 
-
 from clawk_cli.config import (
     DEFAULT_CONFIG,
     _EXTRA_KNOWN_ROOT_KEYS,
@@ -45,7 +44,9 @@ class TestCustomProvidersValidation:
         })
         warnings = [i for i in issues if i.severity == "warning"]
         # Should flag base_url, api_key as looking like custom_providers entry fields
-        misplaced = [i for i in warnings if "custom_providers entry fields" in i.message]
+        misplaced = [
+            i for i in warnings if "custom_providers entry fields" in i.message
+        ]
         assert len(misplaced) == 1
 
     def test_dict_detects_nested_fallback(self):
@@ -57,7 +58,9 @@ class TestCustomProvidersValidation:
             },
         })
         errors = [i for i in issues if i.severity == "error"]
-        assert any("fallback_model" in i.message and "inside" in i.message for i in errors)
+        assert any(
+            "fallback_model" in i.message and "inside" in i.message for i in errors
+        )
 
     def test_valid_list_no_issues(self):
         """Properly formatted custom_providers should produce no issues."""
@@ -159,7 +162,9 @@ class TestFallbackModelValidation:
                 {"model": "claude-sonnet-4-6"},
             ],
         })
-        assert any("fallback_model[1]" in i.message and "provider" in i.message for i in issues)
+        assert any(
+            "fallback_model[1]" in i.message and "provider" in i.message for i in issues
+        )
 
     def test_fallback_list_entry_missing_model(self):
         issues = validate_config_structure({
@@ -167,13 +172,18 @@ class TestFallbackModelValidation:
                 {"provider": "openrouter"},
             ],
         })
-        assert any("fallback_model[0]" in i.message and "model" in i.message for i in issues)
+        assert any(
+            "fallback_model[0]" in i.message and "model" in i.message for i in issues
+        )
 
     def test_fallback_list_entry_not_a_dict(self):
         issues = validate_config_structure({
             "fallback_model": ["openrouter:anthropic/claude-sonnet-4"],
         })
-        assert any("fallback_model[0]" in i.message and "should be a dict" in i.message for i in issues)
+        assert any(
+            "fallback_model[0]" in i.message and "should be a dict" in i.message
+            for i in issues
+        )
 
 
 class TestMissingModelSection:
@@ -240,7 +250,10 @@ class TestUnknownTopLevelKeys:
         """_KNOWN_ROOT_KEYS must be DEFAULT_CONFIG.keys() plus extras — single source of truth."""
         assert set(DEFAULT_CONFIG.keys()).issubset(_KNOWN_ROOT_KEYS)
         assert _EXTRA_KNOWN_ROOT_KEYS.issubset(_KNOWN_ROOT_KEYS)
-        assert _KNOWN_ROOT_KEYS == frozenset(DEFAULT_CONFIG.keys()) | _EXTRA_KNOWN_ROOT_KEYS
+        assert (
+            _KNOWN_ROOT_KEYS
+            == frozenset(DEFAULT_CONFIG.keys()) | _EXTRA_KNOWN_ROOT_KEYS
+        )
 
     def test_provider_like_unknown_root_keeps_misplaced_message(self):
         """Preserve existing base_url/api_key root-level guidance."""
@@ -249,7 +262,8 @@ class TestUnknownTopLevelKeys:
             "api_key": "secret",
         })
         misplaced = [
-            i for i in issues
+            i
+            for i in issues
             if i.severity == "warning" and "looks misplaced" in i.message
         ]
         assert any("base_url" in i.message for i in misplaced)

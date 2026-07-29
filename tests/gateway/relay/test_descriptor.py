@@ -74,7 +74,9 @@ def test_from_json_normalizes_negative_max_message_length_to_default():
 
 def test_from_json_keeps_a_real_positive_bound():
     """A normal positive bound is passed through unchanged."""
-    d = CapabilityDescriptor.from_json(_telegram_descriptor(max_message_length=2000).to_json())
+    d = CapabilityDescriptor.from_json(
+        _telegram_descriptor(max_message_length=2000).to_json()
+    )
     assert d.max_message_length == 2000
 
 

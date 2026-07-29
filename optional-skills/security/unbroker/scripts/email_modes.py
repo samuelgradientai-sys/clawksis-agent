@@ -7,6 +7,7 @@ resolve the verification link with `extract_verification_link`. Those transports
 are driven by the agent through native tools; this module stays network-free so
 the hermetic tests pass.
 """
+
 from __future__ import annotations
 
 import re
@@ -16,7 +17,16 @@ import legal
 import paths
 
 _LINK_RE = re.compile(r"https?://[^\s\"'<>)\]]+", re.IGNORECASE)
-_VERIFY_HINTS = ("opt", "remov", "verif", "confirm", "unsubscrib", "suppress", "delete", "privacy")
+_VERIFY_HINTS = (
+    "opt",
+    "remov",
+    "verif",
+    "confirm",
+    "unsubscrib",
+    "suppress",
+    "delete",
+    "privacy",
+)
 
 
 def render_draft(broker: dict, fields: dict, out_dir: Path | None = None) -> Path:
@@ -29,8 +39,9 @@ def render_draft(broker: dict, fields: dict, out_dir: Path | None = None) -> Pat
     return fp
 
 
-def render_request_draft(broker: dict, fields: dict, kind: str = "generic",
-                         out_dir: Path | None = None) -> Path:
+def render_request_draft(
+    broker: dict, fields: dict, kind: str = "generic", out_dir: Path | None = None
+) -> Path:
     """Mode A: write a ready-to-send request of a specific KIND.
 
     kind: generic | ccpa | ccpa_agent | ccpa_indirect | gdpr. Used for indirect-exposure
@@ -46,7 +57,9 @@ def render_request_draft(broker: dict, fields: dict, kind: str = "generic",
     return fp
 
 
-def extract_verification_link(email_body: str, broker: dict | None = None) -> str | None:
+def extract_verification_link(
+    email_body: str, broker: dict | None = None
+) -> str | None:
     """Return the most likely opt-out/verification link from an email body.
 
     Anti-phishing: a link is only returned if its URL matches an opt-out hint
@@ -58,7 +71,11 @@ def extract_verification_link(email_body: str, broker: dict | None = None) -> st
 
     domain = ""
     if broker:
-        url = (broker.get("optout") or {}).get("url") or (broker.get("search") or {}).get("url") or ""
+        url = (
+            (broker.get("optout") or {}).get("url")
+            or (broker.get("search") or {}).get("url")
+            or ""
+        )
         m = re.search(r"https?://([^/]+)", url)
         if m:
             domain = m.group(1).replace("www.", "")

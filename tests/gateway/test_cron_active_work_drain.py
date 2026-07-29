@@ -130,7 +130,9 @@ class TestDrainWaitsForCronWork:
 
 class TestKillToolSubprocessesMarksCronInterrupted:
     @pytest.mark.asyncio
-    async def test_in_flight_cron_job_marked_interrupted_on_forced_kill(self, monkeypatch):
+    async def test_in_flight_cron_job_marked_interrupted_on_forced_kill(
+        self, monkeypatch
+    ):
         import cron.scheduler as sched
         import tools.process_registry as _pr
         import tools.terminal_tool as _tt
@@ -156,11 +158,16 @@ class TestKillToolSubprocessesMarksCronInterrupted:
 
         monkeypatch.setattr(sched, "mark_running_jobs_interrupted", _spy)
 
-        with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"), \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("gateway.status.remove_pid_file"),
+            patch("gateway.status.write_runtime_status"),
+            patch("cron.scheduler.mark_job_run"),
+        ):
             await runner.stop()
 
-        assert marked_calls, "mark_running_jobs_interrupted was never called during shutdown"
+        assert marked_calls, (
+            "mark_running_jobs_interrupted was never called during shutdown"
+        )
         assert any(result == ["job-1"] for _reason, result in marked_calls)
 
     @pytest.mark.asyncio
@@ -178,8 +185,11 @@ class TestKillToolSubprocessesMarksCronInterrupted:
         monkeypatch.setattr(_tt, "cleanup_all_environments", lambda: None)
         monkeypatch.setattr(_bt, "cleanup_all_browsers", lambda: None)
 
-        with patch("gateway.status.remove_pid_file"), patch("gateway.status.write_runtime_status"), \
-             patch("cron.scheduler.mark_job_run") as mock_mark:
+        with (
+            patch("gateway.status.remove_pid_file"),
+            patch("gateway.status.write_runtime_status"),
+            patch("cron.scheduler.mark_job_run") as mock_mark,
+        ):
             await runner.stop()
 
         mock_mark.assert_not_called()

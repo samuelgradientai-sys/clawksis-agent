@@ -182,7 +182,9 @@ def test_sessions_export_jsonl_requires_output_path(monkeypatch, capsys):
     assert "requires an output path" in capsys.readouterr().out
 
 
-def test_sessions_export_md_bulk_dry_run_lists_candidates(monkeypatch, tmp_path, capsys):
+def test_sessions_export_md_bulk_dry_run_lists_candidates(
+    monkeypatch, tmp_path, capsys
+):
     import clawk_cli.main as main_mod
     import clawk_state
 
@@ -260,7 +262,11 @@ def test_sessions_export_md_bulk_writes_manifest(monkeypatch, tmp_path, capsys):
             return [{"id": "s1"}, {"id": "s2"}]
 
         def export_session_lineage(self, session_id):
-            return {"id": session_id, "title": session_id, "messages": [{"role": "user", "content": session_id}]}
+            return {
+                "id": session_id,
+                "title": session_id,
+                "messages": [{"role": "user", "content": session_id}],
+            }
 
         def close(self):
             pass
@@ -293,7 +299,9 @@ def test_sessions_export_md_bulk_writes_manifest(monkeypatch, tmp_path, capsys):
     assert "Exported 2 session(s)" in capsys.readouterr().out
 
 
-def test_sessions_export_md_delete_after_verified_requires_yes(monkeypatch, tmp_path, capsys):
+def test_sessions_export_md_delete_after_verified_requires_yes(
+    monkeypatch, tmp_path, capsys
+):
     import clawk_cli.main as main_mod
     import clawk_state
 
@@ -323,7 +331,9 @@ def test_sessions_export_md_delete_after_verified_requires_yes(monkeypatch, tmp_
     assert "requires --yes" in capsys.readouterr().out
 
 
-def test_sessions_export_md_delete_after_verified_deletes_after_file_check(monkeypatch, tmp_path, capsys):
+def test_sessions_export_md_delete_after_verified_deletes_after_file_check(
+    monkeypatch, tmp_path, capsys
+):
     import clawk_cli.main as main_mod
     import clawk_state
 
@@ -334,7 +344,12 @@ def test_sessions_export_md_delete_after_verified_deletes_after_file_check(monke
             return "s1"
 
         def export_session(self, session_id):
-            return {"id": "s1", "title": "Delete", "message_count": 1, "messages": [{"role": "user", "content": "safe"}]}
+            return {
+                "id": "s1",
+                "title": "Delete",
+                "message_count": 1,
+                "messages": [{"role": "user", "content": "safe"}],
+            }
 
         def delete_session(self, session_id, **kwargs):
             captured["deleted"] = session_id
@@ -386,8 +401,15 @@ def test_sessions_export_md_accepts_duration_age_grammar(monkeypatch, tmp_path, 
         sys,
         "argv",
         [
-            "clawk", "sessions", "export", "--format", "md",
-            "--older-than", "2w", "--dry-run", str(tmp_path),
+            "clawk",
+            "sessions",
+            "export",
+            "--format",
+            "md",
+            "--older-than",
+            "2w",
+            "--dry-run",
+            str(tmp_path),
         ],
     )
 
@@ -396,7 +418,9 @@ def test_sessions_export_md_accepts_duration_age_grammar(monkeypatch, tmp_path, 
     assert "Would export 1 session(s)" in capsys.readouterr().out
 
 
-def test_sessions_export_md_supports_extended_prune_filters(monkeypatch, tmp_path, capsys):
+def test_sessions_export_md_supports_extended_prune_filters(
+    monkeypatch, tmp_path, capsys
+):
     """Filters like --model/--min-messages pass through the shared machinery."""
     import clawk_cli.main as main_mod
     import clawk_state
@@ -416,8 +440,16 @@ def test_sessions_export_md_supports_extended_prune_filters(monkeypatch, tmp_pat
         sys,
         "argv",
         [
-            "clawk", "sessions", "export", "--format", "md",
-            "--model", "sonnet", "--min-messages", "5", "--dry-run",
+            "clawk",
+            "sessions",
+            "export",
+            "--format",
+            "md",
+            "--model",
+            "sonnet",
+            "--min-messages",
+            "5",
+            "--dry-run",
             str(tmp_path),
         ],
     )
@@ -445,7 +477,9 @@ def test_sessions_export_jsonl_honors_filters(monkeypatch, tmp_path, capsys):
             return {"id": session_id, "messages": [{"role": "user", "content": "hi"}]}
 
         def export_all(self, **kwargs):
-            raise AssertionError("filtered jsonl export must not fall back to export_all")
+            raise AssertionError(
+                "filtered jsonl export must not fall back to export_all"
+            )
 
         def close(self):
             pass
@@ -486,7 +520,11 @@ def test_sessions_export_redact_scrubs_secrets(monkeypatch, tmp_path):
                 "id": "s1",
                 "title": "Redact",
                 "messages": [
-                    {"role": "tool", "name": "terminal", "content": f"api key: {secret}"}
+                    {
+                        "role": "tool",
+                        "name": "terminal",
+                        "content": f"api key: {secret}",
+                    }
                 ],
             }
 
@@ -498,8 +536,15 @@ def test_sessions_export_redact_scrubs_secrets(monkeypatch, tmp_path):
         sys,
         "argv",
         [
-            "clawk", "sessions", "export", "--format", "md",
-            "--session-id", "s1", "--redact", str(tmp_path),
+            "clawk",
+            "sessions",
+            "export",
+            "--format",
+            "md",
+            "--session-id",
+            "s1",
+            "--redact",
+            str(tmp_path),
         ],
     )
 
@@ -543,7 +588,16 @@ def test_sessions_export_trace_writes_claude_jsonl(monkeypatch, tmp_path, capsys
     monkeypatch.setattr(
         sys,
         "argv",
-        ["clawk", "sessions", "export", "--format", "trace", "--session-id", "s1", str(out)],
+        [
+            "clawk",
+            "sessions",
+            "export",
+            "--format",
+            "trace",
+            "--session-id",
+            "s1",
+            str(out),
+        ],
     )
 
     main_mod.main()
@@ -595,8 +649,15 @@ def test_sessions_export_trace_upload_routes_to_uploader(monkeypatch, capsys):
         sys,
         "argv",
         [
-            "clawk", "sessions", "export", "--format", "trace",
-            "--session-id", "s1", "--upload", "--public",
+            "clawk",
+            "sessions",
+            "export",
+            "--format",
+            "trace",
+            "--session-id",
+            "s1",
+            "--upload",
+            "--public",
         ],
     )
 
@@ -618,11 +679,21 @@ def test_sessions_export_trace_only_flag_rejected(monkeypatch, capsys):
         sys,
         "argv",
         [
-            "clawk", "sessions", "export", "--format", "trace",
-            "--session-id", "s1", "--only", "user-prompts", "-",
+            "clawk",
+            "sessions",
+            "export",
+            "--format",
+            "trace",
+            "--session-id",
+            "s1",
+            "--only",
+            "user-prompts",
+            "-",
         ],
     )
 
     main_mod.main()
 
-    assert "--only user-prompts supports --format jsonl or md." in capsys.readouterr().out
+    assert (
+        "--only user-prompts supports --format jsonl or md." in capsys.readouterr().out
+    )

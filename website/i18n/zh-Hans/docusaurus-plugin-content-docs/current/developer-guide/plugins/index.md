@@ -147,11 +147,22 @@ import math
 
 # Safe globals for expression evaluation — no file/network access
 _SAFE_MATH = {
-    "abs": abs, "round": round, "min": min, "max": max,
-    "pow": pow, "sqrt": math.sqrt, "sin": math.sin, "cos": math.cos,
-    "tan": math.tan, "log": math.log, "log2": math.log2, "log10": math.log10,
-    "floor": math.floor, "ceil": math.ceil,
-    "pi": math.pi, "e": math.e,
+    "abs": abs,
+    "round": round,
+    "min": min,
+    "max": max,
+    "pow": pow,
+    "sqrt": math.sqrt,
+    "sin": math.sin,
+    "cos": math.cos,
+    "tan": math.tan,
+    "log": math.log,
+    "log2": math.log2,
+    "log10": math.log10,
+    "floor": math.floor,
+    "ceil": math.ceil,
+    "pi": math.pi,
+    "e": math.e,
     "factorial": math.factorial,
 }
 
@@ -187,9 +198,9 @@ _TIME = {"s": 1, "ms": 0.001, "min": 60, "hr": 3600, "day": 86400}
 
 def _convert_temp(value, from_u, to_u):
     # Normalize to Celsius
-    c = {"F": (value - 32) * 5/9, "K": value - 273.15}.get(from_u, value)
+    c = {"F": (value - 32) * 5 / 9, "K": value - 273.15}.get(from_u, value)
     # Convert to target
-    return {"F": c * 9/5 + 32, "K": c + 273.15}.get(to_u, c)
+    return {"F": c * 9 / 5 + 32, "K": c + 273.15}.get(to_u, c)
 
 
 def unit_convert(args: dict, **kwargs) -> str:
@@ -203,19 +214,24 @@ def unit_convert(args: dict, **kwargs) -> str:
 
     try:
         # Temperature
-        if from_unit.upper() in {"C","F","K"} and to_unit.upper() in {"C","F","K"}:
+        if from_unit.upper() in {"C", "F", "K"} and to_unit.upper() in {"C", "F", "K"}:
             result = _convert_temp(float(value), from_unit.upper(), to_unit.upper())
-            return json.dumps({"input": f"{value} {from_unit}", "result": round(result, 4),
-                             "output": f"{round(result, 4)} {to_unit}"})
+            return json.dumps({
+                "input": f"{value} {from_unit}",
+                "result": round(result, 4),
+                "output": f"{round(result, 4)} {to_unit}",
+            })
 
         # Ratio-based conversions
         for table in (_LENGTH, _WEIGHT, _DATA, _TIME):
             lc = {k.lower(): v for k, v in table.items()}
             if from_unit.lower() in lc and to_unit.lower() in lc:
                 result = float(value) * lc[from_unit.lower()] / lc[to_unit.lower()]
-                return json.dumps({"input": f"{value} {from_unit}",
-                                 "result": round(result, 6),
-                                 "output": f"{round(result, 6)} {to_unit}"})
+                return json.dumps({
+                    "input": f"{value} {from_unit}",
+                    "result": round(result, 6),
+                    "output": f"{round(result, 6)} {to_unit}",
+                })
 
         return json.dumps({"error": f"Cannot convert {from_unit} → {to_unit}"})
     except Exception as e:
@@ -244,6 +260,7 @@ logger = logging.getLogger(__name__)
 # Track tool usage via hooks
 _call_log = []
 
+
 def _on_post_tool_call(tool_name, args, result, task_id, **kwargs):
     """Hook: runs after every tool call (not just ours)."""
     _call_log.append({"tool": tool_name, "session": task_id})
@@ -254,10 +271,18 @@ def _on_post_tool_call(tool_name, args, result, task_id, **kwargs):
 
 def register(ctx):
     """Wire schemas to handlers and register hooks."""
-    ctx.register_tool(name="calculate",    toolset="calculator",
-                      schema=schemas.CALCULATE,    handler=tools.calculate)
-    ctx.register_tool(name="unit_convert", toolset="calculator",
-                      schema=schemas.UNIT_CONVERT, handler=tools.unit_convert)
+    ctx.register_tool(
+        name="calculate",
+        toolset="calculator",
+        schema=schemas.CALCULATE,
+        handler=tools.calculate,
+    )
+    ctx.register_tool(
+        name="unit_convert",
+        toolset="calculator",
+        schema=schemas.UNIT_CONVERT,
+        handler=tools.unit_convert,
+    )
 
     # This hook fires for ALL tool calls, not just ours
     ctx.register_hook("post_tool_call", _on_post_tool_call)
@@ -279,6 +304,7 @@ def handle_scan(ctx, argstr):
     """Implement /scan by invoking the terminal tool through the registry."""
     result = ctx.dispatch_tool("terminal", {"command": f"find . -name '{argstr}'"})
     return result  # returned to the caller's chat UI
+
 
 def register(ctx):
     ctx.register_command("scan", handle_scan, help="Find files matching a glob")
@@ -396,6 +422,7 @@ with open(_DATA_FILE) as f:
 ```python
 from pathlib import Path
 
+
 def register(ctx):
     skills_dir = Path(__file__).parent / "skills"
     for child in sorted(skills_dir.iterdir()):
@@ -407,8 +434,8 @@ def register(ctx):
 代理现在可以通过命名空间名称加载你的技能：
 
 ```python
-skill_view("my-plugin:my-workflow")   # → 插件版本
-skill_view("my-workflow")              # → 内置版本（不受影响）
+skill_view("my-plugin:my-workflow")  # → 插件版本
+skill_view("my-workflow")  # → 内置版本（不受影响）
 ```
 
 **关键特性：**
@@ -463,13 +490,15 @@ requires_env:
 # tools.py
 from tools.lazy_deps import ensure, FeatureUnavailable
 
+
 def my_tool_handler(args, **kwargs):
     try:
-        ensure("my-plugin.my-backend")   # key must be in LAZY_DEPS
+        ensure("my-plugin.my-backend")  # key must be in LAZY_DEPS
     except FeatureUnavailable as exc:
         return {"error": str(exc)}
 
-    import my_backend_sdk   # safe now
+    import my_backend_sdk  # safe now
+
     ...
 ```
 
@@ -504,11 +533,11 @@ ctx.register_tool(
 ```python
 def register(ctx):
     ctx.register_tool(
-        name="browser_navigate",             # 与内置工具同名
-        toolset="plugin_my_browser",         # 你自己的 toolset 命名空间
+        name="browser_navigate",  # 与内置工具同名
+        toolset="plugin_my_browser",  # 你自己的 toolset 命名空间
         schema={...},
         handler=my_custom_navigate,
-        override=True,                       # 显式启用覆盖
+        override=True,  # 显式启用覆盖
     )
 ```
 
@@ -552,7 +581,9 @@ def register(ctx):
 
 ```python
 # 包含 context 键的字典
-return {"context": "Recalled memories:\n- User prefers dark mode\n- Last project: clawksis-agent"}
+return {
+    "context": "Recalled memories:\n- User prefers dark mode\n- Last project: clawksis-agent"
+}
 
 # 纯字符串（等同于上面的字典形式）
 return "Recalled memories:\n- User prefers dark mode"
@@ -580,13 +611,18 @@ import httpx
 
 MEMORY_API = "https://your-memory-api.example.com"
 
+
 def recall_context(session_id, user_message, is_first_turn, **kwargs):
     """Called before each LLM turn. Returns recalled memories."""
     try:
-        resp = httpx.post(f"{MEMORY_API}/recall", json={
-            "session_id": session_id,
-            "query": user_message,
-        }, timeout=3)
+        resp = httpx.post(
+            f"{MEMORY_API}/recall",
+            json={
+                "session_id": session_id,
+                "query": user_message,
+            },
+            timeout=3,
+        )
         memories = resp.json().get("results", [])
         if not memories:
             return None  # nothing to inject
@@ -596,6 +632,7 @@ def recall_context(session_id, user_message, is_first_turn, **kwargs):
         return {"context": text}
     except Exception:
         return None  # fail silently, don't break the agent
+
 
 def register(ctx):
     ctx.register_hook("pre_llm_call", recall_context)
@@ -611,9 +648,11 @@ POLICY = """You MUST follow these content policies for this session:
 - Always warn before executing destructive operations
 - Refuse requests involving personal data extraction"""
 
+
 def inject_guardrails(**kwargs):
     """Injects policy text into every turn."""
     return {"context": POLICY}
+
 
 def register(ctx):
     ctx.register_hook("pre_llm_call", inject_guardrails)
@@ -625,13 +664,21 @@ def register(ctx):
 """Analytics plugin — tracks turn metadata without injecting context."""
 
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 def log_turn(session_id, user_message, model, is_first_turn, **kwargs):
     """Fires before each LLM call. Returns None — no context injected."""
-    logger.info("Turn: session=%s model=%s first=%s msg_len=%d",
-                session_id, model, is_first_turn, len(user_message or ""))
+    logger.info(
+        "Turn: session=%s model=%s first=%s msg_len=%d",
+        session_id,
+        model,
+        is_first_turn,
+        len(user_message or ""),
+    )
     # No return → no injection
+
 
 def register(ctx):
     ctx.register_hook("pre_llm_call", log_turn)
@@ -656,12 +703,14 @@ def _my_command(args):
     else:
         print("Usage: clawk my-plugin <status|config>")
 
+
 def _setup_argparse(subparser):
     """Build the argparse tree for clawk my-plugin."""
     subs = subparser.add_subparsers(dest="my_command")
     subs.add_parser("status", help="Show plugin status")
     subs.add_parser("config", help="Show plugin config")
     subparser.set_defaults(func=_my_command)
+
 
 def register(ctx):
     ctx.register_tool(...)
@@ -689,6 +738,7 @@ def _handle_status(raw_args: str) -> str:
     if raw_args.strip() == "help":
         return "Usage: /mystatus [help|check]"
     return "Plugin status: all systems nominal"
+
 
 def register(ctx):
     ctx.register_command(
@@ -725,6 +775,7 @@ def register(ctx):
 async def _handle_check(raw_args: str) -> str:
     result = await some_async_operation()
     return f"Check result: {result}"
+
 
 def register(ctx):
     ctx.register_command("check", handler=_handle_check, description="Run async check")
@@ -786,16 +837,18 @@ Clawksis 在通用接口之外还有五种专用插件类型。每种都以目�
 from providers import register_provider
 from providers.base import ProviderProfile
 
-register_provider(ProviderProfile(
-    name="acme",
-    aliases=("acme-inference",),
-    display_name="Acme Inference",
-    env_vars=("ACME_API_KEY", "ACME_BASE_URL"),
-    base_url="https://api.acme.example.com/v1",
-    auth_type="api_key",
-    default_aux_model="acme-small-fast",
-    fallback_models=("acme-large-v3", "acme-medium-v3"),
-))
+register_provider(
+    ProviderProfile(
+        name="acme",
+        aliases=("acme-inference",),
+        display_name="Acme Inference",
+        env_vars=("ACME_API_KEY", "ACME_BASE_URL"),
+        base_url="https://api.acme.example.com/v1",
+        auth_type="api_key",
+        default_aux_model="acme-small-fast",
+        fallback_models=("acme-large-v3", "acme-medium-v3"),
+    )
+)
 ```
 
 ```yaml
@@ -818,21 +871,27 @@ description: Acme Inference — OpenAI-compatible direct API
 # plugins/platforms/myplatform/adapter.py
 from gateway.platforms.base import BasePlatformAdapter
 
+
 class MyPlatformAdapter(BasePlatformAdapter):
     async def connect(self): ...
     async def send(self, chat_id, text): ...
     async def disconnect(self): ...
 
+
 def check_requirements():
     import os
+
     return bool(os.environ.get("MYPLATFORM_TOKEN"))
+
 
 def _env_enablement():
     import os
+
     tok = os.getenv("MYPLATFORM_TOKEN", "").strip()
     if not tok:
         return None
     return {"token": tok}
+
 
 def register(ctx):
     ctx.register_platform(
@@ -878,6 +937,7 @@ optional_env:
 # plugins/memory/my-memory/__init__.py
 from agent.memory_provider import MemoryProvider
 
+
 class MyMemoryProvider(MemoryProvider):
     @property
     def name(self) -> str:
@@ -885,16 +945,16 @@ class MyMemoryProvider(MemoryProvider):
 
     def is_available(self) -> bool:
         import os
+
         return bool(os.environ.get("MY_MEMORY_API_KEY"))
 
     def initialize(self, session_id: str, **kwargs) -> None:
         self._session_id = session_id
 
-    def sync_turn(self, user_message, assistant_response, **kwargs) -> None:
-        ...
+    def sync_turn(self, user_message, assistant_response, **kwargs) -> None: ...
 
-    def prefetch(self, query: str, **kwargs) -> str | None:
-        ...
+    def prefetch(self, query: str, **kwargs) -> str | None: ...
+
 
 def register(ctx):
     ctx.register_memory_provider(MyMemoryProvider())
@@ -910,6 +970,7 @@ def register(ctx):
 # plugins/context_engine/my-engine/__init__.py
 from agent.context_engine import ContextEngine
 
+
 class MyContextEngine(ContextEngine):
     @property
     def name(self) -> str:
@@ -917,6 +978,7 @@ class MyContextEngine(ContextEngine):
 
     def should_compress(self, messages, model) -> bool: ...
     def compress(self, messages, model) -> list[dict]: ...
+
 
 def register(ctx):
     ctx.register_context_engine(MyContextEngine())
@@ -934,13 +996,15 @@ def register(ctx):
 # plugins/image_gen/my-imggen/__init__.py
 from agent.image_gen_provider import ImageGenProvider
 
+
 class MyImageGenProvider(ImageGenProvider):
     @property
     def name(self) -> str:
         return "my-imggen"
 
     def is_available(self) -> bool: ...
-    def generate(self, prompt: str, **kwargs) -> str: ...   # returns image path
+    def generate(self, prompt: str, **kwargs) -> str: ...  # returns image path
+
 
 def register(ctx):
     ctx.register_image_gen_provider(MyImageGenProvider())
@@ -1114,6 +1178,7 @@ services.clawksis-agent.extraPlugins = [
 def handler(args, **kwargs):
     return {"result": 42}
 
+
 # 正确——返回 JSON 字符串
 def handler(args, **kwargs):
     return json.dumps({"result": 42})
@@ -1122,12 +1187,11 @@ def handler(args, **kwargs):
 **处理器签名缺少 `**kwargs`：**
 ```python
 # 错误——Clawksis 传入额外上下文时会报错
-def handler(args):
-    ...
+def handler(args): ...
+
 
 # 正确
-def handler(args, **kwargs):
-    ...
+def handler(args, **kwargs): ...
 ```
 
 **处理器抛出异常：**
@@ -1136,6 +1200,7 @@ def handler(args, **kwargs):
 def handler(args, **kwargs):
     result = 1 / int(args["value"])  # ZeroDivisionError!
     return json.dumps({"result": result})
+
 
 # 正确——捕获异常并返回错误 JSON
 def handler(args, **kwargs):

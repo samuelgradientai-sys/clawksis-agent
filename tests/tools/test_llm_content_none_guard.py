@@ -20,6 +20,7 @@ from agent.auxiliary_client import extract_content_or_reasoning
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
+
 def _make_response(content, **msg_attrs):
     """Build a minimal OpenAI-compatible ChatCompletion response stub.
 
@@ -37,6 +38,7 @@ def _run(coro):
 
 
 # ── web_tools — LLM content processor (line 419) ─────────────────────────
+
 
 class TestWebToolsProcessorContentNone:
     """tools/web_tools.py — _process_with_llm() return line"""
@@ -56,6 +58,7 @@ class TestWebToolsProcessorContentNone:
 
 # ── web_tools — synthesis/summarization (line 538) ────────────────────────
 
+
 class TestWebToolsSynthesisContentNone:
     """tools/web_tools.py — synthesize_content() final_summary line"""
 
@@ -73,6 +76,7 @@ class TestWebToolsSynthesisContentNone:
 
 
 # ── vision_tools (line 350) ───────────────────────────────────────────────
+
 
 class TestVisionToolsContentNone:
     """tools/vision_tools.py — analyze_image() analysis extraction"""
@@ -92,6 +96,7 @@ class TestVisionToolsContentNone:
 
 # ── skills_guard (line 963) ───────────────────────────────────────────────
 
+
 class TestSkillsGuardContentNone:
     """tools/skills_guard.py — _llm_audit_skill() llm_text extraction"""
 
@@ -110,6 +115,7 @@ class TestSkillsGuardContentNone:
 
 # ── integration: verify the actual source lines are guarded ───────────────
 
+
 class TestSourceLinesAreGuarded:
     """Read the actual source files and verify the fix is applied.
 
@@ -120,6 +126,7 @@ class TestSourceLinesAreGuarded:
     @staticmethod
     def _read_file(rel_path: str) -> str:
         import os
+
         base = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         with open(os.path.join(base, rel_path)) as f:
             return f.read()
@@ -128,25 +135,26 @@ class TestSourceLinesAreGuarded:
         src = self._read_file("tools/web_tools.py")
         assert ".message.content.strip()" not in src, (
             "tools/web_tools.py still has unguarded "
-            ".content.strip() — apply `(... or \"\").strip()` guard"
+            '.content.strip() — apply `(... or "").strip()` guard'
         )
 
     def test_vision_tools_guarded(self):
         src = self._read_file("tools/vision_tools.py")
         assert ".message.content.strip()" not in src, (
             "tools/vision_tools.py still has unguarded "
-            ".content.strip() — apply `(... or \"\").strip()` guard"
+            '.content.strip() — apply `(... or "").strip()` guard'
         )
 
     def test_skills_guard_guarded(self):
         src = self._read_file("tools/skills_guard.py")
         assert ".message.content.strip()" not in src, (
             "tools/skills_guard.py still has unguarded "
-            ".content.strip() — apply `(... or \"\").strip()` guard"
+            '.content.strip() — apply `(... or "").strip()` guard'
         )
 
 
 # ── extract_content_or_reasoning() ────────────────────────────────────────
+
 
 class TestExtractContentOrReasoning:
     """agent/auxiliary_client.py — extract_content_or_reasoning()"""
@@ -178,7 +186,9 @@ class TestExtractContentOrReasoning:
     def test_none_content_with_reasoning_field(self):
         """DeepSeek-R1 pattern: content=None, reasoning='...'"""
         response = _make_response(None, reasoning="Step 1: analyze the problem...")
-        assert extract_content_or_reasoning(response) == "Step 1: analyze the problem..."
+        assert (
+            extract_content_or_reasoning(response) == "Step 1: analyze the problem..."
+        )
 
     def test_none_content_with_reasoning_content_field(self):
         """Moonshot/Novita pattern: content=None, reasoning_content='...'"""
@@ -187,14 +197,19 @@ class TestExtractContentOrReasoning:
 
     def test_none_content_with_reasoning_details(self):
         """OpenRouter unified format: reasoning_details=[{summary: ...}]"""
-        response = _make_response(None, reasoning_details=[
-            {"type": "reasoning.summary", "summary": "The key insight is..."},
-        ])
+        response = _make_response(
+            None,
+            reasoning_details=[
+                {"type": "reasoning.summary", "summary": "The key insight is..."},
+            ],
+        )
         assert extract_content_or_reasoning(response) == "The key insight is..."
 
     def test_reasoning_fields_not_duplicated(self):
         """When reasoning and reasoning_content have the same value, don't duplicate."""
-        response = _make_response(None, reasoning="same text", reasoning_content="same text")
+        response = _make_response(
+            None, reasoning="same text", reasoning_content="same text"
+        )
         assert extract_content_or_reasoning(response) == "same text"
 
     def test_multiple_reasoning_sources_combined(self):

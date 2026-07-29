@@ -1,4 +1,5 @@
 """Tests for the profile-scoped credential primitive (Workstream A / Phase 2)."""
+
 import pytest
 
 from agent import secret_scope as ss
@@ -118,6 +119,7 @@ class TestEnvFileParsing:
         env.write_text("ZZZ_KEY=secret\n")
         ss.load_env_file(env)
         import os
+
         assert "ZZZ_KEY" not in os.environ
 
     def test_missing_file_returns_empty(self, tmp_path):

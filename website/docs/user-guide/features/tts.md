@@ -374,14 +374,25 @@ class MyTTSProvider(TTSProvider):
         # Return False when credentials/deps are missing — picker skips
         # this row but the dispatcher still routes here on explicit config.
         import os
+
         return bool(os.environ.get("MY_TTS_API_KEY"))
 
-    def synthesize(self, text, output_path, *, voice=None, model=None,
-                   speed=None, format="mp3", **extra) -> str:
+    def synthesize(
+        self,
+        text,
+        output_path,
+        *,
+        voice=None,
+        model=None,
+        speed=None,
+        format="mp3",
+        **extra,
+    ) -> str:
         # Write audio bytes to output_path, return the path.
         # Raise on failure — the dispatcher converts exceptions to a
         # standard error envelope.
         import my_tts_sdk
+
         client = my_tts_sdk.Client()
         audio_bytes = client.synthesize(text=text, voice=voice or "default")
         with open(output_path, "wb") as f:
@@ -630,6 +641,7 @@ class MySTTProvider(TranscriptionProvider):
         # Return False when credentials/deps are missing — picker skips
         # this row but the dispatcher still routes here on explicit config.
         import os
+
         return bool(os.environ.get("MY_STT_API_KEY"))
 
     def transcribe(self, file_path, *, model=None, language=None, **extra):
@@ -639,6 +651,7 @@ class MySTTProvider(TranscriptionProvider):
         # gateway/CLI caller sees a consistent shape on failure.
         try:
             import my_stt_sdk
+
             client = my_stt_sdk.Client()
             text = client.transcribe(open(file_path, "rb"))
             return {

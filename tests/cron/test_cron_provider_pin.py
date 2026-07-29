@@ -50,21 +50,23 @@ def _run_with_current_provider(job, current_provider, tmp_path):
     Returns (success, output, final_response, error, agent_constructed).
     """
     fake_db = MagicMock()
-    with patch("cron.scheduler._clawk_home", tmp_path), \
-         patch("cron.scheduler._resolve_origin", return_value=None), \
-         patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-         patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-         patch("clawk_state.SessionDB", return_value=fake_db), \
-         patch(
-             "clawk_cli.runtime_provider.resolve_runtime_provider",
-             return_value={
-                 "api_key": "test-key",
-                 "base_url": "https://example.invalid/v1",
-                 "provider": current_provider,
-                 "api_mode": "chat_completions",
-             },
-         ), \
-         patch("run_agent.AIAgent") as mock_agent_cls:
+    with (
+        patch("cron.scheduler._clawk_home", tmp_path),
+        patch("cron.scheduler._resolve_origin", return_value=None),
+        patch("clawk_cli.env_loader.load_clawk_dotenv"),
+        patch("clawk_cli.env_loader.reset_secret_source_cache"),
+        patch("clawk_state.SessionDB", return_value=fake_db),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider",
+            return_value={
+                "api_key": "test-key",
+                "base_url": "https://example.invalid/v1",
+                "provider": current_provider,
+                "api_mode": "chat_completions",
+            },
+        ),
+        patch("run_agent.AIAgent") as mock_agent_cls,
+    ):
         mock_agent = MagicMock()
         mock_agent.run_conversation.return_value = {"final_response": "ok"}
         mock_agent_cls.return_value = mock_agent
@@ -79,8 +81,9 @@ class TestProviderDriftGuard:
     def test_a_unpinned_snapshot_matches_runs_normally(self, tmp_path):
         """(a) Unpinned job whose snapshot == current provider → runs normally."""
         job = _base_job(provider_snapshot="openrouter")
-        success, output, final_response, error, agent_constructed = \
+        success, output, final_response, error, agent_constructed = (
             _run_with_current_provider(job, "openrouter", tmp_path)
+        )
 
         assert success is True
         assert error is None
@@ -94,8 +97,9 @@ class TestProviderDriftGuard:
         delivered error must name both providers and tell the user to pin.
         """
         job = _base_job(provider_snapshot="openrouter")
-        success, output, final_response, error, agent_constructed = \
+        success, output, final_response, error, agent_constructed = (
             _run_with_current_provider(job, "nous", tmp_path)
+        )
 
         # Fail closed: no agent constructed, no inference call.
         assert agent_constructed is False
@@ -119,8 +123,9 @@ class TestProviderDriftGuard:
         # A job dict that predates the field entirely (key absent, not None).
         job = _base_job()
         job.pop("provider_snapshot", None)
-        success, output, final_response, error, agent_constructed = \
+        success, output, final_response, error, agent_constructed = (
             _run_with_current_provider(job, "nous", tmp_path)
+        )
 
         assert success is True
         assert error is None
@@ -129,8 +134,9 @@ class TestProviderDriftGuard:
     def test_c2_snapshot_none_runs_backcompat(self, tmp_path):
         """(c') Job with provider_snapshot explicitly None → runs (back-compat)."""
         job = _base_job(provider_snapshot=None)
-        success, output, final_response, error, agent_constructed = \
+        success, output, final_response, error, agent_constructed = (
             _run_with_current_provider(job, "nous", tmp_path)
+        )
 
         assert success is True
         assert error is None
@@ -146,8 +152,9 @@ class TestProviderDriftGuard:
         job = _base_job(provider="openrouter", provider_snapshot="anthropic")
         # Current resolution differs from the (stale) snapshot, but the job is
         # pinned, so the guard must not engage.
-        success, output, final_response, error, agent_constructed = \
+        success, output, final_response, error, agent_constructed = (
             _run_with_current_provider(job, "nous", tmp_path)
+        )
 
         assert success is True
         assert error is None
@@ -214,9 +221,7 @@ class TestCreateJobSnapshot:
         """An unpinned model captures config.yaml model.default into model_snapshot."""
         jobs = self._isolate_storage(monkeypatch)
         (tmp_path / "config.yaml").write_text("model:\n  default: llama-3.3-70b:free\n")
-        monkeypatch.setattr(
-            "cron.jobs.get_clawk_home", lambda: tmp_path, raising=True
-        )
+        monkeypatch.setattr("cron.jobs.get_clawk_home", lambda: tmp_path, raising=True)
         with patch(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
             return_value={"provider": "openrouter"},
@@ -229,9 +234,7 @@ class TestCreateJobSnapshot:
         """An explicit model → pinned → no model_snapshot captured."""
         jobs = self._isolate_storage(monkeypatch)
         (tmp_path / "config.yaml").write_text("model:\n  default: llama-3.3-70b:free\n")
-        monkeypatch.setattr(
-            "cron.jobs.get_clawk_home", lambda: tmp_path, raising=True
-        )
+        monkeypatch.setattr("cron.jobs.get_clawk_home", lambda: tmp_path, raising=True)
         with patch(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
             return_value={"provider": "openrouter"},
@@ -243,29 +246,31 @@ class TestCreateJobSnapshot:
         assert job["model_snapshot"] is None
 
 
-def _run_with_current_provider_and_model(job, current_provider, current_model, tmp_path):
+def _run_with_current_provider_and_model(
+    job, current_provider, current_model, tmp_path
+):
     """Drive run_job with resolved provider pinned and config.yaml model.default
     set to ``current_model`` (the unpinned-model fire-time source)."""
-    (tmp_path / "config.yaml").write_text(
-        f"model:\n  default: {current_model}\n"
-    )
+    (tmp_path / "config.yaml").write_text(f"model:\n  default: {current_model}\n")
     fake_db = MagicMock()
-    with patch("cron.scheduler._clawk_home", tmp_path), \
-         patch("cron.scheduler._get_clawk_home", return_value=tmp_path), \
-         patch("cron.scheduler._resolve_origin", return_value=None), \
-         patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-         patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-         patch("clawk_state.SessionDB", return_value=fake_db), \
-         patch(
-             "clawk_cli.runtime_provider.resolve_runtime_provider",
-             return_value={
-                 "api_key": "test-key",
-                 "base_url": "https://example.invalid/v1",
-                 "provider": current_provider,
-                 "api_mode": "chat_completions",
-             },
-         ), \
-         patch("run_agent.AIAgent") as mock_agent_cls:
+    with (
+        patch("cron.scheduler._clawk_home", tmp_path),
+        patch("cron.scheduler._get_clawk_home", return_value=tmp_path),
+        patch("cron.scheduler._resolve_origin", return_value=None),
+        patch("clawk_cli.env_loader.load_clawk_dotenv"),
+        patch("clawk_cli.env_loader.reset_secret_source_cache"),
+        patch("clawk_state.SessionDB", return_value=fake_db),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider",
+            return_value={
+                "api_key": "test-key",
+                "base_url": "https://example.invalid/v1",
+                "provider": current_provider,
+                "api_mode": "chat_completions",
+            },
+        ),
+        patch("run_agent.AIAgent") as mock_agent_cls,
+    ):
         mock_agent = MagicMock()
         mock_agent.run_conversation.return_value = {"final_response": "ok"}
         mock_agent_cls.return_value = mock_agent
@@ -286,10 +291,11 @@ class TestModelDriftGuard:
             provider_snapshot="openrouter",
             model_snapshot="llama-3.3-70b-instruct:free",
         )
-        success, output, final_response, error, agent_constructed = \
+        success, output, final_response, error, agent_constructed = (
             _run_with_current_provider_and_model(
                 job, "openrouter", "claude-fable-5", tmp_path
             )
+        )
         assert agent_constructed is False, "paid call must not be made on model drift"
         assert success is False
         blob = f"{error}\n{output}".lower()
@@ -303,10 +309,11 @@ class TestModelDriftGuard:
             provider_snapshot="openrouter",
             model_snapshot="llama-3.3-70b-instruct:free",
         )
-        success, output, final_response, error, agent_constructed = \
+        success, output, final_response, error, agent_constructed = (
             _run_with_current_provider_and_model(
                 job, "openrouter", "llama-3.3-70b-instruct:free", tmp_path
             )
+        )
         assert agent_constructed is True
         assert success is True
 
@@ -318,20 +325,24 @@ class TestModelDriftGuard:
             model_snapshot="old-model",
             model="my-pinned-model",
         )
-        success, output, final_response, error, agent_constructed = \
+        success, output, final_response, error, agent_constructed = (
             _run_with_current_provider_and_model(
                 job, "openrouter", "claude-fable-5", tmp_path
             )
+        )
         assert agent_constructed is True
         assert success is True
 
     def test_no_model_snapshot_backcompat(self, tmp_path):
         # Pre-existing job without model_snapshot → no model-drift skip.
-        job = _base_job(provider_snapshot="openrouter")  # no model_snapshot key set to a value
-        success, output, final_response, error, agent_constructed = \
+        job = _base_job(
+            provider_snapshot="openrouter"
+        )  # no model_snapshot key set to a value
+        success, output, final_response, error, agent_constructed = (
             _run_with_current_provider_and_model(
                 job, "openrouter", "claude-fable-5", tmp_path
             )
+        )
         assert agent_constructed is True
         assert success is True
 
@@ -356,16 +367,18 @@ class TestRuntimeResolutionTargetModel:
             }
 
         fake_db = MagicMock()
-        with patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler._resolve_origin", return_value=None), \
-             patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-             patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-             patch("clawk_state.SessionDB", return_value=fake_db), \
-             patch(
-                 "clawk_cli.runtime_provider.resolve_runtime_provider",
-                 side_effect=_capture,
-             ), \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with (
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler._resolve_origin", return_value=None),
+            patch("clawk_cli.env_loader.load_clawk_dotenv"),
+            patch("clawk_cli.env_loader.reset_secret_source_cache"),
+            patch("clawk_state.SessionDB", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                side_effect=_capture,
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent

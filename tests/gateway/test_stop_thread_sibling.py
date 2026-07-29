@@ -82,11 +82,19 @@ def test_sibling_returns_empty_for_non_thread_source():
     )
     grp_b = build_session_key(
         SessionSource(
-            platform=Platform.DISCORD, chat_type="group", chat_id="chan1", user_id="userB"
+            platform=Platform.DISCORD,
+            chat_type="group",
+            chat_id="chan1",
+            user_id="userB",
         )
     )
     runner._running_agents = {grp_b: _FakeAgent()}
-    assert runner._sibling_thread_run_keys(nonthread, "agent:main:discord:group:chan1:userA") == []
+    assert (
+        runner._sibling_thread_run_keys(
+            nonthread, "agent:main:discord:group:chan1:userA"
+        )
+        == []
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +125,9 @@ async def test_stop_interrupts_sibling_thread_run_when_authorized(monkeypatch):
 
     interrupted = []
 
-    async def _fake_interrupt(session_key, source, *, interrupt_reason, invalidation_reason):
+    async def _fake_interrupt(
+        session_key, source, *, interrupt_reason, invalidation_reason
+    ):
         interrupted.append((session_key, interrupt_reason, invalidation_reason))
 
     runner._interrupt_and_clear_session = _fake_interrupt
@@ -128,7 +138,9 @@ async def test_stop_interrupts_sibling_thread_run_when_authorized(monkeypatch):
     )
     result = await runner._handle_stop_command(event)
 
-    assert interrupted == [(key_b, _INTERRUPT_REASON_STOP, "stop_command_thread_sibling")]
+    assert interrupted == [
+        (key_b, _INTERRUPT_REASON_STOP, "stop_command_thread_sibling")
+    ]
     # EphemeralReply or str — both carry the "stopped" message, not "no_active".
     assert "no active" not in str(getattr(result, "text", result)).lower()
 
@@ -143,7 +155,9 @@ async def test_stop_does_not_interrupt_sibling_when_unauthorized(monkeypatch):
 
     interrupted = []
 
-    async def _fake_interrupt(session_key, source, *, interrupt_reason, invalidation_reason):
+    async def _fake_interrupt(
+        session_key, source, *, interrupt_reason, invalidation_reason
+    ):
         interrupted.append(session_key)
 
     runner._interrupt_and_clear_session = _fake_interrupt
@@ -181,9 +195,9 @@ async def test_stop_no_active_agent_clears_stuck_status():
 
     adapter = _FakeStatusAdapter()
     runner.adapters = {Platform.DISCORD: adapter}
-    runner._thread_metadata_for_source = (
-        lambda source, reply_to_message_id=None: {"thread_id": source.thread_id}
-    )
+    runner._thread_metadata_for_source = lambda source, reply_to_message_id=None: {
+        "thread_id": source.thread_id
+    }
     runner._reply_anchor_for_event = lambda event: None
 
     event = MessageEvent(
@@ -209,9 +223,7 @@ async def test_stop_no_active_agent_survives_status_clear_failure():
             raise RuntimeError("boom")
 
     runner.adapters = {Platform.DISCORD: _BoomAdapter()}
-    runner._thread_metadata_for_source = (
-        lambda source, reply_to_message_id=None: None
-    )
+    runner._thread_metadata_for_source = lambda source, reply_to_message_id=None: None
     runner._reply_anchor_for_event = lambda event: None
 
     event = MessageEvent(

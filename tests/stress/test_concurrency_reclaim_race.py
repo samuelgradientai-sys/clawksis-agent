@@ -63,31 +63,49 @@ def worker_loop(worker_id: int, clawk_home: str, result_file: str) -> None:
             idle = 0
             tid = row["id"]
             try:
-                claimed = kb.claim_task(conn, tid, claimer=f"worker-{worker_id}",
-                                        ttl_seconds=TTL)
+                claimed = kb.claim_task(
+                    conn, tid, claimer=f"worker-{worker_id}", ttl_seconds=TTL
+                )
             except sqlite3.OperationalError as e:
-                events.append({"kind": "sqlite_err", "op": "claim", "err": str(e)[:100]})
+                events.append({
+                    "kind": "sqlite_err",
+                    "op": "claim",
+                    "err": str(e)[:100],
+                })
                 continue
             if claimed is None:
                 events.append({"kind": "lost_claim", "task": tid})
                 continue
             run = kb.latest_run(conn, tid)
-            events.append({"kind": "claimed", "task": tid, "worker": worker_id,
-                           "run_id": run.id})
+            events.append({
+                "kind": "claimed",
+                "task": tid,
+                "worker": worker_id,
+                "run_id": run.id,
+            })
 
             # Sleep longer than TTL so reclaimer has a chance to intervene
             time.sleep(WORK_DURATION_S + random.uniform(-0.3, 0.3))
 
             try:
                 ok = kb.complete_task(
-                    conn, tid,
+                    conn,
+                    tid,
                     result=f"by worker-{worker_id}",
                     summary=f"worker-{worker_id} finished",
                 )
-                events.append({"kind": "complete_ok" if ok else "complete_refused",
-                               "task": tid, "worker": worker_id, "run_id": run.id})
+                events.append({
+                    "kind": "complete_ok" if ok else "complete_refused",
+                    "task": tid,
+                    "worker": worker_id,
+                    "run_id": run.id,
+                })
             except sqlite3.OperationalError as e:
-                events.append({"kind": "sqlite_err", "op": "complete", "err": str(e)[:100]})
+                events.append({
+                    "kind": "sqlite_err",
+                    "op": "complete",
+                    "err": str(e)[:100],
+                })
         finally:
             conn.close()
 
@@ -109,8 +127,11 @@ def reclaimer_loop(clawk_home: str, result_file: str) -> None:
             try:
                 n = kb.release_stale_claims(conn)
                 if n:
-                    events.append({"kind": "reclaimed", "count": n,
-                                   "t": time.monotonic() - start})
+                    events.append({
+                        "kind": "reclaimed",
+                        "count": n,
+                        "t": time.monotonic() - start,
+                    })
             except sqlite3.OperationalError as e:
                 events.append({"kind": "sqlite_err", "err": str(e)[:100]})
         finally:
@@ -130,8 +151,7 @@ def main():
     kb.init_db()
     conn = kb.connect()
     for i in range(NUM_TASKS):
-        kb.create_task(conn, title=f"t{i}", assignee="shared",
-                       tenant="reclaim-race")
+        kb.create_task(conn, title=f"t{i}", assignee="shared", tenant="reclaim-race")
     conn.close()
     print(f"Seeded {NUM_TASKS} tasks. TTL={TTL}s, work_duration={WORK_DURATION_S}s")
     print("(worker work > TTL guarantees reclaims)")
@@ -169,7 +189,9 @@ def main():
     for e in all_events:
         op_counts[e["kind"]] = op_counts.get(e["kind"], 0) + 1
     total_reclaims = sum(e.get("count", 0) for e in reclaim_events)
-    print(f"\nReclaimer fired {len(reclaim_events)} times, total tasks reclaimed: {total_reclaims}")
+    print(
+        f"\nReclaimer fired {len(reclaim_events)} times, total tasks reclaimed: {total_reclaims}"
+    )
     print("Worker events:")
     for k in sorted(op_counts):
         print(f"  {k:<25} {op_counts[k]}")
@@ -199,15 +221,22 @@ def main():
             WHERE r.ended_at IS NULL AND t.id IS NULL
         """).fetchall()
         for row in orphans:
-            failures.append(f"ORPHAN OPEN RUN: run {row['id']} on task {row['task_id']}")
+            failures.append(
+                f"ORPHAN OPEN RUN: run {row['id']} on task {row['task_id']}"
+            )
         # Event counts
         claim_evts = conn.execute(
-            "SELECT COUNT(*) FROM task_events WHERE kind='claimed'").fetchone()[0]
+            "SELECT COUNT(*) FROM task_events WHERE kind='claimed'"
+        ).fetchone()[0]
         reclaim_evts = conn.execute(
-            "SELECT COUNT(*) FROM task_events WHERE kind='reclaimed'").fetchone()[0]
+            "SELECT COUNT(*) FROM task_events WHERE kind='reclaimed'"
+        ).fetchone()[0]
         comp_evts = conn.execute(
-            "SELECT COUNT(*) FROM task_events WHERE kind='completed'").fetchone()[0]
-        print(f"\nDB event counts: claimed={claim_evts} reclaimed={reclaim_evts} completed={comp_evts}")
+            "SELECT COUNT(*) FROM task_events WHERE kind='completed'"
+        ).fetchone()[0]
+        print(
+            f"\nDB event counts: claimed={claim_evts} reclaimed={reclaim_evts} completed={comp_evts}"
+        )
         # Every reclaimed run must have ended_at set
         unended_reclaims = conn.execute(
             "SELECT COUNT(*) FROM task_runs WHERE outcome='reclaimed' AND ended_at IS NULL"
@@ -226,7 +255,9 @@ def main():
         conn.close()
 
     if reclaim_runs == 0:
-        failures.append("NO RECLAIMS HAPPENED — test didn't stress what it was supposed to")
+        failures.append(
+            "NO RECLAIMS HAPPENED — test didn't stress what it was supposed to"
+        )
 
     if failures:
         print(f"\nFAILURES ({len(failures)}):")

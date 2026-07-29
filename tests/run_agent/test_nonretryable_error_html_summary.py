@@ -27,7 +27,7 @@ from run_agent import AIAgent
 _CLOUDFLARE_CHALLENGE_HTML = (
     "<!DOCTYPE html>\n<html>\n  <head>\n"
     '    <meta http-equiv="refresh" content="360"></head>\n'
-    "  <body>\n    <div class=\"data\"><noscript>"
+    '  <body>\n    <div class="data"><noscript>'
     "Enable JavaScript and cookies to continue</noscript>"
     "<script>(function(){window._cf_chl_opt = {cRay: 'a0ca002c4f91769c',"
     "cZone: 'chatgpt.com', cType: 'managed', "

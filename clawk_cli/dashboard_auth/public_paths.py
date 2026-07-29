@@ -28,6 +28,7 @@ entry should be safe to expose to:
 If a new endpoint doesn't pass all three tests, it should be gated and
 the SPA should bootstrap it after login instead.
 """
+
 from __future__ import annotations
 
 PUBLIC_API_PATHS: frozenset[str] = frozenset({

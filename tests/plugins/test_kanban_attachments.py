@@ -33,7 +33,8 @@ def _load_plugin_router():
     plugin_file = repo_root / "plugins" / "kanban" / "dashboard" / "plugin_api.py"
     assert plugin_file.exists(), f"plugin file missing: {plugin_file}"
     spec = importlib.util.spec_from_file_location(
-        "clawk_dashboard_plugin_kanban_attach_test", plugin_file,
+        "clawk_dashboard_plugin_kanban_attach_test",
+        plugin_file,
     )
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
@@ -243,9 +244,12 @@ def test_upload_list_download_delete_roundtrip(client):
     r = client.delete(f"/api/plugins/kanban/attachments/{att_id}")
     assert r.status_code == 200
     assert client.get(f"/api/plugins/kanban/attachments/{att_id}").status_code == 404
-    assert client.get(
-        f"/api/plugins/kanban/tasks/{task_id}/attachments"
-    ).json()["attachments"] == []
+    assert (
+        client.get(f"/api/plugins/kanban/tasks/{task_id}/attachments").json()[
+            "attachments"
+        ]
+        == []
+    )
 
 
 def test_upload_sanitizes_traversal_filename(client):
@@ -272,9 +276,9 @@ def test_upload_name_collision_gets_suffixed(client):
         assert r.status_code == 200, r.text
     names = sorted(
         a["filename"]
-        for a in client.get(
-            f"/api/plugins/kanban/tasks/{task_id}/attachments"
-        ).json()["attachments"]
+        for a in client.get(f"/api/plugins/kanban/tasks/{task_id}/attachments").json()[
+            "attachments"
+        ]
     )
     assert names == ["dup (1).txt", "dup.txt"]
 
@@ -301,8 +305,12 @@ def test_store_attachment_bytes_roundtrip(kanban_home):
     try:
         task_id = _make_task(conn)
         att_id = kb.store_attachment_bytes(
-            conn, task_id, "doc.txt", b"some bytes",
-            content_type="text/plain", uploaded_by="tester",
+            conn,
+            task_id,
+            "doc.txt",
+            b"some bytes",
+            content_type="text/plain",
+            uploaded_by="tester",
         )
         a = kb.get_attachment(conn, att_id)
         assert a is not None
@@ -310,8 +318,10 @@ def test_store_attachment_bytes_roundtrip(kanban_home):
         assert a.size == len(b"some bytes")
         assert a.uploaded_by == "tester"
         assert Path(a.stored_path).read_bytes() == b"some bytes"
-        assert Path(a.stored_path).resolve().is_relative_to(
-            kb.task_attachments_dir(task_id).resolve()
+        assert (
+            Path(a.stored_path)
+            .resolve()
+            .is_relative_to(kb.task_attachments_dir(task_id).resolve())
         )
     finally:
         conn.close()
@@ -323,7 +333,11 @@ def test_store_attachment_bytes_rejects_oversize_and_leaves_no_blob(kanban_home)
         task_id = _make_task(conn)
         with pytest.raises(kb.AttachmentTooLarge):
             kb.store_attachment_bytes(
-                conn, task_id, "big.bin", b"0123456789", max_bytes=4,
+                conn,
+                task_id,
+                "big.bin",
+                b"0123456789",
+                max_bytes=4,
             )
         assert kb.list_attachments(conn, task_id) == []
         # No partial blob left behind.

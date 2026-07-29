@@ -120,11 +120,17 @@ class _BrokenWebSocket:
     ("key", "attribute", "raw"),
     [
         ("websocket_liveness_interval_seconds", "_liveness_interval_seconds", "nan"),
-        ("websocket_heartbeat_ack_max_age_seconds", "_heartbeat_ack_max_age_seconds", "inf"),
+        (
+            "websocket_heartbeat_ack_max_age_seconds",
+            "_heartbeat_ack_max_age_seconds",
+            "inf",
+        ),
         ("websocket_max_latency_seconds", "_max_latency_seconds", "-inf"),
     ],
 )
-def test_nonfinite_liveness_config_disables_that_probe_dimension(monkeypatch, key, attribute, raw):
+def test_nonfinite_liveness_config_disables_that_probe_dimension(
+    monkeypatch, key, attribute, raw
+):
     adapter = DiscordAdapter(
         PlatformConfig(enabled=True, token="test-token", extra={key: raw})
     )
@@ -175,10 +181,15 @@ async def _connect(adapter: DiscordAdapter, monkeypatch, bot_factory):
         "gateway.status.acquire_scoped_lock",
         lambda scope, identity, metadata=None: (True, None),
     )
-    monkeypatch.setattr("gateway.status.release_scoped_lock", lambda scope, identity: None)
+    monkeypatch.setattr(
+        "gateway.status.release_scoped_lock", lambda scope, identity: None
+    )
     intents = SimpleNamespace(
-        message_content=False, dm_messages=False, guild_messages=False,
-        members=False, voice_states=False,
+        message_content=False,
+        dm_messages=False,
+        guild_messages=False,
+        members=False,
+        voice_states=False,
     )
     monkeypatch.setattr(discord_platform.Intents, "default", lambda: intents)
     monkeypatch.setattr(discord_platform.commands, "Bot", bot_factory)
@@ -202,7 +213,9 @@ async def test_liveness_probe_disabled_when_interval_zero(monkeypatch):
     bot_holder: dict = {}
 
     def factory(**kwargs):
-        bot = _LiveBot(intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions"))
+        bot = _LiveBot(
+            intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions")
+        )
         bot.fetch_user = AsyncMock()
         bot_holder["bot"] = bot
         return bot
@@ -220,7 +233,9 @@ async def test_liveness_probe_disabled_when_threshold_zero(monkeypatch):
     adapter = _make_adapter(monkeypatch, interval=0.01, threshold=0)
 
     def factory(**kwargs):
-        bot = _LiveBot(intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions"))
+        bot = _LiveBot(
+            intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions")
+        )
         bot.fetch_user = AsyncMock()
         return bot
 
@@ -230,12 +245,16 @@ async def test_liveness_probe_disabled_when_threshold_zero(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_liveness_probe_does_not_call_rest_while_websocket_is_healthy(monkeypatch):
+async def test_liveness_probe_does_not_call_rest_while_websocket_is_healthy(
+    monkeypatch,
+):
     """A fresh Gateway ACK is sufficient; REST is not a transport health probe."""
     adapter = _make_adapter(monkeypatch, interval=0.01, threshold=3)
 
     def factory(**kwargs):
-        bot = _LiveBot(intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions"))
+        bot = _LiveBot(
+            intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions")
+        )
         _set_websocket_health(bot)
         bot.fetch_user = AsyncMock(return_value=SimpleNamespace(id=999))
         return bot
@@ -249,12 +268,16 @@ async def test_liveness_probe_does_not_call_rest_while_websocket_is_healthy(monk
 
 
 @pytest.mark.asyncio
-async def test_liveness_probe_forces_reconnect_when_rest_succeeds_but_gateway_ack_is_stale(monkeypatch):
+async def test_liveness_probe_forces_reconnect_when_rest_succeeds_but_gateway_ack_is_stale(
+    monkeypatch,
+):
     """A REST response must not hide a stale Gateway heartbeat failure."""
     adapter = _make_adapter(monkeypatch, interval=0.005, threshold=2, max_ack_age=0.01)
 
     def factory(**kwargs):
-        bot = _LiveBot(intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions"))
+        bot = _LiveBot(
+            intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions")
+        )
         _set_websocket_health(bot, ack_age=3600)
         bot.fetch_user = AsyncMock(return_value=SimpleNamespace(id=999))
         return bot
@@ -283,11 +306,15 @@ async def test_liveness_probe_forces_reconnect_when_rest_succeeds_but_gateway_ac
 
 
 @pytest.mark.asyncio
-async def test_liveness_fatal_queues_primary_runner_reconnect_without_self_cancellation(monkeypatch):
+async def test_liveness_fatal_queues_primary_runner_reconnect_without_self_cancellation(
+    monkeypatch,
+):
     adapter = _make_adapter(monkeypatch, interval=0.005, threshold=1, max_ack_age=0.01)
 
     def factory(**kwargs):
-        bot = _LiveBot(intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions"))
+        bot = _LiveBot(
+            intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions")
+        )
         _set_websocket_health(bot, ack_age=3600)
         return bot
 
@@ -308,7 +335,10 @@ async def test_liveness_fatal_queues_primary_runner_reconnect_without_self_cance
         "liveness fatal did not reach the runner reconnect queue",
     )
 
-    assert adapter._liveness_notification_task is None or adapter._liveness_notification_task.done()
+    assert (
+        adapter._liveness_notification_task is None
+        or adapter._liveness_notification_task.done()
+    )
     assert runner._failed_platforms[Platform.DISCORD]["attempts"] == 0
     runner.stop.assert_not_awaited()
 
@@ -322,11 +352,15 @@ async def test_liveness_fatal_queues_primary_runner_reconnect_without_self_cance
         ({"latency": float("inf")}, "latency_non_finite"),
     ],
 )
-async def test_liveness_probe_reports_gateway_health_failure_reason(monkeypatch, health, expected_reason):
+async def test_liveness_probe_reports_gateway_health_failure_reason(
+    monkeypatch, health, expected_reason
+):
     adapter = _make_adapter(monkeypatch, interval=0.005, threshold=1)
 
     def factory(**kwargs):
-        bot = _LiveBot(intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions"))
+        bot = _LiveBot(
+            intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions")
+        )
         _set_websocket_health(bot, **health)
         bot.fetch_user = AsyncMock(return_value=SimpleNamespace(id=999))
         return bot
@@ -346,14 +380,16 @@ async def test_liveness_probe_reports_gateway_health_failure_reason(monkeypatch,
     await adapter.disconnect()
 
 
-
-
 @pytest.mark.asyncio
-async def test_liveness_probe_treats_websocket_state_read_error_as_unhealthy(monkeypatch):
+async def test_liveness_probe_treats_websocket_state_read_error_as_unhealthy(
+    monkeypatch,
+):
     adapter = _make_adapter(monkeypatch, interval=0.005, threshold=1)
 
     def factory(**kwargs):
-        bot = _LiveBot(intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions"))
+        bot = _LiveBot(
+            intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions")
+        )
         bot.ws = _BrokenWebSocket()
         return bot
 
@@ -401,12 +437,16 @@ async def test_liveness_probe_recovers_when_health_reader_raises(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_liveness_recovery_keeps_websocket_fatal_when_client_task_exits(monkeypatch):
+async def test_liveness_recovery_keeps_websocket_fatal_when_client_task_exits(
+    monkeypatch,
+):
     """The close callback must not replace stale-ACK recovery with task-exited."""
     adapter = _make_adapter(monkeypatch, interval=0.005, threshold=1, max_ack_age=0.01)
 
     def factory(**kwargs):
-        bot = _LiveBot(intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions"))
+        bot = _LiveBot(
+            intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions")
+        )
         _set_websocket_health(bot, ack_age=3600)
         return bot
 
@@ -432,7 +472,9 @@ async def test_liveness_recovery_not_blocked_by_hanging_client_close(monkeypatch
     monkeypatch.setenv("CLAWK_GATEWAY_ADAPTER_DISCONNECT_TIMEOUT", "0.02")
 
     def factory(**kwargs):
-        bot = _LiveBot(intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions"))
+        bot = _LiveBot(
+            intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions")
+        )
         _set_websocket_health(bot, ack_age=3600)
         bot.fetch_user = AsyncMock(return_value=SimpleNamespace(id=999))
         return bot
@@ -559,7 +601,9 @@ async def test_disconnect_cancels_liveness_task(monkeypatch):
     adapter = _make_adapter(monkeypatch, interval=60, threshold=3)
 
     def factory(**kwargs):
-        bot = _LiveBot(intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions"))
+        bot = _LiveBot(
+            intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions")
+        )
         bot.fetch_user = AsyncMock()
         return bot
 

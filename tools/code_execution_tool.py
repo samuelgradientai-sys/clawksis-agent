@@ -70,10 +70,10 @@ SANDBOX_ALLOWED_TOOLS = frozenset([
 ])
 
 # Resource limit defaults (overridable via config.yaml → code_execution.*)
-DEFAULT_TIMEOUT = 300        # 5 minutes
+DEFAULT_TIMEOUT = 300  # 5 minutes
 DEFAULT_MAX_TOOL_CALLS = 50
-MAX_STDOUT_BYTES = 50_000    # 50 KB
-MAX_STDERR_BYTES = 10_000    # 10 KB
+MAX_STDOUT_BYTES = 50_000  # 50 KB
+MAX_STDERR_BYTES = 10_000  # 10 KB
 
 
 def _assemble_stdout_result(
@@ -97,8 +97,7 @@ def _assemble_stdout_result(
         stdout_text = (
             head.decode("utf-8", errors="replace")
             + f"\n\n... [OUTPUT TRUNCATED - {omitted:,} bytes omitted "
-            f"out of {total:,} total] ...\n\n"
-            + tail.decode("utf-8", errors="replace")
+            f"out of {total:,} total] ...\n\n" + tail.decode("utf-8", errors="replace")
         )
     else:
         stdout_text = captured.decode("utf-8", errors="replace")
@@ -132,6 +131,7 @@ def _truncate_stdout_text(stdout_text: str) -> Tuple[str, Dict[str, Any]]:
         total_bytes=len(stdout_bytes),
     )
 
+
 # Environment variable scrubbing rules (shared between the local + remote
 # backends).  Secret-substring block is applied first; anything left must
 # match a safe prefix, the operational CLAWK_ allowlist, or (on Windows) an
@@ -142,20 +142,45 @@ def _truncate_stdout_text(stdout_text: str) -> Tuple[str, Dict[str, Any]]:
 # CLAWK_KANBAN_DB, CLAWK_*_WEBHOOK).  The child only needs the few
 # location/profile vars in _CLAWK_CHILD_ALLOWED below; CLAWK_RPC_SOCKET /
 # CLAWK_RPC_DIR / TZ / HOME are injected explicitly after scrubbing.
-_SAFE_ENV_PREFIXES = ("PATH", "HOME", "USER", "LANG", "LC_", "TERM",
-                      "TMPDIR", "TMP", "TEMP", "SHELL", "LOGNAME",
-                      "XDG_", "PYTHONPATH", "VIRTUAL_ENV", "CONDA")
-_SECRET_SUBSTRINGS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL",
-                      "PASSWD", "AUTH", "DSN", "WEBHOOK",
-                      # Abbreviations that appear in real-world credential
-                      # variable names but were previously undetected:
-                      # CREDS (CREDENTIALS abbreviated), BEARER
-                      # (Authorization: Bearer tokens), APIKEY (written
-                      # without an underscore). "PASS" is intentionally NOT
-                      # added — it false-positives on legitimate non-secret
-                      # vars (BYPASS_CACHE, COMPASS_DIR, PASSENGER_HOST) while
-                      # PASSWORD/PASSWD already cover the credential cases.
-                      "CREDS", "BEARER", "APIKEY")
+_SAFE_ENV_PREFIXES = (
+    "PATH",
+    "HOME",
+    "USER",
+    "LANG",
+    "LC_",
+    "TERM",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "SHELL",
+    "LOGNAME",
+    "XDG_",
+    "PYTHONPATH",
+    "VIRTUAL_ENV",
+    "CONDA",
+)
+_SECRET_SUBSTRINGS = (
+    "KEY",
+    "TOKEN",
+    "SECRET",
+    "PASSWORD",
+    "CREDENTIAL",
+    "PASSWD",
+    "AUTH",
+    "DSN",
+    "WEBHOOK",
+    # Abbreviations that appear in real-world credential
+    # variable names but were previously undetected:
+    # CREDS (CREDENTIALS abbreviated), BEARER
+    # (Authorization: Bearer tokens), APIKEY (written
+    # without an underscore). "PASS" is intentionally NOT
+    # added — it false-positives on legitimate non-secret
+    # vars (BYPASS_CACHE, COMPASS_DIR, PASSENGER_HOST) while
+    # PASSWORD/PASSWD already cover the credential cases.
+    "CREDS",
+    "BEARER",
+    "APIKEY",
+)
 
 # Operational CLAWK_* vars the child legitimately needs by exact name — these
 # are non-secret runtime-location flags (the same set clawk_cli treats as the
@@ -175,27 +200,27 @@ _CLAWK_CHILD_ALLOWED = frozenset({
 # we allow them through by exact name.  The _SECRET_SUBSTRINGS block
 # still runs as a safety net (none of these names match those substrings).
 _WINDOWS_ESSENTIAL_ENV_VARS = frozenset({
-    "SYSTEMROOT",       # %SYSTEMROOT%\System32 — Winsock needs this
-    "SYSTEMDRIVE",      # C: (or wherever Windows lives)
-    "WINDIR",           # usually same as SYSTEMROOT
-    "COMSPEC",          # cmd.exe path — subprocess shell=True needs it
-    "PATHEXT",          # .COM;.EXE;.BAT;... — shell lookup
-    "OS",               # "Windows_NT" — some tools gate on this
+    "SYSTEMROOT",  # %SYSTEMROOT%\System32 — Winsock needs this
+    "SYSTEMDRIVE",  # C: (or wherever Windows lives)
+    "WINDIR",  # usually same as SYSTEMROOT
+    "COMSPEC",  # cmd.exe path — subprocess shell=True needs it
+    "PATHEXT",  # .COM;.EXE;.BAT;... — shell lookup
+    "OS",  # "Windows_NT" — some tools gate on this
     "PROCESSOR_ARCHITECTURE",
     "NUMBER_OF_PROCESSORS",
-    "PUBLIC",           # C:\Users\Public
+    "PUBLIC",  # C:\Users\Public
     "ALLUSERSPROFILE",  # C:\ProgramData — some stdlib paths use it
-    "PROGRAMDATA",      # C:\ProgramData
+    "PROGRAMDATA",  # C:\ProgramData
     "PROGRAMFILES",
     "PROGRAMFILES(X86)",
     "PROGRAMW6432",
-    "APPDATA",          # %USERPROFILE%\AppData\Roaming — Python uses it
-    "LOCALAPPDATA",     # %USERPROFILE%\AppData\Local
-    "USERPROFILE",      # C:\Users\<name> — Python's expanduser uses it
+    "APPDATA",  # %USERPROFILE%\AppData\Roaming — Python uses it
+    "LOCALAPPDATA",  # %USERPROFILE%\AppData\Local
+    "USERPROFILE",  # C:\Users\<name> — Python's expanduser uses it
     "USERDOMAIN",
     "USERNAME",
-    "HOMEDRIVE",        # C:
-    "HOMEPATH",         # \Users\<name>
+    "HOMEDRIVE",  # C:
+    "HOMEPATH",  # \Users\<name>
     "COMPUTERNAME",
 })
 
@@ -323,8 +348,9 @@ _TOOL_STUBS = {
 }
 
 
-def generate_clawk_tools_module(enabled_tools: List[str],
-                                 transport: str = "uds") -> str:
+def generate_clawk_tools_module(
+    enabled_tools: List[str], transport: str = "uds"
+) -> str:
     """
     Build the source code for the clawk_tools.py stub module.
 
@@ -400,7 +426,8 @@ def retry(fn, max_attempts=3, delay=2):
 
 # ---- UDS transport (local backend) ---------------------------------------
 
-_UDS_TRANSPORT_HEADER = '''\
+_UDS_TRANSPORT_HEADER = (
+    '''\
 """Auto-generated Clawksis tools RPC stubs."""
 import json, os, socket, shlex, threading, time
 
@@ -410,7 +437,9 @@ _sock = None
 # threads (e.g. ThreadPoolExecutor) would race on the shared socket and get
 # each other's responses. Serialize the entire send+recv round-trip.
 _call_lock = threading.Lock()
-''' + _COMMON_HELPERS + '''\
+'''
+    + _COMMON_HELPERS
+    + '''\
 
 def _connect():
     """Connect to the parent's RPC server via the transport it picked.
@@ -465,10 +494,12 @@ def _call(tool_name, args):
     return result
 
 '''
+)
 
 # ---- File-based transport (remote backends) -------------------------------
 
-_FILE_TRANSPORT_HEADER = '''\
+_FILE_TRANSPORT_HEADER = (
+    '''\
 """Auto-generated Clawksis tools RPC stubs (file-based transport)."""
 import json, os, shlex, tempfile, threading, time
 
@@ -478,7 +509,9 @@ _seq = 0
 # invocations from multiple threads could allocate the same sequence number
 # and clobber each other's request files. Guard seq allocation with a lock.
 _seq_lock = threading.Lock()
-''' + _COMMON_HELPERS + '''\
+'''
+    + _COMMON_HELPERS
+    + '''\
 
 def _call(tool_name, args):
     """Send a tool call request via file-based RPC and wait for response."""
@@ -531,6 +564,7 @@ def _call(tool_name, args):
     return result
 
 '''
+)
 
 
 # ---------------------------------------------------------------------------
@@ -545,7 +579,7 @@ def _rpc_server_loop(
     server_sock: socket.socket,
     task_id: str,
     tool_call_log: list,
-    tool_call_counter: list,   # mutable [int] so the thread can increment
+    tool_call_counter: list,  # mutable [int] so the thread can increment
     max_tool_calls: int,
     allowed_tools: frozenset,
     stop_event: threading.Event,
@@ -599,7 +633,8 @@ def _rpc_server_loop(
                     # Compare as bytes: compare_digest raises TypeError on a
                     # str with non-ASCII characters, and the token comes from
                     # sandbox-script-supplied JSON.
-                    str(request.get("token") or "").encode(), rpc_token.encode()
+                    str(request.get("token") or "").encode(),
+                    rpc_token.encode(),
                 ):
                     resp = json.dumps({"error": "Unauthorized RPC request"})
                     conn.sendall((resp + "\n").encode())
@@ -684,6 +719,7 @@ def _rpc_server_loop(
 # Remote execution support (file-based RPC via terminal backend)
 # ---------------------------------------------------------------------------
 
+
 def _get_or_create_env(task_id: str):
     """Get or create the terminal environment for *task_id*.
 
@@ -692,9 +728,15 @@ def _get_or_create_env(task_id: str):
     Returns ``(env, env_type)`` tuple.
     """
     from tools.terminal_tool import (
-        _active_environments, _env_lock, _create_environment,
-        _get_env_config, _last_activity, _start_cleanup_thread,
-        _creation_locks, _creation_locks_lock, _task_env_overrides,
+        _active_environments,
+        _env_lock,
+        _create_environment,
+        _get_env_config,
+        _last_activity,
+        _start_cleanup_thread,
+        _creation_locks,
+        _creation_locks_lock,
+        _task_env_overrides,
         _resolve_container_task_id,
     )
 
@@ -704,7 +746,9 @@ def _get_or_create_env(task_id: str):
     with _env_lock:
         if effective_task_id in _active_environments:
             _last_activity[effective_task_id] = time.time()
-            return _active_environments[effective_task_id], _get_env_config()["env_type"]
+            return _active_environments[effective_task_id], _get_env_config()[
+                "env_type"
+            ]
 
     # Slow path: create environment (same pattern as file_tools._get_file_ops)
     with _creation_locks_lock:
@@ -716,7 +760,9 @@ def _get_or_create_env(task_id: str):
         with _env_lock:
             if effective_task_id in _active_environments:
                 _last_activity[effective_task_id] = time.time()
-                return _active_environments[effective_task_id], _get_env_config()["env_type"]
+                return _active_environments[effective_task_id], _get_env_config()[
+                    "env_type"
+                ]
 
         config = _get_env_config()
         env_type = config["env_type"]
@@ -763,8 +809,11 @@ def _get_or_create_env(task_id: str):
                 "persistent": config.get("local_persistent", False),
             }
 
-        logger.info("Creating new %s environment for execute_code task %s...",
-                     env_type, effective_task_id[:8])
+        logger.info(
+            "Creating new %s environment for execute_code task %s...",
+            env_type,
+            effective_task_id[:8],
+        )
         env = _create_environment(
             env_type=env_type,
             image=image,
@@ -782,8 +831,11 @@ def _get_or_create_env(task_id: str):
             _last_activity[effective_task_id] = time.time()
 
         _start_cleanup_thread()
-        logger.info("%s environment ready for execute_code task %s",
-                     env_type, effective_task_id[:8])
+        logger.info(
+            "%s environment ready for execute_code task %s",
+            env_type,
+            effective_task_id[:8],
+        )
         return env, env_type
 
 
@@ -856,10 +908,9 @@ def _rpc_poll_loop(
                 continue
 
             req_files = sorted([
-                f.strip() for f in output.split("\n")
-                if f.strip()
-                and not f.strip().endswith(".tmp")
-                and "/req_" in f.strip()
+                f.strip()
+                for f in output.split("\n")
+                if f.strip() and not f.strip().endswith(".tmp") and "/req_" in f.strip()
             ])
 
             for req_file in req_files:
@@ -887,7 +938,8 @@ def _rpc_poll_loop(
                     # Compare as bytes: compare_digest raises TypeError on a
                     # str with non-ASCII characters, and the token comes from
                     # sandbox-script-supplied JSON.
-                    str(request.get("token") or "").encode(), rpc_token.encode()
+                    str(request.get("token") or "").encode(),
+                    rpc_token.encode(),
                 ):
                     logger.debug("Unauthorized RPC request in %s", req_file)
                     env.execute(f"rm -f {quoted_req_file}", cwd="/", timeout=5)
@@ -937,8 +989,9 @@ def _rpc_poll_loop(
                             sys.stdout, sys.stderr = _real_stdout, _real_stderr
                             devnull.close()
                     except Exception as exc:
-                        logger.error("Tool call failed in remote sandbox: %s",
-                                     exc, exc_info=True)
+                        logger.error(
+                            "Tool call failed in remote sandbox: %s", exc, exc_info=True
+                        )
                         tool_result = tool_error(str(exc))
 
                     tool_call_counter[0] += 1
@@ -952,9 +1005,9 @@ def _rpc_poll_loop(
                 # Write response atomically (tmp + rename).
                 # Use echo piping (not stdin_data) because Modal doesn't
                 # reliably deliver stdin to chained commands.
-                encoded_result = base64.b64encode(
-                    tool_result.encode("utf-8")
-                ).decode("ascii")
+                encoded_result = base64.b64encode(tool_result.encode("utf-8")).decode(
+                    "ascii"
+                )
                 env.execute(
                     f"echo '{encoded_result}' | base64 -d > {quoted_res_file}.tmp"
                     f" && mv {quoted_res_file}.tmp {quoted_res_file}",
@@ -1013,7 +1066,8 @@ def _execute_remote(
         # Verify Python is available on the remote
         py_check = env.execute(
             "command -v python3 >/dev/null 2>&1 && echo OK",
-            cwd="/", timeout=15,
+            cwd="/",
+            timeout=15,
         )
         if "OK" not in py_check.get("output", ""):
             return json.dumps({
@@ -1029,14 +1083,17 @@ def _execute_remote(
 
         # Create sandbox directory on remote
         env.execute(
-            f"mkdir -p {quoted_rpc_dir}", cwd="/", timeout=10,
+            f"mkdir -p {quoted_rpc_dir}",
+            cwd="/",
+            timeout=10,
         )
 
         rpc_token = secrets.token_urlsafe(32)
 
         # Generate and ship files
         tools_src = generate_clawk_tools_module(
-            list(sandbox_tools), transport="file",
+            list(sandbox_tools),
+            transport="file",
         )
         _ship_file_to_remote(env, f"{sandbox_dir}/clawk_tools.py", tools_src)
         _ship_file_to_remote(env, f"{sandbox_dir}/script.py", code)
@@ -1047,9 +1104,15 @@ def _execute_remote(
         rpc_thread = threading.Thread(
             target=propagate_context_to_thread(_rpc_poll_loop),
             args=(
-                env, f"{sandbox_dir}/rpc", effective_task_id,
-                tool_call_log, tool_call_counter, max_tool_calls,
-                sandbox_tools, stop_event, rpc_token,
+                env,
+                f"{sandbox_dir}/rpc",
+                effective_task_id,
+                tool_call_log,
+                tool_call_counter,
+                max_tool_calls,
+                sandbox_tools,
+                stop_event,
+                rpc_token,
             ),
             daemon=True,
         )
@@ -1066,8 +1129,9 @@ def _execute_remote(
             env_prefix += f" TZ={shlex.quote(tz)}"
 
         # Execute the script on the remote backend
-        logger.info("Executing code on %s backend (task %s)...",
-                     env_type, effective_task_id[:8])
+        logger.info(
+            "Executing code on %s backend (task %s)...", env_type, effective_task_id[:8]
+        )
         script_result = env.execute(
             f"cd {quoted_sandbox_dir} && {env_prefix} python3 script.py",
             timeout=timeout,
@@ -1087,15 +1151,21 @@ def _execute_remote(
         duration = round(time.monotonic() - exec_start, 2)
         logger.error(
             "execute_code remote failed after %ss with %d tool calls: %s: %s",
-            duration, tool_call_counter[0], type(exc).__name__, exc,
+            duration,
+            tool_call_counter[0],
+            type(exc).__name__,
+            exc,
             exc_info=True,
         )
-        return json.dumps({
-            "status": "error",
-            "error": str(exc),
-            "tool_calls_made": tool_call_counter[0],
-            "duration_seconds": duration,
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "error",
+                "error": str(exc),
+                "tool_calls_made": tool_call_counter[0],
+                "duration_seconds": duration,
+            },
+            ensure_ascii=False,
+        )
 
     finally:
         # Stop the polling thread
@@ -1106,7 +1176,9 @@ def _execute_remote(
         # Clean up remote sandbox dir
         try:
             env.execute(
-                f"rm -rf {quoted_sandbox_dir}", cwd="/", timeout=15,
+                f"rm -rf {quoted_sandbox_dir}",
+                cwd="/",
+                timeout=15,
             )
         except Exception:
             logger.debug("Failed to clean up remote sandbox %s", sandbox_dir)
@@ -1119,12 +1191,14 @@ def _execute_remote(
 
     # Strip ANSI escape sequences
     from tools.ansi_strip import strip_ansi
+
     stdout_text = strip_ansi(stdout_text)
 
     # Redact secrets. code_file=True: execute_code output is code-execution
     # output that often echoes source/config — skip false-positive ENV/JSON/
     # f-string-template redaction while still masking real credentials.
     from agent.redact import redact_sensitive_text
+
     stdout_text = redact_sensitive_text(stdout_text, code_file=True)
 
     # Build response
@@ -1148,7 +1222,9 @@ def _execute_remote(
             result["output"] = f"⏰ {timeout_msg}"
         logger.warning(
             "execute_code (remote) timed out after %ss (limit %ss) with %d tool calls",
-            duration, timeout, tool_call_counter[0],
+            duration,
+            timeout,
+            tool_call_counter[0],
         )
     elif status == "interrupted":
         result["output"] = (
@@ -1164,6 +1240,7 @@ def _execute_remote(
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
+
 
 def execute_code(
     code: str,
@@ -1189,7 +1266,7 @@ def execute_code(
     if not SANDBOX_AVAILABLE:
         return json.dumps({
             "error": "execute_code sandbox is unavailable in this environment. "
-                     "Use normal tool calls (terminal, read_file, write_file, ...) instead."
+            "Use normal tool calls (terminal, read_file, write_file, ...) instead."
         })
 
     if not code or not code.strip():
@@ -1197,6 +1274,7 @@ def execute_code(
 
     # Dispatch: remote backends use file-based RPC, local uses UDS
     from tools.terminal_tool import _get_env_config, _docker_has_host_access
+
     _env_config = _get_env_config()
     env_type = _env_config["env_type"]
 
@@ -1207,17 +1285,23 @@ def execute_code(
     # A Docker sandbox with host bind mounts is no longer isolated, so its
     # script does not get the container fast-path.
     from tools.approval import check_execute_code_guard
+
     _guard = check_execute_code_guard(
-        code, env_type,
+        code,
+        env_type,
         has_host_access=_docker_has_host_access(_env_config),
     )
     if not _guard.get("approved", False):
-        return json.dumps({
-            "status": "error",
-            "error": _guard.get("message") or "execute_code blocked by approval guard.",
-            "tool_calls_made": 0,
-            "duration_seconds": 0,
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "error",
+                "error": _guard.get("message")
+                or "execute_code blocked by approval guard.",
+                "tool_calls_made": 0,
+                "duration_seconds": 0,
+            },
+            ensure_ascii=False,
+        )
 
     # Clean interrupt slate for a user-approved script before EITHER dispatch
     # path spawns it: drop a stale bit that landed on this thread during the
@@ -1227,6 +1311,7 @@ def execute_code(
     # bit and is still caught downstream.
     if _guard.get("user_approved"):
         from tools.interrupt import clear_current_thread_interrupt
+
         clear_current_thread_interrupt()
 
     if env_type != "local":
@@ -1323,8 +1408,14 @@ def execute_code(
         rpc_thread = threading.Thread(
             target=propagate_context_to_thread(_rpc_server_loop),
             args=(
-                server_sock, task_id, tool_call_log,
-                tool_call_counter, max_tool_calls, sandbox_tools, stop_event, rpc_token,
+                server_sock,
+                task_id,
+                tool_call_log,
+                tool_call_counter,
+                max_tool_calls,
+                sandbox_tools,
+                stop_event,
+                rpc_token,
             ),
             daemon=True,
         )
@@ -1383,6 +1474,7 @@ def execute_code(
         child_env.pop("CLAWK_TIMEZONE", None)
 
         from clawk_constants import apply_subprocess_home_env
+
         apply_subprocess_home_env(child_env)
 
         # Resolve interpreter + CWD based on execute_code mode.
@@ -1414,7 +1506,7 @@ def execute_code(
         # For stdout we use a head+tail strategy: keep the first HEAD_BYTES
         # and a rolling window of the last TAIL_BYTES so the final print()
         # output is never lost.  Stderr keeps head-only (errors appear early).
-        _STDOUT_HEAD_BYTES = int(MAX_STDOUT_BYTES * 0.4)   # 40% head
+        _STDOUT_HEAD_BYTES = int(MAX_STDOUT_BYTES * 0.4)  # 40% head
         _STDOUT_TAIL_BYTES = MAX_STDOUT_BYTES - _STDOUT_HEAD_BYTES  # 60% tail
 
         def _drain(pipe, chunks, max_bytes):
@@ -1434,10 +1526,13 @@ def execute_code(
 
         stdout_total_bytes = [0]  # mutable ref for total bytes seen
 
-        def _drain_head_tail(pipe, head_chunks, tail_chunks, head_bytes, tail_bytes, total_ref):
+        def _drain_head_tail(
+            pipe, head_chunks, tail_chunks, head_bytes, tail_bytes, total_ref
+        ):
             """Drain stdout keeping both head and tail data."""
             head_collected = 0
             from collections import deque
+
             tail_buf = deque()
             tail_collected = 0
             try:
@@ -1471,12 +1566,20 @@ def execute_code(
 
         stdout_reader = threading.Thread(
             target=_drain_head_tail,
-            args=(proc.stdout, stdout_head_chunks, stdout_tail_chunks,
-                  _STDOUT_HEAD_BYTES, _STDOUT_TAIL_BYTES, stdout_total_bytes),
-            daemon=True
+            args=(
+                proc.stdout,
+                stdout_head_chunks,
+                stdout_tail_chunks,
+                _STDOUT_HEAD_BYTES,
+                _STDOUT_TAIL_BYTES,
+                stdout_total_bytes,
+            ),
+            daemon=True,
         )
         stderr_reader = threading.Thread(
-            target=_drain, args=(proc.stderr, stderr_chunks, MAX_STDERR_BYTES), daemon=True
+            target=_drain,
+            args=(proc.stderr, stderr_chunks, MAX_STDERR_BYTES),
+            daemon=True,
         )
         stdout_reader.start()
         stderr_reader.start()
@@ -1538,6 +1641,7 @@ def execute_code(
         # Strip ANSI escape sequences so the model never sees terminal
         # formatting — prevents it from copying escapes into file writes.
         from tools.ansi_strip import strip_ansi
+
         stdout_text = strip_ansi(stdout_text)
         stderr_text = strip_ansi(stderr_text)
 
@@ -1548,6 +1652,7 @@ def execute_code(
         # code_file=True: this is code-execution output — skip false-positive
         # ENV/JSON/f-string-template redaction; real credentials still masked.
         from agent.redact import redact_sensitive_text
+
         stdout_text = redact_sensitive_text(stdout_text, code_file=True)
         stderr_text = redact_sensitive_text(stderr_text, code_file=True)
 
@@ -1574,10 +1679,14 @@ def execute_code(
                 result["output"] = f"⏰ {timeout_msg}"
             logger.warning(
                 "execute_code timed out after %ss (limit %ss) with %d tool calls",
-                duration, timeout, tool_call_counter[0],
+                duration,
+                timeout,
+                tool_call_counter[0],
             )
         elif status == "interrupted":
-            result["output"] = stdout_text + "\n[execution interrupted — user sent a new message]"
+            result["output"] = (
+                stdout_text + "\n[execution interrupted — user sent a new message]"
+            )
         elif exit_code != 0:
             result["status"] = "error"
             result["error"] = stderr_text or f"Script exited with code {exit_code}"
@@ -1597,12 +1706,15 @@ def execute_code(
             exc,
             exc_info=True,
         )
-        return json.dumps({
-            "status": "error",
-            "error": str(exc),
-            "tool_calls_made": tool_call_counter[0],
-            "duration_seconds": duration,
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "error",
+                "error": str(exc),
+                "tool_calls_made": tool_call_counter[0],
+                "duration_seconds": duration,
+            },
+            ensure_ascii=False,
+        )
 
     finally:
         # Cleanup temp dir and socket
@@ -1612,6 +1724,7 @@ def execute_code(
             except OSError as e:
                 logger.debug("Server socket close error: %s", e)
         import shutil
+
         shutil.rmtree(tmpdir, ignore_errors=True)
         try:
             # Only UDS has a filesystem socket to unlink; TCP sockets are
@@ -1625,6 +1738,7 @@ def execute_code(
 def _kill_process_group(proc, escalate: bool = False):
     """Kill the child and its entire process tree (cross-platform via psutil)."""
     import psutil
+
     try:
         parent = psutil.Process(proc.pid)
         children = parent.children(recursive=True)
@@ -1723,7 +1837,9 @@ def _get_execution_mode() -> str:
         return cfg_value
     logger.warning(
         "Ignoring code_execution.mode=%r (expected one of %s), falling back to %r",
-        cfg_value, EXECUTION_MODES, DEFAULT_EXECUTION_MODE,
+        cfg_value,
+        EXECUTION_MODES,
+        DEFAULT_EXECUTION_MODE,
     )
     return DEFAULT_EXECUTION_MODE
 
@@ -1737,8 +1853,11 @@ def _is_usable_python(python_path: str) -> bool:
     """
     try:
         result = subprocess.run(
-            [python_path, "-c",
-             "import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)"],
+            [
+                python_path,
+                "-c",
+                "import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)",
+            ],
             timeout=5,
             capture_output=True,
             creationflags=subprocess.CREATE_NO_WINDOW if _IS_WINDOWS else 0,
@@ -1785,7 +1904,9 @@ def _resolve_child_python(mode: str) -> str:
                 # log once and fall through to sys.executable.
                 logger.info(
                     "execute_code: skipping %s=%s (Python version < 3.8 or broken). "
-                    "Using sys.executable instead.", var, candidate,
+                    "Using sys.executable instead.",
+                    var,
+                    candidate,
                 )
                 return sys.executable
 
@@ -1847,33 +1968,48 @@ def _resolve_child_cwd(mode: str, staging_dir: str, task_id: str = "") -> str:
 # Per-tool documentation lines for the execute_code description.
 # Ordered to match the canonical display order.
 _TOOL_DOC_LINES = [
-    ("web_search",
-     "  web_search(query: str, limit: int = 5) -> dict\n"
-     "    Returns {\"data\": {\"web\": [{\"url\", \"title\", \"description\"}, ...]}}"),
-    ("web_extract",
-     "  web_extract(urls: list[str], char_limit: int = None) -> dict\n"
-     "    Returns {\"results\": [{\"url\", \"title\", \"content\", \"error\"}, ...]} where content is markdown.\n"
-     "    No LLM summarization. Pages over char_limit (default 15000) are head+tail truncated; full text stored on disk (path in the content footer)."),
-    ("read_file",
-     "  read_file(path: str, offset: int = 1, limit: int = 500) -> dict\n"
-     "    Lines are 1-indexed. Returns {\"content\": \"...\", \"total_lines\": N}"),
-    ("write_file",
-     "  write_file(path: str, content: str) -> dict\n"
-     "    Always overwrites the entire file."),
-    ("search_files",
-     "  search_files(pattern: str, target=\"content\", path=\".\", file_glob=None, limit=50) -> dict\n"
-     "    target: \"content\" (search inside files) or \"files\" (find files by name). Returns {\"matches\": [...]}"),
-    ("patch",
-     "  patch(path: str, old_string: str, new_string: str, replace_all: bool = False) -> dict\n"
-     "    Replaces old_string with new_string in the file."),
-    ("terminal",
-     "  terminal(command: str, timeout=None, workdir=None) -> dict\n"
-     "    Foreground only (no background/pty). Returns {\"output\": \"...\", \"exit_code\": N}"),
+    (
+        "web_search",
+        "  web_search(query: str, limit: int = 5) -> dict\n"
+        '    Returns {"data": {"web": [{"url", "title", "description"}, ...]}}',
+    ),
+    (
+        "web_extract",
+        "  web_extract(urls: list[str], char_limit: int = None) -> dict\n"
+        '    Returns {"results": [{"url", "title", "content", "error"}, ...]} where content is markdown.\n'
+        "    No LLM summarization. Pages over char_limit (default 15000) are head+tail truncated; full text stored on disk (path in the content footer).",
+    ),
+    (
+        "read_file",
+        "  read_file(path: str, offset: int = 1, limit: int = 500) -> dict\n"
+        '    Lines are 1-indexed. Returns {"content": "...", "total_lines": N}',
+    ),
+    (
+        "write_file",
+        "  write_file(path: str, content: str) -> dict\n"
+        "    Always overwrites the entire file.",
+    ),
+    (
+        "search_files",
+        '  search_files(pattern: str, target="content", path=".", file_glob=None, limit=50) -> dict\n'
+        '    target: "content" (search inside files) or "files" (find files by name). Returns {"matches": [...]}',
+    ),
+    (
+        "patch",
+        "  patch(path: str, old_string: str, new_string: str, replace_all: bool = False) -> dict\n"
+        "    Replaces old_string with new_string in the file.",
+    ),
+    (
+        "terminal",
+        "  terminal(command: str, timeout=None, workdir=None) -> dict\n"
+        '    Foreground only (no background/pty). Returns {"output": "...", "exit_code": N}',
+    ),
 ]
 
 
-def build_execute_code_schema(enabled_sandbox_tools: set = None,
-                              mode: str = None) -> dict:
+def build_execute_code_schema(
+    enabled_sandbox_tools: set = None, mode: str = None
+) -> dict:
     """Build the execute_code schema with description listing only enabled tools.
 
     When tools are disabled via ``clawk tools`` (e.g. web is turned off),
@@ -1897,7 +2033,9 @@ def build_execute_code_schema(enabled_sandbox_tools: set = None,
     )
 
     # Build example import list from enabled tools
-    import_examples = [n for n in ("web_search", "terminal") if n in enabled_sandbox_tools]
+    import_examples = [
+        n for n in ("web_search", "terminal") if n in enabled_sandbox_tools
+    ]
     if not import_examples:
         import_examples = sorted(enabled_sandbox_tools)[:2]
     if import_examples:
@@ -1976,7 +2114,8 @@ registry.register(
     handler=lambda args, **kw: execute_code(
         code=args.get("code", ""),
         task_id=kw.get("task_id"),
-        enabled_tools=kw.get("enabled_tools")),
+        enabled_tools=kw.get("enabled_tools"),
+    ),
     check_fn=check_sandbox_requirements,
     emoji="🐍",
     max_result_size_chars=100_000,

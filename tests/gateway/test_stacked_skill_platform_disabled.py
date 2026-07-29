@@ -81,6 +81,7 @@ def _make_runner():
     runner._set_session_env = lambda _context: None
     runner._should_send_voice_reply = lambda *_args, **_kwargs: False
     from gateway.run import GatewayRunner as _GR
+
     runner._session_key_for_source = _GR._session_key_for_source.__get__(runner, _GR)
     return runner
 
@@ -98,15 +99,19 @@ def skills_env(tmp_path, monkeypatch):
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir()
     import tools.skills_tool as skills_tool_module
+
     monkeypatch.setattr(skills_tool_module, "SKILLS_DIR", skills_dir)
     import agent.skill_commands as skill_commands_mod
+
     skill_commands_mod._skill_commands = {}
     skill_commands_mod._skill_commands_platform = None
     return skills_dir
 
 
 @pytest.mark.asyncio
-async def test_stacked_second_skill_disabled_for_platform_is_blocked(monkeypatch, skills_env):
+async def test_stacked_second_skill_disabled_for_platform_is_blocked(
+    monkeypatch, skills_env
+):
     """The whole stacked invocation is rejected when a NON-leading stacked
     skill is disabled for the message's platform — it must not silently load
     that skill's content just because only the first skill was checked."""

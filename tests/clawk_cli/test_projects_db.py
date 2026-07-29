@@ -19,7 +19,9 @@ def conn(tmp_path):
 
 
 def test_record_and_list_discovered_repos(conn):
-    n = pdb.record_discovered_repos(conn, [("/www/alpha", "alpha"), ("/www/beta", None)])
+    n = pdb.record_discovered_repos(
+        conn, [("/www/alpha", "alpha"), ("/www/beta", None)]
+    )
     assert n == 2
 
     rows = {r["root"]: r["label"] for r in pdb.list_discovered_repos(conn)}
@@ -149,7 +151,10 @@ def test_branch_name_for_is_deterministic():
     proj = pdb.Project(id="p_1", slug="web-app", name="Web App", created_at=0)
 
     assert pdb.branch_name_for(proj, "t_abc") == "web-app/t_abc"
-    assert pdb.branch_name_for(proj, "t_abc", title="Add login!") == "web-app/t_abc-add-login"
+    assert (
+        pdb.branch_name_for(proj, "t_abc", title="Add login!")
+        == "web-app/t_abc-add-login"
+    )
     # Stable across calls.
     assert pdb.branch_name_for(proj, "t_abc") == pdb.branch_name_for(proj, "t_abc")
 

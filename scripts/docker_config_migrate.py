@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run Docker boot-time config migrations safely."""
+
 from __future__ import annotations
 
 import shutil
@@ -52,7 +53,9 @@ def _restore_backups(backups: dict[Path, Path]) -> list[Path]:
 
 def main() -> int:
     if env_var_enabled("CLAWK_SKIP_CONFIG_MIGRATION"):
-        print("[config-migrate] CLAWK_SKIP_CONFIG_MIGRATION is set; skipping config migration")
+        print(
+            "[config-migrate] CLAWK_SKIP_CONFIG_MIGRATION is set; skipping config migration"
+        )
         return 0
 
     current_ver, latest_ver = check_config_version()
@@ -60,7 +63,9 @@ def main() -> int:
         return 0
 
     backups = _backup_existing((get_config_path(), get_env_path()))
-    backup_text = ", ".join(str(path) for path in backups.values()) if backups else "none"
+    backup_text = (
+        ", ".join(str(path) for path in backups.values()) if backups else "none"
+    )
     print(
         f"[config-migrate] Migrating config schema {current_ver} -> {latest_ver}; "
         f"backups: {backup_text}"
@@ -79,7 +84,9 @@ def main() -> int:
     post_ver, _ = check_config_version()
     if post_ver < latest_ver:
         restored = _restore_backups(backups)
-        restored_text = ", ".join(str(path) for path in restored) if restored else "none"
+        restored_text = (
+            ", ".join(str(path) for path in restored) if restored else "none"
+        )
         raise RuntimeError(
             f"migration did not advance config version to {latest_ver} "
             f"(still {post_ver}); restored: {restored_text}"

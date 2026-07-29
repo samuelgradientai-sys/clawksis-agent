@@ -26,7 +26,8 @@ def test_discord_fail_closed_default_logs_once(monkeypatch, caplog):
 
     messages = [record.message for record in caplog.records]
     matches = [
-        msg for msg in messages
+        msg
+        for msg in messages
         if "Discord messages are being denied because no allowlist is configured" in msg
     ]
     assert len(matches) == 1
@@ -34,7 +35,9 @@ def test_discord_fail_closed_default_logs_once(monkeypatch, caplog):
     assert "DISCORD_ALLOW_ALL_USERS=true" in matches[0]
 
 
-def test_discord_fail_closed_default_warning_skips_explicit_channel_gate(monkeypatch, caplog):
+def test_discord_fail_closed_default_warning_skips_explicit_channel_gate(
+    monkeypatch, caplog
+):
     adapter = _make_adapter()
     adapter._allowed_user_ids = set()
     adapter._allowed_role_ids = set()
@@ -56,12 +59,24 @@ def test_discord_setup_existing_token_warns_fail_closed_not_fail_open(monkeypatc
         return "token" if key == "DISCORD_BOT_TOKEN" else ""
 
     monkeypatch.setattr("clawk_cli.config.get_env_value", fake_get_env_value)
-    monkeypatch.setattr("clawk_cli.config.save_env_value", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("clawk_cli.cli_output.print_header", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("clawk_cli.cli_output.print_success", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("clawk_cli.cli_output.print_info", lambda msg="", **_kwargs: info_lines.append(str(msg)))
+    monkeypatch.setattr(
+        "clawk_cli.config.save_env_value", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        "clawk_cli.cli_output.print_header", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        "clawk_cli.cli_output.print_success", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        "clawk_cli.cli_output.print_info",
+        lambda msg="", **_kwargs: info_lines.append(str(msg)),
+    )
     monkeypatch.setattr("clawk_cli.cli_output.prompt", lambda *_args, **_kwargs: "")
-    monkeypatch.setattr("clawk_cli.cli_output.prompt_yes_no", lambda *_args, **_kwargs: next(yes_no_answers))
+    monkeypatch.setattr(
+        "clawk_cli.cli_output.prompt_yes_no",
+        lambda *_args, **_kwargs: next(yes_no_answers),
+    )
 
     interactive_setup()
 
@@ -71,17 +86,32 @@ def test_discord_setup_existing_token_warns_fail_closed_not_fail_open(monkeypatc
     assert "DISCORD_ALLOW_ALL_USERS=true" in joined
 
 
-def test_discord_setup_new_token_empty_allowlist_warns_denied_until_configured(monkeypatch):
+def test_discord_setup_new_token_empty_allowlist_warns_denied_until_configured(
+    monkeypatch,
+):
     info_lines: list[str] = []
     prompts = iter(["token", "", ""])
 
     monkeypatch.setattr("clawk_cli.config.get_env_value", lambda _key: "")
-    monkeypatch.setattr("clawk_cli.config.save_env_value", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("clawk_cli.cli_output.print_header", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("clawk_cli.cli_output.print_success", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("clawk_cli.cli_output.print_info", lambda msg="", **_kwargs: info_lines.append(str(msg)))
-    monkeypatch.setattr("clawk_cli.cli_output.prompt", lambda *_args, **_kwargs: next(prompts))
-    monkeypatch.setattr("clawk_cli.cli_output.prompt_yes_no", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        "clawk_cli.config.save_env_value", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        "clawk_cli.cli_output.print_header", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        "clawk_cli.cli_output.print_success", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        "clawk_cli.cli_output.print_info",
+        lambda msg="", **_kwargs: info_lines.append(str(msg)),
+    )
+    monkeypatch.setattr(
+        "clawk_cli.cli_output.prompt", lambda *_args, **_kwargs: next(prompts)
+    )
+    monkeypatch.setattr(
+        "clawk_cli.cli_output.prompt_yes_no", lambda *_args, **_kwargs: False
+    )
 
     interactive_setup()
 

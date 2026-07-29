@@ -19,6 +19,7 @@ from agent.pet.constants import FRAME_H, FRAME_W, PetState
 # state mapping — priority invariants
 # ─────────────────────────────────────────────────────────────────────────
 
+
 def test_derive_idle_default():
     assert state.derive_pet_state() is PetState.IDLE
     # awaiting input uses the dedicated waiting row when available.
@@ -27,14 +28,25 @@ def test_derive_idle_default():
 
 def test_derive_priority_order():
     # error beats everything
-    assert state.derive_pet_state(error=True, celebrate=True, busy=True) is PetState.FAILED
+    assert (
+        state.derive_pet_state(error=True, celebrate=True, busy=True) is PetState.FAILED
+    )
     # celebrate beats completion/tool
-    assert state.derive_pet_state(celebrate=True, just_completed=True, tool_running=True) is PetState.JUMP
+    assert (
+        state.derive_pet_state(celebrate=True, just_completed=True, tool_running=True)
+        is PetState.JUMP
+    )
     # completion beats waiting/tool
-    assert state.derive_pet_state(just_completed=True, awaiting_input=True) is PetState.WAVE
+    assert (
+        state.derive_pet_state(just_completed=True, awaiting_input=True)
+        is PetState.WAVE
+    )
     # waiting (blocked on the user) outranks the in-flight signals — a clarify
     # mid-turn pauses on you even though a tool is technically still open.
-    assert state.derive_pet_state(awaiting_input=True, tool_running=True, busy=True) is PetState.WAITING
+    assert (
+        state.derive_pet_state(awaiting_input=True, tool_running=True, busy=True)
+        is PetState.WAITING
+    )
     # tool beats reasoning
     assert state.derive_pet_state(tool_running=True, reasoning=True) is PetState.RUN
     # reasoning beats bare-busy
@@ -48,10 +60,14 @@ def test_todos_all_done():
     assert state.todos_all_done(None) is False
     assert state.todos_all_done([]) is False
     # any open item → not done
-    assert state.todos_all_done([{"status": "completed"}, {"status": "pending"}]) is False
+    assert (
+        state.todos_all_done([{"status": "completed"}, {"status": "pending"}]) is False
+    )
     assert state.todos_all_done([{"status": "in_progress"}]) is False
     # every item terminal → done (completed and/or cancelled)
-    assert state.todos_all_done([{"status": "completed"}, {"status": "cancelled"}]) is True
+    assert (
+        state.todos_all_done([{"status": "completed"}, {"status": "cancelled"}]) is True
+    )
 
     # objects with a .status attr work too (mirrors dict + attr access)
     class _T:
@@ -83,9 +99,21 @@ def test_state_row_index_maps_to_supported_atlas_taxonomies():
     assert constants.state_row_index(PetState.WAITING, 8) == 0
 
     # Alias rows resolve as expected.
-    assert constants.state_row_index("wave", 9) == constants.state_row_index("waving", 9) == 3
-    assert constants.state_row_index("jump", 9) == constants.state_row_index("jumping", 9) == 4
-    assert constants.state_row_index("run", 9) == constants.state_row_index("running", 9) == 7
+    assert (
+        constants.state_row_index("wave", 9)
+        == constants.state_row_index("waving", 9)
+        == 3
+    )
+    assert (
+        constants.state_row_index("jump", 9)
+        == constants.state_row_index("jumping", 9)
+        == 4
+    )
+    assert (
+        constants.state_row_index("run", 9)
+        == constants.state_row_index("running", 9)
+        == 7
+    )
 
     # unknown row names clamp to idle (row 0), never raise
     assert constants.state_row_index("nonsense") == 0
@@ -114,6 +142,7 @@ def test_resolve_cols_override_else_scale():
 # ─────────────────────────────────────────────────────────────────────────
 # synthetic spritesheet fixture
 # ─────────────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def boba_like(tmp_path, monkeypatch):
@@ -164,6 +193,7 @@ def test_store_remove(boba_like):
 # ─────────────────────────────────────────────────────────────────────────
 # render — decode + every encoder produces output
 # ─────────────────────────────────────────────────────────────────────────
+
 
 def test_renderer_decodes_frames(boba_like):
     sprite = store.load_pet("boba").spritesheet
@@ -255,12 +285,18 @@ def test_cells_grid_shape(boba_like):
     (top, bottom) = grid[0][0]
     assert len(top) == 4 and len(bottom) == 4
     # missing-sheet renderer yields no cells, never raises
-    assert render.PetRenderer(str(sprite.parent / "missing.webp"), mode="unicode").cells("idle", 0) == []
+    assert (
+        render.PetRenderer(str(sprite.parent / "missing.webp"), mode="unicode").cells(
+            "idle", 0
+        )
+        == []
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────
 # render — kitty Unicode placeholders (TUI graphics path)
 # ─────────────────────────────────────────────────────────────────────────
+
 
 def test_kitty_image_id_stable_bounded_nonzero():
     # Deterministic per slug so re-renders reuse the same terminal-side image,
@@ -352,7 +388,13 @@ def test_resolve_mode_non_tty_is_off():
 
 
 def test_detect_terminal_graphics_env(monkeypatch):
-    for key in ("KITTY_WINDOW_ID", "TERM_PROGRAM", "ITERM_SESSION_ID", "WEZTERM_PANE", "TERM"):
+    for key in (
+        "KITTY_WINDOW_ID",
+        "TERM_PROGRAM",
+        "ITERM_SESSION_ID",
+        "WEZTERM_PANE",
+        "TERM",
+    ):
         monkeypatch.delenv(key, raising=False)
 
     monkeypatch.setenv("KITTY_WINDOW_ID", "1")
@@ -372,7 +414,13 @@ def test_vscode_terminal_ignores_leaked_graphics_env(monkeypatch):
     # default, yet inherits ITERM_SESSION_ID/KITTY_WINDOW_ID when launched from
     # those terminals. TERM_PROGRAM=vscode must win → unicode, never a protocol
     # whose escapes the embedded terminal would silently drop.
-    for key in ("KITTY_WINDOW_ID", "TERM_PROGRAM", "ITERM_SESSION_ID", "WEZTERM_PANE", "TERM"):
+    for key in (
+        "KITTY_WINDOW_ID",
+        "TERM_PROGRAM",
+        "ITERM_SESSION_ID",
+        "WEZTERM_PANE",
+        "TERM",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("TERM_PROGRAM", "vscode")
 

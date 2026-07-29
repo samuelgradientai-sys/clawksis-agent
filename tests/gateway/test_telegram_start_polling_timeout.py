@@ -12,6 +12,7 @@ The fix wraps every ``start_polling()`` await in ``asyncio.wait_for`` with
 ``_UPDATER_START_TIMEOUT`` so a hung call raises and feeds the existing retry
 ladder. These tests patch the timeout down to keep the suite fast.
 """
+
 import asyncio
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -78,11 +79,17 @@ async def test_network_ladder_start_polling_hang_does_not_wedge(monkeypatch):
     app.updater.running = False
     a._app = app
 
-    with patch.object(a, "_drain_polling_connections", new=AsyncMock()), \
-         patch.object(
-             tg_adapter.asyncio, "ensure_future",
-             side_effect=lambda coro: (coro.close(), asyncio.get_event_loop().create_future())[1],
-         ):
+    with (
+        patch.object(a, "_drain_polling_connections", new=AsyncMock()),
+        patch.object(
+            tg_adapter.asyncio,
+            "ensure_future",
+            side_effect=lambda coro: (
+                coro.close(),
+                asyncio.get_event_loop().create_future(),
+            )[1],
+        ),
+    ):
         # Unbounded, this await hangs past the 30s wait_for and fails the
         # test; bounded, the handler waits its 5s backoff, times out the hung
         # start_polling() in 0.2s, schedules the chained retry (captured by
@@ -107,7 +114,8 @@ async def test_bootstrap_start_polling_hang_schedules_recovery(monkeypatch):
 
     scheduled = []
     monkeypatch.setattr(
-        a, "_schedule_polling_recovery",
+        a,
+        "_schedule_polling_recovery",
         lambda err, reason: scheduled.append((err, reason)),
         raising=False,
     )
@@ -132,7 +140,9 @@ async def test_start_polling_success_path_unaffected(monkeypatch):
     app.updater.start_polling = AsyncMock(return_value=None)
     a._app = app
 
-    ok = await a._start_polling_resilient(drop_pending_updates=False, error_callback=None)
+    ok = await a._start_polling_resilient(
+        drop_pending_updates=False, error_callback=None
+    )
     assert ok is True
     app.updater.start_polling.assert_awaited_once()
 
@@ -151,7 +161,7 @@ def test_every_start_polling_call_site_is_time_bounded():
     unbounded = []
     for i, line in enumerate(lines):
         if re.search(r"updater\.start_polling\(", line) and "def " not in line:
-            window = "\n".join(lines[max(0, i - 6):i + 1])
+            window = "\n".join(lines[max(0, i - 6) : i + 1])
             if "wait_for" not in window:
                 unbounded.append((i + 1, line.strip()))
     assert not unbounded, f"unbounded start_polling() call sites: {unbounded}"

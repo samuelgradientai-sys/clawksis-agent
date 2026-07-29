@@ -47,6 +47,7 @@ epoch check is deliberately **lenient**: it ignores a marker only on a
 or an environment where the epoch cannot be computed (non-Linux, no ``/proc``),
 both degrade to the original presence-only behaviour — never fail-closed.
 """
+
 from __future__ import annotations
 
 import functools
@@ -101,9 +102,7 @@ def current_instantiation_epoch() -> str:
     boot_id = ""
     try:
         boot_id = (
-            Path("/proc/sys/kernel/random/boot_id")
-            .read_text(encoding="utf-8")
-            .strip()
+            Path("/proc/sys/kernel/random/boot_id").read_text(encoding="utf-8").strip()
         )
     except OSError:
         pass

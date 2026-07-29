@@ -30,13 +30,19 @@ _fake_telegram_constants = types.ModuleType("telegram.constants")
 _fake_telegram_constants.ParseMode = SimpleNamespace(HTML="HTML")
 
 _fake_telegram_request = types.ModuleType("telegram.request")
-_fake_telegram_request.HTTPXRequest = type("HTTPXRequest", (), {"__init__": lambda *a, **kw: None})
+_fake_telegram_request.HTTPXRequest = type(
+    "HTTPXRequest", (), {"__init__": lambda *a, **kw: None}
+)
 
 _fake_telegram_ext = types.ModuleType("telegram.ext")
-_fake_telegram_ext.ApplicationBuilder = type("ApplicationBuilder", (), {
-    "token": lambda self, *a: self,
-    "build": lambda self: None,
-})
+_fake_telegram_ext.ApplicationBuilder = type(
+    "ApplicationBuilder",
+    (),
+    {
+        "token": lambda self, *a: self,
+        "build": lambda self: None,
+    },
+)
 
 _fake_telegram = types.ModuleType("telegram")
 _fake_telegram.error = _fake_telegram_error

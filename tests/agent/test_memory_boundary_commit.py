@@ -98,7 +98,9 @@ def test_boundary_commit_serializes_against_turn_syncs():
     assert mm.flush_pending(timeout=5)
 
     kinds = [c[0] for c in provider.calls]
-    assert kinds == ["end", "switch", "sync_turn"], f"unexpected order: {provider.calls}"
+    assert kinds == ["end", "switch", "sync_turn"], (
+        f"unexpected order: {provider.calls}"
+    )
 
 
 def test_boundary_commit_switch_still_fires_when_end_raises():
@@ -111,7 +113,9 @@ def test_boundary_commit_switch_still_fires_when_end_raises():
     provider = _ExplodingEndProvider()
     mm = _make_manager(provider)
 
-    mm.commit_session_boundary_async([{"role": "user", "content": "x"}], new_session_id="new-sid")
+    mm.commit_session_boundary_async(
+        [{"role": "user", "content": "x"}], new_session_id="new-sid"
+    )
     assert mm.flush_pending(timeout=5)
 
     assert ("switch", "new-sid", True) in provider.calls
@@ -120,5 +124,7 @@ def test_boundary_commit_switch_still_fires_when_end_raises():
 def test_boundary_commit_noop_without_providers():
     mm = MemoryManager()
     # Must not create the executor or raise.
-    mm.commit_session_boundary_async([{"role": "user", "content": "x"}], new_session_id="s")
+    mm.commit_session_boundary_async(
+        [{"role": "user", "content": "x"}], new_session_id="s"
+    )
     assert mm._sync_executor is None

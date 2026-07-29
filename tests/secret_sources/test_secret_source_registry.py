@@ -118,9 +118,10 @@ class TestRegistration:
 
     def test_same_name_replace_keeps_scheme(self):
         assert reg.register_source(_make_source(name="one", scheme="op")) is True
-        assert reg.register_source(
-            _make_source(name="one", scheme="op"), replace=True
-        ) is True
+        assert (
+            reg.register_source(_make_source(name="one", scheme="op"), replace=True)
+            is True
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -176,9 +177,13 @@ class TestApplyAll:
         env: dict = {}
         # bulk listed first in sources order — mapped must still win.
         report = reg.apply_all(
-            {"sources": ["bulky", "mappy"],
-             "bulky": {"enabled": True}, "mappy": {"enabled": True}},
-            tmp_path, environ=env,
+            {
+                "sources": ["bulky", "mappy"],
+                "bulky": {"enabled": True},
+                "mappy": {"enabled": True},
+            },
+            tmp_path,
+            environ=env,
         )
         assert env["K"] == "mapped"
         assert report.provenance["K"].source == "mappy"
@@ -189,9 +194,13 @@ class TestApplyAll:
         reg.register_source(_make_source(name="beta", secrets={"K": "b"}))
         env: dict = {}
         report = reg.apply_all(
-            {"sources": ["beta", "alpha"],
-             "alpha": {"enabled": True}, "beta": {"enabled": True}},
-            tmp_path, environ=env,
+            {
+                "sources": ["beta", "alpha"],
+                "alpha": {"enabled": True},
+                "beta": {"enabled": True},
+            },
+            tmp_path,
+            environ=env,
         )
         assert env["K"] == "b"  # beta listed first
         assert report.provenance["K"].source == "beta"
@@ -206,17 +215,25 @@ class TestApplyAll:
         )
         env: dict = {}
         report = reg.apply_all(
-            {"sources": ["alpha", "beta"],
-             "alpha": {"enabled": True}, "beta": {"enabled": True}},
-            tmp_path, environ=env,
+            {
+                "sources": ["alpha", "beta"],
+                "alpha": {"enabled": True},
+                "beta": {"enabled": True},
+            },
+            tmp_path,
+            environ=env,
         )
         assert env["K"] == "a"
         assert report.conflicts
 
     def test_protected_vars_never_overwritten_by_any_source(self, tmp_path):
         reg.register_source(
-            _make_source(name="alpha", secrets={"BOOT_TOKEN": "evil"},
-                         override=True, protected=("BOOT_TOKEN",))
+            _make_source(
+                name="alpha",
+                secrets={"BOOT_TOKEN": "evil"},
+                override=True,
+                protected=("BOOT_TOKEN",),
+            )
         )
         env = {"BOOT_TOKEN": "real"}
         report = reg.apply_all({"alpha": {"enabled": True}}, tmp_path, environ=env)
@@ -240,7 +257,8 @@ class TestApplyAll:
         env: dict = {}
         report = reg.apply_all(
             {"broken": {"enabled": True}, "works": {"enabled": True}},
-            tmp_path, environ=env,
+            tmp_path,
+            environ=env,
         )
         assert env["K"] == "v"
         broken = [s for s in report.sources if s.name == "broken"][0]
@@ -289,7 +307,8 @@ class TestApplyAll:
         env: dict = {}
         reg.apply_all(
             {"sources": ["ghost", "dummy"], "dummy": {"enabled": True}},
-            tmp_path, environ=env,
+            tmp_path,
+            environ=env,
         )
         assert env["K"] == "v"
 
@@ -315,24 +334,29 @@ class TestHelpers:
 
     def test_run_secret_cli_minimal_env(self):
         proc = run_secret_cli(
-            [sys.executable, "-c",
-             "import os, json; print(json.dumps(sorted(os.environ)))"],
+            [
+                sys.executable,
+                "-c",
+                "import os, json; print(json.dumps(sorted(os.environ)))",
+            ],
         )
         import json
 
         child_env = json.loads(proc.stdout)
         # No credential-bearing vars from the parent env leak through.
-        assert not any(k.endswith(("_API_KEY", "_TOKEN", "_SECRET"))
-                       for k in child_env)
+        assert not any(k.endswith(("_API_KEY", "_TOKEN", "_SECRET")) for k in child_env)
         assert "NO_COLOR" in child_env
 
     def test_run_secret_cli_allowlist_passes_named_vars(self, monkeypatch):
         monkeypatch.setenv("MY_AUTH_TOKEN", "tok")
         monkeypatch.setenv("OTHER_API_KEY", "leak")
         proc = run_secret_cli(
-            [sys.executable, "-c",
-             "import os; print(os.environ.get('MY_AUTH_TOKEN', '')); "
-             "print(os.environ.get('OTHER_API_KEY', ''))"],
+            [
+                sys.executable,
+                "-c",
+                "import os; print(os.environ.get('MY_AUTH_TOKEN', '')); "
+                "print(os.environ.get('OTHER_API_KEY', ''))",
+            ],
             allow_env=["MY_AUTH_TOKEN"],
         )
         lines = proc.stdout.splitlines()
@@ -349,8 +373,7 @@ class TestHelpers:
     def test_run_secret_cli_stdin_devnull(self):
         # A helper that tries to prompt reads EOF immediately.
         proc = run_secret_cli(
-            [sys.executable, "-c",
-             "import sys; print(repr(sys.stdin.read()))"],
+            [sys.executable, "-c", "import sys; print(repr(sys.stdin.read()))"],
         )
         assert proc.stdout.strip() == "''"
 
@@ -375,9 +398,9 @@ class TestBitwardenSource:
     def test_protected_vars_track_token_env(self):
         src = BitwardenSource()
         assert src.protected_env_vars({}) == frozenset({"BWS_ACCESS_TOKEN"})
-        assert src.protected_env_vars(
-            {"access_token_env": "CUSTOM_TOKEN"}
-        ) == frozenset({"CUSTOM_TOKEN"})
+        assert src.protected_env_vars({
+            "access_token_env": "CUSTOM_TOKEN"
+        }) == frozenset({"CUSTOM_TOKEN"})
 
     def test_fetch_missing_token_not_configured(self, tmp_path, monkeypatch):
         monkeypatch.delenv("BWS_ACCESS_TOKEN", raising=False)
@@ -404,8 +427,11 @@ class TestBitwardenSource:
 
         monkeypatch.setattr(bw, "fetch_bitwarden_secrets", _fake_fetch)
         result = BitwardenSource().fetch(
-            {"enabled": True, "project_id": "proj",
-             "server_url": " https://vault.bitwarden.eu "},
+            {
+                "enabled": True,
+                "project_id": "proj",
+                "server_url": " https://vault.bitwarden.eu ",
+            },
             tmp_path,
         )
         assert result.ok
@@ -437,14 +463,19 @@ class TestBitwardenSource:
 
         monkeypatch.setattr(bw, "find_bws", lambda **kw: Path("/fake/bws"))
         monkeypatch.setattr(
-            bw, "fetch_bitwarden_secrets",
-            lambda **kw: ({"ANTHROPIC_API_KEY": "sk-ant", "BWS_ACCESS_TOKEN": "steal"}, []),
+            bw,
+            "fetch_bitwarden_secrets",
+            lambda **kw: (
+                {"ANTHROPIC_API_KEY": "sk-ant", "BWS_ACCESS_TOKEN": "steal"},
+                [],
+            ),
         )
         reg.register_source(BitwardenSource())
         env = {"BWS_ACCESS_TOKEN": "0.token"}
         report = reg.apply_all(
             {"bitwarden": {"enabled": True, "project_id": "proj"}},
-            tmp_path, environ=env,
+            tmp_path,
+            environ=env,
         )
         assert env["ANTHROPIC_API_KEY"] == "sk-ant"
         # The bootstrap token is protected even though BSM carried it.
@@ -493,12 +524,10 @@ class TestOnePasswordSource:
         from agent.secret_sources.onepassword import OnePasswordSource
 
         src = OnePasswordSource()
-        assert src.protected_env_vars({}) == frozenset(
-            {"OP_SERVICE_ACCOUNT_TOKEN"}
-        )
-        assert src.protected_env_vars(
-            {"service_account_token_env": "MY_OP_TOKEN"}
-        ) == frozenset({"MY_OP_TOKEN"})
+        assert src.protected_env_vars({}) == frozenset({"OP_SERVICE_ACCOUNT_TOKEN"})
+        assert src.protected_env_vars({
+            "service_account_token_env": "MY_OP_TOKEN"
+        }) == frozenset({"MY_OP_TOKEN"})
 
     def test_fetch_empty_map_not_configured(self, tmp_path):
         from agent.secret_sources.onepassword import OnePasswordSource
@@ -527,8 +556,12 @@ class TestOnePasswordSource:
 
         monkeypatch.setattr(op, "fetch_onepassword_secrets", _fake_fetch)
         result = op.OnePasswordSource().fetch(
-            {"enabled": True, "env": {"K": "op://V/I/F"},
-             "account": "team", "service_account_token_env": "MY_TOK"},
+            {
+                "enabled": True,
+                "env": {"K": "op://V/I/F"},
+                "account": "team",
+                "service_account_token_env": "MY_TOK",
+            },
             tmp_path,
         )
         assert result.ok and result.secrets == {"K": "v"}
@@ -540,12 +573,18 @@ class TestOnePasswordSource:
         import agent.secret_sources.onepassword as op
 
         monkeypatch.setattr(op, "find_op", lambda *_a, **_kw: Path("/fake/op"))
-        monkeypatch.setattr(op, "fetch_onepassword_secrets",
-                            lambda **kw: ({"GOOD": "v"}, []))
+        monkeypatch.setattr(
+            op, "fetch_onepassword_secrets", lambda **kw: ({"GOOD": "v"}, [])
+        )
         result = op.OnePasswordSource().fetch(
-            {"enabled": True,
-             "env": {"GOOD": "op://V/I/F", "BAD": "not-a-ref",
-                     "bad name": "op://V/I/F"}},
+            {
+                "enabled": True,
+                "env": {
+                    "GOOD": "op://V/I/F",
+                    "BAD": "not-a-ref",
+                    "bad name": "op://V/I/F",
+                },
+            },
             tmp_path,
         )
         assert result.ok
@@ -561,13 +600,14 @@ class TestOnePasswordSource:
         monkeypatch.setenv("BWS_ACCESS_TOKEN", "0.token")
         monkeypatch.setattr(bw, "find_bws", lambda **kw: Path("/fake/bws"))
         monkeypatch.setattr(
-            bw, "fetch_bitwarden_secrets",
-            lambda **kw: ({"SHARED_KEY": "from-bitwarden",
-                           "BW_ONLY": "bw-val"}, []),
+            bw,
+            "fetch_bitwarden_secrets",
+            lambda **kw: ({"SHARED_KEY": "from-bitwarden", "BW_ONLY": "bw-val"}, []),
         )
         monkeypatch.setattr(op, "find_op", lambda *_a, **_kw: Path("/fake/op"))
         monkeypatch.setattr(
-            op, "fetch_onepassword_secrets",
+            op,
+            "fetch_onepassword_secrets",
             lambda **kw: ({"SHARED_KEY": "from-1password"}, []),
         )
         reg.register_source(bw.BitwardenSource())
@@ -578,10 +618,10 @@ class TestOnePasswordSource:
                 # bitwarden listed FIRST — mapped 1Password must still win.
                 "sources": ["bitwarden", "onepassword"],
                 "bitwarden": {"enabled": True, "project_id": "proj"},
-                "onepassword": {"enabled": True,
-                                "env": {"SHARED_KEY": "op://V/I/F"}},
+                "onepassword": {"enabled": True, "env": {"SHARED_KEY": "op://V/I/F"}},
             },
-            tmp_path, environ=env,
+            tmp_path,
+            environ=env,
         )
         assert env["SHARED_KEY"] == "from-1password"
         assert env["BW_ONLY"] == "bw-val"

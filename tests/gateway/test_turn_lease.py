@@ -86,7 +86,9 @@ def test_distinct_sessions_do_not_contend():
 def test_contention_logs_named_warning(caplog):
     async def scenario():
         registry = SessionTurnLeaseRegistry()
-        t1 = await registry.acquire("sess-w", owner_key="key-a", generation=3, timeout=5)
+        t1 = await registry.acquire(
+            "sess-w", owner_key="key-a", generation=3, timeout=5
+        )
 
         async def second():
             t2 = await registry.acquire(
@@ -118,13 +120,17 @@ def test_generation_scoped_idempotent_release():
 
     async def scenario():
         registry = SessionTurnLeaseRegistry()
-        stale = await registry.acquire("sess-g", owner_key="key-a", generation=1, timeout=5)
+        stale = await registry.acquire(
+            "sess-g", owner_key="key-a", generation=1, timeout=5
+        )
         assert stale is not None
         assert registry.release(stale) is True
         # Double release: no-op.
         assert registry.release(stale) is False
 
-        newer = await registry.acquire("sess-g", owner_key="key-a", generation=2, timeout=5)
+        newer = await registry.acquire(
+            "sess-g", owner_key="key-a", generation=2, timeout=5
+        )
         # Stale token (already released, older generation) must not free the
         # newer holder even if some unwind calls release again.
         stale.released = False  # simulate a buggy double-unwind resurrecting it
@@ -219,7 +225,9 @@ def test_rebind_moves_serialization_to_new_session_id():
 
     async def scenario():
         registry = SessionTurnLeaseRegistry()
-        token = await registry.acquire("parent", owner_key="key-a", generation=1, timeout=5)
+        token = await registry.acquire(
+            "parent", owner_key="key-a", generation=1, timeout=5
+        )
         assert registry.rebind(token, "child") is True
         assert token is not None and token.session_id == "child"
 
@@ -261,8 +269,12 @@ def test_rebind_blocked_when_target_lease_is_live():
 
     async def scenario():
         registry = SessionTurnLeaseRegistry()
-        t_a = await registry.acquire("sess-a", owner_key="key-a", generation=1, timeout=5)
-        t_b = await registry.acquire("sess-b", owner_key="key-b", generation=1, timeout=5)
+        t_a = await registry.acquire(
+            "sess-a", owner_key="key-a", generation=1, timeout=5
+        )
+        t_b = await registry.acquire(
+            "sess-b", owner_key="key-b", generation=1, timeout=5
+        )
         assert t_a is not None and t_b is not None
         assert registry.rebind(t_a, "sess-b") is False
         assert t_a.session_id == "sess-a"  # unchanged

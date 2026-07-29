@@ -60,6 +60,7 @@ def _patch_aux_client(content: str, *, model: str = "test-model"):
 # JSON extraction helpers
 # ---------------------------------------------------------------------------
 
+
 def test_extract_json_blob_handles_plain_json():
     raw = '{"title": "T", "body": "B"}'
     assert spec._extract_json_blob(raw) == {"title": "T", "body": "B"}
@@ -84,6 +85,7 @@ def test_extract_json_blob_returns_none_for_unparseable():
 # ---------------------------------------------------------------------------
 # specify_task (module-level entry point)
 # ---------------------------------------------------------------------------
+
 
 def test_specify_task_happy_path(kanban_home):
     with kb.connect() as conn:
@@ -215,6 +217,7 @@ def test_list_triage_ids(kanban_home):
 # CLI wiring — argparse + _cmd_specify
 # ---------------------------------------------------------------------------
 
+
 def _run_cli(*argv: str) -> int:
     """Invoke the `clawk kanban …` argparse surface directly."""
     root = argparse.ArgumentParser()
@@ -297,7 +300,10 @@ def test_cli_specify_tenant_filter(kanban_home, capsys):
     with kb.connect() as conn:
         outside = kb.create_task(conn, title="outside", triage=True)
         inside = kb.create_task(
-            conn, title="inside", triage=True, tenant="proj-a",
+            conn,
+            title="inside",
+            triage=True,
+            tenant="proj-a",
         )
 
     content = jsonlib.dumps({"title": "spec", "body": "body"})
@@ -306,9 +312,7 @@ def test_cli_specify_tenant_filter(kanban_home, capsys):
         rc = _run_cli("specify", "--all", "--tenant", "proj-a", "--json")
     assert rc == 0
     lines = [
-        jsonlib.loads(l)
-        for l in capsys.readouterr().out.strip().splitlines()
-        if l
+        jsonlib.loads(l) for l in capsys.readouterr().out.strip().splitlines() if l
     ]
     ids = {row["task_id"] for row in lines}
     assert ids == {inside}

@@ -113,7 +113,8 @@ def test_duplicate_async_queue_replay_injects_once(monkeypatch, isolated_registr
 
 
 def test_unroutable_async_event_is_not_requeued_forever(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     isolated = queue.Queue()
     monkeypatch.setattr(isolated_registry, "completion_queue", isolated)
@@ -146,9 +147,13 @@ def test_concurrent_claims_share_the_same_narrow_delivery_seam():
     text = "completion"
 
     async def _exercise():
-        first = asyncio.create_task(runner._deliver_completion_notification(text, dict(event)))
+        first = asyncio.create_task(
+            runner._deliver_completion_notification(text, dict(event))
+        )
         await entered.wait()
-        second = asyncio.create_task(runner._deliver_completion_notification(text, dict(event)))
+        second = asyncio.create_task(
+            runner._deliver_completion_notification(text, dict(event))
+        )
         await asyncio.sleep(0)
         release.set()
         return await asyncio.gather(first, second)
@@ -158,7 +163,8 @@ def test_concurrent_claims_share_the_same_narrow_delivery_seam():
 
 
 def test_failed_async_injection_is_retried_and_only_success_is_acked(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     isolated = queue.Queue()
     monkeypatch.setattr(isolated_registry, "completion_queue", isolated)
@@ -240,10 +246,12 @@ def test_delivery_state_is_isolated_per_gateway_profile_lifecycle():
 
     async def _exercise():
         first = await default_runner._deliver_completion_notification(
-            "default", dict(event),
+            "default",
+            dict(event),
         )
         second = await profile_runner._deliver_completion_notification(
-            "profile", dict(event),
+            "profile",
+            dict(event),
         )
         return first, second
 
@@ -306,15 +314,17 @@ def test_explicit_kill_returns_output_before_consuming_notification(monkeypatch)
         pass
 
     monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
-    asyncio.run(runner._run_process_watcher({
-        "session_id": session.id,
-        "check_interval": 0,
-        "session_key": "agent:main:telegram:dm:123",
-        "platform": "telegram",
-        "chat_type": "dm",
-        "chat_id": "123",
-        "notify_on_complete": True,
-    }))
+    asyncio.run(
+        runner._run_process_watcher({
+            "session_id": session.id,
+            "check_interval": 0,
+            "session_key": "agent:main:telegram:dm:123",
+            "platform": "telegram",
+            "chat_type": "dm",
+            "chat_id": "123",
+            "notify_on_complete": True,
+        })
+    )
 
     adapter.handle_message.assert_not_awaited()
 
@@ -342,10 +352,12 @@ def test_process_tool_redacts_explicit_kill_output(monkeypatch):
 
     monkeypatch.setattr(pr_module, "_redact_process_result", _redact)
 
-    result = json.loads(pr_module._handle_process({
-        "action": "kill",
-        "session_id": session.id,
-    }))
+    result = json.loads(
+        pr_module._handle_process({
+            "action": "kill",
+            "session_id": session.id,
+        })
+    )
     assert result["output"] == "PRIVATE_TOKEN=<redacted>\n"
 
 
@@ -439,15 +451,17 @@ def test_unobserved_normal_completion_still_notifies(monkeypatch):
         pass
 
     monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
-    asyncio.run(runner._run_process_watcher({
-        "session_id": "proc_unobserved",
-        "check_interval": 0,
-        "session_key": "agent:main:telegram:dm:123",
-        "platform": "telegram",
-        "chat_type": "dm",
-        "chat_id": "123",
-        "notify_on_complete": True,
-    }))
+    asyncio.run(
+        runner._run_process_watcher({
+            "session_id": "proc_unobserved",
+            "check_interval": 0,
+            "session_key": "agent:main:telegram:dm:123",
+            "platform": "telegram",
+            "chat_type": "dm",
+            "chat_id": "123",
+            "notify_on_complete": True,
+        })
+    )
 
     adapter.handle_message.assert_awaited_once()
 
@@ -479,15 +493,17 @@ def test_autonomous_completion_redacts_real_command_and_output_secrets(monkeypat
         pass
 
     monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
-    asyncio.run(runner._run_process_watcher({
-        "session_id": session.id,
-        "check_interval": 0,
-        "session_key": "agent:main:telegram:dm:123",
-        "platform": "telegram",
-        "chat_type": "dm",
-        "chat_id": "123",
-        "notify_on_complete": True,
-    }))
+    asyncio.run(
+        runner._run_process_watcher({
+            "session_id": session.id,
+            "check_interval": 0,
+            "session_key": "agent:main:telegram:dm:123",
+            "platform": "telegram",
+            "chat_type": "dm",
+            "chat_id": "123",
+            "notify_on_complete": True,
+        })
+    )
 
     delivered = adapter.handle_message.await_args.args[0]
     assert secret not in delivered.text

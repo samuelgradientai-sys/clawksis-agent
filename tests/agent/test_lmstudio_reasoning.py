@@ -19,7 +19,7 @@ _LM_RANK = {"minimal": 0, "low": 1, "medium": 2, "high": 3, "xhigh": 4}
 
 @pytest.mark.parametrize("effort", ["max", "ultra"])
 def test_strong_efforts_clamp_to_lmstudio_ceiling(effort):
-    """"max"/"ultra" exceed LM Studio's vocabulary and clamp to its ceiling.
+    """ "max"/"ultra" exceed LM Studio's vocabulary and clamp to its ceiling.
 
     Without the clamp they miss the valid set, keep the "medium" default and
     resolve *below* "xhigh" -- more requested reasoning yielding less.
@@ -49,7 +49,9 @@ def test_effort_ladder_is_monotonic():
 )
 def test_levels_within_lmstudio_vocabulary_are_unchanged(effort, expected):
     """Negative control: the clamp must not disturb levels LM Studio knows."""
-    assert resolve_lmstudio_effort({"enabled": True, "effort": effort}, None) == expected
+    assert (
+        resolve_lmstudio_effort({"enabled": True, "effort": effort}, None) == expected
+    )
 
 
 def test_unparseable_effort_still_falls_back_to_medium():
@@ -57,7 +59,9 @@ def test_unparseable_effort_still_falls_back_to_medium():
 
     This is the behaviour "max"/"ultra" were previously conflated with.
     """
-    assert resolve_lmstudio_effort({"enabled": True, "effort": "banana"}, None) == "medium"
+    assert (
+        resolve_lmstudio_effort({"enabled": True, "effort": "banana"}, None) == "medium"
+    )
 
 
 def test_disabled_reasoning_still_resolves_to_none():

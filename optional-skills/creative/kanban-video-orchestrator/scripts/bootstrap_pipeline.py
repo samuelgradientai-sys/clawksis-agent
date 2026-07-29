@@ -55,6 +55,7 @@ function. A minimal example:
       }
     }
 """
+
 from __future__ import annotations
 
 import argparse
@@ -78,9 +79,19 @@ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]+$")
 def validate_plan(plan: dict) -> list[str]:
     """Return a list of validation error strings; empty list = valid."""
     errors = []
-    required_top = ["title", "slug", "tenant", "duration_s", "aspect",
-                    "resolution", "fps", "team", "scenes", "audio",
-                    "deliverables"]
+    required_top = [
+        "title",
+        "slug",
+        "tenant",
+        "duration_s",
+        "aspect",
+        "resolution",
+        "fps",
+        "team",
+        "scenes",
+        "audio",
+        "deliverables",
+    ]
     for k in required_top:
         if k not in plan:
             errors.append(f"missing required key: {k}")
@@ -94,8 +105,7 @@ def validate_plan(plan: dict) -> list[str]:
                 errors.append("team must include a director role")
             seen_profiles = set()
             for i, t in enumerate(plan["team"]):
-                for k in ["profile", "role", "toolsets", "skills",
-                          "responsibilities"]:
+                for k in ["profile", "role", "toolsets", "skills", "responsibilities"]:
                     if k not in t:
                         errors.append(f"team[{i}] missing {k}")
                 # Profile name must match Clawksis's regex (lowercase
@@ -113,18 +123,13 @@ def validate_plan(plan: dict) -> list[str]:
                     seen_profiles.add(t["profile"])
                 # Toolsets / skills must be lists, not strings.
                 if "toolsets" in t and not isinstance(t["toolsets"], list):
-                    errors.append(
-                        f"team[{i}].toolsets must be a list of strings"
-                    )
+                    errors.append(f"team[{i}].toolsets must be a list of strings")
                 if "skills" in t and not isinstance(t["skills"], list):
-                    errors.append(
-                        f"team[{i}].skills must be a list of strings"
-                    )
+                    errors.append(f"team[{i}].skills must be a list of strings")
 
     if "slug" in plan:
         if not SLUG_RE.match(plan["slug"]):
-            errors.append("slug must be lowercase, hyphenated, "
-                          "starting with [a-z0-9]")
+            errors.append("slug must be lowercase, hyphenated, starting with [a-z0-9]")
 
     return errors
 
@@ -178,12 +183,21 @@ def render_brief(plan: dict) -> str:
         "SFX_DETAILS": plan["audio"].get("sfx", "_(n/a)_"),
         "PRIMARY_FORMAT": plan["deliverables"][0]["format"],
         "PRIMARY_RES": plan["deliverables"][0]["resolution"],
-        "ALT_FORMAT_1": (plan["deliverables"][1]["format"]
-                          if len(plan["deliverables"]) > 1 else "_(none)_"),
-        "ALT_RES_1": (plan["deliverables"][1]["resolution"]
-                       if len(plan["deliverables"]) > 1 else ""),
-        "ALT_NOTES_1": (plan["deliverables"][1].get("notes", "")
-                         if len(plan["deliverables"]) > 1 else ""),
+        "ALT_FORMAT_1": (
+            plan["deliverables"][1]["format"]
+            if len(plan["deliverables"]) > 1
+            else "_(none)_"
+        ),
+        "ALT_RES_1": (
+            plan["deliverables"][1]["resolution"]
+            if len(plan["deliverables"]) > 1
+            else ""
+        ),
+        "ALT_NOTES_1": (
+            plan["deliverables"][1].get("notes", "")
+            if len(plan["deliverables"]) > 1
+            else ""
+        ),
         "API_KEYS_REQUIRED": ", ".join(plan.get("api_keys_required", [])) or "none",
         "EXT_DEPS": extra.get("ext_deps", "ffmpeg, Python 3.11+"),
         "SOURCE_ASSETS": extra.get("source_assets", "_(none)_"),
@@ -196,7 +210,8 @@ def render_brief(plan: dict) -> str:
     out = re.sub(
         r"\|\s*1\s*\|\s*0:00–0:0X.+?\n\|\s*2\s*\|.+?\n",
         scene_table + "\n",
-        out, flags=re.DOTALL,
+        out,
+        flags=re.DOTALL,
     )
     return out
 
@@ -206,12 +221,9 @@ def render_team_md(plan: dict) -> str:
     lines = [f"# Team & Task Graph — {plan['title']}", "", "## Team", ""]
     for t in plan["team"]:
         skills = (
-            f"loads `{', '.join(t['skills'])}`"
-            if t["skills"] else "no skills required"
+            f"loads `{', '.join(t['skills'])}`" if t["skills"] else "no skills required"
         )
-        lines.append(
-            f"- `{t['profile']}` — {t['responsibilities']} ({skills})"
-        )
+        lines.append(f"- `{t['profile']}` — {t['responsibilities']} ({skills})")
     lines.extend(["", "## Task Graph", "", "```"])
 
     # Build a simple task graph based on conventions
@@ -262,7 +274,9 @@ def render_team_md(plan: dict) -> str:
     # VO + audio mix
     if "voice-talent" in profiles_by_role:
         vo_id = f"T{next_id}"
-        lines.append(f"{vo_id:5} {profiles_by_role['voice-talent']} — narration (parent: T0)")
+        lines.append(
+            f"{vo_id:5} {profiles_by_role['voice-talent']} — narration (parent: T0)"
+        )
         next_id += 1
     else:
         vo_id = None
@@ -280,7 +294,9 @@ def render_team_md(plan: dict) -> str:
     # Editor
     if "editor" in profiles_by_role:
         ed_id = f"T{next_id}"
-        ed_parents = scene_ids + [p for p in [am_id, vo_id, ms_id] if p and p not in scene_ids]
+        ed_parents = scene_ids + [
+            p for p in [am_id, vo_id, ms_id] if p and p not in scene_ids
+        ]
         lines.append(
             f"{ed_id:5} {profiles_by_role['editor']} — assemble + mux (parents: {', '.join(ed_parents)})"
         )
@@ -328,21 +344,23 @@ def render_setup_sh(plan: dict, brief_md: str, team_md: str) -> str:
     # API key checks
     key_checks = []
     for key in plan.get("api_keys_required", []):
-        key_checks.append(f'check_key {key} clawk {key} || exit 1')
+        key_checks.append(f"check_key {key} clawk {key} || exit 1")
     key_checks_str = "\n".join(key_checks) if key_checks else "# (no API keys required)"
 
     # Scene dirs
     scene_dir_lines = []
     for s in plan["scenes"]:
         n = s.get("n", "?")
-        scene_dir_lines.append(f'mkdir -p "$WORKSPACE/scenes/scene-{n:02d}"/checkpoints')
+        scene_dir_lines.append(
+            f'mkdir -p "$WORKSPACE/scenes/scene-{n:02d}"/checkpoints'
+        )
     scene_dirs = "\n".join(scene_dir_lines) if scene_dir_lines else ""
 
     # Profile create
     profile_creates = []
     for t in plan["team"]:
         profile_creates.append(
-            f'clawk profile create {t["profile"]} --clone 2>/dev/null || true'
+            f"clawk profile create {t['profile']} --clone 2>/dev/null || true"
         )
 
     # Profile config — emit JSON arrays so the bash function can pass them
@@ -361,7 +379,7 @@ def render_setup_sh(plan: dict, brief_md: str, team_md: str) -> str:
     soul_writes = []
     for t in plan["team"]:
         soul_writes.append(
-            f'cat > "$HOME/.clawksis/profiles/{t["profile"]}/SOUL.md" <<\'SOUL_EOF\'\n'
+            f"cat > \"$HOME/.clawksis/profiles/{t['profile']}/SOUL.md\" <<'SOUL_EOF'\n"
             f"{render_soul_md(t, plan)}\n"
             f"SOUL_EOF\n"
             f'echo "  ✓ SOUL.md for {t["profile"]}"'
@@ -369,14 +387,14 @@ def render_setup_sh(plan: dict, brief_md: str, team_md: str) -> str:
 
     # Taste writes (placeholder; real content optional)
     taste_writes = (
-        'cat > "$WORKSPACE/taste/brand-guide.md" <<\'TASTE_EOF\'\n'
-        '# Brand Guide\n\n'
-        '_(Populate with project-specific colors, typography, motion rules)_\n'
-        'TASTE_EOF\n'
-        'cat > "$WORKSPACE/taste/emotional-dna.md" <<\'DNA_EOF\'\n'
-        '# Emotional DNA\n\n'
-        '_(What this piece should FEEL like — populate from the brief.)_\n'
-        'DNA_EOF'
+        "cat > \"$WORKSPACE/taste/brand-guide.md\" <<'TASTE_EOF'\n"
+        "# Brand Guide\n\n"
+        "_(Populate with project-specific colors, typography, motion rules)_\n"
+        "TASTE_EOF\n"
+        "cat > \"$WORKSPACE/taste/emotional-dna.md\" <<'DNA_EOF'\n"
+        "# Emotional DNA\n\n"
+        "_(What this piece should FEEL like — populate from the brief.)_\n"
+        "DNA_EOF"
     )
 
     # Asset copies — leave empty by default; user fills in
@@ -407,7 +425,7 @@ def render_soul_md(team_member: dict, plan: dict) -> str:
 
     common_rules = (
         "- **Read the brief and team graph** before doing anything else.\n"
-        "- **Pass `workspace_kind=\"dir\"` and `workspace_path` on every "
+        '- **Pass `workspace_kind="dir"` and `workspace_path` on every '
         "`kanban_create` call.** This keeps the team in one shared workspace.\n"
         f"- **Use tenant `{plan['tenant']}`** on every kanban call.\n"
         "- **Write outputs to predictable paths.** Other profiles depend on "
@@ -440,19 +458,20 @@ def render_soul_md(team_member: dict, plan: dict) -> str:
     out = out.replace("{{ROLE_NAME}}", role)
     out = out.replace("{{ROLE_RESPONSIBILITIES}}", team_member["responsibilities"])
     out = out.replace("{{INPUTS_READ}}", team_member.get("inputs", "_(see brief)_"))
-    out = out.replace("{{OUTPUTS_PRODUCED}}", team_member.get("outputs", "_(see brief)_"))
+    out = out.replace(
+        "{{OUTPUTS_PRODUCED}}", team_member.get("outputs", "_(see brief)_")
+    )
     out = out.replace("{{TOOLSETS}}", ", ".join(team_member["toolsets"]))
     out = out.replace(
         "{{SKILLS}}",
-        ", ".join(team_member["skills"]) if team_member["skills"] else "(none)"
+        ", ".join(team_member["skills"]) if team_member["skills"] else "(none)",
     )
     out = out.replace(
         "{{EXTERNAL_TOOLS}}",
-        team_member.get("external_tools", "ffmpeg, ffprobe (via terminal)")
+        team_member.get("external_tools", "ffmpeg, ffprobe (via terminal)"),
     )
     out = out.replace(
-        "{{ROLE_RULES}}",
-        team_member.get("role_rules", "_(see TEAM.md and brief.md)_")
+        "{{ROLE_RULES}}", team_member.get("role_rules", "_(see TEAM.md and brief.md)_")
     )
     out = out.replace("{{COMMON_RULES}}", common_rules)
     out = out.replace("{{COMMON_COMMANDS}}", common_commands)
@@ -460,15 +479,21 @@ def render_soul_md(team_member: dict, plan: dict) -> str:
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("plan_json", help="Path to plan.json")
-    ap.add_argument("--out", default="setup.sh",
-                    help="Output path for setup.sh (default: ./setup.sh)")
-    ap.add_argument("--brief-out", default=None,
-                    help="Write brief.md alongside (default: skipped)")
-    ap.add_argument("--team-out", default=None,
-                    help="Write TEAM.md alongside (default: skipped)")
+    ap.add_argument(
+        "--out",
+        default="setup.sh",
+        help="Output path for setup.sh (default: ./setup.sh)",
+    )
+    ap.add_argument(
+        "--brief-out", default=None, help="Write brief.md alongside (default: skipped)"
+    )
+    ap.add_argument(
+        "--team-out", default=None, help="Write TEAM.md alongside (default: skipped)"
+    )
     args = ap.parse_args()
 
     plan = json.loads(Path(args.plan_json).read_text())

@@ -8,6 +8,7 @@ Build the real image and verify:
   3. Legacy ``tini -g -- <cmd>`` entrypoints boot without
      ``rc.init: -g: not found``
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -23,16 +24,25 @@ def test_tini_compat_shim_exists(built_image: str) -> None:
     strip those flags before exec'ing /init.
     """
     r = subprocess.run(
-        ["docker", "run", "--rm", "--entrypoint", "sh",
-         built_image, "-c",
-         'test -x /usr/bin/tini && '
-         # Must NOT be a raw symlink to /init — that reintroduces #66679.
-         'if [ -L /usr/bin/tini ]; then '
-         '  target="$(readlink -f /usr/bin/tini)"; '
-         '  test "$target" != "/init"; '
-         'fi && '
-         'head -n1 /usr/bin/tini | grep -q "^#!"'],
-        capture_output=True, text=True, timeout=60,
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "sh",
+            built_image,
+            "-c",
+            "test -x /usr/bin/tini && "
+            # Must NOT be a raw symlink to /init — that reintroduces #66679.
+            "if [ -L /usr/bin/tini ]; then "
+            '  target="$(readlink -f /usr/bin/tini)"; '
+            '  test "$target" != "/init"; '
+            "fi && "
+            'head -n1 /usr/bin/tini | grep -q "^#!"',
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
     assert r.returncode == 0, (
         f"/usr/bin/tini is not a usable tini shim: "
@@ -47,15 +57,14 @@ def test_entrypoint_is_init_not_tini(built_image: str) -> None:
     runtime must continue to use the canonical /init.
     """
     r = subprocess.run(
-        ["docker", "inspect", built_image,
-         "--format", "{{json .Config.Entrypoint}}"],
-        capture_output=True, text=True, timeout=30,
+        ["docker", "inspect", built_image, "--format", "{{json .Config.Entrypoint}}"],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     assert r.returncode == 0, f"docker inspect failed: {r.stderr}"
     entrypoint = r.stdout.strip()
-    assert "/init" in entrypoint, (
-        f"ENTRYPOINT is not /init: {entrypoint!r}"
-    )
+    assert "/init" in entrypoint, f"ENTRYPOINT is not /init: {entrypoint!r}"
     # The entrypoint array should be ["/init", "/opt/clawksis/docker/main-wrapper.sh"]
     # /usr/bin/tini should NOT be in the entrypoint.
     assert "tini" not in entrypoint.lower(), (
@@ -73,12 +82,19 @@ def test_legacy_tini_g_entrypoint_does_not_boot_loop(built_image: str) -> None:
     """
     r = subprocess.run(
         [
-            "docker", "run", "--rm",
-            "--entrypoint", "/usr/bin/tini",
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "/usr/bin/tini",
             built_image,
-            "-g", "--", "--help",
+            "-g",
+            "--",
+            "--help",
         ],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
     combined = r.stdout + r.stderr
     assert "-g: not found" not in combined, (

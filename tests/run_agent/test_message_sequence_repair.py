@@ -18,17 +18,25 @@ def _bare_agent():
 
 # ── _drop_trailing_empty_response_scaffolding ──────────────────────────────
 
+
 def test_drop_scaffolding_rewinds_orphan_tool_tail():
     """When scaffolding is stripped, also rewind the orphan assistant+tool pair."""
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "task"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "t1", "type": "function",
-                         "function": {"name": "f", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "out"},
-        {"role": "assistant", "content": "(empty)",
-         "_empty_terminal_sentinel": True},
+        {"role": "assistant", "content": "(empty)", "_empty_terminal_sentinel": True},
     ]
 
     AIAgent._drop_trailing_empty_response_scaffolding(agent, messages)
@@ -41,9 +49,17 @@ def test_drop_scaffolding_keeps_tail_when_no_scaffolding():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "task"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "t1", "type": "function",
-                         "function": {"name": "f", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "out"},
     ]
     original = [dict(m) for m in messages]
@@ -58,17 +74,25 @@ def test_drop_scaffolding_handles_multiple_parallel_tool_results():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "task"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [
-             {"id": "t1", "type": "function",
-              "function": {"name": "f", "arguments": "{}"}},
-             {"id": "t2", "type": "function",
-              "function": {"name": "g", "arguments": "{}"}},
-         ]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                },
+                {
+                    "id": "t2",
+                    "type": "function",
+                    "function": {"name": "g", "arguments": "{}"},
+                },
+            ],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "out1"},
         {"role": "tool", "tool_call_id": "t2", "content": "out2"},
-        {"role": "assistant", "content": "(empty)",
-         "_empty_terminal_sentinel": True},
+        {"role": "assistant", "content": "(empty)", "_empty_terminal_sentinel": True},
     ]
 
     AIAgent._drop_trailing_empty_response_scaffolding(agent, messages)
@@ -77,6 +101,7 @@ def test_drop_scaffolding_handles_multiple_parallel_tool_results():
 
 
 # ── _repair_message_sequence ───────────────────────────────────────────────
+
 
 def test_repair_merges_consecutive_user_messages():
     agent = _bare_agent()
@@ -114,9 +139,17 @@ def test_repair_does_not_rewind_ongoing_dialog_tool_pair():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "Q1"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "t1", "type": "function",
-                         "function": {"name": "f", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "out"},
         {"role": "user", "content": "Q2"},
     ]
@@ -158,10 +191,18 @@ def test_repair_keeps_tool_matching_codex_call_id():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "do it"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "fc_123", "call_id": "call_ABC",
-                         "type": "function",
-                         "function": {"name": "x", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "fc_123",
+                    "call_id": "call_ABC",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "call_ABC", "content": "result"},
         {"role": "user", "content": "next"},
     ]
@@ -180,9 +221,17 @@ def test_repair_keeps_tool_matching_only_call_id():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "do it"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"call_id": "call_XYZ", "type": "function",
-                         "function": {"name": "x", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "call_id": "call_XYZ",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "call_XYZ", "content": "result"},
         {"role": "user", "content": "next"},
     ]
@@ -201,10 +250,18 @@ def test_repair_keeps_tool_matching_id_when_call_id_also_present():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "do it"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "fc_9", "call_id": "call_9",
-                         "type": "function",
-                         "function": {"name": "x", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "fc_9",
+                    "call_id": "call_9",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "fc_9", "content": "result"},
         {"role": "user", "content": "next"},
     ]
@@ -224,10 +281,18 @@ def test_repair_still_drops_genuine_orphan_alongside_codex_pair():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "go"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "fc_1", "call_id": "call_1",
-                         "type": "function",
-                         "function": {"name": "x", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "fc_1",
+                    "call_id": "call_1",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "call_1", "content": "valid"},
         {"role": "tool", "tool_call_id": "call_ORPHAN", "content": "stray"},
         {"role": "user", "content": "next"},
@@ -244,9 +309,17 @@ def test_repair_leaves_valid_conversation_unchanged():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "list files"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "t1", "type": "function",
-                         "function": {"name": "ls", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "ls", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "a.txt b.txt"},
         {"role": "assistant", "content": "Found 2 files"},
         {"role": "user", "content": "more"},
@@ -263,8 +336,13 @@ def test_repair_preserves_multimodal_user_content():
     """Multimodal (list) content must NOT be merged — risks mangling attachments."""
     agent = _bare_agent()
     messages = [
-        {"role": "user", "content": [{"type": "text", "text": "hi"},
-                                     {"type": "image_url", "image_url": {"url": "..."}}]},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "hi"},
+                {"type": "image_url", "image_url": {"url": "..."}},
+            ],
+        },
         {"role": "user", "content": "follow-up"},
     ]
 
@@ -399,6 +477,7 @@ def test_flush_guard_clamps_overshooting_cursor():
 
 # ── Pass 0: merge consecutive assistant messages (issue #29148, #49147) ─────
 
+
 def test_repair_merges_parallel_tool_calls_split_across_assistants():
     """Two adjacent assistant(tool_calls) collapse into one turn (#29148).
 
@@ -411,12 +490,28 @@ def test_repair_merges_parallel_tool_calls_split_across_assistants():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "run both"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "call_A", "type": "function",
-                         "function": {"name": "session_search", "arguments": "{}"}}]},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "call_B", "type": "function",
-                         "function": {"name": "search_files", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_A",
+                    "type": "function",
+                    "function": {"name": "session_search", "arguments": "{}"},
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_B",
+                    "type": "function",
+                    "function": {"name": "search_files", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "call_A", "content": "A"},
         {"role": "tool", "tool_call_id": "call_B", "content": "B"},
     ]
@@ -443,9 +538,17 @@ def test_repair_merges_content_then_toolcalls_split():
     messages = [
         {"role": "user", "content": "search"},
         {"role": "assistant", "content": "Let me search for that."},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "call_1", "type": "function",
-                         "function": {"name": "session_search", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "session_search", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "call_1", "content": "found"},
     ]
 
@@ -467,15 +570,39 @@ def test_repair_merges_three_consecutive_assistant_tool_calls():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "run three"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "c1", "type": "function",
-                         "function": {"name": "x", "arguments": "{}"}}]},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "c2", "type": "function",
-                         "function": {"name": "y", "arguments": "{}"}}]},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "c3", "type": "function",
-                         "function": {"name": "z", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "c2",
+                    "type": "function",
+                    "function": {"name": "y", "arguments": "{}"},
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "c3",
+                    "type": "function",
+                    "function": {"name": "z", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "c1", "content": "r1"},
         {"role": "tool", "tool_call_id": "c2", "content": "r2"},
         {"role": "tool", "tool_call_id": "c3", "content": "r3"},
@@ -499,13 +626,29 @@ def test_repair_does_NOT_merge_tool_calls_separated_by_tool_result():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "go"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "t1", "type": "function",
-                         "function": {"name": "f", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "done"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "t2", "type": "function",
-                         "function": {"name": "g", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "t2",
+                    "type": "function",
+                    "function": {"name": "g", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "t2", "content": "done2"},
     ]
     before = sum(1 for m in messages if m.get("role") == "assistant")
@@ -558,12 +701,29 @@ def test_repair_preserves_reasoning_content_on_merge():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "go"},
-        {"role": "assistant", "content": "", "reasoning_content": "thinking A",
-         "tool_calls": [{"id": "a", "type": "function",
-                         "function": {"name": "f", "arguments": "{}"}}]},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "b", "type": "function",
-                         "function": {"name": "g", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "reasoning_content": "thinking A",
+            "tool_calls": [
+                {
+                    "id": "a",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "b",
+                    "type": "function",
+                    "function": {"name": "g", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "a", "content": "ra"},
         {"role": "tool", "tool_call_id": "b", "content": "rb"},
     ]
@@ -579,13 +739,22 @@ def test_repair_noop_on_valid_parallel_format():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "run both"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [
-             {"id": "call_A", "type": "function",
-              "function": {"name": "session_search", "arguments": "{}"}},
-             {"id": "call_B", "type": "function",
-              "function": {"name": "search_files", "arguments": "{}"}},
-         ]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_A",
+                    "type": "function",
+                    "function": {"name": "session_search", "arguments": "{}"},
+                },
+                {
+                    "id": "call_B",
+                    "type": "function",
+                    "function": {"name": "search_files", "arguments": "{}"},
+                },
+            ],
+        },
         {"role": "tool", "tool_call_id": "call_A", "content": "A"},
         {"role": "tool", "tool_call_id": "call_B", "content": "B"},
     ]
@@ -608,10 +777,18 @@ def test_repair_does_NOT_merge_codex_interim_assistants():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "think hard"},
-        {"role": "assistant", "content": "", "finish_reason": "incomplete",
-         "codex_reasoning_items": [{"encrypted_content": "enc_first"}]},
-        {"role": "assistant", "content": "", "finish_reason": "incomplete",
-         "codex_reasoning_items": [{"encrypted_content": "enc_second"}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "finish_reason": "incomplete",
+            "codex_reasoning_items": [{"encrypted_content": "enc_first"}],
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "finish_reason": "incomplete",
+            "codex_reasoning_items": [{"encrypted_content": "enc_second"}],
+        },
         {"role": "assistant", "content": "Final answer."},
     ]
 
@@ -639,9 +816,17 @@ def test_repair_deduplicates_duplicate_tool_results():
     agent = _bare_agent()
     messages = [
         {"role": "user", "content": "run the tool"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "call_1", "type": "function",
-                         "function": {"name": "test", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "test", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "call_1", "content": "res1"},
         {"role": "tool", "tool_call_id": "call_1", "content": "res1 duplicate"},
     ]
@@ -659,9 +844,17 @@ def test_sanitize_deduplicates_duplicate_tool_results():
 
     messages = [
         {"role": "user", "content": "hi"},
-        {"role": "assistant", "content": None,
-         "tool_calls": [{"id": "call_X", "type": "function",
-                         "function": {"name": "foo", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "call_X",
+                    "type": "function",
+                    "function": {"name": "foo", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "call_X", "content": "A"},
         {"role": "tool", "tool_call_id": "call_X", "content": "B (duplicate)"},
         {"role": "assistant", "content": "done"},
@@ -677,12 +870,22 @@ def test_sanitize_deduplicates_duplicate_assistant_tool_call_ids():
     from agent.agent_runtime_helpers import sanitize_api_messages
 
     messages = [
-        {"role": "assistant", "content": None, "tool_calls": [
-            {"id": "call_Y", "type": "function",
-             "function": {"name": "foo", "arguments": "{}"}},
-            {"id": "call_Y", "type": "function",
-             "function": {"name": "bar", "arguments": "{}"}},
-        ]},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "call_Y",
+                    "type": "function",
+                    "function": {"name": "foo", "arguments": "{}"},
+                },
+                {
+                    "id": "call_Y",
+                    "type": "function",
+                    "function": {"name": "bar", "arguments": "{}"},
+                },
+            ],
+        },
         {"role": "tool", "tool_call_id": "call_Y", "content": "r"},
     ]
     out = sanitize_api_messages(list(messages))
@@ -697,19 +900,32 @@ def test_sanitize_preserves_distinct_tool_call_ids():
     from agent.agent_runtime_helpers import sanitize_api_messages
 
     messages = [
-        {"role": "assistant", "content": None, "tool_calls": [
-            {"id": "call_A", "type": "function",
-             "function": {"name": "a", "arguments": "{}"}},
-            {"id": "call_B", "type": "function",
-             "function": {"name": "b", "arguments": "{}"}},
-        ]},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "call_A",
+                    "type": "function",
+                    "function": {"name": "a", "arguments": "{}"},
+                },
+                {
+                    "id": "call_B",
+                    "type": "function",
+                    "function": {"name": "b", "arguments": "{}"},
+                },
+            ],
+        },
         {"role": "tool", "tool_call_id": "call_A", "content": "ra"},
         {"role": "tool", "tool_call_id": "call_B", "content": "rb"},
     ]
     out = sanitize_api_messages(list(messages))
     assistant = [m for m in out if m.get("role") == "assistant"][0]
     assert [tc["id"] for tc in assistant["tool_calls"]] == ["call_A", "call_B"]
-    assert sorted(m["tool_call_id"] for m in out if m.get("role") == "tool") == ["call_A", "call_B"]
+    assert sorted(m["tool_call_id"] for m in out if m.get("role") == "tool") == [
+        "call_A",
+        "call_B",
+    ]
 
 
 def test_sanitize_drops_empty_tool_calls_array():
@@ -761,10 +977,17 @@ def test_sanitize_preserves_populated_tool_calls():
     from agent.agent_runtime_helpers import sanitize_api_messages
 
     messages = [
-        {"role": "assistant", "content": None, "tool_calls": [
-            {"id": "call_Z", "type": "function",
-             "function": {"name": "foo", "arguments": "{}"}},
-        ]},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "call_Z",
+                    "type": "function",
+                    "function": {"name": "foo", "arguments": "{}"},
+                },
+            ],
+        },
         {"role": "tool", "tool_call_id": "call_Z", "content": "r"},
     ]
     out = sanitize_api_messages(list(messages))

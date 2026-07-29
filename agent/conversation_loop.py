@@ -4652,9 +4652,8 @@ def run_conversation(
                     FailoverReason.context_overflow,
                 }
 
-                if (
-                    classified.reason in _overflow_reasons
-                    and not getattr(agent, "compression_enabled", True)
+                if classified.reason in _overflow_reasons and not getattr(
+                    agent, "compression_enabled", True
                 ):
                     agent._flush_status_buffer()
 
@@ -5858,9 +5857,7 @@ def run_conversation(
                                 # re-trip the limit. 600s covers all realistic
                                 # provider reset windows while still rejecting
                                 # pathological values. (#26293)
-                                _retry_after = min(
-                                    float(_ra_raw), 600
-                                )
+                                _retry_after = min(float(_ra_raw), 600)
 
                             except (TypeError, ValueError):
                                 pass

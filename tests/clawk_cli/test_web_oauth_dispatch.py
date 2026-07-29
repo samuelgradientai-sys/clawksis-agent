@@ -19,6 +19,7 @@ The fix:
 
 These tests pin the corrected behavior.
 """
+
 import asyncio
 import time
 from datetime import datetime, timezone
@@ -77,15 +78,19 @@ def test_minimax_login_does_not_launch_anthropic_flow():
         "interval": 2000,
         "state": "stub-state",
     }
-    with patch(
-        "clawk_cli.auth._minimax_request_user_code",
-        return_value=fake_user_code_resp,
-    ), patch(
-        "clawk_cli.auth._minimax_pkce_pair",
-        return_value=("verifier-stub", "challenge-stub", "stub-state"),
-    ), patch(
-        "clawk_cli.web_server._minimax_poller",
-        return_value=None,
+    with (
+        patch(
+            "clawk_cli.auth._minimax_request_user_code",
+            return_value=fake_user_code_resp,
+        ),
+        patch(
+            "clawk_cli.auth._minimax_pkce_pair",
+            return_value=("verifier-stub", "challenge-stub", "stub-state"),
+        ),
+        patch(
+            "clawk_cli.web_server._minimax_poller",
+            return_value=None,
+        ),
     ):
         resp = client.post(
             "/api/providers/oauth/minimax-oauth/start",
@@ -145,14 +150,16 @@ def test_oauth_provider_status_uses_profile_query(tmp_path, monkeypatch):
         observed_homes.append(get_clawk_home())
         return {"logged_in": False, "source": None}
 
-    fake_catalog = ({
-        "id": "fake-oauth",
-        "name": "Fake OAuth",
-        "flow": "pkce",
-        "cli_command": "clawk auth add fake-oauth",
-        "docs_url": "https://example.com",
-        "status_fn": fake_status,
-    },)
+    fake_catalog = (
+        {
+            "id": "fake-oauth",
+            "name": "Fake OAuth",
+            "flow": "pkce",
+            "cli_command": "clawk auth add fake-oauth",
+            "docs_url": "https://example.com",
+            "status_fn": fake_status,
+        },
+    )
     monkeypatch.setattr(ws, "_OAUTH_PROVIDER_CATALOG", fake_catalog)
 
     resp = client.get("/api/providers/oauth?profile=coder", headers=HEADERS)
@@ -172,15 +179,19 @@ def test_oauth_start_stores_profile_for_background_completion(tmp_path, monkeypa
         "interval": 2000,
         "state": "stub-state",
     }
-    with patch(
-        "clawk_cli.auth._minimax_request_user_code",
-        return_value=fake_user_code_resp,
-    ), patch(
-        "clawk_cli.auth._minimax_pkce_pair",
-        return_value=("verifier-stub", "challenge-stub", "stub-state"),
-    ), patch(
-        "clawk_cli.web_server._minimax_poller",
-        return_value=None,
+    with (
+        patch(
+            "clawk_cli.auth._minimax_request_user_code",
+            return_value=fake_user_code_resp,
+        ),
+        patch(
+            "clawk_cli.auth._minimax_pkce_pair",
+            return_value=("verifier-stub", "challenge-stub", "stub-state"),
+        ),
+        patch(
+            "clawk_cli.web_server._minimax_poller",
+            return_value=None,
+        ),
     ):
         resp = client.post(
             "/api/providers/oauth/minimax-oauth/start?profile=coder",
@@ -195,7 +206,9 @@ def test_oauth_start_stores_profile_for_background_completion(tmp_path, monkeypa
         ws._oauth_sessions.pop(session_id, None)
 
 
-def test_nous_dashboard_device_flow_does_not_retry_legacy_scope_on_invoke_refusal(monkeypatch):
+def test_nous_dashboard_device_flow_does_not_retry_legacy_scope_on_invoke_refusal(
+    monkeypatch,
+):
     from clawk_cli import auth as auth_mod
     from clawk_cli import web_server as ws
 
@@ -241,20 +254,29 @@ def test_codex_dashboard_worker_persists_runtime_provider(tmp_path, monkeypatch)
 
         def post(self, url, **kwargs):
             if url.endswith("/deviceauth/usercode"):
-                return _Resp(200, {
-                    "device_auth_id": "device-auth-id",
-                    "interval": 3,
-                    "user_code": "CODEX-1234",
-                })
+                return _Resp(
+                    200,
+                    {
+                        "device_auth_id": "device-auth-id",
+                        "interval": 3,
+                        "user_code": "CODEX-1234",
+                    },
+                )
             if url.endswith("/deviceauth/token"):
-                return _Resp(200, {
-                    "authorization_code": "authorization-code",
-                    "code_verifier": "code-verifier",
-                })
-            return _Resp(200, {
-                "access_token": access_token,
-                "refresh_token": "codex-refresh",
-            })
+                return _Resp(
+                    200,
+                    {
+                        "authorization_code": "authorization-code",
+                        "code_verifier": "code-verifier",
+                    },
+                )
+            return _Resp(
+                200,
+                {
+                    "access_token": access_token,
+                    "refresh_token": "codex-refresh",
+                },
+            )
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr(httpx, "Client", _Client)
@@ -302,20 +324,29 @@ def test_codex_dashboard_worker_persists_inside_session_profile(tmp_path, monkey
 
         def post(self, url, **kwargs):
             if url.endswith("/deviceauth/usercode"):
-                return _Resp(200, {
-                    "device_auth_id": "device-auth-id",
-                    "interval": 3,
-                    "user_code": "CODEX-1234",
-                })
+                return _Resp(
+                    200,
+                    {
+                        "device_auth_id": "device-auth-id",
+                        "interval": 3,
+                        "user_code": "CODEX-1234",
+                    },
+                )
             if url.endswith("/deviceauth/token"):
-                return _Resp(200, {
-                    "authorization_code": "authorization-code",
-                    "code_verifier": "code-verifier",
-                })
-            return _Resp(200, {
-                "access_token": "codex-access",
-                "refresh_token": "codex-refresh",
-            })
+                return _Resp(
+                    200,
+                    {
+                        "authorization_code": "authorization-code",
+                        "code_verifier": "code-verifier",
+                    },
+                )
+            return _Resp(
+                200,
+                {
+                    "access_token": "codex-access",
+                    "refresh_token": "codex-refresh",
+                },
+            )
 
     saved_homes = []
     monkeypatch.setattr(httpx, "Client", _Client)
@@ -390,7 +421,9 @@ def test_codex_dashboard_start_rewords_device_authorization_error(monkeypatch):
             ws._oauth_sessions.pop(sid, None)
 
 
-def test_nous_dashboard_poller_preserves_effective_scope_when_token_omits_scope(monkeypatch):
+def test_nous_dashboard_poller_preserves_effective_scope_when_token_omits_scope(
+    monkeypatch,
+):
     from clawk_cli import auth as auth_mod
     from clawk_cli import web_server as ws
 
@@ -465,18 +498,21 @@ def test_minimax_dashboard_poller_accepts_absolute_ms_expired_in():
     captured_state = {}
 
     try:
-        with patch(
-            "clawk_cli.auth._minimax_poll_token",
-            return_value={
-                "status": "success",
-                "access_token": "access",
-                "refresh_token": "refresh",
-                "expired_in": abs_ms,
-                "token_type": "Bearer",
-            },
-        ), patch(
-            "clawk_cli.auth._minimax_save_auth_state",
-            side_effect=lambda state: captured_state.update(state),
+        with (
+            patch(
+                "clawk_cli.auth._minimax_poll_token",
+                return_value={
+                    "status": "success",
+                    "access_token": "access",
+                    "refresh_token": "refresh",
+                    "expired_in": abs_ms,
+                    "token_type": "Bearer",
+                },
+            ),
+            patch(
+                "clawk_cli.auth._minimax_save_auth_state",
+                side_effect=lambda state: captured_state.update(state),
+            ),
         ):
             ws._minimax_poller(session_id)
     finally:
@@ -600,7 +636,10 @@ def test_env_sourced_oauth_status_is_not_disconnectable(monkeypatch):
 
     assert providers["anthropic"]["status"]["source"] == "env_var"
     assert providers["anthropic"]["disconnectable"] is False
-    assert providers["anthropic"]["disconnect_hint"] == "Remove the API key from Settings → Keys instead."
+    assert (
+        providers["anthropic"]["disconnect_hint"]
+        == "Remove the API key from Settings → Keys instead."
+    )
 
     delete_resp = client.delete("/api/providers/oauth/anthropic", headers=HEADERS)
     assert delete_resp.status_code == 400, delete_resp.text
@@ -633,7 +672,9 @@ def test_xai_oauth_device_code_start_returns_user_code(monkeypatch):
     try:
         assert body["flow"] == "device_code"
         assert body["user_code"] == "ABCD-EFGH"
-        assert body["verification_url"].startswith("https://accounts.x.ai/oauth2/device")
+        assert body["verification_url"].startswith(
+            "https://accounts.x.ai/oauth2/device"
+        )
         sess = ws._oauth_sessions[body["session_id"]]
         assert sess["provider"] == "xai-oauth"
         assert sess["flow"] == "device_code"
@@ -642,7 +683,9 @@ def test_xai_oauth_device_code_start_returns_user_code(monkeypatch):
         ws._oauth_sessions.pop(body["session_id"], None)
 
 
-def test_xai_dashboard_poller_seeds_single_entry_and_clears_suppression(tmp_path, monkeypatch):
+def test_xai_dashboard_poller_seeds_single_entry_and_clears_suppression(
+    tmp_path, monkeypatch
+):
     """The dashboard device-code poller must leave exactly ONE pool entry — the
     singleton-seeded ``device_code`` source — and must NOT create a parallel
     ``manual:dashboard_*`` entry.
@@ -784,7 +827,10 @@ def test_status_falls_through_to_generic_dispatcher_for_catalog_only_provider():
     assert out["source"] == "some-future-oauth"
     assert out["source_label"] == "Future OAuth Provider"
     # Token is previewed, never returned whole.
-    assert out["token_preview"] and "sk-future-secret-token-xyz" not in out["token_preview"]
+    assert (
+        out["token_preview"]
+        and "sk-future-secret-token-xyz" not in out["token_preview"]
+    )
     assert out["expires_at"] == "2026-12-01T00:00:00Z"
     assert out["has_refresh_token"] is True
 

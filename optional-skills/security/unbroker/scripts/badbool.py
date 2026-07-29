@@ -9,6 +9,7 @@ confidence="auto" so the agent treats their URLs as best guesses to verify first
 `parse()` is pure (markdown in, records out) so it is tested offline; `fetch()` is
 the only network call and can be bypassed by passing markdown directly to refresh().
 """
+
 from __future__ import annotations
 
 import re
@@ -25,11 +26,11 @@ USER_AGENT = "Mozilla/5.0 (compatible; unbroker/1.0; data opt-out)"
 
 # BADBOOL legend symbols.
 SYMBOLS = {
-    "crucial": "\U0001F490",  # 💐
-    "high": "\u2620",          # ☠
-    "gov_id": "\U0001F3AB",    # 🎫
-    "phone": "\U0001F4DE",     # 📞
-    "payment": "\U0001F4B0",   # 💰
+    "crucial": "\U0001f490",  # 💐
+    "high": "\u2620",  # ☠
+    "gov_id": "\U0001f3ab",  # 🎫
+    "phone": "\U0001f4de",  # 📞
+    "payment": "\U0001f4b0",  # 💰
 }
 
 _LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
@@ -99,8 +100,13 @@ def _build(name: str, flags: dict, body: str) -> dict:
         "category": "people_search",
         "priority": _priority(flags),
         "jurisdictions": ["US"],
-        "search": {"method": "url_pattern", "url": search_url, "fetch": "browser",
-                   "match_signal": "result", "by": ["name", "phone", "address"]},
+        "search": {
+            "method": "url_pattern",
+            "url": search_url,
+            "fetch": "browser",
+            "match_signal": "result",
+            "by": ["name", "phone", "address"],
+        },
         "optout": {
             "method": method,
             "url": optout_url,
@@ -162,16 +168,22 @@ def fetch(url: str = DEFAULT_URL, timeout: int = 30) -> str:
         return resp.read().decode("utf-8", errors="replace")
 
 
-MIN_EXPECTED = 20  # BADBOOL's People Search section lists ~47; far fewer => upstream reorg, warn
+MIN_EXPECTED = (
+    20  # BADBOOL's People Search section lists ~47; far fewer => upstream reorg, warn
+)
 
 
-def refresh(cache_path: Path, url: str = DEFAULT_URL, markdown: str | None = None) -> dict:
+def refresh(
+    cache_path: Path, url: str = DEFAULT_URL, markdown: str | None = None
+) -> dict:
     """Fetch (or accept) BADBOOL markdown, parse it, and write the snapshot cache."""
     md = markdown if markdown is not None else fetch(url)
     records = parse(md)
     storage.write_json(cache_path, records)
     out = {"parsed": len(records), "cache_path": str(cache_path), "source_url": url}
     if len(records) < MIN_EXPECTED:
-        out["warning"] = (f"only {len(records)} parsed (expected >{MIN_EXPECTED}); BADBOOL's "
-                          "'People Search Sites' section may have moved/reorganized - check the parser")
+        out["warning"] = (
+            f"only {len(records)} parsed (expected >{MIN_EXPECTED}); BADBOOL's "
+            "'People Search Sites' section may have moved/reorganized - check the parser"
+        )
     return out

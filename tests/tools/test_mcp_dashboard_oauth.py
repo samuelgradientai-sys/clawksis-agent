@@ -17,7 +17,9 @@ def test_dashboard_flow_exposes_authorization_url_and_accepts_callback():
         redirect_uri="https://agent.example/mcp/oauth/callback/flow-1",
     )
 
-    asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=s1"))
+    asyncio.run(
+        flow.publish_authorization_url("https://idp.example/authorize?state=s1")
+    )
     assert flow.snapshot() == {
         "flow_id": "flow-1",
         "server_name": "reports",
@@ -67,9 +69,7 @@ def test_dashboard_flow_rejects_second_callback():
         redirect_uri="https://agent.example/mcp/oauth/callback/flow-2",
     )
     asyncio.run(
-        flow.publish_authorization_url(
-            "https://idp.example/authorize?state=state"
-        )
+        flow.publish_authorization_url("https://idp.example/authorize?state=state")
     )
     flow.deliver_callback(code="first", state="state", error=None)
     with pytest.raises(ValueError, match="already received"):
@@ -86,7 +86,9 @@ def test_dashboard_flow_accepts_only_one_concurrent_callback():
         clawk_home="/tmp/clawk-test",
         redirect_uri="https://agent.example/mcp/oauth/callback/flow-race",
     )
-    asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=state"))
+    asyncio.run(
+        flow.publish_authorization_url("https://idp.example/authorize?state=state")
+    )
 
     start = threading.Barrier(3)
     outcomes: list[str] = []
@@ -99,7 +101,9 @@ def test_dashboard_flow_accepts_only_one_concurrent_callback():
         except ValueError:
             outcomes.append("rejected")
 
-    workers = [threading.Thread(target=deliver, args=(code,)) for code in ("one", "two")]
+    workers = [
+        threading.Thread(target=deliver, args=(code,)) for code in ("one", "two")
+    ]
     for worker in workers:
         worker.start()
     start.wait()
@@ -176,9 +180,7 @@ def test_mcp_oauth_helpers_use_dashboard_flow_without_loopback_port():
         assert str(metadata.redirect_uris[0]) == flow.redirect_uri
 
         asyncio.run(
-            _make_redirect_handler(0)(
-                "https://idp.example/authorize?state=state-4"
-            )
+            _make_redirect_handler(0)("https://idp.example/authorize?state=state-4")
         )
         flow.deliver_callback(code="code-4", state="state-4", error=None)
         assert asyncio.run(_make_callback_waiter(0)()) == ("code-4", "state-4")
@@ -214,9 +216,7 @@ def test_manager_evict_preserves_persisted_oauth_state(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     storage = ClawksisTokenStorage("reports")
     storage._tokens_path().parent.mkdir(parents=True)
-    storage._tokens_path().write_text(
-        '{"access_token":"a","token_type":"Bearer"}'
-    )
+    storage._tokens_path().write_text('{"access_token":"a","token_type":"Bearer"}')
     manager = MCPOAuthManager()
     manager._entries[manager._key("reports")] = _ProviderEntry(
         server_url="https://mcp.example/mcp", oauth_config={}

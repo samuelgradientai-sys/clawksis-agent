@@ -4,6 +4,7 @@ Templates use {field} placeholders. Missing fields are left literal (never crash
 never inject blanks that look like real data). Field values come from the
 least-disclosure selection in dossier.select_disclosure.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

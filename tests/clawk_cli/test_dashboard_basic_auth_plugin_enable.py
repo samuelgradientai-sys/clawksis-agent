@@ -5,6 +5,7 @@ provider plugin is listed in ``plugins.disabled``, plugin discovery skips
 it and the dashboard auth gate sees zero providers — even after the
 interactive username/password setup path writes credentials to config.yaml.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -78,7 +79,9 @@ class TestBasicProviderLoadsAfterUnblock:
         assert list_providers() == []
 
     def test_unblock_then_rediscover_registers_provider(
-        self, clawk_home, monkeypatch,
+        self,
+        clawk_home,
+        monkeypatch,
     ):
         password_hash = basic_plugin.hash_password("hunter2")
         cfg = {

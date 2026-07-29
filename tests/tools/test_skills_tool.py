@@ -589,13 +589,11 @@ class TestSkillViewSecureSetupOnLoad:
         calls = []
 
         def fake_secret_callback(var_name, prompt, metadata=None):
-            calls.append(
-                {
-                    "var_name": var_name,
-                    "prompt": prompt,
-                    "metadata": metadata,
-                }
-            )
+            calls.append({
+                "var_name": var_name,
+                "prompt": prompt,
+                "metadata": metadata,
+            })
             os.environ[var_name] = "stored-in-test"
             return {
                 "success": True,
@@ -676,6 +674,7 @@ class TestSkillViewSecureSetupOnLoad:
         assert result["success"] is True
         assert result["setup_skipped"] is True
         assert result["content"].startswith("---")
+
 
 # ---------------------------------------------------------------------------
 # skill_matches_platform
@@ -1287,11 +1286,7 @@ class TestSkillViewCollisionDetection:
 
         _make_skill(local_dir, "umbrella", category="creative", body="UMBRELLA")
         package = (
-            local_dir
-            / "creative"
-            / "umbrella"
-            / "references"
-            / "old-skill-package"
+            local_dir / "creative" / "umbrella" / "references" / "old-skill-package"
         )
         package.mkdir(parents=True, exist_ok=True)
         (package / "SKILL.md").write_text(
@@ -1302,7 +1297,9 @@ class TestSkillViewCollisionDetection:
         with p1, p2:
             names = {skill["name"] for skill in _find_all_skills()}
             old_raw = skill_view("old-skill")
-            direct_package_raw = skill_view("creative/umbrella/references/old-skill-package")
+            direct_package_raw = skill_view(
+                "creative/umbrella/references/old-skill-package"
+            )
             package_raw = skill_view(
                 "umbrella", file_path="references/old-skill-package/SKILL.md"
             )

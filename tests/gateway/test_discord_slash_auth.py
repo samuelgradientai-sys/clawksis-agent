@@ -65,9 +65,9 @@ def _ensure_discord_mock():
                 self.default_permissions = None
 
         discord_mod.app_commands = SimpleNamespace(
-            describe=lambda **kwargs: (lambda fn: fn),
-            choices=lambda **kwargs: (lambda fn: fn),
-            autocomplete=lambda **kwargs: (lambda fn: fn),
+            describe=lambda **kwargs: lambda fn: fn,
+            choices=lambda **kwargs: lambda fn: fn,
+            autocomplete=lambda **kwargs: lambda fn: fn,
             Choice=lambda **kwargs: SimpleNamespace(**kwargs),
             Group=_FakeGroup,
             Command=_FakeCommand,
@@ -121,7 +121,9 @@ def _stub_discord_permissions(monkeypatch):
 def adapter():
     config = PlatformConfig(enabled=True, token="***")
     a = DiscordAdapter(config)
-    a._client = SimpleNamespace(user=SimpleNamespace(id=99999, name="ClawksisBot"), guilds=[])
+    a._client = SimpleNamespace(
+        user=SimpleNamespace(id=99999, name="ClawksisBot"), guilds=[]
+    )
     return a
 
 
@@ -129,8 +131,15 @@ _SENTINEL = object()
 
 
 def _make_interaction(
-    user_id, *, channel_id=12345, guild_id=42, in_dm=False, in_thread=False,
-    parent_channel_id=None, user=_SENTINEL, channel_name=None,
+    user_id,
+    *,
+    channel_id=12345,
+    guild_id=42,
+    in_dm=False,
+    in_thread=False,
+    parent_channel_id=None,
+    user=_SENTINEL,
+    channel_name=None,
 ):
     """Build a mock Discord Interaction with a still-unresponded response.
 
@@ -229,7 +238,9 @@ async def test_no_allowlist_allows_with_gateway_allow_all(adapter, monkeypatch):
 async def test_allowed_user_passes(adapter):
     adapter._allowed_user_ids = {"100200300"}
     interaction = _make_interaction("100200300")
-    assert await adapter._check_slash_authorization(interaction, "/background hi") is True
+    assert (
+        await adapter._check_slash_authorization(interaction, "/background hi") is True
+    )
     interaction.response.send_message.assert_not_awaited()
 
 
@@ -238,7 +249,10 @@ async def test_disallowed_user_rejected_with_ephemeral(adapter, caplog):
     adapter._allowed_user_ids = {"100200300"}
     interaction = _make_interaction("999999999")
     with caplog.at_level(logging.WARNING):
-        assert await adapter._check_slash_authorization(interaction, "/background hi") is False
+        assert (
+            await adapter._check_slash_authorization(interaction, "/background hi")
+            is False
+        )
     interaction.response.send_message.assert_awaited_once()
     args, kwargs = interaction.response.send_message.call_args
     assert kwargs.get("ephemeral") is True
@@ -247,20 +261,27 @@ async def test_disallowed_user_rejected_with_ephemeral(adapter, caplog):
     assert any("DISCORD_ALLOWED_USERS" in r.message for r in caplog.records)
 
 
-def test_pairing_approved_user_passes_message_gate_without_allowlist(adapter, monkeypatch):
+def test_pairing_approved_user_passes_message_gate_without_allowlist(
+    adapter, monkeypatch
+):
     """Pairing grants must be honored before on_message drops guild mentions."""
     _stub_pairing_store(monkeypatch, {"100200300"})
-    assert adapter._is_allowed_user(
-        "100200300",
-        author=SimpleNamespace(id=100200300),
-        guild=SimpleNamespace(id=42, get_member=lambda _uid: None),
-        is_dm=False,
-        channel_ids={"12345"},
-    ) is True
+    assert (
+        adapter._is_allowed_user(
+            "100200300",
+            author=SimpleNamespace(id=100200300),
+            guild=SimpleNamespace(id=42, get_member=lambda _uid: None),
+            is_dm=False,
+            channel_ids={"12345"},
+        )
+        is True
+    )
 
 
 @pytest.mark.asyncio
-async def test_pairing_approved_user_passes_slash_gate_without_allowlist(adapter, monkeypatch):
+async def test_pairing_approved_user_passes_slash_gate_without_allowlist(
+    adapter, monkeypatch
+):
     """Slash and normal text auth share the pairing-aware user gate."""
     _stub_pairing_store(monkeypatch, {"100200300"})
     interaction = _make_interaction("100200300")
@@ -304,7 +325,10 @@ async def test_channel_not_in_allowlist_rejected(adapter, monkeypatch, caplog):
     monkeypatch.setenv("DISCORD_ALLOWED_CHANNELS", "1111,2222")
     interaction = _make_interaction("100200300", channel_id=9999)
     with caplog.at_level(logging.WARNING):
-        assert await adapter._check_slash_authorization(interaction, "/background hi") is False
+        assert (
+            await adapter._check_slash_authorization(interaction, "/background hi")
+            is False
+        )
     assert any("DISCORD_ALLOWED_CHANNELS" in r.message for r in caplog.records)
 
 
@@ -393,7 +417,9 @@ async def test_unauthorized_attempt_notifies_telegram(adapter):
     home = SimpleNamespace(chat_id="987654321")
     runner = SimpleNamespace(
         adapters={Platform.TELEGRAM: telegram_adapter},
-        config=SimpleNamespace(get_home_channel=lambda p: home if p is Platform.TELEGRAM else None),
+        config=SimpleNamespace(
+            get_home_channel=lambda p: home if p is Platform.TELEGRAM else None
+        ),
     )
     adapter.gateway_runner = runner
     adapter._allowed_user_ids = {"100200300"}
@@ -417,7 +443,9 @@ async def test_unauthorized_attempt_notifies_telegram(adapter):
 @pytest.mark.asyncio
 async def test_notify_silently_no_ops_without_runner(adapter):
     adapter.gateway_runner = None
-    await adapter._notify_unauthorized_slash("u", "1", 2, 3, "/x", "reason")  # must not raise
+    await adapter._notify_unauthorized_slash(
+        "u", "1", 2, 3, "/x", "reason"
+    )  # must not raise
 
 
 @pytest.mark.asyncio
@@ -472,6 +500,7 @@ def test_visibility_hide_helper_zeroes_perms(adapter):
 def test_visibility_hide_tolerates_unsetable_command(adapter, caplog):
     class _Frozen:
         __slots__ = ("name",)
+
         def __init__(self, name):
             self.name = name
 
@@ -496,7 +525,8 @@ import os  # noqa: E402
 
 @pytest.mark.asyncio
 async def test_missing_channel_id_rejected_when_channel_policy_configured(
-    adapter, monkeypatch,
+    adapter,
+    monkeypatch,
 ):
     """A guild interaction without a resolvable channel id must fail
     closed when DISCORD_ALLOWED_CHANNELS is configured. Without this
@@ -577,7 +607,10 @@ async def test_thread_parent_in_allowlist_passes(adapter, monkeypatch):
     even though the thread id itself isn't on the list."""
     monkeypatch.setenv("DISCORD_ALLOWED_CHANNELS", "5555")
     interaction = _make_interaction(
-        "100200300", channel_id=9999, in_thread=True, parent_channel_id=5555,
+        "100200300",
+        channel_id=9999,
+        in_thread=True,
+        parent_channel_id=5555,
     )
     assert await adapter._check_slash_authorization(interaction, "/help") is True
 
@@ -588,7 +621,10 @@ async def test_thread_parent_in_ignorelist_rejects(adapter, monkeypatch):
     even when the thread id itself isn't ignored."""
     monkeypatch.setenv("DISCORD_IGNORED_CHANNELS", "5555")
     interaction = _make_interaction(
-        "100200300", channel_id=9999, in_thread=True, parent_channel_id=5555,
+        "100200300",
+        channel_id=9999,
+        in_thread=True,
+        parent_channel_id=5555,
     )
     assert await adapter._check_slash_authorization(interaction, "/help") is False
 
@@ -689,8 +725,11 @@ def _capture_skill_registration(adapter, monkeypatch, entries):
         return ({}, list(entries), 0)
 
     import clawk_cli.commands as _hc
+
     monkeypatch.setattr(
-        _hc, "discord_skill_commands_by_category", fake_categories,
+        _hc,
+        "discord_skill_commands_by_category",
+        fake_categories,
     )
 
     def capture_autocomplete(**kwargs):
@@ -703,7 +742,9 @@ def _capture_skill_registration(adapter, monkeypatch, entries):
         return _passthrough
 
     monkeypatch.setattr(
-        discord.app_commands, "autocomplete", capture_autocomplete,
+        discord.app_commands,
+        "autocomplete",
+        capture_autocomplete,
         raising=False,
     )
 
@@ -723,7 +764,8 @@ def _capture_skill_registration(adapter, monkeypatch, entries):
 
 @pytest.mark.asyncio
 async def test_skill_autocomplete_returns_empty_for_unauthorized(
-    adapter, monkeypatch,
+    adapter,
+    monkeypatch,
 ):
     """Autocomplete must not leak the installed skill catalog to users
     who can't run /skill. With DISCORD_ALLOWED_USERS configured and the
@@ -734,7 +776,9 @@ async def test_skill_autocomplete_returns_empty_for_unauthorized(
         ("beta", "Second skill", "/beta"),
     ]
     _handler, autocomplete = _capture_skill_registration(
-        adapter, monkeypatch, entries,
+        adapter,
+        monkeypatch,
+        entries,
     )
 
     interaction = _make_interaction("999999999")
@@ -744,7 +788,8 @@ async def test_skill_autocomplete_returns_empty_for_unauthorized(
 
 @pytest.mark.asyncio
 async def test_skill_autocomplete_returns_choices_for_authorized(
-    adapter, monkeypatch,
+    adapter,
+    monkeypatch,
 ):
     """Sanity: an authorized user still gets the autocomplete suggestions."""
     adapter._allowed_user_ids = {"100200300"}
@@ -753,7 +798,9 @@ async def test_skill_autocomplete_returns_choices_for_authorized(
         ("beta", "Second skill", "/beta"),
     ]
     _handler, autocomplete = _capture_skill_registration(
-        adapter, monkeypatch, entries,
+        adapter,
+        monkeypatch,
+        entries,
     )
 
     interaction = _make_interaction("100200300")
@@ -764,7 +811,8 @@ async def test_skill_autocomplete_returns_choices_for_authorized(
 
 @pytest.mark.asyncio
 async def test_skill_handler_rejects_before_dispatch_for_unauthorized(
-    adapter, monkeypatch,
+    adapter,
+    monkeypatch,
 ):
     """The /skill handler must call _check_slash_authorization BEFORE
     skill_lookup. Otherwise unknown vs known names produce divergent
@@ -773,7 +821,9 @@ async def test_skill_handler_rejects_before_dispatch_for_unauthorized(
     adapter._allowed_user_ids = {"100200300"}
     entries = [("alpha", "First skill", "/alpha")]
     handler, _autocomplete = _capture_skill_registration(
-        adapter, monkeypatch, entries,
+        adapter,
+        monkeypatch,
+        entries,
     )
 
     # Patch _run_simple_slash so we can detect any leak through it.
@@ -790,9 +840,7 @@ async def test_skill_handler_rejects_before_dispatch_for_unauthorized(
     interaction.response.send_message.assert_awaited_once()
     args, kwargs = interaction.response.send_message.call_args
     assert kwargs.get("ephemeral") is True
-    assert "not authorized" in (
-        args[0] if args else kwargs.get("content", "")
-    ).lower()
+    assert "not authorized" in (args[0] if args else kwargs.get("content", "")).lower()
     # Critically: nothing was dispatched, and the auth message did NOT
     # mention the skill name "alpha" (no catalog leak).
     assert dispatched == []
@@ -800,7 +848,8 @@ async def test_skill_handler_rejects_before_dispatch_for_unauthorized(
 
 @pytest.mark.asyncio
 async def test_skill_handler_known_and_unknown_produce_same_rejection(
-    adapter, monkeypatch,
+    adapter,
+    monkeypatch,
 ):
     """An unauthorized user probing for valid skill names must see the
     same rejection text regardless of whether the name they tried is
@@ -819,16 +868,15 @@ async def test_skill_handler_known_and_unknown_produce_same_rejection(
     known_interaction.response.send_message.assert_awaited_once()
     unknown_interaction.response.send_message.assert_awaited_once()
     known_args, known_kwargs = known_interaction.response.send_message.call_args
-    unknown_args, unknown_kwargs = (
-        unknown_interaction.response.send_message.call_args
-    )
+    unknown_args, unknown_kwargs = unknown_interaction.response.send_message.call_args
     assert known_args == unknown_args
     assert known_kwargs == unknown_kwargs
 
 
 @pytest.mark.asyncio
 async def test_skill_handler_dispatches_for_authorized(
-    adapter, monkeypatch,
+    adapter,
+    monkeypatch,
 ):
     """Sanity: an authorized user reaches _run_simple_slash with the
     resolved cmd_key and arguments."""

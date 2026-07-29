@@ -262,7 +262,11 @@ class XAIImageGenProvider(ImageGenProvider):
                 aspect_ratio=aspect,
             )
         for index, source in enumerate(source_images):
-            field = "image_url" if index == 0 and image_url and image_url.strip() == source else "reference_image_urls"
+            field = (
+                "image_url"
+                if index == 0 and image_url and image_url.strip() == source
+                else "reference_image_urls"
+            )
             lower = source.lower()
             if not lower.startswith(("http://", "https://", "data:")):
                 path = Path(source).expanduser()
@@ -287,7 +291,9 @@ class XAIImageGenProvider(ImageGenProvider):
             "User-Agent": clawk_xai_user_agent(),
         }
 
-        base_url = str(creds.get("base_url") or "https://api.x.ai/v1").strip().rstrip("/")
+        base_url = (
+            str(creds.get("base_url") or "https://api.x.ai/v1").strip().rstrip("/")
+        )
         storage_options = build_xai_storage_options(
             "image_gen",
             filename_prefix="clawk-xai-image",
@@ -345,7 +351,9 @@ class XAIImageGenProvider(ImageGenProvider):
             response = exc.response
             status = response.status_code if response is not None else 0
             try:
-                err_msg = response.json().get("error", {}).get("message", response.text[:300])
+                err_msg = (
+                    response.json().get("error", {}).get("message", response.text[:300])
+                )
             except Exception:
                 err_msg = response.text[:300] if response is not None else str(exc)
             logger.error("xAI image gen failed (%d): %s", status, err_msg)
@@ -406,7 +414,11 @@ class XAIImageGenProvider(ImageGenProvider):
         url = first.get("url")
         file_output = first.get("file_output") if isinstance(first, dict) else None
         file_output = file_output if isinstance(file_output, dict) else {}
-        public_url = file_output.get("public_url") if isinstance(file_output.get("public_url"), str) else None
+        public_url = (
+            file_output.get("public_url")
+            if isinstance(file_output.get("public_url"), str)
+            else None
+        )
 
         if public_url:
             image_ref = public_url

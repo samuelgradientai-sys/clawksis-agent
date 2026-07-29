@@ -86,4 +86,6 @@ async def test_connect_wires_inbound_interrupt_over_ws(adapter):
 
     # Simulate the connector pushing an interrupt_inbound frame down the WS.
     await stub.push_interrupt(key, chat_id="chanA")
-    assert ev.is_set() is True, "interrupt delivered over the WS must cancel the target turn"
+    assert ev.is_set() is True, (
+        "interrupt delivered over the WS must cancel the target turn"
+    )

@@ -6,6 +6,7 @@ flag, the registry filter, bearer extraction, provider stacking (verify_token),
 and the route-agnostic middleware seam's fail-closed / 503 / pass-through
 behaviour.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -333,8 +334,6 @@ def test_seam_fails_closed_when_no_token_provider():
 def test_seam_503_on_provider_unreachable():
     register_provider(_UnreachableTokenProvider())
     token_auth.register_token_route("/api/gateway/drain")
-    req = _FakeRequest(
-        path="/api/gateway/drain", headers={"authorization": "Bearer x"}
-    )
+    req = _FakeRequest(path="/api/gateway/drain", headers={"authorization": "Bearer x"})
     resp = _run(token_auth.token_auth_middleware(req, _call_next_ok))
     assert resp.status_code == 503

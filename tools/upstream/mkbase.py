@@ -6,6 +6,7 @@ ya rebrandeada hermes->clawksis, para poder calcular el delta propio del fork.
 Uso:
   python tools/upstream/mkbase.py <fork_path>  > /tmp/base.py
 """
+
 from __future__ import annotations
 
 import json

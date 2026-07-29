@@ -180,7 +180,9 @@ class ShellHookSpec:
             except re.error as exc:
                 logger.warning(
                     "shell hook matcher %r is invalid (%s) — treating as "
-                    "literal equality", self.matcher, exc,
+                    "literal equality",
+                    self.matcher,
+                    exc,
                 )
                 self.compiled_matcher = None
 
@@ -199,6 +201,7 @@ class ShellHookSpec:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def register_from_config(
     cfg: Optional[Dict[str, Any]],
@@ -259,14 +262,17 @@ def register_from_config(
 
         if not already_allowlisted:
             if not _prompt_and_record(
-                spec.event, spec.command, accept_hooks=effective_accept,
+                spec.event,
+                spec.command,
+                accept_hooks=effective_accept,
             ):
                 logger.warning(
                     "shell hook for %s (%s) not allowlisted — skipped. "
                     "Use --accept-hooks / CLAWK_ACCEPT_HOOKS=1 / "
                     "hooks_auto_accept: true, or approve at the TTY "
                     "prompt next run.",
-                    spec.event, spec.command,
+                    spec.event,
+                    spec.command,
                 )
                 continue
 
@@ -278,7 +284,10 @@ def register_from_config(
             registered.append(spec)
             logger.info(
                 "shell hook registered: %s -> %s (matcher=%s, timeout=%ds)",
-                spec.event, spec.command, spec.matcher, spec.timeout,
+                spec.event,
+                spec.command,
+                spec.matcher,
+                spec.timeout,
             )
 
     return registered
@@ -302,6 +311,7 @@ def reset_for_tests() -> None:
 # Config parsing
 # ---------------------------------------------------------------------------
 
+
 def _parse_hooks_block(hooks_cfg: Any) -> List[ShellHookSpec]:
     """Normalise the ``hooks:`` dict into a flat list of ``ShellHookSpec``.
 
@@ -323,17 +333,22 @@ def _parse_hooks_block(hooks_cfg: Any) -> List[ShellHookSpec]:
             continue
         if event_name not in VALID_HOOKS:
             suggestion = difflib.get_close_matches(
-                str(event_name), VALID_HOOKS, n=1, cutoff=0.6,
+                str(event_name),
+                VALID_HOOKS,
+                n=1,
+                cutoff=0.6,
             )
             if suggestion:
                 logger.warning(
                     "unknown hook event %r in hooks: config — did you mean %r?",
-                    event_name, suggestion[0],
+                    event_name,
+                    suggestion[0],
                 )
             else:
                 logger.warning(
                     "unknown hook event %r in hooks: config (valid: %s)",
-                    event_name, ", ".join(sorted(VALID_HOOKS)),
+                    event_name,
+                    ", ".join(sorted(VALID_HOOKS)),
                 )
             continue
 
@@ -343,7 +358,8 @@ def _parse_hooks_block(hooks_cfg: Any) -> List[ShellHookSpec]:
         if not isinstance(entries, list):
             logger.warning(
                 "hooks.%s must be a list of hook definitions; got %s",
-                event_name, type(entries).__name__,
+                event_name,
+                type(entries).__name__,
             )
             continue
 
@@ -356,12 +372,16 @@ def _parse_hooks_block(hooks_cfg: Any) -> List[ShellHookSpec]:
 
 
 def _parse_single_entry(
-    event: str, index: int, raw: Any,
+    event: str,
+    index: int,
+    raw: Any,
 ) -> Optional[ShellHookSpec]:
     if not isinstance(raw, dict):
         logger.warning(
             "hooks.%s[%d] must be a mapping with a 'command' key; got %s",
-            event, index, type(raw).__name__,
+            event,
+            index,
+            type(raw).__name__,
         )
         return None
 
@@ -369,7 +389,8 @@ def _parse_single_entry(
     if not isinstance(command, str) or not command.strip():
         logger.warning(
             "hooks.%s[%d] is missing a non-empty 'command' field",
-            event, index,
+            event,
+            index,
         )
         return None
 
@@ -377,7 +398,8 @@ def _parse_single_entry(
     if matcher is not None and not isinstance(matcher, str):
         logger.warning(
             "hooks.%s[%d].matcher must be a string regex; ignoring",
-            event, index,
+            event,
+            index,
         )
         matcher = None
 
@@ -386,7 +408,10 @@ def _parse_single_entry(
             "hooks.%s[%d].matcher=%r will be ignored at runtime — the "
             "matcher field is only honored for pre_tool_call / "
             "post_tool_call.  The hook will fire on every %s event.",
-            event, index, matcher, event,
+            event,
+            index,
+            matcher,
+            event,
         )
         matcher = None
 
@@ -396,21 +421,29 @@ def _parse_single_entry(
     except (TypeError, ValueError):
         logger.warning(
             "hooks.%s[%d].timeout must be an int (got %r); using default %ds",
-            event, index, timeout_raw, DEFAULT_TIMEOUT_SECONDS,
+            event,
+            index,
+            timeout_raw,
+            DEFAULT_TIMEOUT_SECONDS,
         )
         timeout = DEFAULT_TIMEOUT_SECONDS
 
     if timeout < 1:
         logger.warning(
             "hooks.%s[%d].timeout must be >=1; using default %ds",
-            event, index, DEFAULT_TIMEOUT_SECONDS,
+            event,
+            index,
+            DEFAULT_TIMEOUT_SECONDS,
         )
         timeout = DEFAULT_TIMEOUT_SECONDS
 
     if timeout > MAX_TIMEOUT_SECONDS:
         logger.warning(
             "hooks.%s[%d].timeout=%ds exceeds max %ds; clamping",
-            event, index, timeout, MAX_TIMEOUT_SECONDS,
+            event,
+            index,
+            timeout,
+            MAX_TIMEOUT_SECONDS,
         )
         timeout = MAX_TIMEOUT_SECONDS
 
@@ -503,13 +536,17 @@ def _make_callback(spec: ShellHookSpec) -> Callable[..., Optional[Dict[str, Any]
         if r["error"]:
             logger.warning(
                 "shell hook failed (event=%s command=%s): %s",
-                spec.event, spec.command, r["error"],
+                spec.event,
+                spec.command,
+                r["error"],
             )
             return None
         if r["timed_out"]:
             logger.warning(
                 "shell hook timed out after %.2fs (event=%s command=%s)",
-                r["elapsed_seconds"], spec.event, spec.command,
+                r["elapsed_seconds"],
+                spec.event,
+                spec.command,
             )
             return None
 
@@ -517,14 +554,19 @@ def _make_callback(spec: ShellHookSpec) -> Callable[..., Optional[Dict[str, Any]
         if stderr:
             logger.debug(
                 "shell hook stderr (event=%s command=%s): %s",
-                spec.event, spec.command, stderr[:400],
+                spec.event,
+                spec.command,
+                stderr[:400],
             )
         # Non-zero exits: log but still parse stdout so scripts that
         # signal failure via exit code can also return a block directive.
         if r["returncode"] != 0:
             logger.warning(
                 "shell hook exited %d (event=%s command=%s); stderr=%s",
-                r["returncode"], spec.event, spec.command, stderr[:400],
+                r["returncode"],
+                spec.event,
+                spec.command,
+                stderr[:400],
             )
         return _parse_response(spec.event, r["stdout"])
 
@@ -544,7 +586,9 @@ def _serialize_payload(event: str, kwargs: Dict[str, Any]) -> str:
     payload = {
         "hook_event_name": event,
         "tool_name": kwargs.get("tool_name"),
-        "tool_input": kwargs.get("args") if isinstance(kwargs.get("args"), dict) else None,
+        "tool_input": kwargs.get("args")
+        if isinstance(kwargs.get("args"), dict)
+        else None,
         "session_id": kwargs.get("session_id") or kwargs.get("parent_session_id") or "",
         "cwd": cwd,
         "extra": extras,
@@ -588,7 +632,8 @@ def _parse_response(event: str, stdout: str) -> Optional[Dict[str, Any]]:
     except json.JSONDecodeError:
         logger.warning(
             "shell hook stdout was not valid JSON (event=%s): %s",
-            event, stdout[:200],
+            event,
+            stdout[:200],
         )
         return None
 
@@ -597,9 +642,15 @@ def _parse_response(event: str, stdout: str) -> Optional[Dict[str, Any]]:
 
     if event == "pre_tool_call":
         if data.get("action") == "block":
-            return {"action": "block", "message": _block_message(data.get("message"), data.get("reason"))}
+            return {
+                "action": "block",
+                "message": _block_message(data.get("message"), data.get("reason")),
+            }
         if data.get("decision") == "block":
-            return {"action": "block", "message": _block_message(data.get("reason"), data.get("message"))}
+            return {
+                "action": "block",
+                "message": _block_message(data.get("reason"), data.get("message")),
+            }
         return None
 
     if event == "pre_verify":
@@ -623,6 +674,7 @@ def _parse_response(event: str, stdout: str) -> Optional[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Allowlist / consent
 # ---------------------------------------------------------------------------
+
 
 def allowlist_path() -> Path:
     """Path to the per-user shell-hook allowlist file."""
@@ -653,7 +705,9 @@ def save_allowlist(data: Dict[str, Any]) -> None:
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(
-            prefix=f"{p.name}.", suffix=".tmp", dir=str(p.parent),
+            prefix=f"{p.name}.",
+            suffix=".tmp",
+            dir=str(p.parent),
         )
         try:
             with os.fdopen(fd, "w") as fh:
@@ -671,16 +725,15 @@ def save_allowlist(data: Dict[str, Any]) -> None:
             "The approval is in-memory for this run, but the next "
             "startup will re-prompt (or skip registration on non-TTY "
             "runs without --accept-hooks / CLAWK_ACCEPT_HOOKS).",
-            p, exc,
+            p,
+            exc,
         )
 
 
 def _is_allowlisted(event: str, command: str) -> bool:
     data = load_allowlist()
     return any(
-        isinstance(e, dict)
-        and e.get("event") == event
-        and e.get("command") == command
+        isinstance(e, dict) and e.get("event") == event and e.get("command") == command
         for e in data.get("approvals", [])
     )
 
@@ -720,7 +773,10 @@ def _locked_update_approvals() -> Iterator[Dict[str, Any]]:
 
 
 def _prompt_and_record(
-    event: str, command: str, *, accept_hooks: bool,
+    event: str,
+    command: str,
+    *,
+    accept_hooks: bool,
 ) -> bool:
     """Decide whether to approve an unseen ``(event, command)`` pair.
     Returns ``True`` iff the approval was granted and recorded.
@@ -728,8 +784,9 @@ def _prompt_and_record(
     if accept_hooks:
         _record_approval(event, command)
         logger.info(
-            "shell hook auto-approved via --accept-hooks / env / config: "
-            "%s -> %s", event, command,
+            "shell hook auto-approved via --accept-hooks / env / config: %s -> %s",
+            event,
+            command,
         )
         return True
 
@@ -766,7 +823,8 @@ def _record_approval(event: str, command: str) -> None:
     }
     with _locked_update_approvals() as data:
         data["approvals"] = [
-            e for e in data.get("approvals", [])
+            e
+            for e in data.get("approvals", [])
             if not (
                 isinstance(e, dict)
                 and e.get("event") == event
@@ -789,7 +847,8 @@ def revoke(command: str) -> int:
     with _locked_update_approvals() as data:
         before = len(data.get("approvals", []))
         data["approvals"] = [
-            e for e in data.get("approvals", [])
+            e
+            for e in data.get("approvals", [])
             if not (isinstance(e, dict) and e.get("command") == command)
         ]
         after = len(data["approvals"])
@@ -797,10 +856,19 @@ def revoke(command: str) -> int:
 
 
 _SCRIPT_EXTENSIONS: Tuple[str, ...] = (
-    ".sh", ".bash", ".zsh", ".fish",
-    ".py", ".pyw",
-    ".rb", ".pl", ".lua",
-    ".js", ".mjs", ".cjs", ".ts",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".py",
+    ".pyw",
+    ".rb",
+    ".pl",
+    ".lua",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".ts",
 )
 
 
@@ -831,8 +899,10 @@ def _command_script_path(command: str) -> str:
 # Helpers for accept-hooks resolution
 # ---------------------------------------------------------------------------
 
+
 def _resolve_effective_accept(
-    cfg: Dict[str, Any], accept_hooks_arg: bool,
+    cfg: Dict[str, Any],
+    accept_hooks_arg: bool,
 ) -> bool:
     """Combine all three opt-in channels into a single boolean.
 
@@ -858,6 +928,7 @@ def _resolve_effective_accept(
 # Introspection (used by `clawk hooks` CLI)
 # ---------------------------------------------------------------------------
 
+
 def allowlist_entry_for(event: str, command: str) -> Optional[Dict[str, Any]]:
     """Return the allowlist record for this pair, if any."""
     for e in load_allowlist().get("approvals", []):
@@ -878,9 +949,15 @@ def script_mtime_iso(command: str) -> Optional[str]:
         return None
     try:
         expanded = os.path.expanduser(path)
-        return datetime.fromtimestamp(
-            os.path.getmtime(expanded), tz=timezone.utc,
-        ).isoformat().replace("+00:00", "Z")
+        return (
+            datetime
+            .fromtimestamp(
+                os.path.getmtime(expanded),
+                tz=timezone.utc,
+            )
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
     except OSError:
         return None
 
@@ -909,7 +986,8 @@ def script_is_executable(command: str) -> bool:
 
 
 def run_once(
-    spec: ShellHookSpec, kwargs: Dict[str, Any],
+    spec: ShellHookSpec,
+    kwargs: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Fire a single shell-hook invocation with a synthetic payload.
     Used by ``clawk hooks test`` and ``clawk hooks doctor``.

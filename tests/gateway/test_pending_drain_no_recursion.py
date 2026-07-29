@@ -58,7 +58,9 @@ def _make_event(text="hi", chat_id="42"):
     return MessageEvent(
         text=text,
         message_type=MessageType.TEXT,
-        source=SessionSource(platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"),
+        source=SessionSource(
+            platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"
+        ),
     )
 
 

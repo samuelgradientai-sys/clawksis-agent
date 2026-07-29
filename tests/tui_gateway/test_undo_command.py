@@ -177,7 +177,9 @@ def test_undo_refuses_when_session_busy(server, session_with_history):
 
 
 def test_undo_errors_when_no_active_session(server):
-    resp = _call(server, "command.dispatch", session_id="no-such-sid", name="undo", arg="")
+    resp = _call(
+        server, "command.dispatch", session_id="no-such-sid", name="undo", arg=""
+    )
     assert "error" in resp
     assert "no active session" in resp["error"]["message"].lower()
 

@@ -104,6 +104,7 @@ class TestGoalMigratesOnRotation:
         with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}):
             (tmp_path / ".clawk").mkdir(exist_ok=True)
             import clawk_cli.goals as goals
+
             goals._DB_CACHE.clear()
             # Point the goal DB at the same state.db the agent uses.
             with patch.object(goals, "_get_session_db", return_value=db):
@@ -210,7 +211,9 @@ class TestFallbackStreakFollowsRotation:
         resumed.bind_session_state(db, "CHILD_FALLBACK_ROT")
         assert resumed._fallback_compression_streak == 2
 
-    def test_real_rotation_records_fallback_after_lifecycle_rebind(self, tmp_path: Path):
+    def test_real_rotation_records_fallback_after_lifecycle_rebind(
+        self, tmp_path: Path
+    ):
         db = SessionDB(db_path=tmp_path / "state.db")
         parent = "PARENT_REAL_FALLBACK_ROT"
         db.create_session(parent, source="telegram")

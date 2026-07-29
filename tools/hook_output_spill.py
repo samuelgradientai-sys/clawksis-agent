@@ -83,6 +83,7 @@ def get_spill_config() -> Dict[str, Any]:
     section: Dict[str, Any] = {}
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config() or {}
         hooks = cfg.get("hooks") if isinstance(cfg, dict) else None
         if isinstance(hooks, dict):
@@ -112,13 +113,16 @@ def get_spill_config() -> Dict[str, Any]:
     }
 
 
-def _resolve_spill_dir(directory_override: Optional[str], session_id: Optional[str]) -> Path:
+def _resolve_spill_dir(
+    directory_override: Optional[str], session_id: Optional[str]
+) -> Path:
     """Return the directory where spill files for this session live."""
     if directory_override:
         base = Path(os.path.expanduser(directory_override))
     else:
         try:
             from clawk_constants import get_clawk_home
+
             base = Path(get_clawk_home()) / "hook_outputs"
         except Exception:
             # Last-resort fallback: CLAWK_HOME env var, then ~/.clawksis
@@ -129,7 +133,9 @@ def _resolve_spill_dir(directory_override: Optional[str], session_id: Optional[s
     session_segment = session_id or "no-session"
     # Defensive: strip path separators so a weird session id can't
     # escape the directory.
-    session_segment = session_segment.replace("/", "_").replace("\\", "_").replace("..", "_")
+    session_segment = (
+        session_segment.replace("/", "_").replace("\\", "_").replace("..", "_")
+    )
     return base / session_segment
 
 
@@ -148,7 +154,11 @@ def _build_preview(
 
     parts = [
         f"[{source} output truncated — {total:,} chars; full content "
-        + (f"saved to {saved_path}]" if saved_path else "unavailable — spill write failed]"),
+        + (
+            f"saved to {saved_path}]"
+            if saved_path
+            else "unavailable — spill write failed]"
+        ),
     ]
     if head_chunk:
         parts.append("--- head ---")
@@ -217,7 +227,9 @@ def spill_if_oversized(
         spill_path = spill_dir / filename
         # Write the raw text plus a trailing newline so tail readers
         # (``tail -f``, editors) don't report "missing newline".
-        spill_path.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
+        spill_path.write_text(
+            text if text.endswith("\n") else text + "\n", encoding="utf-8"
+        )
         saved_path = str(spill_path)
     except Exception as exc:
         logger.warning("hook output spill failed: %s", exc)

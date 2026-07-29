@@ -25,7 +25,9 @@ def test_no_thread_is_noop():
         entry._mcp_discovery_thread = None
         start = time.monotonic()
         entry.wait_for_mcp_discovery(timeout=5.0)
-        assert time.monotonic() - start < 1.0  # fast path; loose bound for loaded runners
+        assert (
+            time.monotonic() - start < 1.0
+        )  # fast path; loose bound for loaded runners
     finally:
         _restore_thread_slot(saved)
 
@@ -40,7 +42,9 @@ def test_already_finished_thread_is_noop():
         entry._mcp_discovery_thread = t
         start = time.monotonic()
         entry.wait_for_mcp_discovery(timeout=5.0)
-        assert time.monotonic() - start < 1.0  # fast path; loose bound for loaded runners
+        assert (
+            time.monotonic() - start < 1.0
+        )  # fast path; loose bound for loaded runners
     finally:
         _restore_thread_slot(saved)
 

@@ -52,7 +52,9 @@ logger = logging.getLogger(__name__)
 # wedged open by an orphaned pip descendant) can degrade at most the
 # probe line itself, never system-prompt construction.
 _CACHE_LOCK = threading.Lock()
-_CACHED_LINE: Optional[str] = None  # None = not probed yet; "" = probed, nothing to say.
+_CACHED_LINE: Optional[str] = (
+    None  # None = not probed yet; "" = probed, nothing to say.
+)
 _PROBE_DONE = threading.Event()
 _PROBE_THREAD: Optional[threading.Thread] = None
 # Generation counter — bumped on every reset so a stale worker (started
@@ -72,7 +74,12 @@ _WAIT_ALREADY_TIMED_OUT = False
 # Duplicated rather than imported to avoid a circular import (prompt_builder
 # imports nothing from tools).
 _REMOTE_BACKENDS = frozenset({
-    "docker", "singularity", "modal", "daytona", "ssh", "managed_modal",
+    "docker",
+    "singularity",
+    "modal",
+    "daytona",
+    "ssh",
+    "managed_modal",
 })
 
 
@@ -123,7 +130,11 @@ def _python_version_of(binary: str) -> Optional[str]:
     """Return a short version string like ``3.12.4`` for ``binary``, or None."""
     if not shutil.which(binary):
         return None
-    rc, out, err = _run([binary, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"])
+    rc, out, err = _run([
+        binary,
+        "-c",
+        "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')",
+    ])
     if rc == 0 and out:
         return out
     return None

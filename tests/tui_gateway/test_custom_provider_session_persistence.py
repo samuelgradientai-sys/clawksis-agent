@@ -233,14 +233,9 @@ class TestBareCustomNoBaseUrlHealsFromConfig:
         monkeypatch.setattr(rp, "_get_model_config", lambda: NAMED_CONFIG["model"])
 
         # No base_url to reverse-lookup → must fall back to config.model.provider.
-        assert (
-            rp.canonical_custom_identity(base_url=None)
-            == "custom:mimo-v2.5-pro"
-        )
+        assert rp.canonical_custom_identity(base_url=None) == "custom:mimo-v2.5-pro"
 
-    def test_canonical_identity_returns_none_without_a_real_entry(
-        self, monkeypatch
-    ):
+    def test_canonical_identity_returns_none_without_a_real_entry(self, monkeypatch):
         # config.model.provider is bare "custom" and no entry is named → no
         # routable identity to recover; caller keeps its fallback behaviour.
         monkeypatch.setattr(rp, "load_config", lambda: {})
@@ -270,9 +265,10 @@ class TestBareCustomNoBaseUrlHealsFromConfig:
         # A poisoned row from before the fix: bare custom, no base_url.
         row = {
             "model": "mimo-v2.5-pro",
-            "model_config": json.dumps(
-                {"model": "mimo-v2.5-pro", "provider": "custom"}
-            ),
+            "model_config": json.dumps({
+                "model": "mimo-v2.5-pro",
+                "provider": "custom",
+            }),
             "billing_provider": "custom",
         }
         overrides = _stored_session_runtime_overrides(row)
@@ -292,9 +288,7 @@ class TestBareCustomNoBaseUrlHealsFromConfig:
 
         row = {
             "model": "some-model",
-            "model_config": json.dumps(
-                {"model": "some-model", "provider": "custom"}
-            ),
+            "model_config": json.dumps({"model": "some-model", "provider": "custom"}),
             "billing_provider": "custom",
         }
         overrides = _stored_session_runtime_overrides(row)
@@ -350,5 +344,3 @@ class TestBareCustomNoBaseUrlHealsFromConfig:
 
         persisted = captured.get("model_config") or {}
         assert persisted.get("provider") == "custom:mimo-v2.5-pro"
-
-

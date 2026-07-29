@@ -39,20 +39,28 @@ def _permission_option_supports_kind(kind: str) -> bool:
 
 
 def _build_permission_options(
-    *, allow_permanent: bool, smart_denied: bool = False,
+    *,
+    allow_permanent: bool,
+    smart_denied: bool = False,
 ) -> list[PermissionOption]:
     """Return ACP options that match Clawksis approval semantics."""
-    options = [PermissionOption(
-        option_id="allow_once", kind="allow_once", name="Allow once",
-    )]
+    options = [
+        PermissionOption(
+            option_id="allow_once",
+            kind="allow_once",
+            name="Allow once",
+        )
+    ]
     if not smart_denied:
-        options.append(PermissionOption(
-            option_id="allow_session",
-            # ACP has no session-scoped kind, so use the closest persistent
-            # hint while keeping Clawksis semantics in the option id.
-            kind="allow_always",
-            name="Allow for session",
-        ))
+        options.append(
+            PermissionOption(
+                option_id="allow_session",
+                # ACP has no session-scoped kind, so use the closest persistent
+                # hint while keeping Clawksis semantics in the option id.
+                kind="allow_always",
+                name="Allow for session",
+            )
+        )
     if allow_permanent and not smart_denied:
         options.append(
             PermissionOption(
@@ -149,7 +157,8 @@ def make_approval_callback(
             options=options,
         )
         future = safe_schedule_threadsafe(
-            coro, loop,
+            coro,
+            loop,
             logger=logger,
             log_message="Permission request: failed to schedule on loop",
         )

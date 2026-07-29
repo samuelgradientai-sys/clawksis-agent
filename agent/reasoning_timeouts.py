@@ -65,7 +65,7 @@ _REASONING_STALE_TIMEOUT_FLOORS: tuple[tuple[str, int], ...] = (
     # 120s measured).
     ("nemotron-3-ultra", 600),
     ("nemotron-3-super", 600),
-    ("nemotron-3-nano",  300),
+    ("nemotron-3-nano", 300),
     # DeepSeek — R1 and V4 reasoning models on hosted NIM / DeepSeek direct.
     # V4 series emits reasoning_content in a separate delta field before
     # final content, requiring the same extended stale timeout floor.
@@ -143,11 +143,7 @@ _PATTERN_CACHE: dict[str, re.Pattern[str]] = {}
 def _get_pattern(slug: str) -> re.Pattern[str]:
     compiled = _PATTERN_CACHE.get(slug)
     if compiled is None:
-        compiled = re.compile(
-            r"^"
-            + re.escape(slug)
-            + r"(?:$|[\-._])"
-        )
+        compiled = re.compile(r"^" + re.escape(slug) + r"(?:$|[\-._])")
         _PATTERN_CACHE[slug] = compiled
     return compiled
 
@@ -162,9 +158,7 @@ def _match_any(model_lower: str) -> Optional[float]:
     """
     # Sort by slug length descending so longer / more-specific slugs
     # win on shared prefixes (o3-mini beats o3).
-    sorted_floors = sorted(
-        _REASONING_STALE_TIMEOUT_FLOORS, key=lambda kv: -len(kv[0])
-    )
+    sorted_floors = sorted(_REASONING_STALE_TIMEOUT_FLOORS, key=lambda kv: -len(kv[0]))
     for slug, floor in sorted_floors:
         if _get_pattern(slug).search(model_lower):
             return float(floor)

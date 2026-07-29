@@ -54,8 +54,12 @@ async def test_native_image_buffer_isolated_per_session():
         history=[],
     )
 
-    assert runner._consume_pending_native_image_paths(build_session_key(source_a)) == ["/tmp/a.png"]
-    assert runner._consume_pending_native_image_paths(build_session_key(source_b)) == ["/tmp/b.png"]
+    assert runner._consume_pending_native_image_paths(build_session_key(source_a)) == [
+        "/tmp/a.png"
+    ]
+    assert runner._consume_pending_native_image_paths(build_session_key(source_b)) == [
+        "/tmp/b.png"
+    ]
 
 
 @pytest.mark.asyncio
@@ -75,7 +79,9 @@ async def test_native_image_buffer_not_cleared_by_other_sessions_without_images(
         history=[],
     )
 
-    assert runner._consume_pending_native_image_paths(build_session_key(source_a)) == ["/tmp/a.png"]
+    assert runner._consume_pending_native_image_paths(build_session_key(source_a)) == [
+        "/tmp/a.png"
+    ]
     assert runner._consume_pending_native_image_paths(build_session_key(source_b)) == []
 
 
@@ -93,4 +99,6 @@ async def test_native_image_buffer_uses_resolved_session_key_when_provided():
     )
 
     assert runner._consume_pending_native_image_paths("source-derived-key") == []
-    assert runner._consume_pending_native_image_paths("canonical-session-key") == ["/tmp/a.png"]
+    assert runner._consume_pending_native_image_paths("canonical-session-key") == [
+        "/tmp/a.png"
+    ]

@@ -78,6 +78,7 @@ class _AuthRunner:
 # send_exec_approval — inline keyboard buttons
 # ===========================================================================
 
+
 class TestTelegramExecApproval:
     """Test the send_exec_approval method sends InlineKeyboard buttons."""
 
@@ -106,21 +107,30 @@ class TestTelegramExecApproval:
         assert kwargs["reply_markup"] is not None  # InlineKeyboardMarkup
 
     @pytest.mark.asyncio
-    async def test_smart_deny_owner_override_only_offers_once_and_deny(self, monkeypatch):
+    async def test_smart_deny_owner_override_only_offers_once_and_deny(
+        self, monkeypatch
+    ):
         adapter = _make_adapter()
-        adapter._bot.send_message = AsyncMock(return_value=SimpleNamespace(message_id=42))
+        adapter._bot.send_message = AsyncMock(
+            return_value=SimpleNamespace(message_id=42)
+        )
         buttons = []
         monkeypatch.setattr(
             "plugins.platforms.telegram.adapter.InlineKeyboardButton",
-            lambda text, callback_data: buttons.append((text, callback_data)) or (text, callback_data),
+            lambda text, callback_data: (
+                buttons.append((text, callback_data)) or (text, callback_data)
+            ),
         )
         monkeypatch.setattr(
             "plugins.platforms.telegram.adapter.InlineKeyboardMarkup", lambda rows: rows
         )
 
         await adapter.send_exec_approval(
-            chat_id="12345", command="rm -rf /", session_key="s",
-            allow_permanent=False, smart_denied=True,
+            chat_id="12345",
+            command="rm -rf /",
+            session_key="s",
+            allow_permanent=False,
+            smart_denied=True,
         )
 
         labels = [label for label, _ in buttons]
@@ -131,7 +141,9 @@ class TestTelegramExecApproval:
     @pytest.mark.asyncio
     async def test_non_smart_allow_permanent_false_keeps_session(self, monkeypatch):
         adapter = _make_adapter()
-        adapter._bot.send_message = AsyncMock(return_value=SimpleNamespace(message_id=42))
+        adapter._bot.send_message = AsyncMock(
+            return_value=SimpleNamespace(message_id=42)
+        )
         buttons = []
         monkeypatch.setattr(
             "plugins.platforms.telegram.adapter.InlineKeyboardButton",
@@ -142,7 +154,9 @@ class TestTelegramExecApproval:
         )
 
         await adapter.send_exec_approval(
-            chat_id="12345", command="curl example.test", session_key="s",
+            chat_id="12345",
+            command="curl example.test",
+            session_key="s",
             allow_permanent=False,
         )
 
@@ -209,7 +223,10 @@ class TestTelegramExecApproval:
         assert result.success is True
         assert len(call_log) == 2
         assert call_log[0]["message_thread_id"] == 999
-        assert "message_thread_id" not in call_log[1] or call_log[1]["message_thread_id"] is None
+        assert (
+            "message_thread_id" not in call_log[1]
+            or call_log[1]["message_thread_id"] is None
+        )
 
     @pytest.mark.asyncio
     async def test_not_connected(self):
@@ -227,9 +244,7 @@ class TestTelegramExecApproval:
         mock_msg.message_id = 42
         adapter._bot.send_message = AsyncMock(return_value=mock_msg)
 
-        await adapter.send_exec_approval(
-            chat_id="12345", command="ls", session_key="s"
-        )
+        await adapter.send_exec_approval(chat_id="12345", command="ls", session_key="s")
 
         kwargs = adapter._bot.send_message.call_args[1]
         assert (
@@ -275,8 +290,11 @@ class TestTelegramExecApproval:
         kwargs = adapter._bot.send_message.call_args[1]
         assert "..." in kwargs["text"]
         assert len(kwargs["text"]) < 5000
+
+
 # _handle_callback_query — approval button clicks
 # ===========================================================================
+
 
 class TestTelegramApprovalCallback:
     """Test the approval callback handling in _handle_callback_query."""
@@ -303,10 +321,14 @@ class TestTelegramApprovalCallback:
         query.from_user.id = "12345"
 
         with patch.dict(os.environ, {"TELEGRAM_ALLOWED_USERS": "*"}, clear=False):
-            with patch("tools.approval.resolve_gateway_approval", return_value=1) as mock_resolve:
+            with patch(
+                "tools.approval.resolve_gateway_approval", return_value=1
+            ) as mock_resolve:
                 await adapter._handle_callback_query(update, context)
 
-        mock_resolve.assert_called_once_with("agent:main:telegram:group:12345:99", "once")
+        mock_resolve.assert_called_once_with(
+            "agent:main:telegram:group:12345:99", "once"
+        )
         query.answer.assert_called_once()
         query.edit_message_text.assert_called_once()
 
@@ -422,7 +444,9 @@ class TestTelegramApprovalCallback:
         query.from_user.id = "12345"
 
         with patch.dict(os.environ, {"TELEGRAM_ALLOWED_USERS": "*"}, clear=False):
-            with patch("tools.approval.resolve_gateway_approval", return_value=1) as mock_resolve:
+            with patch(
+                "tools.approval.resolve_gateway_approval", return_value=1
+            ) as mock_resolve:
                 await adapter._handle_callback_query(update, context)
 
         mock_resolve.assert_called_once_with("some-session", "deny")
@@ -510,7 +534,9 @@ class TestTelegramApprovalCallback:
         # Model picker callback should be handled (not crash)
         # We just verify it doesn't try to resolve an approval
         with patch("tools.approval.resolve_gateway_approval") as mock_resolve:
-            with patch.object(adapter, "_handle_model_picker_callback", new_callable=AsyncMock):
+            with patch.object(
+                adapter, "_handle_model_picker_callback", new_callable=AsyncMock
+            ):
                 await adapter._handle_callback_query(update, context)
 
         mock_resolve.assert_not_called()
@@ -574,7 +600,9 @@ class TestTelegramApprovalCallback:
         assert not (tmp_path / ".update_response").exists()
 
     @pytest.mark.asyncio
-    async def test_update_prompt_callback_rejects_user_blocked_by_global_allowlist(self, tmp_path):
+    async def test_update_prompt_callback_rejects_user_blocked_by_global_allowlist(
+        self, tmp_path
+    ):
         adapter = _make_adapter()
         runner = _AuthRunner(authorized=False)
         adapter._message_handler = runner._handle_message

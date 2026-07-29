@@ -31,7 +31,10 @@ def _logged_in_account(monkeypatch):
     """Stub the auth token + account fetch so build_credits_view runs offline."""
     monkeypatch.setattr(
         "clawk_cli.auth.get_provider_auth_state",
-        lambda provider: {"access_token": "tok", "portal_base_url": "https://portal.example.test"},
+        lambda provider: {
+            "access_token": "tok",
+            "portal_base_url": "https://portal.example.test",
+        },
     )
 
     def _install(account):
@@ -173,7 +176,9 @@ def test_gateway_topup_renders_block_and_url(monkeypatch):
 
 def test_gateway_topup_not_logged_in(monkeypatch):
     monkeypatch.setattr(
-        account_usage, "build_credits_view", lambda *a, **kw: CreditsView(logged_in=False)
+        account_usage,
+        "build_credits_view",
+        lambda *a, **kw: CreditsView(logged_in=False),
     )
     stub = _make_gateway_stub()
     out = asyncio.run(stub._handle_topup_command(_FakeEvent()))

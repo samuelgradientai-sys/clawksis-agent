@@ -122,7 +122,6 @@ class TestBrowserSnapshotPrivateNetworkGuard:
         assert result["success"] is True
         assert "snapshot" in result
 
-
     def test_skips_check_for_local_sidecar_session(self, monkeypatch):
         """Local sidecar sessions can legitimately access private URLs."""
         monkeypatch.setattr(browser_tool, "_is_local_backend", lambda: False)
@@ -246,7 +245,12 @@ class TestBrowserSnapshotPrivateNetworkGuard:
         monkeypatch.setattr(browser_tool, "_allow_private_urls", lambda: False)
         monkeypatch.setattr(browser_tool, "_is_safe_url", lambda url: False)
 
-        for private_ip in ["http://10.0.0.1/api", "http://172.16.0.1/admin", "http://192.168.1.1/config"]:
+        for private_ip in [
+            "http://10.0.0.1/api",
+            "http://172.16.0.1/admin",
+            "http://192.168.1.1/config",
+        ]:
+
             def mock_run_browser_command(task_id, command, args=None, **kwargs):
                 if command == "snapshot":
                     return _make_snapshot_result()
@@ -266,11 +270,13 @@ class TestBrowserSnapshotPrivateNetworkGuard:
 # Helper to avoid name collision with the actual function
 def browser_browser_snapshot(**kwargs):
     from tools.browser_tool import browser_snapshot
+
     return browser_snapshot(**kwargs)
 
 
 def browser_browser_vision(**kwargs):
     from tools.browser_tool import browser_vision
+
     return browser_vision(**kwargs)
 
 
@@ -310,7 +316,9 @@ class TestBrowserVisionPrivateNetworkGuard:
             browser_tool, "_run_browser_command", mock_run_browser_command
         )
 
-        result = json.loads(browser_browser_vision(question="what do you see", task_id="test"))
+        result = json.loads(
+            browser_browser_vision(question="what do you see", task_id="test")
+        )
         assert result["success"] is False
         assert "private or internal address" in result["error"]
         assert self.PRIVATE_URL in result["error"]
@@ -357,7 +365,6 @@ class TestBrowserVisionPrivateNetworkGuard:
         result_raw = browser_browser_vision(question="what", task_id="test")
         result = json.loads(result_raw)
         assert "private or internal address" not in result.get("error", "")
-
 
     def test_skips_check_for_local_sidecar_session(self, monkeypatch):
         """Local sidecar sessions can legitimately access private URLs."""

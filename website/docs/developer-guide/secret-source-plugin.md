@@ -50,27 +50,31 @@ from agent.secret_sources.base import (
 
 
 class MyVaultSource(SecretSource):
-    name = "myvault"          # config section key: secrets.myvault
-    label = "My Vault"        # used in startup lines + provenance labels
-    shape = "mapped"          # "mapped" (explicit VAR→ref map) or "bulk" (project dump)
-    scheme = "mv"             # optional: unique URI scheme you own (mv://...)
+    name = "myvault"  # config section key: secrets.myvault
+    label = "My Vault"  # used in startup lines + provenance labels
+    shape = "mapped"  # "mapped" (explicit VAR→ref map) or "bulk" (project dump)
+    scheme = "mv"  # optional: unique URI scheme you own (mv://...)
 
     def fetch(self, cfg: dict, home_path: Path) -> FetchResult:
         """Resolve secrets. MUST NOT raise. MUST NOT prompt."""
         result = FetchResult()
         token = os.environ.get("MYVAULT_TOKEN", "").strip()
         if not token:
-            result.error = "secrets.myvault.enabled is true but MYVAULT_TOKEN is not set."
+            result.error = (
+                "secrets.myvault.enabled is true but MYVAULT_TOKEN is not set."
+            )
             result.error_kind = ErrorKind.NOT_CONFIGURED
             return result
 
         try:
             proc = run_secret_cli(
                 ["myvault-cli", "export", "--json"],
-                allow_env=["MYVAULT_TOKEN"],   # ONLY your auth vars — never full os.environ
+                allow_env=[
+                    "MYVAULT_TOKEN"
+                ],  # ONLY your auth vars — never full os.environ
                 timeout=30,
             )
-        except RuntimeError as exc:           # spawn failure / timeout
+        except RuntimeError as exc:  # spawn failure / timeout
             result.error = str(exc)
             result.error_kind = ErrorKind.BINARY_MISSING
             return result
@@ -148,6 +152,7 @@ Subclass the kit from the Clawksis repo (`tests/secret_sources/conformance.py`) 
 ```python
 import pytest
 from tests.secret_sources.conformance import SecretSourceConformance
+
 
 class TestMyVaultConformance(SecretSourceConformance):
     @pytest.fixture

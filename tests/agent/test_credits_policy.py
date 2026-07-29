@@ -174,7 +174,7 @@ class TestBoundaryFractions:
         s = CreditsState(
             subscription_limit_micros=limit,
             subscription_limit_usd="20.00",
-            subscription_micros=1,           # limit - 1 → used_fraction < 1.0
+            subscription_micros=1,  # limit - 1 → used_fraction < 1.0
             denominator_kind="subscription_cap",
             purchased_micros=5_000_000,
             purchased_usd="5.00",
@@ -246,7 +246,9 @@ class TestDepleted:
         # Fire depleted
         evaluate_credits_notices(CreditsState(paid_access=False), latch)
         # Now recovered
-        to_show, to_clear = evaluate_credits_notices(CreditsState(paid_access=True), latch)
+        to_show, to_clear = evaluate_credits_notices(
+            CreditsState(paid_access=True), latch
+        )
         assert "credits.depleted" in to_clear
         restored = [n for n in to_show if n.key == "credits.restored"]
         assert len(restored) == 1
@@ -260,7 +262,9 @@ class TestDepleted:
         evaluate_credits_notices(CreditsState(paid_access=False), latch)
         evaluate_credits_notices(CreditsState(paid_access=True), latch)
         # Goes depleted again
-        to_show, to_clear = evaluate_credits_notices(CreditsState(paid_access=False), latch)
+        to_show, to_clear = evaluate_credits_notices(
+            CreditsState(paid_access=False), latch
+        )
         keys = [n.key for n in to_show]
         assert "credits.depleted" in keys
 
@@ -293,9 +297,13 @@ class TestDepletedFreeModelSuppression:
     def test_switch_back_to_paid_model_while_depleted_reshows(self):
         latch = fresh_latch()
         evaluate_credits_notices(CreditsState(paid_access=False), latch)
-        evaluate_credits_notices(CreditsState(paid_access=False), latch, model_is_free=True)
+        evaluate_credits_notices(
+            CreditsState(paid_access=False), latch, model_is_free=True
+        )
         # Back on a paid model, still depleted → notice re-fires
-        to_show, to_clear = evaluate_credits_notices(CreditsState(paid_access=False), latch)
+        to_show, to_clear = evaluate_credits_notices(
+            CreditsState(paid_access=False), latch
+        )
         keys = [n.key for n in to_show]
         assert "credits.depleted" in keys
         assert "credits.depleted" in latch["active"]
@@ -304,7 +312,9 @@ class TestDepletedFreeModelSuppression:
         """Recovery observed while suppressed (notice never shown) → nothing to
         clear, no 'restored' (there was no visible depleted state to restore)."""
         latch = fresh_latch()
-        evaluate_credits_notices(CreditsState(paid_access=False), latch, model_is_free=True)
+        evaluate_credits_notices(
+            CreditsState(paid_access=False), latch, model_is_free=True
+        )
         to_show, to_clear = evaluate_credits_notices(
             CreditsState(paid_access=True), latch, model_is_free=True
         )
@@ -343,7 +353,12 @@ class TestIsFreeTierModel:
         from agent.credits_tracker import is_free_tier_model
 
         assert is_free_tier_model("nvidia/nemotron-3-ultra:free") is True
-        assert is_free_tier_model("Hermes-4-70B:free", "https://inference-api.nousresearch.com") is True
+        assert (
+            is_free_tier_model(
+                "Hermes-4-70B:free", "https://inference-api.nousresearch.com"
+            )
+            is True
+        )
 
     def test_empty_or_paid_model_is_not_free(self):
         from agent.credits_tracker import is_free_tier_model
@@ -373,8 +388,18 @@ class TestIsFreeTierModel:
         assert is_free_tier_model("some/zero-priced", base) is True
         assert is_free_tier_model("some/paid", base) is False
         # Pre-stripped and trailing-slash variants resolve to the same key.
-        assert is_free_tier_model("some/zero-priced", "https://inference-api.nousresearch.com/") is True
-        assert is_free_tier_model("some/zero-priced", "https://inference-api.nousresearch.com/v1/") is True
+        assert (
+            is_free_tier_model(
+                "some/zero-priced", "https://inference-api.nousresearch.com/"
+            )
+            is True
+        )
+        assert (
+            is_free_tier_model(
+                "some/zero-priced", "https://inference-api.nousresearch.com/v1/"
+            )
+            is True
+        )
 
     def test_cache_miss_is_not_free_and_no_fetch(self, monkeypatch):
         from agent.credits_tracker import is_free_tier_model
@@ -388,7 +413,12 @@ class TestIsFreeTierModel:
         import urllib.request
 
         monkeypatch.setattr(urllib.request, "urlopen", _boom)
-        assert is_free_tier_model("some/model", "https://inference-api.nousresearch.com/v1") is False
+        assert (
+            is_free_tier_model(
+                "some/model", "https://inference-api.nousresearch.com/v1"
+            )
+            is False
+        )
 
     def test_exception_fails_open_to_false(self, monkeypatch):
         from agent.credits_tracker import is_free_tier_model
@@ -399,7 +429,10 @@ class TestIsFreeTierModel:
                 raise RuntimeError("boom")
 
         monkeypatch.setattr(models_mod, "_pricing_cache", _Exploding())
-        assert is_free_tier_model("some/model", "https://inference-api.nousresearch.com") is False
+        assert (
+            is_free_tier_model("some/model", "https://inference-api.nousresearch.com")
+            is False
+        )
 
 
 # ── Scenario 6: denominator none (uf is None) ────────────────────────────────
@@ -551,7 +584,9 @@ class TestTopUpSuppression:
         evaluate_credits_notices(state_with_fraction(0.95), latch)
         assert latch["usage_band"] == 90
         to_show, to_clear = evaluate_credits_notices(
-            state_with_fraction(0.95, purchased_micros=10_000_000, purchased_usd="10.00"),
+            state_with_fraction(
+                0.95, purchased_micros=10_000_000, purchased_usd="10.00"
+            ),
             latch,
         )
         assert "credits.usage" in to_clear
@@ -563,7 +598,9 @@ class TestTopUpSuppression:
         latch = fresh_latch()
         evaluate_credits_notices(state_with_fraction(0.10), latch)
         evaluate_credits_notices(
-            state_with_fraction(0.95, purchased_micros=10_000_000, purchased_usd="10.00"),
+            state_with_fraction(
+                0.95, purchased_micros=10_000_000, purchased_usd="10.00"
+            ),
             latch,
         )
         assert latch["usage_band"] is None
@@ -589,7 +626,9 @@ class TestTopUpSuppression:
 
     def test_depleted_unaffected_by_topup_suppression(self):
         latch = fresh_latch()
-        s = CreditsState(paid_access=False, purchased_micros=5_000_000, purchased_usd="5.00")
+        s = CreditsState(
+            paid_access=False, purchased_micros=5_000_000, purchased_usd="5.00"
+        )
         to_show, _ = evaluate_credits_notices(s, latch)
         assert any(n.key == "credits.depleted" for n in to_show)
 

@@ -12,7 +12,6 @@ from plugins.memory.mem0._oss_providers import (
 
 
 class TestProviderDefinitions:
-
     def test_llm_providers_have_required_keys(self):
         for pid, p in LLM_PROVIDERS.items():
             assert "label" in p
@@ -43,11 +42,13 @@ class TestProviderDefinitions:
 
 
 class TestValidation:
-
     def test_valid_openai_config(self):
         cfg = {
             "llm": {"provider": "openai", "config": {"model": "gpt-4o-mini"}},
-            "embedder": {"provider": "openai", "config": {"model": "text-embedding-3-small"}},
+            "embedder": {
+                "provider": "openai",
+                "config": {"model": "text-embedding-3-small"},
+            },
             "vector_store": {"provider": "qdrant", "config": {"path": "/tmp/test"}},
         }
         errors = validate_oss_config(cfg)
@@ -101,7 +102,10 @@ class TestValidation:
         cfg = {
             "llm": {"provider": "openai", "config": {}},
             "embedder": {"provider": "openai", "config": {}},
-            "vector_store": {"provider": "pgvector", "config": {"host": "localhost", "user": "pg"}},
+            "vector_store": {
+                "provider": "pgvector",
+                "config": {"host": "localhost", "user": "pg"},
+            },
         }
         errors = validate_oss_config(cfg)
         assert errors == []

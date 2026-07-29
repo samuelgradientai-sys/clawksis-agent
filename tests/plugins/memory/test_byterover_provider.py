@@ -8,7 +8,10 @@ def test_auto_extract_false_skips_sync_turn(monkeypatch):
     provider = ByteRoverMemoryProvider({"auto_extract": False})
     provider.initialize("session-1")
 
-    monkeypatch.setattr("plugins.memory.byterover._run_brv", lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr(
+        "plugins.memory.byterover._run_brv",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
 
     provider.sync_turn("please remember this detail", "acknowledged")
 
@@ -21,7 +24,10 @@ def test_auto_extract_false_skips_memory_write(monkeypatch):
     provider = ByteRoverMemoryProvider({"auto_extract": "false"})
     provider.initialize("session-1")
 
-    monkeypatch.setattr("plugins.memory.byterover._run_brv", lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr(
+        "plugins.memory.byterover._run_brv",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
 
     provider.on_memory_write("add", "user", "User prefers concise responses")
 
@@ -33,7 +39,10 @@ def test_auto_extract_false_skips_pre_compress(monkeypatch):
     provider = ByteRoverMemoryProvider({"auto_extract": "off"})
     provider.initialize("session-1")
 
-    monkeypatch.setattr("plugins.memory.byterover._run_brv", lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr(
+        "plugins.memory.byterover._run_brv",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
 
     result = provider.on_pre_compress([
         {"role": "user", "content": "remember this"},
@@ -55,7 +64,9 @@ def test_auto_extract_false_keeps_explicit_curate_tool(monkeypatch):
 
     monkeypatch.setattr("plugins.memory.byterover._run_brv", fake_run)
 
-    result = provider.handle_tool_call("brv_curate", {"content": "Important project fact"})
+    result = provider.handle_tool_call(
+        "brv_curate", {"content": "Important project fact"}
+    )
 
     assert "Memory curated successfully" in result
     assert calls == [["curate", "--", "Important project fact"]]

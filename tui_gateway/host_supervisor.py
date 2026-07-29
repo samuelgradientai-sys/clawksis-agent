@@ -140,15 +140,25 @@ class HostSupervisor:
         expected_clawk_home: str | None = None,
         autostart: bool = True,
     ) -> None:
-        self.registry_path = Path(registry_path) if registry_path is not None else _default_registry_path()
+        self.registry_path = (
+            Path(registry_path)
+            if registry_path is not None
+            else _default_registry_path()
+        )
         self.argv = argv or [sys.executable, "-m", "tui_gateway.compute_host"]
         self.cwd = Path(cwd) if cwd is not None else _repo_root()
         self.env = env
         self.rpc_sink = rpc_sink or (lambda _obj: None)
         self.respawn_max = max(0, int(respawn_max))
         self.heartbeat_secs = max(1, int(heartbeat_secs))
-        self.expected_build_sha = expected_build_sha if expected_build_sha is not None else _build_sha()
-        self.expected_clawk_home = expected_clawk_home if expected_clawk_home is not None else str(get_clawk_home())
+        self.expected_build_sha = (
+            expected_build_sha if expected_build_sha is not None else _build_sha()
+        )
+        self.expected_clawk_home = (
+            expected_clawk_home
+            if expected_clawk_home is not None
+            else str(get_clawk_home())
+        )
 
         self._lock = threading.RLock()
         self._proc: subprocess.Popen[str] | None = None
@@ -197,7 +207,10 @@ class HostSupervisor:
             return
         try:
             if proc.poll() is None and proc.stdin is not None:
-                self._send_frame({"type": "shutdown", "request_id": f"shutdown-{uuid.uuid4().hex}"})
+                self._send_frame({
+                    "type": "shutdown",
+                    "request_id": f"shutdown-{uuid.uuid4().hex}",
+                })
                 proc.wait(timeout=_SHUTDOWN_TIMEOUT_SECS)
         except Exception:
             self._terminate_process(proc)
@@ -263,13 +276,21 @@ class HostSupervisor:
 
     def interrupt(self, sid: str, *, request_id: str | None = None) -> None:
         self.start()
-        self._send_frame({"type": "interrupt", "sid": sid, "request_id": request_id or uuid.uuid4().hex})
+        self._send_frame({
+            "type": "interrupt",
+            "sid": sid,
+            "request_id": request_id or uuid.uuid4().hex,
+        })
 
     def reload_mcp(self, sid: str, *, request_id: str | None = None) -> dict:
         return self.control(
             sid,
             route_name="reload.mcp",
-            payload={"type": "reload_mcp", "sid": sid, "request_id": request_id or uuid.uuid4().hex},
+            payload={
+                "type": "reload_mcp",
+                "sid": sid,
+                "request_id": request_id or uuid.uuid4().hex,
+            },
             wait=True,
         )
 
@@ -330,15 +351,32 @@ class HostSupervisor:
             start_new_session=True,
         )
         self._proc = proc
-        self._stdout_thread = _Thread(target=self._drain_stdout, args=(proc,), name="compute-host-stdout", daemon=True)
-        self._stderr_thread = _Thread(target=self._drain_stderr, args=(proc,), name="compute-host-stderr", daemon=True)
-        self._wait_thread = _Thread(target=self._wait_for_exit, args=(proc,), name="compute-host-wait", daemon=True)
+        self._stdout_thread = _Thread(
+            target=self._drain_stdout,
+            args=(proc,),
+            name="compute-host-stdout",
+            daemon=True,
+        )
+        self._stderr_thread = _Thread(
+            target=self._drain_stderr,
+            args=(proc,),
+            name="compute-host-stderr",
+            daemon=True,
+        )
+        self._wait_thread = _Thread(
+            target=self._wait_for_exit,
+            args=(proc,),
+            name="compute-host-wait",
+            daemon=True,
+        )
         self._stdout_thread.start()
         self._stderr_thread.start()
         self._wait_thread.start()
         if not self._hello_event.wait(timeout=10.0):
             self._terminate_process(proc)
-            raise RuntimeError(f"compute host did not send hello; stderr={self._stderr_tail[-5:]}")
+            raise RuntimeError(
+                f"compute host did not send hello; stderr={self._stderr_tail[-5:]}"
+            )
         self._validate_hello()
         self._persist_registry()
         logger.info("compute host started pid=%s reason=%s", proc.pid, reason)
@@ -349,10 +387,18 @@ class HostSupervisor:
             raise RuntimeError("compute host missing hello")
         got_home = str(hello.get("clawk_home") or "")
         if got_home and got_home != self.expected_clawk_home:
-            raise RuntimeError(f"compute host CLAWK_HOME mismatch: {got_home} != {self.expected_clawk_home}")
+            raise RuntimeError(
+                f"compute host CLAWK_HOME mismatch: {got_home} != {self.expected_clawk_home}"
+            )
         got_sha = str(hello.get("build_sha") or "")
-        if self.expected_build_sha != "unknown" and got_sha not in {"", "unknown", self.expected_build_sha}:
-            raise RuntimeError(f"compute host build mismatch: {got_sha} != {self.expected_build_sha}")
+        if self.expected_build_sha != "unknown" and got_sha not in {
+            "",
+            "unknown",
+            self.expected_build_sha,
+        }:
+            raise RuntimeError(
+                f"compute host build mismatch: {got_sha} != {self.expected_build_sha}"
+            )
 
     def _persist_registry(self) -> None:
         self.registry_path.parent.mkdir(parents=True, exist_ok=True)
@@ -380,7 +426,9 @@ class HostSupervisor:
             proc = self._proc
             if proc is None or proc.poll() is not None or proc.stdin is None:
                 raise RuntimeError("compute host is not running")
-            proc.stdin.write(json.dumps(frame, separators=(",", ":"), ensure_ascii=False) + "\n")
+            proc.stdin.write(
+                json.dumps(frame, separators=(",", ":"), ensure_ascii=False) + "\n"
+            )
             proc.stdin.flush()
 
     def _drain_stdout(self, proc: subprocess.Popen[str]) -> None:
@@ -409,7 +457,9 @@ class HostSupervisor:
             self._hello_event.set()
             return
         if ftype == "hb":
-            self._last_progress_counter = int(frame.get("progress_counter") or self._last_progress_counter)
+            self._last_progress_counter = int(
+                frame.get("progress_counter") or self._last_progress_counter
+            )
             logger.debug("compute host heartbeat: %s", frame)
             return
         if ftype == "rpc":
@@ -420,7 +470,13 @@ class HostSupervisor:
         if ftype in {"turn.end", "turn.error"}:
             self._complete_turn(frame)
             return
-        if ftype in {"control.ack", "control.error", "interrupt.ack", "reload_mcp.ack", "shutdown.ack"}:
+        if ftype in {
+            "control.ack",
+            "control.error",
+            "interrupt.ack",
+            "reload_mcp.ack",
+            "shutdown.ack",
+        }:
             request_id = str(frame.get("request_id") or "")
             with self._lock:
                 q = self._pending_controls.get(request_id)
@@ -462,7 +518,9 @@ class HostSupervisor:
                 return
             self._proc = None
         self._remove_registry()
-        self._fail_pending_turns(reason="crash", message=f"compute host exited with code {code}")
+        self._fail_pending_turns(
+            reason="crash", message=f"compute host exited with code {code}"
+        )
         self._maybe_respawn_after_crash()
 
     def _fail_pending_turns(self, *, reason: str, message: str) -> None:
@@ -477,17 +535,15 @@ class HostSupervisor:
                 "reason": reason,
                 "message": message,
             }
-            self.rpc_sink(
-                {
-                    "jsonrpc": "2.0",
-                    "method": "event",
-                    "params": {
-                        "type": "error",
-                        "session_id": sid,
-                        "payload": {"message": message, "reason": reason},
-                    },
-                }
-            )
+            self.rpc_sink({
+                "jsonrpc": "2.0",
+                "method": "event",
+                "params": {
+                    "type": "error",
+                    "session_id": sid,
+                    "payload": {"message": message, "reason": reason},
+                },
+            })
             if cb is not None:
                 try:
                     cb(frame)
@@ -496,10 +552,15 @@ class HostSupervisor:
 
     def _maybe_respawn_after_crash(self) -> None:
         now = time.monotonic()
-        self._restart_times = [t for t in self._restart_times if now - t <= _RESPAWN_WINDOW_SECS]
+        self._restart_times = [
+            t for t in self._restart_times if now - t <= _RESPAWN_WINDOW_SECS
+        ]
         if len(self._restart_times) >= self.respawn_max:
             self._stopped_respawning = True
-            logger.error("compute host crash loop: max %s restarts per 5min reached; not respawning", self.respawn_max)
+            logger.error(
+                "compute host crash loop: max %s restarts per 5min reached; not respawning",
+                self.respawn_max,
+            )
             return
         self._restart_times.append(now)
         # Small bounded backoff; tests and first recovery stay quick.
@@ -520,7 +581,9 @@ class HostSupervisor:
     def _pid_matches_compute_host(self, pid: int) -> bool:
         return is_compute_host_identity(pid)
 
-    def _terminate_pid(self, pid: int, *, timeout: float = _SHUTDOWN_TIMEOUT_SECS) -> None:
+    def _terminate_pid(
+        self, pid: int, *, timeout: float = _SHUTDOWN_TIMEOUT_SECS
+    ) -> None:
         try:
             os.kill(pid, signal.SIGTERM)
         except ProcessLookupError:

@@ -92,12 +92,15 @@ def test_review_diff_shows_change_and_synthesizes_untracked(client, repo):
 
 
 def test_stage_commit_roundtrip_clears_changes(client, repo):
-    assert client.post("/api/git/review/stage", json={"path": str(repo), "file": "a.txt"}).json() == {"ok": True}
+    assert client.post(
+        "/api/git/review/stage", json={"path": str(repo), "file": "a.txt"}
+    ).json() == {"ok": True}
     staged = client.get("/api/git/status", params={"path": str(repo)}).json()
     assert staged["staged"] >= 1
 
     assert client.post(
-        "/api/git/review/commit", json={"path": str(repo), "message": "tracked change", "push": False}
+        "/api/git/review/commit",
+        json={"path": str(repo), "message": "tracked change", "push": False},
     ).json() == {"ok": True}
 
     after = client.get("/api/git/status", params={"path": str(repo)}).json()
@@ -108,14 +111,19 @@ def test_stage_commit_roundtrip_clears_changes(client, repo):
 
 def test_commit_with_nothing_staged_commits_all_changes(client, repo):
     assert client.post(
-        "/api/git/review/commit", json={"path": str(repo), "message": "commit all", "push": False}
+        "/api/git/review/commit",
+        json={"path": str(repo), "message": "commit all", "push": False},
     ).json() == {"ok": True}
 
-    assert client.get("/api/git/status", params={"path": str(repo)}).json()["changed"] == 0
+    assert (
+        client.get("/api/git/status", params={"path": str(repo)}).json()["changed"] == 0
+    )
 
 
 def test_worktrees_and_branch_lifecycle(client, repo):
-    worktrees = client.get("/api/git/worktrees", params={"path": str(repo)}).json()["worktrees"]
+    worktrees = client.get("/api/git/worktrees", params={"path": str(repo)}).json()[
+        "worktrees"
+    ]
     assert any(tree["isMain"] and tree["path"] == str(repo) for tree in worktrees)
 
     added = client.post(
@@ -124,11 +132,14 @@ def test_worktrees_and_branch_lifecycle(client, repo):
     assert added["branch"] == "feature/x"
     assert Path(added["path"]).is_dir()
 
-    branches = client.get("/api/git/branches", params={"path": str(repo)}).json()["branches"]
+    branches = client.get("/api/git/branches", params={"path": str(repo)}).json()[
+        "branches"
+    ]
     assert any(b["name"] == "feature/x" and b["checkedOut"] for b in branches)
 
     removed = client.post(
-        "/api/git/worktree/remove", json={"path": str(repo), "worktreePath": added["path"], "force": True}
+        "/api/git/worktree/remove",
+        json={"path": str(repo), "worktreePath": added["path"], "force": True},
     ).json()
     assert removed["removed"]
 
@@ -151,11 +162,15 @@ def test_worktree_add_initializes_plain_folder(client, tmp_path):
     assert status["branch"] == status["defaultBranch"]
     assert status["branch"]
     # Existing files are not silently committed by repo initialization.
-    assert any(file["path"] == "notes.txt" and file["untracked"] for file in status["files"])
+    assert any(
+        file["path"] == "notes.txt" and file["untracked"] for file in status["files"]
+    )
 
 
 def test_commit_context_includes_diff_and_untracked(client, repo):
-    body = client.get("/api/git/review/commit-context", params={"path": str(repo)}).json()
+    body = client.get(
+        "/api/git/review/commit-context", params={"path": str(repo)}
+    ).json()
 
     assert "+three" in body["diff"]
     assert "new.py" in body["diff"]  # untracked files listed since they carry no diff
@@ -164,7 +179,9 @@ def test_commit_context_includes_diff_and_untracked(client, repo):
 def test_ship_info_degrades_without_gh(client, repo, monkeypatch):
     monkeypatch.setattr(web_server._web_git.shutil, "which", lambda _name: None)
 
-    assert client.get("/api/git/review/ship-info", params={"path": str(repo)}).json() == {
+    assert client.get(
+        "/api/git/review/ship-info", params={"path": str(repo)}
+    ).json() == {
         "ghReady": False,
         "pr": None,
     }
@@ -174,4 +191,7 @@ def test_git_endpoints_require_auth(repo):
     unauth = TestClient(web_server.app)
 
     assert unauth.get("/api/git/status", params={"path": str(repo)}).status_code == 401
-    assert unauth.post("/api/git/review/stage", json={"path": str(repo)}).status_code == 401
+    assert (
+        unauth.post("/api/git/review/stage", json={"path": str(repo)}).status_code
+        == 401
+    )

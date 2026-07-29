@@ -65,9 +65,10 @@ def _wait_for_cont_init(container: str) -> None:
     last = ""
     while time.monotonic() < deadline:
         r = subprocess.run(
-            ["docker", "exec", container,
-             "cat", "/opt/data/logs/container-boot.log"],
-            capture_output=True, text=True, timeout=5,
+            ["docker", "exec", container, "cat", "/opt/data/logs/container-boot.log"],
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if r.returncode == 0:
             last = r.stdout
@@ -85,12 +86,23 @@ def sleep_container(built_image: str, container_name: str) -> Iterator[str]:
     """Long-lived container running `sleep infinity` so we can docker exec into it."""
     subprocess.run(
         ["docker", "rm", "-f", container_name],
-        capture_output=True, check=False,
+        capture_output=True,
+        check=False,
     )
     r = subprocess.run(
-        ["docker", "run", "-d", "--name", container_name, built_image,
-         "sleep", "infinity"],
-        capture_output=True, text=True, timeout=30,
+        [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            container_name,
+            built_image,
+            "sleep",
+            "infinity",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     assert r.returncode == 0, f"docker run failed: {r.stderr}"
     try:
@@ -99,7 +111,8 @@ def sleep_container(built_image: str, container_name: str) -> Iterator[str]:
     finally:
         subprocess.run(
             ["docker", "rm", "-f", container_name],
-            capture_output=True, check=False,
+            capture_output=True,
+            check=False,
         )
 
 
@@ -120,24 +133,54 @@ def test_shim_drops_root_to_clawk_uid(sleep_container: str) -> None:
     """
     # Wipe any prior state.
     subprocess.run(
-        ["docker", "exec", "--user", "root", sleep_container,
-         "rm", "-f", "/opt/data/config.yaml"],
-        capture_output=True, check=False,
+        [
+            "docker",
+            "exec",
+            "--user",
+            "root",
+            sleep_container,
+            "rm",
+            "-f",
+            "/opt/data/config.yaml",
+        ],
+        capture_output=True,
+        check=False,
     )
 
     # Default docker exec (root) — should be dropped by the shim.
     r = subprocess.run(
-        ["docker", "exec", sleep_container,
-         "clawk", "config", "set", "_test.shim_marker", "1"],
-        capture_output=True, text=True, timeout=30,
+        [
+            "docker",
+            "exec",
+            sleep_container,
+            "clawk",
+            "config",
+            "set",
+            "_test.shim_marker",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
-    assert r.returncode == 0, f"config set failed: stdout={r.stdout!r} stderr={r.stderr!r}"
+    assert r.returncode == 0, (
+        f"config set failed: stdout={r.stdout!r} stderr={r.stderr!r}"
+    )
 
     # The written file must be owned by clawk, not root.
     r = subprocess.run(
-        ["docker", "exec", sleep_container,
-         "stat", "-c", "%U:%G", "/opt/data/config.yaml"],
-        capture_output=True, text=True, timeout=10,
+        [
+            "docker",
+            "exec",
+            sleep_container,
+            "stat",
+            "-c",
+            "%U:%G",
+            "/opt/data/config.yaml",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert r.returncode == 0, f"stat failed: {r.stderr}"
     assert r.stdout.strip() == "clawk:clawk", (
@@ -155,15 +198,36 @@ def test_shim_short_circuits_for_non_root_exec(sleep_container: str) -> None:
     EPERM. A clean success proves the short-circuit fired.
     """
     subprocess.run(
-        ["docker", "exec", "--user", "root", sleep_container,
-         "rm", "-f", "/opt/data/config.yaml"],
-        capture_output=True, check=False,
+        [
+            "docker",
+            "exec",
+            "--user",
+            "root",
+            sleep_container,
+            "rm",
+            "-f",
+            "/opt/data/config.yaml",
+        ],
+        capture_output=True,
+        check=False,
     )
 
     r = subprocess.run(
-        ["docker", "exec", "--user", "clawk", sleep_container,
-         "clawk", "config", "set", "_test.shim_short_circuit", "1"],
-        capture_output=True, text=True, timeout=30,
+        [
+            "docker",
+            "exec",
+            "--user",
+            "clawk",
+            sleep_container,
+            "clawk",
+            "config",
+            "set",
+            "_test.shim_short_circuit",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     assert r.returncode == 0, (
         f"docker exec --user clawk failed: {r.stderr!r} stdout={r.stdout!r}. "
@@ -172,9 +236,18 @@ def test_shim_short_circuits_for_non_root_exec(sleep_container: str) -> None:
 
     # File still ends up clawk:clawk — orthogonally confirms uid.
     r = subprocess.run(
-        ["docker", "exec", sleep_container,
-         "stat", "-c", "%U:%G", "/opt/data/config.yaml"],
-        capture_output=True, text=True, timeout=10,
+        [
+            "docker",
+            "exec",
+            sleep_container,
+            "stat",
+            "-c",
+            "%U:%G",
+            "/opt/data/config.yaml",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert r.stdout.strip() == "clawk:clawk"
 
@@ -187,24 +260,52 @@ def test_shim_opt_out_keeps_root(sleep_container: str) -> None:
     owner.
     """
     subprocess.run(
-        ["docker", "exec", "--user", "root", sleep_container,
-         "rm", "-f", "/opt/data/config.yaml"],
-        capture_output=True, check=False,
+        [
+            "docker",
+            "exec",
+            "--user",
+            "root",
+            sleep_container,
+            "rm",
+            "-f",
+            "/opt/data/config.yaml",
+        ],
+        capture_output=True,
+        check=False,
     )
 
     r = subprocess.run(
-        ["docker", "exec",
-         "-e", "CLAWK_DOCKER_EXEC_AS_ROOT=1",
-         sleep_container,
-         "clawk", "config", "set", "_test.opt_out", "1"],
-        capture_output=True, text=True, timeout=30,
+        [
+            "docker",
+            "exec",
+            "-e",
+            "CLAWK_DOCKER_EXEC_AS_ROOT=1",
+            sleep_container,
+            "clawk",
+            "config",
+            "set",
+            "_test.opt_out",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     assert r.returncode == 0, f"opt-out invocation failed: {r.stderr}"
 
     r = subprocess.run(
-        ["docker", "exec", sleep_container,
-         "stat", "-c", "%U:%G", "/opt/data/config.yaml"],
-        capture_output=True, text=True, timeout=10,
+        [
+            "docker",
+            "exec",
+            sleep_container,
+            "stat",
+            "-c",
+            "%U:%G",
+            "/opt/data/config.yaml",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert r.stdout.strip() == "root:root", (
         f"With CLAWK_DOCKER_EXEC_AS_ROOT=1, expected root:root, "
@@ -214,7 +315,8 @@ def test_shim_opt_out_keeps_root(sleep_container: str) -> None:
 
 @pytest.mark.parametrize("falsy_value", ["0", "false", "no", "", "garbage", "2"])
 def test_shim_opt_out_strict_truthiness(
-    sleep_container: str, falsy_value: str,
+    sleep_container: str,
+    falsy_value: str,
 ) -> None:
     """Anything other than 1/true/yes (case-insensitive) does NOT opt out.
 
@@ -223,24 +325,52 @@ def test_shim_opt_out_strict_truthiness(
     ``CLAWK_GATEWAY_NO_SUPERVISE`` in #33583.
     """
     subprocess.run(
-        ["docker", "exec", "--user", "root", sleep_container,
-         "rm", "-f", "/opt/data/config.yaml"],
-        capture_output=True, check=False,
+        [
+            "docker",
+            "exec",
+            "--user",
+            "root",
+            sleep_container,
+            "rm",
+            "-f",
+            "/opt/data/config.yaml",
+        ],
+        capture_output=True,
+        check=False,
     )
 
     r = subprocess.run(
-        ["docker", "exec",
-         "-e", f"CLAWK_DOCKER_EXEC_AS_ROOT={falsy_value}",
-         sleep_container,
-         "clawk", "config", "set", "_test.falsy", "1"],
-        capture_output=True, text=True, timeout=30,
+        [
+            "docker",
+            "exec",
+            "-e",
+            f"CLAWK_DOCKER_EXEC_AS_ROOT={falsy_value}",
+            sleep_container,
+            "clawk",
+            "config",
+            "set",
+            "_test.falsy",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     assert r.returncode == 0, f"falsy value {falsy_value!r} caused failure: {r.stderr}"
 
     r = subprocess.run(
-        ["docker", "exec", sleep_container,
-         "stat", "-c", "%U:%G", "/opt/data/config.yaml"],
-        capture_output=True, text=True, timeout=10,
+        [
+            "docker",
+            "exec",
+            sleep_container,
+            "stat",
+            "-c",
+            "%U:%G",
+            "/opt/data/config.yaml",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert r.stdout.strip() == "clawk:clawk", (
         f"falsy opt-out value {falsy_value!r} unexpectedly suppressed the drop; "
@@ -264,7 +394,9 @@ def test_main_cmd_path_unaffected(built_image: str) -> None:
     """
     r = subprocess.run(
         ["docker", "run", "--rm", built_image, "chat", "--help"],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
     assert r.returncode == 0, f"CMD path broken by shim: stderr={r.stderr!r}"
     assert "Traceback" not in r.stderr
@@ -299,19 +431,44 @@ def test_e2e_login_then_supervised_gateway_can_read_auth(
     # provoke a write into CLAWK_HOME so we have something concrete to
     # owner-check.
     r = subprocess.run(
-        ["docker", "exec", sleep_container,
-         "clawk", "config", "set", "_test.e2e_marker", "1"],
-        capture_output=True, text=True, timeout=30,
+        [
+            "docker",
+            "exec",
+            sleep_container,
+            "clawk",
+            "config",
+            "set",
+            "_test.e2e_marker",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     assert r.returncode == 0, f"config set failed: {r.stderr}"
 
     # The supervised UID (10000) must be able to read everything under
     # CLAWK_HOME that docker exec just wrote.
     r = subprocess.run(
-        ["docker", "exec", "--user", "clawk", sleep_container,
-         "find", "/opt/data", "-maxdepth", "2", "-type", "f",
-         "!", "-readable", "-print"],
-        capture_output=True, text=True, timeout=15,
+        [
+            "docker",
+            "exec",
+            "--user",
+            "clawk",
+            sleep_container,
+            "find",
+            "/opt/data",
+            "-maxdepth",
+            "2",
+            "-type",
+            "f",
+            "!",
+            "-readable",
+            "-print",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=15,
     )
     assert r.returncode == 0, f"find failed: {r.stderr}"
     unreadable = [ln for ln in r.stdout.splitlines() if ln.strip()]

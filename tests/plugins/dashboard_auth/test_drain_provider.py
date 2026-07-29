@@ -6,6 +6,7 @@ Task 2.0b. Loads the bundled drain plugin module directly and exercises:
   * the register(ctx) entry point's env/config resolution, skip reasons, and
     token-route registration.
 """
+
 from __future__ import annotations
 
 import secrets

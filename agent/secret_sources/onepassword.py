@@ -126,9 +126,7 @@ def _disk_key_str(cache_key: _CacheKey) -> str:
     return f"{auth_fp}|{account}|{refs_fp}"
 
 
-_DISK_CACHE: DiskCache = DiskCache(
-    _DISK_CACHE_BASENAME, key_serializer=_disk_key_str
-)
+_DISK_CACHE: DiskCache = DiskCache(_DISK_CACHE_BASENAME, key_serializer=_disk_key_str)
 
 
 def _disk_cache_path(home_path: Optional[Path] = None) -> Path:
@@ -288,9 +286,7 @@ def _run_op_read(
         err = _scrub(proc.stderr or "")[:200]
         if err:
             raise RuntimeError(f"op read failed for {reference!r}: {err}")
-        raise RuntimeError(
-            f"op read exited {proc.returncode} for {reference!r}"
-        )
+        raise RuntimeError(f"op read exited {proc.returncode} for {reference!r}")
 
     # `op` appends a trailing newline; strip only that so a value with
     # intentional internal/edge spaces survives.  But a value that is empty or
@@ -528,7 +524,7 @@ class OnePasswordSource(SecretSource):
             },
             "service_account_token_env": {
                 "description": "Env var holding the service-account token "
-                               "(unset = desktop/interactive session)",
+                "(unset = desktop/interactive session)",
                 "default": _DEFAULT_TOKEN_ENV,
             },
             "binary_path": {
@@ -613,17 +609,27 @@ def _classify_op_error(message: str) -> ErrorKind:
     lowered = message.lower()
     if "timed out" in lowered:
         return ErrorKind.TIMEOUT
-    if "not found on path" in lowered or "not an executable" in lowered \
-            or "failed to invoke" in lowered:
+    if (
+        "not found on path" in lowered
+        or "not an executable" in lowered
+        or "failed to invoke" in lowered
+    ):
         return ErrorKind.BINARY_MISSING
-    if any(tok in lowered for tok in ("unauthorized", "not signed in",
-                                      "session expired", "authentication",
-                                      "401", "403")):
+    if any(
+        tok in lowered
+        for tok in (
+            "unauthorized",
+            "not signed in",
+            "session expired",
+            "authentication",
+            "401",
+            "403",
+        )
+    ):
         return ErrorKind.AUTH_FAILED
     if "empty value" in lowered:
         return ErrorKind.EMPTY_VALUE
-    if any(tok in lowered for tok in ("network", "connection", "resolve host",
-                                      "dns")):
+    if any(tok in lowered for tok in ("network", "connection", "resolve host", "dns")):
         return ErrorKind.NETWORK
     return ErrorKind.INTERNAL
 

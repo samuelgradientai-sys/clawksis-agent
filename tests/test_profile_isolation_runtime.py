@@ -51,6 +51,7 @@ def _under_override(home: Path, fn):
 # M1 — import-time path globals / direct os.environ reads
 # ---------------------------------------------------------------------------
 
+
 class TestSkillsHubPathResolution:
     """tools/skills_hub.py path constants must reflect the active profile."""
 
@@ -115,9 +116,13 @@ class TestGatewayCacheDirResolution:
         )
         for getter in getters:
             seen = _under_override(prof_b, getter)
-            assert str(seen).startswith(str(prof_b)), f"{getter.__name__} leaked: {seen}"
+            assert str(seen).startswith(str(prof_b)), (
+                f"{getter.__name__} leaked: {seen}"
+            )
 
-    def test_monkeypatched_constant_still_wins(self, two_profiles, monkeypatch, tmp_path):
+    def test_monkeypatched_constant_still_wins(
+        self, two_profiles, monkeypatch, tmp_path
+    ):
         """The existing test seam (monkeypatch the module constant) is preserved."""
         _prof_a, _prof_b = two_profiles
         import gateway.platforms.base as gb
@@ -146,6 +151,7 @@ class TestRichSentStorePathResolution:
 # ---------------------------------------------------------------------------
 # M2 — thread / executor context propagation
 # ---------------------------------------------------------------------------
+
 
 class TestThreadContextPropagation:
     """Worker threads must inherit the spawning turn's profile override."""

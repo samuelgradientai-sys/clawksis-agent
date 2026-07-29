@@ -62,10 +62,22 @@ def _make_history_with_confirmation(
     gateway/run.py:11616, 11650, 11692, etc).
     """
     return [
-        {"role": "user", "content": "can you force a restart?", "timestamp": user_message_at},
-        {"role": "assistant", "content": "Rebooting the host is dangerous. To confirm, please type: 'confirm forced restart'", "timestamp": assistant_warning_at},
+        {
+            "role": "user",
+            "content": "can you force a restart?",
+            "timestamp": user_message_at,
+        },
+        {
+            "role": "assistant",
+            "content": "Rebooting the host is dangerous. To confirm, please type: 'confirm forced restart'",
+            "timestamp": assistant_warning_at,
+        },
         {"role": "user", "content": confirmation_message, "timestamp": confirmation_at},
-        {"role": "assistant", "content": "OK, restarting now.", "timestamp": assistant_action_at},
+        {
+            "role": "assistant",
+            "content": "OK, restarting now.",
+            "timestamp": assistant_action_at,
+        },
     ]
 
 
@@ -135,11 +147,19 @@ def test_non_confirmation_text_is_preserved():
     """A regular user message is never treated as a confirmation."""
     current_time = time.time()
     user_message_at = current_time - 1000  # 17 min ago
-    confirmation_at = current_time - 300   # 5 min ago
+    confirmation_at = current_time - 300  # 5 min ago
 
     history = [
-        {"role": "user", "content": "can you help me with the docs?", "timestamp": user_message_at},
-        {"role": "assistant", "content": "Sure, what do you need?", "timestamp": confirmation_at},
+        {
+            "role": "user",
+            "content": "can you help me with the docs?",
+            "timestamp": user_message_at,
+        },
+        {
+            "role": "assistant",
+            "content": "Sure, what do you need?",
+            "timestamp": confirmation_at,
+        },
     ]
 
     agent_history, _ = _build_gateway_agent_history(history)
@@ -157,7 +177,11 @@ def test_no_dangerous_pattern_at_all_preserves_everything():
 
     history = [
         {"role": "user", "content": "tell me a joke", "timestamp": user_message_at},
-        {"role": "assistant", "content": "Why did the chicken cross the road?", "timestamp": user_message_at + 1},
+        {
+            "role": "assistant",
+            "content": "Why did the chicken cross the road?",
+            "timestamp": user_message_at + 1,
+        },
         {"role": "user", "content": "haha", "timestamp": user_message_at + 2},
     ]
 
@@ -187,8 +211,11 @@ def test_strip_stale_dangerous_confirmations_directly():
     )
     # The original user question and the assistant responses stay
     assert any("can you force a restart" in (m.get("content") or "") for m in cleaned)
-    assert any("Rebooting the host is dangerous" in (m.get("content") or "") for m in cleaned)
+    assert any(
+        "Rebooting the host is dangerous" in (m.get("content") or "") for m in cleaned
+    )
     assert any("OK, restarting now" in (m.get("content") or "") for m in cleaned)
+
 
 def test_redaction_preserves_role_alternation():
     """Expiry must redact in place, never delete the user message.

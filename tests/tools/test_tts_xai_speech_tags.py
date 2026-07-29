@@ -80,9 +80,7 @@ def test_apply_xai_auto_speech_tags_single_newline_still_gets_first_sentence_pau
     )
 
 
-def test_generate_xai_tts_sends_auxiliary_rewriter_output_to_api(
-    tmp_path, monkeypatch
-):
+def test_generate_xai_tts_sends_auxiliary_rewriter_output_to_api(tmp_path, monkeypatch):
     """auto_speech_tags=True should send the auxiliary rewriter's tagged
     output (not the conservative local pause fallback) to the xAI TTS API.
 
@@ -162,13 +160,9 @@ def test_auto_speech_tags_calls_auxiliary_rewriter_with_tts_audio_tags_task():
     # comma-separated in two example lines ("Valid inline tags (use as
     # `[tag]`): pause, long-pause, ..." and a similar line for wrapping).
     for tag in _XAI_INLINE_SPEECH_TAGS:
-        assert tag in system_prompt, (
-            f"inline tag {tag!r} missing from system prompt"
-        )
+        assert tag in system_prompt, f"inline tag {tag!r} missing from system prompt"
     for tag in _XAI_WRAPPING_SPEECH_TAGS:
-        assert tag in system_prompt, (
-            f"wrapping tag {tag!r} missing from system prompt"
-        )
+        assert tag in system_prompt, f"wrapping tag {tag!r} missing from system prompt"
     # The prompt must explicitly show the BBCode-style closing syntax so
     # the rewriter uses [/tag] and not <tag>...</tag>.
     assert "[/tag]" in system_prompt
@@ -218,9 +212,12 @@ def test_auto_speech_tags_falls_back_to_local_on_auxiliary_exception(caplog):
     """
     import logging
 
-    with caplog.at_level(logging.DEBUG, logger="tools.tts_tool"), patch(
-        "agent.auxiliary_client.call_llm",
-        side_effect=RuntimeError("upstream provider timed out"),
+    with (
+        caplog.at_level(logging.DEBUG, logger="tools.tts_tool"),
+        patch(
+            "agent.auxiliary_client.call_llm",
+            side_effect=RuntimeError("upstream provider timed out"),
+        ),
     ):
         result = _apply_xai_auto_speech_tags(
             "Bonjour Monsieur Talbot. Ceci est un test de réponse vocale."
@@ -240,9 +237,7 @@ def test_auto_speech_tags_falls_back_to_local_when_rewriter_returns_empty():
         choices=[SimpleNamespace(message=SimpleNamespace(content=""))]
     )
 
-    with patch(
-        "agent.auxiliary_client.call_llm", return_value=empty_response
-    ):
+    with patch("agent.auxiliary_client.call_llm", return_value=empty_response):
         result = _apply_xai_auto_speech_tags(
             "Bonjour Monsieur Talbot. Ceci est un test de réponse vocale."
         )
@@ -291,9 +286,7 @@ def test_auto_speech_tags_falls_back_to_local_on_malformed_rewriter_response(
     """Both ``None`` and a response with no choices must fall back to the
     conservative local pass rather than crash.
     """
-    with patch(
-        "agent.auxiliary_client.call_llm", return_value=bad_response
-    ):
+    with patch("agent.auxiliary_client.call_llm", return_value=bad_response):
         result = _apply_xai_auto_speech_tags(
             "Bonjour Monsieur Talbot. Ceci est un test de réponse vocale."
         )
@@ -434,7 +427,9 @@ def test_generate_xai_tts_omits_speed_when_exactly_default(tmp_path, monkeypatch
     assert "speed" not in captured["json"]
 
 
-def test_generate_xai_tts_sends_optimize_streaming_latency_when_set(tmp_path, monkeypatch):
+def test_generate_xai_tts_sends_optimize_streaming_latency_when_set(
+    tmp_path, monkeypatch
+):
     """tts.xai.optimize_streaming_latency flows into the POST body."""
     captured = {}
 
@@ -458,7 +453,9 @@ def test_generate_xai_tts_sends_optimize_streaming_latency_when_set(tmp_path, mo
     assert captured["json"]["optimize_streaming_latency"] == 2
 
 
-def test_generate_xai_tts_optimize_streaming_latency_omitted_at_default(tmp_path, monkeypatch):
+def test_generate_xai_tts_optimize_streaming_latency_omitted_at_default(
+    tmp_path, monkeypatch
+):
     """optimize_streaming_latency == 0 is the API default; field is not sent."""
     captured = {}
 

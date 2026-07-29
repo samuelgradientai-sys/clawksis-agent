@@ -21,7 +21,10 @@ from unittest.mock import patch
 
 import pytest
 
-from agent.auxiliary_client import _fallback_entry_timeout, _call_fallback_candidate_sync
+from agent.auxiliary_client import (
+    _fallback_entry_timeout,
+    _call_fallback_candidate_sync,
+)
 from agent.context_compressor import ContextCompressor
 
 
@@ -43,9 +46,14 @@ def test_entry_timeout_resolved_from_configured_chain():
         {"provider": "openrouter"},
     ]
     with _patch_task_config(chain):
-        assert _fallback_entry_timeout("compression", "fallback_chain[0](custom)") == 240.0
+        assert (
+            _fallback_entry_timeout("compression", "fallback_chain[0](custom)") == 240.0
+        )
         # Entry without a timeout → None (keep task-level).
-        assert _fallback_entry_timeout("compression", "fallback_chain[1](openrouter)") is None
+        assert (
+            _fallback_entry_timeout("compression", "fallback_chain[1](openrouter)")
+            is None
+        )
 
 
 def test_entry_timeout_ignores_non_chain_labels_and_bad_values():
@@ -56,7 +64,9 @@ def test_entry_timeout_ignores_non_chain_labels_and_bad_values():
         assert _fallback_entry_timeout("compression", "") is None
         assert _fallback_entry_timeout(None, "fallback_chain[0](custom)") is None
         # Invalid timeout value → None.
-        assert _fallback_entry_timeout("compression", "fallback_chain[0](custom)") is None
+        assert (
+            _fallback_entry_timeout("compression", "fallback_chain[0](custom)") is None
+        )
     # Out-of-range index → None, never raises.
     with _patch_task_config([]):
         assert _fallback_entry_timeout("compression", "fallback_chain[5](x)") is None
@@ -84,11 +94,17 @@ def test_fallback_candidate_call_uses_entry_timeout():
     chain = [{"provider": "custom", "timeout": 240}]
     with _patch_task_config(chain):
         resp = _call_fallback_candidate_sync(
-            fb_client, "deepseek-v4-flash", "fallback_chain[0](custom)",
-            task="compression", messages=[{"role": "user", "content": "hi"}],
-            temperature=None, max_tokens=None, tools=None,
+            fb_client,
+            "deepseek-v4-flash",
+            "fallback_chain[0](custom)",
+            task="compression",
+            messages=[{"role": "user", "content": "hi"}],
+            temperature=None,
+            max_tokens=None,
+            tools=None,
             effective_timeout=30.0,  # the primary's burned budget
-            effective_extra_body={}, reasoning_config=None,
+            effective_extra_body={},
+            reasoning_config=None,
         )
     assert resp is not None
     assert seen.get("timeout") == 240.0
@@ -110,11 +126,17 @@ def test_fallback_candidate_without_entry_timeout_keeps_task_timeout():
     )
     with _patch_task_config([{"provider": "custom"}]):
         _call_fallback_candidate_sync(
-            fb_client, "m", "fallback_chain[0](custom)",
-            task="compression", messages=[{"role": "user", "content": "hi"}],
-            temperature=None, max_tokens=None, tools=None,
+            fb_client,
+            "m",
+            "fallback_chain[0](custom)",
+            task="compression",
+            messages=[{"role": "user", "content": "hi"}],
+            temperature=None,
+            max_tokens=None,
+            tools=None,
             effective_timeout=300.0,
-            effective_extra_body={}, reasoning_config=None,
+            effective_extra_body={},
+            reasoning_config=None,
         )
     assert seen.get("timeout") == 300.0
 
@@ -125,7 +147,9 @@ def test_fallback_candidate_without_entry_timeout_keeps_task_timeout():
 
 
 def _make_compressor():
-    with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+    with patch(
+        "agent.context_compressor.get_model_context_length", return_value=100000
+    ):
         return ContextCompressor(model="main-model", quiet_mode=True)
 
 
@@ -138,10 +162,13 @@ def _msgs():
 
 
 def _fail_with_timeout(compressor, now):
-    with patch(
-        "agent.context_compressor.call_llm",
-        side_effect=TimeoutError("Request timed out."),
-    ), patch("agent.context_compressor.time.monotonic", return_value=now):
+    with (
+        patch(
+            "agent.context_compressor.call_llm",
+            side_effect=TimeoutError("Request timed out."),
+        ),
+        patch("agent.context_compressor.time.monotonic", return_value=now),
+    ):
         return compressor._generate_summary(_msgs())
 
 
@@ -181,10 +208,13 @@ def test_non_timeout_transient_errors_keep_flat_cooldown():
     """Rate-limit / generic connection errors keep the flat 60s cooldown —
     escalation is scoped to timeout-class failures only."""
     c = _make_compressor()
-    with patch(
-        "agent.context_compressor.call_llm",
-        side_effect=RuntimeError("rate limit exceeded"),
-    ), patch("agent.context_compressor.time.monotonic", return_value=1000.0):
+    with (
+        patch(
+            "agent.context_compressor.call_llm",
+            side_effect=RuntimeError("rate limit exceeded"),
+        ),
+        patch("agent.context_compressor.time.monotonic", return_value=1000.0),
+    ):
         assert c._generate_summary(_msgs()) is None
     assert c._summary_failure_cooldown_until == 1000.0 + 60
 

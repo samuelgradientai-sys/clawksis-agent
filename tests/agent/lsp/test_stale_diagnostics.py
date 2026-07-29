@@ -17,6 +17,7 @@ The contract under test:
 - A slow-but-eventually-correct server ("slow_push") is waited on,
   honouring the configured ``lsp.wait_timeout``.
 """
+
 from __future__ import annotations
 
 import os
@@ -61,13 +62,17 @@ async def test_stale_push_does_not_satisfy_wait(tmp_path: Path):
     await client.start()
     try:
         v0 = await client.open_file(str(f), language_id="python")
-        assert await client.wait_for_diagnostics(str(f), v0, mode="document", timeout=2.0)
+        assert await client.wait_for_diagnostics(
+            str(f), v0, mode="document", timeout=2.0
+        )
         assert len(client.diagnostics_for(str(f))) == 1  # pre-edit error is real
 
         # Fix the file.  The stale server never re-checks.
         f.write_text("good code\n")
         v1 = await client.open_file(str(f), language_id="python")
-        fresh = await client.wait_for_diagnostics(str(f), v1, mode="document", timeout=1.0)
+        fresh = await client.wait_for_diagnostics(
+            str(f), v1, mode="document", timeout=1.0
+        )
         assert fresh is False, "wait must not be satisfied by pre-edit leftovers"
     finally:
         await client.shutdown()
@@ -105,12 +110,16 @@ async def test_slow_push_is_waited_for(tmp_path: Path):
     await client.start()
     try:
         v0 = await client.open_file(str(f), language_id="python")
-        assert await client.wait_for_diagnostics(str(f), v0, mode="document", timeout=2.0)
+        assert await client.wait_for_diagnostics(
+            str(f), v0, mode="document", timeout=2.0
+        )
         assert len(client.diagnostics_for(str(f), fresh_only=True)) == 1
 
         f.write_text("good code\n")
         v1 = await client.open_file(str(f), language_id="python")
-        fresh = await client.wait_for_diagnostics(str(f), v1, mode="document", timeout=5.0)
+        fresh = await client.wait_for_diagnostics(
+            str(f), v1, mode="document", timeout=5.0
+        )
         assert fresh is True, "slow push within budget must satisfy the wait"
         assert client.diagnostics_for(str(f), fresh_only=True) == []
     finally:
@@ -135,7 +144,9 @@ async def test_wait_timeout_param_overrides_mode_budget(tmp_path: Path):
 
         loop = asyncio.get_event_loop()
         start = loop.time()
-        fresh = await client.wait_for_diagnostics(str(f), v1, mode="document", timeout=0.5)
+        fresh = await client.wait_for_diagnostics(
+            str(f), v1, mode="document", timeout=0.5
+        )
         elapsed = loop.time() - start
         assert fresh is False
         # Must respect ~0.5s, not the 5s document default.

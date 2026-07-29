@@ -28,7 +28,9 @@ def test_catalog_has_no_providers_outside_clawk_model():
     """The catalog must not invent providers `clawk model` doesn't show."""
     canonical = {e.slug for e in CANONICAL_PROVIDERS}
     for d in provider_catalog():
-        assert d.slug in canonical, f"{d.slug} in catalog but not in CANONICAL_PROVIDERS"
+        assert d.slug in canonical, (
+            f"{d.slug} in catalog but not in CANONICAL_PROVIDERS"
+        )
 
 
 def test_every_descriptor_lands_on_exactly_one_known_tab():

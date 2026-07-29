@@ -44,14 +44,12 @@ def _run_ddgs_search(query: str, safe_limit: int) -> list[dict[str, Any]]:
             if i >= safe_limit:
                 break
             url = str(hit.get("href") or hit.get("url") or "")
-            results.append(
-                {
-                    "title": str(hit.get("title", "")),
-                    "url": url,
-                    "description": str(hit.get("body", "")),
-                    "position": i + 1,
-                }
-            )
+            results.append({
+                "title": str(hit.get("title", "")),
+                "url": url,
+                "description": str(hit.get("body", "")),
+                "position": i + 1,
+            })
     return results
 
 
@@ -142,7 +140,8 @@ class DDGSWebSearchProvider(WebSearchProvider):
             except _cf.TimeoutError:
                 logger.warning(
                     "DDGS search timed out after %ds for query: %r",
-                    _SEARCH_TIMEOUT_SECS, query,
+                    _SEARCH_TIMEOUT_SECS,
+                    query,
                 )
                 return {
                     "success": False,
@@ -162,7 +161,9 @@ class DDGSWebSearchProvider(WebSearchProvider):
             # on its own; it writes nothing shared, so leaking it is safe.
             pool.shutdown(wait=False, cancel_futures=True)
 
-        logger.info("DDGS search '%s': %d results (limit %d)", query, len(web_results), limit)
+        logger.info(
+            "DDGS search '%s': %d results (limit %d)", query, len(web_results), limit
+        )
         return {"success": True, "data": {"web": web_results}}
 
     def get_setup_schema(self) -> Dict[str, Any]:

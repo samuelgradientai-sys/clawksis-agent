@@ -55,7 +55,9 @@ def test_docker_environment_adds_network_none_when_disabled(monkeypatch):
 
     monkeypatch.setattr(docker_env, "find_docker", lambda: "/usr/bin/docker")
     monkeypatch.setattr(docker_env.subprocess, "run", fake_run)
-    monkeypatch.setattr(docker_env.DockerEnvironment, "_storage_opt_supported", lambda self: False)
+    monkeypatch.setattr(
+        docker_env.DockerEnvironment, "_storage_opt_supported", lambda self: False
+    )
 
     env = docker_env.DockerEnvironment(
         image="python:3.11",
@@ -65,7 +67,9 @@ def test_docker_environment_adds_network_none_when_disabled(monkeypatch):
         network=False,
     )
 
-    run_cmd = next(cmd for cmd in commands if len(cmd) > 2 and cmd[1:3] == ["run", "-d"])
+    run_cmd = next(
+        cmd for cmd in commands if len(cmd) > 2 and cmd[1:3] == ["run", "-d"]
+    )
     assert "--network=none" in run_cmd
     env.cleanup()
 
@@ -110,7 +114,9 @@ def test_sibling_container_config_sites_carry_docker_network():
                     f"docker_run_as_host_user but without docker_network "
                     f"(line {node.lineno})"
                 )
-        assert sites >= 1, f"expected at least one container_config site in {module.__name__}"
+        assert sites >= 1, (
+            f"expected at least one container_config site in {module.__name__}"
+        )
 
 
 def _reuse_guard_harness(monkeypatch, *, existing_mode: str, network: bool):
@@ -139,7 +145,9 @@ def _reuse_guard_harness(monkeypatch, *, existing_mode: str, network: bool):
 
     monkeypatch.setattr(docker_env, "find_docker", lambda: "/usr/bin/docker")
     monkeypatch.setattr(docker_env.subprocess, "run", fake_run)
-    monkeypatch.setattr(docker_env.DockerEnvironment, "_storage_opt_supported", lambda self: False)
+    monkeypatch.setattr(
+        docker_env.DockerEnvironment, "_storage_opt_supported", lambda self: False
+    )
 
     docker_env.DockerEnvironment(
         image="python:3.11",
@@ -158,7 +166,9 @@ def test_reuse_rejects_networked_container_when_lockdown_requested(monkeypatch):
     assert any(cmd[1:3] == ["rm", "-f"] for cmd in commands), (
         "bridge-networked container must be removed when docker_network=false"
     )
-    run_cmd = next(cmd for cmd in commands if len(cmd) > 2 and cmd[1:3] == ["run", "-d"])
+    run_cmd = next(
+        cmd for cmd in commands if len(cmd) > 2 and cmd[1:3] == ["run", "-d"]
+    )
     assert "--network=none" in run_cmd
 
 
@@ -166,7 +176,9 @@ def test_reuse_keeps_airgapped_container_when_lockdown_requested(monkeypatch):
     commands = _reuse_guard_harness(monkeypatch, existing_mode="none", network=False)
 
     assert not any(cmd[1] == "rm" for cmd in commands)
-    assert not any(cmd[1] == "run" for cmd in commands), "matching container must be reused"
+    assert not any(cmd[1] == "run" for cmd in commands), (
+        "matching container must be reused"
+    )
 
 
 def test_reuse_skips_inspect_when_network_enabled(monkeypatch):

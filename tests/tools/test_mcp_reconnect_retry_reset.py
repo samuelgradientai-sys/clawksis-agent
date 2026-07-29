@@ -107,8 +107,7 @@ def test_reconnect_counter_resets_after_successful_session(monkeypatch, tmp_path
             f"— retry counter accumulated instead of resetting"
         )
         assert state["transport_calls"] >= 8, (
-            f"only {state['transport_calls']} transport calls reached "
-            f"(expected >= 8)"
+            f"only {state['transport_calls']} transport calls reached (expected >= 8)"
         )
 
         # Verify the counter is an instance variable, not a local.

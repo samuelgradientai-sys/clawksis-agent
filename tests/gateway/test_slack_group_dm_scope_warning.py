@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 # Mock slack-bolt if not installed (same pattern as test_slack_mention.py)
 # ---------------------------------------------------------------------------
 
+
 def _ensure_slack_mock():
     if "slack_bolt" in sys.modules and hasattr(sys.modules["slack_bolt"], "__file__"):
         return
@@ -34,8 +35,10 @@ def _ensure_slack_mock():
         ("slack_bolt.async_app", slack_bolt.async_app),
         ("slack_bolt.adapter", slack_bolt.adapter),
         ("slack_bolt.adapter.socket_mode", slack_bolt.adapter.socket_mode),
-        ("slack_bolt.adapter.socket_mode.async_handler",
-         slack_bolt.adapter.socket_mode.async_handler),
+        (
+            "slack_bolt.adapter.socket_mode.async_handler",
+            slack_bolt.adapter.socket_mode.async_handler,
+        ),
         ("slack_sdk", slack_sdk),
         ("slack_sdk.web", slack_sdk.web),
         ("slack_sdk.web.async_client", slack_sdk.web.async_client),
@@ -46,6 +49,7 @@ def _ensure_slack_mock():
 _ensure_slack_mock()
 
 import plugins.platforms.slack.adapter as _slack_mod  # noqa: E402
+
 _slack_mod.SLACK_AVAILABLE = True
 
 from plugins.platforms.slack.adapter import SlackAdapter  # noqa: E402
@@ -68,8 +72,9 @@ def test_warns_when_mpim_history_missing(caplog):
     resp = _FakeAuthResponse("chat:write,im:history,im:read,channels:history")
     with caplog.at_level(logging.WARNING):
         adapter._warn_if_missing_group_dm_scopes(resp, "Acme")
-    assert any("Group DMs" in r.message and "mpim:history" in r.message
-               for r in caplog.records)
+    assert any(
+        "Group DMs" in r.message and "mpim:history" in r.message for r in caplog.records
+    )
 
 
 def test_no_warning_when_mpim_history_present(caplog):

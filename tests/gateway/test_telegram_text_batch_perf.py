@@ -57,15 +57,25 @@ class TestEnvFloatClamped:
 
     def test_clamps_below_min(self, monkeypatch):
         monkeypatch.setenv("CLAWK_TEST_VAR", "0.01")
-        assert TelegramAdapter._env_float_clamped(
-            "CLAWK_TEST_VAR", 0.5, min_value=0.1,
-        ) == 0.1
+        assert (
+            TelegramAdapter._env_float_clamped(
+                "CLAWK_TEST_VAR",
+                0.5,
+                min_value=0.1,
+            )
+            == 0.1
+        )
 
     def test_clamps_above_max(self, monkeypatch):
         monkeypatch.setenv("CLAWK_TEST_VAR", "10.0")
-        assert TelegramAdapter._env_float_clamped(
-            "CLAWK_TEST_VAR", 0.5, max_value=2.0,
-        ) == 2.0
+        assert (
+            TelegramAdapter._env_float_clamped(
+                "CLAWK_TEST_VAR",
+                0.5,
+                max_value=2.0,
+            )
+            == 2.0
+        )
 
 
 class TestAdaptiveTextBatchTiers:
@@ -76,8 +86,13 @@ class TestAdaptiveTextBatchTiers:
     def test_class_constants_are_sensible(self):
         """Sanity check that the tier constants form a non-overlapping
         ascending ladder."""
-        assert TelegramAdapter._TEXT_BATCH_FAST_LEN < TelegramAdapter._TEXT_BATCH_SHORT_LEN
-        assert TelegramAdapter._TEXT_BATCH_FAST_DELAY_S < TelegramAdapter._TEXT_BATCH_SHORT_DELAY_S
+        assert (
+            TelegramAdapter._TEXT_BATCH_FAST_LEN < TelegramAdapter._TEXT_BATCH_SHORT_LEN
+        )
+        assert (
+            TelegramAdapter._TEXT_BATCH_FAST_DELAY_S
+            < TelegramAdapter._TEXT_BATCH_SHORT_DELAY_S
+        )
         assert TelegramAdapter._TEXT_BATCH_FAST_DELAY_S > 0
         assert TelegramAdapter._TEXT_BATCH_SHORT_DELAY_S > 0
 

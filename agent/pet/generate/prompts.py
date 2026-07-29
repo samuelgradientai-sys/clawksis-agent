@@ -115,7 +115,9 @@ BASE_VARIATIONS: tuple[str, ...] = (
 )
 
 
-def build_base_prompt(concept: str, *, style: str | None = "auto", variation: str = "") -> str:
+def build_base_prompt(
+    concept: str, *, style: str | None = "auto", variation: str = ""
+) -> str:
     """The base look: a single, clean, centered full-body mascot.
 
     *variation* differentiates one draft from the next (see :data:`BASE_VARIATIONS`).
@@ -137,7 +139,9 @@ def build_base_prompt(concept: str, *, style: str | None = "auto", variation: st
     )
 
 
-def build_row_prompt(state: str, frame_count: int, concept: str, *, style: str | None = "auto") -> str:
+def build_row_prompt(
+    state: str, frame_count: int, concept: str, *, style: str | None = "auto"
+) -> str:
     """A row strip: *frame_count* poses of the SAME character, left→right.
 
     The attached base image is the identity source of truth; the prompt locks

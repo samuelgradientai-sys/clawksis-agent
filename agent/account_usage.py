@@ -9,7 +9,11 @@ from typing import TYPE_CHECKING, Any, Optional
 import httpx
 
 from agent.anthropic_adapter import _is_oauth_token, resolve_anthropic_token
-from clawk_cli.auth import AuthError, _read_codex_tokens, resolve_codex_runtime_credentials
+from clawk_cli.auth import (
+    AuthError,
+    _read_codex_tokens,
+    resolve_codex_runtime_credentials,
+)
 from clawk_cli.runtime_provider import resolve_runtime_provider
 
 if TYPE_CHECKING:
@@ -92,7 +96,9 @@ def _format_reset(dt: Optional[datetime]) -> str:
     return f"{rel} ({local_dt.strftime('%Y-%m-%d %H:%M %Z')})"
 
 
-def render_account_usage_lines(snapshot: Optional[AccountUsageSnapshot], *, markdown: bool = False) -> list[str]:
+def render_account_usage_lines(
+    snapshot: Optional[AccountUsageSnapshot], *, markdown: bool = False
+) -> list[str]:
     if not snapshot:
         return []
     header = f"📈 {'**' if markdown else ''}{snapshot.title}{'**' if markdown else ''}"
@@ -276,7 +282,9 @@ def nous_credits_lines(*, markdown: bool = False, timeout: float = 10.0) -> list
     except Exception:
         # Fail-open (caller shows nothing), but leave a breadcrumb so a dead
         # /usage credits block is diagnosable in agent.log without a dev flag.
-        logger.debug("credits ▸ /usage portal fetch/render failed (fail-open)", exc_info=True)
+        logger.debug(
+            "credits ▸ /usage portal fetch/render failed (fail-open)", exc_info=True
+        )
         return []
 
 
@@ -382,9 +390,9 @@ def build_credits_view(*, markdown: bool = False, timeout: float = 10.0) -> Cred
         )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            account = pool.submit(get_nous_portal_account_info, force_fresh=True).result(
-                timeout=timeout
-            )
+            account = pool.submit(
+                get_nous_portal_account_info, force_fresh=True
+            ).result(timeout=timeout)
     except Exception:
         logger.debug("credits ▸ /topup portal fetch failed (fail-open)", exc_info=True)
         return not_logged_in
@@ -488,10 +496,19 @@ def _resolve_codex_usage_credentials(
             account_id = str(tokens.get("account_id", "") or "").strip() or None
         except AuthError:
             # Pool-only creds carry no singleton account_id; header is optional.
-            logger.debug("codex ▸ /usage account_id read failed (best-effort)", exc_info=True)
-        return creds["api_key"], str(creds.get("base_url", "") or "").strip(), account_id
+            logger.debug(
+                "codex ▸ /usage account_id read failed (best-effort)", exc_info=True
+            )
+        return (
+            creds["api_key"],
+            str(creds.get("base_url", "") or "").strip(),
+            account_id,
+        )
     except AuthError:
-        logger.debug("codex ▸ /usage runtime resolver returned no creds; trying pool", exc_info=True)
+        logger.debug(
+            "codex ▸ /usage runtime resolver returned no creds; trying pool",
+            exc_info=True,
+        )
 
     # Tier 3: direct pool select. Reached only when the resolver itself raises
     # AuthError (e.g. singleton missing AND its own pool read found nothing at
@@ -504,14 +521,20 @@ def _resolve_codex_usage_credentials(
     entry = pool.select()
     if entry is None:
         raise RuntimeError("No available openai-codex credential in credential pool")
-    return entry.runtime_api_key, str(entry.runtime_base_url or base_url or "").strip(), None
+    return (
+        entry.runtime_api_key,
+        str(entry.runtime_base_url or base_url or "").strip(),
+        None,
+    )
 
 
 def _fetch_codex_account_usage(
     base_url: Optional[str] = None,
     api_key: Optional[str] = None,
 ) -> Optional[AccountUsageSnapshot]:
-    token, resolved_base_url, account_id = _resolve_codex_usage_credentials(base_url, api_key)
+    token, resolved_base_url, account_id = _resolve_codex_usage_credentials(
+        base_url, api_key
+    )
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
@@ -520,7 +543,9 @@ def _fetch_codex_account_usage(
     if account_id:
         headers["ChatGPT-Account-Id"] = account_id
     with httpx.Client(timeout=15.0) as client:
-        response = client.get(_resolve_codex_usage_url(resolved_base_url), headers=headers)
+        response = client.get(
+            _resolve_codex_usage_url(resolved_base_url), headers=headers
+        )
         response.raise_for_status()
     payload = response.json() or {}
     rate_limit = payload.get("rate_limit") or {}
@@ -612,7 +637,9 @@ def redeem_codex_reset_credit(
     import uuid
 
     try:
-        token, resolved_base_url, account_id = _resolve_codex_usage_credentials(base_url, api_key)
+        token, resolved_base_url, account_id = _resolve_codex_usage_credentials(
+            base_url, api_key
+        )
     except Exception:
         return CodexResetRedeemResult(
             status="unavailable",
@@ -648,7 +675,9 @@ def redeem_codex_reset_credit(
                 used = (rate_limit.get(key) or {}).get("used_percent")
                 if isinstance(used, (int, float)):
                     worst_used = max(worst_used or 0.0, float(used))
-            exhausted = worst_used is not None and worst_used >= _CODEX_WINDOW_EXHAUSTED_PERCENT
+            exhausted = (
+                worst_used is not None and worst_used >= _CODEX_WINDOW_EXHAUSTED_PERCENT
+            )
             if not exhausted and not force:
                 usage_note = (
                     f"your busiest window is only {worst_used:.0f}% used"
@@ -755,7 +784,9 @@ def _fetch_anthropic_account_usage() -> Optional[AccountUsageSnapshot]:
         "User-Agent": "claude-code/2.1.0",
     }
     with httpx.Client(timeout=15.0) as client:
-        response = client.get("https://api.anthropic.com/api/oauth/usage", headers=headers)
+        response = client.get(
+            "https://api.anthropic.com/api/oauth/usage", headers=headers
+        )
         response.raise_for_status()
     payload = response.json() or {}
     windows: list[AccountUsageWindow] = []
@@ -784,7 +815,9 @@ def _fetch_anthropic_account_usage() -> Optional[AccountUsageSnapshot]:
         used_credits = extra.get("used_credits")
         monthly_limit = extra.get("monthly_limit")
         currency = extra.get("currency") or "USD"
-        if isinstance(used_credits, (int, float)) and isinstance(monthly_limit, (int, float)):
+        if isinstance(used_credits, (int, float)) and isinstance(
+            monthly_limit, (int, float)
+        ):
             details.append(
                 f"Extra usage: {used_credits:.2f} / {monthly_limit:.2f} {currency}"
             )
@@ -797,7 +830,9 @@ def _fetch_anthropic_account_usage() -> Optional[AccountUsageSnapshot]:
     )
 
 
-def _fetch_openrouter_account_usage(base_url: Optional[str], api_key: Optional[str]) -> Optional[AccountUsageSnapshot]:
+def _fetch_openrouter_account_usage(
+    base_url: Optional[str], api_key: Optional[str]
+) -> Optional[AccountUsageSnapshot]:
     runtime = resolve_runtime_provider(
         requested="openrouter",
         explicit_base_url=base_url,

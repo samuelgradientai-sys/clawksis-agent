@@ -1,6 +1,7 @@
 """Test that setup.py uses temporary output directories when the source
 tree is read-only (as it is inside the Docker WebUI install surface).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -56,7 +57,9 @@ def test_setup_uses_temporary_outputs_when_source_tree_is_read_only(
     source_relative_build.build_base = "nested/build"
     source_relative_build.finalize_options()
     assert not _is_under(source_relative_build.build_base, REPO_ROOT)
-    assert Path(source_relative_build.build_base).name.startswith("clawksis-agent-build")
+    assert Path(source_relative_build.build_base).name.startswith(
+        "clawksis-agent-build"
+    )
 
     egg_info_cmd = cmdclass["egg_info"](Distribution())
     egg_info_cmd.initialize_options()

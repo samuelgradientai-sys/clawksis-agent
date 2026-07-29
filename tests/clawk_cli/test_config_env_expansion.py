@@ -73,7 +73,9 @@ class TestLoadConfigExpansion:
         # Patch the imported function's own globals. Other tests may reload
         # clawk_cli.config, making string-target monkeypatches hit a different
         # module object than this collection-time imported load_config().
-        monkeypatch.setitem(load_config.__globals__, "get_config_path", lambda: config_file)
+        monkeypatch.setitem(
+            load_config.__globals__, "get_config_path", lambda: config_file
+        )
 
         config = load_config()
 
@@ -87,7 +89,9 @@ class TestLoadConfigExpansion:
         config_file.write_text(config_yaml)
 
         monkeypatch.delenv("NOT_SET_XYZ_123", raising=False)
-        monkeypatch.setitem(load_config.__globals__, "get_config_path", lambda: config_file)
+        monkeypatch.setitem(
+            load_config.__globals__, "get_config_path", lambda: config_file
+        )
 
         config = load_config()
 
@@ -99,16 +103,23 @@ class TestLoadConfigCacheEnvStaleness:
     environment (#58514): a load before load_clawk_dotenv() runs, or an env
     var rotated in-process, must not keep serving the old expansion."""
 
-    def test_env_var_appearing_after_first_load_invalidates_cache(self, tmp_path, monkeypatch):
+    def test_env_var_appearing_after_first_load_invalidates_cache(
+        self, tmp_path, monkeypatch
+    ):
         config_yaml = "auxiliary:\n  vision:\n    api_key: ${LATE_DOTENV_KEY_58514}\n"
         config_file = tmp_path / "config.yaml"
         config_file.write_text(config_yaml)
 
         monkeypatch.delenv("LATE_DOTENV_KEY_58514", raising=False)
-        monkeypatch.setitem(load_config.__globals__, "get_config_path", lambda: config_file)
+        monkeypatch.setitem(
+            load_config.__globals__, "get_config_path", lambda: config_file
+        )
 
         # First load happens before the var exists (pre-dotenv): literal kept.
-        assert load_config()["auxiliary"]["vision"]["api_key"] == "${LATE_DOTENV_KEY_58514}"
+        assert (
+            load_config()["auxiliary"]["vision"]["api_key"]
+            == "${LATE_DOTENV_KEY_58514}"
+        )
 
         # .env load brings the var in — same file mtime/size, env changed.
         monkeypatch.setenv("LATE_DOTENV_KEY_58514", "nvapi-real")
@@ -120,7 +131,9 @@ class TestLoadConfigCacheEnvStaleness:
         config_file.write_text(config_yaml)
 
         monkeypatch.setenv("ROTATED_KEY_58514", "key-v1")
-        monkeypatch.setitem(load_config.__globals__, "get_config_path", lambda: config_file)
+        monkeypatch.setitem(
+            load_config.__globals__, "get_config_path", lambda: config_file
+        )
 
         assert load_config()["providers"]["mistral"]["api_key"] == "key-v1"
 
@@ -133,7 +146,9 @@ class TestLoadConfigCacheEnvStaleness:
         config_file.write_text(config_yaml)
 
         monkeypatch.setenv("STABLE_KEY_58514", "key-stable")
-        monkeypatch.setitem(load_config.__globals__, "get_config_path", lambda: config_file)
+        monkeypatch.setitem(
+            load_config.__globals__, "get_config_path", lambda: config_file
+        )
 
         load_config()
         # load_config_readonly() returns the cached object itself, so object
@@ -157,17 +172,14 @@ class TestLoadCliConfigExpansion:
         monkeypatch.setattr("cli._clawk_home", tmp_path)
 
         from cli import load_cli_config
+
         config = load_cli_config()
 
         assert isinstance(config["terminal"], dict)
         assert config["terminal"]["env_type"] == "local"
 
     def test_cli_config_expands_auxiliary_api_key(self, tmp_path, monkeypatch):
-        config_yaml = (
-            "auxiliary:\n"
-            "  vision:\n"
-            "    api_key: ${TEST_VISION_KEY_XYZ}\n"
-        )
+        config_yaml = "auxiliary:\n  vision:\n    api_key: ${TEST_VISION_KEY_XYZ}\n"
         config_file = tmp_path / "config.yaml"
         config_file.write_text(config_yaml)
 
@@ -176,16 +188,13 @@ class TestLoadCliConfigExpansion:
         monkeypatch.setattr("cli._clawk_home", tmp_path)
 
         from cli import load_cli_config
+
         config = load_cli_config()
 
         assert config["auxiliary"]["vision"]["api_key"] == "vis-key-123"
 
     def test_cli_config_unresolved_kept_verbatim(self, tmp_path, monkeypatch):
-        config_yaml = (
-            "auxiliary:\n"
-            "  vision:\n"
-            "    api_key: ${UNSET_CLI_VAR_ABC}\n"
-        )
+        config_yaml = "auxiliary:\n  vision:\n    api_key: ${UNSET_CLI_VAR_ABC}\n"
         config_file = tmp_path / "config.yaml"
         config_file.write_text(config_yaml)
 
@@ -193,6 +202,7 @@ class TestLoadCliConfigExpansion:
         monkeypatch.setattr("cli._clawk_home", tmp_path)
 
         from cli import load_cli_config
+
         config = load_cli_config()
 
         assert config["auxiliary"]["vision"]["api_key"] == "${UNSET_CLI_VAR_ABC}"

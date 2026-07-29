@@ -51,6 +51,7 @@ Behavioural knobs live in config.yaml (canonical surface):
 When ``CLAWK_DASHBOARD_DRAIN_SECRET`` is unset, the plugin is a no-op (records
 a skip reason) — agents that don't want NAS-driven drain just don't set it.
 """
+
 from __future__ import annotations
 
 import hmac
@@ -119,8 +120,8 @@ def assess_secret_strength(
     if len(secret) < min_chars:
         return (
             f"secret too short: {len(secret)} chars (need >= {min_chars}; "
-            "use a >=256-bit value, e.g. `python -c \"import secrets; "
-            "print(secrets.token_urlsafe(32))\"`)"
+            'use a >=256-bit value, e.g. `python -c "import secrets; '
+            'print(secrets.token_urlsafe(32))"`)'
         )
     distinct = len(set(secret))
     if distinct < _MIN_DISTINCT_CHARS:
@@ -240,8 +241,8 @@ def register(ctx) -> None:
     if not secret:
         LAST_SKIP_REASON = (
             "CLAWK_DASHBOARD_DRAIN_SECRET is not set. Set a per-agent "
-            ">=256-bit secret (e.g. `python -c \"import secrets; "
-            "print(secrets.token_urlsafe(32))\"`) to enable NAS-driven drain "
+            '>=256-bit secret (e.g. `python -c "import secrets; '
+            'print(secrets.token_urlsafe(32))"`) to enable NAS-driven drain '
             "coordination; leave it unset to disable the drain endpoint."
         )
         logger.debug("dashboard-auth-drain: %s", LAST_SKIP_REASON)
@@ -281,11 +282,13 @@ def register(ctx) -> None:
     except Exception as exc:  # noqa: BLE001 — seam import must not crash plugin load
         logger.warning(
             "dashboard-auth-drain: could not register token route %s: %s",
-            DRAIN_ROUTE_PATH, exc,
+            DRAIN_ROUTE_PATH,
+            exc,
         )
 
     logger.info(
         "dashboard-auth-drain: registered drain service-credential provider "
         "(scope=%s, route=%s)",
-        scope, DRAIN_ROUTE_PATH,
+        scope,
+        DRAIN_ROUTE_PATH,
     )

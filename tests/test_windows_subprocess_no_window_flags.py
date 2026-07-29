@@ -81,7 +81,9 @@ def test_tui_gateway_fuzzy_file_listing_hides_git_windows(monkeypatch):
         return _Completed(stdout=b"src/main.py\0README.md\0")
 
     monkeypatch.setattr(_subprocess_compat, "IS_WINDOWS", True)
-    monkeypatch.setattr(_subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
+    monkeypatch.setattr(
+        _subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW
+    )
     monkeypatch.setattr(server.subprocess, "run", fake_run)
     server._fuzzy_cache.clear()
 
@@ -123,7 +125,9 @@ def test_context_reference_git_and_rg_hide_windows(monkeypatch):
         return _Completed(stdout="diff --git a/src/main.py b/src/main.py\n")
 
     monkeypatch.setattr(context_references, "IS_WINDOWS", True)
-    monkeypatch.setattr(context_references, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
+    monkeypatch.setattr(
+        context_references, "windows_hide_flags", lambda: _CREATE_NO_WINDOW
+    )
     monkeypatch.setattr(context_references.subprocess, "run", fake_run)
 
     ref = context_references.ContextReference(
@@ -187,7 +191,9 @@ def test_gateway_pid_scan_hides_wmic_and_powershell_windows(monkeypatch):
     monkeypatch.setattr(gateway, "is_windows", lambda: True)
     monkeypatch.setattr(gateway.shutil, "which", lambda name: name)
     monkeypatch.setattr(_subprocess_compat, "IS_WINDOWS", True)
-    monkeypatch.setattr(_subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
+    monkeypatch.setattr(
+        _subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW
+    )
     monkeypatch.setattr(gateway.subprocess, "run", fake_run)
 
     assert gateway._scan_gateway_pids(set()) == [123]
@@ -223,7 +229,9 @@ def test_stale_dashboard_windows_scan_hides_wmic(monkeypatch):
 
     monkeypatch.setattr(main.sys, "platform", "win32")
     monkeypatch.setattr(_subprocess_compat, "IS_WINDOWS", True)
-    monkeypatch.setattr(_subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
+    monkeypatch.setattr(
+        _subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW
+    )
     monkeypatch.setattr(main.subprocess, "run", fake_run)
 
     assert main._find_stale_dashboard_pids() == [123]
@@ -242,7 +250,9 @@ def test_gateway_force_kill_hides_taskkill_window(monkeypatch):
 
     monkeypatch.setattr(status, "_IS_WINDOWS", True)
     monkeypatch.setattr(_subprocess_compat, "IS_WINDOWS", True)
-    monkeypatch.setattr(_subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
+    monkeypatch.setattr(
+        _subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW
+    )
     monkeypatch.setattr(status.subprocess, "run", fake_run)
 
     status.terminate_pid(123, force=True)
@@ -293,7 +303,9 @@ def test_inline_skill_shell_hides_bash_window(monkeypatch):
         return SimpleNamespace(returncode=0, stdout="ok\n", stderr="")
 
     monkeypatch.setattr(skill_preprocessing, "IS_WINDOWS", True)
-    monkeypatch.setattr(skill_preprocessing, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
+    monkeypatch.setattr(
+        skill_preprocessing, "windows_hide_flags", lambda: _CREATE_NO_WINDOW
+    )
     monkeypatch.setattr(skill_preprocessing.subprocess, "run", fake_run)
 
     assert skill_preprocessing.run_inline_shell("echo ok", cwd=None, timeout=5) == "ok"
@@ -330,13 +342,16 @@ def test_local_stt_audio_prep_hides_ffmpeg_window(monkeypatch, tmp_path):
         return _Completed(returncode=0)
 
     monkeypatch.setattr(transcription_tools, "_find_ffmpeg_binary", lambda: "ffmpeg")
-    monkeypatch.setattr(transcription_tools, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
+    monkeypatch.setattr(
+        transcription_tools, "windows_hide_flags", lambda: _CREATE_NO_WINDOW
+    )
     monkeypatch.setattr(transcription_tools.subprocess, "run", fake_run)
 
     transcription_tools._prepare_local_audio(str(tmp_path / "in.m4a"), str(tmp_path))
 
     assert captured[0][0][0] == "ffmpeg"
     assert captured[0][1]["creationflags"] == _CREATE_NO_WINDOW
+
 
 def test_checkpoint_manager_git_hides_windows(monkeypatch):
     from tools import checkpoint_manager
@@ -347,7 +362,9 @@ def test_checkpoint_manager_git_hides_windows(monkeypatch):
         captured.append((cmd, kwargs))
         return _Completed(stdout="clean\n")
 
-    monkeypatch.setattr(checkpoint_manager, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
+    monkeypatch.setattr(
+        checkpoint_manager, "windows_hide_flags", lambda: _CREATE_NO_WINDOW
+    )
     monkeypatch.setattr(checkpoint_manager.subprocess, "run", fake_run)
 
     ok, _, _ = checkpoint_manager._run_git(["status", "--short"], Path("C:/store"), ".")
@@ -389,13 +406,21 @@ def test_tui_slash_worker_hides_python_window(monkeypatch):
         return _Proc()
 
     monkeypatch.setattr(server.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(server.threading, "Thread", lambda *a, **k: SimpleNamespace(start=lambda: None))
+    monkeypatch.setattr(
+        server.threading, "Thread", lambda *a, **k: SimpleNamespace(start=lambda: None)
+    )
 
     import clawk_cli._subprocess_compat as subprocess_compat
 
-    monkeypatch.setattr(subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
+    monkeypatch.setattr(
+        subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW
+    )
 
     server._SlashWorker("session-key", "model-x")
 
-    assert captured[0][0][:3] == [server.sys.executable, "-m", "tui_gateway.slash_worker"]
+    assert captured[0][0][:3] == [
+        server.sys.executable,
+        "-m",
+        "tui_gateway.slash_worker",
+    ]
     assert captured[0][1]["creationflags"] == _CREATE_NO_WINDOW

@@ -50,7 +50,9 @@ def test_astral_uv_installer_invoked_via_resolved_host_variable(source: str):
     """
     lines = [ln for ln in source.splitlines() if "astral.sh/uv/install.ps1 | iex" in ln]
     # Exactly one invocation line carries the astral installer.
-    invocation = [ln for ln in lines if "irm https://astral.sh/uv/install.ps1 | iex" in ln]
+    invocation = [
+        ln for ln in lines if "irm https://astral.sh/uv/install.ps1 | iex" in ln
+    ]
     assert invocation, "astral uv install invocation line not found"
     for ln in invocation:
         stripped = ln.strip()
@@ -72,6 +74,5 @@ def test_powershell_host_resolver_is_defined_and_portable(source: str):
     )
     # pwsh-aware fallback: PowerShell 7's executable is `pwsh`, not `powershell`.
     assert "pwsh" in source, (
-        "resolver must fall back to pwsh (PowerShell 7) when powershell is "
-        "unavailable"
+        "resolver must fall back to pwsh (PowerShell 7) when powershell is unavailable"
     )

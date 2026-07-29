@@ -99,7 +99,12 @@ class TestApplySessionModelOverride:
         model, rt = runner._apply_session_model_override(
             sk,
             "anthropic/claude-sonnet-4",
-            {"provider": "anthropic", "api_key": "ant-key", "base_url": "https://api.anthropic.com", "api_mode": "anthropic_messages"},
+            {
+                "provider": "anthropic",
+                "api_key": "ant-key",
+                "base_url": "https://api.anthropic.com",
+                "api_mode": "anthropic_messages",
+            },
         )
 
         assert model == "gpt-5.4-turbo"
@@ -113,7 +118,12 @@ class TestApplySessionModelOverride:
         sk = build_session_key(_make_source())
 
         orig_model = "anthropic/claude-sonnet-4"
-        orig_rt = {"provider": "anthropic", "api_key": "key", "base_url": "https://api.anthropic.com", "api_mode": "anthropic_messages"}
+        orig_rt = {
+            "provider": "anthropic",
+            "api_key": "key",
+            "base_url": "https://api.anthropic.com",
+            "api_mode": "anthropic_messages",
+        }
 
         model, rt = runner._apply_session_model_override(sk, orig_model, dict(orig_rt))
 
@@ -136,7 +146,12 @@ class TestApplySessionModelOverride:
         model, rt = runner._apply_session_model_override(
             sk,
             "anthropic/claude-sonnet-4",
-            {"provider": "anthropic", "api_key": "ant-key", "base_url": "https://api.anthropic.com", "api_mode": "anthropic_messages"},
+            {
+                "provider": "anthropic",
+                "api_key": "ant-key",
+                "base_url": "https://api.anthropic.com",
+                "api_mode": "anthropic_messages",
+            },
         )
 
         assert model == "gpt-5.4"
@@ -161,7 +176,12 @@ class TestApplySessionModelOverride:
         _, rt = runner._apply_session_model_override(
             sk,
             "anthropic/claude-sonnet-4",
-            {"provider": "anthropic", "api_key": "ant-key", "base_url": "https://api.anthropic.com", "api_mode": "anthropic_messages"},
+            {
+                "provider": "anthropic",
+                "api_key": "ant-key",
+                "base_url": "https://api.anthropic.com",
+                "api_mode": "anthropic_messages",
+            },
         )
 
         assert rt["base_url"] == ""  # empty string overwrites
@@ -182,7 +202,12 @@ class TestApplySessionModelOverride:
         model, rt = runner._apply_session_model_override(
             sk,
             "anthropic/claude-sonnet-4",
-            {"provider": "anthropic", "api_key": "ant-key", "base_url": "url", "api_mode": "anthropic_messages"},
+            {
+                "provider": "anthropic",
+                "api_key": "ant-key",
+                "base_url": "url",
+                "api_mode": "anthropic_messages",
+            },
         )
 
         assert model == "anthropic/claude-sonnet-4"  # unchanged — wrong session key
@@ -323,9 +348,9 @@ class TestOneTurnNeverPersisted:
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
-            _yaml.safe_dump(
-                {"model": {"default": "old-model", "provider": "openrouter"}}
-            ),
+            _yaml.safe_dump({
+                "model": {"default": "old-model", "provider": "openrouter"}
+            }),
             encoding="utf-8",
         )
         monkeypatch.setattr(gateway_run, "_clawk_home", clawk_home)
@@ -372,9 +397,7 @@ class TestOneTurnNeverPersisted:
         )
 
     @pytest.mark.asyncio
-    async def test_once_skips_session_store_write_through(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_once_skips_session_store_write_through(self, tmp_path, monkeypatch):
         runner = self._runner_with_store(tmp_path, monkeypatch)
         sk = build_session_key(_make_source())
 
@@ -390,9 +413,7 @@ class TestOneTurnNeverPersisted:
         runner.async_session_store.set_model_override.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_session_switch_still_writes_through(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_session_switch_still_writes_through(self, tmp_path, monkeypatch):
         runner = self._runner_with_store(tmp_path, monkeypatch)
 
         result = await runner._handle_model_command(

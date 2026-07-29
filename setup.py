@@ -46,9 +46,8 @@ def _would_write_under_source(path_value: str | None) -> bool:
 
 class ReadOnlySourceBuild(_build):
     def finalize_options(self) -> None:
-        if (
-            not _source_tree_is_writable()
-            and _would_write_under_source(self.build_base)
+        if not _source_tree_is_writable() and _would_write_under_source(
+            self.build_base
         ):
             self.build_base = _temporary_build_dir("build")
         super().finalize_options()
@@ -56,10 +55,7 @@ class ReadOnlySourceBuild(_build):
 
 class ReadOnlySourceEggInfo(_egg_info):
     def finalize_options(self) -> None:
-        if (
-            not _source_tree_is_writable()
-            and _would_write_under_source(self.egg_base)
-        ):
+        if not _source_tree_is_writable() and _would_write_under_source(self.egg_base):
             self.egg_base = _temporary_build_dir("egg-info")
         super().finalize_options()
 
@@ -83,5 +79,5 @@ setup(
     data_files=[
         *_data_file_tree("skills"),
         *_data_file_tree("optional-skills"),
-    ]
+    ],
 )

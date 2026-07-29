@@ -26,7 +26,7 @@ def _write_skill(skills_dir: Path, name: str, description: str = "") -> Path:
             f"""\
             ---
             name: {name}
-            description: {description or f'{name} skill'}
+            description: {description or f"{name} skill"}
             ---
             body
             """

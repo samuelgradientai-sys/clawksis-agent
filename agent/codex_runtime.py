@@ -62,9 +62,8 @@ def _record_codex_app_server_usage(agent, turn) -> dict[str, Any]:
     usage = getattr(turn, "token_usage_last", None)
     if not isinstance(usage, dict) or not usage:
         compressor = getattr(agent, "context_compressor", None)
-        if (
-            compressor is not None
-            and getattr(compressor, "awaiting_real_usage_after_compression", False)
+        if compressor is not None and getattr(
+            compressor, "awaiting_real_usage_after_compression", False
         ):
             # No usage means this turn cannot adjudicate the pending compaction.
             # Consume the marker so a later unrelated reading is not charged to
@@ -85,7 +84,8 @@ def _record_codex_app_server_usage(agent, turn) -> dict[str, Any]:
             except Exception as exc:
                 logger.debug(
                     "Codex app-server api-call persistence failed (session=%s): %s",
-                    agent.session_id, exc,
+                    agent.session_id,
+                    exc,
                 )
         return {}
 
@@ -162,27 +162,32 @@ def _record_codex_app_server_usage(agent, turn) -> dict[str, Any]:
                 cache_write_tokens=canonical_usage.cache_write_tokens,
                 reasoning_tokens=canonical_usage.reasoning_tokens,
                 estimated_cost_usd=float(cost_result.amount_usd)
-                if cost_result.amount_usd is not None else None,
+                if cost_result.amount_usd is not None
+                else None,
                 cost_status=cost_result.status,
                 cost_source=cost_result.source,
                 billing_provider=agent.provider,
                 billing_base_url=agent.base_url,
                 billing_mode="subscription_included"
-                if cost_result.status == "included" else None,
+                if cost_result.status == "included"
+                else None,
                 model=agent.model,
                 api_call_count=1,
             )
         except Exception as exc:
             logger.debug(
                 "Codex app-server token persistence failed (session=%s, tokens=%d): %s",
-                agent.session_id, total_tokens, exc,
+                agent.session_id,
+                total_tokens,
+                exc,
             )
 
     return {
         **usage_dict,
         "last_prompt_tokens": prompt_tokens,
         "estimated_cost_usd": float(cost_result.amount_usd)
-        if cost_result.amount_usd is not None else None,
+        if cost_result.amount_usd is not None
+        else None,
         "cost_status": cost_result.status,
         "cost_source": cost_result.source,
     }
@@ -223,16 +228,12 @@ def _record_codex_app_server_compaction(
 
     compressor = getattr(agent, "context_compressor", None)
     if compressor is not None:
-        compressor.compression_count = getattr(
-            compressor, "compression_count", 0
-        ) + 1
+        compressor.compression_count = getattr(compressor, "compression_count", 0) + 1
         compressor.last_compression_rough_tokens = approx_tokens or 0
         # The app server has already completed a real compaction boundary. Its
         # usage update (when supplied) is therefore the same real-vs-real
         # effectiveness verdict used by the normal compression path.
-        record_boundary = getattr(
-            type(compressor), "record_completed_compaction", None
-        )
+        record_boundary = getattr(type(compressor), "record_completed_compaction", None)
         if callable(record_boundary):
             # Codex owns this summary. A prior Clawksis deterministic-fallback
             # flag must not leak into the native boundary's quality verdict.
@@ -254,9 +255,7 @@ def _record_codex_app_server_compaction(
                     "session_id": getattr(agent, "session_id", None) or "",
                     "old_session_id": "",
                     "in_place": False,
-                    "compression_count": getattr(
-                        compressor, "compression_count", 0
-                    )
+                    "compression_count": getattr(compressor, "compression_count", 0)
                     if compressor is not None
                     else 0,
                     "runtime": "codex_app_server",
@@ -291,9 +290,13 @@ def _record_codex_app_server_compaction(
 # tool name shown in the UI matches the name recorded in messages.
 # webSearch is codex's built-in web search tool — it has no projector
 # entry (codex handles it internally) but still deserves a bubble.
-_CODEX_TOOL_ITEM_TYPES = frozenset(
-    {"commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall", "webSearch"}
-)
+_CODEX_TOOL_ITEM_TYPES = frozenset({
+    "commandExecution",
+    "fileChange",
+    "mcpToolCall",
+    "dynamicToolCall",
+    "webSearch",
+})
 
 # Internal MCP server that wraps Clawksis' native tools for codex. When
 # codex calls back through it, the inner dispatch runs in a SEPARATE
@@ -335,14 +338,18 @@ def _codex_item_to_args(item: dict) -> dict:
     _project_mcp_tool_call / _project_dynamic_tool_call shapes."""
     item_type = item.get("type") or ""
     if item_type == "commandExecution":
-        return {"command": item.get("command") or "",
-                "cwd": item.get("cwd") or ""}
+        return {"command": item.get("command") or "", "cwd": item.get("cwd") or ""}
     if item_type == "fileChange":
-        return {"changes": [
-            {"kind": (c.get("kind") or {}).get("type") or "update",
-             "path": c.get("path") or ""}
-            for c in (item.get("changes") or []) if isinstance(c, dict)
-        ]}
+        return {
+            "changes": [
+                {
+                    "kind": (c.get("kind") or {}).get("type") or "update",
+                    "path": c.get("path") or "",
+                }
+                for c in (item.get("changes") or [])
+                if isinstance(c, dict)
+            ]
+        }
     if item_type in {"mcpToolCall", "dynamicToolCall"}:
         args = item.get("arguments") or {}
         return args if isinstance(args, dict) else {"arguments": args}
@@ -359,8 +366,11 @@ def _codex_item_to_preview(item: dict) -> Any:
         cmd = item.get("command") or ""
         return cmd[:120] if cmd else None
     if item_type == "fileChange":
-        paths = [c.get("path") for c in (item.get("changes") or [])
-                 if isinstance(c, dict) and c.get("path")]
+        paths = [
+            c.get("path")
+            for c in (item.get("changes") or [])
+            if isinstance(c, dict) and c.get("path")
+        ]
         if not paths:
             return None
         preview = ", ".join(paths[:3])
@@ -409,8 +419,7 @@ def _codex_item_completion_payload(item: dict) -> tuple[str, bool]:
             )
         result = item.get("result")
         return (
-            json.dumps(result, ensure_ascii=False)[:4000]
-            if result is not None else "",
+            json.dumps(result, ensure_ascii=False)[:4000] if result is not None else "",
             False,
         )
     if item_type == "dynamicToolCall":
@@ -490,7 +499,8 @@ def make_codex_app_server_event_bridge(agent) -> Callable[[dict], None]:
             except Exception:
                 logger.debug(
                     "tool_progress_callback raised on tool.started for %s",
-                    name, exc_info=True,
+                    name,
+                    exc_info=True,
                 )
         # Authoritative stable-ID tool card (TUI / desktop). Fires
         # alongside tool_progress so surfaces that render structured tool
@@ -502,7 +512,9 @@ def make_codex_app_server_event_bridge(agent) -> Callable[[dict], None]:
                 start_cb(_stable_call_id(item, name), name, args)
             except Exception:
                 logger.debug(
-                    "tool_start_callback raised for %s", name, exc_info=True,
+                    "tool_start_callback raised for %s",
+                    name,
+                    exc_info=True,
                 )
 
     def _fire_tool_completed(item: dict) -> None:
@@ -523,12 +535,20 @@ def make_codex_app_server_event_bridge(agent) -> Callable[[dict], None]:
         cb = getattr(agent, "tool_progress_callback", None)
         if cb is not None:
             try:
-                cb("tool.completed", name, None, None,
-                   duration=duration, is_error=is_error, result=result)
+                cb(
+                    "tool.completed",
+                    name,
+                    None,
+                    None,
+                    duration=duration,
+                    is_error=is_error,
+                    result=result,
+                )
             except Exception:
                 logger.debug(
                     "tool_progress_callback raised on tool.completed for %s",
-                    name, exc_info=True,
+                    name,
+                    exc_info=True,
                 )
         complete_cb = getattr(agent, "tool_complete_callback", None)
         if complete_cb is not None:
@@ -537,7 +557,9 @@ def make_codex_app_server_event_bridge(agent) -> Callable[[dict], None]:
                 complete_cb(_stable_call_id(item, name), name, args, result)
             except Exception:
                 logger.debug(
-                    "tool_complete_callback raised for %s", name, exc_info=True,
+                    "tool_complete_callback raised for %s",
+                    name,
+                    exc_info=True,
                 )
 
     def _fire_text_delta(params: dict) -> None:
@@ -580,7 +602,8 @@ def make_codex_app_server_event_bridge(agent) -> Callable[[dict], None]:
             emit({"role": "assistant", "content": text})
         except Exception:
             logger.debug(
-                "_emit_interim_assistant_message raised", exc_info=True,
+                "_emit_interim_assistant_message raised",
+                exc_info=True,
             )
 
     def on_event(note: dict) -> None:
@@ -645,6 +668,7 @@ def run_codex_app_server_turn(
         # codex-side fail-closed default.
         try:
             from tools.terminal_tool import _get_approval_callback
+
             approval_callback = _get_approval_callback()
         except Exception:
             approval_callback = None
@@ -756,7 +780,6 @@ def run_codex_app_server_turn(
                     "codex app-server projected-message flush failed",
                     exc_info=True,
                 )
-
 
     # Counter ticks for the agent-improvement loop.
     # _turns_since_memory and _user_turn_count are ALREADY incremented
@@ -913,7 +936,9 @@ def _raise_stream_error(event: Any) -> None:
     raw_message = _error_field("message")
     if raw_message is not None and not isinstance(raw_message, str):
         raw_message = str(raw_message)
-    message = (raw_message or "stream emitted error event").strip() or "stream emitted error event"
+    message = (
+        raw_message or "stream emitted error event"
+    ).strip() or "stream emitted error event"
     raise _StreamErrorEvent(
         message,
         code=_error_field("code"),
@@ -1018,7 +1043,9 @@ def _consume_codex_event_stream(
             item_type = _item_field(item, "type", "")
             if item_type == "message":
                 phase = _item_field(item, "phase", None)
-                active_message_phase = phase.strip().lower() if isinstance(phase, str) else None
+                active_message_phase = (
+                    phase.strip().lower() if isinstance(phase, str) else None
+                )
                 if active_message_phase == "commentary":
                     commentary_text_deltas = []
             else:
@@ -1027,7 +1054,10 @@ def _consume_codex_event_stream(
                 has_tool_calls = True
             continue
 
-        if "output_text.delta" in event_type or event_type == "response.output_text.delta":
+        if (
+            "output_text.delta" in event_type
+            or event_type == "response.output_text.delta"
+        ):
             delta_text = _event_field(event, "delta", "")
             if delta_text and active_message_phase == "commentary":
                 commentary_text_deltas.append(delta_text)
@@ -1037,13 +1067,17 @@ def _consume_codex_event_stream(
                     try:
                         on_reasoning_delta(delta_text)
                     except Exception:
-                        logger.debug("Codex stream on_reasoning_delta raised", exc_info=True)
+                        logger.debug(
+                            "Codex stream on_reasoning_delta raised", exc_info=True
+                        )
             elif delta_text and active_message_phase == "analysis":
                 if on_reasoning_delta is not None:
                     try:
                         on_reasoning_delta(delta_text)
                     except Exception:
-                        logger.debug("Codex stream on_reasoning_delta raised", exc_info=True)
+                        logger.debug(
+                            "Codex stream on_reasoning_delta raised", exc_info=True
+                        )
             elif delta_text:
                 collected_text_deltas.append(delta_text)
                 if not has_tool_calls:
@@ -1053,12 +1087,16 @@ def _consume_codex_event_stream(
                             try:
                                 on_first_delta()
                             except Exception:
-                                logger.debug("Codex stream on_first_delta raised", exc_info=True)
+                                logger.debug(
+                                    "Codex stream on_first_delta raised", exc_info=True
+                                )
                     if on_text_delta is not None:
                         try:
                             on_text_delta(delta_text)
                         except Exception:
-                            logger.debug("Codex stream on_text_delta raised", exc_info=True)
+                            logger.debug(
+                                "Codex stream on_text_delta raised", exc_info=True
+                            )
             continue
 
         if "function_call" in event_type:
@@ -1071,7 +1109,9 @@ def _consume_codex_event_stream(
                 try:
                     on_reasoning_delta(reasoning_text)
                 except Exception:
-                    logger.debug("Codex stream on_reasoning_delta raised", exc_info=True)
+                    logger.debug(
+                        "Codex stream on_reasoning_delta raised", exc_info=True
+                    )
             continue
 
         if event_type == "response.output_item.done":
@@ -1079,7 +1119,9 @@ def _consume_codex_event_stream(
             if done_item is not None:
                 collected_output_items.append(done_item)
                 done_phase = _item_field(done_item, "phase", None)
-                done_phase = done_phase.strip().lower() if isinstance(done_phase, str) else None
+                done_phase = (
+                    done_phase.strip().lower() if isinstance(done_phase, str) else None
+                )
                 if done_phase == "commentary" and on_commentary_message is not None:
                     commentary_text = "".join(commentary_text_deltas).strip()
                     if not commentary_text:
@@ -1118,8 +1160,12 @@ def _consume_codex_event_stream(
                 if isinstance(rstatus, str):
                     terminal_status = rstatus
                 if event_type == "response.incomplete":
-                    terminal_incomplete_details = getattr(resp_obj, "incomplete_details", None)
-                    if terminal_incomplete_details is None and isinstance(resp_obj, dict):
+                    terminal_incomplete_details = getattr(
+                        resp_obj, "incomplete_details", None
+                    )
+                    if terminal_incomplete_details is None and isinstance(
+                        resp_obj, dict
+                    ):
                         terminal_incomplete_details = resp_obj.get("incomplete_details")
                 if event_type == "response.failed":
                     terminal_error = getattr(resp_obj, "error", None)
@@ -1141,12 +1187,14 @@ def _consume_codex_event_stream(
         output = list(collected_output_items)
     elif collected_text_deltas and not has_tool_calls:
         assembled = "".join(collected_text_deltas)
-        output = [SimpleNamespace(
-            type="message",
-            role="assistant",
-            status="completed",
-            content=[SimpleNamespace(type="output_text", text=assembled)],
-        )]
+        output = [
+            SimpleNamespace(
+                type="message",
+                role="assistant",
+                status="completed",
+                content=[SimpleNamespace(type="output_text", text=assembled)],
+            )
+        ]
     else:
         output = []
 
@@ -1157,9 +1205,7 @@ def _consume_codex_event_stream(
     # signal the SDK's high-level helper used to raise as
     # ``RuntimeError("Didn't receive a `response.completed` event.")``.
     if not saw_terminal and not output:
-        raise RuntimeError(
-            "Codex Responses stream did not emit a terminal response"
-        )
+        raise RuntimeError("Codex Responses stream did not emit a terminal response")
 
     assembled_text = "".join(collected_text_deltas)
 
@@ -1187,7 +1233,9 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
     """
     import httpx as _httpx
 
-    active_client = client or agent._ensure_primary_openai_client(reason="codex_stream_direct")
+    active_client = client or agent._ensure_primary_openai_client(
+        reason="codex_stream_direct"
+    )
     max_stream_retries = 1
     # Accumulate streamed text so callers / compat shims can read it.
     agent._codex_streamed_text_parts: list = []
@@ -1216,12 +1264,19 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
 
         try:
             event_stream = active_client.responses.create(**stream_kwargs)
-        except (_httpx.RemoteProtocolError, _httpx.ReadTimeout, _httpx.ConnectError, ConnectionError) as exc:
+        except (
+            _httpx.RemoteProtocolError,
+            _httpx.ReadTimeout,
+            _httpx.ConnectError,
+            ConnectionError,
+        ) as exc:
             if attempt < max_stream_retries:
                 logger.debug(
                     "Codex Responses stream connect failed (attempt %s/%s); retrying. %s error=%s",
-                    attempt + 1, max_stream_retries + 1,
-                    agent._client_log_context(), exc,
+                    attempt + 1,
+                    max_stream_retries + 1,
+                    agent._client_log_context(),
+                    exc,
                 )
                 continue
             raise
@@ -1250,7 +1305,9 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
         try:
             # Compatibility: some mocks/providers return a concrete response
             # instead of an iterable.  Pass it straight through.
-            if hasattr(event_stream, "output") and not hasattr(event_stream, "__iter__"):
+            if hasattr(event_stream, "output") and not hasattr(
+                event_stream, "__iter__"
+            ):
                 return event_stream
 
             try:
@@ -1262,7 +1319,8 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
                     on_commentary_message=(
                         _on_commentary_message
                         if (
-                            getattr(agent, "interim_assistant_callback", None) is not None
+                            getattr(agent, "interim_assistant_callback", None)
+                            is not None
                             and getattr(agent, "show_commentary", True)
                         )
                         else None
@@ -1271,13 +1329,20 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
                     on_event=_on_event,
                     interrupt_check=_interrupt_or_superseded,
                 )
-            except (_httpx.RemoteProtocolError, _httpx.ReadTimeout, _httpx.ConnectError, ConnectionError) as exc:
+            except (
+                _httpx.RemoteProtocolError,
+                _httpx.ReadTimeout,
+                _httpx.ConnectError,
+                ConnectionError,
+            ) as exc:
                 if attempt < max_stream_retries:
                     logger.debug(
                         "Codex Responses stream transport failed mid-iteration "
                         "(attempt %s/%s); retrying. %s error=%s",
-                        attempt + 1, max_stream_retries + 1,
-                        agent._client_log_context(), exc,
+                        attempt + 1,
+                        max_stream_retries + 1,
+                        agent._client_log_context(),
+                        exc,
                     )
                     continue
                 raise
@@ -1286,7 +1351,9 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
                 logger.warning(
                     "Codex Responses stream terminal status=%s "
                     "(incomplete_details=%s, error=%s, streamed_chars=%d). %s",
-                    final.status, final.incomplete_details, final.error,
+                    final.status,
+                    final.incomplete_details,
+                    final.error,
                     sum(len(p) for p in agent._codex_streamed_text_parts),
                     agent._client_log_context(),
                 )

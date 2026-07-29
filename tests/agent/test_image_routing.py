@@ -53,7 +53,9 @@ class TestExplicitAuxVisionOverride:
         assert _explicit_aux_vision_override({}) is False
 
     def test_default_auto_is_not_explicit(self):
-        cfg = {"auxiliary": {"vision": {"provider": "auto", "model": "", "base_url": ""}}}
+        cfg = {
+            "auxiliary": {"vision": {"provider": "auto", "model": "", "base_url": ""}}
+        }
         assert _explicit_aux_vision_override(cfg) is False
 
     def test_provider_set_is_explicit(self):
@@ -61,11 +63,19 @@ class TestExplicitAuxVisionOverride:
         assert _explicit_aux_vision_override(cfg) is True
 
     def test_model_set_is_explicit(self):
-        cfg = {"auxiliary": {"vision": {"provider": "auto", "model": "google/gemini-2.5-flash"}}}
+        cfg = {
+            "auxiliary": {
+                "vision": {"provider": "auto", "model": "google/gemini-2.5-flash"}
+            }
+        }
         assert _explicit_aux_vision_override(cfg) is True
 
     def test_base_url_set_is_explicit(self):
-        cfg = {"auxiliary": {"vision": {"provider": "auto", "base_url": "http://localhost:11434"}}}
+        cfg = {
+            "auxiliary": {
+                "vision": {"provider": "auto", "base_url": "http://localhost:11434"}
+            }
+        }
         assert _explicit_aux_vision_override(cfg) is True
 
 
@@ -78,49 +88,75 @@ class TestDecideImageInputMode:
         # Non-vision model, aux-vision explicitly configured: native still wins.
         cfg["auxiliary"] = {"vision": {"provider": "openrouter", "model": "foo"}}
         with patch("agent.image_routing._lookup_supports_vision", return_value=False):
-            assert decide_image_input_mode("openrouter", "some-non-vision-model", cfg) == "native"
+            assert (
+                decide_image_input_mode("openrouter", "some-non-vision-model", cfg)
+                == "native"
+            )
 
     def test_explicit_text_overrides_everything(self):
         cfg = {"agent": {"image_input_mode": "text"}}
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "text"
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "text"
+            )
 
     def test_auto_with_vision_capable_model(self):
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", {}) == "native"
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", {}) == "native"
+            )
 
     def test_auto_with_non_vision_model(self):
         with patch("agent.image_routing._lookup_supports_vision", return_value=False):
-            assert decide_image_input_mode("openrouter", "qwen/qwen3-235b", {}) == "text"
+            assert (
+                decide_image_input_mode("openrouter", "qwen/qwen3-235b", {}) == "text"
+            )
 
     def test_auto_with_unknown_model(self):
         with patch("agent.image_routing._lookup_supports_vision", return_value=None):
             assert decide_image_input_mode("openrouter", "brand-new-slug", {}) == "text"
 
-    def test_auto_prefers_native_for_vision_capable_main_model_even_with_aux_configured(self):
+    def test_auto_prefers_native_for_vision_capable_main_model_even_with_aux_configured(
+        self,
+    ):
         """Regression #29135: vision-capable main model wins over aux fallback.
 
         Auxiliary.vision is a fallback for text-only main models; it must
         not preempt native vision on a vision-capable main model.
         """
-        cfg = {"auxiliary": {"vision": {"provider": "openrouter", "model": "google/gemini-2.5-flash"}}}
+        cfg = {
+            "auxiliary": {
+                "vision": {"provider": "openrouter", "model": "google/gemini-2.5-flash"}
+            }
+        }
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "native"
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "native"
+            )
 
     def test_auto_uses_aux_vision_fallback_for_text_only_main_model(self):
         """#29135: aux vision still acts as fallback for non-vision main models."""
-        cfg = {"auxiliary": {"vision": {"provider": "openrouter", "model": "google/gemini-2.5-flash"}}}
+        cfg = {
+            "auxiliary": {
+                "vision": {"provider": "openrouter", "model": "google/gemini-2.5-flash"}
+            }
+        }
         with patch("agent.image_routing._lookup_supports_vision", return_value=False):
             assert decide_image_input_mode("deepseek", "deepseek-v4-pro", cfg) == "text"
 
     def test_none_config_is_auto(self):
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", None) == "native"
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", None)
+                == "native"
+            )
 
     def test_invalid_mode_coerces_to_auto(self):
         cfg = {"agent": {"image_input_mode": "weird-value"}}
         with patch("agent.image_routing._lookup_supports_vision", return_value=True):
-            assert decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "native"
+            assert (
+                decide_image_input_mode("anthropic", "claude-sonnet-4", cfg) == "native"
+            )
 
     def test_auto_uses_text_for_text_only_modalities_even_with_attachment_flag(self):
         registry = {
@@ -289,22 +325,34 @@ class TestLookupSupportsVisionOverride:
             assert _lookup_supports_vision("anthropic", "claude-sonnet-4", {}) is True
 
     def test_no_override_no_models_dev_entry_returns_none(self):
-        with patch("agent.models_dev.get_model_capabilities", return_value=None), \
-             patch("agent.image_routing._should_probe_ollama_vision", return_value=False):
+        with (
+            patch("agent.models_dev.get_model_capabilities", return_value=None),
+            patch(
+                "agent.image_routing._should_probe_ollama_vision", return_value=False
+            ),
+        ):
             assert _lookup_supports_vision("custom", "my-llava", {}) is None
 
     def test_ollama_probe_when_models_dev_missing(self):
         cfg = {"model": {"base_url": "http://localhost:11434/v1"}}
-        with patch("agent.models_dev.get_model_capabilities", return_value=None), \
-             patch("agent.image_routing._should_probe_ollama_vision", return_value=True), \
-             patch("agent.model_metadata.query_ollama_supports_vision", return_value=True):
+        with (
+            patch("agent.models_dev.get_model_capabilities", return_value=None),
+            patch("agent.image_routing._should_probe_ollama_vision", return_value=True),
+            patch(
+                "agent.model_metadata.query_ollama_supports_vision", return_value=True
+            ),
+        ):
             assert _lookup_supports_vision("ollama", "gemma4:e2b", cfg) is True
 
     def test_ollama_probe_false_for_text_only_model(self):
         cfg = {"model": {"base_url": "http://localhost:11434/v1"}}
-        with patch("agent.models_dev.get_model_capabilities", return_value=None), \
-             patch("agent.image_routing._should_probe_ollama_vision", return_value=True), \
-             patch("agent.model_metadata.query_ollama_supports_vision", return_value=False):
+        with (
+            patch("agent.models_dev.get_model_capabilities", return_value=None),
+            patch("agent.image_routing._should_probe_ollama_vision", return_value=True),
+            patch(
+                "agent.model_metadata.query_ollama_supports_vision", return_value=False
+            ),
+        ):
             assert _lookup_supports_vision("custom", "gemma4:31b", cfg) is False
 
     def test_cfg_none_falls_back_to_models_dev(self):
@@ -341,7 +389,9 @@ class TestAutoModeRespectsOverride:
         # images directly (supports_vision: true).
         cfg = {
             "model": {"supports_vision": True},
-            "auxiliary": {"vision": {"provider": "openrouter", "model": "gemini-2.5-pro"}},
+            "auxiliary": {
+                "vision": {"provider": "openrouter", "model": "gemini-2.5-pro"}
+            },
         }
         with patch("agent.models_dev.get_model_capabilities", return_value=None):
             assert decide_image_input_mode("custom", "qwen3.6-35b", cfg) == "native"
@@ -350,7 +400,9 @@ class TestAutoModeRespectsOverride:
         # #29135 counterpart: text-only main model + aux fallback → text.
         cfg = {
             "model": {"supports_vision": False},
-            "auxiliary": {"vision": {"provider": "openrouter", "model": "gemini-2.5-pro"}},
+            "auxiliary": {
+                "vision": {"provider": "openrouter", "model": "gemini-2.5-pro"}
+            },
         }
         with patch("agent.models_dev.get_model_capabilities", return_value=None):
             assert decide_image_input_mode("custom", "deepseek-v4", cfg) == "text"
@@ -395,7 +447,9 @@ class TestBuildNativeContentParts:
         assert parts[1]["type"] == "image_url"
 
     def test_missing_file_is_skipped(self, tmp_path: Path):
-        parts, skipped = build_native_content_parts("hi", [str(tmp_path / "missing.png")])
+        parts, skipped = build_native_content_parts(
+            "hi", [str(tmp_path / "missing.png")]
+        )
         assert skipped == [str(tmp_path / "missing.png")]
         # Skipped paths are NOT advertised in the path hints — the model
         # would otherwise be told a non-existent file is attached.
@@ -437,7 +491,9 @@ class TestBuildNativeContentParts:
         img2 = tmp_path / "b.png"
         img1.write_bytes(_png_bytes())
         img2.write_bytes(_png_bytes())
-        parts, skipped = build_native_content_parts("compare these", [str(img1), str(img2)])
+        parts, skipped = build_native_content_parts(
+            "compare these", [str(img1), str(img2)]
+        )
         assert skipped == []
         image_parts = [p for p in parts if p.get("type") == "image_url"]
         assert len(image_parts) == 2
@@ -501,6 +557,7 @@ class TestLargeImageHandling:
 
     def test_missing_file_returns_none(self, tmp_path: Path):
         from agent import image_routing as _ir
+
         missing = tmp_path / "does_not_exist.png"
         assert _ir._file_to_data_url(missing) is None
 
@@ -685,7 +742,9 @@ class TestBuildNativeContentPartsURLs:
         img.write_bytes(_png_bytes())
         # image_urls=[] should behave the same as not passing it at all.
         parts_no_urls, _ = build_native_content_parts("hi", [str(img)])
-        parts_empty_urls, _ = build_native_content_parts("hi", [str(img)], image_urls=[])
+        parts_empty_urls, _ = build_native_content_parts(
+            "hi", [str(img)], image_urls=[]
+        )
         assert parts_no_urls == parts_empty_urls
 
     def test_blank_url_strings_are_dropped(self):
@@ -720,33 +779,46 @@ class TestFormatCompatibility:
 
     def test_avif_sniffed_correctly(self):
         from agent.image_routing import _sniff_mime_from_bytes
+
         avif_header = b"\x00\x00\x00\x20ftypavif\x00\x00\x00\x00"
         assert _sniff_mime_from_bytes(avif_header) == "image/avif"
 
     def test_tiff_sniffed_both_endians(self):
         from agent.image_routing import _sniff_mime_from_bytes
+
         assert _sniff_mime_from_bytes(b"II*\x00" + b"\x00" * 16) == "image/tiff"
         assert _sniff_mime_from_bytes(b"MM\x00*" + b"\x00" * 16) == "image/tiff"
 
     def test_ico_sniffed_correctly(self):
         from agent.image_routing import _sniff_mime_from_bytes
-        assert _sniff_mime_from_bytes(b"\x00\x00\x01\x00" + b"\x00" * 16) == "image/x-icon"
+
+        assert (
+            _sniff_mime_from_bytes(b"\x00\x00\x01\x00" + b"\x00" * 16) == "image/x-icon"
+        )
 
     def test_heic_still_sniffed(self):
         from agent.image_routing import _sniff_mime_from_bytes
+
         heic_header = b"\x00\x00\x00\x20ftypheic\x00\x00\x00\x00"
         assert _sniff_mime_from_bytes(heic_header) == "image/heic"
 
     def test_svg_sniffed_correctly(self):
         from agent.image_routing import _sniff_mime_from_bytes
-        assert _sniff_mime_from_bytes(b'<svg xmlns="http://www.w3.org/2000/svg"/>') == "image/svg+xml"
+
+        assert (
+            _sniff_mime_from_bytes(b'<svg xmlns="http://www.w3.org/2000/svg"/>')
+            == "image/svg+xml"
+        )
         assert _sniff_mime_from_bytes(b'<?xml version="1.0"?><svg/>') == "image/svg+xml"
 
     def test_bmp_transcoded_to_png(self, tmp_path: Path):
         """BMP file should land as image/png in the data URL, not image/bmp,
         because not every provider (Anthropic) accepts BMP."""
         import pytest
-        Image = pytest.importorskip("PIL.Image", reason="Pillow not installed; transcode is best-effort")
+
+        Image = pytest.importorskip(
+            "PIL.Image", reason="Pillow not installed; transcode is best-effort"
+        )
         from agent.image_routing import _file_to_data_url
 
         img_path = tmp_path / "scan.bmp"
@@ -759,7 +831,10 @@ class TestFormatCompatibility:
 
     def test_tiff_transcoded_to_png(self, tmp_path: Path):
         import pytest
-        Image = pytest.importorskip("PIL.Image", reason="Pillow not installed; transcode is best-effort")
+
+        Image = pytest.importorskip(
+            "PIL.Image", reason="Pillow not installed; transcode is best-effort"
+        )
         from agent.image_routing import _file_to_data_url
 
         img_path = tmp_path / "scan.tiff"
@@ -800,7 +875,9 @@ class TestFormatCompatibility:
         assert skipped == [str(img_path)]
         assert all(part.get("type") != "image_url" for part in parts)
 
-    def test_native_content_parts_blocks_image_symlink_to_read_denied_file(self, tmp_path: Path):
+    def test_native_content_parts_blocks_image_symlink_to_read_denied_file(
+        self, tmp_path: Path
+    ):
         from agent.image_routing import build_native_content_parts
         import os
         import pytest
@@ -822,7 +899,9 @@ class TestFormatCompatibility:
         from agent.image_routing import _file_to_data_url
 
         img_path = tmp_path / "ok.jpg"
-        img_path.write_bytes(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9")
+        img_path.write_bytes(
+            b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
+        )
         url = _file_to_data_url(img_path)
         assert url is not None
         assert url.startswith("data:image/jpeg;base64,")
@@ -843,6 +922,8 @@ class TestFormatCompatibility:
         from agent.image_routing import _file_to_data_url
 
         img_path = tmp_path / "icon.svg"
-        img_path.write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>')
+        img_path.write_bytes(
+            b'<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>'
+        )
         url = _file_to_data_url(img_path)
         assert url is None

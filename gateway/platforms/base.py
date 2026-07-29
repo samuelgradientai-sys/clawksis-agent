@@ -27,12 +27,12 @@ logger = logging.getLogger(__name__)
 # Audio file extensions Clawksis recognizes for native audio delivery.
 # Kept in sync with tools/send_message_tool.py and cron/scheduler.py via
 # should_send_media_as_audio() below.
-_AUDIO_EXTS = frozenset({'.ogg', '.opus', '.mp3', '.wav', '.m4a', '.flac'})
+_AUDIO_EXTS = frozenset({".ogg", ".opus", ".mp3", ".wav", ".m4a", ".flac"})
 # Telegram's Bot API sendAudio only accepts MP3 / M4A. Other audio
 # formats either need to go through sendVoice (Opus/OGG) or must be
 # delivered as a regular document.
-_TELEGRAM_AUDIO_ATTACHMENT_EXTS = frozenset({'.mp3', '.m4a'})
-_TELEGRAM_VOICE_EXTS = frozenset({'.ogg', '.opus'})
+_TELEGRAM_AUDIO_ATTACHMENT_EXTS = frozenset({".mp3", ".m4a"})
+_TELEGRAM_VOICE_EXTS = frozenset({".ogg", ".opus"})
 _POST_DELIVERY_CALLBACK_TIMEOUT_SECONDS = 30.0
 
 
@@ -52,7 +52,9 @@ def _float_env(name: str, default: float) -> float:
         return default
 
 
-def _thread_metadata_for_source(source, reply_to_message_id: str | None = None) -> dict | None:
+def _thread_metadata_for_source(
+    source, reply_to_message_id: str | None = None
+) -> dict | None:
     """Build platform-aware thread metadata for adapter sends.
 
     Most platforms route threaded sends with a generic ``thread_id`` metadata
@@ -74,7 +76,10 @@ def _thread_metadata_for_source(source, reply_to_message_id: str | None = None) 
             metadata["slack_team_id"] = str(scope_id)
     if not metadata:
         return None
-    if _platform_name(getattr(source, "platform", None)) == "telegram" and getattr(source, "chat_type", None) == "dm":
+    if (
+        _platform_name(getattr(source, "platform", None)) == "telegram"
+        and getattr(source, "chat_type", None) == "dm"
+    ):
         metadata["telegram_dm_topic_reply_fallback"] = True
         tid = str(thread_id)
         if tid and tid not in {"", "1"}:
@@ -104,13 +109,23 @@ def _reply_anchor_for_event(event) -> str | None:
     source = getattr(event, "source", None)
     platform = _platform_name(getattr(source, "platform", None))
     thread_id = getattr(source, "thread_id", None)
-    if platform == "telegram" and thread_id and getattr(source, "chat_type", None) == "dm":
+    if (
+        platform == "telegram"
+        and thread_id
+        and getattr(source, "chat_type", None) == "dm"
+    ):
         # Reply to the triggering user message. Replying to Telegram's earlier
         # topic seed/anchor can render the bot response outside the active lane.
-        return getattr(event, "message_id", None) or getattr(event, "reply_to_message_id", None)
+        return getattr(event, "message_id", None) or getattr(
+            event, "reply_to_message_id", None
+        )
     if platform == "telegram" and thread_id:
         return None
-    if platform == "feishu" and thread_id and getattr(event, "reply_to_message_id", None):
+    if (
+        platform == "feishu"
+        and thread_id
+        and getattr(event, "reply_to_message_id", None)
+    ):
         return getattr(event, "reply_to_message_id", None)
     return getattr(event, "message_id", None)
 
@@ -213,7 +228,10 @@ def is_network_accessible(host: str) -> bool:
 
     try:
         resolved = _socket.getaddrinfo(
-            host, None, _socket.AF_UNSPEC, _socket.SOCK_STREAM,
+            host,
+            None,
+            _socket.AF_UNSPEC,
+            _socket.SOCK_STREAM,
         )
         # if the hostname resolves into at least one non-loopback address,
         # then we consider it to be network accessible
@@ -237,7 +255,10 @@ def _detect_macos_system_proxy() -> str | None:
         return None
     try:
         out = subprocess.check_output(
-            ["scutil", "--proxy"], timeout=3, text=True, stderr=subprocess.DEVNULL,
+            ["scutil", "--proxy"],
+            timeout=3,
+            text=True,
+            stderr=subprocess.DEVNULL,
         )
     except Exception:
         return None
@@ -331,7 +352,9 @@ def _no_proxy_entry_matches(entry: str, host: str, port: int | None = None) -> b
     return host == token_host or host.endswith(f".{token_host}")
 
 
-def should_bypass_proxy(target_hosts: str | list[str] | tuple[str, ...] | set[str] | None) -> bool:
+def should_bypass_proxy(
+    target_hosts: str | list[str] | tuple[str, ...] | set[str] | None,
+) -> bool:
     """Return True when NO_PROXY/no_proxy matches at least one target host.
 
     Supports exact hosts, domain suffixes, wildcard suffixes, IP literals,
@@ -374,8 +397,14 @@ def resolve_proxy_url(
             if should_bypass_proxy(target_hosts):
                 return None
             return normalize_proxy_url(value)
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+    ):
         value = (os.environ.get(key) or "").strip()
         if value:
             if should_bypass_proxy(target_hosts):
@@ -455,7 +484,9 @@ def proxy_kwargs_for_aiohttp(proxy_url: str | None) -> tuple[dict, dict]:
         return {}, {"proxy": proxy_url}
 
 
-def is_host_excluded_by_no_proxy(hostname: str, no_proxy_value: str | None = None) -> bool:
+def is_host_excluded_by_no_proxy(
+    hostname: str, no_proxy_value: str | None = None
+) -> bool:
     """Return True when ``hostname`` matches a ``NO_PROXY`` entry.
 
     Supports comma- or whitespace-separated entries with optional leading dots
@@ -496,6 +527,7 @@ from typing import Dict, List, Optional, Any, Callable, Awaitable, Tuple, Union
 from enum import Enum
 
 from pathlib import Path as _Path
+
 sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
 
 from gateway.config import Platform, PlatformConfig
@@ -543,7 +575,7 @@ def safe_url_for_log(url: str, max_len: int = 80) -> str:
         return safe
     if max_len <= 3:
         return "." * max_len
-    return f"{safe[:max_len - 3]}..."
+    return f"{safe[: max_len - 3]}..."
 
 
 async def _ssrf_redirect_guard(response):
@@ -555,6 +587,7 @@ async def _ssrf_redirect_guard(response):
     Must be async because httpx.AsyncClient awaits response event hooks.
     """
     from tools.url_safety import is_safe_url, redirect_target_from_response
+
     redirect_url = redirect_target_from_response(response)
     if redirect_url and not is_safe_url(redirect_url):
         raise ValueError(
@@ -586,6 +619,7 @@ def _resolve_cache_dir(constant_name: str, new_subpath: str, old_name: str) -> P
         return Path(current)
     return fresh
 
+
 # ---------------------------------------------------------------------------
 # Inbound media size cap (#13145)
 #
@@ -614,6 +648,7 @@ def get_inbound_media_max_bytes() -> int:
     """
     try:
         from clawk_cli.config import load_config as _load_config
+
         cfg = _load_config()
     except Exception:
         return DEFAULT_INBOUND_MEDIA_MAX_BYTES
@@ -641,8 +676,7 @@ def validate_inbound_media_size(
     limit = get_inbound_media_max_bytes() if max_bytes is None else max_bytes
     if limit and size > limit:
         raise ValueError(
-            f"Inbound {media_type} payload is too large "
-            f"({size} bytes > {limit} bytes)"
+            f"Inbound {media_type} payload is too large ({size} bytes > {limit} bytes)"
         )
 
 
@@ -661,11 +695,14 @@ async def _read_httpx_body_with_limit(response, *, media_type: str) -> bytes:
         except ValueError:
             logger.debug(
                 "Ignoring invalid Content-Length for inbound %s: %r",
-                media_type, content_length,
+                media_type,
+                content_length,
             )
         else:
             validate_inbound_media_size(
-                declared_size, media_type=media_type, max_bytes=max_bytes,
+                declared_size,
+                media_type=media_type,
+                max_bytes=max_bytes,
             )
 
     chunks: list[bytes] = []
@@ -720,8 +757,7 @@ def cache_image_from_bytes(data: bytes, ext: str = ".jpg") -> str:
     if not _looks_like_image(data):
         snippet = data[:80].decode("utf-8", errors="replace")
         raise ValueError(
-            f"Refusing to cache non-image data as {ext} "
-            f"(starts with: {snippet!r})"
+            f"Refusing to cache non-image data as {ext} (starts with: {snippet!r})"
         )
     cache_dir = get_image_cache_dir()
     filename = f"img_{uuid.uuid4().hex[:12]}{ext}"
@@ -749,10 +785,14 @@ async def cache_image_from_url(url: str, ext: str = ".jpg", retries: int = 2) ->
         ValueError: If the URL targets a private/internal network (SSRF protection).
     """
     from tools.url_safety import is_safe_url
+
     if not is_safe_url(url):
-        raise ValueError(f"Blocked unsafe URL (SSRF protection): {safe_url_for_log(url)}")
+        raise ValueError(
+            f"Blocked unsafe URL (SSRF protection): {safe_url_for_log(url)}"
+        )
 
     import httpx
+
     _log = logging.getLogger(__name__)
 
     async with httpx.AsyncClient(
@@ -772,11 +812,15 @@ async def cache_image_from_url(url: str, ext: str = ".jpg", retries: int = 2) ->
                 ) as response:
                     response.raise_for_status()
                     content = await _read_httpx_body_with_limit(
-                        response, media_type="image",
+                        response,
+                        media_type="image",
                     )
                 return cache_image_from_bytes(content, ext)
             except (httpx.TimeoutException, httpx.HTTPStatusError) as exc:
-                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 429:
+                if (
+                    isinstance(exc, httpx.HTTPStatusError)
+                    and exc.response.status_code < 429
+                ):
                     raise
                 if attempt < retries:
                     wait = 1.5 * (attempt + 1)
@@ -869,10 +913,14 @@ async def cache_audio_from_url(url: str, ext: str = ".ogg", retries: int = 2) ->
         ValueError: If the URL targets a private/internal network (SSRF protection).
     """
     from tools.url_safety import is_safe_url
+
     if not is_safe_url(url):
-        raise ValueError(f"Blocked unsafe URL (SSRF protection): {safe_url_for_log(url)}")
+        raise ValueError(
+            f"Blocked unsafe URL (SSRF protection): {safe_url_for_log(url)}"
+        )
 
     import httpx
+
     _log = logging.getLogger(__name__)
 
     async with httpx.AsyncClient(
@@ -892,11 +940,15 @@ async def cache_audio_from_url(url: str, ext: str = ".ogg", retries: int = 2) ->
                 ) as response:
                     response.raise_for_status()
                     content = await _read_httpx_body_with_limit(
-                        response, media_type="audio",
+                        response,
+                        media_type="audio",
                     )
                 return cache_audio_from_bytes(content, ext)
             except (httpx.TimeoutException, httpx.HTTPStatusError) as exc:
-                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 429:
+                if (
+                    isinstance(exc, httpx.HTTPStatusError)
+                    and exc.response.status_code < 429
+                ):
                     raise
                 if attempt < retries:
                     wait = 1.5 * (attempt + 1)
@@ -1091,8 +1143,10 @@ def _kanban_attachment_roots() -> List[Path]:
     boards_root = root / "kanban" / "boards"
     try:
         board_dirs = [
-            path for path in boards_root.iterdir()
-            if path.is_dir() and not path.is_symlink()
+            path
+            for path in boards_root.iterdir()
+            if path.is_dir()
+            and not path.is_symlink()
             and re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", path.name)
             and (path / "kanban.db").is_file()
         ]
@@ -1234,7 +1288,9 @@ def _path_under_denied_prefix(resolved: Path) -> bool:
             resolved_denied = denied.expanduser().resolve(strict=False)
         except (OSError, RuntimeError, ValueError):
             continue
-        if not (_path_is_within(resolved, resolved_denied) or resolved == resolved_denied):
+        if not (
+            _path_is_within(resolved, resolved_denied) or resolved == resolved_denied
+        ):
             continue
         # Allow the running user's own home tree; its credential sub-dirs are
         # caught by their own (more-specific) denylist entries above.
@@ -1399,18 +1455,82 @@ SUPPORTED_DOCUMENT_TYPES = {
 # ---------------------------------------------------------------------------
 
 _TEXT_INJECT_EXTENSIONS = {
-    ".txt", ".md", ".markdown", ".csv", ".tsv", ".log",
-    ".json", ".jsonl", ".ndjson", ".xml", ".yaml", ".yml", ".toml",
-    ".ini", ".cfg", ".conf", ".env", ".properties",
-    ".html", ".htm", ".css", ".scss", ".sass", ".less",
-    ".py", ".pyi", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx",
-    ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat",
-    ".c", ".h", ".cpp", ".cc", ".hpp", ".cs", ".java", ".kt",
-    ".go", ".rs", ".rb", ".php", ".pl", ".lua", ".r", ".jl",
-    ".swift", ".m", ".scala", ".clj", ".ex", ".exs", ".erl",
-    ".sql", ".graphql", ".proto", ".tf", ".hcl",
-    ".dockerfile", ".makefile", ".cmake", ".gradle",
-    ".rst", ".tex", ".srt", ".vtt", ".diff", ".patch",
+    ".txt",
+    ".md",
+    ".markdown",
+    ".csv",
+    ".tsv",
+    ".log",
+    ".json",
+    ".jsonl",
+    ".ndjson",
+    ".xml",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".env",
+    ".properties",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+    ".py",
+    ".pyi",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".ps1",
+    ".bat",
+    ".c",
+    ".h",
+    ".cpp",
+    ".cc",
+    ".hpp",
+    ".cs",
+    ".java",
+    ".kt",
+    ".go",
+    ".rs",
+    ".rb",
+    ".php",
+    ".pl",
+    ".lua",
+    ".r",
+    ".jl",
+    ".swift",
+    ".m",
+    ".scala",
+    ".clj",
+    ".ex",
+    ".exs",
+    ".erl",
+    ".sql",
+    ".graphql",
+    ".proto",
+    ".tf",
+    ".hcl",
+    ".dockerfile",
+    ".makefile",
+    ".cmake",
+    ".gradle",
+    ".rst",
+    ".tex",
+    ".srt",
+    ".vtt",
+    ".diff",
+    ".patch",
 }
 
 
@@ -1462,21 +1582,65 @@ SUPPORTED_IMAGE_DOCUMENT_TYPES = {
 
 MEDIA_DELIVERY_EXTS: Tuple[str, ...] = (
     # Images (embed inline)
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".svg",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".bmp",
+    ".tiff",
+    ".svg",
     # Video (embed inline where supported)
-    ".mp4", ".mov", ".avi", ".mkv", ".webm",
+    ".mp4",
+    ".mov",
+    ".avi",
+    ".mkv",
+    ".webm",
     # Audio (delivered as voice/audio where supported)
-    ".mp3", ".wav", ".ogg", ".opus", ".m4a", ".flac",
+    ".mp3",
+    ".wav",
+    ".ogg",
+    ".opus",
+    ".m4a",
+    ".flac",
     # Documents (uploaded as file attachments)
-    ".pdf", ".docx", ".doc", ".odt", ".rtf", ".txt", ".md", ".epub",
+    ".pdf",
+    ".docx",
+    ".doc",
+    ".odt",
+    ".rtf",
+    ".txt",
+    ".md",
+    ".epub",
     # Spreadsheets / data
-    ".xlsx", ".xls", ".ods", ".csv", ".tsv", ".json", ".xml", ".yaml", ".yml",
+    ".xlsx",
+    ".xls",
+    ".ods",
+    ".csv",
+    ".tsv",
+    ".json",
+    ".xml",
+    ".yaml",
+    ".yml",
     # Presentations
-    ".pptx", ".ppt", ".odp", ".key",
+    ".pptx",
+    ".ppt",
+    ".odp",
+    ".key",
     # Archives
-    ".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar", ".apk", ".ipa",
+    ".zip",
+    ".tar",
+    ".gz",
+    ".tgz",
+    ".bz2",
+    ".xz",
+    ".7z",
+    ".rar",
+    ".apk",
+    ".ipa",
     # Web / rendered output
-    ".html", ".htm",
+    ".html",
+    ".htm",
 )
 
 # Regex alternation fragment of bare extensions (no leading dot), e.g.
@@ -1497,10 +1661,12 @@ _MEDIA_EXT_ALTERNATION = "|".join(
 # Path anchors: ``~/`` (Unix home-relative), ``/`` (Unix absolute),
 # ``X:\\`` or ``X:/`` (Windows drive-letter absolute — #34632).
 MEDIA_TAG_CLEANUP_RE = re.compile(
-    r'''[`"']?MEDIA:\s*'''
-    r'''(?P<path>`[^`\n]+`|"[^"\n]+"|'[^'\n]+'|'''
-    r'''(?:~/|/|[A-Za-z]:[/\\])\S+(?:[^\S\n]+\S+)*?\.(?:''' + _MEDIA_EXT_ALTERNATION + r'''))'''
-    r'''(?=[\s`"',;:)\]}]|$)[`"']?''',
+    r"""[`"']?MEDIA:\s*"""
+    r"""(?P<path>`[^`\n]+`|"[^"\n]+"|'[^'\n]+'|"""
+    r"""(?:~/|/|[A-Za-z]:[/\\])\S+(?:[^\S\n]+\S+)*?\.(?:"""
+    + _MEDIA_EXT_ALTERNATION
+    + r"""))"""
+    r"""(?=[\s`"',;:)\]}]|$)[`"']?""",
     re.IGNORECASE,
 )
 
@@ -1515,10 +1681,10 @@ MEDIA_TAG_CLEANUP_RE = re.compile(
 # prompt-injection paths that do not validate are left visible instead of
 # silently dropped.
 MEDIA_EXTENSIONLESS_TAG_RE = re.compile(
-    r'''[`"']?MEDIA:\s*'''
-    r'''(?P<path>`[^`\n]+`|"[^"\n]+"|'[^'\n]+'|'''
-    r'''(?:~/|/|[A-Za-z]:[/\\])[^\s\n`"']+)'''
-    r'''[`"']?\s*''',
+    r"""[`"']?MEDIA:\s*"""
+    r"""(?P<path>`[^`\n]+`|"[^"\n]+"|'[^'\n]+'|"""
+    r"""(?:~/|/|[A-Za-z]:[/\\])[^\s\n`"']+)"""
+    r"""[`"']?\s*""",
     re.IGNORECASE,
 )
 
@@ -1634,14 +1800,15 @@ def cleanup_document_cache(max_age_hours: int = 24) -> int:
 # platform — not Telegram-specific.
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CachedMedia:
     """Result of caching one attachment's bytes."""
 
-    path: str                 # absolute cache path, agent-visible (sandbox-translated)
-    media_type: str           # MIME type recorded on the MessageEvent
-    kind: str                 # "image" | "video" | "audio" | "document"
-    display_name: str         # human-readable name for transcript notes
+    path: str  # absolute cache path, agent-visible (sandbox-translated)
+    media_type: str  # MIME type recorded on the MessageEvent
+    kind: str  # "image" | "video" | "audio" | "document"
+    display_name: str  # human-readable name for transcript notes
 
     def context_note(self) -> str:
         """One-line transcript annotation pointing the agent at the file."""
@@ -1688,14 +1855,20 @@ def cache_media_bytes(
 
     ext = _resolve_media_ext(filename, mime_type)
     mime = (mime_type or "").lower()
-    display = re.sub(r"[^\w.\- ]", "_", filename) if filename else (ext.lstrip(".") or "file")
+    display = (
+        re.sub(r"[^\w.\- ]", "_", filename) if filename else (ext.lstrip(".") or "file")
+    )
 
     is_image = (
         mime.startswith("image/")
         or ext in SUPPORTED_IMAGE_DOCUMENT_TYPES
         or default_kind == "image"
     )
-    is_video = mime.startswith("video/") or ext in SUPPORTED_VIDEO_TYPES or default_kind == "video"
+    is_video = (
+        mime.startswith("video/")
+        or ext in SUPPORTED_VIDEO_TYPES
+        or default_kind == "video"
+    )
     is_audio = mime.startswith("audio/") or default_kind == "audio"
 
     if is_image:
@@ -1704,19 +1877,34 @@ def cache_media_bytes(
             path = cache_image_from_bytes(data, ext=img_ext)
         except ValueError:
             return None
-        out_mime = mime if mime.startswith("image/") else SUPPORTED_IMAGE_DOCUMENT_TYPES.get(img_ext, "image/jpeg")
-        return CachedMedia(to_agent_visible_cache_path(path), out_mime, "image", display)
+        out_mime = (
+            mime
+            if mime.startswith("image/")
+            else SUPPORTED_IMAGE_DOCUMENT_TYPES.get(img_ext, "image/jpeg")
+        )
+        return CachedMedia(
+            to_agent_visible_cache_path(path), out_mime, "image", display
+        )
 
     if is_video:
         vid_ext = ext if ext in SUPPORTED_VIDEO_TYPES else ".mp4"
         path = cache_video_from_bytes(data, ext=vid_ext)
-        return CachedMedia(to_agent_visible_cache_path(path), SUPPORTED_VIDEO_TYPES.get(vid_ext, "video/mp4"), "video", display)
+        return CachedMedia(
+            to_agent_visible_cache_path(path),
+            SUPPORTED_VIDEO_TYPES.get(vid_ext, "video/mp4"),
+            "video",
+            display,
+        )
 
     if is_audio:
-        aud_ext = ext if ext in {".ogg", ".mp3", ".wav", ".m4a", ".opus", ".flac"} else ".ogg"
+        aud_ext = (
+            ext if ext in {".ogg", ".mp3", ".wav", ".m4a", ".opus", ".flac"} else ".ogg"
+        )
         path = cache_audio_from_bytes(data, ext=aud_ext)
         out_mime = mime if mime.startswith("audio/") else f"audio/{aud_ext.lstrip('.')}"
-        return CachedMedia(to_agent_visible_cache_path(path), out_mime, "audio", display)
+        return CachedMedia(
+            to_agent_visible_cache_path(path), out_mime, "audio", display
+        )
 
     # Any other file type is cached and surfaced to the agent as a local path
     # so it can be inspected with terminal / read_file / etc. Authorization to
@@ -1731,11 +1919,17 @@ def cache_media_bytes(
         out_mime = SUPPORTED_DOCUMENT_TYPES[ext]
     else:
         out_mime = mime if mime else "application/octet-stream"
-    return CachedMedia(to_agent_visible_cache_path(path), out_mime, "document", display or fallback_name)
+    return CachedMedia(
+        to_agent_visible_cache_path(path),
+        out_mime,
+        "document",
+        display or fallback_name,
+    )
 
 
 class MessageType(Enum):
     """Types of incoming messages."""
+
     TEXT = "text"
     LOCATION = "location"
     PHOTO = "photo"
@@ -1759,16 +1953,17 @@ class ProcessingOutcome(Enum):
 class MessageEvent:
     """
     Incoming message from a platform.
-    
+
     Normalized representation that all adapters produce.
     """
+
     # Message content
     text: str
     message_type: MessageType = MessageType.TEXT
-    
+
     # Source information
     source: SessionSource = None
-    
+
     # Original platform data
     raw_message: Any = None
     message_id: Optional[str] = None
@@ -1781,19 +1976,23 @@ class MessageEvent:
     # ("Error while calling `get_updates` one more time to mark all fetched
     # updates" in gateway.log).
     platform_update_id: Optional[int] = None
-    
+
     # Media attachments
     # media_urls: local file paths (for vision tool access)
     media_urls: List[str] = field(default_factory=list)
     media_types: List[str] = field(default_factory=list)
-    
+
     # Reply context
     reply_to_message_id: Optional[str] = None
-    reply_to_text: Optional[str] = None  # Text of the replied-to message (for context injection)
+    reply_to_text: Optional[str] = (
+        None  # Text of the replied-to message (for context injection)
+    )
     reply_to_author_id: Optional[str] = None
     reply_to_author_name: Optional[str] = None
-    reply_to_is_own_message: bool = False  # True when the user replied to this bot/assistant's message
-    
+    reply_to_is_own_message: bool = (
+        False  # True when the user replied to this bot/assistant's message
+    )
+
     # Auto-loaded skill(s) for topic/channel bindings (e.g., Telegram DM Topics,
     # Discord channel_skill_bindings).  A single name or ordered list.
     auto_skill: Optional[str | list[str]] = None
@@ -1807,7 +2006,7 @@ class MessageEvent:
     # from ``text`` so the sender-prefix logic in run.py can operate on the
     # trigger message alone, then prepend this context afterward.
     channel_context: Optional[str] = None
-    
+
     # Internal flag — set for synthetic events (e.g. background process
     # completion notifications) that must bypass user authorization checks.
     internal: bool = False
@@ -1821,11 +2020,11 @@ class MessageEvent:
 
     # Timestamps
     timestamp: datetime = field(default_factory=datetime.now)
-    
+
     def is_command(self) -> bool:
         """Check if this is a command message (e.g., /new, /reset)."""
         return self.text.startswith("/")
-    
+
     def get_command(self) -> Optional[str]:
         """Extract command name if this is a command message."""
         if not self.is_command():
@@ -1839,7 +2038,7 @@ class MessageEvent:
         if raw and "/" in raw:
             return None
         return raw
-    
+
     def get_command_args(self) -> str:
         """Get the arguments after a command."""
         if not self.is_command():
@@ -1847,7 +2046,12 @@ class MessageEvent:
         parts = self.text.split(maxsplit=1)
         args = parts[1] if len(parts) > 1 else ""
         # iOS auto-corrects -- to — (em dash) and - to – (en dash)
-        args = args.replace("\u2014\u2014", "--").replace("\u2014", "--").replace("\u2013", "-")
+        args = (
+            args
+            .replace("\u2014\u2014", "--")
+            .replace("\u2014", "--")
+            .replace("\u2013", "-")
+        )
         return args
 
 
@@ -1861,7 +2065,9 @@ class TextDebounceState:
 
 _PLAINTEXT_GATEWAY_RESTART_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"^(?:please\s+)?restart\s+(?:the\s+)?gateway[.!?\s]*$", re.IGNORECASE),
-    re.compile(r"^(?:please\s+)?restart\s+(?:the\s+)?clawk\s+gateway[.!?\s]*$", re.IGNORECASE),
+    re.compile(
+        r"^(?:please\s+)?restart\s+(?:the\s+)?clawk\s+gateway[.!?\s]*$", re.IGNORECASE
+    ),
     re.compile(r"^(?:please\s+)?restart\s+clawk[.!?\s]*$", re.IGNORECASE),
 )
 
@@ -1897,6 +2103,7 @@ def coerce_plaintext_gateway_command(event: "MessageEvent") -> None:
 @dataclass
 class SendResult:
     """Result of sending a message."""
+
     success: bool
     message_id: Optional[str] = None
     error: Optional[str] = None
@@ -1908,7 +2115,9 @@ class SendResult:
     # last_message_id, delivered_prefix, and continuation_message_ids so the
     # stream consumer can send the missing tail instead of marking a clipped
     # response complete.
-    retryable: bool = False  # True for transient connection errors — base will retry automatically
+    retryable: bool = (
+        False  # True for transient connection errors — base will retry automatically
+    )
     # Server-requested retry delay in seconds (e.g. Telegram FloodWait retry_after).
     # When present, _send_with_retry() honors this instead of its default backoff.
     retry_after: Optional[float] = None
@@ -1945,17 +2154,15 @@ class SendResult:
 #   rate_limited  the platform throttled the send (flood control).
 #   transient     a connection-level failure that is safe to retry.
 #   unknown       classification did not match any known shape.
-SEND_ERROR_KINDS = frozenset(
-    {
-        "too_long",
-        "bad_format",
-        "forbidden",
-        "not_found",
-        "rate_limited",
-        "transient",
-        "unknown",
-    }
-)
+SEND_ERROR_KINDS = frozenset({
+    "too_long",
+    "bad_format",
+    "forbidden",
+    "not_found",
+    "rate_limited",
+    "transient",
+    "unknown",
+})
 
 # ``not_found`` substrings split by blast radius.  A *chat-level* not_found means
 # the chat/user/group itself is gone, so the whole target is dead.  A
@@ -2005,7 +2212,11 @@ def classify_send_error(exc: Optional[BaseException], error_text: str = "") -> s
     blob = _error_blob(exc, error_text)
     if not blob.strip():
         return "unknown"
-    if "message_too_long" in blob or "too long" in blob or "message is too long" in blob:
+    if (
+        "message_too_long" in blob
+        or "too long" in blob
+        or "message is too long" in blob
+    ):
         return "too_long"
     if (
         "can't parse entities" in blob
@@ -2045,7 +2256,9 @@ def classify_send_error(exc: Optional[BaseException], error_text: str = "") -> s
     return "unknown"
 
 
-def is_chat_level_not_found(exc: Optional[BaseException] = None, error_text: str = "") -> bool:
+def is_chat_level_not_found(
+    exc: Optional[BaseException] = None, error_text: str = ""
+) -> bool:
     """Whether a ``not_found`` failure means the *whole chat* is gone.
 
     :func:`classify_send_error` collapses chat-level and thread/topic/message-level
@@ -2152,7 +2365,9 @@ def merge_pending_message_event(
             existing.media_urls.extend(event.media_urls)
             existing.media_types.extend(event.media_types)
             if event.text:
-                existing.text = BasePlatformAdapter._merge_caption(existing.text, event.text)
+                existing.text = BasePlatformAdapter._merge_caption(
+                    existing.text, event.text
+                )
             _invalidate_pending_stt_cache(existing)
             return
 
@@ -2162,7 +2377,9 @@ def merge_pending_message_event(
                 existing.media_types.extend(event.media_types)
             if event.text:
                 if existing.text:
-                    existing.text = BasePlatformAdapter._merge_caption(existing.text, event.text)
+                    existing.text = BasePlatformAdapter._merge_caption(
+                        existing.text, event.text
+                    )
                 else:
                     existing.text = event.text
             if existing_is_photo or incoming_is_photo:
@@ -2181,7 +2398,9 @@ def merge_pending_message_event(
             and event.message_type == MessageType.TEXT
         ):
             if event.text:
-                existing.text = f"{existing.text}\n{event.text}" if existing.text else event.text
+                existing.text = (
+                    f"{existing.text}\n{event.text}" if existing.text else event.text
+                )
             return
 
     pending_messages[session_key] = event
@@ -2210,7 +2429,9 @@ _RETRYABLE_ERROR_PATTERNS = (
 # Type for message handlers.  Handlers may return a plain string (normal
 # reply), an ``EphemeralReply`` to opt the reply into auto-deletion, or
 # ``None`` when the response was already delivered (e.g. via streaming).
-MessageHandler = Callable[[MessageEvent], Awaitable[Optional[Union[str, "EphemeralReply"]]]]
+MessageHandler = Callable[
+    [MessageEvent], Awaitable[Optional[Union[str, "EphemeralReply"]]]
+]
 
 
 def resolve_channel_prompt(
@@ -2317,7 +2538,7 @@ def _strip_media_directives(text: str) -> str:
 class BasePlatformAdapter(ABC):
     """
     Base class for platform adapters.
-    
+
     Subclasses implement platform-specific logic for:
     - Connecting and authenticating
     - Receiving messages
@@ -2447,8 +2668,10 @@ class BasePlatformAdapter(ABC):
         self._fatal_error_code: Optional[str] = None
         self._fatal_error_message: Optional[str] = None
         self._fatal_error_retryable = True
-        self._fatal_error_handler: Optional[Callable[["BasePlatformAdapter"], Awaitable[None] | None]] = None
-        
+        self._fatal_error_handler: Optional[
+            Callable[["BasePlatformAdapter"], Awaitable[None] | None]
+        ] = None
+
         # Track active message handlers per session for interrupt support.
         # _active_sessions stores the per-session interrupt Event; _session_tasks
         # maps session → the specific Task currently processing it so that
@@ -2486,13 +2709,17 @@ class BasePlatformAdapter(ABC):
         # registered by a fresher run for the same session.
         self._post_delivery_callbacks: Dict[str, Any] = {}
         self._expected_cancelled_tasks: set[asyncio.Task] = set()
-        self._busy_session_handler: Optional[Callable[[MessageEvent, str], Awaitable[bool]]] = None
+        self._busy_session_handler: Optional[
+            Callable[[MessageEvent, str], Awaitable[bool]]
+        ] = None
         # Optional authorization check, registered by GatewayRunner. Used by
         # adapters that fetch external context (e.g. Slack thread history) to
         # mark senders not on the allowlist as unverified in LLM context,
         # mitigating indirect prompt injection from third parties in a shared
         # thread/channel.
-        self._authorization_check: Optional[Callable[[str, Optional[str], Optional[str]], bool]] = None
+        self._authorization_check: Optional[
+            Callable[[str, Optional[str], Optional[str]], bool]
+        ] = None
         # Auto-TTS on voice input: ``_auto_tts_default`` is the global default
         # (``voice.auto_tts`` in config.yaml, pushed by GatewayRunner on connect).
         # Per-chat overrides live in two sets populated from ``_voice_mode``:
@@ -2710,8 +2937,9 @@ class BasePlatformAdapter(ABC):
             if event.text:
                 sink.on_commentary(event.text)
 
-    def format_tool_event(self, event: Any, *, mode: str = "all",
-                          preview_max_len: int = 40) -> Optional[str]:
+    def format_tool_event(
+        self, event: Any, *, mode: str = "all", preview_max_len: int = 40
+    ) -> Optional[str]:
         """Return the rendered chrome for a ToolCallChunk, or None to eat it.
 
         Reproduces the gateway's historical tool-progress formatting: an emoji
@@ -2725,21 +2953,26 @@ class BasePlatformAdapter(ABC):
         "no cap" in verbose mode).
         """
         from gateway.stream_events import ToolCallChunk
+
         if not isinstance(event, ToolCallChunk):
             return None
 
         from agent.display import get_tool_emoji
+
         emoji = get_tool_emoji(event.tool_name, default="⚙️", args=event.args)
 
         if mode == "verbose":
             if event.args:
                 import json
+
                 args_str = json.dumps(event.args, ensure_ascii=False, default=str)
                 if preview_max_len > 0 and len(args_str) > preview_max_len:
-                    args_str = args_str[:preview_max_len - 3] + "..."
-                return f"{emoji} {event.tool_name}({list(event.args.keys())})\n{args_str}"
+                    args_str = args_str[: preview_max_len - 3] + "..."
+                return (
+                    f"{emoji} {event.tool_name}({list(event.args.keys())})\n{args_str}"
+                )
             if event.preview:
-                return f"{emoji} {event.tool_name}: \"{event.preview}\""
+                return f'{emoji} {event.tool_name}: "{event.preview}"'
             return f"{emoji} {event.tool_name}..."
 
         # "all" / "new": short preview, capped (default 40 to keep gateway
@@ -2748,8 +2981,8 @@ class BasePlatformAdapter(ABC):
         if preview:
             cap = preview_max_len if preview_max_len > 0 else 40
             if len(preview) > cap:
-                preview = preview[:cap - 3] + "..."
-            return f"{emoji} {event.tool_name}: \"{preview}\""
+                preview = preview[: cap - 3] + "..."
+            return f'{emoji} {event.tool_name}: "{preview}"'
         return f"{emoji} {event.tool_name}..."
 
     @property
@@ -2783,7 +3016,9 @@ class BasePlatformAdapter(ABC):
             return False
         return bool(self._auto_tts_default)
 
-    def set_fatal_error_handler(self, handler: Callable[["BasePlatformAdapter"], Awaitable[None] | None]) -> None:
+    def set_fatal_error_handler(
+        self, handler: Callable[["BasePlatformAdapter"], Awaitable[None] | None]
+    ) -> None:
         self._fatal_error_handler = handler
 
     def _mark_connected(self) -> None:
@@ -2791,20 +3026,29 @@ class BasePlatformAdapter(ABC):
         self._fatal_error_code = None
         self._fatal_error_message = None
         self._fatal_error_retryable = True
-        self._write_runtime_status_safe("connected", platform_state="connected", error_code=None, error_message=None)
+        self._write_runtime_status_safe(
+            "connected", platform_state="connected", error_code=None, error_message=None
+        )
 
     def _mark_disconnected(self) -> None:
         self._running = False
         if self.has_fatal_error:
             return
-        self._write_runtime_status_safe("disconnected", platform_state="disconnected", error_code=None, error_message=None)
+        self._write_runtime_status_safe(
+            "disconnected",
+            platform_state="disconnected",
+            error_code=None,
+            error_message=None,
+        )
 
     def _set_fatal_error(self, code: str, message: str, *, retryable: bool) -> None:
         self._running = False
         self._fatal_error_code = code
         self._fatal_error_message = message
         self._fatal_error_retryable = retryable
-        self._write_runtime_status_safe("fatal", platform_state="fatal", error_code=code, error_message=message)
+        self._write_runtime_status_safe(
+            "fatal", platform_state="fatal", error_code=code, error_message=message
+        )
 
     def _write_runtime_status_safe(self, context: str, **kwargs) -> None:
         """Write runtime status; log first failure per context at warning, rest at debug.
@@ -2817,6 +3061,7 @@ class BasePlatformAdapter(ABC):
         """
         try:
             from gateway.status import write_runtime_status
+
             write_runtime_status(platform=self.platform.value, **kwargs)
         except Exception as exc:
             # Use getattr so object.__new__(...) test harnesses that skip __init__
@@ -2832,11 +3077,18 @@ class BasePlatformAdapter(ABC):
             if key not in logged:
                 logger.warning(
                     "Failed to write runtime status (%s) for %s: %s (further failures at debug level)",
-                    context, self.platform.value, exc,
+                    context,
+                    self.platform.value,
+                    exc,
                 )
                 logged.add(key)
             else:
-                logger.debug("Failed to write runtime status (%s) for %s: %s", context, self.platform.value, exc)
+                logger.debug(
+                    "Failed to write runtime status (%s) for %s: %s",
+                    context,
+                    self.platform.value,
+                    exc,
+                )
 
     async def _notify_fatal_error(self) -> None:
         handler = self._fatal_error_handler
@@ -2846,32 +3098,36 @@ class BasePlatformAdapter(ABC):
         if asyncio.iscoroutine(result):
             await result
 
-    def _acquire_platform_lock(self, scope: str, identity: str, resource_desc: str) -> bool:
+    def _acquire_platform_lock(
+        self, scope: str, identity: str, resource_desc: str
+    ) -> bool:
         """Acquire a scoped lock for this adapter. Returns True on success."""
         from gateway.status import acquire_scoped_lock
+
         self._platform_lock_scope = scope
         self._platform_lock_identity = identity
         acquired, existing = acquire_scoped_lock(
-            scope, identity, metadata={'platform': self.platform.value}
+            scope, identity, metadata={"platform": self.platform.value}
         )
         if acquired:
             return True
-        owner_pid = existing.get('pid') if isinstance(existing, dict) else None
+        owner_pid = existing.get("pid") if isinstance(existing, dict) else None
         message = (
-            f'{resource_desc} already in use'
-            + (f' (PID {owner_pid})' if owner_pid else '')
-            + '. Stop the other gateway first.'
+            f"{resource_desc} already in use"
+            + (f" (PID {owner_pid})" if owner_pid else "")
+            + ". Stop the other gateway first."
         )
-        logger.error('[%s] %s', self.name, message)
-        self._set_fatal_error(f'{scope}_lock', message, retryable=True)
+        logger.error("[%s] %s", self.name, message)
+        self._set_fatal_error(f"{scope}_lock", message, retryable=True)
         return False
 
     def _release_platform_lock(self) -> None:
         """Release the scoped lock acquired by _acquire_platform_lock."""
-        identity = getattr(self, '_platform_lock_identity', None)
+        identity = getattr(self, "_platform_lock_identity", None)
         if not identity:
             return
         from gateway.status import release_scoped_lock
+
         release_scoped_lock(self._platform_lock_scope, identity)
         self._platform_lock_identity = None
 
@@ -2879,16 +3135,16 @@ class BasePlatformAdapter(ABC):
     def name(self) -> str:
         """Human-readable name for this adapter."""
         return self.platform.value.title()
-    
+
     @property
     def is_connected(self) -> bool:
         """Check if adapter is currently connected."""
         return self._running
-    
+
     def set_message_handler(self, handler: MessageHandler) -> None:
         """
         Set the handler for incoming messages.
-        
+
         The handler receives a MessageEvent and should return
         an optional response string.
         """
@@ -2928,7 +3184,9 @@ class BasePlatformAdapter(ABC):
         except Exception:
             logger.debug("topic recovery rewrite failed", exc_info=True)
 
-    def set_busy_session_handler(self, handler: Optional[Callable[[MessageEvent, str], Awaitable[bool]]]) -> None:
+    def set_busy_session_handler(
+        self, handler: Optional[Callable[[MessageEvent, str], Awaitable[bool]]]
+    ) -> None:
         """Set an optional handler for messages arriving during active sessions."""
         self._busy_session_handler = handler
 
@@ -2966,20 +3224,22 @@ class BasePlatformAdapter(ABC):
         except Exception:
             logger.warning(
                 "[%s] Authorization check raised for user %s; treating as unknown",
-                self.name, user_id, exc_info=True,
+                self.name,
+                user_id,
+                exc_info=True,
             )
             return None
-    
+
     def set_session_store(self, session_store: Any) -> None:
         """
         Set the session store for checking active sessions.
-        
+
         Used by adapters that need to check if a thread/conversation
         has an active session before processing messages (e.g., Slack
         thread replies without explicit mentions).
         """
         self._session_store = session_store
-    
+
     @abstractmethod
     async def connect(self, *, is_reconnect: bool = False) -> bool:
         """
@@ -2999,29 +3259,29 @@ class BasePlatformAdapter(ABC):
         Returns True if connection was successful.
         """
         pass
-    
+
     @abstractmethod
     async def disconnect(self) -> None:
         """Disconnect from the platform."""
         pass
-    
+
     @abstractmethod
     async def send(
         self,
         chat_id: str,
         content: str,
         reply_to: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> SendResult:
         """
         Send a message to a chat.
-        
+
         Args:
             chat_id: The chat/channel ID to send to
             content: Message content (may be markdown)
             reply_to: Optional message ID to reply to
             metadata: Additional platform-specific options
-        
+
         Returns:
             SendResult with success status and message ID
         """
@@ -3060,7 +3320,6 @@ class BasePlatformAdapter(ABC):
           - Slack:    seed-message thread anchoring
         """
         return None
-
 
     async def edit_message(
         self,
@@ -3158,7 +3417,10 @@ class BasePlatformAdapter(ABC):
             except Exception as e:
                 logger.debug(
                     "[%s] Ephemeral delete failed for %s/%s: %s",
-                    self.name, chat_id, message_id, e,
+                    self.name,
+                    chat_id,
+                    message_id,
+                    e,
                 )
 
         coro = _run_delete()
@@ -3253,6 +3515,7 @@ class BasePlatformAdapter(ABC):
             # Text fallback: enable text-capture so the gateway intercept
             # picks up the user's typed reply (e.g. "2" or choice text).
             from tools.clarify_gateway import mark_awaiting_text
+
             mark_awaiting_text(clarify_id)
         else:
             text = f"❓ {question}"
@@ -3285,7 +3548,7 @@ class BasePlatformAdapter(ABC):
     async def send_typing(self, chat_id: str, metadata=None) -> None:
         """
         Send a typing indicator.
-        
+
         Override in subclasses if the platform supports it.
         metadata: optional dict with platform-specific context (e.g. thread_id for Slack).
         """
@@ -3376,9 +3639,13 @@ class BasePlatformAdapter(ABC):
                         metadata=metadata,
                     )
                 if not img_result.success:
-                    logger.error("[%s] Failed to send image: %s", self.name, img_result.error)
+                    logger.error(
+                        "[%s] Failed to send image: %s", self.name, img_result.error
+                    )
             except Exception as img_err:
-                logger.error("[%s] Error sending image: %s", self.name, img_err, exc_info=True)
+                logger.error(
+                    "[%s] Error sending image: %s", self.name, img_err, exc_info=True
+                )
 
     async def send_image(
         self,
@@ -3390,15 +3657,17 @@ class BasePlatformAdapter(ABC):
     ) -> SendResult:
         """
         Send an image natively via the platform API.
-        
+
         Override in subclasses to send images as proper attachments
         instead of plain-text URLs. Default falls back to sending the
         URL as a text message.
         """
         # Fallback: send URL as text (subclasses override for native images)
         text = f"{caption}\n{image_url}" if caption else image_url
-        return await self.send(chat_id=chat_id, content=text, reply_to=reply_to, metadata=metadata)
-    
+        return await self.send(
+            chat_id=chat_id, content=text, reply_to=reply_to, metadata=metadata
+        )
+
     async def send_animation(
         self,
         chat_id: str,
@@ -3409,67 +3678,88 @@ class BasePlatformAdapter(ABC):
     ) -> SendResult:
         """
         Send an animated GIF natively via the platform API.
-        
+
         Override in subclasses to send GIFs as proper animations
         (e.g., Telegram send_animation) so they auto-play inline.
         Default falls back to send_image.
         """
-        return await self.send_image(chat_id=chat_id, image_url=animation_url, caption=caption, reply_to=reply_to, metadata=metadata)
-    
+        return await self.send_image(
+            chat_id=chat_id,
+            image_url=animation_url,
+            caption=caption,
+            reply_to=reply_to,
+            metadata=metadata,
+        )
+
     @staticmethod
     def _is_animation_url(url: str) -> bool:
         """Check if a URL points to an animated GIF (vs a static image)."""
-        lower = url.lower().split('?')[0]  # Strip query params
-        return lower.endswith('.gif')
+        lower = url.lower().split("?")[0]  # Strip query params
+        return lower.endswith(".gif")
 
     @staticmethod
     def extract_images(content: str) -> Tuple[List[Tuple[str, str]], str]:
         """
         Extract image URLs from markdown and HTML image tags in a response.
-        
+
         Finds patterns like:
         - ![alt text](https://example.com/image.png)
         - <img src="https://example.com/image.png">
         - <img src="https://example.com/image.png"></img>
-        
+
         Args:
             content: The response text to scan.
-        
+
         Returns:
             Tuple of (list of (url, alt_text) pairs, cleaned content with image tags removed).
         """
         images = []
         cleaned = content
-        
+
         # Match markdown images: ![alt](url)
-        md_pattern = r'!\[([^\]]*)\]\((https?://[^\s\)]+)\)'
+        md_pattern = r"!\[([^\]]*)\]\((https?://[^\s\)]+)\)"
         for match in re.finditer(md_pattern, content):
             alt_text = match.group(1)
             url = match.group(2)
             # Only extract URLs that look like actual images
-            if any(url.lower().endswith(ext) or ext in url.lower() for ext in
-                   ['.png', '.jpg', '.jpeg', '.gif', '.webp', 'fal.media', 'fal-cdn', 'replicate.delivery']):
+            if any(
+                url.lower().endswith(ext) or ext in url.lower()
+                for ext in [
+                    ".png",
+                    ".jpg",
+                    ".jpeg",
+                    ".gif",
+                    ".webp",
+                    "fal.media",
+                    "fal-cdn",
+                    "replicate.delivery",
+                ]
+            ):
                 images.append((url, alt_text))
-        
+
         # Match HTML img tags: <img src="url"> or <img src="url"></img> or <img src="url"/>
-        html_pattern = r'<img\s+src=["\']?(https?://[^\s"\'<>]+)["\']?\s*/?>\s*(?:</img>)?'
+        html_pattern = (
+            r'<img\s+src=["\']?(https?://[^\s"\'<>]+)["\']?\s*/?>\s*(?:</img>)?'
+        )
         for match in re.finditer(html_pattern, content):
             url = match.group(1)
             images.append((url, ""))
-        
+
         # Remove only the matched image tags from content (not all markdown images)
         if images:
             extracted_urls = {url for url, _ in images}
+
             def _remove_if_extracted(match):
                 url = match.group(2) if match.lastindex >= 2 else match.group(1)
-                return '' if url in extracted_urls else match.group(0)
+                return "" if url in extracted_urls else match.group(0)
+
             cleaned = re.sub(md_pattern, _remove_if_extracted, cleaned)
             cleaned = re.sub(html_pattern, _remove_if_extracted, cleaned)
             # Clean up leftover blank lines
-            cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
-        
+            cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+
         return images, cleaned
-    
+
     async def send_voice(
         self,
         chat_id: str,
@@ -3492,19 +3782,22 @@ class BasePlatformAdapter(ABC):
         # operator diagnostics instead.
         logger.warning(
             "[%s] send_voice fallback: native audio send unavailable for %s",
-            self.name, audio_path,
+            self.name,
+            audio_path,
         )
         text = "⚠️ Couldn't deliver the audio attachment."
         if caption:
             text = f"{caption}\n{text}"
-        return await self.send(chat_id=chat_id, content=text, reply_to=reply_to, metadata=metadata)
+        return await self.send(
+            chat_id=chat_id, content=text, reply_to=reply_to, metadata=metadata
+        )
 
     def prepare_tts_text(self, text: str) -> str:
         """Prepare text for TTS. Override to filter tool output, code, etc.
 
         Default strips markdown formatting and truncates to 4000 chars.
         """
-        return re.sub(r'[*_`#\[\]()]', '', text)[:4000].strip()
+        return re.sub(r"[*_`#\[\]()]", "", text)[:4000].strip()
 
     async def play_tts(
         self,
@@ -3540,12 +3833,15 @@ class BasePlatformAdapter(ABC):
         # See send_voice for the rationale: do not echo host paths into chat.
         logger.warning(
             "[%s] send_video fallback: native video send unavailable for %s",
-            self.name, video_path,
+            self.name,
+            video_path,
         )
         text = "⚠️ Couldn't deliver the video attachment."
         if caption:
             text = f"{caption}\n{text}"
-        return await self.send(chat_id=chat_id, content=text, reply_to=reply_to, metadata=metadata)
+        return await self.send(
+            chat_id=chat_id, content=text, reply_to=reply_to, metadata=metadata
+        )
 
     async def send_document(
         self,
@@ -3568,7 +3864,8 @@ class BasePlatformAdapter(ABC):
         # See send_voice for the rationale: do not echo host paths into chat.
         logger.warning(
             "[%s] send_document fallback: native file send unavailable for %s",
-            self.name, file_path,
+            self.name,
+            file_path,
         )
         # file_name is supplied by callers and represents the user-facing
         # filename (already non-sensitive — it is what the agent named the
@@ -3579,7 +3876,9 @@ class BasePlatformAdapter(ABC):
             text = "⚠️ Couldn't deliver the file attachment."
         if caption:
             text = f"{caption}\n{text}"
-        return await self.send(chat_id=chat_id, content=text, reply_to=reply_to, metadata=metadata)
+        return await self.send(
+            chat_id=chat_id, content=text, reply_to=reply_to, metadata=metadata
+        )
 
     async def send_image_file(
         self,
@@ -3602,12 +3901,15 @@ class BasePlatformAdapter(ABC):
         # See send_voice for the rationale: do not echo host paths into chat.
         logger.warning(
             "[%s] send_image_file fallback: native image send unavailable for %s",
-            self.name, image_path,
+            self.name,
+            image_path,
         )
         text = "⚠️ Couldn't deliver the image attachment."
         if caption:
             text = f"{caption}\n{text}"
-        return await self.send(chat_id=chat_id, content=text, reply_to=reply_to, metadata=metadata)
+        return await self.send(
+            chat_id=chat_id, content=text, reply_to=reply_to, metadata=metadata
+        )
 
     @staticmethod
     def validate_media_delivery_path(path: str) -> Optional[str]:
@@ -3624,7 +3926,9 @@ class BasePlatformAdapter(ABC):
             if safe_path:
                 safe_media.append((safe_path, bool(is_voice)))
             else:
-                logger.warning("Skipping unsafe MEDIA directive path: %s", _log_safe_path(raw))
+                logger.warning(
+                    "Skipping unsafe MEDIA directive path: %s", _log_safe_path(raw)
+                )
         return safe_media
 
     @staticmethod
@@ -3637,9 +3941,10 @@ class BasePlatformAdapter(ABC):
             if safe_path:
                 safe_paths.append(safe_path)
             else:
-                logger.warning("Skipping unsafe local file path: %s", _log_safe_path(raw))
+                logger.warning(
+                    "Skipping unsafe local file path: %s", _log_safe_path(raw)
+                )
         return safe_paths
-
 
     @staticmethod
     def _mask_protected_spans(content: str) -> str:
@@ -3657,30 +3962,29 @@ class BasePlatformAdapter(ABC):
         spans: list = []
 
         # Fenced code blocks: ```...```
-        for m in re.finditer(r'```[^\n]*\n.*?```', content, re.DOTALL):
+        for m in re.finditer(r"```[^\n]*\n.*?```", content, re.DOTALL):
             spans.append((m.start(), m.end()))
 
         # Inline code: `...` but NOT backtick-quoted paths in MEDIA: tags
-        for m in re.finditer(r'`[^`\n]+`', content):
+        for m in re.finditer(r"`[^`\n]+`", content):
             start = m.start()
             # Check if this is a backtick-quoted path after MEDIA:
-            prefix = content[max(0, start - 20):start]
-            if re.search(r'MEDIA:\s*$', prefix):
+            prefix = content[max(0, start - 20) : start]
+            if re.search(r"MEDIA:\s*$", prefix):
                 continue  # This is a MEDIA path quote, not inline code
             spans.append((start, m.end()))
 
         # Blockquote lines: > at line start
-        for m in re.finditer(r'^>.*$', content, re.MULTILINE):
+        for m in re.finditer(r"^>.*$", content, re.MULTILINE):
             spans.append((m.start(), m.end()))
 
         # Apply masking
         for start, end in spans:
             for i in range(start, end):
-                if chars[i] != '\n':
-                    chars[i] = ' '
+                if chars[i] != "\n":
+                    chars[i] = " "
 
-        return ''.join(chars)
-
+        return "".join(chars)
 
     @staticmethod
     def _mask_json_string_media(content: str) -> str:
@@ -3716,11 +4020,11 @@ class BasePlatformAdapter(ABC):
         # capturing the (escape-aware) string body up to the closing quote.
         for m in re.finditer(r'(?<=[:,{\[])\s*"((?:[^"\\\n]|\\.)*)"', content):
             seg = m.group(1)
-            if re.search(r'MEDIA:\s*(?:~/|/|[A-Za-z]:[/\\])', seg):
+            if re.search(r"MEDIA:\s*(?:~/|/|[A-Za-z]:[/\\])", seg):
                 for i in range(m.start(1), m.end(1)):
-                    if chars[i] != '\n':
-                        chars[i] = ' '
-        return ''.join(chars)
+                    if chars[i] != "\n":
+                        chars[i] = " "
+        return "".join(chars)
 
     @staticmethod
     def extract_media(content: str) -> Tuple[List[Tuple[str, bool]], str]:
@@ -3758,7 +4062,7 @@ class BasePlatformAdapter(ABC):
         # ``content`` for it (so they can still react to it); here we just
         # keep it out of the user-visible cleaned text.
         cleaned = cleaned.replace("[[as_document]]", "")
-        
+
         # Extract MEDIA:<path> tags, allowing optional whitespace after the colon
         # and quoted/backticked paths for LLM-formatted outputs. The extension
         # set is the shared MEDIA_DELIVERY_EXTS source of truth (built once into
@@ -3815,8 +4119,8 @@ class BasePlatformAdapter(ABC):
                 for start, end in sorted(spans, reverse=True):
                     del chars[start:end]
                 cleaned = "".join(chars)
-                cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
-        
+                cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+
         return media, cleaned
 
     @staticmethod
@@ -3835,7 +4139,7 @@ class BasePlatformAdapter(ABC):
         ):
             return text
         cleaned = _strip_media_tag_directives(text)
-        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
         return cleaned.rstrip()
 
     @staticmethod
@@ -3864,22 +4168,24 @@ class BasePlatformAdapter(ABC):
             raw path strings removed).
         """
         _LOCAL_MEDIA_EXTS = MEDIA_DELIVERY_EXTS
-        ext_part = '|'.join(e.lstrip('.') for e in _LOCAL_MEDIA_EXTS)
+        ext_part = "|".join(e.lstrip(".") for e in _LOCAL_MEDIA_EXTS)
 
         # (?<![/:\w.]) prevents matching inside URLs (e.g. https://…/img.png)
         #             and relative paths (./foo.png)
         # (?:~/|/)    anchors to absolute or home-relative Unix paths
         # (?:[A-Za-z]:[/\\]) anchors to Windows drive-letter paths (#34632)
         path_re = re.compile(
-            r'(?<![/:\w.])(?:~/|/|[A-Za-z]:[/\\])(?:[\w.\-]+[/\\])*[\w.\-]+\.(?:' + ext_part + r')\b',
+            r"(?<![/:\w.])(?:~/|/|[A-Za-z]:[/\\])(?:[\w.\-]+[/\\])*[\w.\-]+\.(?:"
+            + ext_part
+            + r")\b",
             re.IGNORECASE,
         )
 
         # Build spans covered by fenced code blocks and inline code
         code_spans: list = []
-        for m in re.finditer(r'```[^\n]*\n.*?```', content, re.DOTALL):
+        for m in re.finditer(r"```[^\n]*\n.*?```", content, re.DOTALL):
             code_spans.append((m.start(), m.end()))
-        for m in re.finditer(r'`[^`\n]+`', content):
+        for m in re.finditer(r"`[^`\n]+`", content):
             code_spans.append((m.start(), m.end()))
 
         def _in_code(pos: int) -> bool:
@@ -3918,8 +4224,8 @@ class BasePlatformAdapter(ABC):
         cleaned = content
         if unique:
             for raw, _exp in unique:
-                cleaned = cleaned.replace(raw, '')
-            cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
+                cleaned = cleaned.replace(raw, "")
+            cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
         return paths, cleaned
 
@@ -3932,10 +4238,10 @@ class BasePlatformAdapter(ABC):
     ) -> None:
         """
         Continuously send typing indicator until cancelled.
-        
+
         Telegram/Discord typing status expires after ~5 seconds, so we refresh every 2
         to recover quickly after progress messages interrupt it.
-        
+
         Skips send_typing when the chat is in ``_typing_paused`` (e.g. while
         the agent is waiting for dangerous-command approval).  This is critical
         for Slack's Assistant API where ``assistant_threads_setStatus`` disables
@@ -3973,7 +4279,8 @@ class BasePlatformAdapter(ABC):
                     except Exception as typing_err:
                         logger.debug(
                             "[%s] send_typing error (non-fatal): %s",
-                            self.name, typing_err,
+                            self.name,
+                            typing_err,
                         )
                 if stop_event is None:
                     await asyncio.sleep(interval)
@@ -4054,7 +4361,9 @@ class BasePlatformAdapter(ABC):
         """Resume typing indicator for a chat after approval resolves."""
         self._typing_paused.discard(chat_id)
 
-    async def interrupt_session_activity(self, session_key: str, chat_id: str, metadata=None) -> None:
+    async def interrupt_session_activity(
+        self, session_key: str, chat_id: str, metadata=None
+    ) -> None:
         """Signal the active session loop to stop and clear typing immediately."""
         if session_key:
             interrupt_event = self._active_sessions.get(session_key)
@@ -4123,9 +4432,7 @@ class BasePlatformAdapter(ABC):
                             if inspect.isawaitable(_result):
                                 await _result
                         except Exception:
-                            logger.debug(
-                                "Post-delivery callback failed", exc_info=True
-                            )
+                            logger.debug("Post-delivery callback failed", exc_info=True)
 
                 callback = _chained
 
@@ -4164,10 +4471,14 @@ class BasePlatformAdapter(ABC):
     async def on_processing_start(self, event: MessageEvent) -> None:
         """Hook called when background processing begins."""
 
-    async def on_processing_complete(self, event: MessageEvent, outcome: ProcessingOutcome) -> None:
+    async def on_processing_complete(
+        self, event: MessageEvent, outcome: ProcessingOutcome
+    ) -> None:
         """Hook called when background processing completes."""
 
-    async def _run_processing_hook(self, hook_name: str, *args: Any, **kwargs: Any) -> None:
+    async def _run_processing_hook(
+        self, hook_name: str, *args: Any, **kwargs: Any
+    ) -> None:
         """Run a lifecycle hook without letting failures break message flow."""
         hook = getattr(self, hook_name, None)
         if not callable(hook):
@@ -4195,7 +4506,11 @@ class BasePlatformAdapter(ABC):
         if not error:
             return False
         lowered = error.lower()
-        return "timed out" in lowered or "readtimeout" in lowered or "writetimeout" in lowered
+        return (
+            "timed out" in lowered
+            or "readtimeout" in lowered
+            or "writetimeout" in lowered
+        )
 
     def _unwrap_ephemeral(self, response: Any) -> Tuple[Optional[str], int]:
         """Unwrap a handler response into (text, ttl_seconds).
@@ -4214,7 +4529,11 @@ class BasePlatformAdapter(ABC):
                     ttl = int(self._get_ephemeral_system_ttl_default())
                 except Exception:
                     ttl = 0
-            if ttl and ttl > 0 and type(self).delete_message is BasePlatformAdapter.delete_message:
+            if (
+                ttl
+                and ttl > 0
+                and type(self).delete_message is BasePlatformAdapter.delete_message
+            ):
                 ttl = 0
             return response.text, int(ttl or 0)
         return response, 0
@@ -4238,7 +4557,9 @@ class BasePlatformAdapter(ABC):
         try:
             live_adapter = resolve(source)
         except Exception:
-            logger.debug("[%s] Failed to resolve live adapter for final delivery", self.name)
+            logger.debug(
+                "[%s] Failed to resolve live adapter for final delivery", self.name
+            )
             return self
         if (
             not isinstance(live_adapter, BasePlatformAdapter)
@@ -4296,7 +4617,11 @@ class BasePlatformAdapter(ABC):
                     delay = base_delay * (2 ** (attempt - 1)) + random.uniform(0, 1)
                 logger.warning(
                     "[%s] Send failed (attempt %d/%d, retrying in %.1fs): %s",
-                    self.name, attempt, max_retries, delay, error_str,
+                    self.name,
+                    attempt,
+                    max_retries,
+                    delay,
+                    error_str,
                 )
                 await asyncio.sleep(delay)
                 result = await self.send(
@@ -4315,19 +4640,35 @@ class BasePlatformAdapter(ABC):
                     break  # error switched to non-transient — fall through to plain-text fallback
             else:
                 # All retries exhausted (loop completed without break) — notify user
-                logger.error("[%s] Failed to deliver response after %d retries: %s", self.name, max_retries, error_str)
+                logger.error(
+                    "[%s] Failed to deliver response after %d retries: %s",
+                    self.name,
+                    max_retries,
+                    error_str,
+                )
                 notice = (
                     "\u26a0\ufe0f Message delivery failed after multiple attempts. "
                     "Please try again \u2014 your request was processed but the response could not be sent."
                 )
                 try:
-                    await self.send(chat_id=chat_id, content=notice, reply_to=reply_to, metadata=metadata)
+                    await self.send(
+                        chat_id=chat_id,
+                        content=notice,
+                        reply_to=reply_to,
+                        metadata=metadata,
+                    )
                 except Exception as notify_err:
-                    logger.debug("[%s] Could not send delivery-failure notice: %s", self.name, notify_err)
+                    logger.debug(
+                        "[%s] Could not send delivery-failure notice: %s",
+                        self.name,
+                        notify_err,
+                    )
                 return result
 
         # Non-network / post-retry formatting failure: try plain text as fallback
-        logger.warning("[%s] Send failed: %s — trying plain-text fallback", self.name, error_str)
+        logger.warning(
+            "[%s] Send failed: %s — trying plain-text fallback", self.name, error_str
+        )
         fallback_result = await self.send(
             chat_id=chat_id,
             content=f"(Response formatting failed, plain text:)\n\n{content[:3500]}",
@@ -4335,7 +4676,9 @@ class BasePlatformAdapter(ABC):
             metadata=metadata,
         )
         if not fallback_result.success:
-            logger.error("[%s] Fallback send also failed: %s", self.name, fallback_result.error)
+            logger.error(
+                "[%s] Fallback send also failed: %s", self.name, fallback_result.error
+            )
         return fallback_result
 
     @staticmethod
@@ -4379,7 +4722,9 @@ class BasePlatformAdapter(ABC):
             )
         return result
 
-    def _can_merge_text_debounce_events(self, existing: MessageEvent, event: MessageEvent) -> bool:
+    def _can_merge_text_debounce_events(
+        self, existing: MessageEvent, event: MessageEvent
+    ) -> bool:
         """Return True when two text debounce events came from the same sender."""
 
         def _identity(candidate: MessageEvent) -> tuple[str, ...] | None:
@@ -4387,10 +4732,14 @@ class BasePlatformAdapter(ABC):
             if source is None:
                 return None
             platform = _platform_name(getattr(source, "platform", None))
-            sender = getattr(source, "user_id_alt", None) or getattr(source, "user_id", None)
+            sender = getattr(source, "user_id_alt", None) or getattr(
+                source, "user_id", None
+            )
             if sender:
                 return (platform, str(sender))
-            if getattr(source, "chat_type", None) in {"dm", "private"} and getattr(source, "chat_id", None):
+            if getattr(source, "chat_type", None) in {"dm", "private"} and getattr(
+                source, "chat_id", None
+            ):
                 return (platform, "dm", str(source.chat_id))
             return None
 
@@ -4413,15 +4762,22 @@ class BasePlatformAdapter(ABC):
         store = self._text_debounce_store()
         state = store.get(session_key)
 
-        if state is not None and not self._can_merge_text_debounce_events(state.event, event):
+        if state is not None and not self._can_merge_text_debounce_events(
+            state.event, event
+        ):
             # Preserve sender attribution in shared sessions. The current
             # buffer becomes the next pending turn; the new sender starts a
             # fresh debounce burst when the pending slot allows it.
             await self._flush_text_debounce_now(session_key)
             state = store.get(session_key)
-            if state is not None and not self._can_merge_text_debounce_events(state.event, event):
+            if state is not None and not self._can_merge_text_debounce_events(
+                state.event, event
+            ):
                 existing_pending = self._pending_messages.get(session_key)
-                if existing_pending is not None and self._can_merge_text_debounce_events(existing_pending, event):
+                if (
+                    existing_pending is not None
+                    and self._can_merge_text_debounce_events(existing_pending, event)
+                ):
                     merge_pending_message_event(
                         self._pending_messages,
                         session_key,
@@ -4447,10 +4803,14 @@ class BasePlatformAdapter(ABC):
                     else event.text
                 )
             latest_message_id = getattr(event, "message_id", None)
-            latest_anchor = latest_message_id or getattr(event, "reply_to_message_id", None)
+            latest_anchor = latest_message_id or getattr(
+                event, "reply_to_message_id", None
+            )
             if latest_message_id is not None:
                 state.event.message_id = str(latest_message_id)
-            if latest_anchor is not None and hasattr(state.event, "reply_to_message_id"):
+            if latest_anchor is not None and hasattr(
+                state.event, "reply_to_message_id"
+            ):
                 state.event.reply_to_message_id = str(latest_anchor)
             state.last_ts = now
 
@@ -4481,14 +4841,17 @@ class BasePlatformAdapter(ABC):
             return False
 
         current = asyncio.current_task()
-        if state.task is not None and state.task is not current and not state.task.done():
+        if (
+            state.task is not None
+            and state.task is not current
+            and not state.task.done()
+        ):
             state.task.cancel()
         state.task = None
 
         existing_pending = self._pending_messages.get(session_key)
-        if (
-            existing_pending is not None
-            and not self._can_merge_text_debounce_events(existing_pending, state.event)
+        if existing_pending is not None and not self._can_merge_text_debounce_events(
+            existing_pending, state.event
         ):
             return False
 
@@ -4649,7 +5012,8 @@ class BasePlatformAdapter(ABC):
                 logger.warning(
                     "[%s] Cancelled task for %s did not exit within 5s; "
                     "unblocking dispatch and letting the task unwind in the background",
-                    self.name, session_key,
+                    self.name,
+                    session_key,
                 )
             except Exception:
                 logger.debug(
@@ -4710,7 +5074,9 @@ class BasePlatformAdapter(ABC):
         current_guard = self._active_sessions.get(session_key)
         command_guard = asyncio.Event()
         self._active_sessions[session_key] = command_guard
-        thread_meta = _thread_metadata_for_source(event.source, _reply_anchor_for_event(event))
+        thread_meta = _thread_metadata_for_source(
+            event.source, _reply_anchor_for_event(event)
+        )
 
         try:
             response = await self._message_handler(event)
@@ -4762,7 +5128,7 @@ class BasePlatformAdapter(ABC):
     async def handle_message(self, event: MessageEvent) -> None:
         """
         Process an incoming message.
-        
+
         This method returns quickly by spawning background tasks.
         This allows new messages to be processed even while an agent is running,
         enabling interruption support.
@@ -4780,8 +5146,12 @@ class BasePlatformAdapter(ABC):
 
         session_key = build_session_key(
             event.source,
-            group_sessions_per_user=self.config.extra.get("group_sessions_per_user", True),
-            thread_sessions_per_user=self.config.extra.get("thread_sessions_per_user", False),
+            group_sessions_per_user=self.config.extra.get(
+                "group_sessions_per_user", True
+            ),
+            thread_sessions_per_user=self.config.extra.get(
+                "thread_sessions_per_user", False
+            ),
         )
 
         # On-entry self-heal: if the adapter still has an _active_sessions
@@ -4815,11 +5185,16 @@ class BasePlatformAdapter(ABC):
                 if cmd in {"stop", "new", "reset"}:
                     self._discard_text_debounce(session_key)
                     try:
-                        await self._dispatch_active_session_command(event, session_key, cmd)
+                        await self._dispatch_active_session_command(
+                            event, session_key, cmd
+                        )
                     except Exception as e:
                         logger.error(
                             "[%s] Command '/%s' dispatch failed: %s",
-                            self.name, cmd, e, exc_info=True,
+                            self.name,
+                            cmd,
+                            e,
+                            exc_info=True,
                         )
                     return
 
@@ -4828,10 +5203,14 @@ class BasePlatformAdapter(ABC):
                 # don't cancel the running task.
                 logger.debug(
                     "[%s] Command '/%s' bypassing active-session guard for %s",
-                    self.name, cmd, session_key,
+                    self.name,
+                    cmd,
+                    session_key,
                 )
                 try:
-                    _thread_meta = _thread_metadata_for_source(event.source, _reply_anchor_for_event(event))
+                    _thread_meta = _thread_metadata_for_source(
+                        event.source, _reply_anchor_for_event(event)
+                    )
                     response = await self._message_handler(event)
                     _text, _eph_ttl = self._unwrap_ephemeral(response)
                     if _text:
@@ -4848,7 +5227,13 @@ class BasePlatformAdapter(ABC):
                                 ttl_seconds=_eph_ttl,
                             )
                 except Exception as e:
-                    logger.error("[%s] Command '/%s' dispatch failed: %s", self.name, cmd, e, exc_info=True)
+                    logger.error(
+                        "[%s] Command '/%s' dispatch failed: %s",
+                        self.name,
+                        cmd,
+                        e,
+                        exc_info=True,
+                    )
                 return
 
             # Clarify reply bypass: if the agent is blocked on a
@@ -4867,11 +5252,13 @@ class BasePlatformAdapter(ABC):
             if not cmd:
                 try:
                     from tools import clarify_gateway as _clarify_mod
+
                     _has_text_clarify = (
                         _clarify_mod.get_pending_for_session(
                             session_key,
                             include_choice_prompts=True,
-                        ) is not None
+                        )
+                        is not None
                     )
                 except Exception:
                     _has_text_clarify = False
@@ -4879,7 +5266,8 @@ class BasePlatformAdapter(ABC):
                 if _has_text_clarify:
                     logger.debug(
                         "[%s] Routing message to clarify text-intercept for %s",
-                        self.name, session_key,
+                        self.name,
+                        session_key,
                     )
                     try:
                         _thread_meta = _thread_metadata_for_source(
@@ -4903,7 +5291,9 @@ class BasePlatformAdapter(ABC):
                     except Exception as e:
                         logger.error(
                             "[%s] Clarify text-intercept dispatch failed: %s",
-                            self.name, e, exc_info=True,
+                            self.name,
+                            e,
+                            exc_info=True,
                         )
                     return
 
@@ -4912,13 +5302,22 @@ class BasePlatformAdapter(ABC):
                     if await self._busy_session_handler(event, session_key):
                         return
                 except Exception as e:
-                    logger.error("[%s] Busy-session handler failed: %s", self.name, e, exc_info=True)
+                    logger.error(
+                        "[%s] Busy-session handler failed: %s",
+                        self.name,
+                        e,
+                        exc_info=True,
+                    )
 
             # Special case: photo bursts/albums frequently arrive as multiple near-
             # simultaneous messages. Queue them without interrupting the active run,
             # then process them immediately after the current task finishes.
             if event.message_type == MessageType.PHOTO:
-                logger.debug("[%s] Queuing photo follow-up for session %s without interrupt", self.name, session_key)
+                logger.debug(
+                    "[%s] Queuing photo follow-up for session %s without interrupt",
+                    self.name,
+                    session_key,
+                )
                 merge_pending_message_event(self._pending_messages, session_key, event)
                 return  # Don't interrupt now - will run after current task completes
 
@@ -4945,7 +5344,7 @@ class BasePlatformAdapter(ABC):
                     merge_text=event.message_type == MessageType.TEXT,
                 )
             return  # Don't process now - will be handled after current task finishes
-        
+
         # Mark session as active BEFORE spawning background task to close
         # the race window where a second message arriving before the task
         # starts would also pass the _active_sessions check and spawn a
@@ -4954,7 +5353,7 @@ class BasePlatformAdapter(ABC):
         # _start_session_processing installs the guard AND the owner-task
         # mapping atomically so stale-lock detection works.
         self._start_session_processing(event, session_key)
-    
+
     @staticmethod
     def _get_human_delay() -> float:
         """
@@ -4982,7 +5381,9 @@ class BasePlatformAdapter(ABC):
             max_ms = 2500
         return random.uniform(min_ms / 1000.0, max_ms / 1000.0)
 
-    async def _process_message_background(self, event: MessageEvent, session_key: str) -> None:
+    async def _process_message_background(
+        self, event: MessageEvent, session_key: str
+    ) -> None:
         """Background task that actually processes the message."""
         # Track delivery outcomes for the processing-complete hook
         delivery_attempted = False
@@ -5001,12 +5402,14 @@ class BasePlatformAdapter(ABC):
         # Fall back to a new Event only if the entry was removed externally.
         interrupt_event = self._active_sessions.get(session_key) or asyncio.Event()
         self._active_sessions[session_key] = interrupt_event
-        
+
         # Start continuous typing indicator (refreshes every 2 seconds).
         # Gated per-platform: when typing_indicator=False the refresh loop is
         # never spawned, so no "typing…" / "is thinking…" status is shown.
         # typing_task stays None; _stop_typing_refresh already no-ops on None.
-        _thread_metadata = _thread_metadata_for_source(event.source, _reply_anchor_for_event(event))
+        _thread_metadata = _thread_metadata_for_source(
+            event.source, _reply_anchor_for_event(event)
+        )
         typing_task: Optional[asyncio.Task] = None
         if getattr(self.config, "typing_indicator", True):
             _keep_typing_kwargs: Dict[str, Any] = {"metadata": _thread_metadata}
@@ -5029,7 +5432,7 @@ class BasePlatformAdapter(ABC):
                 typing_task,
                 metadata=_thread_metadata,
             )
-        
+
         try:
             await self._run_processing_hook("on_processing_start", event)
 
@@ -5066,7 +5469,11 @@ class BasePlatformAdapter(ABC):
                 )
                 response = None
             if not response:
-                logger.debug("[%s] Handler returned empty/None response for %s", self.name, event.source.chat_id)
+                logger.debug(
+                    "[%s] Handler returned empty/None response for %s",
+                    self.name,
+                    event.source.chat_id,
+                )
             if response:
                 # Capture [[as_document]] before extract_media strips it, so the
                 # dispatch partition below can route image-extension files
@@ -5090,7 +5497,12 @@ class BasePlatformAdapter(ABC):
                 # extract_local_files below to pick up rather than silently dropped (#34517).
                 text_content = _strip_media_directives(text_content).strip()
                 if images:
-                    logger.info("[%s] extract_images found %d image(s) in response (%d chars)", self.name, len(images), len(response))
+                    logger.info(
+                        "[%s] extract_images found %d image(s) in response (%d chars)",
+                        self.name,
+                        len(images),
+                        len(response),
+                    )
 
                 local_files = []
                 if not is_ephemeral_response:
@@ -5101,7 +5513,11 @@ class BasePlatformAdapter(ABC):
                     local_files, text_content = self.extract_local_files(text_content)
                     local_files = self.filter_local_delivery_paths(local_files)
                     if local_files:
-                        logger.info("[%s] extract_local_files found %d file(s) in response", self.name, len(local_files))
+                        logger.info(
+                            "[%s] extract_local_files found %d file(s) in response",
+                            self.name,
+                            len(local_files),
+                        )
 
                 # A2 (#29346): extraction can reduce a non-empty response to
                 # empty text with no attachment, and the `if text_content` guard
@@ -5117,7 +5533,9 @@ class BasePlatformAdapter(ABC):
                             "[%s] response_delivery_recovered: extract pipeline "
                             "reduced a non-empty response (%d chars) to empty with "
                             "no attachment; delivering recovered original to %s",
-                            self.name, len(_response_pre_extract), event.source.chat_id,
+                            self.name,
+                            len(_response_pre_extract),
+                            event.source.chat_id,
                         )
                         text_content = _recovered
 
@@ -5132,14 +5550,21 @@ class BasePlatformAdapter(ABC):
                 # an explicit ``/voice on|tts`` opt-in OR when ``voice.auto_tts`` is
                 # True globally and no ``/voice off`` has been issued.
                 _tts_path = None
-                if (self._should_auto_tts_for_chat(event.source.chat_id)
-                        and event.message_type == MessageType.VOICE
-                        and text_content
-                        and not media_files):
+                if (
+                    self._should_auto_tts_for_chat(event.source.chat_id)
+                    and event.message_type == MessageType.VOICE
+                    and text_content
+                    and not media_files
+                ):
                     try:
-                        from tools.tts_tool import text_to_speech_tool, check_tts_requirements
+                        from tools.tts_tool import (
+                            text_to_speech_tool,
+                            check_tts_requirements,
+                        )
+
                         if check_tts_requirements():
                             import json as _json
+
                             speech_text = self.prepare_tts_text(text_content)
                             if not speech_text:
                                 raise ValueError("Empty text after markdown cleanup")
@@ -5169,7 +5594,8 @@ class BasePlatformAdapter(ABC):
                             metadata=_final_thread_metadata,
                         )
                         _tts_caption_delivered = bool(
-                            telegram_tts_caption and getattr(tts_result, "success", False)
+                            telegram_tts_caption
+                            and getattr(tts_result, "success", False)
                         )
                     finally:
                         try:
@@ -5220,8 +5646,11 @@ class BasePlatformAdapter(ABC):
                                     obligation_id=_obligation_id,
                                     session_key=session_key,
                                     platform=str(
-                                        getattr(event.source.platform, "value",
-                                                event.source.platform)
+                                        getattr(
+                                            event.source.platform,
+                                            "value",
+                                            event.source.platform,
+                                        )
                                     ),
                                     chat_id=event.source.chat_id,
                                     thread_id=getattr(event.source, "thread_id", None),
@@ -5253,9 +5682,7 @@ class BasePlatformAdapter(ABC):
                                     str(getattr(result, "error", "") or ""),
                                 )
                         except Exception:
-                            logger.debug(
-                                "delivery ledger update failed", exc_info=True
-                            )
+                            logger.debug("delivery ledger update failed", exc_info=True)
 
                     # Schedule auto-deletion on the adapter that owns the new
                     # message ID, which may be the reconnect replacement.
@@ -5276,7 +5703,11 @@ class BasePlatformAdapter(ABC):
 
                 # Send extracted images as native attachments
                 if images:
-                    logger.info("[%s] Extracted %d image(s) to send as attachments", self.name, len(images))
+                    logger.info(
+                        "[%s] Extracted %d image(s) to send as attachments",
+                        self.name,
+                        len(images),
+                    )
                     try:
                         await self.send_multiple_images(
                             chat_id=event.source.chat_id,
@@ -5285,12 +5716,16 @@ class BasePlatformAdapter(ABC):
                             human_delay=human_delay,
                         )
                     except Exception as batch_err:
-                        logger.warning("[%s] Error batching images: %s", self.name, batch_err, exc_info=True)
-
+                        logger.warning(
+                            "[%s] Error batching images: %s",
+                            self.name,
+                            batch_err,
+                            exc_info=True,
+                        )
 
                 # Send extracted media files — route by file type
-                _VIDEO_EXTS = {'.mp4', '.mov', '.avi', '.mkv', '.webm', '.3gp'}
-                _IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+                _VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".3gp"}
+                _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
                 # Partition images out of media_files + local_files so they
                 # can be sent as a single batch (Signal RPC). When
@@ -5299,20 +5734,25 @@ class BasePlatformAdapter(ABC):
                 # so they're delivered with original bytes (no Telegram
                 # sendPhoto recompression).
                 from urllib.parse import quote as _quote
+
                 _image_paths: list = []
                 _non_image_media: list = []
                 for media_path, is_voice in media_files:
                     _ext = Path(media_path).suffix.lower()
-                    if (_ext in _IMAGE_EXTS
-                            and not is_voice
-                            and not force_document_attachments):
+                    if (
+                        _ext in _IMAGE_EXTS
+                        and not is_voice
+                        and not force_document_attachments
+                    ):
                         _image_paths.append(media_path)
                     else:
                         _non_image_media.append((media_path, is_voice))
                 _non_image_local: list = []
                 for file_path in local_files:
-                    if (Path(file_path).suffix.lower() in _IMAGE_EXTS
-                            and not force_document_attachments):
+                    if (
+                        Path(file_path).suffix.lower() in _IMAGE_EXTS
+                        and not force_document_attachments
+                    ):
                         _image_paths.append(file_path)
                     else:
                         _non_image_local.append(file_path)
@@ -5327,14 +5767,21 @@ class BasePlatformAdapter(ABC):
                             human_delay=human_delay,
                         )
                     except Exception as batch_err:
-                        logger.warning("[%s] Error batching images: %s", self.name, batch_err, exc_info=True)
+                        logger.warning(
+                            "[%s] Error batching images: %s",
+                            self.name,
+                            batch_err,
+                            exc_info=True,
+                        )
 
                 for media_path, is_voice in _non_image_media:
                     if human_delay > 0:
                         await asyncio.sleep(human_delay)
                     try:
                         ext = Path(media_path).suffix.lower()
-                        if should_send_media_as_audio(self.platform, ext, is_voice=is_voice):
+                        if should_send_media_as_audio(
+                            self.platform, ext, is_voice=is_voice
+                        ):
                             media_result = await self.send_voice(
                                 chat_id=event.source.chat_id,
                                 audio_path=media_path,
@@ -5354,9 +5801,16 @@ class BasePlatformAdapter(ABC):
                             )
 
                         if not media_result.success:
-                            logger.warning("[%s] Failed to send media (%s): %s", self.name, ext, media_result.error)
+                            logger.warning(
+                                "[%s] Failed to send media (%s): %s",
+                                self.name,
+                                ext,
+                                media_result.error,
+                            )
                     except Exception as media_err:
-                        logger.warning("[%s] Error sending media: %s", self.name, media_err)
+                        logger.warning(
+                            "[%s] Error sending media: %s", self.name, media_err
+                        )
 
                 # Send auto-detected local non-image files as native attachments
                 for file_path in _non_image_local:
@@ -5377,28 +5831,42 @@ class BasePlatformAdapter(ABC):
                                 metadata=_final_thread_metadata,
                             )
                     except Exception as file_err:
-                        logger.error("[%s] Error sending local file %s: %s", self.name, file_path, file_err)
+                        logger.error(
+                            "[%s] Error sending local file %s: %s",
+                            self.name,
+                            file_path,
+                            file_err,
+                        )
 
                 # A3 (#29346): if a non-empty response produced nothing
                 # deliverable, fail loudly rather than dropping it in silence.
                 _anything_delivered = (
-                    delivery_attempted or _tts_caption_delivered
-                    or images or local_files or media_files
+                    delivery_attempted
+                    or _tts_caption_delivered
+                    or images
+                    or local_files
+                    or media_files
                 )
                 if not _anything_delivered and _response_pre_extract.strip():
                     logger.error(
                         "[%s] response_delivery_dropped: non-empty response "
                         "(%d chars) produced no delivered message or attachment "
                         "for %s (empty after extract, recovery yielded nothing).",
-                        self.name, len(_response_pre_extract), event.source.chat_id,
+                        self.name,
+                        len(_response_pre_extract),
+                        event.source.chat_id,
                     )
 
             # Determine overall success for the processing hook
-            processing_ok = delivery_succeeded if delivery_attempted else not bool(response)
+            processing_ok = (
+                delivery_succeeded if delivery_attempted else not bool(response)
+            )
             await self._run_processing_hook(
                 "on_processing_complete",
                 event,
-                ProcessingOutcome.SUCCESS if processing_ok else ProcessingOutcome.FAILURE,
+                ProcessingOutcome.SUCCESS
+                if processing_ok
+                else ProcessingOutcome.FAILURE,
             )
 
             # The active drain owns debounce state. If a queue-mode timer has
@@ -5444,22 +5912,29 @@ class BasePlatformAdapter(ABC):
                     # Tests stub create_task() with non-hashable sentinels; tolerate.
                     pass
                 return  # Drain task owns the session now.
-                
+
         except asyncio.CancelledError:
             current_task = asyncio.current_task()
             outcome = ProcessingOutcome.CANCELLED
-            if current_task is None or current_task not in self._expected_cancelled_tasks:
+            if (
+                current_task is None
+                or current_task not in self._expected_cancelled_tasks
+            ):
                 outcome = ProcessingOutcome.FAILURE
             await self._run_processing_hook("on_processing_complete", event, outcome)
             raise
         except Exception as e:
-            await self._run_processing_hook("on_processing_complete", event, ProcessingOutcome.FAILURE)
+            await self._run_processing_hook(
+                "on_processing_complete", event, ProcessingOutcome.FAILURE
+            )
             logger.error("[%s] Error handling message: %s", self.name, e, exc_info=True)
             # Send the error to the user so they aren't left with radio silence
             try:
                 error_type = type(e).__name__
                 error_detail = str(e)[:300] if str(e) else "no details available"
-                _thread_metadata = _thread_metadata_for_source(event.source, _reply_anchor_for_event(event))
+                _thread_metadata = _thread_metadata_for_source(
+                    event.source, _reply_anchor_for_event(event)
+                )
                 await self.send(
                     chat_id=event.source.chat_id,
                     content=(
@@ -5472,7 +5947,9 @@ class BasePlatformAdapter(ABC):
             except Exception as notify_err:
                 logger.error(
                     "[%s] Failed to send error notification to user: %s",
-                    self.name, notify_err, exc_info=True,
+                    self.name,
+                    notify_err,
+                    exc_info=True,
                 )  # Last resort — don't let error reporting crash the handler
         finally:
             # Stop typing before any deferred callback work.  Post-delivery
@@ -5501,7 +5978,9 @@ class BasePlatformAdapter(ABC):
                     generation=_callback_generation,
                 )
             else:
-                _post_cb = getattr(self, "_post_delivery_callbacks", {}).pop(session_key, None)
+                _post_cb = getattr(self, "_post_delivery_callbacks", {}).pop(
+                    session_key, None
+                )
             if callable(_post_cb):
                 try:
                     _post_result = _post_cb()
@@ -5535,10 +6014,7 @@ class BasePlatformAdapter(ABC):
             if late_pending is not None:
                 current_task = asyncio.current_task()
                 existing_task = self._session_tasks.get(session_key)
-                if (
-                    existing_task is not None
-                    and existing_task is not current_task
-                ):
+                if existing_task is not None and existing_task is not current_task:
                     # The in-band drain (or an earlier late-arrival drain)
                     # already spawned a follow-up task that owns this
                     # session.  Re-queue the late-arrival event so that
@@ -5589,9 +6065,12 @@ class BasePlatformAdapter(ABC):
                 # the Level-1 guard and spawn a second handler for the
                 # same session.
                 current_task = asyncio.current_task()
-                if current_task is not None and self._session_tasks.get(session_key) is current_task:
+                if (
+                    current_task is not None
+                    and self._session_tasks.get(session_key) is current_task
+                ):
                     self._cleanup_finished_session_task(session_key, interrupt_event)
-    
+
     def _cleanup_finished_session_task(
         self, session_key: str, interrupt_event: Optional[asyncio.Event]
     ) -> None:
@@ -5611,7 +6090,7 @@ class BasePlatformAdapter(ABC):
         self._release_session_guard(session_key, guard=interrupt_event)
         if session_key not in self._active_sessions:
             self._session_tasks.pop(session_key, None)
-    
+
     async def cancel_background_tasks(self) -> None:
         """Cancel any in-flight background message-processing tasks.
 
@@ -5652,7 +6131,8 @@ class BasePlatformAdapter(ABC):
                 logger.warning(
                     "[%s] %d background task(s) did not exit within 5s; "
                     "releasing tracking and letting them unwind in the background",
-                    self.name, len([t for t in tasks if not t.done()]),
+                    self.name,
+                    len([t for t in tasks if not t.done()]),
                 )
                 break
             # Loop: late-arrival tasks spawned during the gather above
@@ -5669,12 +6149,15 @@ class BasePlatformAdapter(ABC):
 
     def has_pending_interrupt(self, session_key: str) -> bool:
         """Check if there's a pending interrupt for a session."""
-        return session_key in self._active_sessions and self._active_sessions[session_key].is_set()
-    
+        return (
+            session_key in self._active_sessions
+            and self._active_sessions[session_key].is_set()
+        )
+
     def get_pending_message(self, session_key: str) -> Optional[MessageEvent]:
         """Get and clear any pending message for a session."""
         return self._pending_messages.pop(session_key, None)
-    
+
     def build_source(
         self,
         chat_id: str,
@@ -5733,7 +6216,9 @@ class BasePlatformAdapter(ABC):
             except Exception:
                 logger.warning(
                     "Profile resolution failed for %s/%s, defaulting to active profile",
-                    self.platform, chat_id, exc_info=True,
+                    self.platform,
+                    chat_id,
+                    exc_info=True,
                 )
 
         return SessionSource(
@@ -5757,29 +6242,29 @@ class BasePlatformAdapter(ABC):
             auto_thread_created=auto_thread_created,
             auto_thread_initial_name=auto_thread_initial_name,
         )
-    
+
     @abstractmethod
     async def get_chat_info(self, chat_id: str) -> Dict[str, Any]:
         """
         Get information about a chat/channel.
-        
+
         Returns dict with at least:
         - name: Chat name
         - type: "dm", "group", "channel"
         """
         pass
-    
+
     def format_message(self, content: str) -> str:
         """
         Format a message for this platform.
-        
+
         Override in subclasses to handle platform-specific formatting
         (e.g., Telegram MarkdownV2, Discord markdown).
-        
+
         Default implementation returns content as-is.
         """
         return content
-    
+
     @staticmethod
     def truncate_message(
         content: str,
@@ -5809,7 +6294,7 @@ class BasePlatformAdapter(ABC):
         if _len(content) <= max_length:
             return [content]
 
-        INDICATOR_RESERVE = 10   # room for " (XX/XX)"
+        INDICATOR_RESERVE = 10  # room for " (XX/XX)"
         FENCE_CLOSE = "\n```"
 
         chunks: List[str] = []
@@ -5926,8 +6411,6 @@ class BasePlatformAdapter(ABC):
         # Append chunk indicators when the response spans multiple messages
         if len(chunks) > 1:
             total = len(chunks)
-            chunks = [
-                f"{chunk} ({i + 1}/{total})" for i, chunk in enumerate(chunks)
-            ]
+            chunks = [f"{chunk} ({i + 1}/{total})" for i, chunk in enumerate(chunks)]
 
         return chunks

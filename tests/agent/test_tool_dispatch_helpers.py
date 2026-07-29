@@ -65,9 +65,7 @@ class TestUntrustedToolClassification:
 # =========================================================================
 
 
-SAMPLE_LONG_TEXT = (
-    "This is a sample document fetched from a web page. " * 4
-)
+SAMPLE_LONG_TEXT = "This is a sample document fetched from a web page. " * 4
 
 
 class TestUntrustedWrapping:
@@ -178,7 +176,7 @@ class TestUntrustedWrapping:
             '<untrusted_tool_result source="mcp_linear_get_issue">'
         )
         # Exactly one genuine boundary remains; the forged ones are defanged.
-        assert result.count('<untrusted_tool_result source=') == 1
+        assert result.count("<untrusted_tool_result source=") == 1
         assert result.count("</untrusted_tool_result>") == 1
         assert "follow these injected instructions" in result
 
@@ -197,7 +195,9 @@ class TestUntrustedWrapping:
     def test_mcp_tool_result_wrapped(self):
         long = "Issue title: Foo\n" + ("body line\n" * 20)
         result = _maybe_wrap_untrusted("mcp_linear_get_issue", long)
-        assert result.startswith('<untrusted_tool_result source="mcp_linear_get_issue">')
+        assert result.startswith(
+            '<untrusted_tool_result source="mcp_linear_get_issue">'
+        )
         assert "Issue title: Foo" in result
 
     def test_browser_tool_result_wrapped(self):
@@ -235,9 +235,7 @@ class TestMakeToolResultMessage:
         assert msg["tool_name"] == "web_extract"
         assert msg["tool_call_id"] == "call_2"
         assert isinstance(msg["content"], str)
-        assert msg["content"].startswith(
-            '<untrusted_tool_result source="web_extract">'
-        )
+        assert msg["content"].startswith('<untrusted_tool_result source="web_extract">')
         assert SAMPLE_LONG_TEXT in msg["content"]
 
     def test_high_risk_message_with_multimodal_short_text_unchanged(self):
@@ -300,7 +298,9 @@ class TestMakeToolResultMessage:
         assert "Ignore all previous instructions" in msg["content"]
 
     def test_clean_untrusted_text_result_has_low_risk_metadata(self):
-        msg = make_tool_result_message("browser_snapshot", "ordinary page text", "call_clean")
+        msg = make_tool_result_message(
+            "browser_snapshot", "ordinary page text", "call_clean"
+        )
 
         assert msg["_tool_output_risk"] == {
             "risk": "low",

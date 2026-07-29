@@ -14,6 +14,7 @@ used by new code that needs to be backend-agnostic — specifically the
 profile create/delete hooks (Phase 4) and the s6 dispatch path in
 ``clawk gateway start/stop/restart`` when running inside a container.
 """
+
 from __future__ import annotations
 
 import re
@@ -41,13 +42,9 @@ def validate_profile_name(name: str) -> None:
     if not name:
         raise ValueError("profile name must not be empty")
     if len(name) > _MAX_PROFILE_LEN:
-        raise ValueError(
-            f"profile name too long ({len(name)} > {_MAX_PROFILE_LEN})"
-        )
+        raise ValueError(f"profile name too long ({len(name)} > {_MAX_PROFILE_LEN})")
     if not _VALID_PROFILE_RE.match(name):
-        raise ValueError(
-            f"profile name must match [a-z0-9][a-z0-9_-]*, got {name!r}"
-        )
+        raise ValueError(f"profile name must match [a-z0-9][a-z0-9_-]*, got {name!r}")
 
 
 @runtime_checkable
@@ -212,18 +209,22 @@ class SystemdServiceManager(_RegistrationUnsupportedMixin):
 
     def start(self, name: str) -> None:
         from clawk_cli.gateway import systemd_start
+
         systemd_start()
 
     def stop(self, name: str) -> None:
         from clawk_cli.gateway import systemd_stop
+
         systemd_stop()
 
     def restart(self, name: str) -> None:
         from clawk_cli.gateway import systemd_restart
+
         systemd_restart()
 
     def is_running(self, name: str) -> bool:
         from clawk_cli.gateway import _probe_systemd_service_running
+
         _, running = _probe_systemd_service_running()
         return running
 
@@ -235,18 +236,22 @@ class LaunchdServiceManager(_RegistrationUnsupportedMixin):
 
     def start(self, name: str) -> None:
         from clawk_cli.gateway import launchd_start
+
         launchd_start()
 
     def stop(self, name: str) -> None:
         from clawk_cli.gateway import launchd_stop
+
         launchd_stop()
 
     def restart(self, name: str) -> None:
         from clawk_cli.gateway import launchd_restart
+
         launchd_restart()
 
     def is_running(self, name: str) -> bool:
         from clawk_cli.gateway import _probe_launchd_service_running
+
         return _probe_launchd_service_running()
 
 
@@ -273,6 +278,7 @@ class WindowsServiceManager(_RegistrationUnsupportedMixin):
         elevated_handoff: bool = False,
     ) -> None:
         from clawk_cli import gateway_windows
+
         gateway_windows.install(
             force=force,
             start_now=start_now,
@@ -282,19 +288,23 @@ class WindowsServiceManager(_RegistrationUnsupportedMixin):
 
     def start(self, name: str) -> None:
         from clawk_cli import gateway_windows
+
         gateway_windows.start()
 
     def stop(self, name: str) -> None:
         from clawk_cli import gateway_windows
+
         gateway_windows.stop()
 
     def restart(self, name: str) -> None:
         from clawk_cli import gateway_windows
+
         gateway_windows.restart()
 
     def is_running(self, name: str) -> bool:
         from clawk_cli import gateway_windows
         from clawk_cli.gateway import find_gateway_pids
+
         if not gateway_windows.is_installed():
             return False
         return bool(find_gateway_pids())
@@ -346,7 +356,9 @@ def _profile_dir_for_gateway_service(name: str) -> Path:
     """
     import os
 
-    profile = name[len(S6_SERVICE_PREFIX):] if name.startswith(S6_SERVICE_PREFIX) else name
+    profile = (
+        name[len(S6_SERVICE_PREFIX) :] if name.startswith(S6_SERVICE_PREFIX) else name
+    )
     validate_profile_name(profile)
     clawk_home = Path(os.environ.get("CLAWK_HOME", "/opt/data"))
     if clawk_home.parent.name == "profiles":
@@ -585,14 +597,17 @@ class S6CommandError(S6Error):
     """
 
     def __init__(
-        self, *, service: str, action: str, returncode: int, stderr: str,
+        self,
+        *,
+        service: str,
+        action: str,
+        returncode: int,
+        stderr: str,
     ) -> None:
         self.action = action
         self.returncode = returncode
         self.stderr = stderr
-        message = (
-            f"s6-svc {action} on {service!r} failed (rc={returncode})"
-        )
+        message = f"s6-svc {action} on {service!r} failed (rc={returncode})"
         if stderr.strip():
             message += f": {stderr.strip()}"
         super().__init__(message, service=service)
@@ -666,6 +681,7 @@ class S6ServiceManager:
         parameter because they were dead code through the entire stack.
         """
         import shlex
+
         lines = [
             "#!/command/with-contenv sh",
             "# shellcheck shell=sh",
@@ -777,6 +793,7 @@ class S6ServiceManager:
             correlatable in ``current``.
         """
         import shlex
+
         prof = shlex.quote(profile)
         return (
             f"#!/command/with-contenv sh\n"
@@ -829,7 +846,7 @@ class S6ServiceManager:
             # Strip the gateway- prefix back off so the message
             # matches what the user typed on the CLI (``-p <profile>``).
             profile = (
-                name[len(S6_SERVICE_PREFIX):]
+                name[len(S6_SERVICE_PREFIX) :]
                 if name.startswith(S6_SERVICE_PREFIX)
                 else name
             )
@@ -838,7 +855,10 @@ class S6ServiceManager:
         try:
             subprocess.run(
                 [f"{_S6_BIN_DIR}/s6-svc", action_flag, str(service_dir)],
-                check=True, capture_output=True, text=True, timeout=5,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
         except subprocess.CalledProcessError as exc:
             raise S6CommandError(
@@ -873,7 +893,9 @@ class S6ServiceManager:
         try:
             result = subprocess.run(
                 [f"{_S6_BIN_DIR}/s6-svstat", str(self.scandir / name)],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
         except (OSError, subprocess.SubprocessError):
             return None
@@ -924,9 +946,12 @@ class S6ServiceManager:
     def is_running(self, name: str) -> bool:
         """True iff ``s6-svstat`` reports the service as up."""
         import subprocess
+
         result = subprocess.run(
             [f"{_S6_BIN_DIR}/s6-svstat", str(self.scandir / name)],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return result.returncode == 0 and "up " in result.stdout
 
@@ -1029,15 +1054,15 @@ class S6ServiceManager:
         # Trigger rescan so s6-svscan picks up the new service.
         result = subprocess.run(
             [f"{_S6_BIN_DIR}/s6-svscanctl", "-a", str(self.scandir)],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode != 0:
             # Clean up: rescan failed, leave the directory in place would
             # be confusing (no supervisor watching it).
             shutil.rmtree(svc_dir, ignore_errors=True)
-            raise RuntimeError(
-                f"s6-svscanctl failed: {result.stderr or result.stdout}"
-            )
+            raise RuntimeError(f"s6-svscanctl failed: {result.stderr or result.stdout}")
 
     def unregister_profile_gateway(self, profile: str) -> None:
         """Stop the profile gateway service and remove its directory.
@@ -1066,13 +1091,17 @@ class S6ServiceManager:
         # Stop the service (best effort — service may already be down).
         subprocess.run(
             [f"{_S6_BIN_DIR}/s6-svc", "-d", str(svc_dir)],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
             check=False,
         )
         # Wait for it to actually go down (up to 10s).
         subprocess.run(
             [f"{_S6_BIN_DIR}/s6-svwait", "-D", "-t", "10000", str(svc_dir)],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
             check=False,
         )
 
@@ -1084,7 +1113,9 @@ class S6ServiceManager:
         # files inside the slot, so the upcoming rmtree doesn't race.
         subprocess.run(
             [f"{_S6_BIN_DIR}/s6-svscanctl", "-an", str(self.scandir)],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
             check=False,
         )
         # Give s6-svscan a moment to reap. There's no synchronous
@@ -1119,5 +1150,5 @@ class S6ServiceManager:
                 continue
             if not entry.name.startswith(S6_SERVICE_PREFIX):
                 continue
-            profiles.append(entry.name[len(S6_SERVICE_PREFIX):])
+            profiles.append(entry.name[len(S6_SERVICE_PREFIX) :])
         return profiles

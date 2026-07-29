@@ -1135,13 +1135,16 @@ def _telegram_command_menu_config() -> dict[str, Any]:
     """
     try:
         from clawk_cli.config import read_raw_config
+
         raw_cfg = read_raw_config() or {}
     except Exception:
         raw_cfg = {}
     if not isinstance(raw_cfg, Mapping):
         raw_cfg = {}
 
-    menu_cfg = dict(_nested_mapping(raw_cfg, "platforms", "telegram", "extra", "command_menu"))
+    menu_cfg = dict(
+        _nested_mapping(raw_cfg, "platforms", "telegram", "extra", "command_menu")
+    )
 
     max_commands = menu_cfg.get("max_commands", _DEFAULT_TELEGRAM_MENU_MAX_COMMANDS)
     try:
@@ -1203,8 +1206,7 @@ def _prioritize_telegram_menu_commands(
 ) -> list[tuple[str, str]]:
 
     priority = {
-        name: index
-        for index, name in enumerate(_telegram_effective_priority())
+        name: index for index, name in enumerate(_telegram_effective_priority())
     }
 
     return [

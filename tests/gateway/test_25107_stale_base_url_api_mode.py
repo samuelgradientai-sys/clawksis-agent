@@ -56,7 +56,9 @@ def _make_event(text):
     return MessageEvent(
         text=text,
         message_type=MessageType.TEXT,
-        source=SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"),
+        source=SessionSource(
+            platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"
+        ),
     )
 
 
@@ -76,7 +78,9 @@ def _fake_switch_result(*, base_url="", api_mode=""):
     )
 
 
-def _setup_isolated_home(tmp_path, monkeypatch, model_yaml_value, *, base_url="", api_mode=""):
+def _setup_isolated_home(
+    tmp_path, monkeypatch, model_yaml_value, *, base_url="", api_mode=""
+):
     import gateway.run as gateway_run
 
     clawk_home = tmp_path / ".clawk"
@@ -121,7 +125,9 @@ _STALE_MODEL_CFG = {
 
 
 @pytest.mark.asyncio
-async def test_typed_switch_to_custom_clears_stale_base_url_and_api_mode(tmp_path, monkeypatch):
+async def test_typed_switch_to_custom_clears_stale_base_url_and_api_mode(
+    tmp_path, monkeypatch
+):
     """Switching to a custom provider whose resolver returns no base_url/
     api_mode must clear the previous custom endpoint's leftovers, not keep
     routing at the old host/protocol (#25107)."""
@@ -143,7 +149,9 @@ async def test_typed_switch_to_custom_clears_stale_base_url_and_api_mode(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_typed_switch_to_custom_persists_resolved_base_url_and_api_mode(tmp_path, monkeypatch):
+async def test_typed_switch_to_custom_persists_resolved_base_url_and_api_mode(
+    tmp_path, monkeypatch
+):
     """The normal case: a custom-provider switch that DOES resolve a fresh
     base_url/api_mode must persist both (api_mode was never written here
     before the fix)."""
@@ -179,14 +187,18 @@ async def _drive_picker(runner, event):
 
 
 @pytest.mark.asyncio
-async def test_picker_tap_to_custom_clears_stale_base_url_and_api_mode(tmp_path, monkeypatch):
+async def test_picker_tap_to_custom_clears_stale_base_url_and_api_mode(
+    tmp_path, monkeypatch
+):
     """Same bug, picker-tap path: tapping a custom-provider model with an
     empty resolved base_url must clear the previous custom endpoint (#25107).
     """
     adapter = _FakePickerAdapter()
     cfg_path = _setup_isolated_home(tmp_path, monkeypatch, dict(_STALE_MODEL_CFG))
 
-    confirmation = await _drive_picker(_make_runner(adapter), _make_event("/model --global"))
+    confirmation = await _drive_picker(
+        _make_runner(adapter), _make_event("/model --global")
+    )
 
     assert confirmation is not None
     written = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))

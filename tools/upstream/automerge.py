@@ -17,6 +17,7 @@ Uso:
   python tools/upstream/automerge.py            # dry-run: clasifica, no escribe
   python tools/upstream/automerge.py --apply    # escribe los seguros
 """
+
 from __future__ import annotations
 
 import argparse
@@ -125,9 +126,9 @@ def main() -> int:
             to_agent.append((fork_path, "delta AST real del fork"))
             continue
         # fork == base semanticamente: el fork no cambio nada; adoptar target.
-        if NOUS_ACTIVE.search(theirs.decode("utf-8", "replace")) and not NOUS_ACTIVE.search(
-            ours.decode("utf-8", "replace")
-        ):
+        if NOUS_ACTIVE.search(
+            theirs.decode("utf-8", "replace")
+        ) and not NOUS_ACTIVE.search(ours.decode("utf-8", "replace")):
             nous_guard.append(fork_path)
             to_agent.append((fork_path, "theirs introduce Nous -> subagente"))
             continue
@@ -138,7 +139,9 @@ def main() -> int:
     mode = "APLICADO" if args.apply else "DRY-RUN"
     print(f"=== automerge [{mode}] ===")
     print(f"  auto-aplicables (.py, delta fork = solo formato): {len(applied)}")
-    print(f"  a subagente (delta real / movido / base irreconstruible): {len(to_agent)}")
+    print(
+        f"  a subagente (delta real / movido / base irreconstruible): {len(to_agent)}"
+    )
     print(f"  no-.py (a subagente/manual): {len(skipped_nonpy)}")
     print(f"  desaparecidos del arbol: {len(skipped_gone)}")
     print(f"  guard Nous (theirs mete acople): {len(nous_guard)}")

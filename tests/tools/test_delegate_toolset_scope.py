@@ -30,7 +30,9 @@ class TestToolsetIntersection:
 
     def test_all_requested_toolsets_available_on_parent(self):
         """LLM requests subset of parent tools — all pass through."""
-        parent = SimpleNamespace(enabled_toolsets=["terminal", "file", "web", "browser"])
+        parent = SimpleNamespace(
+            enabled_toolsets=["terminal", "file", "web", "browser"]
+        )
 
         parent_toolsets = set(parent.enabled_toolsets)
         requested = ["terminal", "web"]

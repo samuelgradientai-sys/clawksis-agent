@@ -28,7 +28,9 @@ _ACCOUNT = re.compile(
     r"Account:\s*(?P<name>.+?)\s*\((?P<state>created|reused)\)", re.IGNORECASE
 )
 # "Claim within:   60 minutes"
-_CLAIM_WITHIN = re.compile(r"Claim within:\s*(?P<minutes>\d+)\s*minutes?", re.IGNORECASE)
+_CLAIM_WITHIN = re.compile(
+    r"Claim within:\s*(?P<minutes>\d+)\s*minutes?", re.IGNORECASE
+)
 # A successful deploy prints a "Deployed" / "Uploaded" line.
 _DEPLOYED = re.compile(r"^\s*(Deployed|Uploaded)\b", re.IGNORECASE | re.MULTILINE)
 
@@ -87,7 +89,10 @@ To continue without logging in, rerun this command with `--temporary`.
 def _selftest() -> int:
     r = parse(_SAMPLE)
     assert r["live_url"] == "https://example-worker.example-name.workers.dev", r
-    assert r["claim_url"] == "https://dash.cloudflare.com/claim-preview?claimToken=abc123XYZ", r
+    assert (
+        r["claim_url"]
+        == "https://dash.cloudflare.com/claim-preview?claimToken=abc123XYZ"
+    ), r
     assert r["account"] == "example-name", r
     assert r["account_state"] == "created", r
     assert r["expires_minutes"] == 60, r

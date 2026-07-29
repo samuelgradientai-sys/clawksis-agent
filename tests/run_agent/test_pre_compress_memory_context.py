@@ -181,7 +181,9 @@ def test_provider_context_is_strictly_sanitized_before_plugin_engine(monkeypatch
 
 def test_provider_context_is_bounded_before_plugin_engine():
     manager = MagicMock()
-    manager.on_pre_compress.return_value = "HEAD-SENTINEL" + "x" * 8_000 + "TAIL-SENTINEL"
+    manager.on_pre_compress.return_value = (
+        "HEAD-SENTINEL" + "x" * 8_000 + "TAIL-SENTINEL"
+    )
     received = []
     compressor = MagicMock()
 

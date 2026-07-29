@@ -59,7 +59,9 @@ def _resolve_script_path(script_value: Any) -> tuple[Optional[Path], Optional[st
         candidate = mapped.resolve() if mapped is not None else scripts_root
     else:
         raw = Path(raw_text).expanduser()
-        candidate = raw.resolve() if raw.is_absolute() else (scripts_root / raw).resolve()
+        candidate = (
+            raw.resolve() if raw.is_absolute() else (scripts_root / raw).resolve()
+        )
     try:
         candidate.relative_to(scripts_root)
     except ValueError:
@@ -163,7 +165,9 @@ class WebhookRouteProcessor:
                 for item in items
             )
         if "not" in spec:
-            return not self.filter_matches(spec.get("not"), payload, event_type, headers)
+            return not self.filter_matches(
+                spec.get("not"), payload, event_type, headers
+            )
 
         value = self.resolve_filter_field(
             spec.get("field"), payload, event_type, headers
@@ -221,11 +225,12 @@ class WebhookRouteProcessor:
             logger.warning("[webhook] filters must be a list or object")
             return False
         return all(
-            self.filter_matches(spec, payload, event_type, headers)
-            for spec in filters
+            self.filter_matches(spec, payload, event_type, headers) for spec in filters
         )
 
-    def run_route_script(self, script_value: Any, payload: dict) -> tuple[bool, Optional[dict]]:
+    def run_route_script(
+        self, script_value: Any, payload: dict
+    ) -> tuple[bool, Optional[dict]]:
         """Run a route script and return (should_continue, transformed_payload)."""
         path, error = _resolve_script_path(script_value)
         if error or path is None:
@@ -247,7 +252,9 @@ class WebhookRouteProcessor:
         try:
             from tools.environments.local import _sanitize_subprocess_env
 
-            popen_kwargs = {"creationflags": 0x08000000} if sys.platform == "win32" else {}
+            popen_kwargs = (
+                {"creationflags": 0x08000000} if sys.platform == "win32" else {}
+            )
             result = subprocess.run(
                 argv,
                 input=json.dumps(payload),

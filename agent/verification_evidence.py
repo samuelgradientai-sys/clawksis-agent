@@ -52,7 +52,9 @@ def _utc_now() -> str:
 
 
 def _retention_cutoff() -> str:
-    return (datetime.now(timezone.utc) - timedelta(days=_MAX_EVIDENCE_AGE_DAYS)).isoformat()
+    return (
+        datetime.now(timezone.utc) - timedelta(days=_MAX_EVIDENCE_AGE_DAYS)
+    ).isoformat()
 
 
 def _db_path() -> Path:
@@ -155,7 +157,7 @@ def _find_subsequence(tokens: list[str], needle: list[str]) -> Optional[int]:
         return None
     cleaned = [_clean_token(t) for t in tokens]
     for idx in range(0, len(cleaned) - len(needle) + 1):
-        if cleaned[idx:idx + len(needle)] == needle:
+        if cleaned[idx : idx + len(needle)] == needle:
             return idx
     return None
 
@@ -183,19 +185,19 @@ def _equivalent_needles(needle: list[str]) -> list[list[str]]:
     if len(needle) == 1 and "/" in needle[0]:
         candidates.extend([["bash", needle[0]], ["sh", needle[0]]])
     if needle == ["pytest"]:
-        candidates.extend(
-            [
-                ["python", "-m", "pytest"],
-                ["python3", "-m", "pytest"],
-                ["uv", "run", "pytest"],
-                ["poetry", "run", "pytest"],
-                ["pipenv", "run", "pytest"],
-            ]
-        )
+        candidates.extend([
+            ["python", "-m", "pytest"],
+            ["python3", "-m", "pytest"],
+            ["uv", "run", "pytest"],
+            ["poetry", "run", "pytest"],
+            ["pipenv", "run", "pytest"],
+        ])
     return candidates
 
 
-def _find_canonical_match(command: str, canonical_commands: list[str]) -> Optional[tuple[str, list[str]]]:
+def _find_canonical_match(
+    command: str, canonical_commands: list[str]
+) -> Optional[tuple[str, list[str]]]:
     """Return ``(canonical, trailing_args)`` for the first detected command."""
 
     segments = _split_segment_tokens(command)
@@ -206,8 +208,8 @@ def _find_canonical_match(command: str, canonical_commands: list[str]) -> Option
         for tokens in segments:
             candidate_tokens = _strip_command_prefix(tokens)
             for candidate in _equivalent_needles(needle):
-                if candidate_tokens[:len(candidate)] == candidate:
-                    return canonical, candidate_tokens[len(candidate):]
+                if candidate_tokens[: len(candidate)] == candidate:
+                    return canonical, candidate_tokens[len(candidate) :]
     return None
 
 
@@ -279,7 +281,9 @@ def _is_temp_script_path(token: str, root: str | Path | None) -> bool:
     )
 
 
-def _ad_hoc_script_args(tokens: list[str], root: str | Path | None) -> Optional[list[str]]:
+def _ad_hoc_script_args(
+    tokens: list[str], root: str | Path | None
+) -> Optional[list[str]]:
     candidate_tokens = _strip_command_prefix(tokens)
     if not candidate_tokens:
         return None
@@ -291,7 +295,7 @@ def _ad_hoc_script_args(tokens: list[str], root: str | Path | None) -> Optional[
             if token == "--":
                 continue
             if _is_temp_script_path(token, root):
-                return candidate_tokens[idx + 1:]
+                return candidate_tokens[idx + 1 :]
             if not token.startswith("-"):
                 return None
     return None
@@ -546,7 +550,12 @@ def mark_workspace_edited(
             )
             conn.commit()
 
-    return {"session_id": sid, "root": root, "last_edit_at": edited_at, "changed_paths": changed_paths}
+    return {
+        "session_id": sid,
+        "root": root,
+        "last_edit_at": edited_at,
+        "changed_paths": changed_paths,
+    }
 
 
 def verification_status(

@@ -205,8 +205,7 @@ def _make_probe_dir(tmp_path: Path) -> Path:
     probe_dir = tmp_path / "probe"
     probe_dir.mkdir()
     (probe_dir / "test_flagprobe.py").write_text(
-        "def test_alpha():\n    assert True\n\n"
-        "def test_beta():\n    assert True\n"
+        "def test_alpha():\n    assert True\n\ndef test_beta():\n    assert True\n"
     )
     return probe_dir
 
@@ -215,8 +214,17 @@ def _run_runner(probe_dir: Path, *extra: str) -> subprocess.CompletedProcess:
     repo_root = Path(__file__).resolve().parent.parent
     runner = repo_root / "scripts" / "run_tests_parallel.py"
     return subprocess.run(
-        [sys.executable, str(runner), "--paths", str(probe_dir),
-         "-j", "1", "--file-timeout", "30", *extra],
+        [
+            sys.executable,
+            str(runner),
+            "--paths",
+            str(probe_dir),
+            "-j",
+            "1",
+            "--file-timeout",
+            "30",
+            *extra,
+        ],
         cwd=repo_root,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -268,10 +276,21 @@ def test_positional_path_not_treated_as_flag(tmp_path: Path) -> None:
     runner = repo_root / "scripts" / "run_tests_parallel.py"
     # Pass the probe dir positionally (no --paths), plus a bare -q.
     proc = subprocess.run(
-        [sys.executable, str(runner), str(probe_dir), "-j", "1",
-         "--file-timeout", "30", "-q"],
-        cwd=repo_root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, timeout=60,
+        [
+            sys.executable,
+            str(runner),
+            str(probe_dir),
+            "-j",
+            "1",
+            "--file-timeout",
+            "30",
+            "-q",
+        ],
+        cwd=repo_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=60,
     )
     assert proc.returncode == 0, proc.stdout
     # Discovery found the probe file (2 tests), proving the positional path

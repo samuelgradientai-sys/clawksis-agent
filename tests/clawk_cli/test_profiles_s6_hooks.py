@@ -7,6 +7,7 @@ existing TestCreateProfile and TestDeleteProfile classes in
 tests/clawk_cli/test_profiles.py; here we only exercise the new
 helper surface that doesn't touch the filesystem.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -26,20 +27,26 @@ from clawk_cli.profiles import (
 
 class _HostManager:
     """Mimics a host backend that doesn't support runtime registration."""
+
     kind = "systemd"
 
     def supports_runtime_registration(self) -> bool:
         return False
 
     def register_profile_gateway(self, *args: Any, **kwargs: Any) -> None:
-        raise AssertionError("host backend register_profile_gateway should not be called")
+        raise AssertionError(
+            "host backend register_profile_gateway should not be called"
+        )
 
     def unregister_profile_gateway(self, *args: Any, **kwargs: Any) -> None:
-        raise AssertionError("host backend unregister_profile_gateway should not be called")
+        raise AssertionError(
+            "host backend unregister_profile_gateway should not be called"
+        )
 
 
 class _S6Manager:
     """Mimics S6ServiceManager just enough for the hooks."""
+
     kind = "s6"
 
     def __init__(self) -> None:
@@ -52,7 +59,9 @@ class _S6Manager:
         return True
 
     def register_profile_gateway(
-        self, profile: str, *,
+        self,
+        profile: str,
+        *,
         extra_env: dict[str, str] | None = None,
         start_now: bool = True,
     ) -> None:
@@ -103,7 +112,8 @@ def test_register_calls_through_on_s6(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_detect_s6(monkeypatch)
     mgr = _S6Manager()
     monkeypatch.setattr(
-        "clawk_cli.service_manager.get_service_manager", lambda: mgr,
+        "clawk_cli.service_manager.get_service_manager",
+        lambda: mgr,
     )
     _maybe_register_gateway_service("coder")
     assert mgr.registered == ["coder"]
@@ -116,7 +126,8 @@ def test_register_passes_start_now_false(monkeypatch: pytest.MonkeyPatch) -> Non
     _patch_detect_s6(monkeypatch)
     mgr = _S6Manager()
     monkeypatch.setattr(
-        "clawk_cli.service_manager.get_service_manager", lambda: mgr,
+        "clawk_cli.service_manager.get_service_manager",
+        lambda: mgr,
     )
     _maybe_register_gateway_service("coder")
     assert mgr.last_start_now is False, (
@@ -133,14 +144,16 @@ def test_register_swallows_duplicate_value_error(
     mgr = _S6Manager()
     mgr.raise_on_register = ValueError("already registered")
     monkeypatch.setattr(
-        "clawk_cli.service_manager.get_service_manager", lambda: mgr,
+        "clawk_cli.service_manager.get_service_manager",
+        lambda: mgr,
     )
     # Should NOT raise
     _maybe_register_gateway_service("coder")
 
 
 def test_register_swallows_arbitrary_error(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Even an unexpected exception from the manager must not bring
     down `clawk profile create` — print and continue."""
@@ -148,7 +161,8 @@ def test_register_swallows_arbitrary_error(
     mgr = _S6Manager()
     mgr.raise_on_register = RuntimeError("svscanctl exploded")
     monkeypatch.setattr(
-        "clawk_cli.service_manager.get_service_manager", lambda: mgr,
+        "clawk_cli.service_manager.get_service_manager",
+        lambda: mgr,
     )
     _maybe_register_gateway_service("coder")
     captured = capsys.readouterr()
@@ -161,26 +175,33 @@ def test_register_swallows_no_backend_runtime_error(
     """When `get_service_manager()` raises RuntimeError (no backend
     detected), the hook must silently no-op."""
     _patch_detect_s6(monkeypatch)
+
     def _no_backend() -> None:
         raise RuntimeError("no supported service manager detected")
+
     monkeypatch.setattr(
-        "clawk_cli.service_manager.get_service_manager", _no_backend,
+        "clawk_cli.service_manager.get_service_manager",
+        _no_backend,
     )
     # Should NOT raise
     _maybe_register_gateway_service("anywhere")
 
 
 def test_register_silent_when_detect_throws(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """If detect_service_manager itself raises (e.g. a partial s6
     install on a host machine), the hook must stay silent — no
     confusing s6 warning printed to a user who has never touched a
     container."""
+
     def _broken_detect() -> str:
         raise RuntimeError("detection blew up")
+
     monkeypatch.setattr(
-        "clawk_cli.service_manager.detect_service_manager", _broken_detect,
+        "clawk_cli.service_manager.detect_service_manager",
+        _broken_detect,
     )
     # If get_service_manager is reached, the test will assert via
     # _HostManager.register. It must NOT be reached.
@@ -207,20 +228,23 @@ def test_unregister_calls_through_on_s6(monkeypatch: pytest.MonkeyPatch) -> None
     _patch_detect_s6(monkeypatch)
     mgr = _S6Manager()
     monkeypatch.setattr(
-        "clawk_cli.service_manager.get_service_manager", lambda: mgr,
+        "clawk_cli.service_manager.get_service_manager",
+        lambda: mgr,
     )
     _maybe_unregister_gateway_service("coder")
     assert mgr.unregistered == ["coder"]
 
 
 def test_unregister_swallows_errors(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _patch_detect_s6(monkeypatch)
     mgr = _S6Manager()
     mgr.raise_on_unregister = RuntimeError("svc gone weird")
     monkeypatch.setattr(
-        "clawk_cli.service_manager.get_service_manager", lambda: mgr,
+        "clawk_cli.service_manager.get_service_manager",
+        lambda: mgr,
     )
     _maybe_unregister_gateway_service("coder")
     captured = capsys.readouterr()

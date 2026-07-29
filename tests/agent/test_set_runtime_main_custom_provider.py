@@ -3,6 +3,7 @@ so that _resolve_auto() can route custom: providers in Step 1.
 
 Fixes https://github.com/samuelgradientai-sys/clawksis-agent/issues/34777
 """
+
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -48,7 +49,8 @@ class TestSetRuntimeMainCustomProvider:
         import agent.auxiliary_client as mod
 
         mod.set_runtime_main(
-            "custom:x", "m",
+            "custom:x",
+            "m",
             base_url="https://x.example.com",
             api_key="sk-abc",
             api_mode="chat_completions",
@@ -78,7 +80,10 @@ class TestSetRuntimeMainCustomProvider:
                 mock_resolve.assert_called_once()
                 call_args = mock_resolve.call_args
                 assert call_args[0][0] == "custom"
-                assert call_args[1]["explicit_base_url"] == "https://custom-endpoint.example.com/v1"
+                assert (
+                    call_args[1]["explicit_base_url"]
+                    == "https://custom-endpoint.example.com/v1"
+                )
                 assert call_args[1]["explicit_api_key"] == "sk-test-123"
         finally:
             mod.clear_runtime_main()
@@ -156,8 +161,12 @@ class TestResolveAutoCustomEndToEnd:
         import agent.auxiliary_client as mod
 
         # Hermetic: no aggregator creds, no stale OPENAI_BASE_URL.
-        for var in ("OPENROUTER_API_KEY", "NOUS_API_KEY", "OPENAI_API_KEY",
-                    "OPENAI_BASE_URL"):
+        for var in (
+            "OPENROUTER_API_KEY",
+            "NOUS_API_KEY",
+            "OPENAI_API_KEY",
+            "OPENAI_BASE_URL",
+        ):
             monkeypatch.delenv(var, raising=False)
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()
@@ -195,8 +204,12 @@ class TestResolveAutoCustomEndToEnd:
         broke the named-custom branch and returned None here."""
         import agent.auxiliary_client as mod
 
-        for var in ("OPENROUTER_API_KEY", "NOUS_API_KEY", "OPENAI_API_KEY",
-                    "OPENAI_BASE_URL"):
+        for var in (
+            "OPENROUTER_API_KEY",
+            "NOUS_API_KEY",
+            "OPENAI_API_KEY",
+            "OPENAI_BASE_URL",
+        ):
             monkeypatch.delenv(var, raising=False)
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()
@@ -226,7 +239,8 @@ class TestResolveAutoCustomEndToEnd:
             mod.clear_runtime_main()
 
     def test_named_custom_anthropic_messages_keeps_full_name_and_url(
-            self, tmp_path, monkeypatch):
+        self, tmp_path, monkeypatch
+    ):
         """PR #36043: a ``custom:<name>`` main provider whose config entry
         declares ``api_mode: anthropic_messages`` must reach the
         named-custom-provider arm of resolve_provider_client — NOT the
@@ -236,8 +250,12 @@ class TestResolveAutoCustomEndToEnd:
         AnthropicAuxiliaryClient pointed at the ORIGINAL /anthropic URL."""
         import agent.auxiliary_client as mod
 
-        for var in ("OPENROUTER_API_KEY", "NOUS_API_KEY", "OPENAI_API_KEY",
-                    "OPENAI_BASE_URL"):
+        for var in (
+            "OPENROUTER_API_KEY",
+            "NOUS_API_KEY",
+            "OPENAI_API_KEY",
+            "OPENAI_BASE_URL",
+        ):
             monkeypatch.delenv(var, raising=False)
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()

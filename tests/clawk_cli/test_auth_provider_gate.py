@@ -8,6 +8,7 @@ def _write_config(tmp_path, config: dict) -> None:
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir(parents=True, exist_ok=True)
     import yaml
+
     (clawk_home / "config.yaml").write_text(yaml.dump(config))
 
 
@@ -29,39 +30,53 @@ def test_returns_false_when_no_config(tmp_path, monkeypatch):
     (tmp_path / "clawk").mkdir(parents=True, exist_ok=True)
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("anthropic") is False
 
 
 def test_returns_true_when_active_provider_matches(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
-    _write_auth_store(tmp_path, {
-        "version": 1,
-        "providers": {},
-        "active_provider": "anthropic",
-    })
+    _write_auth_store(
+        tmp_path,
+        {
+            "version": 1,
+            "providers": {},
+            "active_provider": "anthropic",
+        },
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("anthropic") is True
 
 
 def test_returns_true_when_config_provider_matches(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
-    _write_config(tmp_path, {"model": {"provider": "anthropic", "default": "claude-sonnet-4-6"}})
+    _write_config(
+        tmp_path, {"model": {"provider": "anthropic", "default": "claude-sonnet-4-6"}}
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("anthropic") is True
 
 
 def test_returns_false_when_config_provider_is_different(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
-    _write_config(tmp_path, {"model": {"provider": "kimi-coding", "default": "kimi-k2"}})
-    _write_auth_store(tmp_path, {
-        "version": 1,
-        "providers": {},
-        "active_provider": None,
-    })
+    _write_config(
+        tmp_path, {"model": {"provider": "kimi-coding", "default": "kimi-k2"}}
+    )
+    _write_auth_store(
+        tmp_path,
+        {
+            "version": 1,
+            "providers": {},
+            "active_provider": None,
+        },
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("anthropic") is False
 
 
@@ -71,6 +86,7 @@ def test_returns_true_when_anthropic_env_var_set(tmp_path, monkeypatch):
     (tmp_path / "clawk").mkdir(parents=True, exist_ok=True)
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("anthropic") is True
 
 
@@ -81,6 +97,7 @@ def test_claude_code_oauth_token_does_not_count_as_explicit(tmp_path, monkeypatc
     (tmp_path / "clawk").mkdir(parents=True, exist_ok=True)
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("anthropic") is False
 
 
@@ -90,42 +107,54 @@ def test_ambient_pool_source_does_not_count_as_explicit(tmp_path, monkeypatch):
     monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    _write_auth_store(tmp_path, {
-        "version": 1,
-        "providers": {},
-        "active_provider": None,
-        "credential_pool": {
-            "copilot": [{
-                "id": "abc123",
-                "source": "gh_cli",
-                "auth_type": "api_key",
-                "access_token": "ghu_sometoken",
-            }],
+    _write_auth_store(
+        tmp_path,
+        {
+            "version": 1,
+            "providers": {},
+            "active_provider": None,
+            "credential_pool": {
+                "copilot": [
+                    {
+                        "id": "abc123",
+                        "source": "gh_cli",
+                        "auth_type": "api_key",
+                        "access_token": "ghu_sometoken",
+                    }
+                ],
+            },
         },
-    })
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("copilot") is False
 
 
 def test_explicit_pool_source_counts_as_explicit(tmp_path, monkeypatch):
     """manual / device_code / PKCE pool entries reflect explicit Clawksis flows."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
-    _write_auth_store(tmp_path, {
-        "version": 1,
-        "providers": {},
-        "active_provider": None,
-        "credential_pool": {
-            "anthropic": [{
-                "id": "def456",
-                "source": "manual:key-1",
-                "auth_type": "api_key",
-                "access_token": "sk-ant-api03-key",
-            }],
+    _write_auth_store(
+        tmp_path,
+        {
+            "version": 1,
+            "providers": {},
+            "active_provider": None,
+            "credential_pool": {
+                "anthropic": [
+                    {
+                        "id": "def456",
+                        "source": "manual:key-1",
+                        "auth_type": "api_key",
+                        "access_token": "sk-ant-api03-key",
+                    }
+                ],
+            },
         },
-    })
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("anthropic") is True
 
 
@@ -135,20 +164,26 @@ def test_stale_env_pool_entry_does_not_count_when_var_unset(tmp_path, monkeypatc
     providers forever because the record existed even though no secret resolves."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
-    _write_auth_store(tmp_path, {
-        "version": 1,
-        "providers": {},
-        "active_provider": None,
-        "credential_pool": {
-            "deepseek": [{
-                "id": "aaa111",
-                "source": "env:DEEPSEEK_API_KEY",
-                "auth_type": "api_key",
-            }],
+    _write_auth_store(
+        tmp_path,
+        {
+            "version": 1,
+            "providers": {},
+            "active_provider": None,
+            "credential_pool": {
+                "deepseek": [
+                    {
+                        "id": "aaa111",
+                        "source": "env:DEEPSEEK_API_KEY",
+                        "auth_type": "api_key",
+                    }
+                ],
+            },
         },
-    })
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("deepseek") is False
 
 
@@ -156,20 +191,26 @@ def test_env_pool_entry_counts_when_var_still_resolves(tmp_path, monkeypatch):
     """The same env-seeded pool entry IS explicit while the var still resolves."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-realkey-123456")
-    _write_auth_store(tmp_path, {
-        "version": 1,
-        "providers": {},
-        "active_provider": None,
-        "credential_pool": {
-            "deepseek": [{
-                "id": "aaa111",
-                "source": "env:DEEPSEEK_API_KEY",
-                "auth_type": "api_key",
-            }],
+    _write_auth_store(
+        tmp_path,
+        {
+            "version": 1,
+            "providers": {},
+            "active_provider": None,
+            "credential_pool": {
+                "deepseek": [
+                    {
+                        "id": "aaa111",
+                        "source": "env:DEEPSEEK_API_KEY",
+                        "auth_type": "api_key",
+                    }
+                ],
+            },
         },
-    })
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("deepseek") is True
 
 
@@ -189,4 +230,5 @@ def test_provider_not_in_registry_but_in_models_dev(tmp_path, monkeypatch):
     (tmp_path / "clawk").mkdir(parents=True, exist_ok=True)
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("openrouter") is True

@@ -220,7 +220,8 @@ def test_is_codex_spark_rejects_non_codex_providers(provider) -> None:
         "gpt-5.3-codex",  # sibling, not spark
         "gpt-5.3",  # bare 5.3, not spark
         "gpt-5.3-codex-spark-mini",  # hypothetical variant — not matched yet
-        "", None,
+        "",
+        None,
     ],
 )
 def test_is_codex_spark_rejects_non_spark_models(model) -> None:
@@ -228,15 +229,22 @@ def test_is_codex_spark_rejects_non_spark_models(model) -> None:
 
 
 def test_compression_threshold_for_codex_spark() -> None:
-    assert _compression_threshold_for_model("gpt-5.3-codex-spark", "openai-codex") == 0.70
-    assert _compression_threshold_for_model("openai/gpt-5.3-codex-spark", "openai-codex") == 0.70
+    assert (
+        _compression_threshold_for_model("gpt-5.3-codex-spark", "openai-codex") == 0.70
+    )
+    assert (
+        _compression_threshold_for_model("openai/gpt-5.3-codex-spark", "openai-codex")
+        == 0.70
+    )
 
 
 def test_compression_threshold_codex_spark_other_routes_unaffected() -> None:
     # Same slug, different route → no override (keep the user's config value).
     assert _compression_threshold_for_model("gpt-5.3-codex-spark", "openrouter") is None
     assert _compression_threshold_for_model("gpt-5.3-codex-spark", "openai") is None
-    assert _compression_threshold_for_model("gpt-5.3-codex-spark") is None  # no provider
+    assert (
+        _compression_threshold_for_model("gpt-5.3-codex-spark") is None
+    )  # no provider
 
 
 def test_compression_threshold_codex_spark_not_gated_by_gpt55_optout() -> None:

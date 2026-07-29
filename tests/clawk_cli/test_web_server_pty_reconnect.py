@@ -79,14 +79,14 @@ def test_channel_reconnect_resumes_active_session_file(pty_client, monkeypatch):
     ws, client, token = pty_client
     captured = []
 
-    def fake_resolve(resume=None, sidecar_url=None, profile=None, active_session_file=None):
-        captured.append(
-            {
-                "active_session_file": active_session_file,
-                "resume": resume,
-                "sidecar_url": sidecar_url,
-            }
-        )
+    def fake_resolve(
+        resume=None, sidecar_url=None, profile=None, active_session_file=None
+    ):
+        captured.append({
+            "active_session_file": active_session_file,
+            "resume": resume,
+            "sidecar_url": sidecar_url,
+        })
         if active_session_file and not resume:
             Path(active_session_file).write_text(
                 json.dumps({"session_id": "sess-live"}),
@@ -116,7 +116,9 @@ def test_fresh_param_ignores_channel_active_session_file(pty_client, monkeypatch
     active_file.write_text(json.dumps({"session_id": "sess-old"}), encoding="utf-8")
     captured = {}
 
-    def fake_resolve(resume=None, sidecar_url=None, profile=None, active_session_file=None):
+    def fake_resolve(
+        resume=None, sidecar_url=None, profile=None, active_session_file=None
+    ):
         captured["active_session_file"] = active_session_file
         captured["resume"] = resume
         return (["fake-clawk-tui"], None, None)

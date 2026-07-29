@@ -37,7 +37,12 @@ def test_real_read_tool_binaries_confirm_option_ownership(
     [
         ("rg", ["--pre", "-payload-marker", "needle", "{input}"], None, False),
         ("rg", ["--hostname-bin=-payload-marker", "needle", "{input}"], None, False),
-        ("sort", ["--buffer-size=1K", "--compress-program", "-payload-marker"], "{bulk}", False),
+        (
+            "sort",
+            ["--buffer-size=1K", "--compress-program", "-payload-marker"],
+            "{bulk}",
+            False,
+        ),
         ("ag", ["--pager=-payload-marker", "needle", "{input}"], None, True),
         ("man", ["--pager", "-payload-marker", "ls"], None, True),
         ("man", ["-P", "-payload-marker", "ls"], None, True),
@@ -52,7 +57,7 @@ def test_real_binaries_execute_leading_dash_program_payload(
 
     marker = tmp_path / "executed"
     payload = tmp_path / "-payload-marker"
-    payload.write_text("#!/bin/sh\nprintf executed > \"$MARKER\"\ncat\n")
+    payload.write_text('#!/bin/sh\nprintf executed > "$MARKER"\ncat\n')
     payload.chmod(0o755)
     input_file = tmp_path / "input.txt"
     input_file.write_text("needle\n")
@@ -72,7 +77,9 @@ def test_real_binaries_execute_leading_dash_program_payload(
     if needs_tty:
         argv = ["script", "-qec", shlex.join(argv), "/dev/null"]
 
-    subprocess.run(argv, input=input_text, text=True, capture_output=True, env=env, timeout=20)
+    subprocess.run(
+        argv, input=input_text, text=True, capture_output=True, env=env, timeout=20
+    )
 
     assert marker.read_text() == "executed"
 
@@ -161,10 +168,22 @@ def test_ag_pager_less_is_an_executable_option_and_requires_approval():
     ("command", "description"),
     [
         ("rg --pre -payload-marker needle", "arbitrary program execution via rg --pre"),
-        ("rg --hostname-bin=-payload-marker needle", "arbitrary program execution via rg --hostname-bin"),
-        ("sort --compress-program -payload-marker names", "arbitrary program execution via sort --compress-program"),
-        ("ag --pager=-payload-marker needle", "arbitrary program execution via ag --pager"),
-        ("man --pager -payload-marker ls", "arbitrary program execution via man --pager"),
+        (
+            "rg --hostname-bin=-payload-marker needle",
+            "arbitrary program execution via rg --hostname-bin",
+        ),
+        (
+            "sort --compress-program -payload-marker names",
+            "arbitrary program execution via sort --compress-program",
+        ),
+        (
+            "ag --pager=-payload-marker needle",
+            "arbitrary program execution via ag --pager",
+        ),
+        (
+            "man --pager -payload-marker ls",
+            "arbitrary program execution via man --pager",
+        ),
         ("man -P -payload-marker ls", "arbitrary program execution via man -P"),
         ("man -H-payload-marker ls", "arbitrary program execution via man -H"),
     ],
@@ -454,9 +473,9 @@ def test_single_quoted_grep_substitution_syntax_is_inert_data():
 @pytest.mark.parametrize(
     "command",
     [
-        'sort --compress-program="sh -c \'rm -rf --no-preserve-root /\'" names',
-        'sort --compress-program="bash -lc \'rm -rf --no-preserve-root /\'" names',
-        'rg --pre="env X=1 sh -c \'rm -rf --no-preserve-root /\'" pattern files',
+        "sort --compress-program=\"sh -c 'rm -rf --no-preserve-root /'\" names",
+        "sort --compress-program=\"bash -lc 'rm -rf --no-preserve-root /'\" names",
+        "rg --pre=\"env X=1 sh -c 'rm -rf --no-preserve-root /'\" pattern files",
     ],
 )
 def test_nested_quoted_executable_payloads_reach_hardline(command):

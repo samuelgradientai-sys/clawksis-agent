@@ -54,9 +54,9 @@ class AppliedVar:
     """Provenance record for one env var the orchestrator set."""
 
     name: str
-    source: str          # SecretSource.name
-    shape: str           # "mapped" | "bulk"
-    overrode_env: bool   # replaced a pre-existing .env/shell value
+    source: str  # SecretSource.name
+    shape: str  # "mapped" | "bulk"
+    overrode_env: bool  # replaced a pre-existing .env/shell value
 
 
 @dataclass
@@ -67,10 +67,10 @@ class SourceReport:
     label: str
     result: FetchResult
     applied: List[str] = field(default_factory=list)
-    skipped_existing: List[str] = field(default_factory=list)   # .env/shell won
-    skipped_claimed: List[str] = field(default_factory=list)    # earlier source won
+    skipped_existing: List[str] = field(default_factory=list)  # .env/shell won
+    skipped_claimed: List[str] = field(default_factory=list)  # earlier source won
     skipped_protected: List[str] = field(default_factory=list)  # bootstrap-auth guard
-    skipped_invalid: List[str] = field(default_factory=list)    # bad env-var name
+    skipped_invalid: List[str] = field(default_factory=list)  # bad env-var name
 
 
 @dataclass
@@ -114,17 +114,22 @@ def register_source(source: SecretSource, *, replace: bool = False) -> bool:
         logger.warning(
             "Ignoring secret source '%s': built against secret-source API v%s, "
             "this Clawksis speaks v%s",
-            name, getattr(source, "api_version", "?"), SECRET_SOURCE_API_VERSION,
+            name,
+            getattr(source, "api_version", "?"),
+            SECRET_SOURCE_API_VERSION,
         )
         return False
     if getattr(source, "shape", None) not in ("mapped", "bulk"):
         logger.warning(
             "Ignoring secret source '%s': shape must be 'mapped' or 'bulk', got %r",
-            name, getattr(source, "shape", None),
+            name,
+            getattr(source, "shape", None),
         )
         return False
     if name in _SOURCES and not replace:
-        logger.warning("Secret source '%s' already registered; ignoring duplicate", name)
+        logger.warning(
+            "Secret source '%s' already registered; ignoring duplicate", name
+        )
         return False
     scheme = getattr(source, "scheme", None)
     if scheme:
@@ -133,7 +138,9 @@ def register_source(source: SecretSource, *, replace: bool = False) -> bool:
                 logger.warning(
                     "Ignoring secret source '%s': scheme '%s://' is already "
                     "owned by source '%s'",
-                    name, scheme, other_name,
+                    name,
+                    scheme,
+                    other_name,
                 )
                 return False
     _SOURCES[name] = source
@@ -165,15 +172,17 @@ def _ensure_builtin_sources() -> None:
 
         register_source(BitwardenSource())
     except Exception:  # noqa: BLE001 — never block startup
-        logger.warning("Failed to register bundled Bitwarden secret source",
-                       exc_info=True)
+        logger.warning(
+            "Failed to register bundled Bitwarden secret source", exc_info=True
+        )
     try:
         from agent.secret_sources.onepassword import OnePasswordSource
 
         register_source(OnePasswordSource())
     except Exception:  # noqa: BLE001 — never block startup
-        logger.warning("Failed to register bundled 1Password secret source",
-                       exc_info=True)
+        logger.warning(
+            "Failed to register bundled 1Password secret source", exc_info=True
+        )
 
 
 def _reset_registry_for_tests() -> None:
@@ -226,9 +235,7 @@ def _fetch_with_timeout(
 
     if not isinstance(result, FetchResult):
         res = FetchResult()
-        res.error = (
-            f"fetch returned {type(result).__name__} instead of FetchResult"
-        )
+        res.error = f"fetch returned {type(result).__name__} instead of FetchResult"
         res.error_kind = ErrorKind.INTERNAL
         return res
     return result
@@ -250,12 +257,12 @@ def _ordered_enabled_sources(secrets_cfg: dict) -> List[SecretSource]:
         for entry in explicit:
             if isinstance(entry, str) and entry in _SOURCES and entry not in order:
                 order.append(entry)
-        unknown = [e for e in explicit
-                   if isinstance(e, str) and e not in _SOURCES]
+        unknown = [e for e in explicit if isinstance(e, str) and e not in _SOURCES]
         if unknown:
             logger.warning(
                 "secrets.sources names unknown source(s): %s (known: %s)",
-                ", ".join(unknown), ", ".join(_SOURCES) or "none",
+                ", ".join(unknown),
+                ", ".join(_SOURCES) or "none",
             )
     for name in _SOURCES:
         if name not in order:
@@ -270,13 +277,15 @@ def _ordered_enabled_sources(secrets_cfg: dict) -> List[SecretSource]:
             if source.is_enabled(cfg):
                 enabled.append(source)
         except Exception:  # noqa: BLE001
-            logger.warning("Secret source '%s' is_enabled() raised; skipping",
-                           name, exc_info=True)
+            logger.warning(
+                "Secret source '%s' is_enabled() raised; skipping", name, exc_info=True
+            )
     return enabled
 
 
-def apply_all(secrets_cfg: dict, home_path: Path,
-              environ: Optional[Dict[str, str]] = None) -> ApplyReport:
+def apply_all(
+    secrets_cfg: dict, home_path: Path, environ: Optional[Dict[str, str]] = None
+) -> ApplyReport:
     """Fetch from every enabled source and apply the merged result to env.
 
     ``environ`` defaults to ``os.environ``; injectable for tests.
@@ -304,8 +313,9 @@ def apply_all(secrets_cfg: dict, home_path: Path,
 
     # Mapped sources outrank bulk sources regardless of list order:
     # an explicit VAR→ref binding is stronger intent than a project dump.
-    ordered = ([s for s in enabled if s.shape == "mapped"]
-               + [s for s in enabled if s.shape == "bulk"])
+    ordered = [s for s in enabled if s.shape == "mapped"] + [
+        s for s in enabled if s.shape == "bulk"
+    ]
 
     # Fetch phase.
     fetches: List[tuple[SecretSource, dict, FetchResult]] = []
@@ -324,9 +334,9 @@ def apply_all(secrets_cfg: dict, home_path: Path,
     # Apply phase — sequential, first-wins, fully attributed.
     claimed: Dict[str, str] = {}  # var → source name that won it
     for source, cfg, result in fetches:
-        sr = SourceReport(name=source.name,
-                          label=source.label or source.name,
-                          result=result)
+        sr = SourceReport(
+            name=source.name, label=source.label or source.name, result=result
+        )
         report.sources.append(sr)
         if not result.ok:
             continue

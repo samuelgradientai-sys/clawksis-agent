@@ -34,15 +34,19 @@ def compressor():
 
 
 def _tool_group(call_id: str, results: int = 1, payload: str = "r" * 60):
-    msgs = [{
-        "role": "assistant",
-        "content": "",
-        "tool_calls": [{
-            "id": call_id,
-            "type": "function",
-            "function": {"name": "f", "arguments": "{}"},
-        }],
-    }]
+    msgs = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
+            ],
+        }
+    ]
     for _ in range(results):
         msgs.append({"role": "tool", "tool_call_id": call_id, "content": payload})
     return msgs

@@ -36,6 +36,7 @@ from gateway.session import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_runner(**attrs):
     from gateway.run import GatewayRunner
 
@@ -82,7 +83,9 @@ def _make_context(
         scope_id=guild_id,
         message_id=message_id,
     )
-    connected = connected if connected is not None else [Platform.DISCORD, Platform.TELEGRAM]
+    connected = (
+        connected if connected is not None else [Platform.DISCORD, Platform.TELEGRAM]
+    )
     if home_channels is None:
         home_channels = {
             Platform.DISCORD: HomeChannel(
@@ -115,6 +118,7 @@ def _render(context, redact_pii=False):
 # ---------------------------------------------------------------------------
 # 1. Parity: key <-> render (the maintained invariant)
 # ---------------------------------------------------------------------------
+
 
 class TestEphemeralChangeKeyParity:
     # Single-field mutations spanning every rendered input.  For each:
@@ -180,7 +184,9 @@ class TestEphemeralChangeKeyParity:
         # PII redaction only rewrites bytes on pii-safe platforms; the key
         # must react wherever the render does.
         runner = _make_runner()
-        ctx = _make_context(platform=Platform.TELEGRAM, thread_id=None, parent_chat_id=None)
+        ctx = _make_context(
+            platform=Platform.TELEGRAM, thread_id=None, parent_chat_id=None
+        )
         assert _render(ctx, False) != _render(ctx, True)
         assert _key(runner, ctx, False) != _key(runner, ctx, True)
 
@@ -210,6 +216,7 @@ class TestEphemeralChangeKeyParity:
 # ---------------------------------------------------------------------------
 # 2. The pin: reuse verbatim on hit, exactly one legit bust on change
 # ---------------------------------------------------------------------------
+
 
 class TestSessionContextPin:
     def test_pin_hit_returns_identical_object(self):
@@ -241,7 +248,8 @@ class TestSessionContextPin:
 
     def test_eviction_drops_pin_and_vc_state(self):
         runner = _make_runner(
-            _agent_cache={}, _running_agents={},
+            _agent_cache={},
+            _running_agents={},
         )
         runner._session_ephemeral_pin["sk"] = ("k", "text")
         runner._session_vc_last["sk"] = "vc"
@@ -260,6 +268,7 @@ class TestSessionContextPin:
 # ---------------------------------------------------------------------------
 # 3. Two-turn byte test: composed system prompt sha256 + codex cache key
 # ---------------------------------------------------------------------------
+
 
 def _compose(context_prompt: str) -> str:
     """Compose base + ephemeral exactly like conversation_loop does."""
@@ -281,7 +290,10 @@ class TestComposedPromptByteStability:
                 _make_context(chat_name=name), False, "sk"
             )
         )
-        assert hashlib.sha256(t2.encode()).hexdigest() == hashlib.sha256(t3.encode()).hexdigest()
+        assert (
+            hashlib.sha256(t2.encode()).hexdigest()
+            == hashlib.sha256(t3.encode()).hexdigest()
+        )
 
     def test_codex_cache_key_constant_across_turns(self):
         """The codex transport content-addresses its prompt cache key from
@@ -308,6 +320,7 @@ class TestComposedPromptByteStability:
 # ---------------------------------------------------------------------------
 # 4. Voice-channel sidecar note: only-when-changed
 # ---------------------------------------------------------------------------
+
 
 def _source():
     return SessionSource(
@@ -372,11 +385,14 @@ class TestVoiceChannelSidecarNote:
 # 5. Sidecar note staging: one-shot per turn
 # ---------------------------------------------------------------------------
 
+
 class TestSidecarNoteStaging:
     def test_set_then_consume_once(self):
         runner = _make_runner()
         runner._set_pending_turn_sidecar_notes("sk", ["[System note: reset]"])  # noqa: SLF001
-        assert runner._consume_pending_turn_sidecar_notes("sk") == ["[System note: reset]"]  # noqa: SLF001
+        assert runner._consume_pending_turn_sidecar_notes("sk") == [
+            "[System note: reset]"
+        ]  # noqa: SLF001
         assert runner._consume_pending_turn_sidecar_notes("sk") == []  # noqa: SLF001
 
     def test_empty_inputs_are_noops(self):
@@ -390,6 +406,7 @@ class TestSidecarNoteStaging:
 # ---------------------------------------------------------------------------
 # 6. Connected platforms: stable order
 # ---------------------------------------------------------------------------
+
 
 class TestConnectedPlatformsOrder:
     def test_sorted_regardless_of_insertion_order(self):

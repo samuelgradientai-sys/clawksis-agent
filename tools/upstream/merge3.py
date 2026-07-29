@@ -17,6 +17,7 @@ Uso:
   python tools/upstream/merge3.py --list lista.txt            # dry-run
   python tools/upstream/merge3.py --list lista.txt --apply
 """
+
 from __future__ import annotations
 
 import argparse
@@ -76,8 +77,15 @@ def three_way(base: bytes, ours: bytes, theirs: bytes) -> tuple[bytes | None, in
         (dp / "b").write_bytes(base)
         (dp / "t").write_bytes(theirs)
         res = subprocess.run(
-            ["git", "merge-file", "-p", "--diff3",
-             str(dp / "o"), str(dp / "b"), str(dp / "t")],
+            [
+                "git",
+                "merge-file",
+                "-p",
+                "--diff3",
+                str(dp / "o"),
+                str(dp / "b"),
+                str(dp / "t"),
+            ],
             capture_output=True,
         )
         if res.returncode < 0:
@@ -94,32 +102,43 @@ def main() -> int:
     args = ap.parse_args()
 
     base_rev = merge_base()
-    files = [l.strip() for l in Path(args.list).read_text(encoding="utf-8").splitlines() if l.strip()]
+    files = [
+        l.strip()
+        for l in Path(args.list).read_text(encoding="utf-8").splitlines()
+        if l.strip()
+    ]
     merged, conflict, nocompile, nous, skip = [], [], [], [], []
 
     for fp in files:
         dest = ROOT / fp
         theirs_f = PENDING / f"{fp.replace('/', '__')}.theirs"
         if not dest.is_file() or not theirs_f.exists():
-            skip.append(fp); continue
+            skip.append(fp)
+            continue
         theirs = theirs_f.read_bytes()
         if not theirs.strip():
-            skip.append(fp); continue  # movido, no aplica aca
+            skip.append(fp)
+            continue  # movido, no aplica aca
         base = base_rebranded(fp, base_rev)
         if base is None:
-            skip.append(fp); continue
+            skip.append(fp)
+            continue
         ours = dest.read_bytes()
         out, rc = three_way(denoise(base), denoise(ours), denoise(theirs))
         if out is None:
-            skip.append(fp); continue
+            skip.append(fp)
+            continue
         if rc != 0:
-            conflict.append(fp); continue
+            conflict.append(fp)
+            continue
         if not compiles(out):
-            nocompile.append(fp); continue
-        if NOUS_ACTIVE.search(out.decode("utf-8", "replace")) and not NOUS_ACTIVE.search(
-            ours.decode("utf-8", "replace")
-        ):
-            nous.append(fp); continue
+            nocompile.append(fp)
+            continue
+        if NOUS_ACTIVE.search(
+            out.decode("utf-8", "replace")
+        ) and not NOUS_ACTIVE.search(ours.decode("utf-8", "replace")):
+            nous.append(fp)
+            continue
         if args.apply:
             dest.write_bytes(match_eol(out, ours))
         merged.append(fp)
@@ -132,7 +151,8 @@ def main() -> int:
     print(f"  guard Nous -> subagente: {len(nous)}")
     print(f"  saltados (movido/irreconstruible): {len(skip)}")
     (PENDING / "MERGE3_TOAGENT.txt").write_text(
-        "\n".join(conflict + nocompile + nous), encoding="utf-8")
+        "\n".join(conflict + nocompile + nous), encoding="utf-8"
+    )
     (PENDING / "MERGE3_APPLIED.txt").write_text("\n".join(merged), encoding="utf-8")
     return 0
 

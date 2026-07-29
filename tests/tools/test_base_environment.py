@@ -197,7 +197,9 @@ class TestAtomicSnapshotWrite:
         captured = {}
 
         def fake_run_bash(cmd_string, *, login=False, timeout=120, stdin_data=None):
-            captured.setdefault("cmd", cmd_string)  # only the bootstrap; ignore the failure-path probe
+            captured.setdefault(
+                "cmd", cmd_string
+            )  # only the bootstrap; ignore the failure-path probe
             raise RuntimeError("stop after capture")
 
         env._run_bash = fake_run_bash  # type: ignore[assignment]
@@ -224,7 +226,9 @@ class TestAtomicSnapshotWrite:
         captured = {}
 
         def fake_run_bash(cmd_string, *, login=False, timeout=120, stdin_data=None):
-            captured.setdefault("cmd", cmd_string)  # only the bootstrap; ignore the failure-path probe
+            captured.setdefault(
+                "cmd", cmd_string
+            )  # only the bootstrap; ignore the failure-path probe
             raise RuntimeError("stop after capture")
 
         env._run_bash = fake_run_bash  # type: ignore[assignment]
@@ -251,14 +255,20 @@ class TestAtomicSnapshotConcurrencyBehavioral:
 
     def _run(self, script):
         import subprocess
-        return subprocess.run(["/bin/bash", "-c", script], capture_output=True, text=True)
+
+        return subprocess.run(
+            ["/bin/bash", "-c", script], capture_output=True, text=True
+        )
 
     def test_concurrent_writes_never_tear_the_snapshot(self, tmp_path):
         import shutil
+
         if not shutil.which("bash"):
             import pytest
+
             pytest.skip("bash required")
         import shlex
+
         snap = str(tmp_path / "clawk-snap-x.sh")
         _q = shlex.quote
         _snap_tmp = _q(snap + ".tmp.") + "$BASHPID"
@@ -286,17 +296,24 @@ class TestAtomicSnapshotConcurrencyBehavioral:
         procs = [self._run(f"{w} & {r} & wait") for _ in range(3)]
         corrupt = any("CORRUPT" in p.stdout for p in procs)
         assert not corrupt, "snapshot tore — PATH absorbed a declare-x/export fragment"
-        final = self._run(f"source {_q(snap)} >/dev/null 2>&1 && echo OK || echo BROKEN")
-        assert "OK" in final.stdout, f"final snapshot not sourceable: {final.stdout} {final.stderr}"
+        final = self._run(
+            f"source {_q(snap)} >/dev/null 2>&1 && echo OK || echo BROKEN"
+        )
+        assert "OK" in final.stdout, (
+            f"final snapshot not sourceable: {final.stdout} {final.stderr}"
+        )
 
     def test_failed_export_does_not_destroy_good_snapshot(self, tmp_path):
         """If ``export -p`` fails, the ``&&``-chained mv must NOT clobber the
         existing good snapshot."""
         import shutil
+
         if not shutil.which("bash"):
             import pytest
+
             pytest.skip("bash required")
         import shlex
+
         snap = str(tmp_path / "snap.sh")
         _q = shlex.quote
         self._run(f"echo 'export GOOD=1' > {_q(snap)}")  # seed good snapshot
@@ -309,7 +326,9 @@ class TestAtomicSnapshotConcurrencyBehavioral:
         )
         self._run(script)
         out = self._run(f"cat {_q(snap)}")
-        assert "export GOOD=1" in out.stdout, "good snapshot was destroyed by a failed export"
+        assert "export GOOD=1" in out.stdout, (
+            "good snapshot was destroyed by a failed export"
+        )
 
 
 class TestSnapshotFileModes:
@@ -321,8 +340,10 @@ class TestSnapshotFileModes:
         import shutil
         import stat
         import subprocess
+
         if not shutil.which("bash"):
             import pytest
+
             pytest.skip("bash required")
 
         class ExecutableEnv(BaseEnvironment):
@@ -333,7 +354,9 @@ class TestSnapshotFileModes:
             def get_temp_dir(self):
                 return self._temp_dir
 
-            def _run_bash(self, cmd_string, *, login=False, timeout=120, stdin_data=None):
+            def _run_bash(
+                self, cmd_string, *, login=False, timeout=120, stdin_data=None
+            ):
                 proc = subprocess.Popen(
                     ["/bin/bash", "-lc", cmd_string],
                     stdout=subprocess.PIPE,
@@ -460,6 +483,7 @@ class TestInitSessionFailure:
         env._snapshot_ready = False
 
         calls = []
+
         def mock_run_bash(cmd, *, login=False, timeout=120, stdin_data=None):
             calls.append({"login": login})
             # Return a mock process handle

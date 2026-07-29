@@ -39,6 +39,7 @@ def _whatsapp_open_optin(monkeypatch):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_adapter(**overrides):
     """Build a WhatsAppCloudAdapter with test attributes (bypass __init__).
 
@@ -76,6 +77,7 @@ def _make_adapter(**overrides):
 
     # Webhook dispatch state (Phase 3)
     from collections import OrderedDict
+
     adapter._seen_wamids = OrderedDict()
     adapter._duplicate_count = 0
     adapter._accepted_count = 0
@@ -129,6 +131,7 @@ def _mock_httpx_response(status_code: int, json_body: dict):
 # Outbound send via Graph API
 # ---------------------------------------------------------------------------
 
+
 class TestSendText:
     """Outbound text-message path."""
 
@@ -137,9 +140,7 @@ class TestSendText:
         adapter = _make_adapter(phone_number_id="9999", api_version="v20.0")
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(
-            return_value=_mock_httpx_response(
-                200, {"messages": [{"id": "wamid.abc"}]}
-            )
+            return_value=_mock_httpx_response(200, {"messages": [{"id": "wamid.abc"}]})
         )
 
         await adapter.send("15551234567", "hello")
@@ -152,9 +153,7 @@ class TestSendText:
         adapter = _make_adapter(access_token="my-secret-token")
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(
-            return_value=_mock_httpx_response(
-                200, {"messages": [{"id": "wamid.abc"}]}
-            )
+            return_value=_mock_httpx_response(200, {"messages": [{"id": "wamid.abc"}]})
         )
 
         await adapter.send("15551234567", "hi")
@@ -168,9 +167,7 @@ class TestSendText:
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(
-            return_value=_mock_httpx_response(
-                200, {"messages": [{"id": "wamid.abc"}]}
-            )
+            return_value=_mock_httpx_response(200, {"messages": [{"id": "wamid.abc"}]})
         )
 
         await adapter.send("15551234567", "hello world")
@@ -204,9 +201,7 @@ class TestSendText:
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(
-            return_value=_mock_httpx_response(
-                200, {"messages": [{"id": "wamid.x"}]}
-            )
+            return_value=_mock_httpx_response(200, {"messages": [{"id": "wamid.x"}]})
         )
 
         await adapter.send("15551234567", "**bold** text")
@@ -219,9 +214,7 @@ class TestSendText:
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(
-            return_value=_mock_httpx_response(
-                200, {"messages": [{"id": "wamid.x"}]}
-            )
+            return_value=_mock_httpx_response(200, {"messages": [{"id": "wamid.x"}]})
         )
 
         await adapter.send("15551234567", "short reply", reply_to="wamid.original")
@@ -235,9 +228,7 @@ class TestSendText:
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(
-            return_value=_mock_httpx_response(
-                200, {"messages": [{"id": "wamid.x"}]}
-            )
+            return_value=_mock_httpx_response(200, {"messages": [{"id": "wamid.x"}]})
         )
 
         # MAX_MESSAGE_LENGTH = 4096 from the mixin. 8500 chars forces 2+ chunks.
@@ -314,6 +305,7 @@ class TestSendText:
 # ---------------------------------------------------------------------------
 # Inbound webhook verify (GET) handshake
 # ---------------------------------------------------------------------------
+
 
 def _verify_request(query: dict):
     """Build a minimal aiohttp.web.Request stub for verify tests."""
@@ -422,9 +414,7 @@ import hmac as _hmac_lib
 
 def _sign(secret: str, body: bytes) -> str:
     """Compute the X-Hub-Signature-256 header value Meta would send."""
-    digest = _hmac_lib.new(
-        secret.encode("utf-8"), body, hashlib.sha256
-    ).hexdigest()
+    digest = _hmac_lib.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
     return f"sha256={digest}"
 
 
@@ -497,7 +487,9 @@ class TestWebhookSignature:
         # MessageEvent construction here (covered separately).
         adapter._dispatch_payload = AsyncMock()
         body = b'{"object":"whatsapp_business_account","entry":[]}'
-        request = _post_request(body, {"X-Hub-Signature-256": _sign("signing-key-123", body)})
+        request = _post_request(
+            body, {"X-Hub-Signature-256": _sign("signing-key-123", body)}
+        )
 
         response = await adapter._handle_webhook(request)
 
@@ -619,6 +611,7 @@ class TestWebhookReplay:
 
     def test_dedup_cache_evicts_oldest(self):
         from gateway.platforms.whatsapp_cloud import WAMID_DEDUP_CACHE_SIZE
+
         adapter = _make_adapter()
         # Fill the cache plus 5 extra
         for i in range(WAMID_DEDUP_CACHE_SIZE + 5):
@@ -814,9 +807,7 @@ class TestWebhookDispatch:
         body = json.dumps(payload_with_ctx).encode("utf-8")
         sig = _sign("key", body)
 
-        await adapter._handle_webhook(
-            _post_request(body, {"X-Hub-Signature-256": sig})
-        )
+        await adapter._handle_webhook(_post_request(body, {"X-Hub-Signature-256": sig}))
         assert len(captured) == 1
         assert captured[0].reply_to_message_id == "wamid.our_outbound"
 
@@ -835,6 +826,7 @@ class TestWebhookDispatch:
 # ---------------------------------------------------------------------------
 # Health endpoint
 # ---------------------------------------------------------------------------
+
 
 class TestHealth:
     @pytest.mark.asyncio
@@ -878,6 +870,7 @@ class TestHealth:
 # Mixin contract — gating still works on the cloud adapter
 # ---------------------------------------------------------------------------
 
+
 class TestMixinInherited:
     """Sanity-check: the Cloud adapter inherits the same gating behavior
     as the Baileys adapter via WhatsAppBehaviorMixin.
@@ -891,30 +884,39 @@ class TestMixinInherited:
     def test_should_process_message_dm_open(self):
         adapter = _make_adapter()
         adapter._dm_policy = "open"
-        assert adapter._should_process_message({
-            "chatId": "15551234567@c.us",
-            "senderId": "15551234567@c.us",
-            "isGroup": False,
-            "body": "hi",
-        }) is True
+        assert (
+            adapter._should_process_message({
+                "chatId": "15551234567@c.us",
+                "senderId": "15551234567@c.us",
+                "isGroup": False,
+                "body": "hi",
+            })
+            is True
+        )
 
     def test_should_process_message_dm_disabled(self):
         adapter = _make_adapter()
         adapter._dm_policy = "disabled"
-        assert adapter._should_process_message({
-            "chatId": "15551234567@c.us",
-            "senderId": "15551234567@c.us",
-            "isGroup": False,
-            "body": "hi",
-        }) is False
+        assert (
+            adapter._should_process_message({
+                "chatId": "15551234567@c.us",
+                "senderId": "15551234567@c.us",
+                "isGroup": False,
+                "body": "hi",
+            })
+            is False
+        )
 
     def test_broadcast_chats_filtered(self):
         adapter = _make_adapter()
-        assert adapter._should_process_message({
-            "chatId": "status@broadcast",
-            "isGroup": False,
-            "body": "x",
-        }) is False
+        assert (
+            adapter._should_process_message({
+                "chatId": "status@broadcast",
+                "isGroup": False,
+                "body": "x",
+            })
+            is False
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -961,7 +963,9 @@ class TestSendImage:
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(return_value=_mock_message_response())
 
-        result = await adapter.send_image("15551234567", "https://cdn.example.com/cat.jpg")
+        result = await adapter.send_image(
+            "15551234567", "https://cdn.example.com/cat.jpg"
+        )
 
         assert result.success is True
         # Exactly one POST — straight to /messages, no /media upload
@@ -976,10 +980,12 @@ class TestSendImage:
     async def test_send_image_local_path_uploads_then_sends(self):
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
-        adapter._http_client.post = AsyncMock(side_effect=[
-            _mock_upload_response("media_uploaded_id"),
-            _mock_message_response(),
-        ])
+        adapter._http_client.post = AsyncMock(
+            side_effect=[
+                _mock_upload_response("media_uploaded_id"),
+                _mock_message_response(),
+            ]
+        )
         path = _tmpfile(".jpg")
         try:
             result = await adapter.send_image_file("15551234567", path)
@@ -1044,9 +1050,9 @@ class TestSendImage:
         # First call (upload) fails with a Graph error
         upload_fail = MagicMock()
         upload_fail.status_code = 400
-        upload_fail.json = MagicMock(return_value={
-            "error": {"code": 100, "message": "Bad media"}
-        })
+        upload_fail.json = MagicMock(
+            return_value={"error": {"code": 100, "message": "Bad media"}}
+        )
         upload_fail.text = '{"error":{"code":100,"message":"Bad media"}}'
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(return_value=upload_fail)
@@ -1069,7 +1075,9 @@ class TestSendVideo:
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(return_value=_mock_message_response())
 
-        await adapter.send_video("15551234567", "https://cdn.example.com/v.mp4", caption="clip")
+        await adapter.send_video(
+            "15551234567", "https://cdn.example.com/v.mp4", caption="clip"
+        )
         payload = adapter._http_client.post.call_args.kwargs["json"]
         assert payload["type"] == "video"
         assert payload["video"]["link"] == "https://cdn.example.com/v.mp4"
@@ -1094,7 +1102,8 @@ class TestSendMethodsAcceptBaseClassKwargs:
         adapter._http_client.post = AsyncMock(return_value=_mock_message_response())
         # Should not raise TypeError.
         result = await adapter.send_image(
-            "15551234567", "https://cdn.example.com/x.jpg",
+            "15551234567",
+            "https://cdn.example.com/x.jpg",
             metadata={"trace_id": "abc"},
         )
         assert result.success is True
@@ -1103,14 +1112,18 @@ class TestSendMethodsAcceptBaseClassKwargs:
     async def test_send_image_file_accepts_metadata(self):
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
-        adapter._http_client.post = AsyncMock(side_effect=[
-            _mock_upload_response(),
-            _mock_message_response(),
-        ])
+        adapter._http_client.post = AsyncMock(
+            side_effect=[
+                _mock_upload_response(),
+                _mock_message_response(),
+            ]
+        )
         path = _tmpfile(".jpg")
         try:
             result = await adapter.send_image_file(
-                "15551234567", path, metadata={"x": 1},
+                "15551234567",
+                path,
+                metadata={"x": 1},
             )
             assert result.success is True
         finally:
@@ -1122,7 +1135,8 @@ class TestSendMethodsAcceptBaseClassKwargs:
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(return_value=_mock_message_response())
         result = await adapter.send_video(
-            "15551234567", "https://cdn.example.com/v.mp4",
+            "15551234567",
+            "https://cdn.example.com/v.mp4",
             metadata={"x": 1},
         )
         assert result.success is True
@@ -1133,7 +1147,8 @@ class TestSendMethodsAcceptBaseClassKwargs:
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(return_value=_mock_message_response())
         result = await adapter.send_voice(
-            "15551234567", "https://cdn.example.com/a.ogg",
+            "15551234567",
+            "https://cdn.example.com/a.ogg",
             metadata={"x": 1},
         )
         assert result.success is True
@@ -1142,14 +1157,18 @@ class TestSendMethodsAcceptBaseClassKwargs:
     async def test_send_document_accepts_metadata(self):
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
-        adapter._http_client.post = AsyncMock(side_effect=[
-            _mock_upload_response(),
-            _mock_message_response(),
-        ])
+        adapter._http_client.post = AsyncMock(
+            side_effect=[
+                _mock_upload_response(),
+                _mock_message_response(),
+            ]
+        )
         path = _tmpfile(".pdf", content=b"%PDF")
         try:
             result = await adapter.send_document(
-                "15551234567", path, metadata={"x": 1},
+                "15551234567",
+                path,
+                metadata={"x": 1},
             )
             assert result.success is True
         finally:
@@ -1161,14 +1180,18 @@ class TestSendDocument:
     async def test_send_document_filename_attached(self):
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
-        adapter._http_client.post = AsyncMock(side_effect=[
-            _mock_upload_response("doc_id"),
-            _mock_message_response(),
-        ])
+        adapter._http_client.post = AsyncMock(
+            side_effect=[
+                _mock_upload_response("doc_id"),
+                _mock_message_response(),
+            ]
+        )
         path = _tmpfile(".pdf", content=b"%PDF-1.4 ...")
         try:
             await adapter.send_document(
-                "15551234567", path, caption="Q3 report",
+                "15551234567",
+                path,
+                caption="Q3 report",
                 file_name="report.pdf",
             )
             send_payload = adapter._http_client.post.call_args_list[1].kwargs["json"]
@@ -1187,10 +1210,12 @@ class TestSendVoice:
     async def test_send_voice_no_ffmpeg_falls_back_to_mp3(self):
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
-        adapter._http_client.post = AsyncMock(side_effect=[
-            _mock_upload_response("audio_id"),
-            _mock_message_response(),
-        ])
+        adapter._http_client.post = AsyncMock(
+            side_effect=[
+                _mock_upload_response("audio_id"),
+                _mock_message_response(),
+            ]
+        )
         # Simulate ffmpeg absent — adapter._convert_to_opus returns None
         adapter._convert_to_opus = AsyncMock(return_value=None)
 
@@ -1210,10 +1235,12 @@ class TestSendVoice:
     async def test_send_voice_ffmpeg_present_uses_opus(self):
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
-        adapter._http_client.post = AsyncMock(side_effect=[
-            _mock_upload_response("voice_id"),
-            _mock_message_response(),
-        ])
+        adapter._http_client.post = AsyncMock(
+            side_effect=[
+                _mock_upload_response("voice_id"),
+                _mock_message_response(),
+            ]
+        )
         # Pretend ffmpeg conversion succeeded by returning a fake opus path.
         opus_path = _tmpfile(".ogg", content=b"OggS")
         adapter._convert_to_opus = AsyncMock(return_value=opus_path)
@@ -1247,6 +1274,7 @@ class TestSendVoice:
 # Inbound media — Graph two-step download (Phase 4)
 # ---------------------------------------------------------------------------
 
+
 class TestDownloadMedia:
     """Two-step Graph media download: meta -> temp URL -> bytes."""
 
@@ -1259,14 +1287,16 @@ class TestDownloadMedia:
 
         # Step 1 — metadata returns temp URL + mime
         meta_resp = MagicMock(status_code=200)
-        meta_resp.json = MagicMock(return_value={
-            "url": "https://lookaside.fbsbx.com/whatsapp/m/...",
-            "mime_type": "image/jpeg",
-            "sha256": "abc",
-            "file_size": 12345,
-            "id": "media_xyz",
-            "messaging_product": "whatsapp",
-        })
+        meta_resp.json = MagicMock(
+            return_value={
+                "url": "https://lookaside.fbsbx.com/whatsapp/m/...",
+                "mime_type": "image/jpeg",
+                "sha256": "abc",
+                "file_size": 12345,
+                "id": "media_xyz",
+                "messaging_product": "whatsapp",
+            }
+        )
         # Step 2 — bytes
         blob_resp = MagicMock(status_code=200, content=b"\xff\xd8\xff\xe0jpegdata")
 
@@ -1301,10 +1331,12 @@ class TestDownloadMedia:
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
         meta_resp = MagicMock(status_code=200)
-        meta_resp.json = MagicMock(return_value={
-            "url": "https://lookaside.fbsbx.com/...",
-            "mime_type": "image/jpeg",
-        })
+        meta_resp.json = MagicMock(
+            return_value={
+                "url": "https://lookaside.fbsbx.com/...",
+                "mime_type": "image/jpeg",
+            }
+        )
         blob_fail = MagicMock(status_code=403, content=b"")
         adapter._http_client.get = AsyncMock(side_effect=[meta_resp, blob_fail])
 
@@ -1322,30 +1354,37 @@ class TestDownloadMedia:
         assert headers["Authorization"] == "Bearer bearer-tok"
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("mime,expected_ext", [
-        # Regression for the ".oga vs .ogg" voice-note bug — Python's
-        # mimetypes module returns the RFC-correct .oga which downstream
-        # STT pipelines reject.
-        ("audio/ogg", ".ogg"),
-        ("audio/ogg; codecs=opus", ".ogg"),
-        ("audio/x-opus+ogg", ".ogg"),
-        ("audio/opus", ".ogg"),
-        # iOS voice memos arrive as audio/mp4 — must become .m4a, not .mp4.
-        ("audio/mp4", ".m4a"),
-        ("audio/x-m4a", ".m4a"),
-        # JPEG should never land as .jpe (legacy IANA).
-        ("image/jpeg", ".jpg"),
-    ])
-    async def test_extension_overrides_for_real_world_mimes(self, tmp_path, mime, expected_ext):
+    @pytest.mark.parametrize(
+        "mime,expected_ext",
+        [
+            # Regression for the ".oga vs .ogg" voice-note bug — Python's
+            # mimetypes module returns the RFC-correct .oga which downstream
+            # STT pipelines reject.
+            ("audio/ogg", ".ogg"),
+            ("audio/ogg; codecs=opus", ".ogg"),
+            ("audio/x-opus+ogg", ".ogg"),
+            ("audio/opus", ".ogg"),
+            # iOS voice memos arrive as audio/mp4 — must become .m4a, not .mp4.
+            ("audio/mp4", ".m4a"),
+            ("audio/x-m4a", ".m4a"),
+            # JPEG should never land as .jpe (legacy IANA).
+            ("image/jpeg", ".jpg"),
+        ],
+    )
+    async def test_extension_overrides_for_real_world_mimes(
+        self, tmp_path, mime, expected_ext
+    ):
         from gateway.platforms import whatsapp_cloud as wac
 
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
         meta_resp = MagicMock(status_code=200)
-        meta_resp.json = MagicMock(return_value={
-            "url": "https://lookaside.fbsbx.com/test",
-            "mime_type": mime,
-        })
+        meta_resp.json = MagicMock(
+            return_value={
+                "url": "https://lookaside.fbsbx.com/test",
+                "mime_type": mime,
+            }
+        )
         blob_resp = MagicMock(status_code=200, content=b"x")
         adapter._http_client.get = AsyncMock(side_effect=[meta_resp, blob_resp])
 
@@ -1375,10 +1414,12 @@ class TestInboundMediaDispatch:
 
         # Mock the two-step Graph download
         meta_resp = MagicMock(status_code=200)
-        meta_resp.json = MagicMock(return_value={
-            "url": "https://lookaside.fbsbx.com/whatsapp/m/abc",
-            "mime_type": "image/jpeg",
-        })
+        meta_resp.json = MagicMock(
+            return_value={
+                "url": "https://lookaside.fbsbx.com/whatsapp/m/abc",
+                "mime_type": "image/jpeg",
+            }
+        )
         blob_resp = MagicMock(status_code=200, content=b"\xff\xd8\xff\xe0fake_jpeg")
         adapter._http_client = MagicMock()
         adapter._http_client.get = AsyncMock(side_effect=[meta_resp, blob_resp])
@@ -1386,29 +1427,37 @@ class TestInboundMediaDispatch:
         # Build an inbound image webhook payload
         payload = {
             "object": "whatsapp_business_account",
-            "entry": [{
-                "id": "x",
-                "changes": [{
-                    "field": "messages",
-                    "value": {
-                        "messaging_product": "whatsapp",
-                        "metadata": {"phone_number_id": "1"},
-                        "contacts": [{"profile": {"name": "U"}, "wa_id": "1555"}],
-                        "messages": [{
-                            "from": "1555",
-                            "id": "wamid.img1",
-                            "timestamp": "0",
-                            "type": "image",
-                            "image": {
-                                "id": "media_image_abc",
-                                "mime_type": "image/jpeg",
-                                "sha256": "...",
-                                "caption": "look at this",
+            "entry": [
+                {
+                    "id": "x",
+                    "changes": [
+                        {
+                            "field": "messages",
+                            "value": {
+                                "messaging_product": "whatsapp",
+                                "metadata": {"phone_number_id": "1"},
+                                "contacts": [
+                                    {"profile": {"name": "U"}, "wa_id": "1555"}
+                                ],
+                                "messages": [
+                                    {
+                                        "from": "1555",
+                                        "id": "wamid.img1",
+                                        "timestamp": "0",
+                                        "type": "image",
+                                        "image": {
+                                            "id": "media_image_abc",
+                                            "mime_type": "image/jpeg",
+                                            "sha256": "...",
+                                            "caption": "look at this",
+                                        },
+                                    }
+                                ],
                             },
-                        }],
-                    },
-                }],
-            }],
+                        }
+                    ],
+                }
+            ],
         }
         body = json.dumps(payload).encode("utf-8")
         sig = _sign("key", body)
@@ -1428,6 +1477,7 @@ class TestInboundMediaDispatch:
         assert _os.path.exists(event.media_urls[0])
         assert event.media_types[0] == "image/jpeg"
         from gateway.platforms.base import MessageType
+
         assert event.message_type == MessageType.PHOTO
 
     @pytest.mark.asyncio
@@ -1445,38 +1495,48 @@ class TestInboundMediaDispatch:
 
         text_content = b"hello\nthis is the file\n"
         meta_resp = MagicMock(status_code=200)
-        meta_resp.json = MagicMock(return_value={
-            "url": "https://lookaside.fbsbx.com/whatsapp/m/doc",
-            "mime_type": "text/plain",
-        })
+        meta_resp.json = MagicMock(
+            return_value={
+                "url": "https://lookaside.fbsbx.com/whatsapp/m/doc",
+                "mime_type": "text/plain",
+            }
+        )
         blob_resp = MagicMock(status_code=200, content=text_content)
         adapter._http_client = MagicMock()
         adapter._http_client.get = AsyncMock(side_effect=[meta_resp, blob_resp])
 
         payload = {
             "object": "whatsapp_business_account",
-            "entry": [{
-                "id": "x",
-                "changes": [{
-                    "field": "messages",
-                    "value": {
-                        "messaging_product": "whatsapp",
-                        "metadata": {"phone_number_id": "1"},
-                        "contacts": [{"profile": {"name": "U"}, "wa_id": "1555"}],
-                        "messages": [{
-                            "from": "1555",
-                            "id": "wamid.doc1",
-                            "timestamp": "0",
-                            "type": "document",
-                            "document": {
-                                "id": "media_doc_abc",
-                                "mime_type": "text/plain",
-                                "filename": "notes.txt",
+            "entry": [
+                {
+                    "id": "x",
+                    "changes": [
+                        {
+                            "field": "messages",
+                            "value": {
+                                "messaging_product": "whatsapp",
+                                "metadata": {"phone_number_id": "1"},
+                                "contacts": [
+                                    {"profile": {"name": "U"}, "wa_id": "1555"}
+                                ],
+                                "messages": [
+                                    {
+                                        "from": "1555",
+                                        "id": "wamid.doc1",
+                                        "timestamp": "0",
+                                        "type": "document",
+                                        "document": {
+                                            "id": "media_doc_abc",
+                                            "mime_type": "text/plain",
+                                            "filename": "notes.txt",
+                                        },
+                                    }
+                                ],
                             },
-                        }],
-                    },
-                }],
-            }],
+                        }
+                    ],
+                }
+            ],
         }
         body = json.dumps(payload).encode("utf-8")
         sig = _sign("key", body)
@@ -1512,24 +1572,35 @@ class TestInboundMediaDispatch:
 
         payload = {
             "object": "whatsapp_business_account",
-            "entry": [{
-                "id": "x",
-                "changes": [{
-                    "field": "messages",
-                    "value": {
-                        "messaging_product": "whatsapp",
-                        "metadata": {"phone_number_id": "1"},
-                        "contacts": [{"profile": {"name": "U"}, "wa_id": "1555"}],
-                        "messages": [{
-                            "from": "1555",
-                            "id": "wamid.bad_img",
-                            "timestamp": "0",
-                            "type": "image",
-                            "image": {"id": "borked", "mime_type": "image/jpeg"},
-                        }],
-                    },
-                }],
-            }],
+            "entry": [
+                {
+                    "id": "x",
+                    "changes": [
+                        {
+                            "field": "messages",
+                            "value": {
+                                "messaging_product": "whatsapp",
+                                "metadata": {"phone_number_id": "1"},
+                                "contacts": [
+                                    {"profile": {"name": "U"}, "wa_id": "1555"}
+                                ],
+                                "messages": [
+                                    {
+                                        "from": "1555",
+                                        "id": "wamid.bad_img",
+                                        "timestamp": "0",
+                                        "type": "image",
+                                        "image": {
+                                            "id": "borked",
+                                            "mime_type": "image/jpeg",
+                                        },
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                }
+            ],
         }
         body = json.dumps(payload).encode("utf-8")
         sig = _sign("key", body)
@@ -1548,6 +1619,7 @@ class TestInboundMediaDispatch:
 # ---------------------------------------------------------------------------
 # Group-shaped message guard
 # ---------------------------------------------------------------------------
+
 
 class TestGroupMessageGuard:
     """Cloud API group support is deferred to v2 (Meta capability-tier
@@ -1576,10 +1648,7 @@ class TestGroupMessageGuard:
             )
         assert event is None
         # Warning surfaced so the operator knows group messages are being dropped
-        assert any(
-            "group-shaped" in rec.message
-            for rec in caplog.records
-        )
+        assert any("group-shaped" in rec.message for rec in caplog.records)
         # Defensive: handler not invoked
         adapter.handle_message.assert_not_called()
 
@@ -2041,6 +2110,7 @@ class TestDispatchInteractiveReplySlashConfirm:
             return "MCP reloaded."
 
         import tools.slash_confirm as _sc
+
         monkeypatch.setattr(_sc, "resolve", fake_resolve)
 
         raw = {
@@ -2328,17 +2398,15 @@ class TestSendTyping:
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(
             return_value=_mock_httpx_response(
-                400, {"error": {"code": 131009, "message": "Parameter value is not valid"}}
+                400,
+                {"error": {"code": 131009, "message": "Parameter value is not valid"}},
             )
         )
 
         with caplog.at_level("INFO"):
             await adapter.send_typing("15551234567")
 
-        assert any(
-            "older than 30 days" in rec.message
-            for rec in caplog.records
-        )
+        assert any("older than 30 days" in rec.message for rec in caplog.records)
 
     @pytest.mark.asyncio
     async def test_send_typing_no_http_client_is_noop(self):
@@ -2371,6 +2439,7 @@ class TestSendTyping:
 # Allowlist normalization + env decoupling (salvage follow-up)
 # ---------------------------------------------------------------------------
 
+
 class TestAllowlistNormalization:
     def test_normalize_allow_ids_strips_jid_suffix_and_punctuation(self):
         from gateway.platforms.whatsapp_cloud import WhatsAppCloudAdapter
@@ -2386,9 +2455,9 @@ class TestAllowlistNormalization:
 
         adapter = _make_adapter()
         adapter._dm_policy = "allowlist"
-        adapter._allow_from = WhatsAppCloudAdapter._normalize_allow_ids(
-            {"15551234567@s.whatsapp.net"}
-        )
+        adapter._allow_from = WhatsAppCloudAdapter._normalize_allow_ids({
+            "15551234567@s.whatsapp.net"
+        })
         assert adapter._is_dm_allowed("15551234567") is True
         assert adapter._is_dm_allowed("19998887777") is False
 
@@ -2453,16 +2522,26 @@ class TestReplyContextResolution:
         adapter = _make_adapter()
         # First inbound message gets recorded by wamid.
         await adapter._build_message_event_from_cloud(
-            {"from": "15551234567", "id": "wamid.PRIOR", "type": "text",
-             "text": {"body": "remind me to buy milk"}},
-            {"15551234567": "Alice"}, {},
+            {
+                "from": "15551234567",
+                "id": "wamid.PRIOR",
+                "type": "text",
+                "text": {"body": "remind me to buy milk"},
+            },
+            {"15551234567": "Alice"},
+            {},
         )
         # Now the user replies to that earlier message.
         event = await adapter._build_message_event_from_cloud(
-            {"from": "15551234567", "id": "wamid.REPLY", "type": "text",
-             "text": {"body": "did you?"},
-             "context": {"id": "wamid.PRIOR", "from": "15551234567"}},
-            {"15551234567": "Alice"}, {},
+            {
+                "from": "15551234567",
+                "id": "wamid.REPLY",
+                "type": "text",
+                "text": {"body": "did you?"},
+                "context": {"id": "wamid.PRIOR", "from": "15551234567"},
+            },
+            {"15551234567": "Alice"},
+            {},
         )
         assert event is not None
         assert event.reply_to_message_id == "wamid.PRIOR"
@@ -2480,9 +2559,13 @@ class TestReplyContextResolution:
         # Simulate the outbound record send() would have made.
         rich_sent_store.record("15551234567", "wamid.BOT", "Sure, milk added.")
         event = await adapter._build_message_event_from_cloud(
-            {"from": "15551234567", "id": "wamid.REPLY", "type": "text",
-             "text": {"body": "thanks"},
-             "context": {"id": "wamid.BOT", "from": "15550009999"}},
+            {
+                "from": "15551234567",
+                "id": "wamid.REPLY",
+                "type": "text",
+                "text": {"body": "thanks"},
+                "context": {"id": "wamid.BOT", "from": "15550009999"},
+            },
             {"15551234567": "Alice"},
             {"display_phone_number": "15550009999"},
         )
@@ -2497,10 +2580,15 @@ class TestReplyContextResolution:
         still surfaced, text is None, and we don't crash."""
         adapter = _make_adapter()
         event = await adapter._build_message_event_from_cloud(
-            {"from": "15551234567", "id": "wamid.REPLY", "type": "text",
-             "text": {"body": "what about this"},
-             "context": {"id": "wamid.GONE", "from": "15551234567"}},
-            {"15551234567": "Alice"}, {},
+            {
+                "from": "15551234567",
+                "id": "wamid.REPLY",
+                "type": "text",
+                "text": {"body": "what about this"},
+                "context": {"id": "wamid.GONE", "from": "15551234567"},
+            },
+            {"15551234567": "Alice"},
+            {},
         )
         assert event is not None
         assert event.reply_to_message_id == "wamid.GONE"
@@ -2511,9 +2599,14 @@ class TestReplyContextResolution:
     async def test_non_reply_message_has_no_reply_context(self):
         adapter = _make_adapter()
         event = await adapter._build_message_event_from_cloud(
-            {"from": "15551234567", "id": "wamid.PLAIN", "type": "text",
-             "text": {"body": "hello"}},
-            {"15551234567": "Alice"}, {},
+            {
+                "from": "15551234567",
+                "id": "wamid.PLAIN",
+                "type": "text",
+                "text": {"body": "hello"},
+            },
+            {"15551234567": "Alice"},
+            {},
         )
         assert event is not None
         assert event.reply_to_message_id is None
@@ -2529,13 +2622,10 @@ class TestReplyContextResolution:
         adapter = _make_adapter()
         adapter._http_client = MagicMock()
         adapter._http_client.post = AsyncMock(
-            return_value=_mock_httpx_response(
-                200, {"messages": [{"id": "wamid.OUT"}]}
-            )
+            return_value=_mock_httpx_response(200, {"messages": [{"id": "wamid.OUT"}]})
         )
         result = await adapter.send("15551234567", "here is your answer")
         assert result.success and result.message_id == "wamid.OUT"
         assert (
-            rich_sent_store.lookup("15551234567", "wamid.OUT")
-            == "here is your answer"
+            rich_sent_store.lookup("15551234567", "wamid.OUT") == "here is your answer"
         )

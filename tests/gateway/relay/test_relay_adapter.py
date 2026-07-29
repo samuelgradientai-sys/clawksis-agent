@@ -265,7 +265,9 @@ class _RevokedTransport:
 async def test_revocation_marks_relay_disabled_non_retryable():
     """When the transport reports auth_revoked, the adapter surfaces a clean,
     NON-retryable `relay_disabled` fatal and fires the fatal-error handler."""
-    a = RelayAdapter(PlatformConfig(), make_desc(platform="discord"), transport=_RevokedTransport())
+    a = RelayAdapter(
+        PlatformConfig(), make_desc(platform="discord"), transport=_RevokedTransport()
+    )
     notified = []
     a.set_fatal_error_handler(lambda adapter: notified.append(adapter))
 
@@ -290,7 +292,9 @@ async def test_no_revocation_no_fatal():
         def set_inbound_handler(self, h):  # noqa: D401
             self._h = h
 
-    a = RelayAdapter(PlatformConfig(), make_desc(platform="discord"), transport=_LiveTransport())
+    a = RelayAdapter(
+        PlatformConfig(), make_desc(platform="discord"), transport=_LiveTransport()
+    )
     # Run the monitor with a tiny window then cancel — it should never fire.
     import asyncio
 

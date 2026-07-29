@@ -44,9 +44,11 @@ class TestVerifyConsoleScriptsInstalled:
         for name in ("clawk", "clawksis-agent", "clawk-acp"):
             (fake_scripts_dir / f"{name}.exe").write_bytes(b"fake")
 
-        with patch("clawk_cli.main._is_windows", return_value=True), \
-             patch("clawk_cli.main._venv_scripts_dir", return_value=fake_scripts_dir), \
-             patch("clawk_cli.main._run_quarantined_install") as mock_install:
+        with (
+            patch("clawk_cli.main._is_windows", return_value=True),
+            patch("clawk_cli.main._venv_scripts_dir", return_value=fake_scripts_dir),
+            patch("clawk_cli.main._run_quarantined_install") as mock_install,
+        ):
             from clawk_cli.main import _verify_console_scripts_installed
 
             _verify_console_scripts_installed(["uv", "pip"], env={})
@@ -59,9 +61,11 @@ class TestVerifyConsoleScriptsInstalled:
         (fake_scripts_dir / "clawksis-agent.exe").write_bytes(b"fake")
         (fake_scripts_dir / "clawk-acp.exe").write_bytes(b"fake")
 
-        with patch("clawk_cli.main._is_windows", return_value=True), \
-             patch("clawk_cli.main._venv_scripts_dir", return_value=fake_scripts_dir), \
-             patch("clawk_cli.main._run_quarantined_install") as mock_install:
+        with (
+            patch("clawk_cli.main._is_windows", return_value=True),
+            patch("clawk_cli.main._venv_scripts_dir", return_value=fake_scripts_dir),
+            patch("clawk_cli.main._run_quarantined_install") as mock_install,
+        ):
             from clawk_cli.main import _verify_console_scripts_installed
 
             _verify_console_scripts_installed(["uv", "pip"], env={})
@@ -73,8 +77,10 @@ class TestVerifyConsoleScriptsInstalled:
         assert mock_install.call_args[1]["scripts_dir"] == fake_scripts_dir
 
     def test_skips_off_windows(self, temp_pyproject, fake_scripts_dir):
-        with patch("clawk_cli.main._is_windows", return_value=False), \
-             patch("clawk_cli.main._run_quarantined_install") as mock_install:
+        with (
+            patch("clawk_cli.main._is_windows", return_value=False),
+            patch("clawk_cli.main._run_quarantined_install") as mock_install,
+        ):
             from clawk_cli.main import _verify_console_scripts_installed
 
             _verify_console_scripts_installed(["uv", "pip"], env={})
@@ -90,9 +96,11 @@ class TestVerifyConsoleScriptsInstalled:
     def test_primary_install_success_still_verifies_scripts(self):
         import clawk_cli.main as main_mod
 
-        with patch("clawk_cli.main._is_windows", return_value=False), \
-             patch("clawk_cli.main._run_quarantined_install") as mock_install, \
-             patch("clawk_cli.main._verify_console_scripts_installed") as mock_verify:
+        with (
+            patch("clawk_cli.main._is_windows", return_value=False),
+            patch("clawk_cli.main._run_quarantined_install") as mock_install,
+            patch("clawk_cli.main._verify_console_scripts_installed") as mock_verify,
+        ):
             main_mod._install_python_dependencies_with_optional_fallback(
                 ["uv", "pip"], env={"VIRTUAL_ENV": "x"}
             )

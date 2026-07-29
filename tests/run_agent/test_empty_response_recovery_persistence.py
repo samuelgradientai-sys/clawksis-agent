@@ -51,8 +51,13 @@ def test_persist_session_strips_trailing_empty_recovery_scaffolding():
         {
             "role": "assistant",
             "content": "",
-            "tool_calls": [{"id": "call_1", "type": "function",
-                            "function": {"name": "x", "arguments": "{}"}}],
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
         },
         {"role": "tool", "content": "{}", "tool_call_id": "call_1"},
         {
@@ -130,8 +135,13 @@ def test_flush_never_writes_buried_empty_recovery_scaffolding():
         {
             "role": "assistant",
             "content": "",
-            "tool_calls": [{"id": "call_1", "type": "function",
-                            "function": {"name": "x", "arguments": "{}"}}],
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
         },
         {"role": "tool", "content": "{}", "tool_call_id": "call_1"},
         # Synthetic recovery scaffolding, now buried because the model answered
@@ -145,8 +155,13 @@ def test_flush_never_writes_buried_empty_recovery_scaffolding():
         {
             "role": "assistant",
             "content": "",
-            "tool_calls": [{"id": "call_2", "type": "function",
-                            "function": {"name": "x", "arguments": "{}"}}],
+            "tool_calls": [
+                {
+                    "id": "call_2",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
         },
         {"role": "tool", "content": "{}", "tool_call_id": "call_2"},
         {"role": "assistant", "content": "All done."},
@@ -159,7 +174,12 @@ def test_flush_never_writes_buried_empty_recovery_scaffolding():
     assert all("empty response" not in (row["content"] or "") for row in persisted)
     # Only the genuine turns reach the store, in order.
     assert [r["role"] for r in persisted] == [
-        "user", "assistant", "tool", "assistant", "tool", "assistant",
+        "user",
+        "assistant",
+        "tool",
+        "assistant",
+        "tool",
+        "assistant",
     ]
     assert persisted[-1]["content"] == "All done."
 

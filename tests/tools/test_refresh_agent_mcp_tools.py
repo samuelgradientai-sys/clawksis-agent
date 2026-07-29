@@ -15,7 +15,10 @@ from tools import mcp_tool
 
 
 def _tool(name):
-    return {"type": "function", "function": {"name": name, "description": "", "parameters": {}}}
+    return {
+        "type": "function",
+        "function": {"name": name, "description": "", "parameters": {}},
+    }
 
 
 def _agent(tool_names, *, enabled=None, disabled=None):
@@ -31,10 +34,15 @@ def test_refresh_adds_late_landing_tools(monkeypatch):
     """A server that registers after build → its tools land in the snapshot."""
     agent = _agent(["read_file", "terminal"])
 
-    new_defs = [_tool(n) for n in ("read_file", "terminal", "mcp_granola_get_account_info")]
-    monkeypatch.setattr(mcp_tool, "get_tool_definitions", lambda **kw: new_defs, raising=False)
+    new_defs = [
+        _tool(n) for n in ("read_file", "terminal", "mcp_granola_get_account_info")
+    ]
+    monkeypatch.setattr(
+        mcp_tool, "get_tool_definitions", lambda **kw: new_defs, raising=False
+    )
     # get_tool_definitions is imported inside the helper from model_tools, so patch there too.
     import model_tools
+
     monkeypatch.setattr(model_tools, "get_tool_definitions", lambda **kw: new_defs)
 
     added = mcp_tool.refresh_agent_mcp_tools(agent)
@@ -50,8 +58,10 @@ def test_refresh_no_change_returns_empty_and_leaves_agent_untouched(monkeypatch)
     original_tools = agent.tools
 
     import model_tools
+
     monkeypatch.setattr(
-        model_tools, "get_tool_definitions",
+        model_tools,
+        "get_tool_definitions",
         lambda **kw: [_tool("read_file"), _tool("terminal")],
     )
 
@@ -66,9 +76,11 @@ def test_refresh_detects_equal_size_swap(monkeypatch):
     agent = _agent(["a", "old_mcp_tool"])  # 2 tools
 
     import model_tools
+
     # Same COUNT (2) but a different membership: old_mcp_tool removed, new added.
     monkeypatch.setattr(
-        model_tools, "get_tool_definitions",
+        model_tools,
+        "get_tool_definitions",
         lambda **kw: [_tool("a"), _tool("new_mcp_tool")],
     )
 
@@ -124,10 +136,12 @@ def test_refresh_preserves_memory_provider_and_context_engine_tools(monkeypatch)
     agent._context_engine_tool_names = {"lcm_grep"}
 
     import model_tools
+
     # The registry now ALSO has a newly-connected MCP tool, but does NOT contain
     # the memory/context tools (they're never in get_tool_definitions output).
     monkeypatch.setattr(
-        model_tools, "get_tool_definitions",
+        model_tools,
+        "get_tool_definitions",
         lambda **kw: [_tool("read_file"), _tool("mcp_new_server_tool")],
     )
 
@@ -135,8 +149,8 @@ def test_refresh_preserves_memory_provider_and_context_engine_tools(monkeypatch)
 
     # The new MCP tool landed AND the injected families survived.
     assert "mcp_new_server_tool" in agent.valid_tool_names
-    assert "memory_search" in agent.valid_tool_names   # not clobbered
-    assert "lcm_grep" in agent.valid_tool_names         # not clobbered
+    assert "memory_search" in agent.valid_tool_names  # not clobbered
+    assert "lcm_grep" in agent.valid_tool_names  # not clobbered
     assert added == {"mcp_new_server_tool"}
 
 
@@ -146,20 +160,24 @@ def test_refresh_respects_context_engine_toolset_gate(monkeypatch):
     must not get lcm_* leaked back in by a refresh."""
     agent = _agent(["read_file"], enabled=["coding"])  # context_engine NOT enabled
     agent.context_compressor = types.SimpleNamespace(
-        get_tool_schemas=lambda: [{"name": "lcm_grep", "description": "", "parameters": {}}]
+        get_tool_schemas=lambda: [
+            {"name": "lcm_grep", "description": "", "parameters": {}}
+        ]
     )
     agent._context_engine_tool_names = set()
 
     import model_tools
+
     monkeypatch.setattr(
-        model_tools, "get_tool_definitions",
+        model_tools,
+        "get_tool_definitions",
         lambda **kw: [_tool("read_file"), _tool("mcp_new_tool")],
     )
 
     mcp_tool.refresh_agent_mcp_tools(agent)
 
     assert "mcp_new_tool" in agent.valid_tool_names  # MCP tool still lands
-    assert "lcm_grep" not in agent.valid_tool_names   # gated out (#5544)
+    assert "lcm_grep" not in agent.valid_tool_names  # gated out (#5544)
 
 
 def test_refreshed_tool_is_callable_through_valid_tool_names_guard(monkeypatch):
@@ -168,8 +186,10 @@ def test_refreshed_tool_is_callable_through_valid_tool_names_guard(monkeypatch):
     agent = _agent(["read_file"])
 
     import model_tools
+
     monkeypatch.setattr(
-        model_tools, "get_tool_definitions",
+        model_tools,
+        "get_tool_definitions",
         lambda **kw: [_tool("read_file"), _tool("mcp_granola_list_meetings")],
     )
 
@@ -180,7 +200,9 @@ def test_refreshed_tool_is_callable_through_valid_tool_names_guard(monkeypatch):
 
     # After refresh the same guard accepts it AND it's in the tools= payload.
     assert "mcp_granola_list_meetings" in agent.valid_tool_names
-    assert any(t["function"]["name"] == "mcp_granola_list_meetings" for t in agent.tools)
+    assert any(
+        t["function"]["name"] == "mcp_granola_list_meetings" for t in agent.tools
+    )
 
 
 def test_refresh_is_thread_safe_under_concurrent_calls(monkeypatch):
@@ -195,6 +217,7 @@ def test_refresh_is_thread_safe_under_concurrent_calls(monkeypatch):
     agent = _agent(["a"])
 
     import itertools
+
     set_a = [_tool("a"), _tool("b")]
     set_b = [_tool("a"), _tool("c")]
     flip = itertools.cycle([set_a, set_b])
@@ -205,6 +228,7 @@ def test_refresh_is_thread_safe_under_concurrent_calls(monkeypatch):
             return list(next(flip))
 
     import model_tools
+
     monkeypatch.setattr(model_tools, "get_tool_definitions", _gtd)
 
     errors = []
@@ -274,8 +298,11 @@ def test_stale_generation_refresh_does_not_clobber_newer(monkeypatch):
     agent.valid_tool_names = {"read_file", "mcp_new_tool"}
 
     import model_tools
+
     # This (stale) refresh computes only the old single-tool set.
-    monkeypatch.setattr(model_tools, "get_tool_definitions", lambda **kw: [_tool("read_file")])
+    monkeypatch.setattr(
+        model_tools, "get_tool_definitions", lambda **kw: [_tool("read_file")]
+    )
 
     added = mcp_tool.refresh_agent_mcp_tools(agent)
 
@@ -291,6 +318,7 @@ def test_wait_returns_instantly_when_no_discovery_thread(monkeypatch):
 
     monkeypatch.setattr(mcp_startup, "_mcp_discovery_thread", None)
     import clawk_cli.config as cfg
+
     monkeypatch.setattr(cfg, "load_config", lambda: {"mcp_discovery_timeout": 999.0})
 
     t0 = time.time()

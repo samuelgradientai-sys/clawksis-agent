@@ -59,7 +59,11 @@ def _interaction_forward(payload: dict) -> PassthroughForward:
 def test_passthrough_from_wire_byte_preserves_body():
     """The wire frame's base64 body decodes back to the exact bytes (parity with
     the connector's toPassthroughForward)."""
-    original = json.dumps({"type": 2, "data": {"name": "ping"}, "guild_id": "g1"}).encode("utf-8")
+    original = json.dumps({
+        "type": 2,
+        "data": {"name": "ping"},
+        "guild_id": "g1",
+    }).encode("utf-8")
     wire = {
         "platform": "discord",
         "botId": "appShared",
@@ -104,16 +108,14 @@ async def test_discord_interaction_routes_through_handle_message(adapter, monkey
 
     monkeypatch.setattr(adapter, "handle_message", fake_handle)
 
-    fwd = _interaction_forward(
-        {
-            "id": "interaction-1",
-            "type": 2,  # APPLICATION_COMMAND
-            "channel_id": "chan-9",
-            "guild_id": "guild-7",
-            "data": {"name": "summarize"},
-            "member": {"user": {"id": "user-3", "username": "ben"}},
-        }
-    )
+    fwd = _interaction_forward({
+        "id": "interaction-1",
+        "type": 2,  # APPLICATION_COMMAND
+        "channel_id": "chan-9",
+        "guild_id": "guild-7",
+        "data": {"name": "summarize"},
+        "member": {"user": {"id": "user-3", "username": "ben"}},
+    })
     await stub.push_passthrough(fwd, buffer_id=None)
 
     assert len(seen) == 1
@@ -138,16 +140,14 @@ async def test_message_component_interaction_uses_custom_id(adapter, monkeypatch
         seen.append(event)
 
     monkeypatch.setattr(adapter, "handle_message", fake_handle)
-    fwd = _interaction_forward(
-        {
-            "id": "i2",
-            "type": 3,  # MESSAGE_COMPONENT
-            "channel_id": "c2",
-            "guild_id": "g2",
-            "data": {"custom_id": "approve_btn"},
-            "member": {"user": {"id": "u2", "username": "x"}},
-        }
-    )
+    fwd = _interaction_forward({
+        "id": "i2",
+        "type": 3,  # MESSAGE_COMPONENT
+        "channel_id": "c2",
+        "guild_id": "g2",
+        "data": {"custom_id": "approve_btn"},
+        "member": {"user": {"id": "u2", "username": "x"}},
+    })
     await stub.push_passthrough(fwd)
     assert len(seen) == 1
     assert seen[0].text == "approve_btn"

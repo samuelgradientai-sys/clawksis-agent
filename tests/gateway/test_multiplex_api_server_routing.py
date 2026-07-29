@@ -4,6 +4,7 @@ Mirrors ``test_multiplex_http_routing.py`` (webhook): the default listener
 owns the port, and secondary profiles are reached via a URL prefix when
 ``gateway.multiplex_profiles`` is on.
 """
+
 from __future__ import annotations
 
 from gateway.config import GatewayConfig, PlatformConfig
@@ -15,7 +16,9 @@ from gateway.platforms.api_server import (
 
 
 def _make_adapter(multiplex: bool = True) -> APIServerAdapter:
-    cfg = PlatformConfig(enabled=True, extra={"host": "127.0.0.1", "port": 8642, "key": "test-key"})
+    cfg = PlatformConfig(
+        enabled=True, extra={"host": "127.0.0.1", "port": 8642, "key": "test-key"}
+    )
     adapter = APIServerAdapter(cfg)
 
     class _Runner:
@@ -59,7 +62,7 @@ class TestApiServerProfileResolution:
 
 class TestApiServerRouteTable:
     def test_route_table_includes_models_and_chat(self):
-        """ /p/{profile}/v1/models must be registered — this is the 404 Fadeway hit. """
+        """/p/{profile}/v1/models must be registered — this is the 404 Fadeway hit."""
         adapter = _make_adapter(multiplex=True)
         paths = {path for _method, path, _handler in adapter._http_route_table()}
         assert "/v1/models" in paths

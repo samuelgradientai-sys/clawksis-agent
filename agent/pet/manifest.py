@@ -111,7 +111,9 @@ class ManifestError(RuntimeError):
     """Raised when the manifest can't be fetched or parsed."""
 
 
-def fetch_manifest(*, timeout: float = _DEFAULT_TIMEOUT, force: bool = False) -> list[ManifestEntry]:
+def fetch_manifest(
+    *, timeout: float = _DEFAULT_TIMEOUT, force: bool = False
+) -> list[ManifestEntry]:
     """Return every approved pet from the public manifest.
 
     Cached in-process for ``_MANIFEST_TTL`` seconds (pass ``force=True`` to
@@ -120,7 +122,11 @@ def fetch_manifest(*, timeout: float = _DEFAULT_TIMEOUT, force: bool = False) ->
     """
     global _cache
 
-    if not force and _cache is not None and time.monotonic() - _cache[0] < _MANIFEST_TTL:
+    if (
+        not force
+        and _cache is not None
+        and time.monotonic() - _cache[0] < _MANIFEST_TTL
+    ):
         return _cache[1]
 
     try:

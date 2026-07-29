@@ -35,44 +35,64 @@ class TestValidateImageUrl:
     """Tests for URL validation, including urlparse-based netloc check."""
 
     def test_valid_https_url(self):
-        with patch("tools.url_safety.socket.getaddrinfo", return_value=[
-            (2, 1, 6, "", ("93.184.216.34", 0)),
-        ]):
+        with patch(
+            "tools.url_safety.socket.getaddrinfo",
+            return_value=[
+                (2, 1, 6, "", ("93.184.216.34", 0)),
+            ],
+        ):
             assert _validate_image_url("https://example.com/image.jpg") is True
 
     def test_valid_http_url(self):
-        with patch("tools.url_safety.socket.getaddrinfo", return_value=[
-            (2, 1, 6, "", ("93.184.216.34", 0)),
-        ]):
+        with patch(
+            "tools.url_safety.socket.getaddrinfo",
+            return_value=[
+                (2, 1, 6, "", ("93.184.216.34", 0)),
+            ],
+        ):
             assert _validate_image_url("http://cdn.example.org/photo.png") is True
 
     def test_valid_url_without_extension(self):
         """CDN endpoints that redirect to images should still pass."""
-        with patch("tools.url_safety.socket.getaddrinfo", return_value=[
-            (2, 1, 6, "", ("93.184.216.34", 0)),
-        ]):
+        with patch(
+            "tools.url_safety.socket.getaddrinfo",
+            return_value=[
+                (2, 1, 6, "", ("93.184.216.34", 0)),
+            ],
+        ):
             assert _validate_image_url("https://cdn.example.com/abcdef123") is True
 
     def test_valid_url_with_query_params(self):
-        with patch("tools.url_safety.socket.getaddrinfo", return_value=[
-            (2, 1, 6, "", ("93.184.216.34", 0)),
-        ]):
-            assert _validate_image_url("https://img.example.com/pic?w=200&h=200") is True
+        with patch(
+            "tools.url_safety.socket.getaddrinfo",
+            return_value=[
+                (2, 1, 6, "", ("93.184.216.34", 0)),
+            ],
+        ):
+            assert (
+                _validate_image_url("https://img.example.com/pic?w=200&h=200") is True
+            )
 
     def test_localhost_url_blocked_by_ssrf(self):
         """localhost URLs are now blocked by SSRF protection."""
         assert _validate_image_url("http://localhost:8080/image.png") is False
 
     def test_valid_url_with_port(self):
-        with patch("tools.url_safety.socket.getaddrinfo", return_value=[
-            (2, 1, 6, "", ("93.184.216.34", 0)),
-        ]):
+        with patch(
+            "tools.url_safety.socket.getaddrinfo",
+            return_value=[
+                (2, 1, 6, "", ("93.184.216.34", 0)),
+            ],
+        ):
             assert _validate_image_url("http://example.com:8080/image.png") is True
 
     def test_valid_url_with_path_only(self):
-        with patch("tools.url_safety.socket.getaddrinfo", return_value=[
-            (2, 1, 6, "", ("93.184.216.34", 0)),
-        ]):
+        with patch(
+            "tools.url_safety.socket.getaddrinfo",
+            return_value=[
+                (2, 1, 6, "", ("93.184.216.34", 0)),
+            ],
+        ):
             assert _validate_image_url("https://example.com/") is True
 
     def test_rejects_empty_string(self):
@@ -181,12 +201,10 @@ class TestHandleVisionAnalyze:
             "tools.vision_tools.vision_analyze_tool", new_callable=AsyncMock
         ) as mock_tool:
             mock_tool.return_value = json.dumps({"result": "ok"})
-            result = _handle_vision_analyze(
-                {
-                    "image_url": "https://example.com/img.png",
-                    "question": "What is this?",
-                }
-            )
+            result = _handle_vision_analyze({
+                "image_url": "https://example.com/img.png",
+                "question": "What is this?",
+            })
             # It should be an Awaitable (coroutine)
             assert isinstance(result, Awaitable)
             # Clean up the coroutine to avoid RuntimeWarning
@@ -205,12 +223,10 @@ class TestHandleVisionAnalyze:
             ),
         ):
             mock_tool.return_value = json.dumps({"result": "ok"})
-            await _handle_vision_analyze(
-                {
-                    "image_url": "https://example.com/img.png",
-                    "question": "Describe the cat",
-                }
-            )
+            await _handle_vision_analyze({
+                "image_url": "https://example.com/img.png",
+                "question": "Describe the cat",
+            })
             call_args = mock_tool.call_args
             full_prompt = call_args[0][1]  # second positional arg
             assert "Describe the cat" in full_prompt
@@ -230,9 +246,10 @@ class TestHandleVisionAnalyze:
             patch.dict(os.environ, {"AUXILIARY_VISION_MODEL": "custom/model-v1"}),
         ):
             mock_tool.return_value = json.dumps({"result": "ok"})
-            await _handle_vision_analyze(
-                {"image_url": "https://example.com/img.png", "question": "test"}
-            )
+            await _handle_vision_analyze({
+                "image_url": "https://example.com/img.png",
+                "question": "test",
+            })
             call_args = mock_tool.call_args
             model = call_args[0][2]  # third positional arg
             assert model == "custom/model-v1"
@@ -253,9 +270,10 @@ class TestHandleVisionAnalyze:
             # Ensure AUXILIARY_VISION_MODEL is not set
             os.environ.pop("AUXILIARY_VISION_MODEL", None)
             mock_tool.return_value = json.dumps({"result": "ok"})
-            await _handle_vision_analyze(
-                {"image_url": "https://example.com/img.png", "question": "test"}
-            )
+            await _handle_vision_analyze({
+                "image_url": "https://example.com/img.png",
+                "question": "test",
+            })
             call_args = mock_tool.call_args
             model = call_args[0][2]
             # With no AUXILIARY_VISION_MODEL set, model should be None
@@ -280,9 +298,10 @@ class TestHandleVisionAnalyze:
             patch.dict(os.environ, {"AUXILIARY_VISION_MODEL": "env-model"}),
         ):
             mock_tool.return_value = json.dumps({"result": "ok"})
-            await _handle_vision_analyze(
-                {"image_url": "https://example.com/img.png", "question": "test"}
-            )
+            await _handle_vision_analyze({
+                "image_url": "https://example.com/img.png",
+                "question": "test",
+            })
             call_args = mock_tool.call_args
             model = call_args[0][2]  # third positional arg
             assert model == "qwen3.7-plus"
@@ -305,9 +324,10 @@ class TestHandleVisionAnalyze:
             patch.dict(os.environ, {"AUXILIARY_VISION_MODEL": "fallback-model"}),
         ):
             mock_tool.return_value = json.dumps({"result": "ok"})
-            await _handle_vision_analyze(
-                {"image_url": "https://example.com/img.png", "question": "test"}
-            )
+            await _handle_vision_analyze({
+                "image_url": "https://example.com/img.png",
+                "question": "test",
+            })
             call_args = mock_tool.call_args
             model = call_args[0][2]
             assert model == "fallback-model"
@@ -361,7 +381,11 @@ class TestErrorLoggingExcInfo:
     async def test_analysis_error_logs_exc_info(self, caplog):
         """When vision_analyze_tool encounters an error, it should log with exc_info."""
         with (
-            patch("tools.vision_tools._validate_image_url_async", new_callable=AsyncMock, return_value=True),
+            patch(
+                "tools.vision_tools._validate_image_url_async",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
             patch(
                 "tools.vision_tools._download_image",
                 new_callable=AsyncMock,
@@ -402,14 +426,20 @@ class TestErrorLoggingExcInfo:
             mock_response.choices = [mock_choice]
 
             with (
-                patch("tools.vision_tools.async_call_llm", new_callable=AsyncMock, return_value=mock_response),
+                patch(
+                    "tools.vision_tools.async_call_llm",
+                    new_callable=AsyncMock,
+                    return_value=mock_response,
+                ),
             ):
                 # Make unlink fail to trigger the cleanup warning.
                 def failing_unlink(self, *args, **kwargs):
                     raise PermissionError("no permission")
 
                 with patch.object(Path, "unlink", failing_unlink):
-                    result = await vision_analyze_tool(data_url, "describe", "test/model")
+                    result = await vision_analyze_tool(
+                        data_url, "describe", "test/model"
+                    )
 
             warning_records = [
                 r
@@ -433,9 +463,12 @@ class TestVisionConfig:
         mock_response.choices = [mock_choice]
 
         with (
-            patch("clawk_cli.config.load_config", return_value={
-                "auxiliary": {"vision": {"temperature": 1, "timeout": 77}}
-            }),
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={
+                    "auxiliary": {"vision": {"temperature": 1, "timeout": 77}}
+                },
+            ),
             patch(
                 "tools.vision_tools._image_to_base64_data_url",
                 return_value="data:image/png;base64,abc",
@@ -446,7 +479,9 @@ class TestVisionConfig:
                 return_value=mock_response,
             ) as mock_llm,
         ):
-            result = json.loads(await vision_analyze_tool(str(img), "describe this", "test/model"))
+            result = json.loads(
+                await vision_analyze_tool(str(img), "describe this", "test/model")
+            )
 
         assert result["success"] is True
         assert mock_llm.await_args.kwargs["temperature"] == 1.0
@@ -463,7 +498,10 @@ class TestVisionConfig:
         mock_response.choices = [mock_choice]
 
         with (
-            patch("clawk_cli.config.load_config", return_value={"auxiliary": {"vision": {}}}),
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={"auxiliary": {"vision": {}}},
+            ),
             patch(
                 "tools.vision_tools._image_to_base64_data_url",
                 return_value="data:image/png;base64,abc",
@@ -474,7 +512,9 @@ class TestVisionConfig:
                 return_value=mock_response,
             ) as mock_llm,
         ):
-            result = json.loads(await vision_analyze_tool(str(img), "describe this", "test/model"))
+            result = json.loads(
+                await vision_analyze_tool(str(img), "describe this", "test/model")
+            )
 
         assert result["success"] is True
         assert mock_llm.await_args.kwargs["temperature"] == 0.1
@@ -487,7 +527,9 @@ class TestVisionSafetyGuards:
         secret = tmp_path / "secret.txt"
         secret.write_text("TOP-SECRET=1\n", encoding="utf-8")
 
-        with patch("tools.vision_tools.async_call_llm", new_callable=AsyncMock) as mock_llm:
+        with patch(
+            "tools.vision_tools.async_call_llm", new_callable=AsyncMock
+        ) as mock_llm:
             result = json.loads(await vision_analyze_tool(str(secret), "extract text"))
 
         assert result["success"] is False
@@ -507,7 +549,9 @@ class TestVisionSafetyGuards:
         secret = tmp_path / ".env"
         secret.write_text("OPENAI_API_KEY=sk-super-secret\n", encoding="utf-8")
 
-        with patch("tools.vision_tools.async_call_llm", new_callable=AsyncMock) as mock_llm:
+        with patch(
+            "tools.vision_tools.async_call_llm", new_callable=AsyncMock
+        ) as mock_llm:
             result = json.loads(await vision_analyze_tool(str(secret), "extract text"))
 
         assert result["success"] is False
@@ -515,7 +559,9 @@ class TestVisionSafetyGuards:
         mock_llm.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_native_fast_path_local_env_file_blocked_via_read_guard(self, tmp_path):
+    async def test_native_fast_path_local_env_file_blocked_via_read_guard(
+        self, tmp_path
+    ):
         """Same read guard must apply to the native vision fast path."""
         from tools.vision_tools import _vision_analyze_native
 
@@ -539,9 +585,13 @@ class TestVisionSafetyGuards:
         with (
             patch("tools.website_policy.check_website_access", return_value=blocked),
             patch("tools.url_safety.is_safe_url", return_value=True),
-            patch("tools.vision_tools._download_image", new_callable=AsyncMock) as mock_download,
+            patch(
+                "tools.vision_tools._download_image", new_callable=AsyncMock
+            ) as mock_download,
         ):
-            result = json.loads(await vision_analyze_tool("https://blocked.test/cat.png", "describe"))
+            result = json.loads(
+                await vision_analyze_tool("https://blocked.test/cat.png", "describe")
+            )
 
         assert result["success"] is False
         assert "Blocked by website policy" in result["error"]
@@ -582,7 +632,9 @@ class TestVisionSafetyGuards:
             mock_client.get = AsyncMock(return_value=FakeResponse())
             mock_client_cls.return_value = mock_client
 
-            await _download_image("https://allowed.test/cat.png", tmp_path / "cat.png", max_retries=1)
+            await _download_image(
+                "https://allowed.test/cat.png", tmp_path / "cat.png", max_retries=1
+            )
 
         assert not (tmp_path / "cat.png").exists()
 
@@ -605,7 +657,7 @@ class TestVisionRequirements:
         # config.yaml must reference the codex provider so vision auto-detect
         # falls back to the active provider via _read_main_provider().
         (tmp_path / "config.yaml").write_text(
-            'model:\n  default: gpt-4o\n  provider: openai-codex\n'
+            "model:\n  default: gpt-4o\n  provider: openai-codex\n"
         )
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
@@ -739,8 +791,12 @@ class TestBase64SizeLimit:
         img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * (4 * 1024 * 1024))
 
         # Patch the hard limit to a small value so the test runs fast.
-        with patch("tools.vision_tools._MAX_BASE64_BYTES", 1000), \
-             patch("tools.vision_tools.async_call_llm", new_callable=AsyncMock) as mock_llm:
+        with (
+            patch("tools.vision_tools._MAX_BASE64_BYTES", 1000),
+            patch(
+                "tools.vision_tools.async_call_llm", new_callable=AsyncMock
+            ) as mock_llm,
+        ):
             result = json.loads(await vision_analyze_tool(str(img), "describe this"))
 
         assert result["success"] is False
@@ -765,7 +821,9 @@ class TestBase64SizeLimit:
                 return_value=mock_response,
             ),
         ):
-            result = json.loads(await vision_analyze_tool(str(img), "describe this", "test/model"))
+            result = json.loads(
+                await vision_analyze_tool(str(img), "describe this", "test/model")
+            )
 
         assert result["success"] is True
 
@@ -800,7 +858,9 @@ class TestErrorClassification:
                 side_effect=api_error,
             ),
         ):
-            result = json.loads(await vision_analyze_tool(str(img), "describe", "test/model"))
+            result = json.loads(
+                await vision_analyze_tool(str(img), "describe", "test/model")
+            )
 
         assert result["success"] is False
         assert "rejected the image" in result["analysis"].lower()
@@ -899,8 +959,9 @@ class TestResizeImageForVision:
         path = tmp_path / "photo.jpg"
         img.save(path, "JPEG", quality=95)
 
-        result = _resize_image_for_vision(path, mime_type="image/jpeg",
-                                           max_base64_bytes=50_000)
+        result = _resize_image_for_vision(
+            path, mime_type="image/jpeg", max_base64_bytes=50_000
+        )
         assert result.startswith("data:image/jpeg;base64,")
 
     def test_constants_sane(self):
@@ -920,14 +981,17 @@ class TestResizeImageForVision:
         path = tmp_path / "panorama.png"
         img.save(path, "PNG")
 
-        result = _resize_image_for_vision(path, mime_type="image/png",
-                                           max_base64_bytes=50_000)
+        result = _resize_image_for_vision(
+            path, mime_type="image/png", max_base64_bytes=50_000
+        )
         assert result.startswith("data:image/")
         # Decode and check aspect ratio is roughly preserved
         import base64
+
         header, b64data = result.split(",", 1)
         raw = base64.b64decode(b64data)
         from io import BytesIO
+
         resized = Image.open(BytesIO(raw))
         original_ratio = 8000 / 200  # 40:1
         resized_ratio = resized.width / resized.height if resized.height > 0 else 0
@@ -950,11 +1014,13 @@ class TestResizeImageForVision:
         path = tmp_path / "tall.png"
         img.save(path, "PNG")
 
-        result = _resize_image_for_vision(path, mime_type="image/png",
-                                           max_base64_bytes=50_000)
+        result = _resize_image_for_vision(
+            path, mime_type="image/png", max_base64_bytes=50_000
+        )
         assert result.startswith("data:image/")
         import base64
         from io import BytesIO
+
         header, b64data = result.split(",", 1)
         raw = base64.b64decode(b64data)
         resized = Image.open(BytesIO(raw))
@@ -1241,7 +1307,9 @@ class TestVisionCpuBurstCap:
             seen_threads.append(threading.current_thread().name)
             return "data:image/jpeg;base64,AAAA"
 
-        result = await vt._run_encode_on_cpu_executor(fake_encode, "p", mime_type="image/jpeg")
+        result = await vt._run_encode_on_cpu_executor(
+            fake_encode, "p", mime_type="image/jpeg"
+        )
         assert result == "data:image/jpeg;base64,AAAA"
         assert len(seen_threads) == 1
         assert seen_threads[0].startswith("vision-encode"), seen_threads
@@ -1268,6 +1336,7 @@ class TestVisionCpuBurstCap:
         calls_inflight = 0
         calls_peak = 0
         import threading as _t
+
         enc_lock = _t.Lock()
 
         def slow_encode(path, mime_type=None):
@@ -1288,7 +1357,9 @@ class TestVisionCpuBurstCap:
             calls_peak = max(calls_peak, calls_inflight)
             try:
                 # The encode is the capped CPU step.
-                await vt._run_encode_on_cpu_executor(slow_encode, "p", mime_type="image/jpeg")
+                await vt._run_encode_on_cpu_executor(
+                    slow_encode, "p", mime_type="image/jpeg"
+                )
                 # The "LLM call" is NOT capped — overlaps freely.
                 await asyncio.sleep(0.02)
             finally:
@@ -1296,16 +1367,19 @@ class TestVisionCpuBurstCap:
             return json.dumps({"ok": True})
 
         with (
-            patch.object(vt, "_vision_cpu_executor",
-                         ThreadPoolExecutor(max_workers=CAP, thread_name_prefix="vision-encode")),
+            patch.object(
+                vt,
+                "_vision_cpu_executor",
+                ThreadPoolExecutor(max_workers=CAP, thread_name_prefix="vision-encode"),
+            ),
             patch.object(vt, "_should_use_native_vision_fast_path", return_value=True),
             patch.object(vt, "_vision_analyze_native", side_effect=fake_native),
         ):
             await asyncio.gather(*[
-                vt._handle_vision_analyze(
-                    {"image_url": f"https://example.com/frame_{i}.png",
-                     "question": "what is this"}
-                )
+                vt._handle_vision_analyze({
+                    "image_url": f"https://example.com/frame_{i}.png",
+                    "question": "what is this",
+                })
                 for i in range(N)
             ])
 

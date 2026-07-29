@@ -50,7 +50,7 @@ def test_role_is_escaped_in_html_export():
 
 
 def test_known_role_keeps_its_css_class():
-    html = _generate_messages_html(
-        [{"role": "assistant", "content": "hi", "timestamp": 1700000000}]
-    )
+    html = _generate_messages_html([
+        {"role": "assistant", "content": "hi", "timestamp": 1700000000}
+    ])
     assert 'class="message message-assistant active"' in html

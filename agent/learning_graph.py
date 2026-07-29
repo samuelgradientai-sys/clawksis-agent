@@ -115,7 +115,13 @@ def _to_int_ts(value: Any) -> Optional[int]:
 
 
 def _usage_timestamp(rec: dict[str, Any]) -> Optional[int]:
-    for key in ("last_activity_at", "last_used_at", "last_viewed_at", "last_patched_at", "created_at"):
+    for key in (
+        "last_activity_at",
+        "last_used_at",
+        "last_viewed_at",
+        "last_patched_at",
+        "created_at",
+    ):
         ts = _to_int_ts(rec.get(key))
         if ts is not None:
             return ts
@@ -127,7 +133,9 @@ def build_skill_nodes(skill_roots: list[tuple[str, Path]]) -> dict[str, SkillNod
     nodes: dict[str, SkillNode] = {}
 
     for source, skill_md in _iter_skill_files(skill_roots):
-        if any(p in {".archive", ".hub", "node_modules", ".git"} for p in skill_md.parts):
+        if any(
+            p in {".archive", ".hub", "node_modules", ".git"} for p in skill_md.parts
+        ):
             continue
         try:
             fm = _frontmatter(skill_md.read_text(encoding="utf-8")[:4000])
@@ -168,7 +176,9 @@ def build_edges(nodes: dict[str, SkillNode]) -> list[tuple[str, str]]:
     return edges
 
 
-def density_stats(nodes: dict[str, SkillNode], edges: list[tuple[str, str]]) -> dict[str, Any]:
+def density_stats(
+    nodes: dict[str, SkillNode], edges: list[tuple[str, str]]
+) -> dict[str, Any]:
     linked: set[str] = set()
     for a, b in edges:
         linked.add(a)
@@ -209,14 +219,12 @@ def _memory_cards() -> list[dict[str, Any]]:
             if not chunk:
                 continue
             first = chunk.splitlines()[0].strip().lstrip("# ").strip()
-            cards.append(
-                {
-                    "source": source,
-                    "timestamp": file_ts + chunk_idx if file_ts is not None else None,
-                    "title": (first[:80] + "…") if len(first) > 80 else first,
-                    "body": chunk[:1200],
-                }
-            )
+            cards.append({
+                "source": source,
+                "timestamp": file_ts + chunk_idx if file_ts is not None else None,
+                "title": (first[:80] + "…") if len(first) > 80 else first,
+                "body": chunk[:1200],
+            })
     return cards
 
 
@@ -224,7 +232,9 @@ def _tokenize(text: str) -> set[str]:
     return {t for t in re.split(r"[^a-z0-9]+", text.lower()) if len(t) >= 3}
 
 
-def _memory_skill_edges(memory_cards: list[dict[str, Any]], skills: list[SkillNode]) -> list[tuple[str, str]]:
+def _memory_skill_edges(
+    memory_cards: list[dict[str, Any]], skills: list[SkillNode]
+) -> list[tuple[str, str]]:
     edges: list[tuple[str, str]] = []
     skill_meta = [(s, _tokenize(s.name), s.name.lower()) for s in skills]
     for idx, card in enumerate(memory_cards):
@@ -291,20 +301,18 @@ def build_learning_graph() -> dict[str, Any]:
         for n in learned_skills.values()
     ]
     for i, card in enumerate(memory_cards):
-        graph_nodes.append(
-            {
-                "id": f"memory:{card['source']}:{i}",
-                "label": card["title"],
-                "kind": "memory",
-                "memorySource": card["source"],
-                "timestamp": card.get("timestamp"),
-                "category": "memory",
-                "useCount": 0,
-                "state": "active",
-                "createdBy": "memory",
-                "pinned": False,
-            }
-        )
+        graph_nodes.append({
+            "id": f"memory:{card['source']}:{i}",
+            "label": card["title"],
+            "kind": "memory",
+            "memorySource": card["source"],
+            "timestamp": card.get("timestamp"),
+            "category": "memory",
+            "useCount": 0,
+            "state": "active",
+            "createdBy": "memory",
+            "pinned": False,
+        })
 
     return {
         "nodes": graph_nodes,

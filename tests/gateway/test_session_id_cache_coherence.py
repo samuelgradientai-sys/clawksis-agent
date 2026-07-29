@@ -88,11 +88,7 @@ def _guard_would_reuse(runner, session_key, session_id):
         return True
 
     # Same session_id: standard cross-process guard.
-    invalidate = (
-        cached_mc is not None
-        and live is not None
-        and live != cached_mc
-    )
+    invalidate = cached_mc is not None and live is not None and live != cached_mc
     return not invalidate
 
 
@@ -180,7 +176,10 @@ class TestSessionIdCacheCoherence:
         with runner._agent_cache_lock:
             _row = db.get_session("s1")
             runner._agent_cache["telegram:s1"] = (
-                agent, "sig", (_row.get("message_count", 0) if _row else 0), "s1",
+                agent,
+                "sig",
+                (_row.get("message_count", 0) if _row else 0),
+                "s1",
             )
 
         # Our own turn + re-baseline → reuse next turn.

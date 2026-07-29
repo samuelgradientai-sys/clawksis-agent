@@ -1,4 +1,5 @@
 """Subject dossier management + consent gate + least-disclosure field selection."""
+
 from __future__ import annotations
 
 import datetime as _dt
@@ -25,13 +26,16 @@ def new_subject_id(full_name: str = "") -> str:
     return "sub_" + hashlib.sha1(os.urandom(8)).hexdigest()[:10]
 
 
-def create(identity: dict, consent: dict, residency: str = "US", prefs: dict | None = None) -> dict:
+def create(
+    identity: dict, consent: dict, residency: str = "US", prefs: dict | None = None
+) -> dict:
     dossier = {
         "subject_id": new_subject_id(identity.get("full_name", "subject")),
         "consent": consent,
         "identity": identity,
         "residency_jurisdiction": residency,
-        "preferences": prefs or {"email_mode": "draft_only", "rescan_interval_days": 120},
+        "preferences": prefs
+        or {"email_mode": "draft_only", "rescan_interval_days": 120},
         "created_at": now(),
     }
     save(dossier)
@@ -103,7 +107,9 @@ def contact_email(dossier: dict) -> str | None:
     return prefs.get("contact_email_for_optouts") or (emails[0] if emails else None)
 
 
-def select_disclosure(dossier: dict, inputs: list[str], override_email: str | None = None) -> dict:
+def select_disclosure(
+    dossier: dict, inputs: list[str], override_email: str | None = None
+) -> dict:
     """Return ONLY the dossier fields a broker's opt-out actually requires.
 
     Enforces least-disclosure: skips anything in NEVER_VOLUNTEER, and skips

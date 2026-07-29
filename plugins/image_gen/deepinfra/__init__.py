@@ -92,7 +92,9 @@ def _format_catalog_row(item: Dict[str, Any]) -> Dict[str, Any]:
     row: Dict[str, Any] = {
         "id": mid,
         "display": mid.split("/", 1)[-1] if "/" in mid else mid,
-        "strengths": metadata.get("description", "") if isinstance(metadata, dict) else "",
+        "strengths": metadata.get("description", "")
+        if isinstance(metadata, dict)
+        else "",
     }
     if price:
         row["price"] = price
@@ -230,6 +232,7 @@ class DeepInfraImageGenProvider(ImageGenProvider):
             )
         size = _SIZES.get(aspect, _SIZES["square"])
         from clawk_cli.models import deepinfra_base_url
+
         base_url = deepinfra_base_url(di_cfg)
 
         # DeepInfra's /images/generations is OpenAI-compatible — use the
@@ -308,7 +311,9 @@ class DeepInfraImageGenProvider(ImageGenProvider):
             try:
                 image_ref = str(save_url_image(url, prefix=f"deepinfra_{short}"))
             except Exception as exc:
-                logger.debug("DeepInfra: caching delivery URL failed (%s); returning URL", exc)
+                logger.debug(
+                    "DeepInfra: caching delivery URL failed (%s); returning URL", exc
+                )
                 image_ref = url
         else:
             return error_response(

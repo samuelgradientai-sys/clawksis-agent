@@ -201,7 +201,9 @@ def arm_shutdown_watchdog(
             except Exception as exc:
                 snapshot = {"snapshot_error": repr(exc)}
 
-        target = dump_path if dump_path is not None else get_shutdown_watchdog_dump_path()
+        target = (
+            dump_path if dump_path is not None else get_shutdown_watchdog_dump_path()
+        )
         _write_watchdog_dump(target, delay_s=delay, snapshot=snapshot)
 
         try:
@@ -225,12 +227,14 @@ def arm_shutdown_watchdog(
         # reaches the file before os._exit bypasses atexit. (#66892)
         try:
             from gateway.status import remove_pid_file, release_gateway_runtime_lock
+
             remove_pid_file()
             release_gateway_runtime_lock()
         except Exception:
             pass
         try:
             from clawk_logging import drain_log_queue
+
             drain_log_queue(timeout=1.0)
         except Exception:
             pass

@@ -25,7 +25,9 @@ if os.name == "posix":
     _path_dirs = set(os.environ.get("PATH", "").split(os.pathsep))
     _missing = _sys_dirs - _path_dirs
     if _missing:
-        os.environ["PATH"] = os.environ.get("PATH", "") + os.pathsep + os.pathsep.join(sorted(_missing))
+        os.environ["PATH"] = (
+            os.environ.get("PATH", "") + os.pathsep + os.pathsep.join(sorted(_missing))
+        )
 
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
@@ -244,7 +246,9 @@ def _request_gateway_self_restart(pid: int) -> bool:
     if not _is_pid_ancestor_of_current_process(pid):
         return False
     try:
-        os.kill(pid, signal.SIGUSR1)  # windows-footgun: ok — POSIX signal, guarded by hasattr(signal, 'SIGUSR1') above
+        os.kill(
+            pid, signal.SIGUSR1
+        )  # windows-footgun: ok — POSIX signal, guarded by hasattr(signal, 'SIGUSR1') above
     except (ProcessLookupError, PermissionError, OSError):
         return False
     return True
@@ -279,7 +283,9 @@ def _graceful_restart_via_sigusr1(pid: int, drain_timeout: float) -> bool:
     if pid <= 0:
         return False
     try:
-        os.kill(pid, signal.SIGUSR1)  # windows-footgun: ok — POSIX signal, guarded by hasattr(signal, 'SIGUSR1') above
+        os.kill(
+            pid, signal.SIGUSR1
+        )  # windows-footgun: ok — POSIX signal, guarded by hasattr(signal, 'SIGUSR1') above
     except ProcessLookupError:
         # Already gone — nothing to drain.
         return True
@@ -359,6 +365,7 @@ def _scan_gateway_pids(
         looks_like_gateway_command_line,
         looks_like_gateway_runtime_command_line,
     )
+
     current_home = str(get_clawk_home().resolve())
     current_home_lc = current_home.lower()
     current_profile_arg = _profile_arg(current_home)
@@ -393,7 +400,9 @@ def _scan_gateway_pids(
     def _matches_gateway_runtime(command: str) -> bool:
         if looks_like_gateway_command_line(command):
             return True
-        return include_restart_managers and looks_like_gateway_runtime_command_line(command)
+        return include_restart_managers and looks_like_gateway_runtime_command_line(
+            command
+        )
 
     try:
         if is_windows():
@@ -736,7 +745,9 @@ def launch_detached_profile_gateway_restart(profile: str, old_pid: int) -> bool:
     """Relaunch a manually-run profile gateway after its current PID exits."""
     if old_pid <= 0:
         return False
-    return _spawn_gateway_restart_watcher(old_pid, _gateway_run_args_for_profile(profile))
+    return _spawn_gateway_restart_watcher(
+        old_pid, _gateway_run_args_for_profile(profile)
+    )
 
 
 def _spawn_gateway_restart_watcher(old_pid: int, run_argv: list[str]) -> bool:
@@ -798,8 +809,10 @@ def _spawn_gateway_restart_watcher(old_pid: int, run_argv: list[str]) -> bool:
     respawn_cwd_literal = json.dumps(respawn_cwd)
     respawn_env_literal = json.dumps(respawn_env_overlay)
 
-    watcher = textwrap.dedent(
-        """
+    watcher = (
+        textwrap
+        .dedent(
+            """
         import os
         import subprocess
         import sys
@@ -857,9 +870,12 @@ def _spawn_gateway_restart_watcher(old_pid: int, run_argv: list[str]) -> bool:
             _popen_kwargs["start_new_session"] = True
             subprocess.Popen(cmd, **_popen_kwargs)
         """
-    ).strip().format(
-        respawn_cwd_literal=respawn_cwd_literal,
-        respawn_env_literal=respawn_env_literal,
+        )
+        .strip()
+        .format(
+            respawn_cwd_literal=respawn_cwd_literal,
+            respawn_env_literal=respawn_env_literal,
+        )
     )
 
     watcher_argv = [
@@ -1000,7 +1016,9 @@ def _sync_clawk_home_from_systemd_unit(system: bool) -> None:
     # back to ``systemctl show`` for units that only exist in the manager.
     unit_home = (_clawk_home_from_systemd_unit_file(system=True) or "").strip()
     if not unit_home:
-        unit_home = _read_systemd_unit_environment(system=True).get("CLAWK_HOME", "").strip()
+        unit_home = (
+            _read_systemd_unit_environment(system=True).get("CLAWK_HOME", "").strip()
+        )
     if not unit_home:
         return
     current = os.environ.get("CLAWK_HOME", "").strip()
@@ -1315,7 +1333,11 @@ def get_gateway_runtime_snapshot(system: bool = False) -> GatewayRuntimeSnapshot
         # Other container runtimes (or containers built before Phase 2)
         # still get the original "docker (foreground)" label.
         try:
-            from clawk_cli.service_manager import detect_service_manager, get_service_manager
+            from clawk_cli.service_manager import (
+                detect_service_manager,
+                get_service_manager,
+            )
+
             if detect_service_manager() == "s6":
                 profile = _profile_suffix() or "default"
                 service_name = f"gateway-{profile}"
@@ -1405,7 +1427,9 @@ def _print_gateway_process_mismatch(snapshot: GatewayRuntimeSnapshot) -> None:
             "⚠ Gateway process is running for this profile, but the service is not active"
         )
         print(f"  PID(s): {_format_gateway_pids(snapshot.gateway_pids, limit=None)}")
-        print("  This is usually a manual foreground/tmux/nohup run, so `clawk gateway`")
+        print(
+            "  This is usually a manual foreground/tmux/nohup run, so `clawk gateway`"
+        )
         print("  can refuse to start another copy until this process stops.")
 
 
@@ -1753,7 +1777,9 @@ def _profile_suffix() -> str:
     return hashlib.sha256(str(home).encode()).hexdigest()[:8]
 
 
-def _profile_arg(clawk_home: str | None = None, default_root: str | Path | None = None) -> str:
+def _profile_arg(
+    clawk_home: str | None = None, default_root: str | Path | None = None
+) -> str:
     """Return ``--profile <name>`` only when CLAWK_HOME is a named profile.
 
     For ``~/.clawksis/profiles/<name>``, returns ``"--profile <name>"``.
@@ -1772,7 +1798,11 @@ def _profile_arg(clawk_home: str | None = None, default_root: str | Path | None 
     from clawk_constants import get_default_clawk_root
 
     home = Path(clawk_home or str(get_clawk_home())).resolve()
-    default = Path(default_root).resolve() if default_root else get_default_clawk_root().resolve()
+    default = (
+        Path(default_root).resolve()
+        if default_root
+        else get_default_clawk_root().resolve()
+    )
     if home == default:
         return ""
     profiles_root = (default / "profiles").resolve()
@@ -1848,13 +1878,17 @@ class SystemScopeRequiresRootError(RuntimeError):
 
 def _user_dbus_socket_path() -> Path:
     """Return the expected per-user D-Bus socket path (regardless of existence)."""
-    xdg = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"  # windows-footgun: ok — POSIX systemd helper, never invoked on Windows
+    xdg = (
+        os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    )  # windows-footgun: ok — POSIX systemd helper, never invoked on Windows
     return Path(xdg) / "bus"
 
 
 def _user_systemd_private_socket_path() -> Path:
     """Return the per-user systemd private socket path (regardless of existence)."""
-    xdg = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"  # windows-footgun: ok — POSIX systemd helper, never invoked on Windows
+    xdg = (
+        os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    )  # windows-footgun: ok — POSIX systemd helper, never invoked on Windows
     return Path(xdg) / "systemd" / "private"
 
 
@@ -1880,7 +1914,9 @@ def _ensure_user_systemd_env() -> None:
     We detect the standard socket path and set the vars so all subsequent
     subprocess calls inherit them.
     """
-    uid = os.getuid()  # windows-footgun: ok — POSIX systemd helper, never invoked on Windows
+    uid = (
+        os.getuid()
+    )  # windows-footgun: ok — POSIX systemd helper, never invoked on Windows
     if "XDG_RUNTIME_DIR" not in os.environ:
         runtime_dir = f"/run/user/{uid}"
         if Path(runtime_dir).exists():
@@ -2220,7 +2256,9 @@ def remove_legacy_clawk_units(
 
     # System-scope removal (needs root)
     if system_units:
-        if os.geteuid() != 0:  # windows-footgun: ok — Linux systemd removal path, guarded by `if system == "Linux"` / systemd-only branch
+        if (
+            os.geteuid() != 0
+        ):  # windows-footgun: ok — Linux systemd removal path, guarded by `if system == "Linux"` / systemd-only branch
             print()
             print_warning("System-scope legacy units require root to remove.")
             print_info("  Re-run with: sudo clawk gateway migrate-legacy")
@@ -2275,7 +2313,9 @@ def print_systemd_scope_conflict_warning() -> None:
 
 
 def _require_root_for_system_service(action: str) -> None:
-    if os.geteuid() != 0:  # windows-footgun: ok — POSIX systemd helper, never invoked on Windows
+    if (
+        os.geteuid() != 0
+    ):  # windows-footgun: ok — POSIX systemd helper, never invoked on Windows
         raise SystemScopeRequiresRootError(
             f"System gateway {action} requires root. Re-run with sudo.",
             action,
@@ -2341,7 +2381,9 @@ def prompt_linux_gateway_install_scope() -> str | None:
     # root — a non-root user is never handed a "re-run yourself under sudo"
     # recipe, since that just funnels them into a system install they can't
     # actually perform from here. Non-root sessions get the user service.
-    is_root = os.geteuid() == 0  # windows-footgun: ok — Linux systemd install wizard, never invoked on Windows
+    is_root = (
+        os.geteuid() == 0
+    )  # windows-footgun: ok — Linux systemd install wizard, never invoked on Windows
     if not is_root:
         choice = prompt_choice(
             "  Choose how the gateway should run in the background:",
@@ -2370,14 +2412,18 @@ def prompt_linux_gateway_install_scope() -> str | None:
     return {0: "user", 1: "system", 2: None}[choice]
 
 
-def install_linux_gateway_from_setup(force: bool = False, enable_on_startup: bool = True) -> tuple[str | None, bool]:
+def install_linux_gateway_from_setup(
+    force: bool = False, enable_on_startup: bool = True
+) -> tuple[str | None, bool]:
     scope = prompt_linux_gateway_install_scope()
     if scope is None:
         return None, False
 
     if scope == "system":
         run_as_user = _default_system_service_user()
-        if os.geteuid() != 0:  # windows-footgun: ok — Linux systemd install wizard, never invoked on Windows
+        if (
+            os.geteuid() != 0
+        ):  # windows-footgun: ok — Linux systemd install wizard, never invoked on Windows
             # Unreachable from the wizard: prompt_linux_gateway_install_scope()
             # only offers "system" to root sessions. Defensive guard for any
             # direct caller — we do NOT print a self-elevation recipe.
@@ -2397,7 +2443,12 @@ def install_linux_gateway_from_setup(force: bool = False, enable_on_startup: boo
                     break
                 print_error("  Enter a username.")
 
-        systemd_install(force=force, system=True, run_as_user=run_as_user, enable_on_startup=enable_on_startup)
+        systemd_install(
+            force=force,
+            system=True,
+            run_as_user=run_as_user,
+            enable_on_startup=enable_on_startup,
+        )
         return scope, True
 
     systemd_install(force=force, system=False, enable_on_startup=enable_on_startup)
@@ -2425,7 +2476,9 @@ def get_systemd_linger_status() -> tuple[bool | None, str]:
         try:
             import pwd
 
-            username = pwd.getpwuid(os.getuid()).pw_name  # windows-footgun: ok — POSIX loginctl helper, never invoked on Windows
+            username = (
+                pwd.getpwuid(os.getuid()).pw_name
+            )  # windows-footgun: ok — POSIX loginctl helper, never invoked on Windows
         except Exception:
             return None, "could not determine current user"
 
@@ -2476,7 +2529,9 @@ def _launchd_user_home() -> Path:
     """
     import pwd
 
-    return Path(pwd.getpwuid(os.getuid()).pw_dir)  # windows-footgun: ok — POSIX launchd (macOS) helper, never invoked on Windows
+    return Path(
+        pwd.getpwuid(os.getuid()).pw_dir
+    )  # windows-footgun: ok — POSIX launchd (macOS) helper, never invoked on Windows
 
 
 def get_launchd_plist_path() -> Path:
@@ -2628,9 +2683,7 @@ def _clawk_home_for_target_user(target_home_dir: str) -> str:
     """
     current_clawk_raw = os.environ.get("CLAWK_HOME", "").strip()
     current_clawk = (
-        Path(current_clawk_raw).expanduser()
-        if current_clawk_raw
-        else get_clawk_home()
+        Path(current_clawk_raw).expanduser() if current_clawk_raw else get_clawk_home()
     )
     # Keep explicit custom paths lexical. Resolving a non-existent custom path
     # can rewrite it through host-specific path mappings, which would bake a
@@ -2801,7 +2854,11 @@ def generate_systemd_unit(system: bool = False, run_as_user: str | None = None) 
         # Anchor cwd to the target user's CLAWK_HOME (stable, always exists)
         # rather than a remapped source-checkout path that can rot. See
         # _stable_service_working_dir() for the full rationale.
-        working_dir = str(clawk_home) if clawk_home else _remap_path_for_user(working_dir, home_dir)
+        working_dir = (
+            str(clawk_home)
+            if clawk_home
+            else _remap_path_for_user(working_dir, home_dir)
+        )
         venv_dir = _remap_path_for_user(venv_dir, home_dir)
         path_entries = [_remap_path_for_user(p, home_dir) for p in path_entries]
         path_entries.extend(_build_user_local_paths(Path(home_dir), path_entries))
@@ -3151,7 +3208,9 @@ def _system_scope_wizard_would_need_root(system: bool = False) -> bool:
     ``SystemScopeRequiresRootError`` propagate out and leave the user
     staring at a bare shell.
     """
-    if os.geteuid() == 0:  # windows-footgun: ok — systemd scope wizard decision, never invoked on Windows
+    if (
+        os.geteuid() == 0
+    ):  # windows-footgun: ok — systemd scope wizard decision, never invoked on Windows
         return False
     return _select_systemd_scope(system=system)
 
@@ -3163,7 +3222,7 @@ def _print_system_scope_remediation(action: str) -> None:
     """
     svc = get_service_name()
     print_warning(
-        f"Gateway is installed as a system-wide service — " f"{action} requires root."
+        f"Gateway is installed as a system-wide service — {action} requires root."
     )
     print_info("  Options:")
     print_info(f"    1. {action.capitalize()} it this time:")
@@ -3214,7 +3273,9 @@ def systemd_install(
         print()
         print_legacy_unit_warning()
         print()
-        if non_interactive or prompt_yes_no("Remove the legacy unit(s) before installing?", True):
+        if non_interactive or prompt_yes_no(
+            "Remove the legacy unit(s) before installing?", True
+        ):
             remove_legacy_clawk_units(interactive=False)
             print()
 
@@ -3237,8 +3298,15 @@ def systemd_install(
             )
             refresh_systemd_unit_if_needed(system=system)
             if enable_on_startup:
-                _run_systemctl(["enable", get_service_name()], system=system, check=True, timeout=30)
-            print(f"✓ {_service_scope_label(system).capitalize()} service definition updated")
+                _run_systemctl(
+                    ["enable", get_service_name()],
+                    system=system,
+                    check=True,
+                    timeout=30,
+                )
+            print(
+                f"✓ {_service_scope_label(system).capitalize()} service definition updated"
+            )
             return
         print(f"Service already installed at: {unit_path}")
         print("Use --force to reinstall")
@@ -3253,7 +3321,9 @@ def systemd_install(
 
     _run_systemctl(["daemon-reload"], system=system, check=True, timeout=30)
     if enable_on_startup:
-        _run_systemctl(["enable", get_service_name()], system=system, check=True, timeout=30)
+        _run_systemctl(
+            ["enable", get_service_name()], system=system, check=True, timeout=30
+        )
 
     print()
     enable_label = "installed and enabled" if enable_on_startup else "installed"
@@ -3610,7 +3680,9 @@ def _launchd_domain() -> str:
     if _resolved_launchd_domain is not None:
         return _resolved_launchd_domain
 
-    uid = os.getuid()  # windows-footgun: ok — POSIX launchd (macOS) helper, never invoked on Windows
+    uid = (
+        os.getuid()
+    )  # windows-footgun: ok — POSIX launchd (macOS) helper, never invoked on Windows
     label = get_launchd_label()
     gui_domain = f"gui/{uid}"
     user_domain = f"user/{uid}"
@@ -3625,7 +3697,11 @@ def _launchd_domain() -> str:
         )
         _resolved_launchd_domain = gui_domain
         return gui_domain
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ):
         pass
 
     # 2. Probe user/<uid> — in Background/SSH sessions this is the working domain.
@@ -3638,7 +3714,11 @@ def _launchd_domain() -> str:
         )
         _resolved_launchd_domain = user_domain
         return user_domain
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ):
         pass
 
     # 3. Neither domain has the service loaded — use managername as heuristic.
@@ -3653,7 +3733,11 @@ def _launchd_domain() -> str:
         if "Aqua" in (result.stdout or ""):
             _resolved_launchd_domain = gui_domain
             return gui_domain
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ):
         pass
 
     # 4. Default to user/<uid> (matches the pre-probing behavior for
@@ -3818,8 +3902,7 @@ def _retry_launchctl_bootstrap_until_registered(
             )
         except subprocess.TimeoutExpired:
             _append_launchd_reload_log(
-                f"bootstrap attempt {attempt} timed out for {domain}/{label} "
-                f"— retrying"
+                f"bootstrap attempt {attempt} timed out for {domain}/{label} — retrying"
             )
         if time.monotonic() >= deadline:
             return False
@@ -3989,13 +4072,11 @@ def generate_launchd_plist() -> str:
     if profile_arg:
         for part in profile_arg.split():
             prog_args.append(f"<string>{part}</string>")
-    prog_args.extend(
-        [
-            "<string>gateway</string>",
-            "<string>run</string>",
-            "<string>--replace</string>",
-        ]
-    )
+    prog_args.extend([
+        "<string>gateway</string>",
+        "<string>run</string>",
+        "<string>--replace</string>",
+    ])
     prog_args_xml = "\n        ".join(prog_args)
 
     return f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -4097,6 +4178,7 @@ def refresh_launchd_plist_if_needed() -> bool:
     gateway_pid = None
     try:
         from gateway.status import get_running_pid
+
         gateway_pid = get_running_pid()
     except Exception:
         gateway_pid = None
@@ -4441,7 +4523,9 @@ def launchd_restart():
             # unmanageable (error 5), degrade to detached; the old process was
             # already drained/terminated above. Otherwise re-raise.
             if _launchctl_domain_unsupported(e.returncode):
-                _launchd_fallback_to_detached(f"launchctl kickstart exit {e.returncode}")
+                _launchd_fallback_to_detached(
+                    f"launchctl kickstart exit {e.returncode}"
+                )
                 return
             raise
         # Job not loaded — bootstrap and start fresh
@@ -4493,11 +4577,14 @@ def launchd_status(deep: bool = False):
     # ``launchctl list`` returns exit 0 whenever the service definition is
     # registered — even when ``state = not running`` (macOS 26+ with an
     # unmanageable domain).  A PID in the output confirms a live process.
-    launchd_pid = _parse_launchd_pid_from_list_output(list_output) if service_listed else None
+    launchd_pid = (
+        _parse_launchd_pid_from_list_output(list_output) if service_listed else None
+    )
 
     # Clawksis PID tracking — may be a detached fallback process spawned when
     # launchd cannot manage the domain on this host.
     from gateway.status import get_running_pid
+
     fallback_pid = get_running_pid(cleanup_stale=False)
 
     # Avoid double-counting: when launchd IS supervising, fallback_pid and
@@ -4524,7 +4611,9 @@ def launchd_status(deep: bool = False):
             print(f"✓ Gateway is supervised by launchd (PID {launchd_pid})")
             print("  Auto-start at login and auto-restart on crash are available.")
             if launchd_unsupported:
-                print("  (launchd domain was previously unavailable but is now working)")
+                print(
+                    "  (launchd domain was previously unavailable but is now working)"
+                )
         elif launchd_unsupported:
             print("⚠ Gateway service is registered but launchd is not supervising it")
             print("  launchd cannot manage the gateway on this macOS version.")
@@ -4534,7 +4623,9 @@ def launchd_status(deep: bool = False):
             else:
                 print("✗ No fallback process is running")
                 print("  Run: clawk gateway start")
-            print("  ⚠ Auto-start at login and auto-restart on crash are NOT available.")
+            print(
+                "  ⚠ Auto-start at login and auto-restart on crash are NOT available."
+            )
         else:
             print("✓ Gateway service is registered with launchd")
             print(list_output)
@@ -4614,6 +4705,7 @@ def _guard_named_profile_under_multiplexer(force: bool = False) -> None:
 
     try:
         from clawk_constants import get_default_clawk_root
+
         default_root = get_default_clawk_root()
         # (b) Is the default-profile gateway running?
         from gateway.status import get_running_pid as _default_running_pid  # noqa
@@ -4630,6 +4722,7 @@ def _guard_named_profile_under_multiplexer(force: bool = False) -> None:
         if not rec:
             return
         from gateway.status import _pid_exists, _pid_from_record
+
         pid = _pid_from_record(rec)
         if not pid or not _pid_exists(pid):
             return
@@ -4745,9 +4838,7 @@ def _guard_existing_gateway_process_conflict(replace: bool = False) -> None:
     if pid is None:
         return
 
-    print_error(
-        f"Another gateway instance is already running (PID {pid})."
-    )
+    print_error(f"Another gateway instance is already running (PID {pid}).")
     print("  Use 'clawk gateway restart' to replace it,")
     print("  or 'clawk gateway stop' first.")
     print("  Or use 'clawk gateway run --replace' to auto-replace.")
@@ -4781,7 +4872,9 @@ def _guard_official_docker_root_gateway() -> None:
     sys.exit(1)
 
 
-def run_gateway(verbose: int = 0, quiet: bool = False, replace: bool = False, force: bool = False):
+def run_gateway(
+    verbose: int = 0, quiet: bool = False, replace: bool = False, force: bool = False
+):
     """Run the gateway in foreground.
 
     Args:
@@ -5263,16 +5356,14 @@ def _all_platforms() -> list[dict]:
         # a built-in or, post-#41112, a registry-discovered plugin.
         if sys.platform == "win32" and entry.name == "matrix":
             continue
-        platforms.append(
-            {
-                "key": entry.name,
-                "label": entry.label,
-                "emoji": entry.emoji,
-                "token_var": entry.required_env[0] if entry.required_env else "",
-                "install_hint": entry.install_hint,
-                "_registry_entry": entry,
-            }
-        )
+        platforms.append({
+            "key": entry.name,
+            "label": entry.label,
+            "emoji": entry.emoji,
+            "token_var": entry.required_env[0] if entry.required_env else "",
+            "install_hint": entry.install_hint,
+            "_registry_entry": entry,
+        })
     return platforms
 
 
@@ -5395,7 +5486,9 @@ def _runtime_health_lines() -> list[str]:
 
 def _set_platform_unauthorized_dm_behavior(platform_key: str, behavior: str) -> None:
     """Persist a platform-specific unauthorized-DM policy in config.yaml."""
-    write_platform_config_field(platform_key, "unauthorized_dm_behavior", behavior, raw=True)
+    write_platform_config_field(
+        platform_key, "unauthorized_dm_behavior", behavior, raw=True
+    )
 
 
 def _setup_standard_platform(platform: dict):
@@ -5446,7 +5539,9 @@ def _setup_standard_platform(platform: dict):
                     auto_owner_user_id = result.owner_user_id
                 else:
                     if result:
-                        print_warning("  Automatic setup returned an invalid Telegram token.")
+                        print_warning(
+                            "  Automatic setup returned an invalid Telegram token."
+                        )
                     print()
                     print_info("  Falling back to manual setup...")
 
@@ -5479,7 +5574,9 @@ def _setup_standard_platform(platform: dict):
                             ids.append(uid)
                     cleaned = ",".join(ids)
                     save_env_value(var["name"], cleaned)
-                    print_success("  Saved — only these users can interact with the bot.")
+                    print_success(
+                        "  Saved — only these users can interact with the bot."
+                    )
                     allowed_val_set = cleaned
                     continue
 
@@ -5545,9 +5642,7 @@ def _setup_standard_platform(platform: dict):
                 elif is_email:
                     print_success("  Unknown email senders will be ignored.")
                 else:
-                    print_info(
-                        "  Skipped — configure later with 'clawk gateway setup'"
-                    )
+                    print_info("  Skipped — configure later with 'clawk gateway setup'")
             continue
 
         value = prompt(f"  {var['prompt']}", password=var.get("password", False))
@@ -6348,7 +6443,9 @@ def gateway_setup():
                     platform_name = "launchd"
                 else:
                     platform_name = "Scheduled Task"
-                wsl_note = " (note: services may not survive WSL restarts)" if is_wsl() else ""
+                wsl_note = (
+                    " (note: services may not survive WSL restarts)" if is_wsl() else ""
+                )
                 start_now = prompt_yes_no("  Start the gateway now?", True)
                 start_on_login = prompt_yes_no(
                     f"  Start the gateway automatically on login/boot as a {platform_name} service?{wsl_note}",
@@ -6359,9 +6456,11 @@ def gateway_setup():
                         installed_scope = None
                         did_install = False
                         if supports_systemd_services():
-                            installed_scope, did_install = install_linux_gateway_from_setup(
-                                force=False,
-                                enable_on_startup=start_on_login,
+                            installed_scope, did_install = (
+                                install_linux_gateway_from_setup(
+                                    force=False,
+                                    enable_on_startup=start_on_login,
+                                )
                             )
                         elif is_macos():
                             launchd_install(force=False)
@@ -6380,6 +6479,7 @@ def gateway_setup():
                                     launchd_start()
                                 elif is_windows():
                                     from clawk_cli import gateway_windows
+
                                     gateway_windows.start()
                             except UserSystemdUnavailableError as e:
                                 print_error(
@@ -6403,9 +6503,7 @@ def gateway_setup():
             elif is_wsl():
                 print_info("  WSL detected but systemd is not running.")
                 print_info("  Run in foreground: clawk gateway run")
-                print_info(
-                    "  For persistence:   tmux new -s clawk 'clawk gateway run'"
-                )
+                print_info("  For persistence:   tmux new -s clawk 'clawk gateway run'")
                 print_info(
                     "  To enable systemd: add systemd=true to /etc/wsl.conf, then 'wsl --shutdown'"
                 )
@@ -6431,8 +6529,10 @@ def gateway_setup():
 # Main Command Handler
 # =============================================================================
 
+
 def _dispatch_via_service_manager_if_s6(
-    action: str, profile: str | None = None,
+    action: str,
+    profile: str | None = None,
 ) -> bool:
     """If we're in a container with s6, dispatch gateway lifecycle via s6.
 
@@ -6533,7 +6633,6 @@ def _dispatch_all_via_service_manager_if_s6(action: str) -> bool:
     return True
 
 
-
 def gateway_command(args):
     """Handle gateway subcommands."""
     try:
@@ -6587,8 +6686,9 @@ def _maybe_redirect_run_to_s6_supervision(args) -> bool:
 
     Returns True iff dispatched (caller should ``return``).
     """
-    no_supervise = getattr(args, "no_supervise", False) or \
-        os.environ.get("CLAWK_GATEWAY_NO_SUPERVISE", "").lower() in ("1", "true", "yes")
+    no_supervise = getattr(args, "no_supervise", False) or os.environ.get(
+        "CLAWK_GATEWAY_NO_SUPERVISE", ""
+    ).lower() in ("1", "true", "yes")
     if no_supervise:
         return False
     if os.environ.get("CLAWK_S6_SUPERVISED_CHILD"):
@@ -6722,7 +6822,9 @@ def _gateway_command_inner(args):
             if _sn is not None:
                 start_now = _sn
             elif not non_interactive:
-                start_now = prompt_yes_no("Start the gateway now after installing the service?", True)
+                start_now = prompt_yes_no(
+                    "Start the gateway now after installing the service?", True
+                )
             else:
                 start_now = True
 
@@ -6730,7 +6832,9 @@ def _gateway_command_inner(args):
             if _sol is not None:
                 start_on_login = _sol
             elif not non_interactive:
-                start_on_login = prompt_yes_no("Start the gateway automatically on login/boot with systemd?", True)
+                start_on_login = prompt_yes_no(
+                    "Start the gateway automatically on login/boot with systemd?", True
+                )
             else:
                 start_on_login = True
             systemd_install(
@@ -6749,9 +6853,9 @@ def _gateway_command_inner(args):
 
             gateway_windows.install(
                 force=force,
-                start_now=getattr(args, 'start_now', None),
-                start_on_login=getattr(args, 'start_on_login', None),
-                elevated_handoff=getattr(args, 'elevated_handoff', False),
+                start_now=getattr(args, "start_now", None),
+                start_on_login=getattr(args, "start_on_login", None),
+                elevated_handoff=getattr(args, "elevated_handoff", False),
             )
         elif is_wsl():
             print("WSL detected but systemd is not running.")
@@ -6775,12 +6879,17 @@ def _gateway_command_inner(args):
             # auto-registered when the profile is created (and reconciled
             # at every container boot). `install` is therefore informational.
             from clawk_cli.service_manager import detect_service_manager
+
             if detect_service_manager() == "s6":
-                print("Per-profile gateways are auto-registered when you create a profile.")
+                print(
+                    "Per-profile gateways are auto-registered when you create a profile."
+                )
                 print()
                 print("  clawk profile create <name>     # creates the s6 service slot")
                 print("  clawk -p <name> gateway start   # bring it up via s6")
-                print("  clawk status                    # see currently-supervised gateways")
+                print(
+                    "  clawk status                    # see currently-supervised gateways"
+                )
                 return
             # Fallback for pre-s6 containers or other container runtimes
             # we haven't taught about supervision (Podman without our
@@ -6824,11 +6933,18 @@ def _gateway_command_inner(args):
             gateway_windows.uninstall()
         elif is_container():
             from clawk_cli.service_manager import detect_service_manager
+
             if detect_service_manager() == "s6":
-                print("Per-profile gateways are auto-unregistered when you delete the profile.")
+                print(
+                    "Per-profile gateways are auto-unregistered when you delete the profile."
+                )
                 print()
-                print("  clawk profile delete <name>     # tears down the s6 service slot")
-                print("  clawk -p <name> gateway stop    # stop without deleting the profile")
+                print(
+                    "  clawk profile delete <name>     # tears down the s6 service slot"
+                )
+                print(
+                    "  clawk -p <name> gateway stop    # stop without deleting the profile"
+                )
                 return
             print("Service uninstall is not applicable inside a Docker container.")
             print("To stop the gateway, stop or remove the container:")

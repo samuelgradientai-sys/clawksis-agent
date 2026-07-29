@@ -79,7 +79,9 @@ class _Codex401ThenSuccessAgent(run_agent.AIAgent):
         type(self).refresh_attempts += 1
         return True
 
-    def run_conversation(self, user_message: str, conversation_history=None, task_id=None):
+    def run_conversation(
+        self, user_message: str, conversation_history=None, task_id=None
+    ):
         calls = {"api": 0}
 
         def _fake_api_call(api_kwargs):
@@ -89,7 +91,9 @@ class _Codex401ThenSuccessAgent(run_agent.AIAgent):
             return _codex_message_response("Recovered via refresh")
 
         self._interruptible_api_call = _fake_api_call
-        return super().run_conversation(user_message, conversation_history=conversation_history, task_id=task_id)
+        return super().run_conversation(
+            user_message, conversation_history=conversation_history, task_id=task_id
+        )
 
 
 def test_cron_run_job_codex_path_handles_internal_401_refresh(monkeypatch):
@@ -105,14 +109,19 @@ def test_cron_run_job_codex_path_handles_internal_401_refresh(monkeypatch):
             "api_key": "codex-token",
         },
     )
-    monkeypatch.setattr("clawk_cli.runtime_provider.format_runtime_provider_error", lambda exc: str(exc))
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider.format_runtime_provider_error", lambda exc: str(exc)
+    )
 
     _Codex401ThenSuccessAgent.refresh_attempts = 0
     _Codex401ThenSuccessAgent.last_init = {}
 
-    success, output, final_response, error = cron_scheduler.run_job(
-        {"id": "job-1", "name": "Codex Refresh Test", "prompt": "ping", "model": "gpt-5.3-codex"}
-    )
+    success, output, final_response, error = cron_scheduler.run_job({
+        "id": "job-1",
+        "name": "Codex Refresh Test",
+        "prompt": "ping",
+        "model": "gpt-5.3-codex",
+    })
 
     assert success is True
     assert error is None
@@ -152,6 +161,7 @@ def test_gateway_run_agent_codex_path_handles_internal_401_refresh(monkeypatch):
     runner._fallback_model = None
     runner._running_agents = {}
     from unittest.mock import MagicMock, AsyncMock
+
     runner.hooks = MagicMock()
     runner.hooks.emit = AsyncMock()
     runner.hooks.loaded_hooks = []

@@ -34,9 +34,12 @@ from gateway.status import get_process_start_time, _pid_exists
 
 def _spawn_sleeper(*extra_argv) -> subprocess.Popen:
     """Spawn a real, short-lived process; optional extra argv shapes its cmdline."""
-    return subprocess.Popen(
-        [sys.executable, "-c", "import time; time.sleep(30)", *extra_argv]
-    )
+    return subprocess.Popen([
+        sys.executable,
+        "-c",
+        "import time; time.sleep(30)",
+        *extra_argv,
+    ])
 
 
 def _wait_dead(proc: subprocess.Popen, timeout: float = 5.0) -> bool:
@@ -82,7 +85,9 @@ class TestIdentityGuard:
         try:
             real_start = get_process_start_time(proc.pid)
             # Pidfile claims a different start time -> simulates a recycled PID.
-            (tmp_path / "bridge.pid").write_text("{}\n{}".format(proc.pid, real_start + 1))
+            (tmp_path / "bridge.pid").write_text(
+                "{}\n{}".format(proc.pid, real_start + 1)
+            )
             _kill_stale_bridge_by_pidfile(tmp_path)
             assert not _wait_dead(proc, timeout=1.0), "recycled PID must survive"
             assert proc.poll() is None
@@ -141,8 +146,10 @@ class TestKillPortProcess:
         srv.listen(5)
         # A separate process holding a *client* connection to that port.
         client = subprocess.Popen([
-            sys.executable, "-c",
-            "import socket,time; c=socket.create_connection(('127.0.0.1',%d)); time.sleep(30)" % port,
+            sys.executable,
+            "-c",
+            "import socket,time; c=socket.create_connection(('127.0.0.1',%d)); time.sleep(30)"
+            % port,
         ])
         try:
             conn, _ = srv.accept()  # establish the client connection
@@ -165,15 +172,17 @@ class TestKillPortProcess:
         # client was spared.
         listener = subprocess.Popen(
             [
-                sys.executable, "-c",
+                sys.executable,
+                "-c",
                 "import socket,time;"
                 "s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);"
                 "s.bind(('127.0.0.1',0));port=s.getsockname()[1];"
-                "s.listen(5);"           # listen BEFORE announcing the port
+                "s.listen(5);"  # listen BEFORE announcing the port
                 "print(port,flush=True);"  # so the parent never connects too early
                 "time.sleep(30)",
             ],
-            stdout=subprocess.PIPE, text=True,
+            stdout=subprocess.PIPE,
+            text=True,
         )
         try:
             port = int(listener.stdout.readline().strip())

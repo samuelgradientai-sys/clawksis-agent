@@ -127,6 +127,7 @@ class TestMarkdownStripping:
 # Voice command parsing
 # ============================================================================
 
+
 class TestVoiceCommandParsing:
     """Test _handle_voice_command logic without full CLI setup."""
 
@@ -149,6 +150,7 @@ class TestVoiceCommandParsing:
 # ============================================================================
 # Voice state thread safety
 # ============================================================================
+
 
 class TestVoiceStateLock:
     def test_lock_protects_state(self):
@@ -175,6 +177,7 @@ class TestVoiceStateLock:
 # Streaming TTS lazy import activation (Bug A fix)
 # ============================================================================
 
+
 class TestStreamingTTSActivation:
     """Verify streaming TTS uses lazy imports to check availability."""
 
@@ -189,15 +192,18 @@ class TestStreamingTTSActivation:
                 _import_elevenlabs,
                 _import_sounddevice,
             )
+
             assert callable(_import_elevenlabs)
             assert callable(_import_sounddevice)
         except ImportError:
             pytest.skip("tools.tts_tool not available")
 
-        with patch("tools.tts_tool._load_tts_config") as mock_cfg, \
-             patch("tools.tts_tool._get_provider", return_value="elevenlabs"), \
-             patch("tools.tts_tool._import_elevenlabs") as mock_el, \
-             patch("tools.tts_tool._import_sounddevice") as mock_sd:
+        with (
+            patch("tools.tts_tool._load_tts_config") as mock_cfg,
+            patch("tools.tts_tool._get_provider", return_value="elevenlabs"),
+            patch("tools.tts_tool._import_elevenlabs") as mock_el,
+            patch("tools.tts_tool._import_sounddevice") as mock_sd,
+        ):
             mock_cfg.return_value = {"provider": "elevenlabs"}
             mock_el.return_value = MagicMock()
             mock_sd.return_value = MagicMock()
@@ -208,6 +214,7 @@ class TestStreamingTTSActivation:
                 _import_elevenlabs as import_el,
                 _import_sounddevice as import_sd,
             )
+
             cfg = load_cfg()
             if get_prov(cfg) == "elevenlabs":
                 import_el()
@@ -219,9 +226,17 @@ class TestStreamingTTSActivation:
     def test_does_not_activate_when_elevenlabs_missing(self):
         """use_streaming_tts stays False when elevenlabs import fails."""
         use_streaming_tts = False
-        with patch("tools.tts_tool._load_tts_config", return_value={"provider": "elevenlabs"}), \
-             patch("tools.tts_tool._get_provider", return_value="elevenlabs"), \
-             patch("tools.tts_tool._import_elevenlabs", side_effect=ImportError("no elevenlabs")):
+        with (
+            patch(
+                "tools.tts_tool._load_tts_config",
+                return_value={"provider": "elevenlabs"},
+            ),
+            patch("tools.tts_tool._get_provider", return_value="elevenlabs"),
+            patch(
+                "tools.tts_tool._import_elevenlabs",
+                side_effect=ImportError("no elevenlabs"),
+            ),
+        ):
             try:
                 from tools.tts_tool import (
                     _load_tts_config as load_cfg,
@@ -229,6 +244,7 @@ class TestStreamingTTSActivation:
                     _import_elevenlabs as import_el,
                     _import_sounddevice as import_sd,
                 )
+
                 cfg = load_cfg()
                 if get_prov(cfg) == "elevenlabs":
                     import_el()
@@ -242,10 +258,18 @@ class TestStreamingTTSActivation:
     def test_does_not_activate_when_sounddevice_missing(self):
         """use_streaming_tts stays False when sounddevice import fails."""
         use_streaming_tts = False
-        with patch("tools.tts_tool._load_tts_config", return_value={"provider": "elevenlabs"}), \
-             patch("tools.tts_tool._get_provider", return_value="elevenlabs"), \
-             patch("tools.tts_tool._import_elevenlabs", return_value=MagicMock()), \
-             patch("tools.tts_tool._import_sounddevice", side_effect=OSError("no PortAudio")):
+        with (
+            patch(
+                "tools.tts_tool._load_tts_config",
+                return_value={"provider": "elevenlabs"},
+            ),
+            patch("tools.tts_tool._get_provider", return_value="elevenlabs"),
+            patch("tools.tts_tool._import_elevenlabs", return_value=MagicMock()),
+            patch(
+                "tools.tts_tool._import_sounddevice",
+                side_effect=OSError("no PortAudio"),
+            ),
+        ):
             try:
                 from tools.tts_tool import (
                     _load_tts_config as load_cfg,
@@ -253,6 +277,7 @@ class TestStreamingTTSActivation:
                     _import_elevenlabs as import_el,
                     _import_sounddevice as import_sd,
                 )
+
                 cfg = load_cfg()
                 if get_prov(cfg) == "elevenlabs":
                     import_el()
@@ -266,8 +291,10 @@ class TestStreamingTTSActivation:
     def test_does_not_activate_for_non_elevenlabs_provider(self):
         """use_streaming_tts stays False when provider is not elevenlabs."""
         use_streaming_tts = False
-        with patch("tools.tts_tool._load_tts_config", return_value={"provider": "edge"}), \
-             patch("tools.tts_tool._get_provider", return_value="edge"):
+        with (
+            patch("tools.tts_tool._load_tts_config", return_value={"provider": "edge"}),
+            patch("tools.tts_tool._get_provider", return_value="edge"),
+        ):
             try:
                 from tools.tts_tool import (
                     _load_tts_config as load_cfg,
@@ -275,6 +302,7 @@ class TestStreamingTTSActivation:
                     _import_elevenlabs as import_el,
                     _import_sounddevice as import_sd,
                 )
+
                 cfg = load_cfg()
                 if get_prov(cfg) == "elevenlabs":
                     import_el()
@@ -288,15 +316,19 @@ class TestStreamingTTSActivation:
     def test_stale_boolean_imports_no_longer_exist(self):
         """Confirm _HAS_ELEVENLABS and _HAS_AUDIO are not in tts_tool module."""
         import tools.tts_tool as tts_mod
-        assert not hasattr(tts_mod, "_HAS_ELEVENLABS"), \
+
+        assert not hasattr(tts_mod, "_HAS_ELEVENLABS"), (
             "_HAS_ELEVENLABS should not exist -- lazy imports replaced it"
-        assert not hasattr(tts_mod, "_HAS_AUDIO"), \
+        )
+        assert not hasattr(tts_mod, "_HAS_AUDIO"), (
             "_HAS_AUDIO should not exist -- lazy imports replaced it"
+        )
 
 
 # ============================================================================
 # Voice mode user message prefix (Bug B fix)
 # ============================================================================
+
 
 class TestVoiceMessagePrefix:
     """Voice mode should inject instruction via user message prefix,
@@ -312,8 +344,7 @@ class TestVoiceMessagePrefix:
         if voice_mode and isinstance(message, str):
             agent_message = (
                 "[Voice input — respond concisely and conversationally, "
-                "2-3 sentences max. No code blocks or markdown.] "
-                + message
+                "2-3 sentences max. No code blocks or markdown.] " + message
             )
 
         assert agent_message.startswith("[Voice input")
@@ -328,8 +359,7 @@ class TestVoiceMessagePrefix:
         if voice_mode and isinstance(message, str):
             agent_message = (
                 "[Voice input — respond concisely and conversationally, "
-                "2-3 sentences max. No code blocks or markdown.] "
-                + message
+                "2-3 sentences max. No code blocks or markdown.] " + message
             )
 
         assert agent_message == message
@@ -343,8 +373,7 @@ class TestVoiceMessagePrefix:
         if voice_mode and isinstance(message, str):
             agent_message = (
                 "[Voice input — respond concisely and conversationally, "
-                "2-3 sentences max. No code blocks or markdown.] "
-                + message
+                "2-3 sentences max. No code blocks or markdown.] " + message
             )
 
         assert agent_message is message
@@ -362,8 +391,7 @@ class TestVoiceMessagePrefix:
         if voice_mode and isinstance(message, str):
             agent_message = (
                 "[Voice input — respond concisely and conversationally, "
-                "2-3 sentences max. No code blocks or markdown.] "
-                + message
+                "2-3 sentences max. No code blocks or markdown.] " + message
             )
 
         assert conversation_history[-1]["content"] == "Hello there"
@@ -394,6 +422,7 @@ class TestVoiceMessagePrefix:
 # ============================================================================
 # _vprint force parameter (Minor fix)
 # ============================================================================
+
 
 class TestVprintForceParameter:
     """_vprint should suppress output during streaming TTS unless force=True."""
@@ -486,13 +515,15 @@ class TestVprintForceParameter:
         # The codebase may legitimately have zero such calls if errors are
         # routed through print() or higher-level Rich panels; what matters is
         # that none are quietly suppressed.
-        assert unforced_error_count == 0, \
+        assert unforced_error_count == 0, (
             f"Found {unforced_error_count} critical error _vprint calls without force=True"
+        )
 
 
 # ============================================================================
 # Bug fix regression tests
 # ============================================================================
+
 
 class TestEdgeTTSLazyImport:
     """Bug #3: _generate_edge_tts must use lazy import, not bare module name."""
@@ -506,10 +537,14 @@ class TestEdgeTTSLazyImport:
             tree = _ast.parse(f.read())
 
         for node in _ast.walk(tree):
-            if isinstance(node, _ast.AsyncFunctionDef) and node.name == "_generate_edge_tts":
+            if (
+                isinstance(node, _ast.AsyncFunctionDef)
+                and node.name == "_generate_edge_tts"
+            ):
                 # Collect all Name references (bare identifiers)
                 bare_refs = [
-                    n.id for n in _ast.walk(node)
+                    n.id
+                    for n in _ast.walk(node)
                     if isinstance(n, _ast.Name) and n.id == "edge_tts"
                 ]
                 assert bare_refs == [], (
@@ -519,7 +554,8 @@ class TestEdgeTTSLazyImport:
 
                 # Must have a call to _import_edge_tts
                 lazy_calls = [
-                    n for n in _ast.walk(node)
+                    n
+                    for n in _ast.walk(node)
                     if isinstance(n, _ast.Call)
                     and isinstance(n.func, _ast.Name)
                     and n.func.id == "_import_edge_tts"
@@ -544,13 +580,14 @@ class TestStreamingTTSOutputStreamCleanup:
             tree = _ast.parse(f.read())
 
         for node in _ast.walk(tree):
-            if isinstance(node, _ast.FunctionDef) and node.name == "stream_tts_to_speaker":
+            if (
+                isinstance(node, _ast.FunctionDef)
+                and node.name == "stream_tts_to_speaker"
+            ):
                 # Find the outermost try that has a finally with tts_done_event.set()
                 for child in _ast.walk(node):
                     if isinstance(child, _ast.Try) and child.finalbody:
-                        finally_text = "\n".join(
-                            _ast.dump(n) for n in child.finalbody
-                        )
+                        finally_text = "\n".join(_ast.dump(n) for n in child.finalbody)
                         if "tts_done_event" in finally_text:
                             assert "output_stream" in finally_text, (
                                 "finally block must close output_stream"
@@ -622,8 +659,7 @@ class TestVoiceStatusUsesConfigKey:
                 break
             elif in_method:
                 assert 'Record key: Ctrl+B"' not in line, (
-                    "_show_voice_status hardcodes 'Ctrl+B' — "
-                    "should read from config"
+                    "_show_voice_status hardcodes 'Ctrl+B' — should read from config"
                 )
 
     def test_show_voice_status_reads_config(self):
@@ -664,9 +700,7 @@ class TestChatTTSCleanupOnException:
                 # Find Try nodes with finally blocks
                 for child in _ast.walk(node):
                     if isinstance(child, _ast.Try) and child.finalbody:
-                        finally_text = "\n".join(
-                            _ast.dump(n) for n in child.finalbody
-                        )
+                        finally_text = "\n".join(_ast.dump(n) for n in child.finalbody)
                         if "text_queue" in finally_text:
                             assert "stop_event" in finally_text, (
                                 "finally must also handle stop_event"
@@ -725,12 +759,17 @@ class TestKeyHandlerNeverBlocks:
             tree = _ast.parse(f.read())
 
         for node in _ast.walk(tree):
-            if isinstance(node, _ast.FunctionDef) and node.name == "handle_voice_record":
+            if (
+                isinstance(node, _ast.FunctionDef)
+                and node.name == "handle_voice_record"
+            ):
                 # Collect all direct calls to _voice_start_recording in this function.
                 # They should ONLY appear inside a nested def (the _start_recording wrapper).
                 for child in _ast.iter_child_nodes(node):
                     # Direct statements in the handler body (not nested defs)
-                    if isinstance(child, _ast.Expr) and isinstance(child.value, _ast.Call):
+                    if isinstance(child, _ast.Expr) and isinstance(
+                        child.value, _ast.Call
+                    ):
                         call_src = _ast.dump(child.value)
                         assert "_voice_start_recording" not in call_src, (
                             "handle_voice_record calls _voice_start_recording directly "
@@ -751,7 +790,11 @@ class TestKeyHandlerNeverBlocks:
         for line in lines:
             if "def handle_voice_record" in line:
                 in_handler = True
-            elif in_handler and line.strip().startswith("def ") and "_start_recording" not in line:
+            elif (
+                in_handler
+                and line.strip().startswith("def ")
+                and "_start_recording" not in line
+            ):
                 break
             elif in_handler and "else:" in line:
                 in_else = True
@@ -789,7 +832,11 @@ class TestKeyHandlerNeverBlocks:
                 if "_voice_processing = True" in stripped:
                     found_processing_true = True
                 # End of with block (dedent)
-                if stripped and not line.startswith("            ") and not line.startswith("\t\t\t"):
+                if (
+                    stripped
+                    and not line.startswith("            ")
+                    and not line.startswith("\t\t\t")
+                ):
                     break
 
         assert found_recording_false and found_processing_true, (
@@ -801,6 +848,7 @@ class TestKeyHandlerNeverBlocks:
 # ============================================================================
 # Real behavior tests — CLI voice methods via _make_voice_cli()
 # ============================================================================
+
 
 class TestHandleVoiceCommandReal:
     """Tests _handle_voice_command routing with real CLI instance."""
@@ -858,8 +906,9 @@ class TestHandleVoiceCommandReal:
         cli._enable_voice_mode.assert_not_called()
         cli._disable_voice_mode.assert_not_called()
         # Should print usage via _cprint
-        assert any("Unknown" in str(c) or "unknown" in str(c)
-                    for c in mock_cp.call_args_list)
+        assert any(
+            "Unknown" in str(c) or "unknown" in str(c) for c in mock_cp.call_args_list
+        )
 
 
 class TestEnableVoiceModeReal:
@@ -867,10 +916,14 @@ class TestEnableVoiceModeReal:
 
     @patch("cli._cprint")
     @patch("clawk_cli.config.load_config", return_value={"voice": {}})
-    @patch("tools.voice_mode.check_voice_requirements",
-           return_value={"available": True, "details": "OK"})
-    @patch("tools.voice_mode.detect_audio_environment",
-           return_value={"available": True, "warnings": []})
+    @patch(
+        "tools.voice_mode.check_voice_requirements",
+        return_value={"available": True, "details": "OK"},
+    )
+    @patch(
+        "tools.voice_mode.detect_audio_environment",
+        return_value={"available": True, "warnings": []},
+    )
     def test_success_sets_voice_mode(self, _env, _req, _cfg, _cp):
         cli = _make_voice_cli()
         cli._enable_voice_mode()
@@ -883,19 +936,28 @@ class TestEnableVoiceModeReal:
         assert cli._voice_mode is True
 
     @patch("cli._cprint")
-    @patch("tools.voice_mode.detect_audio_environment",
-           return_value={"available": False, "warnings": ["SSH session"]})
+    @patch(
+        "tools.voice_mode.detect_audio_environment",
+        return_value={"available": False, "warnings": ["SSH session"]},
+    )
     def test_env_check_fails(self, _env, _cp):
         cli = _make_voice_cli()
         cli._enable_voice_mode()
         assert cli._voice_mode is False
 
     @patch("cli._cprint")
-    @patch("tools.voice_mode.check_voice_requirements",
-           return_value={"available": False, "details": "Missing",
-                         "missing_packages": ["sounddevice"]})
-    @patch("tools.voice_mode.detect_audio_environment",
-           return_value={"available": True, "warnings": []})
+    @patch(
+        "tools.voice_mode.check_voice_requirements",
+        return_value={
+            "available": False,
+            "details": "Missing",
+            "missing_packages": ["sounddevice"],
+        },
+    )
+    @patch(
+        "tools.voice_mode.detect_audio_environment",
+        return_value={"available": True, "warnings": []},
+    )
     def test_requirements_fail(self, _env, _req, _cp):
         cli = _make_voice_cli()
         cli._enable_voice_mode()
@@ -903,10 +965,14 @@ class TestEnableVoiceModeReal:
 
     @patch("cli._cprint")
     @patch("clawk_cli.config.load_config", return_value={"voice": {"auto_tts": True}})
-    @patch("tools.voice_mode.check_voice_requirements",
-           return_value={"available": True, "details": "OK"})
-    @patch("tools.voice_mode.detect_audio_environment",
-           return_value={"available": True, "warnings": []})
+    @patch(
+        "tools.voice_mode.check_voice_requirements",
+        return_value={"available": True, "details": "OK"},
+    )
+    @patch(
+        "tools.voice_mode.detect_audio_environment",
+        return_value={"available": True, "warnings": []},
+    )
     def test_auto_tts_from_config(self, _env, _req, _cfg, _cp):
         cli = _make_voice_cli()
         cli._enable_voice_mode()
@@ -914,10 +980,14 @@ class TestEnableVoiceModeReal:
 
     @patch("cli._cprint")
     @patch("clawk_cli.config.load_config", return_value={"voice": {}})
-    @patch("tools.voice_mode.check_voice_requirements",
-           return_value={"available": True, "details": "OK"})
-    @patch("tools.voice_mode.detect_audio_environment",
-           return_value={"available": True, "warnings": []})
+    @patch(
+        "tools.voice_mode.check_voice_requirements",
+        return_value={"available": True, "details": "OK"},
+    )
+    @patch(
+        "tools.voice_mode.detect_audio_environment",
+        return_value={"available": True, "warnings": []},
+    )
     def test_no_auto_tts_default(self, _env, _req, _cfg, _cp):
         cli = _make_voice_cli()
         cli._enable_voice_mode()
@@ -925,10 +995,14 @@ class TestEnableVoiceModeReal:
 
     @patch("cli._cprint")
     @patch("clawk_cli.config.load_config", side_effect=Exception("broken config"))
-    @patch("tools.voice_mode.check_voice_requirements",
-           return_value={"available": True, "details": "OK"})
-    @patch("tools.voice_mode.detect_audio_environment",
-           return_value={"available": True, "warnings": []})
+    @patch(
+        "tools.voice_mode.check_voice_requirements",
+        return_value={"available": True, "details": "OK"},
+    )
+    @patch(
+        "tools.voice_mode.detect_audio_environment",
+        return_value={"available": True, "warnings": []},
+    )
     def test_config_exception_still_enables(self, _env, _req, _cfg, _cp):
         cli = _make_voice_cli()
         cli._enable_voice_mode()
@@ -943,7 +1017,9 @@ class TestVoiceBeepConfigReal:
         cli = _make_voice_cli()
         assert cli._voice_beeps_enabled() is True
 
-    @patch("clawk_cli.config.load_config", return_value={"voice": {"beep_enabled": False}})
+    @patch(
+        "clawk_cli.config.load_config", return_value={"voice": {"beep_enabled": False}}
+    )
     def test_beeps_can_be_disabled(self, _cfg):
         cli = _make_voice_cli()
         assert cli._voice_beeps_enabled() is False
@@ -993,8 +1069,7 @@ class TestDisableVoiceModeReal:
     @patch("cli._cprint")
     @patch("tools.voice_mode.stop_playback")
     def test_all_flags_reset(self, _sp, _cp):
-        cli = _make_voice_cli(_voice_mode=True, _voice_tts=True,
-                              _voice_continuous=True)
+        cli = _make_voice_cli(_voice_mode=True, _voice_tts=True, _voice_continuous=True)
         cli._disable_voice_mode()
         assert cli._voice_mode is False
         assert cli._voice_tts is False
@@ -1161,7 +1236,9 @@ class TestVoiceStopAndTranscribeReal:
         assert cli._pending_input.empty()
 
     @patch("cli._cprint")
-    @patch("clawk_cli.config.load_config", return_value={"voice": {"beep_enabled": False}})
+    @patch(
+        "clawk_cli.config.load_config", return_value={"voice": {"beep_enabled": False}}
+    )
     @patch("tools.voice_mode.play_beep")
     def test_no_speech_detected_skips_beep_when_disabled(self, mock_beep, _cfg, _cp):
         recorder = MagicMock()
@@ -1174,8 +1251,10 @@ class TestVoiceStopAndTranscribeReal:
     @patch("cli.os.unlink")
     @patch("cli.os.path.isfile", return_value=True)
     @patch("clawk_cli.config.load_config", return_value={"stt": {}})
-    @patch("tools.voice_mode.transcribe_recording",
-           return_value={"success": True, "transcript": "hello world"})
+    @patch(
+        "tools.voice_mode.transcribe_recording",
+        return_value={"success": True, "transcript": "hello world"},
+    )
     @patch("tools.voice_mode.play_beep")
     def test_successful_transcription_queues_input(
         self, _beep, _tr, _cfg, _isf, _unl, _cp
@@ -1190,8 +1269,10 @@ class TestVoiceStopAndTranscribeReal:
     @patch("cli.os.unlink")
     @patch("cli.os.path.isfile", return_value=True)
     @patch("clawk_cli.config.load_config", return_value={"stt": {}})
-    @patch("tools.voice_mode.transcribe_recording",
-           return_value={"success": True, "transcript": ""})
+    @patch(
+        "tools.voice_mode.transcribe_recording",
+        return_value={"success": True, "transcript": ""},
+    )
     @patch("tools.voice_mode.play_beep")
     def test_empty_transcript_not_queued(self, _beep, _tr, _cfg, _isf, _unl, _cp):
         recorder = MagicMock()
@@ -1204,8 +1285,10 @@ class TestVoiceStopAndTranscribeReal:
     @patch("cli.os.unlink")
     @patch("cli.os.path.isfile", return_value=True)
     @patch("clawk_cli.config.load_config", return_value={"stt": {}})
-    @patch("tools.voice_mode.transcribe_recording",
-           return_value={"success": False, "error": "API timeout"})
+    @patch(
+        "tools.voice_mode.transcribe_recording",
+        return_value={"success": False, "error": "API timeout"},
+    )
     @patch("tools.voice_mode.play_beep")
     def test_transcription_failure(self, _beep, _tr, _cfg, _isf, _unl, _cp):
         recorder = MagicMock()
@@ -1223,8 +1306,9 @@ class TestVoiceStopAndTranscribeReal:
     @patch("cli.os.unlink")
     @patch("cli.os.path.isfile", return_value=True)
     @patch("clawk_cli.config.load_config", return_value={"stt": {}})
-    @patch("tools.voice_mode.transcribe_recording",
-           side_effect=ConnectionError("network"))
+    @patch(
+        "tools.voice_mode.transcribe_recording", side_effect=ConnectionError("network")
+    )
     @patch("tools.voice_mode.play_beep")
     def test_exception_caught(self, _beep, _tr, _cfg, _isf, _unl, _cp):
         recorder = MagicMock()
@@ -1251,8 +1335,9 @@ class TestVoiceStopAndTranscribeReal:
     def test_continuous_restarts_on_no_speech(self, _beep, _cp):
         recorder = MagicMock()
         recorder.stop.return_value = None
-        cli = _make_voice_cli(_voice_recording=True, _voice_recorder=recorder,
-                              _voice_continuous=True)
+        cli = _make_voice_cli(
+            _voice_recording=True, _voice_recorder=recorder, _voice_continuous=True
+        )
         cli._voice_start_recording = MagicMock()
         cli._voice_stop_and_transcribe()
         cli._voice_start_recording.assert_called_once()
@@ -1261,16 +1346,17 @@ class TestVoiceStopAndTranscribeReal:
     @patch("cli.os.unlink")
     @patch("cli.os.path.isfile", return_value=True)
     @patch("clawk_cli.config.load_config", return_value={"stt": {}})
-    @patch("tools.voice_mode.transcribe_recording",
-           return_value={"success": True, "transcript": "hello"})
+    @patch(
+        "tools.voice_mode.transcribe_recording",
+        return_value={"success": True, "transcript": "hello"},
+    )
     @patch("tools.voice_mode.play_beep")
-    def test_continuous_no_restart_on_success(
-        self, _beep, _tr, _cfg, _isf, _unl, _cp
-    ):
+    def test_continuous_no_restart_on_success(self, _beep, _tr, _cfg, _isf, _unl, _cp):
         recorder = MagicMock()
         recorder.stop.return_value = "/tmp/test.wav"
-        cli = _make_voice_cli(_voice_recording=True, _voice_recorder=recorder,
-                              _voice_continuous=True)
+        cli = _make_voice_cli(
+            _voice_recording=True, _voice_recorder=recorder, _voice_continuous=True
+        )
         cli._voice_start_recording = MagicMock()
         cli._voice_stop_and_transcribe()
         cli._voice_start_recording.assert_not_called()
@@ -1278,9 +1364,14 @@ class TestVoiceStopAndTranscribeReal:
     @patch("cli._cprint")
     @patch("cli.os.unlink")
     @patch("cli.os.path.isfile", return_value=True)
-    @patch("clawk_cli.config.load_config", return_value={"stt": {"model": "whisper-large-v3"}})
-    @patch("tools.voice_mode.transcribe_recording",
-           return_value={"success": True, "transcript": "hi"})
+    @patch(
+        "clawk_cli.config.load_config",
+        return_value={"stt": {"model": "whisper-large-v3"}},
+    )
+    @patch(
+        "tools.voice_mode.transcribe_recording",
+        return_value={"success": True, "transcript": "hi"},
+    )
     @patch("tools.voice_mode.play_beep")
     def test_stt_model_from_config(self, _beep, mock_tr, _cfg, _isf, _unl, _cp):
         recorder = MagicMock()

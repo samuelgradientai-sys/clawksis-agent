@@ -127,7 +127,7 @@ def _strip_yaml_frontmatter(content: str) -> str:
         end = content.find("\n---", 3)
         if end != -1:
             # Skip past the closing --- and any trailing newline
-            body = content[end + 4:].lstrip("\n")
+            body = content[end + 4 :].lstrip("\n")
             return body if body else content
     return content
 
@@ -251,7 +251,7 @@ KANBAN_GUIDANCE = (
     "tick), but you lose your current run's progress.\n"
     "4. **Block on genuine ambiguity.** If you need a human decision you cannot "
     "infer (missing credentials, UX choice, paywalled source, peer output you "
-    "need first), call `kanban_block(reason=\"...\")` and stop. Don't guess. "
+    'need first), call `kanban_block(reason="...")` and stop. Don\'t guess. '
     "The user will unblock with context and the dispatcher will respawn you.\n"
     "5. **Complete with structured handoff.** Call `kanban_complete(summary=..., "
     "metadata=...)`. `summary` is 1–3 human-readable sentences naming concrete "
@@ -263,7 +263,7 @@ KANBAN_GUIDANCE = (
     "before counting as merged/done (most coding tasks), drop the "
     "structured metadata (changed_files / tests_run / diff_path) into a "
     "`kanban_comment` first, then end with "
-    "`kanban_block(reason=\"review-required: <one-line summary>\")` so a "
+    '`kanban_block(reason="review-required: <one-line summary>")` so a '
     "reviewer can approve+unblock or request changes. Reviewing-then-"
     "completing is more honest than auto-completing work that still needs "
     "eyes on it.\n"
@@ -339,7 +339,16 @@ TOOL_USE_ENFORCEMENT_GUIDANCE = (
 
 # Model name substrings that trigger tool-use enforcement guidance.
 # Add new patterns here when a model family needs explicit steering.
-TOOL_USE_ENFORCEMENT_MODELS = ("gpt", "codex", "gemini", "gemma", "grok", "glm", "qwen", "deepseek")
+TOOL_USE_ENFORCEMENT_MODELS = (
+    "gpt",
+    "codex",
+    "gemini",
+    "gemma",
+    "grok",
+    "glm",
+    "qwen",
+    "deepseek",
+)
 
 # Universal "finish the job" guidance — applied to ALL models, not gated
 # by model family.  Addresses two cross-model failure modes:
@@ -527,6 +536,7 @@ def computer_use_guidance(platform_name: Optional[str] = None) -> str:
     """
     if platform_name is None:
         import sys as _sys
+
         platform_name = _sys.platform
 
     is_macos = platform_name == "darwin"
@@ -576,9 +586,7 @@ def computer_use_guidance(platform_name: Optional[str] = None) -> str:
         f"# Computer Use ({os_name} background control)\n"
         f"You have a `computer_use` tool that drives the {os_name} desktop in "
         "the BACKGROUND — your actions do not steal the user's cursor, "
-        "keyboard "
-        + share_line +
-        "## Preferred workflow\n"
+        "keyboard " + share_line + "## Preferred workflow\n"
         "1. Call `computer_use` with `action='capture'` and `mode='som'` "
         "(default). You get a screenshot with numbered overlays on every "
         "interactable element plus an AX-tree index listing role, label, and "
@@ -622,8 +630,8 @@ def computer_use_guidance(platform_name: Optional[str] = None) -> str:
         f"- When capturing, prefer `app='{example_app}'` (or whichever app the "
         "task is about) instead of the whole screen — it's less noisy and "
         "won't leak other windows the user has open.\n"
-        + offscreen_line +
-        "## The agent cursor you'll see on screen\n"
+        + offscreen_line
+        + "## The agent cursor you'll see on screen\n"
         "Each computer-use run declares a session with cua-driver; that "
         "session owns a tinted overlay cursor that glides to where you "
         "act. It's a visual cue for the user — the REAL OS cursor never "
@@ -994,7 +1002,11 @@ WSL_ENVIRONMENT_HINT = (
 # runs. For these backends, host info (Windows/Linux/macOS, $HOME, cwd) is
 # misleading — the agent should only see the machine it can actually touch.
 _REMOTE_TERMINAL_BACKENDS = frozenset({
-    "docker", "singularity", "modal", "daytona", "ssh",
+    "docker",
+    "singularity",
+    "modal",
+    "daytona",
+    "ssh",
     "managed_modal",
 })
 
@@ -1091,12 +1103,16 @@ def _probe_remote_backend(env_type: str) -> str | None:
                 "container_persistent": config.get("container_persistent", True),
                 "modal_mode": config.get("modal_mode", "auto"),
                 "docker_volumes": config.get("docker_volumes", []),
-                "docker_mount_cwd_to_workspace": config.get("docker_mount_cwd_to_workspace", False),
+                "docker_mount_cwd_to_workspace": config.get(
+                    "docker_mount_cwd_to_workspace", False
+                ),
                 "docker_forward_env": config.get("docker_forward_env", []),
                 "docker_env": config.get("docker_env", {}),
                 "docker_run_as_host_user": config.get("docker_run_as_host_user", False),
                 "docker_extra_args": config.get("docker_extra_args", []),
-                "docker_persist_across_processes": config.get("docker_persist_across_processes", True),
+                "docker_persist_across_processes": config.get(
+                    "docker_persist_across_processes", True
+                ),
                 "docker_orphan_reaper": config.get("docker_orphan_reaper", True),
             }
 
@@ -1114,9 +1130,9 @@ def _probe_remote_backend(env_type: str) -> str | None:
         # `2>/dev/null` so a missing binary doesn't pollute the output.
         probe_cmd = (
             "printf 'os=%s\\nkernel=%s\\nhome=%s\\ncwd=%s\\nuser=%s\\n' "
-            "\"$(uname -s 2>/dev/null || echo unknown)\" "
-            "\"$(uname -r 2>/dev/null || echo unknown)\" "
-            "\"$HOME\" \"$(pwd)\" \"$(whoami 2>/dev/null || id -un 2>/dev/null || echo unknown)\""
+            '"$(uname -s 2>/dev/null || echo unknown)" '
+            '"$(uname -r 2>/dev/null || echo unknown)" '
+            '"$HOME" "$(pwd)" "$(whoami 2>/dev/null || id -un 2>/dev/null || echo unknown)"'
         )
         result = env.execute(probe_cmd, timeout=4)
         if result.get("returncode") != 0:
@@ -1140,7 +1156,9 @@ def _probe_remote_backend(env_type: str) -> str | None:
             parsed[k.strip()] = v.strip()
 
     pieces = []
-    os_bits = " ".join(x for x in (parsed.get("os"), parsed.get("kernel")) if x and x != "unknown")
+    os_bits = " ".join(
+        x for x in (parsed.get("os"), parsed.get("kernel")) if x and x != "unknown"
+    )
     if os_bits:
         pieces.append(f"OS: {os_bits}")
     if parsed.get("user") and parsed["user"] != "unknown":
@@ -1323,6 +1341,7 @@ def _get_context_file_max_chars(context_length: Optional[int] = None) -> int:
         logger.debug("Could not read context_file_max_chars from config: %s", e)
     return _dynamic_context_file_max_chars(context_length)
 
+
 # Collect truncation warnings so the caller (run_agent) can surface them.
 # A ContextVar (not a module-global list) isolates accumulation per thread /
 # per async task, so concurrent gateway-session prompt builds can't drain or
@@ -1474,6 +1493,7 @@ def _build_snapshot_entry(
 # Skills index
 # =========================================================================
 
+
 def _parse_skill_file(skill_file: Path) -> tuple[bool, dict, str]:
     """Read a SKILL.md once and return platform compatibility, frontmatter, and description.
 
@@ -1533,12 +1553,16 @@ def _skill_should_show(
 
 def _current_session_platform_hint() -> str:
     """Return the active platform without importing the gateway package on CLI startup."""
-    platform = os.environ.get("CLAWK_PLATFORM") or os.environ.get("CLAWK_SESSION_PLATFORM")
+    platform = os.environ.get("CLAWK_PLATFORM") or os.environ.get(
+        "CLAWK_SESSION_PLATFORM"
+    )
     if platform:
         return platform
 
     session_context = sys.modules.get("gateway.session_context")
-    get_session_env = getattr(session_context, "get_session_env", None) if session_context else None
+    get_session_env = (
+        getattr(session_context, "get_session_env", None) if session_context else None
+    )
     if get_session_env is None:
         return ""
     try:
@@ -1623,9 +1647,10 @@ def build_skills_system_prompt(
                 available_toolsets,
             ):
                 continue
-            skills_by_category.setdefault(category, []).append(
-                (frontmatter_name, entry.get("description", ""))
-            )
+            skills_by_category.setdefault(category, []).append((
+                frontmatter_name,
+                entry.get("description", ""),
+            ))
         category_descriptions = {
             str(k): str(v)
             for k, v in (snapshot.get("category_descriptions") or {}).items()
@@ -1648,9 +1673,10 @@ def build_skills_system_prompt(
                 available_toolsets,
             ):
                 continue
-            skills_by_category.setdefault(entry["category"], []).append(
-                (entry["frontmatter_name"], entry["description"])
-            )
+            skills_by_category.setdefault(entry["category"], []).append((
+                entry["frontmatter_name"],
+                entry["description"],
+            ))
 
         # Read category-level DESCRIPTION.md files
         for desc_file in iter_skill_index_files(skills_dir, "DESCRIPTION.md"):
@@ -1704,9 +1730,10 @@ def build_skills_system_prompt(
                 ):
                     continue
                 seen_skill_names.add(frontmatter_name)
-                skills_by_category.setdefault(entry["category"], []).append(
-                    (frontmatter_name, entry["description"])
-                )
+                skills_by_category.setdefault(entry["category"], []).append((
+                    frontmatter_name,
+                    entry["description"],
+                ))
             except Exception as e:
                 logger.debug("Error reading external skill %s: %s", skill_file, e)
 
@@ -1720,9 +1747,13 @@ def build_skills_system_prompt(
                     continue
                 rel = desc_file.relative_to(ext_dir)
                 cat = "/".join(rel.parts[:-1]) if len(rel.parts) > 1 else "general"
-                category_descriptions.setdefault(cat, str(cat_desc).strip().strip("'\""))
+                category_descriptions.setdefault(
+                    cat, str(cat_desc).strip().strip("'\"")
+                )
             except Exception as e:
-                logger.debug("Could not read external skill description %s: %s", desc_file, e)
+                logger.debug(
+                    "Could not read external skill description %s: %s", desc_file, e
+                )
 
     # Posture-driven category demotion (e.g. non-coding skills while pairing
     # on code). Demoted categories stay in the index as a single names-only
@@ -1734,7 +1765,8 @@ def build_skills_system_prompt(
     # segment so nested categories ("social-media/twitter") are demoted with
     # their parent.
     demoted = frozenset(
-        cat for cat in skills_by_category
+        cat
+        for cat in skills_by_category
         if cat.split("/", 1)[0] in (compact_categories or frozenset())
     )
 
@@ -1793,8 +1825,7 @@ def build_skills_system_prompt(
             "If a skill you loaded was missing steps, had wrong commands, or needed "
             "pitfalls you discovered, update it before finishing.\n"
             "\n"
-            "<available_skills>\n"
-            + "\n".join(index_lines) + "\n"
+            "<available_skills>\n" + "\n".join(index_lines) + "\n"
             "</available_skills>\n"
             "\n"
             "Only proceed without loading a skill if genuinely none are relevant to the task."
@@ -1866,20 +1897,19 @@ def build_nous_subscription_prompt(valid_tool_names: "set[str] | None" = None) -
         "Current capability status:",
     ]
     lines.extend(_status_line(feature) for feature in features.items())
-    lines.extend(
-        [
-            "When a Nous-managed feature is active, do not ask the user for Firecrawl, FAL, OpenAI TTS, or Browser-Use API keys.",
-            "If the user is not subscribed and asks for a capability that Nous subscription would unlock or simplify, suggest Nous subscription as one option alongside direct setup or local alternatives.",
-            "Do not mention subscription unless the user asks about it or it directly solves the current missing capability.",
-            "Useful commands: clawk setup, clawk setup tools, clawk setup terminal, clawk status.",
-        ]
-    )
+    lines.extend([
+        "When a Nous-managed feature is active, do not ask the user for Firecrawl, FAL, OpenAI TTS, or Browser-Use API keys.",
+        "If the user is not subscribed and asks for a capability that Nous subscription would unlock or simplify, suggest Nous subscription as one option alongside direct setup or local alternatives.",
+        "Do not mention subscription unless the user asks about it or it directly solves the current missing capability.",
+        "Useful commands: clawk setup, clawk setup tools, clawk setup terminal, clawk status.",
+    ])
     return "\n".join(lines)
 
 
 # =========================================================================
 # Context files (SOUL.md, AGENTS.md, .cursorrules)
 # =========================================================================
+
 
 def _truncate_content(
     content: str,
@@ -1930,6 +1960,7 @@ def load_soul_md(context_length: Optional[int] = None) -> Optional[str]:
     """
     try:
         from clawk_cli.config import ensure_clawk_home
+
         ensure_clawk_home()
     except Exception as e:
         logger.debug("Could not ensure CLAWK_HOME before loading SOUL.md: %s", e)
@@ -1943,7 +1974,9 @@ def load_soul_md(context_length: Optional[int] = None) -> Optional[str]:
             return None
         content = _scan_context_content(content, "SOUL.md")
         content = _truncate_content(
-            content, "SOUL.md", context_length=context_length,
+            content,
+            "SOUL.md",
+            context_length=context_length,
             read_path=str(soul_path),
         )
         return content
@@ -1970,7 +2003,9 @@ def _load_clawk_md(cwd_path: Path, context_length: Optional[int] = None) -> str:
         content = _scan_context_content(content, rel)
         result = f"## {rel}\n\n{content}"
         return _truncate_content(
-            result, ".clawk.md", context_length=context_length,
+            result,
+            ".clawk.md",
+            context_length=context_length,
             read_path=str(clawk_md_path),
         )
     except Exception as e:
@@ -1989,7 +2024,9 @@ def _load_agents_md(cwd_path: Path, context_length: Optional[int] = None) -> str
                     content = _scan_context_content(content, name)
                     result = f"## {name}\n\n{content}"
                     return _truncate_content(
-                        result, "AGENTS.md", context_length=context_length,
+                        result,
+                        "AGENTS.md",
+                        context_length=context_length,
                         read_path=str(candidate),
                     )
             except Exception as e:
@@ -2008,7 +2045,9 @@ def _load_claude_md(cwd_path: Path, context_length: Optional[int] = None) -> str
                     content = _scan_context_content(content, name)
                     result = f"## {name}\n\n{content}"
                     return _truncate_content(
-                        result, "CLAUDE.md", context_length=context_length,
+                        result,
+                        "CLAUDE.md",
+                        context_length=context_length,
                         read_path=str(candidate),
                     )
             except Exception as e:
@@ -2036,15 +2075,21 @@ def _load_cursorrules(cwd_path: Path, context_length: Optional[int] = None) -> s
             try:
                 content = mdc_file.read_text(encoding="utf-8").strip()
                 if content:
-                    content = _scan_context_content(content, f".cursor/rules/{mdc_file.name}")
-                    cursorrules_content += f"## .cursor/rules/{mdc_file.name}\n\n{content}\n\n"
+                    content = _scan_context_content(
+                        content, f".cursor/rules/{mdc_file.name}"
+                    )
+                    cursorrules_content += (
+                        f"## .cursor/rules/{mdc_file.name}\n\n{content}\n\n"
+                    )
             except Exception as e:
                 logger.debug("Could not read %s: %s", mdc_file, e)
 
     if not cursorrules_content:
         return ""
     return _truncate_content(
-        cursorrules_content, ".cursorrules", context_length=context_length,
+        cursorrules_content,
+        ".cursorrules",
+        context_length=context_length,
         read_path=str(cwd_path / ".cursorrules"),
     )
 
@@ -2123,4 +2168,7 @@ def build_context_files_prompt(
 
     if not sections:
         return ""
-    return "# Project Context\n\nThe following project context files have been loaded and should be followed:\n\n" + "\n".join(sections)
+    return (
+        "# Project Context\n\nThe following project context files have been loaded and should be followed:\n\n"
+        + "\n".join(sections)
+    )

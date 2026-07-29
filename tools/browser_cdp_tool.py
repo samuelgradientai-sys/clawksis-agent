@@ -15,6 +15,7 @@ evaluation, cookie/network control, low-level tab management, etc.
 
 Method reference: https://chromedevtools.github.io/devtools-protocol/
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -55,6 +56,7 @@ def _redact_cdp_output(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: _redact_cdp_output(item) for key, item in value.items()}
     return value
+
 
 # ``websockets`` is a direct clawksis-agent dependency because the browser CDP
 # supervisor and browser_dialog tool import it during tool discovery. Wrap the
@@ -218,21 +220,17 @@ async def _cdp_call(
             attach_id = next_id
             next_id += 1
             await ws.send(
-                json.dumps(
-                    {
-                        "id": attach_id,
-                        "method": "Target.attachToTarget",
-                        "params": {"targetId": target_id, "flatten": True},
-                    }
-                )
+                json.dumps({
+                    "id": attach_id,
+                    "method": "Target.attachToTarget",
+                    "params": {"targetId": target_id, "flatten": True},
+                })
             )
             deadline = asyncio.get_running_loop().time() + timeout
             while True:
                 remaining = deadline - asyncio.get_running_loop().time()
                 if remaining <= 0:
-                    raise TimeoutError(
-                        f"Timed out attaching to target {target_id}"
-                    )
+                    raise TimeoutError(f"Timed out attaching to target {target_id}")
                 raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
                 msg = json.loads(raw)
                 if msg.get("id") == attach_id:
@@ -264,9 +262,7 @@ async def _cdp_call(
         while True:
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
-                raise TimeoutError(
-                    f"Timed out waiting for response to {method}"
-                )
+                raise TimeoutError(f"Timed out waiting for response to {method}")
             raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
             msg = json.loads(raw)
             if msg.get("id") == call_id:
@@ -368,6 +364,7 @@ def _browser_cdp_via_supervisor(
 
     try:
         from agent.async_utils import safe_schedule_threadsafe
+
         fut = safe_schedule_threadsafe(_do_cdp(), loop)
         if fut is None:
             return tool_error(
@@ -623,9 +620,7 @@ BROWSER_CDP_SCHEMA: Dict[str, Any] = {
             },
             "timeout": {
                 "type": "number",
-                "description": (
-                    "Timeout in seconds (default 30, max 300)."
-                ),
+                "description": ("Timeout in seconds (default 30, max 300)."),
                 "default": 30,
             },
         },

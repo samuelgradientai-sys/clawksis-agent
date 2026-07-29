@@ -760,8 +760,7 @@ class FirecrawlWebSearchProvider(WebSearchProvider):
                         "content": "",
                         "raw_content": "",
                         "error": (
-                            "Blocked: URL targets a private or internal "
-                            "network address"
+                            "Blocked: URL targets a private or internal network address"
                         ),
                     })
 

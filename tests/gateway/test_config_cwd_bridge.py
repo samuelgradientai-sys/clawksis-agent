@@ -31,9 +31,11 @@ def _simulate_config_bridge(cfg: dict, initial_env: dict | None = None):
     # --- Replicate lines 59-87: terminal config bridge ---
     terminal_cfg = cfg.get("terminal", {})
     if terminal_cfg and isinstance(terminal_cfg, dict):
-        terminal_backend = str(
-            terminal_cfg.get("backend") or env.get("TERMINAL_ENV") or ""
-        ).strip().lower()
+        terminal_backend = (
+            str(terminal_cfg.get("backend") or env.get("TERMINAL_ENV") or "")
+            .strip()
+            .lower()
+        )
         terminal_env_map = {
             "backend": "TERMINAL_ENV",
             "cwd": "TERMINAL_CWD",
@@ -224,10 +226,13 @@ class TestNestedTerminalCwdPlaceholderSkip:
     def test_terminal_dot_cwd_and_messaging_cwd_both_set(self):
         """Pre-set TERMINAL_CWD from .env wins over terminal.cwd: '.'."""
         cfg = {"terminal": {"cwd": ".", "backend": "local"}}
-        result = _simulate_config_bridge(cfg, {
-            "TERMINAL_CWD": "/my/project",
-            "MESSAGING_CWD": "/fallback",
-        })
+        result = _simulate_config_bridge(
+            cfg,
+            {
+                "TERMINAL_CWD": "/my/project",
+                "MESSAGING_CWD": "/fallback",
+            },
+        )
         assert result["TERMINAL_CWD"] == "/my/project"
 
     def test_non_cwd_terminal_keys_still_bridge(self):
@@ -259,9 +264,7 @@ class TestNestedTerminalCwdPlaceholderSkip:
                 "docker_mount_cwd_to_workspace": True,
             },
         }
-        result = _simulate_config_bridge(
-            cfg, {"MESSAGING_CWD": "/host/project"}
-        )
+        result = _simulate_config_bridge(cfg, {"MESSAGING_CWD": "/host/project"})
         assert result["TERMINAL_CWD"] == "/host/project"
         assert result["TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE"] == "True"
 
@@ -324,7 +327,9 @@ class TestTildeExpansion:
         result = _simulate_config_bridge(cfg)
         assert result["TERMINAL_CWD"] == "~/work"
 
-    def test_ssh_terminal_placeholder_cwd_does_not_fallback_to_host_home(self, monkeypatch):
+    def test_ssh_terminal_placeholder_cwd_does_not_fallback_to_host_home(
+        self, monkeypatch
+    ):
         """SSH placeholder cwd should let terminal_tool use its remote-home default."""
         monkeypatch.setenv("HOME", "/opt/data")
         cfg = {"terminal": {"backend": "ssh", "cwd": "auto"}}

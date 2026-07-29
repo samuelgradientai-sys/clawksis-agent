@@ -102,11 +102,11 @@ def _resolve_xai_credentials() -> Tuple[str, str]:
         creds = {}
 
     api_key = str(creds.get("api_key") or os.getenv("XAI_API_KEY", "")).strip()
-    base_url = str(
-        creds.get("base_url")
-        or os.getenv("XAI_BASE_URL")
-        or DEFAULT_XAI_BASE_URL
-    ).strip().rstrip("/")
+    base_url = (
+        str(creds.get("base_url") or os.getenv("XAI_BASE_URL") or DEFAULT_XAI_BASE_URL)
+        .strip()
+        .rstrip("/")
+    )
     return api_key, base_url
 
 
@@ -185,7 +185,9 @@ def _xai_video_output_urls(
     storage is enabled; otherwise xAI's temporary ``video.url``. Pass this value
     as ``video_url`` for edit/extend chaining.
     """
-    file_output = video.get("file_output") if isinstance(video.get("file_output"), dict) else {}
+    file_output = (
+        video.get("file_output") if isinstance(video.get("file_output"), dict) else {}
+    )
     file_output = file_output or {}
     stored_public = file_output.get("public_url")
     stored_public = stored_public.strip() if isinstance(stored_public, str) else None
@@ -298,7 +300,10 @@ def _resolve_model_for_modality(
         return requested
     if modality == "image":
         return DEFAULT_IMAGE_TO_VIDEO_MODEL
-    if requested == DEFAULT_IMAGE_TO_VIDEO_MODEL or requested in _IMAGE_TO_VIDEO_COMPAT_MODEL_IDS:
+    if (
+        requested == DEFAULT_IMAGE_TO_VIDEO_MODEL
+        or requested in _IMAGE_TO_VIDEO_COMPAT_MODEL_IDS
+    ):
         return DEFAULT_TEXT_TO_VIDEO_MODEL
     return requested or DEFAULT_TEXT_TO_VIDEO_MODEL
 
@@ -542,7 +547,9 @@ def _run_xai_video_coroutine(
         finally:
             loop.close()
     except Exception as exc:
-        logger.warning("xAI video %s unexpected failure: %s", operation_label, exc, exc_info=True)
+        logger.warning(
+            "xAI video %s unexpected failure: %s", operation_label, exc, exc_info=True
+        )
         return error_response(
             error=f"xAI video {operation_label} failed: {exc}",
             error_type="api_error",
@@ -597,19 +604,22 @@ async def _generate_xai_video_async(
         return error_response(
             error="prompt is required for xAI video generation",
             error_type="missing_prompt",
-            provider="xai", prompt=prompt,
+            provider="xai",
+            prompt=prompt,
         )
     if refs and len(refs) > MAX_REFERENCE_IMAGES:
         return error_response(
             error=f"reference_image_urls supports at most {MAX_REFERENCE_IMAGES} images on xAI",
             error_type="too_many_references",
-            provider="xai", prompt=prompt,
+            provider="xai",
+            prompt=prompt,
         )
     if image_input and refs:
         return error_response(
             error="image_url and reference_image_urls cannot be combined on xAI",
             error_type="conflicting_inputs",
-            provider="xai", prompt=prompt,
+            provider="xai",
+            prompt=prompt,
         )
 
     if normalized_aspect_ratio not in VALID_ASPECT_RATIOS:
@@ -776,7 +786,8 @@ def _auth_required_response(prompt: str) -> Dict[str, Any]:
             "https://console.x.ai/."
         ),
         error_type="auth_required",
-        provider="xai", prompt=prompt,
+        provider="xai",
+        prompt=prompt,
     )
 
 
@@ -818,7 +829,10 @@ async def _submit_xai_video_payload(
     async with httpx.AsyncClient() as client:
         try:
             request_id = await _submit(
-                client, payload, api_key=api_key, base_url=base_url,
+                client,
+                payload,
+                api_key=api_key,
+                base_url=base_url,
                 endpoint=endpoint,
             )
         except httpx.HTTPStatusError as exc:
@@ -836,8 +850,10 @@ async def _submit_xai_video_payload(
             )
 
         poll_result = await _poll(
-            client, request_id,
-            api_key=api_key, base_url=base_url,
+            client,
+            request_id,
+            api_key=api_key,
+            base_url=base_url,
             timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
             poll_interval=DEFAULT_POLL_INTERVAL_SECONDS,
         )
@@ -849,9 +865,15 @@ async def _submit_xai_video_payload(
         video = body.get("video") or {}
         if not isinstance(video, dict):
             video = {}
-        file_output = video.get("file_output") if isinstance(video.get("file_output"), dict) else {}
+        file_output = (
+            video.get("file_output")
+            if isinstance(video.get("file_output"), dict)
+            else {}
+        )
         file_output = file_output or {}
-        public_video_url, temporary_url, stored_public_url = _xai_video_output_urls(video)
+        public_video_url, temporary_url, stored_public_url = _xai_video_output_urls(
+            video
+        )
         if not public_video_url:
             return error_response(
                 error="xAI video request completed without a video URL",

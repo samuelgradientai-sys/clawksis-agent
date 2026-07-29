@@ -25,7 +25,9 @@ PIL = pytest.importorskip("PIL")
 from PIL import Image, ImageDraw  # noqa: E402
 
 
-def _strip(n_blobs: int, *, transparent: bool = True, bg=(0, 255, 0, 255), size=(208, 208)) -> Image.Image:
+def _strip(
+    n_blobs: int, *, transparent: bool = True, bg=(0, 255, 0, 255), size=(208, 208)
+) -> Image.Image:
     """A horizontal strip with *n_blobs* clearly-separated colored ellipses."""
     w = size[0] * n_blobs
     h = size[1]
@@ -107,7 +109,11 @@ def test_extract_strip_frames_severs_thin_bridges_between_frames():
     # as one merged subject.
     img = _strip(4)
     draw = ImageDraw.Draw(img)
-    draw.line((20, img.height // 2, img.width - 20, img.height // 2), fill=(255, 255, 255, 255), width=1)
+    draw.line(
+        (20, img.height // 2, img.width - 20, img.height // 2),
+        fill=(255, 255, 255, 255),
+        width=1,
+    )
 
     frames = atlas.extract_strip_frames(img, 4, method="components")
     assert len(frames) == 4
@@ -125,8 +131,18 @@ def test_extract_strip_frames_drops_small_side_lobes_from_adjacent_frames():
 
     frame = atlas.extract_strip_frames(img, 1, method="components")[0]
     alpha = frame.getchannel("A")
-    left_edge_mass = sum(1 for x in range(0, 36) for y in range(frame.height) if alpha.getpixel((x, y)) > 16)
-    right_edge_mass = sum(1 for x in range(frame.width - 36, frame.width) for y in range(frame.height) if alpha.getpixel((x, y)) > 16)
+    left_edge_mass = sum(
+        1
+        for x in range(0, 36)
+        for y in range(frame.height)
+        if alpha.getpixel((x, y)) > 16
+    )
+    right_edge_mass = sum(
+        1
+        for x in range(frame.width - 36, frame.width)
+        for y in range(frame.height)
+        if alpha.getpixel((x, y)) > 16
+    )
     assert left_edge_mass == 0
     assert right_edge_mass == 0
 
@@ -135,7 +151,9 @@ def test_extract_strip_frames_drops_detached_slot_effects():
     img = Image.new("RGBA", (atlas.CELL_WIDTH, atlas.CELL_HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     draw.ellipse((72, 54, 148, 172), fill=(70, 190, 70, 255))  # subject
-    draw.polygon([(10, 76), (16, 84), (24, 78), (18, 88)], fill=(255, 255, 160, 255))  # sparkle
+    draw.polygon(
+        [(10, 76), (16, 84), (24, 78), (18, 88)], fill=(255, 255, 160, 255)
+    )  # sparkle
 
     frame = atlas.extract_strip_frames(img, 1, method="components", fit=False)[0]
     bbox = frame.getbbox()
@@ -149,7 +167,10 @@ def test_extract_strip_frames_requires_slot_padding_in_strict_mode():
     # Frame 0 touches the top edge; strict mode should reject the row so the
     # caller regenerates instead of accepting a clipped pet frame.
     draw.rectangle((40, 0, 120, 130), fill=(70, 190, 70, 255))
-    draw.rectangle((atlas.CELL_WIDTH + 40, 40, atlas.CELL_WIDTH + 120, 170), fill=(70, 190, 70, 255))
+    draw.rectangle(
+        (atlas.CELL_WIDTH + 40, 40, atlas.CELL_WIDTH + 120, 170),
+        fill=(70, 190, 70, 255),
+    )
 
     with pytest.raises(ValueError):
         atlas.extract_strip_frames(img, 2, method="components", fit=False)
@@ -256,7 +277,9 @@ def test_validate_atlas_rejects_postage_stamp_sprite():
 
     for _state, row, count in atlas.ROW_SPECS:
         for col in range(count):
-            sheet.alpha_composite(frame, (col * atlas.CELL_WIDTH, row * atlas.CELL_HEIGHT))
+            sheet.alpha_composite(
+                frame, (col * atlas.CELL_WIDTH, row * atlas.CELL_HEIGHT)
+            )
 
     result = atlas.validate_atlas(sheet)
 
@@ -303,7 +326,10 @@ def test_normalize_cells_uses_consistent_pose_scale_for_motion_rows():
     ImageDraw.Draw(jump_low).rectangle((50, 80, 110, 160), fill=(220, 120, 80, 255))
     ImageDraw.Draw(jump_high).rectangle((50, 60, 110, 140), fill=(220, 120, 80, 255))
 
-    normalized = atlas.normalize_cells({"idle": [idle], "jumping": [jump_low, jump_high]})
+    normalized = atlas.normalize_cells({
+        "idle": [idle],
+        "jumping": [jump_low, jump_high],
+    })
     idle_box = normalized["idle"][0].getbbox()
     jump_box = normalized["jumping"][0].getbbox()
 
@@ -331,7 +357,9 @@ def test_register_local_pet_appears_and_is_adoptable():
     from agent.pet import store
 
     sheet = atlas.compose_atlas(_frames_for_all_states())
-    pet = store.register_local_pet(sheet, slug="Sparky", display_name="Sparky", description="zappy")
+    pet = store.register_local_pet(
+        sheet, slug="Sparky", display_name="Sparky", description="zappy"
+    )
     assert pet.slug == "sparky"
     assert pet.exists
     assert any(p.slug == "sparky" for p in store.installed_pets())
@@ -385,7 +413,15 @@ def test_generate_base_drafts_returns_n(monkeypatch, tmp_path):
 
     calls = {"n": 0}
 
-    def fake_generate(prompt, *, n=1, reference_images=None, provider=None, prefix="pet", aspect_ratio="square"):
+    def fake_generate(
+        prompt,
+        *,
+        n=1,
+        reference_images=None,
+        provider=None,
+        prefix="pet",
+        aspect_ratio="square",
+    ):
         paths = []
         for i in range(n):
             calls["n"] += 1
@@ -405,7 +441,15 @@ def test_generate_base_drafts_hardens_opaque_background(monkeypatch, tmp_path):
     """A provider that ignores background=transparent still yields a cutout."""
     from agent.pet.generate import imagegen, orchestrate
 
-    def fake_generate(prompt, *, n=1, reference_images=None, provider=None, prefix="pet", aspect_ratio="square"):
+    def fake_generate(
+        prompt,
+        *,
+        n=1,
+        reference_images=None,
+        provider=None,
+        prefix="pet",
+        aspect_ratio="square",
+    ):
         # Solid-green backdrop with a blob — i.e. the provider painted a backdrop.
         p = tmp_path / f"{prefix}_opaque.png"
         _strip(1, transparent=False, bg=(0, 255, 0, 255)).save(p)
@@ -433,7 +477,15 @@ def test_hatch_pet_end_to_end(monkeypatch, tmp_path):
     base = tmp_path / "base.png"
     _strip(1).save(base)
 
-    def fake_generate(prompt, *, n=1, reference_images=None, provider=None, prefix="pet", aspect_ratio="square"):
+    def fake_generate(
+        prompt,
+        *,
+        n=1,
+        reference_images=None,
+        provider=None,
+        prefix="pet",
+        aspect_ratio="square",
+    ):
         # Return a synthetic row strip; frame count is inferable from the spec.
         state = prefix.replace("pet_row_", "")
         count = atlas_mod.FRAME_COUNTS.get(state, 6)
@@ -470,7 +522,15 @@ def test_hatch_pet_idle_fallback_when_row_fails(monkeypatch, tmp_path):
     base = tmp_path / "base.png"
     _strip(1).save(base)
 
-    def fake_generate(prompt, *, n=1, reference_images=None, provider=None, prefix="pet", aspect_ratio="square"):
+    def fake_generate(
+        prompt,
+        *,
+        n=1,
+        reference_images=None,
+        provider=None,
+        prefix="pet",
+        aspect_ratio="square",
+    ):
         if prefix == "pet_row_idle":
             raise GenerationError("boom")
         state = prefix.replace("pet_row_", "")
@@ -494,7 +554,15 @@ def test_hatch_pet_rejects_missing_required_animation_rows(monkeypatch, tmp_path
     base = tmp_path / "base.png"
     _strip(1).save(base)
 
-    def fake_generate(prompt, *, n=1, reference_images=None, provider=None, prefix="pet", aspect_ratio="square"):
+    def fake_generate(
+        prompt,
+        *,
+        n=1,
+        reference_images=None,
+        provider=None,
+        prefix="pet",
+        aspect_ratio="square",
+    ):
         if prefix == "pet_row_running-right":
             raise GenerationError("bad row")
         state = prefix.replace("pet_row_", "")
@@ -534,10 +602,17 @@ def test_resolve_provider_honors_available_preference(monkeypatch):
     """An explicit, configured, ref-capable preference wins over the active one."""
     from agent.pet.generate import imagegen
 
-    registry = {"openai": _FakeImgProvider("openai"), "openrouter": _FakeImgProvider("openrouter")}
+    registry = {
+        "openai": _FakeImgProvider("openai"),
+        "openrouter": _FakeImgProvider("openrouter"),
+    }
     monkeypatch.setattr(imagegen, "_discover", lambda: None)
-    monkeypatch.setattr("agent.image_gen_registry.get_active_provider", lambda: registry["openai"])
-    monkeypatch.setattr("agent.image_gen_registry.get_provider", lambda name: registry.get(name))
+    monkeypatch.setattr(
+        "agent.image_gen_registry.get_active_provider", lambda: registry["openai"]
+    )
+    monkeypatch.setattr(
+        "agent.image_gen_registry.get_provider", lambda name: registry.get(name)
+    )
 
     assert imagegen.resolve_provider(prefer="openrouter").name == "openrouter"
     # An unavailable / unknown preference is ignored — fall back to the active one.
@@ -552,8 +627,12 @@ def test_list_sprite_providers_marks_default(monkeypatch):
 
     registry = {"openai": _FakeImgProvider("openai"), "nous": _FakeImgProvider("nous")}
     monkeypatch.setattr(imagegen, "_discover", lambda: None)
-    monkeypatch.setattr("agent.image_gen_registry.get_active_provider", lambda: registry["openai"])
-    monkeypatch.setattr("agent.image_gen_registry.get_provider", lambda name: registry.get(name))
+    monkeypatch.setattr(
+        "agent.image_gen_registry.get_active_provider", lambda: registry["openai"]
+    )
+    monkeypatch.setattr(
+        "agent.image_gen_registry.get_provider", lambda name: registry.get(name)
+    )
 
     listed = imagegen.list_sprite_providers()
     names = {p["name"] for p in listed}
@@ -578,10 +657,15 @@ def test_generate_retries_without_transparent_background(monkeypatch, tmp_path):
         def generate(self, prompt, **kwargs):
             calls.append(kwargs)
             if kwargs.get("background") == "transparent":
-                return {"success": False, "error": "Transparent background is not supported for this model."}
+                return {
+                    "success": False,
+                    "error": "Transparent background is not supported for this model.",
+                }
             return {"success": True, "image": str(saved)}
 
-    sprite = imagegen.SpriteProvider(name="openai", provider=FakeProvider(), supports_references=False)
+    sprite = imagegen.SpriteProvider(
+        name="openai", provider=FakeProvider(), supports_references=False
+    )
 
     out = imagegen.generate("a fox", n=2, provider=sprite)
     assert len(out) == 2

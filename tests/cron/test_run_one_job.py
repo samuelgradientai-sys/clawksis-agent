@@ -10,11 +10,19 @@ The first test characterizes the sequence as driven through `tick()` (proving
 the extraction didn't change `tick`'s behavior); the rest unit-test the
 extracted helper directly.
 """
+
 import cron.scheduler as s
 
 
-def _patch_pipeline(monkeypatch, *, success=True, output="out", final="final response",
-                    error=None, silent_marker_in=None):
+def _patch_pipeline(
+    monkeypatch,
+    *,
+    success=True,
+    output="out",
+    final="final response",
+    error=None,
+    silent_marker_in=None,
+):
     """Patch the job pipeline primitives and record the call order."""
     calls = []
 
@@ -103,13 +111,15 @@ def test_run_one_job_failed_job_delivers_error(monkeypatch):
 def test_run_one_job_exception_marks_failure(monkeypatch):
     """If run_job raises, the helper marks the run failed and returns False
     rather than propagating."""
+
     def boom(job, *, defer_agent_teardown=None):
         raise RuntimeError("kaboom")
 
     monkeypatch.setattr(s, "run_job", boom)
     marks = []
     monkeypatch.setattr(
-        s, "mark_job_run",
+        s,
+        "mark_job_run",
         lambda jid, ok, err=None, delivery_error=None: marks.append((jid, ok)),
     )
 
@@ -195,8 +205,10 @@ def test_run_one_job_delivers_before_agent_teardown(monkeypatch):
     # cleanup_stale_async_clients is imported lazily inside _teardown_cron_agent;
     # stub it so the teardown records its own marker without touching real caches.
     import agent.auxiliary_client as aux
-    monkeypatch.setattr(aux, "cleanup_stale_async_clients",
-                        lambda: order.append("cleanup_stale"))
+
+    monkeypatch.setattr(
+        aux, "cleanup_stale_async_clients", lambda: order.append("cleanup_stale")
+    )
 
     ok = s.run_one_job({"id": "j8", "name": "t"})
 
@@ -228,8 +240,10 @@ def test_run_one_job_tears_down_deferred_agent_when_delivery_raises(monkeypatch)
     monkeypatch.setattr(s, "_deliver_result", boom_deliver)
     monkeypatch.setattr(s, "mark_job_run", lambda *a, **k: None)
     import agent.auxiliary_client as aux
-    monkeypatch.setattr(aux, "cleanup_stale_async_clients",
-                        lambda: order.append("cleanup_stale"))
+
+    monkeypatch.setattr(
+        aux, "cleanup_stale_async_clients", lambda: order.append("cleanup_stale")
+    )
 
     ok = s.run_one_job({"id": "j9", "name": "t"})
 
@@ -260,12 +274,13 @@ def test_run_one_job_tears_down_deferred_agent_when_save_raises(monkeypatch):
 
     monkeypatch.setattr(s, "run_job", fake_run_job)
     monkeypatch.setattr(s, "save_job_output", boom_save)
-    monkeypatch.setattr(s, "_deliver_result",
-                        lambda *a, **k: order.append("deliver"))
+    monkeypatch.setattr(s, "_deliver_result", lambda *a, **k: order.append("deliver"))
     monkeypatch.setattr(s, "mark_job_run", lambda *a, **k: None)
     import agent.auxiliary_client as aux
-    monkeypatch.setattr(aux, "cleanup_stale_async_clients",
-                        lambda: order.append("cleanup_stale"))
+
+    monkeypatch.setattr(
+        aux, "cleanup_stale_async_clients", lambda: order.append("cleanup_stale")
+    )
 
     ok = s.run_one_job({"id": "j10", "name": "t"})
 

@@ -56,6 +56,7 @@ except ImportError:  # pragma: no cover - older provider module without it
                 out.append(item.strip())
         return out or None
 
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -271,7 +272,7 @@ class KreaImageGenProvider(ImageGenProvider):
         style_refs: List[Any] = []
         if isinstance(image_url, str) and image_url.strip():
             style_refs.append(image_url.strip())
-        for ref in (normalize_reference_images(reference_image_urls) or []):
+        for ref in normalize_reference_images(reference_image_urls) or []:
             style_refs.append(ref)
         legacy_refs = kwargs.get("image_style_references")
         if isinstance(legacy_refs, list):
@@ -348,9 +349,10 @@ class KreaImageGenProvider(ImageGenProvider):
             normalized_refs: List[Any] = []
             for ref in style_refs:
                 if isinstance(ref, str):
-                    normalized_refs.append(
-                        {"url": ref, "strength": _DEFAULT_STYLE_REFERENCE_STRENGTH}
-                    )
+                    normalized_refs.append({
+                        "url": ref,
+                        "strength": _DEFAULT_STYLE_REFERENCE_STRENGTH,
+                    })
                 else:
                     normalized_refs.append(ref)
             payload["image_style_references"] = normalized_refs
@@ -464,7 +466,10 @@ class KreaImageGenProvider(ImageGenProvider):
                 # other permanent 4xx) so callers don't wait the full 180s
                 # deadline on a request that will never succeed. Only retry
                 # transient statuses such as 408/409/425/429/5xx.
-                if status not in _RETRYABLE_POLL_STATUSES or time.monotonic() >= deadline:
+                if (
+                    status not in _RETRYABLE_POLL_STATUSES
+                    or time.monotonic() >= deadline
+                ):
                     return error_response(
                         error=f"Krea poll failed ({status}) for job {job_id}",
                         error_type="api_error",
@@ -492,7 +497,9 @@ class KreaImageGenProvider(ImageGenProvider):
             try:
                 job = poll_resp.json()
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Krea poll returned invalid JSON for job %s: %s", job_id, exc)
+                logger.warning(
+                    "Krea poll returned invalid JSON for job %s: %s", job_id, exc
+                )
                 if time.monotonic() >= deadline:
                     return error_response(
                         error=f"Krea poll returned invalid JSON: {exc}",
@@ -542,7 +549,11 @@ class KreaImageGenProvider(ImageGenProvider):
             )
 
         if last_status == "failed":
-            err = (job.get("result") or {}).get("error") if isinstance(job.get("result"), dict) else None
+            err = (
+                (job.get("result") or {}).get("error")
+                if isinstance(job.get("result"), dict)
+                else None
+            )
             return error_response(
                 error=f"Krea job {job_id} failed: {err or 'unknown error'}",
                 error_type="api_error",

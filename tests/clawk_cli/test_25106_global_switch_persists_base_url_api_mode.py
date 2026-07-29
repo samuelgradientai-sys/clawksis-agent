@@ -20,7 +20,12 @@ import pytest
 from clawk_cli.model_switch import ModelSwitchResult
 
 
-def _make_result(*, base_url="https://api.minimax.io/v1", api_mode="chat_completions", provider_changed=True):
+def _make_result(
+    *,
+    base_url="https://api.minimax.io/v1",
+    api_mode="chat_completions",
+    provider_changed=True,
+):
     return ModelSwitchResult(
         success=True,
         new_model="MiniMax-M3",
@@ -108,8 +113,12 @@ def test_session_only_switch_does_not_touch_config(monkeypatch):
 
     monkeypatch.setattr(cli_mod, "_cprint", lambda *a, **k: None)
     save_calls = []
-    monkeypatch.setattr(cli_mod, "save_config_value", lambda *a, **k: save_calls.append(a))
-    monkeypatch.setattr("clawk_cli.model_switch.switch_model", lambda **kw: _make_result())
+    monkeypatch.setattr(
+        cli_mod, "save_config_value", lambda *a, **k: save_calls.append(a)
+    )
+    monkeypatch.setattr(
+        "clawk_cli.model_switch.switch_model", lambda **kw: _make_result()
+    )
     monkeypatch.setattr(
         "clawk_cli.inventory.load_picker_context",
         lambda: (_ for _ in ()).throw(RuntimeError("no picker context in test")),

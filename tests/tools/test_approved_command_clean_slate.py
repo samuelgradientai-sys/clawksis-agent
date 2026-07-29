@@ -17,6 +17,7 @@ Invariant preserved: a genuine interrupt arriving AFTER execution starts (or
 during a retry backoff) must still SIGINT the command (exit 130); non-approved
 commands keep current interrupt behavior.
 """
+
 import json
 import threading
 import time
@@ -60,6 +61,7 @@ def _wait_for_sentinel(sentinel, timeout=10.0):
 # ---------------------------------------------------------------------------
 # terminal_tool
 # ---------------------------------------------------------------------------
+
 
 def test_approved_command_clears_stale_interrupt_bit():
     """force=True marks the run user-approved -> the stale bit is cleared and
@@ -119,13 +121,19 @@ def test_approved_note_enriched_not_misleading_on_interrupt(monkeypatch, tmp_pat
     monkeypatch.setattr(
         tt,
         "_check_all_guards",
-        lambda *a, **k: {"approved": True, "user_approved": True, "description": "rm -rf x"},
+        lambda *a, **k: {
+            "approved": True,
+            "user_approved": True,
+            "description": "rm -rf x",
+        },
     )
     sentinel = tmp_path / "cmd_started_d"
     holder = {}
 
     def worker():
-        holder["result"] = tt.terminal_tool(command=f"touch {sentinel}; sleep 5; echo DONE")
+        holder["result"] = tt.terminal_tool(
+            command=f"touch {sentinel}; sleep 5; echo DONE"
+        )
 
     t = threading.Thread(target=worker, daemon=True)
     t.start()
@@ -183,16 +191,21 @@ def test_retry_backoff_does_not_clear_genuine_interrupt(monkeypatch):
     monkeypatch.setattr("tools.terminal_tool.time.sleep", lambda *a, **k: None)
     set_interrupt(False)
 
-    result = json.loads(tt.terminal_tool(command="sleep 1", force=True, task_id="retry-test"))
+    result = json.loads(
+        tt.terminal_tool(command="sleep 1", force=True, task_id="retry-test")
+    )
 
     assert calls["n"] == 2, calls
-    assert calls["interrupted_at_retry"] is True, "retry must NOT re-clear a genuine interrupt"
+    assert calls["interrupted_at_retry"] is True, (
+        "retry must NOT re-clear a genuine interrupt"
+    )
     assert result["exit_code"] == 130, result
 
 
 # ---------------------------------------------------------------------------
 # execute_code (same root cause, its own approval-wait + spawn/poll loop)
 # ---------------------------------------------------------------------------
+
 
 def test_execute_code_approved_clears_stale_interrupt_bit(monkeypatch):
     """An approved execute_code script (local path) runs from a clean slate."""
@@ -205,10 +218,12 @@ def test_execute_code_approved_clears_stale_interrupt_bit(monkeypatch):
     set_interrupt(True)
     assert is_interrupted()
 
-    result = json.loads(execute_code(
-        code='import time; time.sleep(0.5); print("CODE_DONE")',
-        task_id="test-clean-slate",
-    ))
+    result = json.loads(
+        execute_code(
+            code='import time; time.sleep(0.5); print("CODE_DONE")',
+            task_id="test-clean-slate",
+        )
+    )
 
     assert result["status"] == "success", result
     assert "CODE_DONE" in result["output"]
@@ -225,10 +240,12 @@ def test_execute_code_non_approved_still_interrupts_on_stale_bit(monkeypatch):
     )
     set_interrupt(True)
 
-    result = json.loads(execute_code(
-        code='import time; time.sleep(0.5); print("CODE_DONE")',
-        task_id="test-clean-slate-2",
-    ))
+    result = json.loads(
+        execute_code(
+            code='import time; time.sleep(0.5); print("CODE_DONE")',
+            task_id="test-clean-slate-2",
+        )
+    )
 
     # Killed on the first poll before the script can print.
     assert "CODE_DONE" not in result["output"], result
@@ -243,7 +260,9 @@ def test_execute_code_remote_clears_stale_bit(monkeypatch):
         "tools.approval.check_execute_code_guard",
         lambda *a, **k: {"approved": True, "user_approved": True},
     )
-    monkeypatch.setattr("tools.terminal_tool._get_env_config", lambda *a, **k: {"env_type": "ssh"})
+    monkeypatch.setattr(
+        "tools.terminal_tool._get_env_config", lambda *a, **k: {"env_type": "ssh"}
+    )
 
     captured = {}
 

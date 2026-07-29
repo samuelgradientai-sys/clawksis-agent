@@ -13,7 +13,10 @@ def test_flatten_message_text_accepts_chat_and_responses_text_parts():
         {"type": "summary_text", "text": "summary text"},
     ]
 
-    assert flatten_message_text(content) == "chat text\nuser text\nassistant text\nsummary text"
+    assert (
+        flatten_message_text(content)
+        == "chat text\nuser text\nassistant text\nsummary text"
+    )
 
 
 def test_flatten_message_text_accepts_object_parts():

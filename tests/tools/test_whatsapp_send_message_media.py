@@ -104,14 +104,12 @@ def test_text_plus_mixed_media_routes_native_types():
     vid = _tmpfile(".mp4")
     voice = _tmpfile(".ogg")
     try:
-        session_ctx, calls = _session_with(
-            [
-                _resp(200, {"messageId": "t1"}),
-                _resp(200, {"messageId": "m1"}),
-                _resp(200, {"messageId": "m2"}),
-                _resp(200, {"messageId": "m3"}),
-            ]
-        )
+        session_ctx, calls = _session_with([
+            _resp(200, {"messageId": "t1"}),
+            _resp(200, {"messageId": "m1"}),
+            _resp(200, {"messageId": "m2"}),
+            _resp(200, {"messageId": "m3"}),
+        ])
         with patch("aiohttp.ClientSession", return_value=session_ctx):
             res = asyncio.run(
                 _standalone_send(
@@ -151,9 +149,10 @@ def test_media_only_skips_text_send():
 def test_force_document_sends_image_as_document():
     img = _tmpfile(".png")
     try:
-        session_ctx, calls = _session_with(
-            [_resp(200, {"messageId": "t1"}), _resp(200, {"messageId": "m1"})]
-        )
+        session_ctx, calls = _session_with([
+            _resp(200, {"messageId": "t1"}),
+            _resp(200, {"messageId": "m1"}),
+        ])
         with patch("aiohttp.ClientSession", return_value=session_ctx):
             res = asyncio.run(
                 _standalone_send(
@@ -190,17 +189,13 @@ def test_missing_media_file_errors():
 def test_media_upload_error_propagates():
     img = _tmpfile(".png")
     try:
-        session_ctx, _ = _session_with(
-            [
-                _resp(200, {"messageId": "t1"}),
-                _resp(500, text_data="boom"),
-            ]
-        )
+        session_ctx, _ = _session_with([
+            _resp(200, {"messageId": "t1"}),
+            _resp(500, text_data="boom"),
+        ])
         with patch("aiohttp.ClientSession", return_value=session_ctx):
             res = asyncio.run(
-                _standalone_send(
-                    _pconfig(), "12345", "hi", media_files=[(img, False)]
-                )
+                _standalone_send(_pconfig(), "12345", "hi", media_files=[(img, False)])
             )
         assert "error" in res
         assert "500" in res["error"]
@@ -251,9 +246,10 @@ def test_caption_ignored_for_multi_file_send():
     img = _tmpfile(".png")
     img2 = _tmpfile(".jpg")
     try:
-        session_ctx, calls = _session_with(
-            [_resp(200, {"messageId": "m1"}), _resp(200, {"messageId": "m2"})]
-        )
+        session_ctx, calls = _session_with([
+            _resp(200, {"messageId": "m1"}),
+            _resp(200, {"messageId": "m2"}),
+        ])
         with patch("aiohttp.ClientSession", return_value=session_ctx):
             res = asyncio.run(
                 _standalone_send(

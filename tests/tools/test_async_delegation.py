@@ -70,13 +70,24 @@ def test_dispatch_returns_immediately_without_blocking():
 
     def runner():
         gate.wait(timeout=60)
-        return {"status": "completed", "summary": "done", "api_calls": 1,
-                "duration_seconds": 0.1, "model": "m"}
+        return {
+            "status": "completed",
+            "summary": "done",
+            "api_calls": 1,
+            "duration_seconds": 0.1,
+            "model": "m",
+        }
 
     t0 = time.monotonic()
     res = ad.dispatch_async_delegation(
-        goal="g", context=None, toolsets=None, role="leaf", model="m",
-        session_key="", runner=runner, max_async_children=3,
+        goal="g",
+        context=None,
+        toolsets=None,
+        role="leaf",
+        model="m",
+        session_key="",
+        runner=runner,
+        max_async_children=3,
     )
     elapsed = time.monotonic() - t0
 
@@ -100,8 +111,14 @@ def test_async_executor_workers_are_daemon_threads():
         return {"status": "completed", "summary": "done"}
 
     res = ad.dispatch_async_delegation(
-        goal="daemon check", context=None, toolsets=None, role="leaf", model="m",
-        session_key="", runner=runner, max_async_children=1,
+        goal="daemon check",
+        context=None,
+        toolsets=None,
+        role="leaf",
+        model="m",
+        session_key="",
+        runner=runner,
+        max_async_children=1,
     )
     assert res["status"] == "dispatched"
 
@@ -123,14 +140,24 @@ def test_async_executor_workers_are_daemon_threads():
 
 def test_completion_event_lands_on_shared_queue_with_session_key():
     def runner():
-        return {"status": "completed", "summary": "the result",
-                "api_calls": 3, "duration_seconds": 2.0, "model": "test-model"}
+        return {
+            "status": "completed",
+            "summary": "the result",
+            "api_calls": 3,
+            "duration_seconds": 2.0,
+            "model": "test-model",
+        }
 
     res = ad.dispatch_async_delegation(
-        goal="compute X", context="some context", toolsets=["web", "file"],
-        role="leaf", model="test-model", session_key="agent:main:cli:dm:local",
+        goal="compute X",
+        context="some context",
+        toolsets=["web", "file"],
+        role="leaf",
+        model="test-model",
+        session_key="agent:main:cli:dm:local",
         parent_session_id="20260703_parent_sid",
-        runner=runner, max_async_children=3,
+        runner=runner,
+        max_async_children=3,
     )
     assert res["status"] == "dispatched"
 
@@ -145,14 +172,23 @@ def test_completion_event_lands_on_shared_queue_with_session_key():
 
 def test_rich_reinjection_block_is_self_contained():
     def runner():
-        return {"status": "completed", "summary": "The answer is 42.",
-                "api_calls": 7, "duration_seconds": 3.5, "model": "test-model"}
+        return {
+            "status": "completed",
+            "summary": "The answer is 42.",
+            "api_calls": 7,
+            "duration_seconds": 3.5,
+            "model": "test-model",
+        }
 
     ad.dispatch_async_delegation(
         goal="Compute the meaning of life",
         context="User is a philosopher. Respond tersely.",
-        toolsets=["web"], role="leaf", model="test-model",
-        session_key="", runner=runner, max_async_children=3,
+        toolsets=["web"],
+        role="leaf",
+        model="test-model",
+        session_key="",
+        runner=runner,
+        max_async_children=3,
     )
     evt = _drain_one()
     assert evt is not None
@@ -179,14 +215,26 @@ def test_dispatch_rejected_at_capacity():
 
     for i in range(2):
         r = ad.dispatch_async_delegation(
-            goal=f"task{i}", context=None, toolsets=None, role="leaf",
-            model="m", session_key="", runner=blocker, max_async_children=2,
+            goal=f"task{i}",
+            context=None,
+            toolsets=None,
+            role="leaf",
+            model="m",
+            session_key="",
+            runner=blocker,
+            max_async_children=2,
         )
         assert r["status"] == "dispatched"
 
     r3 = ad.dispatch_async_delegation(
-        goal="task3", context=None, toolsets=None, role="leaf", model="m",
-        session_key="", runner=blocker, max_async_children=2,
+        goal="task3",
+        context=None,
+        toolsets=None,
+        role="leaf",
+        model="m",
+        session_key="",
+        runner=blocker,
+        max_async_children=2,
     )
     assert r3["status"] == "rejected"
     assert "capacity reached" in r3["error"]
@@ -205,17 +253,22 @@ def test_interrupt_all_signals_running_children():
 
     def blocker():
         ev.wait(timeout=60)
-        return {"status": "interrupted", "summary": None,
-                "error": "cancelled"}
+        return {"status": "interrupted", "summary": None, "error": "cancelled"}
 
     def interrupt_fn():
         interrupted["count"] += 1
         ev.set()
 
     r = ad.dispatch_async_delegation(
-        goal="long task", context=None, toolsets=None, role="leaf",
-        model="m", session_key="", runner=blocker,
-        interrupt_fn=interrupt_fn, max_async_children=3,
+        goal="long task",
+        context=None,
+        toolsets=None,
+        role="leaf",
+        model="m",
+        session_key="",
+        runner=blocker,
+        interrupt_fn=interrupt_fn,
+        max_async_children=3,
     )
     n = ad.interrupt_all(reason="test")
     assert n == 1
@@ -233,8 +286,13 @@ def test_completed_records_pruned_to_cap():
     # Run more than the retention cap quickly; ensure list doesn't grow forever.
     for i in range(ad._MAX_RETAINED_COMPLETED + 10):
         ad.dispatch_async_delegation(
-            goal=f"t{i}", context=None, toolsets=None, role="leaf", model="m",
-            session_key="", runner=lambda: {"status": "completed", "summary": "ok"},
+            goal=f"t{i}",
+            context=None,
+            toolsets=None,
+            role="leaf",
+            model="m",
+            session_key="",
+            runner=lambda: {"status": "completed", "summary": "ok"},
             max_async_children=ad._MAX_RETAINED_COMPLETED + 20,
         )
     # let workers finish
@@ -244,12 +302,19 @@ def test_completed_records_pruned_to_cap():
     assert len(ad.list_async_delegations()) <= ad._MAX_RETAINED_COMPLETED
 
 
-def test_completion_is_persisted_and_delivery_can_be_acknowledged(tmp_path, monkeypatch):
+def test_completion_is_persisted_and_delivery_can_be_acknowledged(
+    tmp_path, monkeypatch
+):
     """A finished child remains pending on disk until its queue consumer acks it."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     dispatched = ad.dispatch_async_delegation(
-        goal="durable", context="ctx", toolsets=["terminal"], role="leaf",
-        model="m", session_key="owner", parent_session_id="parent",
+        goal="durable",
+        context="ctx",
+        toolsets=["terminal"],
+        role="leaf",
+        model="m",
+        session_key="owner",
+        parent_session_id="parent",
         runner=lambda: {"status": "completed", "summary": "survived"},
     )
     assert _drain_one() is not None
@@ -266,14 +331,17 @@ def test_completion_is_persisted_and_delivery_can_be_acknowledged(tmp_path, monk
 
     assert ad.mark_completion_delivered(dispatched["delegation_id"])
     assert ad.restore_undelivered_completions(queue.Queue()) == 0
-    assert ad.get_durable_delegation(dispatched["delegation_id"])["delivery_state"] == "delivered"
+    assert (
+        ad.get_durable_delegation(dispatched["delegation_id"])["delivery_state"]
+        == "delivered"
+    )
 
 
 def test_real_process_restart_restores_owned_completion_once(tmp_path):
     """Real-import E2E: a fresh interpreter restores a prior process's result."""
     repo = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     env = {**os.environ, "CLAWK_HOME": str(tmp_path), "PYTHONPATH": repo}
-    producer = r'''
+    producer = r"""
 import time
 from tools import async_delegation as ad
 r = ad.dispatch_async_delegation(
@@ -285,22 +353,32 @@ deadline = time.time() + 5
 while ad.active_count() and time.time() < deadline:
     time.sleep(.01)
 print(r["delegation_id"])
-'''
+"""
     first = subprocess.run(
-        [sys.executable, "-c", producer], cwd=repo, env=env,
-        text=True, capture_output=True, timeout=15, check=True,
+        [sys.executable, "-c", producer],
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=15,
+        check=True,
     )
     delegation_id = first.stdout.strip().splitlines()[-1]
 
-    consumer = r'''
+    consumer = r"""
 import json
 from tools.process_registry import process_registry
 evt = process_registry.completion_queue.get_nowait()
 print(json.dumps(evt, sort_keys=True))
-'''
+"""
     second = subprocess.run(
-        [sys.executable, "-c", consumer], cwd=repo, env=env,
-        text=True, capture_output=True, timeout=15, check=True,
+        [sys.executable, "-c", consumer],
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=15,
+        check=True,
     )
     evt = json.loads(second.stdout.strip().splitlines()[-1])
     assert evt["delegation_id"] == delegation_id
@@ -308,17 +386,31 @@ print(json.dumps(evt, sort_keys=True))
     assert evt["parent_session_id"] == "durable-parent"
     assert evt["summary"] == "after restart"
 
-    acker = f'''
+    acker = f"""
 from tools import async_delegation as ad
 assert ad.mark_completion_delivered({delegation_id!r})
-'''
+"""
     subprocess.run(
-        [sys.executable, "-c", acker], cwd=repo, env=env,
-        text=True, capture_output=True, timeout=15, check=True,
+        [sys.executable, "-c", acker],
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=15,
+        check=True,
     )
     probe = subprocess.run(
-        [sys.executable, "-c", "from tools.process_registry import process_registry; print(process_registry.completion_queue.qsize())"],
-        cwd=repo, env=env, text=True, capture_output=True, timeout=15, check=True,
+        [
+            sys.executable,
+            "-c",
+            "from tools.process_registry import process_registry; print(process_registry.completion_queue.qsize())",
+        ],
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=15,
+        check=True,
     )
     assert probe.stdout.strip().splitlines()[-1] == "0"
 
@@ -332,8 +424,13 @@ def test_submit_failure_removes_durable_running_record(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ad, "_get_executor", lambda _max_workers: _BrokenExecutor())
     result = ad.dispatch_async_delegation(
-        goal="never ran", context=None, toolsets=None, role="leaf", model="m",
-        session_key="owner", runner=lambda: {},
+        goal="never ran",
+        context=None,
+        toolsets=None,
+        role="leaf",
+        model="m",
+        session_key="owner",
+        runner=lambda: {},
     )
 
     assert result["status"] == "rejected"
@@ -400,8 +497,10 @@ def test_recover_marks_abandoned_running_record_unknown(tmp_path, monkeypatch):
 def test_durable_delivery_claim_is_exclusive_and_retryable(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     record = {
-        "delegation_id": "deleg_claim", "session_key": "owner",
-        "origin_ui_session_id": "", "parent_session_id": None,
+        "delegation_id": "deleg_claim",
+        "session_key": "owner",
+        "origin_ui_session_id": "",
+        "parent_session_id": None,
         "dispatched_at": 1.0,
     }
     ad._persist_dispatch(record)
@@ -422,6 +521,7 @@ def test_durable_delivery_claim_is_exclusive_and_retryable(tmp_path, monkeypatch
 # ---------------------------------------------------------------------------
 # Integration: delegate_task(background=True) routing
 # ---------------------------------------------------------------------------
+
 
 def test_delegate_task_background_routes_async_and_does_not_block(monkeypatch):
     """delegate_task(background=True) returns a handle without running the
@@ -445,14 +545,23 @@ def test_delegate_task_background_routes_async_and_does_not_block(monkeypatch):
     def slow_child(task_index, goal, child=None, parent_agent=None, **kw):
         gate.wait(timeout=60)  # a sync impl would hang delegate_task here
         return {
-            "task_index": 0, "status": "completed", "summary": f"done: {goal}",
-            "api_calls": 1, "duration_seconds": 0.1, "model": "m",
+            "task_index": 0,
+            "status": "completed",
+            "summary": f"done: {goal}",
+            "api_calls": 1,
+            "duration_seconds": 0.1,
+            "model": "m",
             "exit_reason": "completed",
         }
 
     creds = {
-        "model": "m", "provider": None, "base_url": None, "api_key": None,
-        "api_mode": None, "command": None, "args": None,
+        "model": "m",
+        "provider": None,
+        "base_url": None,
+        "api_key": None,
+        "api_mode": None,
+        "command": None,
+        "args": None,
     }
     # monkeypatch (not `with`) so patches outlive delegate_task's return and
     # remain active while the background worker runs.
@@ -460,11 +569,14 @@ def test_delegate_task_background_routes_async_and_does_not_block(monkeypatch):
     monkeypatch.setattr(dt, "_run_single_child", slow_child)
     monkeypatch.setattr(dt, "_resolve_delegation_credentials", lambda *a, **k: creds)
     out = dt.delegate_task(
-        goal="the real task", context="ctx",
-        background=True, parent_agent=parent,
+        goal="the real task",
+        context="ctx",
+        background=True,
+        parent_agent=parent,
     )
 
     import json
+
     parsed = json.loads(out)
     assert parsed["status"] == "dispatched"
     assert parsed["mode"] == "background"
@@ -510,8 +622,13 @@ def test_delegate_task_background_uses_live_tui_agent_session_id(monkeypatch):
     fake_child._delegate_role = "leaf"
 
     creds = {
-        "model": "m", "provider": None, "base_url": None, "api_key": None,
-        "api_mode": None, "command": None, "args": None,
+        "model": "m",
+        "provider": None,
+        "base_url": None,
+        "api_key": None,
+        "api_mode": None,
+        "command": None,
+        "args": None,
     }
     monkeypatch.setattr(dt, "_build_child_agent", lambda **kw: fake_child)
     monkeypatch.setattr(dt, "_resolve_delegation_credentials", lambda *a, **k: creds)
@@ -573,14 +690,23 @@ def test_delegate_task_background_batch_runs_as_one_unit(monkeypatch):
     def _blocking_child(task_index, goal, child=None, parent_agent=None, **kw):
         gate.wait(timeout=60)
         return {
-            "task_index": task_index, "status": "completed",
-            "summary": f"done: {goal}", "api_calls": 1,
-            "duration_seconds": 0.1, "model": "m", "exit_reason": "completed",
+            "task_index": task_index,
+            "status": "completed",
+            "summary": f"done: {goal}",
+            "api_calls": 1,
+            "duration_seconds": 0.1,
+            "model": "m",
+            "exit_reason": "completed",
         }
 
     creds = {
-        "model": "m", "provider": None, "base_url": None, "api_key": None,
-        "api_mode": None, "command": None, "args": None,
+        "model": "m",
+        "provider": None,
+        "base_url": None,
+        "api_key": None,
+        "api_mode": None,
+        "command": None,
+        "args": None,
     }
 
     # Use monkeypatch (not a `with` block) so the patches stay active while the
@@ -640,14 +766,16 @@ def test_model_dispatch_forces_background():
     # Registry-fallback helper: top-level always background, regardless of
     # single vs batch; subagent never.
     assert dt._model_background_value({"goal": "x"}, top) is True
-    assert dt._model_background_value(
-        {"tasks": [{"goal": "a"}, {"goal": "b"}]}, top
-    ) is True
+    assert (
+        dt._model_background_value({"tasks": [{"goal": "a"}, {"goal": "b"}]}, top)
+        is True
+    )
     assert dt._model_background_value({"tasks": [{"goal": "a"}]}, top) is True
     assert dt._model_background_value({"goal": "x"}, sub) is False
-    assert dt._model_background_value(
-        {"tasks": [{"goal": "a"}, {"goal": "b"}]}, sub
-    ) is False
+    assert (
+        dt._model_background_value({"tasks": [{"goal": "a"}, {"goal": "b"}]}, sub)
+        is False
+    )
 
 
 def test_run_agent_dispatch_forces_background():
@@ -735,15 +863,23 @@ def test_delegate_task_background_detaches_child_from_parent(monkeypatch):
         return fake_child
 
     creds = {
-        "model": "m", "provider": None, "base_url": None, "api_key": None,
-        "api_mode": None, "command": None, "args": None,
+        "model": "m",
+        "provider": None,
+        "base_url": None,
+        "api_key": None,
+        "api_mode": None,
+        "command": None,
+        "args": None,
     }
-    with patch.object(dt, "_build_child_agent", side_effect=build_and_register), \
-         patch.object(dt, "_run_single_child", side_effect=slow_child), \
-         patch.object(dt, "_resolve_delegation_credentials", return_value=creds):
+    with (
+        patch.object(dt, "_build_child_agent", side_effect=build_and_register),
+        patch.object(dt, "_run_single_child", side_effect=slow_child),
+        patch.object(dt, "_resolve_delegation_credentials", return_value=creds),
+    ):
         out = dt.delegate_task(goal="bg task", background=True, parent_agent=parent)
 
     import json
+
     assert json.loads(out)["status"] == "dispatched"
     # Child detached immediately at dispatch, while it is still running.
     assert fake_child not in parent._active_children
@@ -767,8 +903,13 @@ def test_concurrent_dispatch_respects_capacity():
         barrier.wait(timeout=5)
         results.append(
             ad.dispatch_async_delegation(
-                goal="race", context=None, toolsets=None, role="leaf",
-                model="m", session_key="", runner=blocker,
+                goal="race",
+                context=None,
+                toolsets=None,
+                role="leaf",
+                model="m",
+                session_key="",
+                runner=blocker,
                 max_async_children=1,
             )
         )
@@ -786,6 +927,7 @@ def test_concurrent_dispatch_respects_capacity():
 # ---------------------------------------------------------------------------
 # Gateway routing: session_key -> platform/chat_id, rich formatting, injection
 # ---------------------------------------------------------------------------
+
 
 def _make_async_evt(**over):
     evt = {
@@ -871,5 +1013,3 @@ def test_gateway_cli_origin_event_left_unrouted():
     evt = _make_async_evt(session_key="")
     runner._enrich_async_delegation_routing(evt)
     assert "platform" not in evt
-
-

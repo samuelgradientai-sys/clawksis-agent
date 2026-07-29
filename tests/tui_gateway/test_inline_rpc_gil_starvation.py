@@ -34,13 +34,19 @@ def _restore_stdout():
 
 @pytest.fixture()
 def server():
-    with patch.dict("sys.modules", {
-        "clawk_constants": MagicMock(get_clawk_home=MagicMock(return_value="/tmp/clawk_test")),
-        "clawk_cli.env_loader": MagicMock(),
-        "clawk_cli.banner": MagicMock(),
-        "clawk_state": MagicMock(),
-    }):
+    with patch.dict(
+        "sys.modules",
+        {
+            "clawk_constants": MagicMock(
+                get_clawk_home=MagicMock(return_value="/tmp/clawk_test")
+            ),
+            "clawk_cli.env_loader": MagicMock(),
+            "clawk_cli.banner": MagicMock(),
+            "clawk_state": MagicMock(),
+        },
+    ):
         import importlib
+
         mod = importlib.import_module("tui_gateway.server")
         yield mod
         mod._sessions.clear()
@@ -64,12 +70,12 @@ def capture(server):
 # seconds when the GIL is contended by concurrent agent turns.
 
 FRONTEND_POLLED_RPCS = [
-    "session.active_list",   # live-session rehydrate — in-memory registry
-    "session.list",          # loads session list — SQLite query
-    "pet.info",              # petdex poll — file/network read
-    "process.list",          # background process status — process registry scan
-    "setup.runtime_check",   # runtime readiness — resolve_runtime_provider() I/O
-    "setup.status",          # provider configured check — config/credential scan
+    "session.active_list",  # live-session rehydrate — in-memory registry
+    "session.list",  # loads session list — SQLite query
+    "pet.info",  # petdex poll — file/network read
+    "process.list",  # background process status — process registry scan
+    "setup.runtime_check",  # runtime readiness — resolve_runtime_provider() I/O
+    "setup.status",  # provider configured check — config/credential scan
 ]
 
 
@@ -103,7 +109,9 @@ def test_dispatch_inline_rpc_does_not_block_under_gil_pressure(server):
 
     t0 = time.monotonic()
     # session.list is in _LONG_HANDLERS → dispatch returns None immediately
-    assert server.dispatch({"id": "slow", "method": "session.list", "params": {}}) is None
+    assert (
+        server.dispatch({"id": "slow", "method": "session.list", "params": {}}) is None
+    )
 
     # fast.check is inline → dispatch runs it synchronously and returns the result
     fast_resp = server.dispatch({"id": "fast", "method": "fast.check", "params": {}})
@@ -131,7 +139,9 @@ def test_dispatch_pet_info_does_not_block_prompt_submit(server):
         return server._ok(rid, {"pet": "cat"})
 
     server._methods["pet.info"] = slow_pet_info
-    server._methods["prompt.submit"] = lambda rid, params: server._ok(rid, {"status": "streaming"})
+    server._methods["prompt.submit"] = lambda rid, params: server._ok(
+        rid, {"status": "streaming"}
+    )
 
     t0 = time.monotonic()
     assert server.dispatch({"id": "pet", "method": "pet.info", "params": {}}) is None

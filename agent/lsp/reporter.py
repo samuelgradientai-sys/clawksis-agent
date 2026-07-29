@@ -6,6 +6,7 @@ OpenCode's ``lsp/diagnostic.ts`` and Claude Code's
 ``formatDiagnosticsSummary`` produce — ``<diagnostics>`` blocks with
 1-indexed line/column, capped at ``MAX_PER_FILE`` errors.
 """
+
 from __future__ import annotations
 
 import html
@@ -109,7 +110,7 @@ def report_for_file(
     # ``foo"><script`` can't break out of the ``file="..."`` attribute and
     # synthesize new tags inside the tool output.
     safe_path = html.escape(file_path, quote=True)
-    return f"<diagnostics file=\"{safe_path}\">\n{body}\n</diagnostics>"
+    return f'<diagnostics file="{safe_path}">\n{body}\n</diagnostics>'
 
 
 def truncate(s: str, *, limit: int = MAX_TOTAL_CHARS) -> str:

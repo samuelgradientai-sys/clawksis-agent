@@ -64,7 +64,7 @@ def jittered_backoff(
     if exponent >= 63 or base_delay <= 0:
         delay = max_delay
     else:
-        delay = min(base_delay * (2 ** exponent), max_delay)
+        delay = min(base_delay * (2**exponent), max_delay)
 
     # Seed from time + counter for decorrelation even with coarse clocks.
     seed = (time.time_ns() ^ (tick * 0x9E3779B9)) & 0xFFFFFFFF
@@ -85,7 +85,9 @@ def _error_text(error: Any) -> str:
     return " ".join(str(part) for part in parts if part is not None).lower()
 
 
-def is_zai_coding_overload_error(*, base_url: str | None, model: str | None, error: Any) -> bool:
+def is_zai_coding_overload_error(
+    *, base_url: str | None, model: str | None, error: Any
+) -> bool:
     """Return True for Z.AI Coding Plan transient overload 429s.
 
     The coding-plan endpoint reports overload as HTTP 429 with body code 1305
@@ -134,10 +136,14 @@ def adaptive_rate_limit_backoff(
     base_delay = _ZAI_CODING_OVERLOAD_LONG_BACKOFF[idx]
     # A smaller jitter ratio keeps long waits readable while still avoiding
     # synchronized retry storms across concurrent Clawksis sessions.
-    return jittered_backoff(1, base_delay=base_delay, max_delay=base_delay, jitter_ratio=0.2), "zai_coding_overload_long"
+    return jittered_backoff(
+        1, base_delay=base_delay, max_delay=base_delay, jitter_ratio=0.2
+    ), "zai_coding_overload_long"
 
 
-def zai_coding_overload_retry_ceiling(short_attempts: int = _ZAI_CODING_OVERLOAD_SHORT_ATTEMPTS) -> int:
+def zai_coding_overload_retry_ceiling(
+    short_attempts: int = _ZAI_CODING_OVERLOAD_SHORT_ATTEMPTS,
+) -> int:
     """Retry-loop ceiling needed for the full Z.AI overload backoff schedule.
 
     The adaptive policy runs ``short_attempts`` short retries, then walks the

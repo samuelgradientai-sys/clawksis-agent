@@ -316,7 +316,9 @@ class TestCoerceToolArgs:
 
     def test_bare_string_wrapped_as_array(self):
         """Bare string on array field → single-element list."""
-        schema = self._mock_schema({"urls": {"type": "array", "items": {"type": "string"}}})
+        schema = self._mock_schema({
+            "urls": {"type": "array", "items": {"type": "string"}}
+        })
         with patch("model_tools.registry.get_schema", return_value=schema):
             args = {"urls": "https://a.com"}
             result = coerce_tool_args("test_tool", args)
@@ -324,7 +326,9 @@ class TestCoerceToolArgs:
 
     def test_bare_int_wrapped_as_array(self):
         """Bare non-string scalars (int, bool, float) also get wrapped."""
-        schema = self._mock_schema({"ids": {"type": "array", "items": {"type": "integer"}}})
+        schema = self._mock_schema({
+            "ids": {"type": "array", "items": {"type": "integer"}}
+        })
         with patch("model_tools.registry.get_schema", return_value=schema):
             args = {"ids": 5}
             result = coerce_tool_args("test_tool", args)
@@ -460,7 +464,9 @@ class TestNormalizeJsonStringsForSchema:
     def test_normalizes_nested_object_field(self):
         schema = {
             "type": "object",
-            "properties": {"cfg": {"type": "object", "properties": {"k": {"type": "string"}}}},
+            "properties": {
+                "cfg": {"type": "object", "properties": {"k": {"type": "string"}}}
+            },
         }
         out = _normalize_json_strings_for_schema({"cfg": '{"k": "v"}'}, schema)
         assert out == {"cfg": {"k": "v"}}
@@ -510,7 +516,9 @@ class TestCoerceToolArgsNested:
     def test_mixed_native_and_string_elements(self):
         schema = self._array_of_objects_schema()
         with patch("model_tools.registry.get_schema", return_value=schema):
-            args = {"items": [{"id": "1", "content": "a"}, '{"id": "2", "content": "b"}']}
+            args = {
+                "items": [{"id": "1", "content": "a"}, '{"id": "2", "content": "b"}']
+            }
             result = coerce_tool_args("test_tool", args)
             assert result["items"] == [
                 {"id": "1", "content": "a"},
@@ -542,6 +550,9 @@ class TestCoerceToolArgsNested:
     def test_real_todo_schema_element_strings(self):
         """Against the real todo schema from the registry."""
         import json as _json
-        args = {"todos": [_json.dumps({"id": "1", "content": "x", "status": "pending"})]}
+
+        args = {
+            "todos": [_json.dumps({"id": "1", "content": "x", "status": "pending"})]
+        }
         result = coerce_tool_args("todo", args)
         assert result["todos"][0] == {"id": "1", "content": "x", "status": "pending"}

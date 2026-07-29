@@ -120,24 +120,22 @@ def test_full_markdown_renderer_collapses_tool_output_and_filters_system():
 def test_html_export_escapes_tool_call_names():
     payload = '<img src=x onerror="alert(document.domain)">'
 
-    rendered = _generate_messages_html(
-        [
-            {
-                "role": "assistant",
-                "content": "",
-                "tool_calls": [
-                    {
-                        "id": "call_1",
-                        "type": "function",
-                        "function": {"name": payload, "arguments": "<b>x</b>"},
-                    }
-                ],
-            }
-        ]
-    )
+    rendered = _generate_messages_html([
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": payload, "arguments": "<b>x</b>"},
+                }
+            ],
+        }
+    ])
 
     assert payload not in rendered
-    assert '&lt;img src=x onerror=&quot;alert(document.domain)&quot;&gt;' in rendered
+    assert "&lt;img src=x onerror=&quot;alert(document.domain)&quot;&gt;" in rendered
     assert "&lt;b&gt;x&lt;/b&gt;" in rendered
 
 
@@ -183,7 +181,16 @@ def test_sessions_export_cli_prompt_only_stdout(monkeypatch, capsys):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["clawk", "sessions", "export", "-", "--session-id", "sess", "--only", "user-prompts"],
+        [
+            "clawk",
+            "sessions",
+            "export",
+            "-",
+            "--session-id",
+            "sess",
+            "--only",
+            "user-prompts",
+        ],
     )
 
     main_mod.main()
@@ -258,9 +265,20 @@ def test_sessions_export_only_rejects_unsupported_format(monkeypatch, capsys):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["clawk", "sessions", "export", "-", "--format", "html", "--only", "user-prompts"],
+        [
+            "clawk",
+            "sessions",
+            "export",
+            "-",
+            "--format",
+            "html",
+            "--only",
+            "user-prompts",
+        ],
     )
 
     main_mod.main()
 
-    assert "--only user-prompts supports --format jsonl or md." in capsys.readouterr().out
+    assert (
+        "--only user-prompts supports --format jsonl or md." in capsys.readouterr().out
+    )

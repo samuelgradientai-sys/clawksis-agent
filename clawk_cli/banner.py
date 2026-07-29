@@ -284,9 +284,9 @@ def _check_via_local_git(repo_dir: Path) -> Optional[int]:
         # No history to count against; only "same commit or not" is knowable.
         head_rev = _git_stdout(["rev-parse", "HEAD"], cwd=repo_dir)
 
-        target_rev = _git_stdout(["rev-parse", "FETCH_HEAD"], cwd=repo_dir) or _git_stdout(
-            ["rev-parse", "origin/main"], cwd=repo_dir
-        )
+        target_rev = _git_stdout(
+            ["rev-parse", "FETCH_HEAD"], cwd=repo_dir
+        ) or _git_stdout(["rev-parse", "origin/main"], cwd=repo_dir)
 
         if not head_rev or not target_rev:
             return None

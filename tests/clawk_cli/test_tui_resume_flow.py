@@ -137,15 +137,13 @@ def test_cmd_chat_tui_passes_model_and_provider(monkeypatch, main_mod):
         toolsets=None,
         **kwargs,
     ):
-        captured.update(
-            {
-                "model": model,
-                "provider": provider,
-                "resume": resume_session_id,
-                "toolsets": toolsets,
-                "tui_dev": tui_dev,
-            }
-        )
+        captured.update({
+            "model": model,
+            "provider": provider,
+            "resume": resume_session_id,
+            "toolsets": toolsets,
+            "tui_dev": tui_dev,
+        })
         raise SystemExit(0)
 
     monkeypatch.setattr(main_mod, "_launch_tui", fake_launch)
@@ -264,9 +262,7 @@ def test_termux_fast_tui_launch_uses_light_parser(monkeypatch, main_mod):
     captured = {}
 
     monkeypatch.setenv("TERMUX_VERSION", "1")
-    monkeypatch.setattr(
-        sys, "argv", ["clawk", "--tui", "--toolsets", "web,terminal"]
-    )
+    monkeypatch.setattr(sys, "argv", ["clawk", "--tui", "--toolsets", "web,terminal"])
     monkeypatch.setattr(
         main_mod,
         "cmd_chat",
@@ -307,9 +303,11 @@ def test_termux_fast_cli_launch_chat_uses_light_parser(monkeypatch, main_mod):
     monkeypatch.setattr(
         main_mod,
         "cmd_chat",
-        lambda args: captured.update(
-            {"query": args.query, "toolsets": args.toolsets, "command": args.command}
-        ),
+        lambda args: captured.update({
+            "query": args.query,
+            "toolsets": args.toolsets,
+            "command": args.command,
+        }),
     )
 
     assert main_mod._try_termux_fast_cli_launch() is True
@@ -336,13 +334,11 @@ def test_termux_fast_cli_launch_bare_defers_agent_startup(monkeypatch, main_mod)
     monkeypatch.setattr(
         main_mod,
         "cmd_chat",
-        lambda args: captured.update(
-            {
-                "query": args.query,
-                "command": args.command,
-                "compact": getattr(args, "compact", False),
-            }
-        ),
+        lambda args: captured.update({
+            "query": args.query,
+            "command": args.command,
+            "compact": getattr(args, "compact", False),
+        }),
     )
 
     assert main_mod._try_termux_fast_cli_launch() is True
@@ -380,10 +376,9 @@ def test_termux_fast_cli_launch_oneshot_uses_light_parser(monkeypatch, main_mod)
         sys.modules,
         "clawk_cli.oneshot",
         types.SimpleNamespace(
-            run_oneshot=lambda prompt, **kwargs: captured.update(
-                {"prompt": prompt, **kwargs}
+            run_oneshot=lambda prompt, **kwargs: (
+                captured.update({"prompt": prompt, **kwargs}) or 17
             )
-            or 17
         ),
     )
     monkeypatch.setattr(
@@ -413,7 +408,9 @@ def test_termux_fast_cli_launch_version_skips_update_check(monkeypatch, main_mod
     monkeypatch.delenv("CLAWK_TUI", raising=False)
     monkeypatch.setattr(sys, "argv", ["clawk", "version"])
     monkeypatch.setattr(
-        main_mod, "_print_version_info", lambda *, check_updates: captured.append(check_updates)
+        main_mod,
+        "_print_version_info",
+        lambda *, check_updates: captured.append(check_updates),
     )
 
     assert main_mod._try_termux_fast_cli_launch() is True
@@ -478,7 +475,9 @@ def test_termux_bundled_skills_stamp_controls_sync(monkeypatch, tmp_path, main_m
     assert main_mod._termux_bundled_skills_sync_needed() is True
 
 
-def test_termux_skips_bundled_skill_sync_when_stamp_fresh(monkeypatch, tmp_path, main_mod):
+def test_termux_skips_bundled_skill_sync_when_stamp_fresh(
+    monkeypatch, tmp_path, main_mod
+):
     calls = []
 
     monkeypatch.setenv("TERMUX_VERSION", "1")
@@ -635,10 +634,9 @@ def test_main_top_level_oneshot_accepts_toolsets(monkeypatch, main_mod):
         sys.modules,
         "clawk_cli.oneshot",
         types.SimpleNamespace(
-            run_oneshot=lambda prompt, **kwargs: captured.update(
-                {"prompt": prompt, **kwargs}
+            run_oneshot=lambda prompt, **kwargs: (
+                captured.update({"prompt": prompt, **kwargs}) or 0
             )
-            or 0
         ),
     )
     monkeypatch.setattr(
@@ -660,9 +658,7 @@ def test_main_top_level_oneshot_accepts_toolsets(monkeypatch, main_mod):
     }
 
 
-def test_exit_after_oneshot_flushes_stdio_and_calls_os_exit(
-    monkeypatch, main_mod
-):
+def test_exit_after_oneshot_flushes_stdio_and_calls_os_exit(monkeypatch, main_mod):
     flushed = []
     exits = []
 
@@ -690,9 +686,7 @@ def test_exit_after_oneshot_flushes_stdio_and_calls_os_exit(
     assert flushed == ["stdout", "stderr"]
 
 
-def test_exit_after_oneshot_invokes_logging_shutdown_in_order(
-    monkeypatch, main_mod
-):
+def test_exit_after_oneshot_invokes_logging_shutdown_in_order(monkeypatch, main_mod):
     events = []
 
     class FakeStream:
@@ -832,9 +826,7 @@ def test_run_and_exit_oneshot_routes_bare_system_exit_to_zero(monkeypatch, main_
     assert exits == [None]
 
 
-def test_run_and_exit_oneshot_prints_system_exit_message(
-    monkeypatch, capsys, main_mod
-):
+def test_run_and_exit_oneshot_prints_system_exit_message(monkeypatch, capsys, main_mod):
     exits = []
 
     def fake_run_oneshot(*_args, **_kwargs):
@@ -870,22 +862,33 @@ def test_run_and_exit_oneshot_cleans_global_runtime_before_hard_exit(
     monkeypatch.setitem(
         sys.modules,
         "clawk_cli.oneshot",
-        types.SimpleNamespace(run_oneshot=lambda *_args, **_kwargs: events.append("run") or 0),
+        types.SimpleNamespace(
+            run_oneshot=lambda *_args, **_kwargs: events.append("run") or 0
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
         "tools.terminal_tool",
-        _mod("tools.terminal_tool", cleanup_all_environments=lambda: events.append("terminal")),
+        _mod(
+            "tools.terminal_tool",
+            cleanup_all_environments=lambda: events.append("terminal"),
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
         "tools.async_delegation",
-        _mod("tools.async_delegation", interrupt_all=lambda **kw: events.append("delegation")),
+        _mod(
+            "tools.async_delegation",
+            interrupt_all=lambda **kw: events.append("delegation"),
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
         "tools.browser_tool",
-        _mod("tools.browser_tool", _emergency_cleanup_all_sessions=lambda: events.append("browser")),
+        _mod(
+            "tools.browser_tool",
+            _emergency_cleanup_all_sessions=lambda: events.append("browser"),
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -895,7 +898,10 @@ def test_run_and_exit_oneshot_cleans_global_runtime_before_hard_exit(
     monkeypatch.setitem(
         sys.modules,
         "agent.auxiliary_client",
-        _mod("agent.auxiliary_client", shutdown_cached_clients=lambda: events.append("aux")),
+        _mod(
+            "agent.auxiliary_client",
+            shutdown_cached_clients=lambda: events.append("aux"),
+        ),
     )
     monkeypatch.setattr(
         main_mod, "_exit_after_oneshot", lambda rc: events.append(f"exit:{rc}")
@@ -903,7 +909,15 @@ def test_run_and_exit_oneshot_cleans_global_runtime_before_hard_exit(
 
     main_mod._run_and_exit_oneshot("hello")
 
-    assert events == ["run", "terminal", "delegation", "browser", "mcp", "aux", "exit:0"]
+    assert events == [
+        "run",
+        "terminal",
+        "delegation",
+        "browser",
+        "mcp",
+        "aux",
+        "exit:0",
+    ]
 
 
 def test_run_and_exit_oneshot_still_exits_when_global_cleanup_raises(
@@ -922,7 +936,9 @@ def test_run_and_exit_oneshot_still_exits_when_global_cleanup_raises(
     monkeypatch.setitem(
         sys.modules,
         "tools.terminal_tool",
-        types.SimpleNamespace(cleanup_all_environments=lambda: events.append("terminal")),
+        types.SimpleNamespace(
+            cleanup_all_environments=lambda: events.append("terminal")
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -932,7 +948,9 @@ def test_run_and_exit_oneshot_still_exits_when_global_cleanup_raises(
     monkeypatch.setitem(
         sys.modules,
         "tools.browser_tool",
-        types.SimpleNamespace(_emergency_cleanup_all_sessions=lambda: events.append("browser")),
+        types.SimpleNamespace(
+            _emergency_cleanup_all_sessions=lambda: events.append("browser")
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -964,9 +982,7 @@ def test_run_and_exit_oneshot_hard_exits_when_cleanup_is_interrupted(
         "clawk_cli.oneshot",
         types.SimpleNamespace(run_oneshot=lambda *_args, **_kwargs: 0),
     )
-    monkeypatch.setattr(
-        main_mod, "_cleanup_oneshot_runtime", _raise_keyboard_interrupt
-    )
+    monkeypatch.setattr(main_mod, "_cleanup_oneshot_runtime", _raise_keyboard_interrupt)
     monkeypatch.setattr(main_mod, "_exit_after_oneshot", _raise_exit)
 
     with pytest.raises(SystemExit) as exc:
@@ -975,9 +991,7 @@ def test_run_and_exit_oneshot_hard_exits_when_cleanup_is_interrupted(
     assert exc.value.code == 0
 
 
-def test_run_and_exit_oneshot_routes_keyboard_interrupt_to_130(
-    monkeypatch, main_mod
-):
+def test_run_and_exit_oneshot_routes_keyboard_interrupt_to_130(monkeypatch, main_mod):
     exits = []
 
     def fake_run_oneshot(*_args, **_kwargs):
@@ -1209,12 +1223,9 @@ def test_oneshot_run_agent_closes_agent_after_chat(monkeypatch):
     )
     monkeypatch.setattr(oneshot_mod, "_create_session_db_for_oneshot", lambda: None)
 
-    assert (
-        oneshot_mod._run_agent(
-            "hello", model="gpt-test", provider="openai", use_config_toolsets=False
-        )
-        == ("done", {"final_response": "done"})
-    )
+    assert oneshot_mod._run_agent(
+        "hello", model="gpt-test", provider="openai", use_config_toolsets=False
+    ) == ("done", {"final_response": "done"})
     assert closed == [True]
     assert shutdown_messages == [[{"role": "user", "content": "hello"}]]
 
@@ -1316,12 +1327,9 @@ def test_oneshot_run_agent_closes_session_db(monkeypatch):
         oneshot_mod, "_create_session_db_for_oneshot", lambda: FakeSessionDB()
     )
 
-    assert (
-        oneshot_mod._run_agent(
-            "hello", model="gpt-test", provider="openai", use_config_toolsets=False
-        )
-        == ("done", {"final_response": "done"})
-    )
+    assert oneshot_mod._run_agent(
+        "hello", model="gpt-test", provider="openai", use_config_toolsets=False
+    ) == ("done", {"final_response": "done"})
     assert db_closed == [True]
 
 
@@ -1405,7 +1413,9 @@ def test_oneshot_prints_nonempty_final_response(monkeypatch, capsys):
     _stub_plugin_discovery(monkeypatch)
     import clawk_cli.oneshot as oneshot_mod
 
-    monkeypatch.setattr(oneshot_mod, "_run_agent", lambda *_args, **_kwargs: ("done", {}))
+    monkeypatch.setattr(
+        oneshot_mod, "_run_agent", lambda *_args, **_kwargs: ("done", {})
+    )
 
     assert oneshot_mod.run_oneshot("hello") == 0
     captured = capsys.readouterr()
@@ -1596,7 +1606,9 @@ def test_oneshot_wires_session_db_for_recall(monkeypatch):
         return module
 
     monkeypatch.setitem(sys.modules, "run_agent", mod("run_agent", AIAgent=FakeAgent))
-    monkeypatch.setitem(sys.modules, "clawk_state", mod("clawk_state", SessionDB=FakeSessionDB))
+    monkeypatch.setitem(
+        sys.modules, "clawk_state", mod("clawk_state", SessionDB=FakeSessionDB)
+    )
     monkeypatch.setitem(
         sys.modules,
         "clawk_cli.config",
@@ -1605,7 +1617,9 @@ def test_oneshot_wires_session_db_for_recall(monkeypatch):
     monkeypatch.setitem(
         sys.modules,
         "clawk_cli.models",
-        mod("clawk_cli.models", detect_provider_for_model=lambda *_args, **_kwargs: None),
+        mod(
+            "clawk_cli.models", detect_provider_for_model=lambda *_args, **_kwargs: None
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -1624,7 +1638,10 @@ def test_oneshot_wires_session_db_for_recall(monkeypatch):
     monkeypatch.setitem(
         sys.modules,
         "clawk_cli.tools_config",
-        mod("clawk_cli.tools_config", _get_platform_tools=lambda *_args, **_kwargs: {"session_search"}),
+        mod(
+            "clawk_cli.tools_config",
+            _get_platform_tools=lambda *_args, **_kwargs: {"session_search"},
+        ),
     )
 
     text, result = _run_agent("recall this")
@@ -1721,15 +1738,13 @@ def test_launch_tui_applies_terminal_backend_config(
     captured = {}
     config_path = Path(os.environ["CLAWK_HOME"]) / "config.yaml"
     config_path.write_text(
-        "\n".join(
-            [
-                "terminal:",
-                "  backend: docker",
-                "  docker_image: example/clawk-tools:latest",
-                "  docker_extra_args:",
-                "    - --network=host",
-            ]
-        ),
+        "\n".join([
+            "terminal:",
+            "  backend: docker",
+            "  docker_image: example/clawk-tools:latest",
+            "  docker_extra_args:",
+            "    - --network=host",
+        ]),
         encoding="utf-8",
     )
     monkeypatch.delenv("TERMINAL_ENV", raising=False)
@@ -1826,7 +1841,9 @@ def test_make_tui_argv_dev_prebuilds_clawk_ink(monkeypatch, main_mod, tmp_path):
     monkeypatch.setattr(main_mod, "_ensure_tui_node", lambda: None)
     monkeypatch.setattr(main_mod, "_tui_need_npm_install", lambda _tui_dir: False)
     monkeypatch.delenv("CLAWK_TUI_DIR", raising=False)
-    monkeypatch.setattr(main_mod.shutil, "which", lambda bin_name: f"/usr/bin/{bin_name}")
+    monkeypatch.setattr(
+        main_mod.shutil, "which", lambda bin_name: f"/usr/bin/{bin_name}"
+    )
 
     calls = []
 

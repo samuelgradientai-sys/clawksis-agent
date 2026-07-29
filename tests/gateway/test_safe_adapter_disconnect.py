@@ -62,7 +62,9 @@ async def test_safe_disconnect_handles_none_platform(bare_runner):
 
 
 @pytest.mark.asyncio
-async def test_safe_disconnect_times_out_and_continues(bare_runner, monkeypatch, caplog):
+async def test_safe_disconnect_times_out_and_continues(
+    bare_runner, monkeypatch, caplog
+):
     """A wedged adapter disconnect must not block gateway shutdown."""
     monkeypatch.setenv("CLAWK_GATEWAY_ADAPTER_DISCONNECT_TIMEOUT", "0.001")
     adapter = MagicMock()

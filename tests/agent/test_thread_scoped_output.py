@@ -141,7 +141,9 @@ def test_many_concurrent_silenced_and_loud_threads():
         start.set()
         for t in threads:
             t.join(timeout=15.0)
-        assert not any(t.is_alive() for t in threads), "straggler thread would truncate captured output"
+        assert not any(t.is_alive() for t in threads), (
+            "straggler thread would truncate captured output"
+        )
 
     captured = _run_with_real_stream(body)
     for i in range(5):

@@ -60,14 +60,19 @@ def _patches(client, *, task_timeout):
     """Common mocks: provider resolution, cached client, response validation,
     and the config-derived task timeout."""
     return (
-        patch("agent.auxiliary_client._resolve_task_provider_model",
-              return_value=("openai-codex", "gpt-5.5", None, None, None)),
-        patch("agent.auxiliary_client._get_cached_client",
-              return_value=(client, "gpt-5.5")),
-        patch("agent.auxiliary_client._validate_llm_response",
-              side_effect=lambda resp, _task, **_kw: resp),
-        patch("agent.auxiliary_client._get_task_timeout",
-              return_value=task_timeout),
+        patch(
+            "agent.auxiliary_client._resolve_task_provider_model",
+            return_value=("openai-codex", "gpt-5.5", None, None, None),
+        ),
+        patch(
+            "agent.auxiliary_client._get_cached_client",
+            return_value=(client, "gpt-5.5"),
+        ),
+        patch(
+            "agent.auxiliary_client._validate_llm_response",
+            side_effect=lambda resp, _task, **_kw: resp,
+        ),
+        patch("agent.auxiliary_client._get_task_timeout", return_value=task_timeout),
     )
 
 

@@ -52,6 +52,7 @@ from clawk_cli.config import DEFAULT_CONFIG
 # Shared fixture: redirect Path.home() and CLAWK_HOME for profile tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def profile_env(tmp_path, monkeypatch):
     """Set up an isolated environment for profile tests.
@@ -70,6 +71,7 @@ def profile_env(tmp_path, monkeypatch):
 # ===================================================================
 # TestValidateProfileName
 # ===================================================================
+
 
 class TestNormalizeProfileName:
     """Tests for normalize_profile_name()."""
@@ -138,6 +140,7 @@ class TestValidateProfileName:
 # TestGetProfileDir
 # ===================================================================
 
+
 class TestGetProfileDir:
     """Tests for get_profile_dir()."""
 
@@ -160,14 +163,23 @@ class TestGetProfileDir:
 # TestCreateProfile
 # ===================================================================
 
+
 class TestCreateProfile:
     """Tests for create_profile()."""
 
     def test_creates_directory_with_subdirs(self, profile_env):
         profile_dir = create_profile("coder", no_alias=True)
         assert profile_dir.is_dir()
-        for subdir in ["memories", "sessions", "skills", "skins", "logs",
-                        "plans", "workspace", "cron"]:
+        for subdir in [
+            "memories",
+            "sessions",
+            "skills",
+            "skins",
+            "logs",
+            "plans",
+            "workspace",
+            "cron",
+        ]:
             assert (profile_dir / subdir).is_dir(), f"Missing subdir: {subdir}"
 
     def test_seeds_placeholder_env_file(self, profile_env):
@@ -175,14 +187,14 @@ class TestCreateProfile:
         writes are profile-scoped from day one instead of falling through
         to the shell environment / root install."""
         import stat
+
         profile_dir = create_profile("coder", no_alias=True)
         env_path = profile_dir / ".env"
         assert env_path.exists()
         content = env_path.read_text(encoding="utf-8")
         # Placeholder only — no credentials leak in from anywhere.
         assert all(
-            line.startswith("#") or not line.strip()
-            for line in content.splitlines()
+            line.startswith("#") or not line.strip() for line in content.splitlines()
         )
         mode = stat.S_IMODE(env_path.stat().st_mode)
         assert mode == 0o600
@@ -247,11 +259,7 @@ class TestCreateProfile:
         profile_dir = create_profile("coder", clone_config=True, no_alias=True)
 
         assert (
-            profile_dir
-            / "skills"
-            / "custom"
-            / "installed-skill"
-            / "SKILL.md"
+            profile_dir / "skills" / "custom" / "installed-skill" / "SKILL.md"
         ).read_text() == "---\nname: installed-skill\n---\n"
 
     def test_clone_all_copies_entire_tree(self, profile_env):
@@ -314,7 +322,13 @@ class TestCreateProfile:
         (default_home / "node_modules" / ".package-lock.json").mkdir(parents=True)
         # Bytecode + temp files at nested depth (universal exclusion)
         (default_home / "skills" / "my-skill" / "__pycache__").mkdir(parents=True)
-        (default_home / "skills" / "my-skill" / "__pycache__" / "module.cpython-311.pyc").write_text("stale")
+        (
+            default_home
+            / "skills"
+            / "my-skill"
+            / "__pycache__"
+            / "module.cpython-311.pyc"
+        ).write_text("stale")
         (default_home / "skills" / "my-skill" / "module.pyc").write_text("stale")
         (default_home / "skills" / "my-skill" / "module.pyo").write_text("stale")
         (default_home / "data.sock").write_text("socket")
@@ -371,13 +385,20 @@ class TestCreateProfile:
         profile_dir = create_profile("fresh", clone_all=True, no_alias=True)
 
         for history in (
-            "state.db", "state.db-wal", "state.db-shm",
-            "sessions", "backups", "state-snapshots", "checkpoints",
+            "state.db",
+            "state.db-wal",
+            "state.db-shm",
+            "sessions",
+            "backups",
+            "state-snapshots",
+            "checkpoints",
         ):
             assert not (profile_dir / history).exists(), history
         assert (profile_dir / "config.yaml").read_text() == "model: gpt-4"
         # Root-only: nested same-name dirs survive
-        assert (profile_dir / "workspace" / "backups" / "user-data.txt").read_text() == "mine"
+        assert (
+            profile_dir / "workspace" / "backups" / "user-data.txt"
+        ).read_text() == "mine"
 
     def test_clone_config_missing_files_skipped(self, profile_env):
         """Clone config gracefully skips files that don't exist in source."""
@@ -394,6 +415,7 @@ class TestCreateProfile:
 # ===================================================================
 # TestNoSkillsOptOut
 # ===================================================================
+
 
 class TestNoSkillsOptOut:
     """Tests for `clawk profile create --no-skills` and the opt-out marker."""
@@ -485,9 +507,12 @@ class TestNoSkillsOptOut:
         called = []
         monkeypatch.setattr(
             "subprocess.run",
-            lambda *a, **kw: (called.append(a), _sp.CompletedProcess(
-                args=a, returncode=0, stdout='{"copied": []}', stderr=""
-            ))[1],
+            lambda *a, **kw: (
+                called.append(a),
+                _sp.CompletedProcess(
+                    args=a, returncode=0, stdout='{"copied": []}', stderr=""
+                ),
+            )[1],
         )
         r1 = seed_profile_skills(profile_dir, quiet=True)
         assert r1.get("skipped_opt_out") is True
@@ -505,6 +530,7 @@ class TestNoSkillsOptOut:
 # TestBackfillProfileEnvs
 # ===================================================================
 
+
 class TestBackfillProfileEnvs:
     """Tests for backfill_profile_envs() — the `clawk update` pass that
     gives pre-#44792 profiles (created before .env seeding) their own
@@ -512,6 +538,7 @@ class TestBackfillProfileEnvs:
 
     def test_copies_default_env_into_envless_profiles(self, profile_env):
         import stat
+
         tmp_path = profile_env
         (tmp_path / ".clawk" / ".env").write_text("OPENROUTER_API_KEY=root-key\n")
         p1 = create_profile("old1", no_alias=True)
@@ -547,8 +574,7 @@ class TestBackfillProfileEnvs:
         assert backfilled == ["noroot"]
         content = (p / ".env").read_text(encoding="utf-8")
         assert all(
-            line.startswith("#") or not line.strip()
-            for line in content.splitlines()
+            line.startswith("#") or not line.strip() for line in content.splitlines()
         )
 
     def test_no_profiles_root_is_noop(self, profile_env):
@@ -558,6 +584,7 @@ class TestBackfillProfileEnvs:
 # ===================================================================
 # TestDeleteProfile
 # ===================================================================
+
 
 class TestDeleteProfile:
     """Tests for delete_profile()."""
@@ -582,10 +609,17 @@ class TestDeleteProfile:
         profile_dir = create_profile("coder", no_alias=True)
         set_active_profile("coder")
 
-        with patch("clawk_cli.profiles._cleanup_gateway_service"), \
-             patch("clawk_cli.profiles.time.sleep"), \
-             patch("clawk_cli.profiles.shutil.rmtree", side_effect=PermissionError("locked")):
-            with pytest.raises(RuntimeError, match="Could not remove profile directory"):
+        with (
+            patch("clawk_cli.profiles._cleanup_gateway_service"),
+            patch("clawk_cli.profiles.time.sleep"),
+            patch(
+                "clawk_cli.profiles.shutil.rmtree",
+                side_effect=PermissionError("locked"),
+            ),
+        ):
+            with pytest.raises(
+                RuntimeError, match="Could not remove profile directory"
+            ):
                 delete_profile("coder", yes=True)
 
         assert profile_dir.is_dir()
@@ -595,10 +629,14 @@ class TestDeleteProfile:
         """A Desktop-spawned backend (not in gateway.pid) is stopped first."""
         profile_dir = create_profile("coder", no_alias=True)
 
-        with patch("clawk_cli.profiles._cleanup_gateway_service"), \
-             patch("clawk_cli.profiles._profile_bound_backend_pids", return_value=[4242]) as pids, \
-             patch("gateway.status.terminate_pid") as terminate, \
-             patch("gateway.status._pid_exists", return_value=False):
+        with (
+            patch("clawk_cli.profiles._cleanup_gateway_service"),
+            patch(
+                "clawk_cli.profiles._profile_bound_backend_pids", return_value=[4242]
+            ) as pids,
+            patch("gateway.status.terminate_pid") as terminate,
+            patch("gateway.status._pid_exists", return_value=False),
+        ):
             delete_profile("coder", yes=True)
 
         pids.assert_called_once()
@@ -617,10 +655,12 @@ class TestDeleteProfile:
                 raise OSError(66, "Directory not empty")
             return real_rmtree(path)
 
-        with patch("clawk_cli.profiles._cleanup_gateway_service"), \
-             patch("clawk_cli.profiles._profile_bound_backend_pids", return_value=[]), \
-             patch("clawk_cli.profiles.time.sleep"), \
-             patch("clawk_cli.profiles.shutil.rmtree", side_effect=flaky_rmtree):
+        with (
+            patch("clawk_cli.profiles._cleanup_gateway_service"),
+            patch("clawk_cli.profiles._profile_bound_backend_pids", return_value=[]),
+            patch("clawk_cli.profiles.time.sleep"),
+            patch("clawk_cli.profiles.shutil.rmtree", side_effect=flaky_rmtree),
+        ):
             delete_profile("coder", yes=True)
 
         assert calls["n"] == 2
@@ -634,7 +674,12 @@ class TestDeleteProfile:
         class FakeProc:
             def __init__(self, pid, cmdline, username="me"):
                 self.pid = pid
-                self.info = {"pid": pid, "name": "python", "username": username, "cmdline": cmdline}
+                self.info = {
+                    "pid": pid,
+                    "name": "python",
+                    "username": username,
+                    "cmdline": cmdline,
+                }
 
             def parent(self):
                 return None
@@ -648,13 +693,22 @@ class TestDeleteProfile:
         self_pid = os.getpid()
         procs = [
             # Backend bound to coder → matched.
-            FakeProc(101, ["python", "-m", "clawk_cli.main", "--profile", "coder", "serve"]),
+            FakeProc(
+                101, ["python", "-m", "clawk_cli.main", "--profile", "coder", "serve"]
+            ),
             # Interactive chat for coder → NOT a backend subcommand, skipped.
-            FakeProc(102, ["python", "-m", "clawk_cli.main", "--profile", "coder", "chat"]),
+            FakeProc(
+                102, ["python", "-m", "clawk_cli.main", "--profile", "coder", "chat"]
+            ),
             # Backend for a different profile → skipped.
-            FakeProc(103, ["python", "-m", "clawk_cli.main", "--profile", "other", "serve"]),
+            FakeProc(
+                103, ["python", "-m", "clawk_cli.main", "--profile", "other", "serve"]
+            ),
             # This very process → skipped even if it matched.
-            FakeProc(self_pid, ["python", "-m", "clawk_cli.main", "--profile", "coder", "serve"]),
+            FakeProc(
+                self_pid,
+                ["python", "-m", "clawk_cli.main", "--profile", "coder", "serve"],
+            ),
         ]
 
         fake_psutil = types.SimpleNamespace(
@@ -673,6 +727,7 @@ class TestDeleteProfile:
 # ===================================================================
 # TestListProfiles
 # ===================================================================
+
 
 class TestListProfiles:
     """Tests for list_profiles()."""
@@ -708,6 +763,7 @@ class TestListProfiles:
 # ===================================================================
 # TestActiveProfile
 # ===================================================================
+
 
 class TestActiveProfile:
     """Tests for set_active_profile() / get_active_profile()."""
@@ -745,6 +801,7 @@ class TestActiveProfile:
 # TestGetActiveProfileName
 # ===================================================================
 
+
 class TestGetActiveProfileName:
     """Tests for get_active_profile_name()."""
 
@@ -775,6 +832,7 @@ class TestGetActiveProfileName:
 # TestResolveProfileEnv
 # ===================================================================
 
+
 class TestResolveProfileEnv:
     """Tests for resolve_profile_env()."""
 
@@ -801,6 +859,7 @@ class TestResolveProfileEnv:
 # ===================================================================
 # TestAliasCollision
 # ===================================================================
+
 
 class TestAliasCollision:
     """Tests for check_alias_collision()."""
@@ -851,7 +910,8 @@ class TestAliasCollision:
         bat_path.write_text("@echo off\r\nclawk -p mybot %*\r\n")
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
-                returncode=0, stdout=str(bat_path),
+                returncode=0,
+                stdout=str(bat_path),
             )
             result = check_alias_collision("mybot")
         assert result is None  # our own wrapper, safe to overwrite
@@ -869,13 +929,17 @@ class TestAliasCollision:
 # TestWrapperScript
 # ===================================================================
 
+
 class TestWrapperScript:
     """Tests for create_wrapper_script() and remove_wrapper_script()."""
 
     def test_creates_sh_on_posix(self, profile_env, monkeypatch):
         monkeypatch.setattr("sys.platform", "darwin")
-        monkeypatch.setattr("clawk_cli.profiles.shutil.which", lambda name: "/opt/clawksis/bin/clawk")
+        monkeypatch.setattr(
+            "clawk_cli.profiles.shutil.which", lambda name: "/opt/clawksis/bin/clawk"
+        )
         from clawk_cli.profiles import create_wrapper_script
+
         wrapper = create_wrapper_script("mybot")
         assert wrapper is not None
         assert wrapper.name == "mybot"
@@ -886,6 +950,7 @@ class TestWrapperScript:
     def test_creates_bat_on_windows(self, profile_env, monkeypatch):
         monkeypatch.setattr("sys.platform", "win32")
         from clawk_cli.profiles import create_wrapper_script
+
         wrapper = create_wrapper_script("mybot")
         assert wrapper is not None
         assert wrapper.name == "mybot.bat"
@@ -897,6 +962,7 @@ class TestWrapperScript:
     def test_remove_finds_bat_on_windows(self, profile_env, monkeypatch):
         monkeypatch.setattr("sys.platform", "win32")
         from clawk_cli.profiles import create_wrapper_script, remove_wrapper_script
+
         wrapper = create_wrapper_script("mybot")
         assert wrapper is not None
         assert wrapper.exists()
@@ -907,6 +973,7 @@ class TestWrapperScript:
     def test_remove_finds_sh_on_posix(self, profile_env, monkeypatch):
         monkeypatch.setattr("sys.platform", "darwin")
         from clawk_cli.profiles import create_wrapper_script, remove_wrapper_script
+
         wrapper = create_wrapper_script("mybot")
         assert wrapper is not None
         assert wrapper.exists()
@@ -916,6 +983,7 @@ class TestWrapperScript:
 
     def test_remove_returns_false_when_absent(self, profile_env):
         from clawk_cli.profiles import remove_wrapper_script
+
         assert remove_wrapper_script("nonexistent") is False
 
     def test_custom_alias_target_on_posix(self, profile_env, monkeypatch):
@@ -923,6 +991,7 @@ class TestWrapperScript:
         # is named after the alias, the -p content references the profile.
         monkeypatch.setattr("sys.platform", "darwin")
         from clawk_cli.profiles import create_wrapper_script
+
         wrapper = create_wrapper_script("rq", target="redqueen")
         assert wrapper is not None
         assert wrapper.name == "rq"
@@ -935,6 +1004,7 @@ class TestWrapperScript:
         # .bat (not a clobbered #!/bin/sh) on Windows.
         monkeypatch.setattr("sys.platform", "win32")
         from clawk_cli.profiles import create_wrapper_script
+
         wrapper = create_wrapper_script("rq", target="redqueen")
         assert wrapper is not None
         assert wrapper.name == "rq.bat"
@@ -948,6 +1018,7 @@ class TestWrapperScript:
 # ===================================================================
 # TestWrapperScriptSecurity — path-traversal hardening
 # ===================================================================
+
 
 class TestWrapperScriptSecurity:
     """A crafted alias name must not escape the wrapper directory."""
@@ -986,6 +1057,7 @@ class TestWrapperScriptSecurity:
     def test_legit_alias_stays_inside_wrapper_dir(self, profile_env, monkeypatch):
         monkeypatch.setattr("sys.platform", "darwin")
         from clawk_cli.profiles import _get_wrapper_dir
+
         wrapper = create_wrapper_script("mybot", target="coder")
         assert wrapper is not None
         assert wrapper.resolve().is_relative_to(_get_wrapper_dir().resolve())
@@ -996,12 +1068,14 @@ class TestWrapperScriptSecurity:
 # TestFindAliasForProfile — display-side reverse lookup
 # ===================================================================
 
+
 class TestFindAliasForProfile:
     """Tests for find_alias_for_profile() and alias display in list/show."""
 
     def test_profile_named_alias(self, profile_env, monkeypatch):
         monkeypatch.setattr("sys.platform", "darwin")
         from clawk_cli.profiles import create_wrapper_script, find_alias_for_profile
+
         create_wrapper_script("steve")
         assert find_alias_for_profile("steve") == "steve"
 
@@ -1010,26 +1084,30 @@ class TestFindAliasForProfile:
         # profile name, because that's the command the user actually typed.
         monkeypatch.setattr("sys.platform", "darwin")
         from clawk_cli.profiles import create_wrapper_script, find_alias_for_profile
+
         create_wrapper_script("qiaobusi", target="steve")
         assert find_alias_for_profile("steve") == "qiaobusi"
 
     def test_no_alias_returns_none(self, profile_env, monkeypatch):
         monkeypatch.setattr("sys.platform", "darwin")
         from clawk_cli.profiles import find_alias_for_profile
+
         assert find_alias_for_profile("steve") is None
 
     def test_ignores_unrelated_files(self, profile_env, monkeypatch):
         # ~/.local/bin commonly holds unrelated binaries; they must not match.
         monkeypatch.setattr("sys.platform", "darwin")
         from clawk_cli.profiles import _get_wrapper_dir, find_alias_for_profile
+
         wrapper_dir = _get_wrapper_dir()
         wrapper_dir.mkdir(parents=True, exist_ok=True)
-        (wrapper_dir / "pip").write_text("#!/bin/sh\nexec python -m pip \"$@\"\n")
+        (wrapper_dir / "pip").write_text('#!/bin/sh\nexec python -m pip "$@"\n')
         assert find_alias_for_profile("steve") is None
 
     def test_custom_alias_on_windows(self, profile_env, monkeypatch):
         monkeypatch.setattr("sys.platform", "win32")
         from clawk_cli.profiles import create_wrapper_script, find_alias_for_profile
+
         create_wrapper_script("qiaobusi", target="steve")
         # The .bat extension must be stripped from the returned alias name.
         assert find_alias_for_profile("steve") == "qiaobusi"
@@ -1041,6 +1119,7 @@ class TestFindAliasForProfile:
             create_wrapper_script,
             list_profiles,
         )
+
         create_profile("steve", no_alias=True)
         create_wrapper_script("qiaobusi", target="steve")
         info = next(p for p in list_profiles() if p.name == "steve")
@@ -1052,6 +1131,7 @@ class TestFindAliasForProfile:
 # ===================================================================
 # TestRenameProfile
 # ===================================================================
+
 
 class TestRenameProfile:
     """Tests for rename_profile()."""
@@ -1074,20 +1154,22 @@ class TestRenameProfile:
         tmp_path = profile_env
         create_profile("ssi_health", no_alias=True)
         honcho_path = tmp_path / ".clawk" / "honcho.json"
-        honcho_path.write_text(json.dumps({
-            "hosts": {
-                "clawk.ssi_health": {
-                    "recallMode": "hybrid",
-                    "writeFrequency": "async",
-                    "sessionStrategy": "per-session",
-                    "saveMessages": True,
-                    "peerName": "user-peer",
-                    "aiPeer": "ssi_health",
-                    "workspace": "clawk",
-                    "enabled": True,
+        honcho_path.write_text(
+            json.dumps({
+                "hosts": {
+                    "clawk.ssi_health": {
+                        "recallMode": "hybrid",
+                        "writeFrequency": "async",
+                        "sessionStrategy": "per-session",
+                        "saveMessages": True,
+                        "peerName": "user-peer",
+                        "aiPeer": "ssi_health",
+                        "workspace": "clawk",
+                        "enabled": True,
+                    }
                 }
-            }
-        }))
+            })
+        )
 
         with patch("clawk_cli.profiles.check_alias_collision", return_value="skip"):
             rename_profile("ssi_health", "heimdall")
@@ -1101,11 +1183,11 @@ class TestRenameProfile:
         tmp_path = profile_env
         create_profile("ssi_health", no_alias=True)
         honcho_path = tmp_path / ".clawk" / "honcho.json"
-        honcho_path.write_text(json.dumps({
-            "hosts": {
-                "clawk.ssi_health": {"workspace": "clawk", "enabled": True}
-            }
-        }))
+        honcho_path.write_text(
+            json.dumps({
+                "hosts": {"clawk.ssi_health": {"workspace": "clawk", "enabled": True}}
+            })
+        )
 
         with patch("clawk_cli.profiles.check_alias_collision", return_value="skip"):
             rename_profile("ssi_health", "heimdall")
@@ -1119,12 +1201,14 @@ class TestRenameProfile:
         tmp_path = profile_env
         create_profile("ssi_health", no_alias=True)
         honcho_path = tmp_path / ".clawk" / "honcho.json"
-        honcho_path.write_text(json.dumps({
-            "hosts": {
-                "clawk.ssi_health": {"aiPeer": "ssi_health"},
-                "clawk_heimdall": {"aiPeer": "heimdall"},
-            }
-        }))
+        honcho_path.write_text(
+            json.dumps({
+                "hosts": {
+                    "clawk.ssi_health": {"aiPeer": "ssi_health"},
+                    "clawk_heimdall": {"aiPeer": "heimdall"},
+                }
+            })
+        )
 
         with patch("clawk_cli.profiles.check_alias_collision", return_value="skip"):
             rename_profile("ssi_health", "heimdall")
@@ -1157,6 +1241,7 @@ class TestRenameProfile:
 # TestExportImport
 # ===================================================================
 
+
 class TestExportImport:
     """Tests for export_profile() / import_profile()."""
 
@@ -1185,6 +1270,7 @@ class TestExportImport:
 
         # Delete the profile, then import it back under a new name
         import shutil
+
         shutil.rmtree(profile_dir)
         assert not profile_dir.is_dir()
 
@@ -1327,15 +1413,31 @@ class TestExportImport:
         (default_dir / "config.yaml").write_text("ok")
 
         # Create dirs/files that should be excluded
-        for d in ("clawksis-agent", ".worktrees", "profiles", "bin",
-                  "image_cache", "logs", "sandboxes", "checkpoints"):
+        for d in (
+            "clawksis-agent",
+            ".worktrees",
+            "profiles",
+            "bin",
+            "image_cache",
+            "logs",
+            "sandboxes",
+            "checkpoints",
+        ):
             sub = default_dir / d
             sub.mkdir(exist_ok=True)
             (sub / "marker.txt").write_text("excluded")
 
-        for f in ("state.db", "gateway.pid", "gateway_state.json",
-                  "processes.json", "errors.log", ".clawk_history",
-                  "active_profile", ".update_check", "auth.lock"):
+        for f in (
+            "state.db",
+            "gateway.pid",
+            "gateway_state.json",
+            "processes.json",
+            "errors.log",
+            ".clawk_history",
+            "active_profile",
+            ".update_check",
+            "auth.lock",
+        ):
             (default_dir / f).write_text("excluded")
 
         output = tmp_path / "export" / "default.tar.gz"
@@ -1350,19 +1452,29 @@ class TestExportImport:
 
         # Infrastructure excluded
         excluded_prefixes = [
-            "default/clawksis-agent", "default/.worktrees", "default/profiles",
-            "default/bin", "default/image_cache", "default/logs",
-            "default/sandboxes", "default/checkpoints",
+            "default/clawksis-agent",
+            "default/.worktrees",
+            "default/profiles",
+            "default/bin",
+            "default/image_cache",
+            "default/logs",
+            "default/sandboxes",
+            "default/checkpoints",
         ]
         for prefix in excluded_prefixes:
-            assert not any(n.startswith(prefix) for n in names), \
+            assert not any(n.startswith(prefix) for n in names), (
                 f"Expected {prefix} to be excluded but found it in archive"
+            )
 
         excluded_files = [
-            "default/state.db", "default/gateway.pid",
-            "default/gateway_state.json", "default/processes.json",
-            "default/errors.log", "default/.clawk_history",
-            "default/active_profile", "default/.update_check",
+            "default/state.db",
+            "default/gateway.pid",
+            "default/gateway_state.json",
+            "default/processes.json",
+            "default/errors.log",
+            "default/.clawk_history",
+            "default/active_profile",
+            "default/.update_check",
             "default/auth.lock",
         ]
         for f in excluded_files:
@@ -1385,7 +1497,9 @@ class TestExportImport:
 
         assert not any("__pycache__" in n for n in names)
 
-    def test_export_default_uses_allowlist_for_unrelated_dirs(self, profile_env, tmp_path):
+    def test_export_default_uses_allowlist_for_unrelated_dirs(
+        self, profile_env, tmp_path
+    ):
         """Unrelated directories under CLAWK_HOME are excluded by allow-list (#58394).
 
         Docker/custom deployments often set CLAWK_HOME to a working
@@ -1439,9 +1553,7 @@ class TestExportImport:
         (broken_dir / "broken_link").symlink_to("/nonexistent/path")
         # Valid symlink for comparison
         (broken_dir / "valid_target.txt").write_text("real data")
-        (broken_dir / "valid_link").symlink_to(
-            broken_dir / "valid_target.txt"
-        )
+        (broken_dir / "valid_link").symlink_to(broken_dir / "valid_target.txt")
 
         output = tmp_path / "export" / "default.tar.gz"
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -1454,9 +1566,7 @@ class TestExportImport:
         assert any(n.endswith("config.yaml") for n in names)
         # Broken symlink inside an allowed dir was preserved as a symlink
         # (without crashing) — tar entry name recorded as the link path.
-        assert any(
-            "with-broken-links/broken_link" in n for n in names
-        ), (
+        assert any("with-broken-links/broken_link" in n for n in names), (
             f"broken_link should survive; tarfile names: {sorted(names)[:30]}"
         )
         # Valid symlink + target also kept
@@ -1475,7 +1585,9 @@ class TestExportImport:
         with pytest.raises(ValueError, match="Cannot import as 'default'"):
             import_profile(str(archive))
 
-    def test_import_default_with_explicit_default_name_raises(self, profile_env, tmp_path):
+    def test_import_default_with_explicit_default_name_raises(
+        self, profile_env, tmp_path
+    ):
         """Explicitly importing as 'default' is also rejected."""
         default_dir = get_profile_dir("default")
         (default_dir / "config.yaml").write_text("ok")
@@ -1509,6 +1621,7 @@ class TestExportImport:
 # TestProfileIsolation
 # ===================================================================
 
+
 class TestProfileIsolation:
     """Verify that two profiles have completely separate paths."""
 
@@ -1539,6 +1652,7 @@ class TestProfileIsolation:
 # ===================================================================
 # TestGetProfilesRoot / TestGetDefaultClawkHome (internal helpers)
 # ===================================================================
+
 
 class TestInternalHelpers:
     """Tests for _get_profiles_root() and _get_default_clawk_home()."""
@@ -1584,6 +1698,7 @@ class TestInternalHelpers:
     def test_active_profile_path_docker(self, tmp_path, monkeypatch):
         """In Docker, active_profile file lives under CLAWK_HOME."""
         from clawk_cli.profiles import _get_active_profile_path
+
         docker_home = tmp_path / "opt" / "data"
         docker_home.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -1624,6 +1739,7 @@ class TestInternalHelpers:
 # Edge cases and additional coverage
 # ===================================================================
 
+
 class TestEdgeCases:
     """Additional edge-case tests."""
 
@@ -1643,10 +1759,13 @@ class TestEdgeCases:
     def test_gateway_running_check_with_pid_file(self, profile_env):
         """Verify _check_gateway_running uses the shared gateway PID validator."""
         from clawk_cli.profiles import _check_gateway_running
+
         tmp_path = profile_env
         default_home = tmp_path / ".clawk"
 
-        with patch("gateway.status.get_running_pid", return_value=99999) as mock_get_running_pid:
+        with patch(
+            "gateway.status.get_running_pid", return_value=99999
+        ) as mock_get_running_pid:
             assert _check_gateway_running(default_home) is True
         mock_get_running_pid.assert_called_once_with(
             default_home / "gateway.pid",
@@ -1656,10 +1775,13 @@ class TestEdgeCases:
     def test_gateway_running_check_plain_pid(self, profile_env):
         """Shared PID validator returning None means the profile is not running."""
         from clawk_cli.profiles import _check_gateway_running
+
         tmp_path = profile_env
         default_home = tmp_path / ".clawk"
 
-        with patch("gateway.status.get_running_pid", return_value=None) as mock_get_running_pid:
+        with patch(
+            "gateway.status.get_running_pid", return_value=None
+        ) as mock_get_running_pid:
             assert _check_gateway_running(default_home) is False
         mock_get_running_pid.assert_called_once_with(
             default_home / "gateway.pid",
@@ -1688,16 +1810,14 @@ class TestEdgeCases:
         # a gateway-shaped argv, so get_runtime_status_running_pid validates it.
         live_pid = os.getpid()
         (default_home / "gateway_state.json").write_text(
-            json.dumps(
-                {
-                    "pid": live_pid,
-                    "kind": "clawk-gateway",
-                    "argv": ["clawk", "gateway", "run"],
-                    "start_time": gw_status._get_process_start_time(live_pid),
-                    "gateway_state": "running",
-                    "active_agents": 0,
-                }
-            ),
+            json.dumps({
+                "pid": live_pid,
+                "kind": "clawk-gateway",
+                "argv": ["clawk", "gateway", "run"],
+                "start_time": gw_status._get_process_start_time(live_pid),
+                "gateway_state": "running",
+                "active_agents": 0,
+            }),
             encoding="utf-8",
         )
 
@@ -1708,9 +1828,12 @@ class TestEdgeCases:
         # scenario that PID belongs to the live gateway, so mock its command
         # line to a bare ``gateway run`` (this is the default/root home, which
         # runs the gateway with no profile flag).
-        with patch("gateway.status.get_running_pid", return_value=None), patch(
-            "gateway.status._read_process_cmdline",
-            return_value="clawk gateway run --replace",
+        with (
+            patch("gateway.status.get_running_pid", return_value=None),
+            patch(
+                "gateway.status._read_process_cmdline",
+                return_value="clawk gateway run --replace",
+            ),
         ):
             assert _check_gateway_running(default_home) is True
 
@@ -1724,21 +1847,21 @@ class TestEdgeCases:
         default_home = tmp_path / ".clawk"
         default_home.mkdir(parents=True, exist_ok=True)
         (default_home / "gateway_state.json").write_text(
-            json.dumps(
-                {
-                    "pid": os.getpid(),
-                    "kind": "clawk-gateway",
-                    "argv": ["clawk", "gateway", "run"],
-                    "gateway_state": "stopped",
-                }
-            ),
+            json.dumps({
+                "pid": os.getpid(),
+                "kind": "clawk-gateway",
+                "argv": ["clawk", "gateway", "run"],
+                "gateway_state": "stopped",
+            }),
             encoding="utf-8",
         )
 
         with patch("gateway.status.get_running_pid", return_value=None):
             assert _check_gateway_running(default_home) is False
 
-    def test_gateway_running_check_rejects_pid_reused_by_other_profile(self, profile_env):
+    def test_gateway_running_check_rejects_pid_reused_by_other_profile(
+        self, profile_env
+    ):
         """Regression (user report): the dashboard showed a NAMED profile's
         gateway green while ``clawk -p <name> gateway status`` showed it
         stopped.
@@ -1756,26 +1879,27 @@ class TestEdgeCases:
         coder_home = tmp_path / ".clawk" / "profiles" / "coder"
         coder_home.mkdir(parents=True, exist_ok=True)
         (coder_home / "gateway_state.json").write_text(
-            json.dumps(
-                {
-                    "pid": 139,
-                    "kind": "clawk-gateway",
-                    "argv": ["clawk", "gateway", "run"],
-                    "gateway_state": "running",
-                    "active_agents": 0,
-                }
-            ),
+            json.dumps({
+                "pid": 139,
+                "kind": "clawk-gateway",
+                "argv": ["clawk", "gateway", "run"],
+                "gateway_state": "running",
+                "active_agents": 0,
+            }),
             encoding="utf-8",
         )
 
         # PID 139 is alive but is the DEFAULT gateway (bare, no -p coder), not
         # coder's. start_time is absent so the PID-reuse guard cannot catch it;
         # the profile scope must.
-        with patch("gateway.status.get_running_pid", return_value=None), patch(
-            "gateway.status._pid_exists", return_value=True
-        ), patch("gateway.status._get_process_start_time", return_value=None), patch(
-            "gateway.status._read_process_cmdline",
-            return_value="clawk gateway run --replace",
+        with (
+            patch("gateway.status.get_running_pid", return_value=None),
+            patch("gateway.status._pid_exists", return_value=True),
+            patch("gateway.status._get_process_start_time", return_value=None),
+            patch(
+                "gateway.status._read_process_cmdline",
+                return_value="clawk gateway run --replace",
+            ),
         ):
             assert _check_gateway_running(coder_home) is False
 
@@ -1788,24 +1912,25 @@ class TestEdgeCases:
         coder_home = tmp_path / ".clawk" / "profiles" / "coder"
         coder_home.mkdir(parents=True, exist_ok=True)
         (coder_home / "gateway_state.json").write_text(
-            json.dumps(
-                {
-                    "pid": 139,
-                    "kind": "clawk-gateway",
-                    "argv": ["clawk", "gateway", "run"],
-                    "start_time": 1000,
-                    "gateway_state": "running",
-                    "active_agents": 0,
-                }
-            ),
+            json.dumps({
+                "pid": 139,
+                "kind": "clawk-gateway",
+                "argv": ["clawk", "gateway", "run"],
+                "start_time": 1000,
+                "gateway_state": "running",
+                "active_agents": 0,
+            }),
             encoding="utf-8",
         )
 
-        with patch("gateway.status.get_running_pid", return_value=None), patch(
-            "gateway.status._pid_exists", return_value=True
-        ), patch("gateway.status._get_process_start_time", return_value=1000), patch(
-            "gateway.status._read_process_cmdline",
-            return_value="clawk -p coder gateway run --replace",
+        with (
+            patch("gateway.status.get_running_pid", return_value=None),
+            patch("gateway.status._pid_exists", return_value=True),
+            patch("gateway.status._get_process_start_time", return_value=1000),
+            patch(
+                "gateway.status._read_process_cmdline",
+                return_value="clawk -p coder gateway run --replace",
+            ),
         ):
             assert _check_gateway_running(coder_home) is True
 
@@ -1833,7 +1958,10 @@ class TestEdgeCases:
         (source_dir / ".env").write_text("SECRET=yes")
 
         target_dir = create_profile(
-            "target", clone_from="source", clone_config=True, no_alias=True,
+            "target",
+            clone_from="source",
+            clone_config=True,
+            no_alias=True,
         )
         cloned_config = yaml.safe_load((target_dir / "config.yaml").read_text())
         assert cloned_config["_config_version"] == DEFAULT_CONFIG["_config_version"]

@@ -10,7 +10,7 @@ class FakeBridge:
         self.alive = True
 
     def read(self, timeout):
-        return b""        # idle forever
+        return b""  # idle forever
 
     def write(self, data):
         pass
@@ -59,7 +59,7 @@ async def test_attach_token_reuses_same_session(pty_keepalive_harness):
         ws1.send_bytes(b"hi")
     with client.websocket_connect("/api/pty?attach=TOK1") as ws2:
         ws2.send_bytes(b"again")
-    assert len(pty_keepalive_harness) == 1                # reattached, did not respawn
+    assert len(pty_keepalive_harness) == 1  # reattached, did not respawn
 
 
 @pytest.mark.asyncio

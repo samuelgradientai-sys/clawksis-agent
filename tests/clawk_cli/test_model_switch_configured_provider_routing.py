@@ -24,7 +24,12 @@ from unittest.mock import patch
 from clawk_cli.model_switch import switch_model
 
 _ACCEPTED = {"accepted": True, "persist": True, "recognized": True, "message": None}
-_REJECTED = {"accepted": False, "persist": False, "recognized": False, "message": "not found"}
+_REJECTED = {
+    "accepted": False,
+    "persist": False,
+    "recognized": False,
+    "message": "not found",
+}
 # What validate_requested_model returns for an unknown id on openai-codex: it
 # soft-accepts with a "may be a hidden model" note (#16172 / #19729).
 _CODEX_SOFT_ACCEPT = {
@@ -57,21 +62,26 @@ def _run_switch(
     resolution, normalization, and model metadata.  This isolates the new
     configured-provider detection step.
     """
-    with patch("clawk_cli.model_switch.resolve_alias", return_value=None), \
-         patch("clawk_cli.model_switch.list_provider_models", return_value=[]), \
-         patch("clawk_cli.model_switch.normalize_model_for_provider", side_effect=lambda model, provider: model), \
-         patch("clawk_cli.models.validate_requested_model", return_value=validation), \
-         patch("clawk_cli.models.detect_provider_for_model", return_value=None), \
-         patch("clawk_cli.model_switch.get_model_info", return_value=None), \
-         patch("clawk_cli.model_switch.get_model_capabilities", return_value=None), \
-         patch(
-             "clawk_cli.runtime_provider.resolve_runtime_provider",
-             return_value={
-                 "api_key": "***",
-                 "base_url": current_base_url or "http://resolved/v1",
-                 "api_mode": "",
-             },
-         ):
+    with (
+        patch("clawk_cli.model_switch.resolve_alias", return_value=None),
+        patch("clawk_cli.model_switch.list_provider_models", return_value=[]),
+        patch(
+            "clawk_cli.model_switch.normalize_model_for_provider",
+            side_effect=lambda model, provider: model,
+        ),
+        patch("clawk_cli.models.validate_requested_model", return_value=validation),
+        patch("clawk_cli.models.detect_provider_for_model", return_value=None),
+        patch("clawk_cli.model_switch.get_model_info", return_value=None),
+        patch("clawk_cli.model_switch.get_model_capabilities", return_value=None),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider",
+            return_value={
+                "api_key": "***",
+                "base_url": current_base_url or "http://resolved/v1",
+                "api_mode": "",
+            },
+        ),
+    ):
         return switch_model(
             raw_input=raw_input,
             current_provider=current_provider,
@@ -270,14 +280,14 @@ def test_malformed_provider_config_does_not_raise():
     """Garbage shapes in provider config must not crash detection — they're
     skipped and the typed name falls through to the soft-accept no-op."""
     user_providers = {
-        "bad1": "not-a-dict",            # non-dict cfg
-        "bad2": {"models": 12345},        # models as int
+        "bad1": "not-a-dict",  # non-dict cfg
+        "bad2": {"models": 12345},  # models as int
         "bad3": {"models": [None, 7, {"noname": "x"}]},  # junk list items
         "bad4": {"model": {"k": object()}},  # dict with non-target keys
     }
     custom_providers = [
-        "not-a-dict",                     # non-dict entry
-        {"name": ""},                     # empty name
+        "not-a-dict",  # non-dict entry
+        {"name": ""},  # empty name
         {"models": ["unrelated-model"]},  # no name key
     ]
     result = _run_switch(

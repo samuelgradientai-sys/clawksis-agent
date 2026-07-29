@@ -560,7 +560,9 @@ class TestWebUrlsNotRedacted:
         assert redact_sensitive_text(text) == text
 
     def test_presigned_signature_passes_through(self):
-        text = "https://s3.amazonaws.com/bucket/k?signature=LONG_PRESIGNED_SIG&id=public"
+        text = (
+            "https://s3.amazonaws.com/bucket/k?signature=LONG_PRESIGNED_SIG&id=public"
+        )
         assert redact_sensitive_text(text) == text
 
     def test_https_userinfo_passes_through(self):
@@ -574,7 +576,7 @@ class TestWebUrlsNotRedacted:
     def test_http_access_log_request_target_passes_through(self):
         text = (
             'INFO aiohttp.access: 127.0.0.1 "POST '
-            '/bluebubbles-webhook?password=webhookSecret123&event=new-message '
+            "/bluebubbles-webhook?password=webhookSecret123&event=new-message "
             'HTTP/1.1" 200 173 "-" "test-client"'
         )
         assert redact_sensitive_text(text) == text
@@ -716,7 +718,7 @@ class TestBareTokenUserinfoRedaction:
         result = redact_sensitive_text(text)
         assert token not in result
         assert "abcdef" in result  # head preserved
-        assert "wxyz" in result    # tail preserved
+        assert "wxyz" in result  # tail preserved
 
 
 class TestFormBodyRedaction:
@@ -938,6 +940,7 @@ class TestTerminalOutputRedaction:
 
     def test_is_env_dump_command_detection(self):
         from agent.redact import is_env_dump_command
+
         assert is_env_dump_command("printenv")
         assert is_env_dump_command("env")
         assert is_env_dump_command("env | grep API")
@@ -953,6 +956,7 @@ class TestTerminalOutputRedaction:
 
     def test_env_dump_masks_opaque_token(self):
         from agent.redact import redact_terminal_output
+
         out = "MY_SERVICE_TOKEN=abc123randomopaquetokenvalue999\nHOME=/home/u"
         red = redact_terminal_output(out, "printenv")
         assert "abc123randomopaquetokenvalue999" not in red
@@ -960,6 +964,7 @@ class TestTerminalOutputRedaction:
 
     def test_non_env_command_preserves_source_false_positives(self):
         from agent.redact import redact_terminal_output
+
         # code_file path: MAX_TOKENS=100 is source, must survive; real sk- masked.
         out = "MAX_TOKENS=100\nOPENAI_API_KEY=sk-proj-abc123def456ghi789jkl012"
         red = redact_terminal_output(out, "cat config.py")
@@ -968,6 +973,7 @@ class TestTerminalOutputRedaction:
 
     def test_unknown_command_uses_safe_code_file_path(self):
         from agent.redact import redact_terminal_output
+
         # No command → code_file=True; opaque non-prefix token NOT masked
         # (safe default avoids mangling arbitrary output), prefix still masked.
         out = "OPAQUE=plainvalue123\nKEY=sk-proj-abc123def456ghi789jkl012"
@@ -976,6 +982,7 @@ class TestTerminalOutputRedaction:
 
     def test_disabled_passes_through(self, monkeypatch):
         from agent.redact import redact_terminal_output
+
         monkeypatch.setattr("agent.redact._REDACT_ENABLED", False)
         out = "CUSTOM_TOKEN=zzzopaque1234567890abcdef"
         red = redact_terminal_output(out, "printenv")
@@ -1013,8 +1020,9 @@ class TestFileReadNonReusableRedaction:
         the old mask was a 13-char `ghp_S1...Pn2T` that broke GitHub auth when
         an agent re-saved it. The sentinel is syntactically invalid as a token
         (contains « » … and ':'), so it can't round-trip into a dead key."""
-        out = redact_sensitive_text(f"GITHUB_PERSONAL_ACCESS_TOKEN: {self.GHP}",
-                                    force=True, file_read=True)
+        out = redact_sensitive_text(
+            f"GITHUB_PERSONAL_ACCESS_TOKEN: {self.GHP}", force=True, file_read=True
+        )
         masked = out.split(": ", 1)[1].strip()
         # Not a bare token: contains the sentinel delimiters.
         assert masked.startswith("«") and masked.endswith("»")
@@ -1027,8 +1035,8 @@ class TestFileReadNonReusableRedaction:
         pass: a ``token: <key>`` line would additionally hit the YAML config
         pass and collapse to ``***``, which is unrelated to this guard."""
         out = redact_sensitive_text(f"see {self.GHP} here", force=True)
-        assert "«redacted" not in out          # no sentinel in log mode
-        assert "ghp_" in out and "..." in out   # head/tail mask preserved
+        assert "«redacted" not in out  # no sentinel in log mode
+        assert "ghp_" in out and "..." in out  # head/tail mask preserved
 
     def test_file_read_implies_code_file_no_env_falsepos(self):
         """file_read should skip the source-code ENV/JSON false-positive paths

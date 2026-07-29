@@ -1,4 +1,5 @@
 """Regression tests for Clawksis' Spectrum mixed text+attachment workaround."""
+
 from __future__ import annotations
 
 import subprocess
@@ -11,17 +12,23 @@ _PATCHER = Path("plugins/platforms/photon/sidecar/patch-spectrum-mixed-attachmen
 
 def test_sidecar_applies_spectrum_patch_before_importing_sdk() -> None:
     """Existing installs should self-heal at runtime, not only during npm postinstall."""
-    index = Path("plugins/platforms/photon/sidecar/index.mjs").read_text(encoding="utf-8")
+    index = Path("plugins/platforms/photon/sidecar/index.mjs").read_text(
+        encoding="utf-8"
+    )
     assert "import { patchSpectrumTs }" in index
     assert "patchSpectrumTs();" in index
-    assert index.index("patchSpectrumTs();") < index.index('await import("spectrum-ts")')
+    assert index.index("patchSpectrumTs();") < index.index(
+        'await import("spectrum-ts")'
+    )
 
 
 def test_sidecar_healthz_reports_stream_health() -> None:
     """Local process health must include upstream stream health."""
-    index = Path("plugins/platforms/photon/sidecar/index.mjs").read_text(encoding="utf-8")
+    index = Path("plugins/platforms/photon/sidecar/index.mjs").read_text(
+        encoding="utf-8"
+    )
     assert "function streamHealthSnapshot()" in index
-    assert 'return ok(res, { stream: streamHealthSnapshot() });' in index
+    assert "return ok(res, { stream: streamHealthSnapshot() });" in index
     assert "STREAM_INTERRUPTED_DEGRADE_COUNT" in index
     assert "process.exit(75);" in index
 
@@ -35,7 +42,9 @@ def test_sidecar_intercepts_both_console_channels() -> None:
     only console.error would miss every interrupt burst (the primary silent-
     inbound symptom), so both channels must be intercepted.
     """
-    index = Path("plugins/platforms/photon/sidecar/index.mjs").read_text(encoding="utf-8")
+    index = Path("plugins/platforms/photon/sidecar/index.mjs").read_text(
+        encoding="utf-8"
+    )
     assert "function classifyStreamLog(" in index
     assert "console.error = (...args) =>" in index
     assert "console.log = (...args) =>" in index
@@ -45,7 +54,9 @@ def test_sidecar_intercepts_both_console_channels() -> None:
 
 def test_sidecar_labels_catchup_internal_errors_as_upstream_photon() -> None:
     """Photon cloud stream failures should not look like local auth problems."""
-    index = Path("plugins/platforms/photon/sidecar/index.mjs").read_text(encoding="utf-8")
+    index = Path("plugins/platforms/photon/sidecar/index.mjs").read_text(
+        encoding="utf-8"
+    )
     assert "function inboundStreamErrorMessage" in index
     assert "EventService/CatchUpEvents" in index
     assert "this is upstream of Clawksis" in index

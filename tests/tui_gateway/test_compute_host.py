@@ -47,21 +47,22 @@ def test_compute_host_line_json_seed_turn_interrupt():
         assert hello["type"] == "hello"
         assert hello["host_pid"] == proc.pid
 
-        proc.stdin.write(json.dumps({"type": "session.seed", "sid": "s1", "request_id": "seed"}) + "\n")
+        proc.stdin.write(
+            json.dumps({"type": "session.seed", "sid": "s1", "request_id": "seed"})
+            + "\n"
+        )
         proc.stdin.flush()
         assert _read_json_line(out)["type"] == "session.seeded"
 
         proc.stdin.write(
-            json.dumps(
-                {
-                    "type": "turn.start",
-                    "sid": "s1",
-                    "request_id": "turn",
-                    "prompt": "hello",
-                    "delta_count": 3,
-                    "delay_s": 0,
-                }
-            )
+            json.dumps({
+                "type": "turn.start",
+                "sid": "s1",
+                "request_id": "turn",
+                "prompt": "hello",
+                "delta_count": 3,
+                "delay_s": 0,
+            })
             + "\n"
         )
         proc.stdin.flush()

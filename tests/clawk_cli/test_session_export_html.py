@@ -49,10 +49,18 @@ def test_multi_session_export_keeps_switcher_script():
     """The multi-session export drives session switching with an inline script,
     so the escaping fix must not remove or block that script."""
     sessions = [
-        {"id": "aaaa1111", "title": "First", "started_at": 0,
-         "messages": [{"role": "user", "content": "one"}]},
-        {"id": "bbbb2222", "title": "Second", "started_at": 0,
-         "messages": [{"role": "user", "content": "two"}]},
+        {
+            "id": "aaaa1111",
+            "title": "First",
+            "started_at": 0,
+            "messages": [{"role": "user", "content": "one"}],
+        },
+        {
+            "id": "bbbb2222",
+            "title": "Second",
+            "started_at": 0,
+            "messages": [{"role": "user", "content": "two"}],
+        },
     ]
     html = generate_multi_session_html_export(sessions)
     assert "function showSession" in html

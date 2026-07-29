@@ -5,6 +5,7 @@ asyncio task with no profile scope, so _resolve_session_agent_runtime()'s
 credential reads raise UnscopedSecretError when multiplex_profiles is on.
 The fix wraps the task body in _profile_runtime_scope, mirroring _run_agent.
 """
+
 import asyncio
 from pathlib import Path
 from unittest import mock
@@ -30,11 +31,14 @@ class TestBackgroundTaskProfileScope:
         source = mock.MagicMock()
         source.profile = "test_profile"
 
-        with mock.patch.object(
-            GatewayRunner,
-            "_resolve_profile_home_for_source",
-            return_value=Path("/fake/profile"),
-        ), mock.patch("gateway.run._profile_runtime_scope") as scope:
+        with (
+            mock.patch.object(
+                GatewayRunner,
+                "_resolve_profile_home_for_source",
+                return_value=Path("/fake/profile"),
+            ),
+            mock.patch("gateway.run._profile_runtime_scope") as scope,
+        ):
             scope.return_value.__enter__ = mock.MagicMock()
             scope.return_value.__exit__ = mock.MagicMock(return_value=False)
             asyncio.run(
@@ -67,11 +71,14 @@ class TestBackgroundTaskProfileScope:
         runner._run_background_task_inner = inner
         source = mock.MagicMock()
 
-        with mock.patch.object(
-            GatewayRunner,
-            "_resolve_profile_home_for_source",
-            return_value=Path("/fake/profile"),
-        ), mock.patch("gateway.run._profile_runtime_scope") as scope:
+        with (
+            mock.patch.object(
+                GatewayRunner,
+                "_resolve_profile_home_for_source",
+                return_value=Path("/fake/profile"),
+            ),
+            mock.patch("gateway.run._profile_runtime_scope") as scope,
+        ):
             scope.return_value.__enter__ = mock.MagicMock()
             scope.return_value.__exit__ = mock.MagicMock(return_value=False)
             asyncio.run(

@@ -257,9 +257,7 @@ class CodexEventProjector:
             messages=[assistant_msg, tool_msg], is_tool_iteration=True
         )
 
-    def _project_dynamic_tool_call(
-        self, item: dict, item_id: str
-    ) -> ProjectionResult:
+    def _project_dynamic_tool_call(self, item: dict, item_id: str) -> ProjectionResult:
         tool = item.get("tool") or "unknown"
         call_id = _deterministic_call_id(f"dyn_{tool}", item_id)
         args = item.get("arguments") or {}

@@ -56,23 +56,29 @@ class TestExtraBodyResolution:
             models={"gpt-5.5": {}, "gpt-5.6-sol": {}, "gpt-5.6-terra": {}},
         )
         got = _custom_provider_extra_body_for_agent(
-            provider="custom", model="gpt-5.6-terra",
-            base_url=BASE, custom_providers=[entry],
+            provider="custom",
+            model="gpt-5.6-terra",
+            base_url=BASE,
+            custom_providers=[entry],
         )
         assert got == {"service_tier": "flex"}
 
     def test_non_catalog_model_gets_no_override(self):
         entry = _entry(model="gpt-5.5", models={"gpt-5.5": {}})
         got = _custom_provider_extra_body_for_agent(
-            provider="custom", model="gpt-4o",
-            base_url=BASE, custom_providers=[entry],
+            provider="custom",
+            model="gpt-4o",
+            base_url=BASE,
+            custom_providers=[entry],
         )
         assert got is None
 
     def test_non_custom_provider_unaffected(self):
         entry = _entry(models={"gpt-5.6-terra": {}})
         got = _custom_provider_extra_body_for_agent(
-            provider="openrouter", model="gpt-5.6-terra",
-            base_url=BASE, custom_providers=[entry],
+            provider="openrouter",
+            model="gpt-5.6-terra",
+            base_url=BASE,
+            custom_providers=[entry],
         )
         assert got is None

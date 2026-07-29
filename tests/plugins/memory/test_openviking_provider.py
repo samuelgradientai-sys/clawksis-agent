@@ -102,7 +102,9 @@ def test_ovcli_config_writer_restricts_file_permissions(tmp_path):
     assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
 
 
-def test_secret_permission_restriction_logs_chmod_failure(tmp_path, monkeypatch, caplog):
+def test_secret_permission_restriction_logs_chmod_failure(
+    tmp_path, monkeypatch, caplog
+):
     env_path = tmp_path / ".env"
     env_path.write_text("OPENVIKING_API_KEY=secret\n", encoding="utf-8")
 
@@ -233,7 +235,9 @@ def test_connection_values_omit_stale_identity_for_user_key_with_root_key():
     assert values["user"] == ""
 
 
-def test_discover_ovcli_profiles_lists_saved_profiles_without_active_label(tmp_path, monkeypatch):
+def test_discover_ovcli_profiles_lists_saved_profiles_without_active_label(
+    tmp_path, monkeypatch
+):
     _clear_openviking_env(monkeypatch)
     openviking_home = tmp_path / ".openviking"
     openviking_home.mkdir()
@@ -268,7 +272,9 @@ def test_discover_ovcli_profiles_lists_saved_profiles_without_active_label(tmp_p
 
 def test_link_ovcli_profile_removes_stale_inline_config(tmp_path):
     env_path = tmp_path / ".env"
-    env_path.write_text("OPENVIKING_ENDPOINT=http://old.local\nOTHER_KEY=keep\n", encoding="utf-8")
+    env_path.write_text(
+        "OPENVIKING_ENDPOINT=http://old.local\nOTHER_KEY=keep\n", encoding="utf-8"
+    )
     config = {"memory": {}}
     provider_config = {
         "use_ovcli_config": False,
@@ -296,12 +302,16 @@ def test_link_ovcli_profile_removes_stale_inline_config(tmp_path):
     assert "OTHER_KEY=keep" in env_path.read_text(encoding="utf-8")
 
 
-def test_post_setup_existing_profile_picker_validates_and_links_saved_profile(tmp_path, monkeypatch):
+def test_post_setup_existing_profile_picker_validates_and_links_saved_profile(
+    tmp_path, monkeypatch
+):
     _clear_openviking_env(monkeypatch)
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir()
     env_path = clawk_home / ".env"
-    env_path.write_text("OPENVIKING_ENDPOINT=http://old.local\nOTHER_KEY=keep\n", encoding="utf-8")
+    env_path.write_text(
+        "OPENVIKING_ENDPOINT=http://old.local\nOTHER_KEY=keep\n", encoding="utf-8"
+    )
     openviking_home = tmp_path / ".openviking"
     openviking_home.mkdir()
     active_path = openviking_home / "ovcli.conf"
@@ -329,19 +339,23 @@ def test_post_setup_existing_profile_picker_validates_and_links_saved_profile(tm
         raising=False,
     )
     choices = iter([0, 0])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: next(choices))
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: next(choices)
+    )
     config = {"memory": {}}
 
     OpenVikingMemoryProvider().post_setup(str(clawk_home), config)
 
-    assert validate_calls == [{
-        "endpoint": "https://vps.example",
-        "api_key": "user-key",
-        "root_api_key": "",
-        "account": "",
-        "user": "",
-        "agent": "",
-    }]
+    assert validate_calls == [
+        {
+            "endpoint": "https://vps.example",
+            "api_key": "user-key",
+            "root_api_key": "",
+            "account": "",
+            "user": "",
+            "agent": "",
+        }
+    ]
     assert config["memory"]["provider"] == "openviking"
     assert config["memory"]["openviking"] == {
         "use_ovcli_config": True,
@@ -352,7 +366,9 @@ def test_post_setup_existing_profile_picker_validates_and_links_saved_profile(tm
     assert "OTHER_KEY=keep" in env_text
 
 
-def test_post_setup_create_remote_user_profile_can_mirror_to_openviking_store(tmp_path, monkeypatch):
+def test_post_setup_create_remote_user_profile_can_mirror_to_openviking_store(
+    tmp_path, monkeypatch
+):
     _clear_openviking_env(monkeypatch)
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir()
@@ -363,7 +379,9 @@ def test_post_setup_create_remote_user_profile_can_mirror_to_openviking_store(tm
     from clawk_cli import memory_setup
 
     choices = iter([1, 0, 1])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: next(choices))
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: next(choices)
+    )
     monkeypatch.setattr(
         memory_setup,
         "_prompt",
@@ -405,7 +423,9 @@ def test_post_setup_create_remote_user_can_keep_clawk_only(tmp_path, monkeypatch
     from clawk_cli import memory_setup
 
     choices = iter([1, 0, 0])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: next(choices))
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: next(choices)
+    )
     monkeypatch.setattr(
         memory_setup,
         "_prompt",
@@ -428,7 +448,9 @@ def test_post_setup_create_remote_user_can_keep_clawk_only(tmp_path, monkeypatch
     assert not (tmp_path / "home" / ".openviking").exists()
 
 
-def test_post_setup_create_openviking_service_validates_after_api_key(tmp_path, monkeypatch):
+def test_post_setup_create_openviking_service_validates_after_api_key(
+    tmp_path, monkeypatch
+):
     _clear_openviking_env(monkeypatch)
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir()
@@ -445,11 +467,19 @@ def test_post_setup_create_openviking_service_validates_after_api_key(tmp_path, 
     monkeypatch.setattr(
         openviking_module,
         "_validate_openviking_reachability",
-        MagicMock(side_effect=AssertionError("service setup validates only after API key entry")),
+        MagicMock(
+            side_effect=AssertionError(
+                "service setup validates only after API key entry"
+            )
+        ),
     )
-    monkeypatch.setattr(openviking_module, "_validate_openviking_setup_values", validate_values)
+    monkeypatch.setattr(
+        openviking_module, "_validate_openviking_setup_values", validate_values
+    )
     choices = iter([0, 0])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: next(choices))
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: next(choices)
+    )
     monkeypatch.setattr(
         memory_setup,
         "_prompt",
@@ -458,27 +488,36 @@ def test_post_setup_create_openviking_service_validates_after_api_key(tmp_path, 
                 "OpenViking API key": "service-secret",
                 "Clawksis peer ID in OpenViking": "agent",
             },
-            forbidden={"OpenViking server URL", "OpenViking user API key", "OpenViking root API key"},
+            forbidden={
+                "OpenViking server URL",
+                "OpenViking user API key",
+                "OpenViking root API key",
+            },
         ),
     )
     config = {"memory": {}}
 
     OpenVikingMemoryProvider().post_setup(str(clawk_home), config)
 
-    assert validation_calls == [(
-        {
-            "endpoint": "https://api.vikingdb.cn-beijing.volces.com/openviking",
-            "api_key": "service-secret",
-            "root_api_key": "",
-            "account": "",
-            "user": "",
-            "agent": "agent",
-            "api_key_type": "user",
-        },
-        True,
-    )]
+    assert validation_calls == [
+        (
+            {
+                "endpoint": "https://api.vikingdb.cn-beijing.volces.com/openviking",
+                "api_key": "service-secret",
+                "root_api_key": "",
+                "account": "",
+                "user": "",
+                "agent": "agent",
+                "api_key_type": "user",
+            },
+            True,
+        )
+    ]
     env_text = (clawk_home / ".env").read_text(encoding="utf-8")
-    assert "OPENVIKING_ENDPOINT=https://api.vikingdb.cn-beijing.volces.com/openviking" in env_text
+    assert (
+        "OPENVIKING_ENDPOINT=https://api.vikingdb.cn-beijing.volces.com/openviking"
+        in env_text
+    )
     assert "OPENVIKING_API_KEY=service-secret" in env_text
     assert "OPENVIKING_AGENT=agent" in env_text
 
@@ -488,7 +527,11 @@ def test_post_setup_remote_blank_api_key_cancels_without_saving(tmp_path, monkey
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
-    monkeypatch.setattr(openviking_module, "_validate_openviking_reachability", lambda endpoint: (True, ""))
+    monkeypatch.setattr(
+        openviking_module,
+        "_validate_openviking_reachability",
+        lambda endpoint: (True, ""),
+    )
 
     from clawk_cli import config as clawk_config
     from clawk_cli import memory_setup
@@ -496,7 +539,9 @@ def test_post_setup_remote_blank_api_key_cancels_without_saving(tmp_path, monkey
     save_config = MagicMock()
     monkeypatch.setattr(clawk_config, "save_config", save_config)
     choices = iter([1, 0, 1])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: next(choices))
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: next(choices)
+    )
     monkeypatch.setattr(
         memory_setup,
         "_prompt",
@@ -514,7 +559,9 @@ def test_post_setup_remote_blank_api_key_cancels_without_saving(tmp_path, monkey
     assert not (clawk_home / ".env").exists()
 
 
-def test_post_setup_user_key_path_can_route_detected_root_key_to_root_setup(tmp_path, monkeypatch):
+def test_post_setup_user_key_path_can_route_detected_root_key_to_root_setup(
+    tmp_path, monkeypatch
+):
     _clear_openviking_env(monkeypatch)
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir()
@@ -526,10 +573,18 @@ def test_post_setup_user_key_path_can_route_detected_root_key_to_root_setup(tmp_
         assert values["api_key"] == "root-secret"
         return True, "", "root"
 
-    monkeypatch.setattr(openviking_module, "_validate_openviking_reachability", lambda endpoint: (True, ""))
-    monkeypatch.setattr(openviking_module, "_validate_openviking_setup_values", validate_values)
+    monkeypatch.setattr(
+        openviking_module,
+        "_validate_openviking_reachability",
+        lambda endpoint: (True, ""),
+    )
+    monkeypatch.setattr(
+        openviking_module, "_validate_openviking_setup_values", validate_values
+    )
     choices = iter([1, 0, 0, 0])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: next(choices))
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: next(choices)
+    )
     prompt_events = []
 
     def fake_prompt(label, default=None, secret=False):
@@ -558,7 +613,9 @@ def test_post_setup_user_key_path_can_route_detected_root_key_to_root_setup(tmp_
     assert "OPENVIKING_AGENT=agent" in env_text
 
 
-def test_post_setup_root_key_path_can_route_detected_user_key_to_user_setup(tmp_path, monkeypatch):
+def test_post_setup_root_key_path_can_route_detected_user_key_to_user_setup(
+    tmp_path, monkeypatch
+):
     _clear_openviking_env(monkeypatch)
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir()
@@ -570,10 +627,18 @@ def test_post_setup_root_key_path_can_route_detected_user_key_to_user_setup(tmp_
         assert values["api_key"] == "user-secret"
         return True, "", "user"
 
-    monkeypatch.setattr(openviking_module, "_validate_openviking_reachability", lambda endpoint: (True, ""))
-    monkeypatch.setattr(openviking_module, "_validate_openviking_setup_values", validate_values)
+    monkeypatch.setattr(
+        openviking_module,
+        "_validate_openviking_reachability",
+        lambda endpoint: (True, ""),
+    )
+    monkeypatch.setattr(
+        openviking_module, "_validate_openviking_setup_values", validate_values
+    )
     choices = iter([1, 1, 0, 0])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: next(choices))
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: next(choices)
+    )
     monkeypatch.setattr(
         memory_setup,
         "_prompt",
@@ -583,7 +648,11 @@ def test_post_setup_root_key_path_can_route_detected_user_key_to_user_setup(tmp_
                 "OpenViking root API key": "user-secret",
                 "Clawksis peer ID in OpenViking": "agent",
             },
-            forbidden={"OpenViking user API key", "OpenViking account", "OpenViking user"},
+            forbidden={
+                "OpenViking user API key",
+                "OpenViking account",
+                "OpenViking user",
+            },
         ),
     )
     config = {"memory": {}}
@@ -600,7 +669,11 @@ def test_post_setup_root_key_path_can_route_detected_user_key_to_user_setup(tmp_
 def test_manual_root_key_flow_prints_validation_progress(monkeypatch, capsys):
     _clear_openviking_env(monkeypatch)
 
-    monkeypatch.setattr(openviking_module, "_validate_openviking_reachability", lambda endpoint: (True, ""))
+    monkeypatch.setattr(
+        openviking_module,
+        "_validate_openviking_reachability",
+        lambda endpoint: (True, ""),
+    )
 
     validate_calls = []
 
@@ -608,7 +681,9 @@ def test_manual_root_key_flow_prints_validation_progress(monkeypatch, capsys):
         validate_calls.append(dict(values))
         return True, "", "root"
 
-    monkeypatch.setattr(openviking_module, "_validate_openviking_setup_values", validate_values)
+    monkeypatch.setattr(
+        openviking_module, "_validate_openviking_setup_values", validate_values
+    )
     choices = iter([1])
 
     values = openviking_module._prompt_manual_connection_values(
@@ -638,15 +713,27 @@ def test_start_local_openviking_server_uses_endpoint_host_and_port(monkeypatch):
         popen_calls.append((args, kwargs))
         return object()
 
-    monkeypatch.setattr(openviking_module.shutil, "which", lambda name: "/usr/local/bin/openviking-server")
+    monkeypatch.setattr(
+        openviking_module.shutil,
+        "which",
+        lambda name: "/usr/local/bin/openviking-server",
+    )
     monkeypatch.setattr(openviking_module.subprocess, "Popen", fake_popen)
 
-    started, message = openviking_module._start_local_openviking_server("http://127.0.0.1:1934")
+    started, message = openviking_module._start_local_openviking_server(
+        "http://127.0.0.1:1934"
+    )
 
     assert started is True
     assert "127.0.0.1:1934" in message
     args, kwargs = popen_calls[0]
-    assert args == ["/usr/local/bin/openviking-server", "--host", "127.0.0.1", "--port", "1934"]
+    assert args == [
+        "/usr/local/bin/openviking-server",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "1934",
+    ]
     assert kwargs["start_new_session"] is True
 
 
@@ -661,14 +748,22 @@ def test_start_local_openviking_server_writes_output_to_log(tmp_path, monkeypatc
     def fake_popen(args, **kwargs):
         popen_calls.append((args, kwargs))
         assert kwargs["stdout"] is kwargs["stderr"]
-        assert kwargs["stdout"].name == str(clawk_home / "logs" / "openviking-server.log")
+        assert kwargs["stdout"].name == str(
+            clawk_home / "logs" / "openviking-server.log"
+        )
         assert not kwargs["stdout"].closed
         return FakeProcess()
 
-    monkeypatch.setattr(openviking_module.shutil, "which", lambda name: "/usr/local/bin/openviking-server")
+    monkeypatch.setattr(
+        openviking_module.shutil,
+        "which",
+        lambda name: "/usr/local/bin/openviking-server",
+    )
     monkeypatch.setattr(openviking_module.subprocess, "Popen", fake_popen)
 
-    started, message = openviking_module._start_local_openviking_server("http://127.0.0.1:1934")
+    started, message = openviking_module._start_local_openviking_server(
+        "http://127.0.0.1:1934"
+    )
 
     assert started is True
     assert str(clawk_home / "logs" / "openviking-server.log") in message
@@ -690,7 +785,9 @@ def test_https_local_endpoint_is_not_runtime_autostart_eligible(monkeypatch):
     monkeypatch.setattr(
         openviking_module,
         "_start_local_openviking_server",
-        MagicMock(side_effect=AssertionError("https localhost endpoint should not auto-start")),
+        MagicMock(
+            side_effect=AssertionError("https localhost endpoint should not auto-start")
+        ),
     )
 
     warnings = []
@@ -723,7 +820,11 @@ def test_runtime_does_not_autostart_when_local_server_reports_unhealthy(monkeypa
     monkeypatch.setattr(
         openviking_module,
         "_start_local_openviking_server",
-        MagicMock(side_effect=AssertionError("responding unhealthy server should not auto-start another process")),
+        MagicMock(
+            side_effect=AssertionError(
+                "responding unhealthy server should not auto-start another process"
+            )
+        ),
     )
 
     warnings = []
@@ -737,7 +838,9 @@ def test_runtime_does_not_autostart_when_local_server_reports_unhealthy(monkeypa
     ]
 
 
-def test_handle_unreachable_endpoint_does_not_wait_when_autostart_command_missing(monkeypatch, capsys):
+def test_handle_unreachable_endpoint_does_not_wait_when_autostart_command_missing(
+    monkeypatch, capsys
+):
     monkeypatch.setattr(
         openviking_module,
         "_start_local_openviking_server",
@@ -746,7 +849,9 @@ def test_handle_unreachable_endpoint_does_not_wait_when_autostart_command_missin
     monkeypatch.setattr(
         openviking_module,
         "_wait_for_openviking_health",
-        MagicMock(side_effect=AssertionError("should not wait when server did not start")),
+        MagicMock(
+            side_effect=AssertionError("should not wait when server did not start")
+        ),
     )
 
     result = openviking_module._handle_unreachable_endpoint(
@@ -762,18 +867,25 @@ def test_handle_unreachable_endpoint_does_not_wait_when_autostart_command_missin
     assert "did not become reachable" not in output
 
 
-def test_handle_unreachable_endpoint_waits_long_enough_after_autostart(monkeypatch, capsys):
+def test_handle_unreachable_endpoint_waits_long_enough_after_autostart(
+    monkeypatch, capsys
+):
     wait_calls = []
 
     monkeypatch.setattr(
         openviking_module,
         "_start_local_openviking_server",
-        lambda endpoint: (True, "Started openviking-server on 127.0.0.1:1934 in the background."),
+        lambda endpoint: (
+            True,
+            "Started openviking-server on 127.0.0.1:1934 in the background.",
+        ),
     )
     monkeypatch.setattr(
         openviking_module,
         "_wait_for_openviking_health",
-        lambda endpoint, *, timeout_seconds=0: wait_calls.append((endpoint, timeout_seconds)) or True,
+        lambda endpoint, *, timeout_seconds=0: (
+            wait_calls.append((endpoint, timeout_seconds)) or True
+        ),
     )
 
     result = openviking_module._handle_unreachable_endpoint(
@@ -789,7 +901,9 @@ def test_handle_unreachable_endpoint_waits_long_enough_after_autostart(monkeypat
     assert "Waiting for OpenViking server to become reachable..." in output
 
 
-def test_manual_setup_does_not_offer_autostart_when_local_server_is_unhealthy(monkeypatch):
+def test_manual_setup_does_not_offer_autostart_when_local_server_is_unhealthy(
+    monkeypatch,
+):
     _clear_openviking_env(monkeypatch)
 
     class FakeVikingClient:
@@ -810,7 +924,11 @@ def test_manual_setup_does_not_offer_autostart_when_local_server_is_unhealthy(mo
     monkeypatch.setattr(
         openviking_module,
         "_start_local_openviking_server",
-        MagicMock(side_effect=AssertionError("unhealthy local server should not offer auto-start")),
+        MagicMock(
+            side_effect=AssertionError(
+                "unhealthy local server should not offer auto-start"
+            )
+        ),
     )
 
     result = openviking_module._prompt_manual_connection_values(
@@ -820,16 +938,20 @@ def test_manual_setup_does_not_offer_autostart_when_local_server_is_unhealthy(mo
     )
 
     assert result is openviking_module._SETUP_CANCELLED
-    assert select_calls == [(
-        "  OpenViking server unhealthy",
-        [
-            ("Retry", "try this step again"),
-            ("Cancel setup", "no changes saved"),
-        ],
-    )]
+    assert select_calls == [
+        (
+            "  OpenViking server unhealthy",
+            [
+                ("Retry", "try this step again"),
+                ("Cancel setup", "no changes saved"),
+            ],
+        )
+    ]
 
 
-def test_initialize_autostarts_local_openviking_in_background_when_runtime_health_fails(monkeypatch):
+def test_initialize_autostarts_local_openviking_in_background_when_runtime_health_fails(
+    monkeypatch,
+):
     _clear_openviking_env(monkeypatch)
     monkeypatch.setenv("OPENVIKING_ENDPOINT", "http://127.0.0.1:1934")
     health_calls = []
@@ -853,7 +975,9 @@ def test_initialize_autostarts_local_openviking_in_background_when_runtime_healt
     monkeypatch.setattr(
         openviking_module,
         "_wait_for_openviking_health",
-        MagicMock(side_effect=AssertionError("runtime init should not wait synchronously")),
+        MagicMock(
+            side_effect=AssertionError("runtime init should not wait synchronously")
+        ),
     )
 
     provider = OpenVikingMemoryProvider()
@@ -912,10 +1036,12 @@ def test_runtime_openviking_waiter_attaches_client_after_health_recovers(monkeyp
     assert provider._client is not None
     assert provider._client.endpoint == "http://127.0.0.1:1934"
     assert provider._client.api_key == "secret"
-    assert wait_calls == [(
-        "http://127.0.0.1:1934",
-        {"timeout_seconds": openviking_module._LOCAL_OPENVIKING_AUTOSTART_TIMEOUT},
-    )]
+    assert wait_calls == [
+        (
+            "http://127.0.0.1:1934",
+            {"timeout_seconds": openviking_module._LOCAL_OPENVIKING_AUTOSTART_TIMEOUT},
+        )
+    ]
     assert any("OpenViking memory is active" in message for message in statuses)
 
 
@@ -929,7 +1055,11 @@ def test_runtime_openviking_waiter_warns_when_background_start_times_out(monkeyp
     monkeypatch.setattr(
         openviking_module,
         "_VikingClient",
-        MagicMock(side_effect=AssertionError("client should not be rebuilt before health recovers")),
+        MagicMock(
+            side_effect=AssertionError(
+                "client should not be rebuilt before health recovers"
+            )
+        ),
     )
 
     provider = OpenVikingMemoryProvider()
@@ -977,10 +1107,15 @@ def test_initialize_does_not_autostart_remote_openviking(monkeypatch, caplog):
         provider.initialize("session-1")
 
     assert provider._client is None
-    assert "Remote OpenViking server at https://openviking.example is not reachable" in caplog.text
+    assert (
+        "Remote OpenViking server at https://openviking.example is not reachable"
+        in caplog.text
+    )
 
 
-def test_initialize_warns_clearly_when_local_runtime_autostart_fails(monkeypatch, caplog):
+def test_initialize_warns_clearly_when_local_runtime_autostart_fails(
+    monkeypatch, caplog
+):
     _clear_openviking_env(monkeypatch)
     monkeypatch.setenv("OPENVIKING_ENDPOINT", "http://localhost:1934")
 
@@ -1000,7 +1135,9 @@ def test_initialize_warns_clearly_when_local_runtime_autostart_fails(monkeypatch
     monkeypatch.setattr(
         openviking_module,
         "_wait_for_openviking_health",
-        MagicMock(side_effect=AssertionError("should not wait when server did not start")),
+        MagicMock(
+            side_effect=AssertionError("should not wait when server did not start")
+        ),
     )
 
     with caplog.at_level("WARNING", logger=openviking_module.__name__):
@@ -1008,7 +1145,10 @@ def test_initialize_warns_clearly_when_local_runtime_autostart_fails(monkeypatch
         provider.initialize("session-1")
 
     assert provider._client is None
-    assert "Local OpenViking server at http://localhost:1934 is not reachable" in caplog.text
+    assert (
+        "Local OpenViking server at http://localhost:1934 is not reachable"
+        in caplog.text
+    )
     assert "openviking-server was not found on PATH" in caplog.text
 
 
@@ -1071,7 +1211,11 @@ def test_post_setup_local_server_down_can_offer_autostart(tmp_path, monkeypatch)
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
-    monkeypatch.setattr(openviking_module, "_validate_openviking_setup_values", lambda values, *, require_api_key=False: (True, "", None))
+    monkeypatch.setattr(
+        openviking_module,
+        "_validate_openviking_setup_values",
+        lambda values, *, require_api_key=False: (True, "", None),
+    )
 
     from clawk_cli import memory_setup
 
@@ -1079,14 +1223,28 @@ def test_post_setup_local_server_down_can_offer_autostart(tmp_path, monkeypatch)
 
     def validate_reachability(endpoint):
         reachability_calls.append(endpoint)
-        return False, "OpenViking server is not reachable." if len(reachability_calls) == 1 else ""
+        return False, "OpenViking server is not reachable." if len(
+            reachability_calls
+        ) == 1 else ""
 
     started = []
-    monkeypatch.setattr(openviking_module, "_validate_openviking_reachability", validate_reachability)
-    monkeypatch.setattr(openviking_module, "_start_local_openviking_server", lambda endpoint: (started.append(endpoint) or True, "started"))
-    monkeypatch.setattr(openviking_module, "_wait_for_openviking_health", lambda endpoint, **kwargs: True)
+    monkeypatch.setattr(
+        openviking_module, "_validate_openviking_reachability", validate_reachability
+    )
+    monkeypatch.setattr(
+        openviking_module,
+        "_start_local_openviking_server",
+        lambda endpoint: (started.append(endpoint) or True, "started"),
+    )
+    monkeypatch.setattr(
+        openviking_module,
+        "_wait_for_openviking_health",
+        lambda endpoint, **kwargs: True,
+    )
     choices = iter([1, 0, 0, 0])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: next(choices))
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: next(choices)
+    )
     monkeypatch.setattr(
         memory_setup,
         "_prompt",
@@ -1120,7 +1278,9 @@ def test_post_setup_invalid_env_profile_can_create_new_config(tmp_path, monkeypa
     from clawk_cli import memory_setup
 
     choices = iter([1, 0, 0])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: next(choices))
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: next(choices)
+    )
     monkeypatch.setattr(
         memory_setup,
         "_prompt",
@@ -1144,13 +1304,25 @@ def test_tool_search_sorts_by_raw_score_across_buckets():
     provider._client.post.return_value = {
         "result": {
             "memories": [
-                {"uri": "viking://memories/1", "score": 0.9003, "abstract": "memory result"},
+                {
+                    "uri": "viking://memories/1",
+                    "score": 0.9003,
+                    "abstract": "memory result",
+                },
             ],
             "resources": [
-                {"uri": "viking://resources/1", "score": 0.9004, "abstract": "resource result"},
+                {
+                    "uri": "viking://resources/1",
+                    "score": 0.9004,
+                    "abstract": "resource result",
+                },
             ],
             "skills": [
-                {"uri": "viking://skills/1", "score": 0.8999, "abstract": "skill result"},
+                {
+                    "uri": "viking://skills/1",
+                    "score": 0.8999,
+                    "abstract": "skill result",
+                },
             ],
             "total": 3,
         }
@@ -1176,10 +1348,18 @@ def test_tool_search_sorts_missing_raw_score_after_negative_scores():
                 {"uri": "viking://memories/missing", "abstract": "missing score"},
             ],
             "resources": [
-                {"uri": "viking://resources/negative", "score": -0.25, "abstract": "negative score"},
+                {
+                    "uri": "viking://resources/negative",
+                    "score": -0.25,
+                    "abstract": "negative score",
+                },
             ],
             "skills": [
-                {"uri": "viking://skills/positive", "score": 0.1, "abstract": "positive score"},
+                {
+                    "uri": "viking://skills/positive",
+                    "score": 0.1,
+                    "abstract": "positive score",
+                },
             ],
             "total": 3,
         }
@@ -1221,9 +1401,12 @@ def test_tool_search_uses_find_for_normal_search():
 
     provider._tool_search({"query": "simple lookup", "mode": "fast"})
 
-    provider._client.post.assert_called_once_with("/api/v1/search/find", {
-        "query": "simple lookup",
-    })
+    provider._client.post.assert_called_once_with(
+        "/api/v1/search/find",
+        {
+            "query": "simple lookup",
+        },
+    )
     assert "mode" not in provider._client.post.call_args.args[1]
 
 
@@ -1237,10 +1420,13 @@ def test_tool_search_uses_session_search_for_deep_search():
 
     provider._tool_search({"query": "connect facts", "mode": "deep"})
 
-    provider._client.post.assert_called_once_with("/api/v1/search/search", {
-        "query": "connect facts",
-        "session_id": "session-123",
-    })
+    provider._client.post.assert_called_once_with(
+        "/api/v1/search/search",
+        {
+            "query": "connect facts",
+            "session_id": "session-123",
+        },
+    )
     assert "mode" not in provider._client.post.call_args.args[1]
 
 
@@ -1255,19 +1441,24 @@ def test_tool_add_resource_uploads_existing_local_file(tmp_path):
         "result": {"root_uri": "viking://resources/sample"},
     }
 
-    result = json.loads(provider._tool_add_resource({
-        "url": str(sample),
-        "reason": "local test",
-        "wait": True,
-    }))
+    result = json.loads(
+        provider._tool_add_resource({
+            "url": str(sample),
+            "reason": "local test",
+            "wait": True,
+        })
+    )
 
     provider._client.upload_temp_file.assert_called_once_with(sample)
-    provider._client.post.assert_called_once_with("/api/v1/resources", {
-        "reason": "local test",
-        "wait": True,
-        "source_name": "sample.md",
-        "temp_file_id": "upload_sample.md",
-    })
+    provider._client.post.assert_called_once_with(
+        "/api/v1/resources",
+        {
+            "reason": "local test",
+            "wait": True,
+            "source_name": "sample.md",
+            "temp_file_id": "upload_sample.md",
+        },
+    )
     assert result["status"] == "added"
     assert result["root_uri"] == "viking://resources/sample"
 
@@ -1283,17 +1474,22 @@ def test_tool_add_resource_uploads_file_uri(tmp_path):
         "result": {"root_uri": "viking://resources/sample"},
     }
 
-    result = json.loads(provider._tool_add_resource({
-        "url": sample.as_uri(),
-        "reason": "file uri test",
-    }))
+    result = json.loads(
+        provider._tool_add_resource({
+            "url": sample.as_uri(),
+            "reason": "file uri test",
+        })
+    )
 
     provider._client.upload_temp_file.assert_called_once_with(sample)
-    provider._client.post.assert_called_once_with("/api/v1/resources", {
-        "reason": "file uri test",
-        "source_name": "sample.md",
-        "temp_file_id": "upload_sample.md",
-    })
+    provider._client.post.assert_called_once_with(
+        "/api/v1/resources",
+        {
+            "reason": "file uri test",
+            "source_name": "sample.md",
+            "temp_file_id": "upload_sample.md",
+        },
+    )
     assert result["status"] == "added"
     assert result["root_uri"] == "viking://resources/sample"
 
@@ -1328,29 +1524,34 @@ def test_tool_add_resource_uploads_existing_local_directory_and_cleans_zip(tmp_p
     provider = OpenVikingMemoryProvider()
     provider._client = MagicMock()
     uploaded_paths = []
-    provider._client.upload_temp_file.side_effect = (
-        lambda path: uploaded_paths.append(path) or "upload_docs.zip"
+    provider._client.upload_temp_file.side_effect = lambda path: (
+        uploaded_paths.append(path) or "upload_docs.zip"
     )
     provider._client.post.return_value = {
         "status": "ok",
         "result": {"root_uri": "viking://resources/docs"},
     }
 
-    result = json.loads(provider._tool_add_resource({
-        "url": str(docs),
-        "reason": "directory test",
-        "wait": True,
-    }))
+    result = json.loads(
+        provider._tool_add_resource({
+            "url": str(docs),
+            "reason": "directory test",
+            "wait": True,
+        })
+    )
 
     assert uploaded_paths
     assert uploaded_paths[0].suffix == ".zip"
     assert not uploaded_paths[0].exists()
-    provider._client.post.assert_called_once_with("/api/v1/resources", {
-        "reason": "directory test",
-        "wait": True,
-        "source_name": "docs",
-        "temp_file_id": "upload_docs.zip",
-    })
+    provider._client.post.assert_called_once_with(
+        "/api/v1/resources",
+        {
+            "reason": "directory test",
+            "wait": True,
+            "source_name": "docs",
+            "temp_file_id": "upload_docs.zip",
+        },
+    )
     assert result["status"] == "added"
     assert result["root_uri"] == "viking://resources/docs"
 
@@ -1375,8 +1576,7 @@ def test_tool_add_resource_directory_zip_skips_symlink_escape(tmp_path):
         with zipfile.ZipFile(path) as archive:
             archive_entries["names"] = archive.namelist()
             archive_entries["payloads"] = {
-                name: archive.read(name)
-                for name in archive.namelist()
+                name: archive.read(name) for name in archive.namelist()
             }
         return "upload_docs.zip"
 
@@ -1392,7 +1592,9 @@ def test_tool_add_resource_directory_zip_skips_symlink_escape(tmp_path):
     assert b"do not upload" not in b"".join(archive_entries["payloads"].values())
 
 
-def test_tool_add_resource_directory_zip_skips_clawk_credential_files(tmp_path, monkeypatch):
+def test_tool_add_resource_directory_zip_skips_clawk_credential_files(
+    tmp_path, monkeypatch
+):
     import agent.file_safety as fs
 
     clawk_home = tmp_path / "clawk_home"
@@ -1412,8 +1614,7 @@ def test_tool_add_resource_directory_zip_skips_clawk_credential_files(tmp_path, 
         with zipfile.ZipFile(path) as archive:
             archive_entries["names"] = archive.namelist()
             archive_entries["payloads"] = {
-                name: archive.read(name)
-                for name in archive.namelist()
+                name: archive.read(name) for name in archive.namelist()
             }
         return "upload_clawk_home.zip"
 
@@ -1437,8 +1638,8 @@ def test_tool_add_resource_cleans_local_directory_zip_when_add_fails(tmp_path):
     provider = OpenVikingMemoryProvider()
     provider._client = MagicMock()
     uploaded_paths = []
-    provider._client.upload_temp_file.side_effect = (
-        lambda path: uploaded_paths.append(path) or "upload_docs.zip"
+    provider._client.upload_temp_file.side_effect = lambda path: (
+        uploaded_paths.append(path) or "upload_docs.zip"
     )
     provider._client.post.side_effect = RuntimeError("add failed")
 
@@ -1494,17 +1695,23 @@ def test_tool_add_resource_sends_remote_url_as_path():
     provider._tool_add_resource({"url": "https://example.com/doc.md"})
 
     provider._client.upload_temp_file.assert_not_called()
-    provider._client.post.assert_called_once_with("/api/v1/resources", {
-        "path": "https://example.com/doc.md",
-    })
+    provider._client.post.assert_called_once_with(
+        "/api/v1/resources",
+        {
+            "path": "https://example.com/doc.md",
+        },
+    )
 
 
-@pytest.mark.parametrize("url", [
-    "git@github.com:org/repo.git",
-    "git@ssh.dev.azure.com:v3/org/project/repo",
-    "ssh://git@github.com/org/repo.git",
-    "git://github.com/org/repo.git",
-])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "git@github.com:org/repo.git",
+        "git@ssh.dev.azure.com:v3/org/project/repo",
+        "ssh://git@github.com/org/repo.git",
+        "git://github.com/org/repo.git",
+    ],
+)
 def test_tool_add_resource_sends_git_remote_sources_as_path(url):
     provider = OpenVikingMemoryProvider()
     provider._client = MagicMock()
@@ -1516,9 +1723,12 @@ def test_tool_add_resource_sends_git_remote_sources_as_path(url):
     provider._tool_add_resource({"url": url})
 
     provider._client.upload_temp_file.assert_not_called()
-    provider._client.post.assert_called_once_with("/api/v1/resources", {
-        "path": url,
-    })
+    provider._client.post.assert_called_once_with(
+        "/api/v1/resources",
+        {
+            "path": url,
+        },
+    )
 
 
 def test_get_tool_schemas_includes_narrow_forget_tool():
@@ -1595,21 +1805,24 @@ def test_handle_tool_call_forget_allows_non_generated_dot_md_memory_file():
     }
 
 
-@pytest.mark.parametrize("uri", [
-    "",
-    "https://example.com/mem.md",
-    "viking:/user/memories/preferences/mem_abc123.md",
-    "viking://resources/project/doc.md",
-    "viking://resources/project/memories/mem_abc123.md",
-    "viking://memories/preferences/mem_abc123.md",
-    "viking://agent/clawk/memories/preferences/mem_abc123.md",
-    "viking://user/skills/example/SKILL.md",
-    "viking://user/sessions/session-1/messages.jsonl",
-    "viking://user/memories/preferences/",
-    "viking://user/memories/preferences/.overview.md",
-    "viking://user/memories/preferences/.abstract.md",
-    "viking://user/memories/preferences/mem_abc123.md?recursive=true",
-])
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "",
+        "https://example.com/mem.md",
+        "viking:/user/memories/preferences/mem_abc123.md",
+        "viking://resources/project/doc.md",
+        "viking://resources/project/memories/mem_abc123.md",
+        "viking://memories/preferences/mem_abc123.md",
+        "viking://agent/clawk/memories/preferences/mem_abc123.md",
+        "viking://user/skills/example/SKILL.md",
+        "viking://user/sessions/session-1/messages.jsonl",
+        "viking://user/memories/preferences/",
+        "viking://user/memories/preferences/.overview.md",
+        "viking://user/memories/preferences/.abstract.md",
+        "viking://user/memories/preferences/mem_abc123.md?recursive=true",
+    ],
+)
 def test_handle_tool_call_forget_rejects_non_memory_file_uris(uri):
     provider = OpenVikingMemoryProvider()
     provider._client = MagicMock()
@@ -1636,13 +1849,18 @@ def test_viking_client_delete_uses_identity_headers(monkeypatch):
         return SimpleNamespace(
             status_code=200,
             text="",
-            json=lambda: {"status": "ok", "result": {"uri": "viking://user/memories/x.md"}},
+            json=lambda: {
+                "status": "ok",
+                "result": {"uri": "viking://user/memories/x.md"},
+            },
             raise_for_status=lambda: None,
         )
 
     monkeypatch.setattr(client._httpx, "delete", capture_delete)
 
-    assert client.delete("/api/v1/fs", params={"uri": "viking://user/memories/x.md"}) == {
+    assert client.delete(
+        "/api/v1/fs", params={"uri": "viking://user/memories/x.md"}
+    ) == {
         "status": "ok",
         "result": {"uri": "viking://user/memories/x.md"},
     }
@@ -1682,7 +1900,9 @@ def test_viking_client_post_allows_per_request_timeout(monkeypatch):
     assert captured["kwargs"]["timeout"] == 1.25
 
 
-def test_viking_client_upload_temp_file_uses_multipart_identity_headers(tmp_path, monkeypatch):
+def test_viking_client_upload_temp_file_uses_multipart_identity_headers(
+    tmp_path, monkeypatch
+):
     sample = tmp_path / "sample.md"
     sample.write_text("# Local resource\n", encoding="utf-8")
     client = _VikingClient(
@@ -1699,7 +1919,10 @@ def test_viking_client_upload_temp_file_uses_multipart_identity_headers(tmp_path
         return SimpleNamespace(
             status_code=200,
             text="",
-            json=lambda: {"status": "ok", "result": {"temp_file_id": "upload_sample.md"}},
+            json=lambda: {
+                "status": "ok",
+                "result": {"temp_file_id": "upload_sample.md"},
+            },
             raise_for_status=lambda: None,
         )
 
@@ -1793,7 +2016,9 @@ def test_viking_client_headers_send_tenant_in_local_mode():
     assert "Authorization" not in headers
 
 
-def test_viking_client_headers_send_tenant_when_empty_falls_back_to_default(monkeypatch):
+def test_viking_client_headers_send_tenant_when_empty_falls_back_to_default(
+    monkeypatch,
+):
     _clear_openviking_tenant_env(monkeypatch)
     # Empty account/user strings fall back to "default" in local mode.
     client = _VikingClient(
@@ -2043,7 +2268,9 @@ def test_validate_openviking_root_access_uses_admin_endpoint(monkeypatch):
 def test_validate_openviking_setup_values_blocks_remote_without_api_key(monkeypatch):
     class FakeVikingClient:
         def __init__(self, *args, **kwargs):
-            raise AssertionError("remote configs without API keys should fail before network validation")
+            raise AssertionError(
+                "remote configs without API keys should fail before network validation"
+            )
 
     monkeypatch.setattr(openviking_module, "_VikingClient", FakeVikingClient)
 
@@ -2057,7 +2284,9 @@ def test_validate_openviking_setup_values_blocks_remote_without_api_key(monkeypa
     assert role is None
 
 
-def test_validate_openviking_setup_values_local_dev_no_key_uses_health_only(monkeypatch):
+def test_validate_openviking_setup_values_local_dev_no_key_uses_health_only(
+    monkeypatch,
+):
     events = []
 
     class FakeVikingClient:
@@ -2070,16 +2299,19 @@ def test_validate_openviking_setup_values_local_dev_no_key_uses_health_only(monk
             return {"healthy": True, "auth_mode": "dev"}
 
         def validate_auth(self):
-            raise AssertionError("dev-mode no-key setup should not run authenticated status check")
+            raise AssertionError(
+                "dev-mode no-key setup should not run authenticated status check"
+            )
 
         def validate_root_access(self):
             raise AssertionError("no-key setup should not run root probe")
 
     monkeypatch.setattr(openviking_module, "_VikingClient", FakeVikingClient)
 
-    ok, message, role = openviking_module._validate_openviking_setup_values(
-        {"endpoint": "localhost", "agent": "clawk"}
-    )
+    ok, message, role = openviking_module._validate_openviking_setup_values({
+        "endpoint": "localhost",
+        "agent": "clawk",
+    })
 
     assert ok is True
     assert message == ""
@@ -2087,7 +2319,9 @@ def test_validate_openviking_setup_values_local_dev_no_key_uses_health_only(monk
     assert events == ["health"]
 
 
-def test_validate_openviking_setup_values_user_key_runs_status_and_classifies_role(monkeypatch):
+def test_validate_openviking_setup_values_user_key_runs_status_and_classifies_role(
+    monkeypatch,
+):
     events = []
 
     class FakeVikingClient:
@@ -2181,9 +2415,12 @@ def test_validate_openviking_identity_value_matches_cli_rules(value, field, ok):
 
     assert valid is ok
     assert bool(normalized) is ok
+
+
 # ---------------------------------------------------------------------------
 # on_session_switch — flush + commit + rotate behavior (clawksis-agent#28296)
 # ---------------------------------------------------------------------------
+
 
 def _make_provider_with_session(session_id: str, turn_count: int):
     provider = OpenVikingMemoryProvider()
@@ -2337,6 +2574,7 @@ def test_sync_turn_captures_session_id_before_worker_runs():
             return fake_post(path, payload, **kwargs)
 
     import plugins.memory.openviking as _mod
+
     _mod._VikingClient = StubClient
     try:
         provider.sync_turn("u", "a")
@@ -2352,12 +2590,18 @@ def test_sync_turn_captures_session_id_before_worker_runs():
 
     # The whole turn must target the OLD session id as a single ordered batch.
     assert captured_paths == ["/api/v1/sessions/old-sid/messages/batch"]
-    assert captured_payloads == [{
-        "messages": [
-            {"role": "user", "parts": [{"type": "text", "text": "u"}]},
-            {"role": "assistant", "parts": [{"type": "text", "text": "a"}], "peer_id": "clawk"},
-        ]
-    }]
+    assert captured_payloads == [
+        {
+            "messages": [
+                {"role": "user", "parts": [{"type": "text", "text": "u"}]},
+                {
+                    "role": "assistant",
+                    "parts": [{"type": "text", "text": "a"}],
+                    "peer_id": "clawk",
+                },
+            ]
+        }
+    ]
 
 
 def test_sync_turn_retries_batch_write_with_fresh_client():
@@ -2385,6 +2629,7 @@ def test_sync_turn_retries_batch_write_with_fresh_client():
             return {}
 
     import plugins.memory.openviking as _mod
+
     real_client_cls = _mod._VikingClient
     _mod._VikingClient = StubClient
     try:
@@ -2394,15 +2639,21 @@ def test_sync_turn_retries_batch_write_with_fresh_client():
         _mod._VikingClient = real_client_cls
 
     assert len(clients) == 2
-    assert captured == [(
-        "/api/v1/sessions/sid-1/messages/batch",
-        {
-            "messages": [
-                {"role": "user", "parts": [{"type": "text", "text": "u"}]},
-                {"role": "assistant", "parts": [{"type": "text", "text": "a"}], "peer_id": "clawk"},
-            ]
-        },
-    )]
+    assert captured == [
+        (
+            "/api/v1/sessions/sid-1/messages/batch",
+            {
+                "messages": [
+                    {"role": "user", "parts": [{"type": "text", "text": "u"}]},
+                    {
+                        "role": "assistant",
+                        "parts": [{"type": "text", "text": "a"}],
+                        "peer_id": "clawk",
+                    },
+                ]
+            },
+        )
+    ]
 
 
 def test_sync_turn_structured_messages_include_assistant_peer_id():
@@ -2438,11 +2689,19 @@ def test_sync_turn_structured_messages_include_assistant_peer_id():
                 {
                     "id": "call-1",
                     "type": "function",
-                    "function": {"name": "shell_command", "arguments": json.dumps({"cmd": "pwd"})},
+                    "function": {
+                        "name": "shell_command",
+                        "arguments": json.dumps({"cmd": "pwd"}),
+                    },
                 }
             ],
         },
-        {"role": "tool", "tool_call_id": "call-1", "name": "shell_command", "content": "ok"},
+        {
+            "role": "tool",
+            "tool_call_id": "call-1",
+            "name": "shell_command",
+            "content": "ok",
+        },
         {"role": "assistant", "content": [{"type": "output_text", "text": "a"}]},
     ]
     try:
@@ -2451,30 +2710,40 @@ def test_sync_turn_structured_messages_include_assistant_peer_id():
     finally:
         _mod._VikingClient = real_client_cls
 
-    assert captured == [(
-        "/api/v1/sessions/sid-structured/messages/batch",
-        {
-            "messages": [
-                {"role": "user", "parts": [{"type": "text", "text": "u"}]},
-                {"role": "assistant", "parts": [{"type": "text", "text": "Looking."}], "peer_id": "clawk"},
-                {
-                    "role": "assistant",
-                    "parts": [
-                        {
-                            "type": "tool",
-                            "tool_id": "call-1",
-                            "tool_name": "shell_command",
-                            "tool_input": {"cmd": "pwd"},
-                            "tool_output": "ok",
-                            "tool_status": "completed",
-                        }
-                    ],
-                    "peer_id": "clawk",
-                },
-                {"role": "assistant", "parts": [{"type": "text", "text": "a"}], "peer_id": "clawk"},
-            ]
-        },
-    )]
+    assert captured == [
+        (
+            "/api/v1/sessions/sid-structured/messages/batch",
+            {
+                "messages": [
+                    {"role": "user", "parts": [{"type": "text", "text": "u"}]},
+                    {
+                        "role": "assistant",
+                        "parts": [{"type": "text", "text": "Looking."}],
+                        "peer_id": "clawk",
+                    },
+                    {
+                        "role": "assistant",
+                        "parts": [
+                            {
+                                "type": "tool",
+                                "tool_id": "call-1",
+                                "tool_name": "shell_command",
+                                "tool_input": {"cmd": "pwd"},
+                                "tool_output": "ok",
+                                "tool_status": "completed",
+                            }
+                        ],
+                        "peer_id": "clawk",
+                    },
+                    {
+                        "role": "assistant",
+                        "parts": [{"type": "text", "text": "a"}],
+                        "peer_id": "clawk",
+                    },
+                ]
+            },
+        )
+    ]
 
 
 def test_sync_turn_noop_when_session_id_blank():
@@ -2597,6 +2866,7 @@ def test_on_session_switch_swallows_commit_failure():
 # the commit boundary — they would never be extracted.
 # ---------------------------------------------------------------------------
 
+
 class _HungThread:
     """Thread stand-in that stays alive across joins."""
 
@@ -2642,6 +2912,7 @@ def test_on_session_switch_skips_commit_when_sync_worker_outlives_join():
 # still-alive previous worker — that dropped writer keeps POSTing under the
 # old sid and would otherwise land its writes past the commit boundary.
 # ---------------------------------------------------------------------------
+
 
 def test_on_session_end_waits_for_all_writers_not_just_latest():
     provider = _make_provider_with_session("old-sid", turn_count=2)
@@ -2775,6 +3046,7 @@ def test_sync_turn_tracks_writer_under_session_id():
             return {}
 
     import plugins.memory.openviking as _mod
+
     real_client_cls = _mod._VikingClient
     _mod._VikingClient = StubClient
     try:
@@ -2795,6 +3067,7 @@ def test_sync_turn_tracks_writer_under_session_id():
 # on_memory_write: explicit memory writes use content/write and stay outside
 # the session transcript/commit boundary.
 # ---------------------------------------------------------------------------
+
 
 def test_on_memory_write_uses_content_write_independent_of_session_rotation():
     import threading
@@ -2826,6 +3099,7 @@ def test_on_memory_write_uses_content_write_independent_of_session_rotation():
             return {}
 
     import plugins.memory.openviking as _mod
+
     real_client_cls = _mod._VikingClient
     _mod._VikingClient = StubClient
     try:
@@ -2887,7 +3161,9 @@ def test_shutdown_waits_for_memory_write_worker(monkeypatch):
 
     returned_before_worker_finished = shutdown_returned.wait(timeout=0.1)
     release_worker.set()
-    assert shutdown_returned.wait(timeout=2.0), "shutdown did not return after worker finished"
+    assert shutdown_returned.wait(timeout=2.0), (
+        "shutdown did not return after worker finished"
+    )
     shutdown_thread.join(timeout=2.0)
 
     assert not returned_before_worker_finished
@@ -2923,6 +3199,7 @@ def test_on_memory_write_ignores_non_add_actions(action, content, monkeypatch):
             raise AssertionError("non-URI remove should not spawn a mirror thread")
 
     import plugins.memory.openviking as _mod
+
     monkeypatch.setattr(_mod.threading, "Thread", StubThread)
 
     provider.on_memory_write(
@@ -3209,10 +3486,7 @@ def test_prefetch_reads_empty_abstract_content_within_budget(monkeypatch):
     assert [params["uri"] for _path, params in captured_reads] == [
         "viking://user/peers/clawk/memories/one.md",
     ]
-    assert (
-        "content for viking://user/peers/clawk/memories/one.md"
-        in context
-    )
+    assert "content for viking://user/peers/clawk/memories/one.md" in context
 
 
 def test_prefetch_caps_full_content_reads(monkeypatch):
@@ -3252,8 +3526,12 @@ def test_prefetch_caps_full_content_reads(monkeypatch):
     context = provider.prefetch("anything")
 
     assert len(captured_reads) == 2
-    assert "full content for viking://user/peers/clawk/memories/events/mem_0.md" in context
-    assert "full content for viking://user/peers/clawk/memories/events/mem_1.md" in context
+    assert (
+        "full content for viking://user/peers/clawk/memories/events/mem_0.md" in context
+    )
+    assert (
+        "full content for viking://user/peers/clawk/memories/events/mem_1.md" in context
+    )
     assert "short abstract 2" in context
 
 

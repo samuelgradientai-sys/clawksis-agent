@@ -40,17 +40,15 @@ def test_profile_local_mcp_tool_is_visible_in_slash_worker(tmp_path):
         encoding="utf-8",
     )
     (profile_home / "config.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "mcp_servers": {
-                    "profileprobe": {
-                        "enabled": True,
-                        "command": sys.executable,
-                        "args": [str(server)],
-                    }
+        yaml.safe_dump({
+            "mcp_servers": {
+                "profileprobe": {
+                    "enabled": True,
+                    "command": sys.executable,
+                    "args": [str(server)],
                 }
             }
-        ),
+        }),
         encoding="utf-8",
     )
 

@@ -128,6 +128,7 @@ def _persist_dispatch(record: Dict[str, Any]) -> None:
     now = time.time()
     try:
         from gateway.status import get_process_start_time
+
         owner_started_at = get_process_start_time(__import__("os").getpid())
     except Exception:
         owner_started_at = None
@@ -144,17 +145,26 @@ def _persist_dispatch(record: Dict[str, Any]) -> None:
                 delivery_state, delivery_attempts, owner_pid,
                 owner_started_at, task_json)
                VALUES (?, ?, ?, ?, 'running', ?, ?, 'pending', 0, ?, ?, ?)""",
-            (record["delegation_id"], record.get("session_key", ""),
-             record.get("origin_ui_session_id", ""), record.get("parent_session_id"),
-             record["dispatched_at"], now, __import__("os").getpid(),
-             owner_started_at, json.dumps(task_payload)),
+            (
+                record["delegation_id"],
+                record.get("session_key", ""),
+                record.get("origin_ui_session_id", ""),
+                record.get("parent_session_id"),
+                record["dispatched_at"],
+                now,
+                __import__("os").getpid(),
+                owner_started_at,
+                json.dumps(task_payload),
+            ),
         )
     _prune_durable_records()
 
 
 def _delete_durable_delegation(delegation_id: str) -> None:
     with _DB_LOCK, _connect() as conn:
-        conn.execute("DELETE FROM async_delegations WHERE delegation_id=?", (delegation_id,))
+        conn.execute(
+            "DELETE FROM async_delegations WHERE delegation_id=?", (delegation_id,)
+        )
 
 
 def _prune_durable_records() -> None:
@@ -203,8 +213,14 @@ def _persist_completion(event: Dict[str, Any], result: Dict[str, Any]) -> None:
             """UPDATE async_delegations SET state=?, completed_at=?, updated_at=?,
                event_json=?, result_json=?, delivery_state='pending'
                WHERE delegation_id=?""",
-            (event.get("status", "completed"), event.get("completed_at", now), now,
-             json.dumps(event), json.dumps(result), event["delegation_id"]),
+            (
+                event.get("status", "completed"),
+                event.get("completed_at", now),
+                now,
+                json.dumps(event),
+                json.dumps(result),
+                event["delegation_id"],
+            ),
         )
 
 
@@ -232,7 +248,16 @@ def recover_abandoned_delegations() -> int:
                FROM async_delegations WHERE state IN ('running','finalizing')"""
         ).fetchall()
         for row in rows:
-            delegation_id, session_key, origin_ui, parent_id, dispatched_at, pid, started, task_json = row
+            (
+                delegation_id,
+                session_key,
+                origin_ui,
+                parent_id,
+                dispatched_at,
+                pid,
+                started,
+                task_json,
+            ) = row
             live = False
             if pid:
                 live = _pid_exists(int(pid))
@@ -242,15 +267,23 @@ def recover_abandoned_delegations() -> int:
                 continue
             task = json.loads(task_json or "{}")
             event = {
-                "type": "async_delegation", "delegation_id": delegation_id,
-                "session_key": session_key, "origin_ui_session_id": origin_ui,
-                "parent_session_id": parent_id, "goal": task.get("goal", ""),
-                "goals": task.get("goals"), "context": task.get("context"),
-                "toolsets": task.get("toolsets"), "role": task.get("role"),
-                "model": task.get("model"), "is_batch": bool(task.get("is_batch")),
-                "status": "unknown", "summary": None,
+                "type": "async_delegation",
+                "delegation_id": delegation_id,
+                "session_key": session_key,
+                "origin_ui_session_id": origin_ui,
+                "parent_session_id": parent_id,
+                "goal": task.get("goal", ""),
+                "goals": task.get("goals"),
+                "context": task.get("context"),
+                "toolsets": task.get("toolsets"),
+                "role": task.get("role"),
+                "model": task.get("model"),
+                "is_batch": bool(task.get("is_batch")),
+                "status": "unknown",
+                "summary": None,
                 "error": "Delegation owner exited before recording a terminal result; outcome unknown.",
-                "dispatched_at": dispatched_at, "completed_at": now,
+                "dispatched_at": dispatched_at,
+                "completed_at": now,
             }
             result = {"status": "unknown", "summary": None, "error": event["error"]}
             conn.execute(
@@ -376,15 +409,20 @@ def get_durable_delegation(delegation_id: str) -> Optional[Dict[str, Any]]:
         row = conn.execute(
             """SELECT origin_session, state, dispatched_at, completed_at,
                       result_json, delivery_state, delivery_attempts
-               FROM async_delegations WHERE delegation_id=?""", (delegation_id,),
+               FROM async_delegations WHERE delegation_id=?""",
+            (delegation_id,),
         ).fetchone()
     if row is None:
         return None
     return {
-        "delegation_id": delegation_id, "origin_session": row[0], "state": row[1],
-        "dispatched_at": row[2], "completed_at": row[3],
+        "delegation_id": delegation_id,
+        "origin_session": row[0],
+        "state": row[1],
+        "dispatched_at": row[2],
+        "completed_at": row[3],
         "result": json.loads(row[4]) if row[4] else None,
-        "delivery_state": row[5], "delivery_attempts": row[6],
+        "delivery_state": row[5],
+        "delivery_attempts": row[6],
     }
 
 
@@ -410,7 +448,9 @@ def _get_executor(max_workers: int) -> ThreadPoolExecutor:
 def active_count() -> int:
     """Number of async delegations currently running."""
     with _records_lock:
-        return sum(1 for r in _records.values() if r.get("status") in {"running", "finalizing"})
+        return sum(
+            1 for r in _records.values() if r.get("status") in {"running", "finalizing"}
+        )
 
 
 def _new_delegation_id() -> str:
@@ -423,14 +463,14 @@ def _prune_completed_locked() -> None:
     Caller must hold ``_records_lock``.
     """
     completed = [
-        (rid, r)
-        for rid, r in _records.items()
-        if r.get("status") != "running"
+        (rid, r) for rid, r in _records.items() if r.get("status") != "running"
     ]
     if len(completed) <= _MAX_RETAINED_COMPLETED:
         return
     # Oldest-first by completion time (fall back to dispatch time).
-    completed.sort(key=lambda kv: kv[1].get("completed_at") or kv[1].get("dispatched_at") or 0)
+    completed.sort(
+        key=lambda kv: kv[1].get("completed_at") or kv[1].get("dispatched_at") or 0
+    )
     for rid, _ in completed[: len(completed) - _MAX_RETAINED_COMPLETED]:
         _records.pop(rid, None)
 
@@ -504,9 +544,7 @@ def dispatch_async_delegation(
     # active_count() separately would let two concurrent dispatches (e.g.
     # from different gateway sessions) both pass the check and exceed the cap.
     with _records_lock:
-        running = sum(
-            1 for r in _records.values() if r.get("status") == "running"
-        )
+        running = sum(1 for r in _records.values() if r.get("status") == "running")
         if running >= max_async_children:
             return {
                 "status": "rejected",
@@ -557,7 +595,9 @@ def dispatch_async_delegation(
 
     logger.info(
         "Dispatched async delegation %s (session_key=%s): %s",
-        delegation_id, session_key or "<cli>", (goal or "")[:80],
+        delegation_id,
+        session_key or "<cli>",
+        (goal or "")[:80],
     )
     return {"status": "dispatched", "delegation_id": delegation_id}
 
@@ -598,7 +638,8 @@ def _push_completion_event(
         logger.error(
             "Async delegation %s finished but process_registry import failed; "
             "result lost: %s",
-            record.get("delegation_id"), exc,
+            record.get("delegation_id"),
+            exc,
         )
         return
 
@@ -636,9 +677,9 @@ def _push_completion_event(
         process_registry.completion_queue.put(evt)
     except Exception as exc:  # pragma: no cover
         logger.error(
-            "Async delegation %s: failed to enqueue completion event; "
-            "result lost: %s",
-            record.get("delegation_id"), exc,
+            "Async delegation %s: failed to enqueue completion event; result lost: %s",
+            record.get("delegation_id"),
+            exc,
         )
 
 
@@ -682,7 +723,9 @@ def dispatch_async_delegation_batch(
     n = len(goals)
     # A combined goal label for status listings / the completion header.
     combined_goal = (
-        goals[0] if n == 1 else f"{n} parallel subagents: " + "; ".join(g[:40] for g in goals)
+        goals[0]
+        if n == 1
+        else f"{n} parallel subagents: " + "; ".join(g[:40] for g in goals)
     )
     record: Dict[str, Any] = {
         "delegation_id": delegation_id,
@@ -702,9 +745,7 @@ def dispatch_async_delegation_batch(
         "is_batch": True,
     }
     with _records_lock:
-        running = sum(
-            1 for r in _records.values() if r.get("status") == "running"
-        )
+        running = sum(1 for r in _records.values() if r.get("status") == "running")
         if running >= max_async_children:
             return {
                 "status": "rejected",
@@ -728,8 +769,7 @@ def dispatch_async_delegation_batch(
             # Batch status: completed unless every child errored/was interrupted.
             child_results = combined.get("results") or []
             if child_results and all(
-                (r.get("status") not in ("completed", "success"))
-                for r in child_results
+                (r.get("status") not in ("completed", "success")) for r in child_results
             ):
                 status = "error"
             else:
@@ -759,14 +799,14 @@ def dispatch_async_delegation_batch(
 
     logger.info(
         "Dispatched async delegation batch %s (%d task(s), session_key=%s)",
-        delegation_id, n, session_key or "<cli>",
+        delegation_id,
+        n,
+        session_key or "<cli>",
     )
     return {"status": "dispatched", "delegation_id": delegation_id}
 
 
-def _finalize_batch(
-    delegation_id: str, combined: Dict[str, Any], status: str
-) -> None:
+def _finalize_batch(delegation_id: str, combined: Dict[str, Any], status: str) -> None:
     """Mark a batch record complete and push ONE combined completion event."""
     with _records_lock:
         record = _records.get(delegation_id)
@@ -783,7 +823,8 @@ def _finalize_batch(
         logger.error(
             "Async delegation batch %s finished but process_registry import "
             "failed; result lost: %s",
-            delegation_id, exc,
+            delegation_id,
+            exc,
         )
         return
 
@@ -822,7 +863,8 @@ def _finalize_batch(
         logger.error(
             "Async delegation batch %s: failed to enqueue completion event; "
             "result lost: %s",
-            delegation_id, exc,
+            delegation_id,
+            exc,
         )
     finally:
         with _records_lock:
@@ -853,9 +895,7 @@ def interrupt_all(reason: str = "shutdown") -> int:
     """
     count = 0
     with _records_lock:
-        targets = [
-            r for r in _records.values() if r.get("status") == "running"
-        ]
+        targets = [r for r in _records.values() if r.get("status") == "running"]
     for r in targets:
         fn = r.get("interrupt_fn")
         if callable(fn):
@@ -865,7 +905,8 @@ def interrupt_all(reason: str = "shutdown") -> int:
             except Exception as exc:
                 logger.debug(
                     "interrupt_all: %s interrupt failed: %s",
-                    r.get("delegation_id"), exc,
+                    r.get("delegation_id"),
+                    exc,
                 )
     if count:
         logger.info("Interrupted %d async delegation(s) (%s)", count, reason)
@@ -901,12 +942,19 @@ def interrupt_for_session(
     count = 0
     with _records_lock:
         targets = [
-            r for r in _records.values()
+            r
+            for r in _records.values()
             if r.get("status") == "running"
             and (
-                (origin_ui_session_id and str(r.get("origin_ui_session_id") or "") == origin_ui_session_id)
+                (
+                    origin_ui_session_id
+                    and str(r.get("origin_ui_session_id") or "") == origin_ui_session_id
+                )
                 or (session_key and str(r.get("session_key") or "") == session_key)
-                or (parent_session_id and str(r.get("parent_session_id") or "") == parent_session_id)
+                or (
+                    parent_session_id
+                    and str(r.get("parent_session_id") or "") == parent_session_id
+                )
             )
         ]
     for r in targets:
@@ -918,12 +966,14 @@ def interrupt_for_session(
             except Exception as exc:
                 logger.debug(
                     "interrupt_for_session: %s interrupt failed: %s",
-                    r.get("delegation_id"), exc,
+                    r.get("delegation_id"),
+                    exc,
                 )
     if count:
         logger.info(
             "Interrupted %d async delegation(s) for ending session (%s)",
-            count, reason,
+            count,
+            reason,
         )
     return count
 

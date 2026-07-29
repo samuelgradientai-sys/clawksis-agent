@@ -50,7 +50,12 @@ def test_nudge_when_no_terminal_tool(clear_kanban_env):
                 }
             ],
         },
-        {"role": "tool", "name": "kanban_heartbeat", "tool_call_id": "1", "content": "ok"},
+        {
+            "role": "tool",
+            "name": "kanban_heartbeat",
+            "tool_call_id": "1",
+            "content": "ok",
+        },
     ]
     nudge = build_kanban_stop_nudge(messages=messages, attempts=0)
     assert nudge is not None
@@ -74,7 +79,12 @@ def test_no_nudge_after_kanban_complete(clear_kanban_env):
                 }
             ],
         },
-        {"role": "tool", "name": "kanban_complete", "tool_call_id": "1", "content": "done"},
+        {
+            "role": "tool",
+            "name": "kanban_complete",
+            "tool_call_id": "1",
+            "content": "done",
+        },
     ]
     assert session_called_kanban_terminal(messages) is True
     assert build_kanban_stop_nudge(messages=messages) is None
@@ -83,7 +93,12 @@ def test_no_nudge_after_kanban_complete(clear_kanban_env):
 def test_no_nudge_after_kanban_block(clear_kanban_env):
     clear_kanban_env.setenv("CLAWK_KANBAN_TASK", "t_abc")
     messages = [
-        {"role": "tool", "name": "kanban_block", "tool_call_id": "1", "content": "blocked"},
+        {
+            "role": "tool",
+            "name": "kanban_block",
+            "tool_call_id": "1",
+            "content": "blocked",
+        },
     ]
     assert build_kanban_stop_nudge(messages=messages) is None
 

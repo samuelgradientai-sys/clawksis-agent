@@ -5,6 +5,7 @@ Regression coverage for #49561: in the Docker image the install tree
 with EACCES. The resolver must detect the read-only install dir and mirror the
 bridge source into a writable CLAWK_HOME location instead.
 """
+
 import importlib
 from pathlib import Path
 
@@ -31,12 +32,11 @@ def test_writable_install_returns_install_dir(tmp_path, monkeypatch):
 
     # Point the resolver's two anchors at our temp dirs.
     monkeypatch.setattr(
-        whatsapp_common, "__file__",
+        whatsapp_common,
+        "__file__",
         str(install_root / "gateway" / "platforms" / "whatsapp_common.py"),
     )
-    monkeypatch.setattr(
-        "clawk_constants.get_clawk_home", lambda: clawk_home
-    )
+    monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: clawk_home)
 
     resolved = whatsapp_common.resolve_whatsapp_bridge_dir()
     assert resolved == install_bridge
@@ -54,12 +54,11 @@ def test_readonly_install_mirrors_to_clawk_home(tmp_path, monkeypatch):
     clawk_home.mkdir()
 
     monkeypatch.setattr(
-        whatsapp_common, "__file__",
+        whatsapp_common,
+        "__file__",
         str(install_root / "gateway" / "platforms" / "whatsapp_common.py"),
     )
-    monkeypatch.setattr(
-        "clawk_constants.get_clawk_home", lambda: clawk_home
-    )
+    monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: clawk_home)
 
     # Simulate a read-only install tree. chmod(0o555) is unreliable under
     # root (CI/Docker bypass permission bits), so force the write probe to
@@ -97,12 +96,11 @@ def test_readonly_install_reuses_existing_mirror(tmp_path, monkeypatch):
     (mirror / "node_modules" / "sentinel").write_text("keep me\n")
 
     monkeypatch.setattr(
-        whatsapp_common, "__file__",
+        whatsapp_common,
+        "__file__",
         str(install_root / "gateway" / "platforms" / "whatsapp_common.py"),
     )
-    monkeypatch.setattr(
-        "clawk_constants.get_clawk_home", lambda: clawk_home
-    )
+    monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: clawk_home)
 
     _real_touch = Path.touch
 

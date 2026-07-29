@@ -5,13 +5,15 @@ discovered at boot: ``AGENT_BROWSER_EXECUTABLE_PATH`` is set, points to
 a real executable, and is a browser binary (not a shared library picked
 up by a broad ``find | grep``).
 """
+
 from __future__ import annotations
 
 from tests.docker.conftest import docker_exec_sh, start_container
 
 
 def test_stage2_discovers_chromium_binary(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """The stage2 hook must discover the Playwright chromium binary and
     export AGENT_BROWSER_EXECUTABLE_PATH so the browser tool can find it.
@@ -47,8 +49,11 @@ def test_stage2_discovers_chromium_binary(
 
     # Must be a browser binary by basename — NOT a shared library.
     accepted_names = (
-        "chrome", "chromium", "chrome-headless-shell",
-        "headless_shell", "chromium-browser",
+        "chrome",
+        "chromium",
+        "chrome-headless-shell",
+        "headless_shell",
+        "chromium-browser",
     )
     r = docker_exec_sh(
         container_name,
@@ -64,7 +69,8 @@ def test_stage2_discovers_chromium_binary(
 
 
 def test_stage2_browser_path_accessible_to_clawk_user(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """The discovered browser binary must be accessible to the
     unprivileged clawk user (UID 10000), since that's who runs

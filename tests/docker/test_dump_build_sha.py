@@ -20,6 +20,7 @@ This test handles both cases:
   still holds — defensive guard against the helper accidentally
   reporting bogus data from somewhere else.
 """
+
 from __future__ import annotations
 
 import re
@@ -41,7 +42,9 @@ def _run_dump(image: str) -> str:
     """
     r = subprocess.run(
         ["docker", "run", "--rm", image, "dump"],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
     assert r.returncode == 0, (
         f"clawk dump exited {r.returncode}: "
@@ -54,10 +57,17 @@ def _read_baked_sha_from_image(image: str) -> str | None:
     """Return the ``/opt/clawksis/.clawk_build_sha`` content, or None if absent."""
     r = subprocess.run(
         [
-            "docker", "run", "--rm", "--entrypoint", "cat", image,
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "cat",
+            image,
             "/opt/clawksis/.clawk_build_sha",
         ],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     if r.returncode != 0:
         return None

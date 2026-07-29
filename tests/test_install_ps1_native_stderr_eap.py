@@ -21,13 +21,10 @@ def _install_ps1() -> str:
 
 def _assert_relaxed_call(text: str, command_pattern: str) -> None:
     helper_block_pattern = (
-        r"Invoke-NativeWithRelaxedErrorAction\s*\{[^}]*"
-        + command_pattern
-        + r"[^}]*\}"
+        r"Invoke-NativeWithRelaxedErrorAction\s*\{[^}]*" + command_pattern + r"[^}]*\}"
     )
     inline_pattern = (
-        r"\$ErrorActionPreference\s*=\s*\"Continue\"[\s\S]{0,900}?"
-        + command_pattern
+        r"\$ErrorActionPreference\s*=\s*\"Continue\"[\s\S]{0,900}?" + command_pattern
     )
     assert re.search(helper_block_pattern, text) or re.search(inline_pattern, text), (
         f"install.ps1 must relax ErrorActionPreference around {command_pattern}"

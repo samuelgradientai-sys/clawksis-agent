@@ -39,6 +39,7 @@ def _clean_env(monkeypatch):
 
 # ─────────────────────────── identity parsing ───────────────────────────
 
+
 def test_identities_default_relay_when_unconfigured():
     assert relay.relay_platform_identities() == [("relay", "")]
     # The primary helper mirrors the first identity.
@@ -47,7 +48,9 @@ def test_identities_default_relay_when_unconfigured():
 
 def test_identities_single_platform(monkeypatch):
     monkeypatch.setenv("GATEWAY_RELAY_PLATFORMS", "discord")
-    monkeypatch.setenv("GATEWAY_RELAY_BOT_IDS", json.dumps({"discord": {"botId": "app-1"}}))
+    monkeypatch.setenv(
+        "GATEWAY_RELAY_BOT_IDS", json.dumps({"discord": {"botId": "app-1"}})
+    )
     assert relay.relay_platform_identities() == [("discord", "app-1")]
     assert relay.relay_platform_identity() == ("discord", "app-1")
 
@@ -56,15 +59,16 @@ def test_identities_multi_platform_keyed_map(monkeypatch):
     monkeypatch.setenv("GATEWAY_RELAY_PLATFORMS", "discord, telegram")
     monkeypatch.setenv(
         "GATEWAY_RELAY_BOT_IDS",
-        json.dumps(
-            {
-                "discord": {"botId": "app-1"},
-                "telegram": {"botId": "bot-9", "username": "@my_bot"},
-            }
-        ),
+        json.dumps({
+            "discord": {"botId": "app-1"},
+            "telegram": {"botId": "bot-9", "username": "@my_bot"},
+        }),
     )
     # Order preserved; whitespace in the list trimmed.
-    assert relay.relay_platform_identities() == [("discord", "app-1"), ("telegram", "bot-9")]
+    assert relay.relay_platform_identities() == [
+        ("discord", "app-1"),
+        ("telegram", "bot-9"),
+    ]
     # The PRIMARY is the first listed platform.
     assert relay.relay_platform_identity() == ("discord", "app-1")
     # Username folded into the per-platform entry; the leading @ is stripped.
@@ -74,7 +78,9 @@ def test_identities_multi_platform_keyed_map(monkeypatch):
 
 def test_identities_platform_missing_from_map_gets_empty_bot_id(monkeypatch):
     monkeypatch.setenv("GATEWAY_RELAY_PLATFORMS", "discord,telegram")
-    monkeypatch.setenv("GATEWAY_RELAY_BOT_IDS", json.dumps({"discord": {"botId": "app-1"}}))
+    monkeypatch.setenv(
+        "GATEWAY_RELAY_BOT_IDS", json.dumps({"discord": {"botId": "app-1"}})
+    )
     # telegram is listed but absent from the ids map ⇒ empty bot_id (the
     # connector rejects an unprovisioned platform with a structured failure).
     assert relay.relay_platform_identities() == [("discord", "app-1"), ("telegram", "")]
@@ -88,6 +94,7 @@ def test_bot_ids_malformed_json_degrades_to_empty(monkeypatch):
 
 
 # ─────────────────────────── provision loop ───────────────────────────
+
 
 def _arm(monkeypatch, *, url="wss://connector.example/relay", token="nas-token"):
     monkeypatch.setattr(relay, "relay_url", lambda: url)
@@ -105,12 +112,20 @@ def test_self_provision_loops_per_platform(monkeypatch):
 
     def _fake(**kwargs):
         calls.append((kwargs["platform"], kwargs["bot_id"], kwargs["gateway_id"]))
-        return {"secret": "s" * 64, "deliveryKey": "d" * 64, "tenant": "t", "gatewayId": kwargs["gateway_id"]}
+        return {
+            "secret": "s" * 64,
+            "deliveryKey": "d" * 64,
+            "tenant": "t",
+            "gatewayId": kwargs["gateway_id"],
+        }
 
     monkeypatch.setattr(relay, "_post_provision", _fake)
     assert relay.self_provision_relay() is True
     # One POST per fronted platform, all under the SAME gatewayId.
-    assert [(p, b) for p, b, _ in calls] == [("discord", "app-1"), ("telegram", "bot-9")]
+    assert [(p, b) for p, b, _ in calls] == [
+        ("discord", "app-1"),
+        ("telegram", "bot-9"),
+    ]
     assert len({gw for _, _, gw in calls}) == 1
     # The in-process secret is set once (from the first success).
     import os
@@ -129,7 +144,12 @@ def test_self_provision_partial_failure_tolerant(monkeypatch):
     def _fake(**kwargs):
         if kwargs["platform"] == "telegram":
             raise RuntimeError("telegram provision boom")
-        return {"secret": "s" * 64, "deliveryKey": "d" * 64, "tenant": "t", "gatewayId": kwargs["gateway_id"]}
+        return {
+            "secret": "s" * 64,
+            "deliveryKey": "d" * 64,
+            "tenant": "t",
+            "gatewayId": kwargs["gateway_id"],
+        }
 
     monkeypatch.setattr(relay, "_post_provision", _fake)
     # discord succeeds, telegram fails ⇒ still True (at least one fronted).
@@ -148,6 +168,7 @@ def test_self_provision_all_fail_returns_false(monkeypatch):
 
 
 # ─────────────────────────── per-frame egress (adapter) ───────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_adapter_stamps_per_frame_platform_from_inbound(monkeypatch):
@@ -182,7 +203,12 @@ async def test_adapter_stamps_per_frame_platform_from_inbound(monkeypatch):
         MessageEvent(
             text="hi",
             message_type=MessageType.TEXT,
-            source=SessionSource(platform=Platform.TELEGRAM, chat_id="tg-1", chat_type="dm", user_id="u-1"),
+            source=SessionSource(
+                platform=Platform.TELEGRAM,
+                chat_id="tg-1",
+                chat_type="dm",
+                user_id="u-1",
+            ),
         )
     )
     await adapter.send("tg-1", "a telegram reply")
@@ -194,7 +220,12 @@ async def test_adapter_stamps_per_frame_platform_from_inbound(monkeypatch):
         MessageEvent(
             text="yo",
             message_type=MessageType.TEXT,
-            source=SessionSource(platform=Platform.DISCORD, chat_id="dc-1", chat_type="channel", scope_id="g-1"),
+            source=SessionSource(
+                platform=Platform.DISCORD,
+                chat_id="dc-1",
+                chat_type="channel",
+                scope_id="g-1",
+            ),
         )
     )
     await adapter.send("dc-1", "a discord reply")

@@ -55,10 +55,10 @@ def test_overlap_takes_ownership_no_repeat_warning(caplog):
     turn takes ownership of the in-flight slot."""
     agent = _FakeAgent()
     with caplog.at_level(logging.WARNING, logger="agent.agent_runtime_helpers"):
-        note_turn_start(agent, "s1:t1:aaaa")   # never persists (crash)
-        note_turn_start(agent, "s1:t2:bbbb")   # warns once, takes ownership
+        note_turn_start(agent, "s1:t1:aaaa")  # never persists (crash)
+        note_turn_start(agent, "s1:t2:bbbb")  # warns once, takes ownership
         note_turn_persisted(agent)
-        note_turn_start(agent, "s1:t3:cccc")   # clean again
+        note_turn_start(agent, "s1:t3:cccc")  # clean again
     assert len(caplog.records) == 1
 
 
@@ -139,10 +139,10 @@ def test_crashed_cross_agent_turn_warns_once_then_recovers(caplog):
     takes ownership of the session slot and the tripwire goes quiet."""
     agent_a, agent_b, agent_c = _FakeAgent(), _FakeAgent(), _FakeAgent()
     with caplog.at_level(logging.WARNING, logger="agent.agent_runtime_helpers"):
-        note_turn_start(agent_a, "s1:t1:aaaa")   # never persists (crash)
-        note_turn_start(agent_b, "s1:t2:bbbb")   # warns once, takes ownership
+        note_turn_start(agent_a, "s1:t1:aaaa")  # never persists (crash)
+        note_turn_start(agent_b, "s1:t2:bbbb")  # warns once, takes ownership
         note_turn_persisted(agent_b)
-        note_turn_start(agent_c, "s1:t3:cccc")   # clean again
+        note_turn_start(agent_c, "s1:t3:cccc")  # clean again
     assert len(caplog.records) == 1
 
 
@@ -154,9 +154,9 @@ def test_persist_disabled_fork_neither_registers_nor_warns(caplog):
     parent, fork = _FakeAgent(), _FakeAgent()
     fork._persist_disabled = True
     with caplog.at_level(logging.WARNING, logger="agent.agent_runtime_helpers"):
-        note_turn_start(parent, "s1:t1:aaaa")     # real turn in flight
+        note_turn_start(parent, "s1:t1:aaaa")  # real turn in flight
         assert note_turn_start(fork, "s1:tr:ffff") is None  # fork: silent
-        note_turn_persisted(fork)                 # fork's funnel still runs
+        note_turn_persisted(fork)  # fork's funnel still runs
         # Reverse order on the next cycle: fork in flight, then real turn.
         note_turn_persisted(parent)
         note_turn_start(fork, "s1:tr:gggg")
@@ -171,9 +171,9 @@ def test_persist_disabled_fork_persist_does_not_steal_parent_slot(caplog):
     parent, fork, intruder = _FakeAgent(), _FakeAgent(), _FakeAgent()
     fork._persist_disabled = True
     with caplog.at_level(logging.WARNING, logger="agent.agent_runtime_helpers"):
-        note_turn_start(parent, "s1:t1:aaaa")     # real turn holds the slot
+        note_turn_start(parent, "s1:t1:aaaa")  # real turn holds the slot
         note_turn_start(fork, "s1:tr:ffff")
-        note_turn_persisted(fork)                 # must NOT release s1
+        note_turn_persisted(fork)  # must NOT release s1
         prev = note_turn_start(intruder, "s1:t2:bbbb")
     assert prev == "s1:t1:aaaa"
     assert len(caplog.records) == 1

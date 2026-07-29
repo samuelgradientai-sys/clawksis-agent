@@ -40,9 +40,15 @@ def _runner_with(monkeypatch, *, idle, armed_adapter=True):
     adapter = _FakeRelayAdapter() if armed_adapter else None
 
     monkeypatch.setattr(r, "_scale_to_zero_is_idle", lambda: idle, raising=False)
-    monkeypatch.setattr(r, "_relay_adapter_for_dormancy", lambda: adapter, raising=False)
-    monkeypatch.setattr(r, "_scale_to_zero_idle_timeout_seconds", lambda: 300.0, raising=False)
-    monkeypatch.setattr(r, "_update_runtime_status", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(
+        r, "_relay_adapter_for_dormancy", lambda: adapter, raising=False
+    )
+    monkeypatch.setattr(
+        r, "_scale_to_zero_idle_timeout_seconds", lambda: 300.0, raising=False
+    )
+    monkeypatch.setattr(
+        r, "_update_runtime_status", lambda *a, **k: None, raising=False
+    )
     return r, adapter
 
 
@@ -162,7 +168,9 @@ def test_bg_work_false_when_quiet():
 # test_scale_to_zero.py pass bare names so they never exercised this call site.
 
 
-def _arm_runner(monkeypatch, platform_states, *, enabled=True, wake_url="https://wake.example"):
+def _arm_runner(
+    monkeypatch, platform_states, *, enabled=True, wake_url="https://wake.example"
+):
     """Build a GatewayRunner stand-in whose config.platforms mirrors a real load:
     `platform_states` is {Platform: enabled_bool}; everything runs the REAL
     _scale_to_zero_should_arm. Only the env flag + wake_url resolution are stubbed."""
@@ -174,7 +182,9 @@ def _arm_runner(monkeypatch, platform_states, *, enabled=True, wake_url="https:/
     platforms = {p: PlatformConfig(enabled=en) for p, en in platform_states.items()}
     r.config = SimpleNamespace(platforms=platforms)
 
-    monkeypatch.setattr("gateway.scale_to_zero.scale_to_zero_enabled", lambda *a, **k: enabled)
+    monkeypatch.setattr(
+        "gateway.scale_to_zero.scale_to_zero_enabled", lambda *a, **k: enabled
+    )
     monkeypatch.setattr("gateway.relay.relay_wake_url", lambda: wake_url)
     return r
 

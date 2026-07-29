@@ -123,6 +123,7 @@ class _FakeRunningRegistry:
 
 def _patch_process_registry(monkeypatch, count: int) -> None:
     import tools.process_registry as pr_mod
+
     monkeypatch.setattr(pr_mod, "process_registry", _FakeRunningRegistry(count))
 
 
@@ -200,6 +201,7 @@ def test_indicators_independent_agents_and_processes(monkeypatch):
 
 def _patch_async_active(monkeypatch, count: int) -> None:
     import tools.async_delegation as ad_mod
+
     monkeypatch.setattr(ad_mod, "active_count", lambda: count)
 
 
@@ -267,4 +269,3 @@ def test_all_three_background_indicators_independent(monkeypatch):
     assert "▶ 1" in rendered
     assert "⚙ 2" in rendered
     assert "⛓ 5" in rendered
-

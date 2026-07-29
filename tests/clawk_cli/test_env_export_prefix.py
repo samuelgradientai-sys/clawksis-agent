@@ -31,9 +31,9 @@ def test_config_load_env_strips_export_prefix(tmp_path):
     env_path = tmp_path / ".env"
     _write_env(
         env_path,
-        'export OPENAI_API_KEY=sk-export-123\n'
+        "export OPENAI_API_KEY=sk-export-123\n"
         'export OPENROUTER_API_KEY="sk-or-456"\n'
-        'ANTHROPIC_API_KEY=sk-plain-789\n',
+        "ANTHROPIC_API_KEY=sk-plain-789\n",
     )
     invalidate_env_cache()
     try:

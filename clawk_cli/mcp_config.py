@@ -43,14 +43,18 @@ _MCP_PRESETS: Dict[str, Dict[str, Any]] = {
 
 # ─── UI Helpers ───────────────────────────────────────────────────────────────
 
+
 def _info(text: str):
     print(color(f"  {text}", Colors.DIM))
+
 
 def _success(text: str):
     print(color(f"  ✓ {text}", Colors.GREEN))
 
+
 def _warning(text: str):
     print(color(f"  ⚠ {text}", Colors.YELLOW))
+
 
 def _error(text: str):
     print(color(f"  ✗ {text}", Colors.RED))
@@ -59,7 +63,11 @@ def _error(text: str):
 def _confirm(question: str, default: bool = True) -> bool:
     default_str = "Y/n" if default else "y/N"
     try:
-        val = input(color(f"  {question} [{default_str}]: ", Colors.YELLOW)).strip().lower()
+        val = (
+            input(color(f"  {question} [{default_str}]: ", Colors.YELLOW))
+            .strip()
+            .lower()
+        )
     except (KeyboardInterrupt, EOFError):
         print()
         return default
@@ -70,10 +78,12 @@ def _confirm(question: str, default: bool = True) -> bool:
 
 def _prompt(question: str, *, password: bool = False, default: str = "") -> str:
     from clawk_cli.cli_output import prompt as _shared_prompt
+
     return _shared_prompt(question, default=default, password=password)
 
 
 # ─── Config Helpers ───────────────────────────────────────────────────────────
+
 
 def _get_mcp_servers(config: Optional[dict] = None) -> Dict[str, dict]:
     """Return the ``mcp_servers`` dict from config, or empty dict."""
@@ -251,6 +261,7 @@ def _apply_mcp_preset(
 
 # ─── Discovery (temporary connect) ───────────────────────────────────────────
 
+
 def _resolve_mcp_server_config(config: dict) -> dict:
     """Resolve ``${ENV}`` placeholders in a server config before connecting.
 
@@ -269,6 +280,7 @@ def _resolve_mcp_server_config(config: dict) -> dict:
     if current_secret_scope() is None:
         try:
             from clawk_cli.env_loader import load_clawk_dotenv
+
             load_clawk_dotenv()
         except Exception:  # pragma: no cover — defensive
             pass
@@ -276,7 +288,11 @@ def _resolve_mcp_server_config(config: dict) -> dict:
 
 
 def _probe_single_server(
-    name: str, config: dict, connect_timeout: Optional[float] = None, *, details: Optional[dict] = None
+    name: str,
+    config: dict,
+    connect_timeout: Optional[float] = None,
+    *,
+    details: Optional[dict] = None,
 ) -> List[Tuple[str, str]]:
     """Temporarily connect to one MCP server, list its tools, disconnect.
 
@@ -387,6 +403,7 @@ def _oauth_tokens_present(name: str) -> bool:
     """
     try:
         from tools.mcp_oauth import ClawksisTokenStorage
+
         return ClawksisTokenStorage(name).has_cached_tokens()
     except Exception as exc:  # pragma: no cover — defensive
         logger.debug("Could not check OAuth tokens for '%s': %s", name, exc)
@@ -411,6 +428,7 @@ def _unwrap_exception_group(exc: BaseException) -> Exception:
 
 
 # ─── clawk mcp add ──────────────────────────────────────────────────────────
+
 
 def cmd_mcp_add(args):
     """Add a new MCP server with discovery-first tool selection."""
@@ -444,7 +462,9 @@ def cmd_mcp_add(args):
         return
 
     if url and explicit_env:
-        _error("--env is only supported for stdio MCP servers (--command or stdio presets)")
+        _error(
+            "--env is only supported for stdio MCP servers (--command or stdio presets)"
+        )
         return
 
     # Validate transport
@@ -452,8 +472,10 @@ def cmd_mcp_add(args):
         _error("Must specify --url <endpoint>, --command <cmd>, or --preset <name>")
         _info("Examples:")
         _info('  clawk mcp add ink --url "https://mcp.ml.ink/mcp"')
-        _info('  clawk mcp add github --command npx --args @modelcontextprotocol/server-github')
-        _info('  clawk mcp add myserver --preset mypreset')
+        _info(
+            "  clawk mcp add github --command npx --args @modelcontextprotocol/server-github"
+        )
+        _info("  clawk mcp add myserver --preset mypreset")
         return
 
     # Check if server already exists
@@ -490,11 +512,14 @@ def cmd_mcp_add(args):
         oauth_ok = False
         try:
             from tools.mcp_oauth_manager import get_manager
+
             oauth_auth = get_manager().get_or_build_provider(name, url, None)
             if oauth_auth:
                 server_config["auth"] = "oauth"
-                _success("OAuth configured (tokens will be acquired on first connection)")
-                oauth_ok=True
+                _success(
+                    "OAuth configured (tokens will be acquired on first connection)"
+                )
+                oauth_ok = True
             else:
                 _warning("OAuth setup failed — MCP SDK auth module not available")
         except Exception as exc:
@@ -567,9 +592,13 @@ def cmd_mcp_add(args):
 
     # Ask: enable all, select, or cancel
     try:
-        choice = input(
-            color(f"  Enable all {len(tools)} tools? [Y/n/select]: ", Colors.YELLOW)
-        ).strip().lower()
+        choice = (
+            input(
+                color(f"  Enable all {len(tools)} tools? [Y/n/select]: ", Colors.YELLOW)
+            )
+            .strip()
+            .lower()
+        )
     except (KeyboardInterrupt, EOFError):
         print()
         _info("Cancelled.")
@@ -611,11 +640,14 @@ def cmd_mcp_add(args):
     server_config["enabled"] = True
     if _save_mcp_server(name, server_config):
         print()
-        _success(f"Saved '{name}' to {display_clawk_home()}/config.yaml ({tool_count}/{total} tools enabled)")
+        _success(
+            f"Saved '{name}' to {display_clawk_home()}/config.yaml ({tool_count}/{total} tools enabled)"
+        )
         _info("Start a new session to use these tools.")
 
 
 # ─── clawk mcp remove ───────────────────────────────────────────────────────
+
 
 def cmd_mcp_remove(args):
     """Remove an MCP server from config."""
@@ -641,6 +673,7 @@ def cmd_mcp_remove(args):
     # earlier `clawk mcp test` in the same session) is evicted too.
     try:
         from tools.mcp_oauth_manager import get_manager
+
         get_manager().remove(name)
         _success("Cleaned up OAuth tokens")
     except Exception:
@@ -648,6 +681,7 @@ def cmd_mcp_remove(args):
 
 
 # ─── clawk mcp list ──────────────────────────────────────────────────────────
+
 
 def cmd_mcp_list(args=None):
     """List all configured MCP servers."""
@@ -658,8 +692,8 @@ def cmd_mcp_list(args=None):
         _info("No MCP servers configured.")
         print()
         _info("Add one with:")
-        _info('  clawk mcp add <name> --url <endpoint>')
-        _info('  clawk mcp add <name> --command <cmd> --args <args...>')
+        _info("  clawk mcp add <name> --url <endpoint>")
+        _info("  clawk mcp add <name> --command <cmd> --args <args...>")
         print()
         return
 
@@ -709,7 +743,11 @@ def cmd_mcp_list(args=None):
         enabled = cfg.get("enabled", True)
         if isinstance(enabled, str):
             enabled = enabled.lower() in {"true", "1", "yes"}
-        status = color("✓ enabled", Colors.GREEN) if enabled else color("✗ disabled", Colors.DIM)
+        status = (
+            color("✓ enabled", Colors.GREEN)
+            if enabled
+            else color("✗ disabled", Colors.DIM)
+        )
 
         print(f"  {name:<16} {transport:<30} {tools_str:<12} {status}")
 
@@ -717,6 +755,7 @@ def cmd_mcp_list(args=None):
 
 
 # ─── clawk mcp test ──────────────────────────────────────────────────────────
+
 
 def cmd_mcp_test(args):
     """Test connection to an MCP server."""
@@ -750,7 +789,9 @@ def cmd_mcp_test(args):
         for k, v in headers.items():
             if isinstance(v, str) and ("key" in k.lower() or "auth" in k.lower()):
                 # Mask the value (accepts ${VAR} and Cursor-style ${env:VAR})
-                resolved = _ENV_VAR_PATTERN.sub(lambda m: os.getenv(_env_ref_name(m.group(1)), ""), v)
+                resolved = _ENV_VAR_PATTERN.sub(
+                    lambda m: os.getenv(_env_ref_name(m.group(1)), ""), v
+                )
                 if len(resolved) > 8:
                     masked = resolved[:4] + "***" + resolved[-4:]
                 else:
@@ -782,6 +823,7 @@ def cmd_mcp_test(args):
 
 # ─── clawk mcp login ────────────────────────────────────────────────────────
 
+
 def _reauth_oauth_server(name: str, server_config: dict) -> bool:
     """Force a fresh OAuth flow for one server. Returns True on success.
 
@@ -795,7 +837,9 @@ def _reauth_oauth_server(name: str, server_config: dict) -> bool:
         _error(f"Server '{name}' has no URL — not an OAuth-capable server")
         return False
     if server_config.get("auth") != "oauth":
-        _error(f"Server '{name}' is not configured for OAuth (auth={server_config.get('auth')})")
+        _error(
+            f"Server '{name}' is not configured for OAuth (auth={server_config.get('auth')})"
+        )
         _info("Use `clawk mcp remove` + `clawk mcp add` to reconfigure auth.")
         return False
 
@@ -803,6 +847,7 @@ def _reauth_oauth_server(name: str, server_config: dict) -> bool:
     # OAuth flow.
     try:
         from tools.mcp_oauth_manager import get_manager
+
         get_manager().remove(name)
     except Exception as exc:
         _warning(f"Could not clear existing OAuth state: {exc}")
@@ -851,8 +896,12 @@ def _reauth_oauth_server(name: str, server_config: dict) -> bool:
             print(color(f"        url: {url}", Colors.DIM))
             print(color("        auth: oauth", Colors.DIM))
             print(color("        oauth:", Colors.DIM))
-            print(color("          client_id: \"<your-oauth-client-id>\"", Colors.DIM))
-            print(color("          client_secret: \"<your-oauth-client-secret>\"", Colors.DIM))
+            print(color('          client_id: "<your-oauth-client-id>"', Colors.DIM))
+            print(
+                color(
+                    '          client_secret: "<your-oauth-client-secret>"', Colors.DIM
+                )
+            )
             print()
             _info("Then re-run `clawk mcp login " + name + "`.")
             return False
@@ -910,14 +959,17 @@ def cmd_mcp_reauth(args):
 
     if do_all:
         oauth_servers = [
-            (n, c) for n, c in servers.items()
+            (n, c)
+            for n, c in servers.items()
             if c.get("auth") == "oauth" and c.get("url")
         ]
         if not oauth_servers:
             _info("No OAuth-based MCP servers found in config.")
             return
         print()
-        _info(f"Re-authenticating {len(oauth_servers)} OAuth server(s) one at a time...")
+        _info(
+            f"Re-authenticating {len(oauth_servers)} OAuth server(s) one at a time..."
+        )
         succeeded = 0
         for n, c in oauth_servers:
             print()
@@ -943,11 +995,16 @@ def cmd_mcp_reauth(args):
 
 # ─── clawk mcp configure ────────────────────────────────────────────────────
 
+
 def cmd_mcp_configure(args):
     """Reconfigure which tools are enabled for an existing MCP server."""
     import sys as _sys
+
     if not _sys.stdin.isatty():
-        print("Error: 'clawk mcp configure' requires an interactive terminal.", file=_sys.stderr)
+        print(
+            "Error: 'clawk mcp configure' requires an interactive terminal.",
+            file=_sys.stderr,
+        )
         _sys.exit(1)
     name = args.name
     servers = _get_mcp_servers()
@@ -988,14 +1045,10 @@ def cmd_mcp_configure(args):
 
     if include and isinstance(include, list):
         include_set = set(include)
-        pre_selected = {
-            i for i, tn in enumerate(tool_names) if tn in include_set
-        }
+        pre_selected = {i for i, tn in enumerate(tool_names) if tn in include_set}
     elif exclude and isinstance(exclude, list):
         exclude_set = set(exclude)
-        pre_selected = {
-            i for i, tn in enumerate(tool_names) if tn not in exclude_set
-        }
+        pre_selected = {i for i, tn in enumerate(tool_names) if tn not in exclude_set}
     else:
         pre_selected = set(range(len(all_tools)))
 
@@ -1042,12 +1095,14 @@ def cmd_mcp_configure(args):
 
 # ─── Dispatcher ───────────────────────────────────────────────────────────────
 
+
 def mcp_command(args):
     """Main dispatcher for ``clawk mcp`` subcommands."""
     action = getattr(args, "mcp_action", None)
 
     if action == "serve":
         from mcp_serve import run_mcp_server
+
         run_mcp_server(verbose=getattr(args, "verbose", False))
         return
 
@@ -1055,15 +1110,18 @@ def mcp_command(args):
     # the original `mcp_config` module stays import-cheap.
     if action == "picker":
         from clawk_cli.mcp_picker import run_picker
+
         run_picker()
         return
     if action == "catalog":
         from clawk_cli.mcp_picker import show_catalog
+
         show_catalog()
         return
     if action == "install":
         from clawk_cli.mcp_picker import install_by_name
         import sys as _sys
+
         rc = install_by_name(getattr(args, "identifier", "") or "")
         if rc:
             _sys.exit(rc)
@@ -1089,9 +1147,12 @@ def mcp_command(args):
         # No subcommand — drop the user into the catalog picker. This is the
         # "try enabling and it flows you into setup" UX matching `clawk plugin`.
         from clawk_cli.mcp_picker import run_picker
+
         run_picker()
         print(color("  Commands:", Colors.CYAN))
-        _info("clawk mcp                                    Open the catalog picker (default)")
+        _info(
+            "clawk mcp                                    Open the catalog picker (default)"
+        )
         _info("clawk mcp catalog                            List Nous-approved MCPs")
         _info("clawk mcp install <name>                     Install a catalog MCP")
         _info("clawk mcp serve                              Run as MCP server")
@@ -1103,5 +1164,7 @@ def mcp_command(args):
         _info("clawk mcp test <name>                        Test connection")
         _info("clawk mcp configure <name>                   Toggle tools")
         _info("clawk mcp login <name>                       Re-authenticate OAuth")
-        _info("clawk mcp reauth <name> | --all              Re-auth one or all OAuth servers")
+        _info(
+            "clawk mcp reauth <name> | --all              Re-auth one or all OAuth servers"
+        )
         print()

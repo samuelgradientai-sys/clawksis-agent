@@ -11,17 +11,23 @@ from tools import mcp_stdio_watchdog, mcp_tool
 def test_is_orphaned_is_false_while_direct_parent_is_unchanged():
     original_ppid = 1234
 
-    assert mcp_stdio_watchdog._is_orphaned(
-        original_ppid,
-        getppid=lambda: original_ppid,
-    ) is False
+    assert (
+        mcp_stdio_watchdog._is_orphaned(
+            original_ppid,
+            getppid=lambda: original_ppid,
+        )
+        is False
+    )
 
 
 def test_is_orphaned_is_true_after_direct_parent_changes():
-    assert mcp_stdio_watchdog._is_orphaned(
-        1234,
-        getppid=lambda: 5678,
-    ) is True
+    assert (
+        mcp_stdio_watchdog._is_orphaned(
+            1234,
+            getppid=lambda: 5678,
+        )
+        is True
+    )
 
 
 @pytest.mark.skipif(os.name != "posix", reason="watchdog wrapping is POSIX-only")

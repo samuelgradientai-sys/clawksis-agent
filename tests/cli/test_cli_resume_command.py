@@ -24,10 +24,22 @@ def _make_cli():
 class TestCliResumeCommand:
     def test_show_recent_sessions_includes_indexes_and_resume_hint(self, capsys):
         cli_obj = _make_cli()
-        cli_obj._list_recent_sessions = MagicMock(return_value=[
-            {"id": "sess_002", "title": "Coding", "preview": "build feature", "last_active": None},
-            {"id": "sess_001", "title": "Research", "preview": "read docs", "last_active": None},
-        ])
+        cli_obj._list_recent_sessions = MagicMock(
+            return_value=[
+                {
+                    "id": "sess_002",
+                    "title": "Coding",
+                    "preview": "build feature",
+                    "last_active": None,
+                },
+                {
+                    "id": "sess_001",
+                    "title": "Research",
+                    "preview": "read docs",
+                    "last_active": None,
+                },
+            ]
+        )
 
         shown = cli_obj._show_recent_sessions(reason="resume")
         output = capsys.readouterr().out
@@ -42,13 +54,22 @@ class TestCliResumeCommand:
 
     def test_show_recent_sessions_uses_prompt_toolkit_safe_print(self):
         cli_obj = _make_cli()
-        cli_obj._list_recent_sessions = MagicMock(return_value=[
-            {"id": "sess_002", "title": "Coding", "preview": "build feature", "last_active": None},
-        ])
+        cli_obj._list_recent_sessions = MagicMock(
+            return_value=[
+                {
+                    "id": "sess_002",
+                    "title": "Coding",
+                    "preview": "build feature",
+                    "last_active": None,
+                },
+            ]
+        )
 
         running_app = SimpleNamespace(_is_running=True)
         with (
-            patch("prompt_toolkit.application.get_app_or_none", return_value=running_app),
+            patch(
+                "prompt_toolkit.application.get_app_or_none", return_value=running_app
+            ),
             patch("cli._cprint") as mock_cprint,
         ):
             shown = cli_obj._show_recent_sessions(reason="sessions")
@@ -64,7 +85,9 @@ class TestCliResumeCommand:
 
         running_app = SimpleNamespace(_is_running=True)
         with (
-            patch("prompt_toolkit.application.get_app_or_none", return_value=running_app),
+            patch(
+                "prompt_toolkit.application.get_app_or_none", return_value=running_app
+            ),
             patch("cli._cprint") as mock_cprint,
         ):
             cli_obj.show_history()
@@ -75,11 +98,16 @@ class TestCliResumeCommand:
 
     def test_handle_resume_by_index_switches_to_numbered_session(self):
         cli_obj = _make_cli()
-        cli_obj._list_recent_sessions = MagicMock(return_value=[
-            {"id": "sess_002", "title": "Coding"},
-            {"id": "sess_001", "title": "Research"},
-        ])
-        cli_obj._session_db.get_session.return_value = {"id": "sess_001", "title": "Research"}
+        cli_obj._list_recent_sessions = MagicMock(
+            return_value=[
+                {"id": "sess_002", "title": "Coding"},
+                {"id": "sess_001", "title": "Research"},
+            ]
+        )
+        cli_obj._session_db.get_session.return_value = {
+            "id": "sess_001",
+            "title": "Research",
+        }
         cli_obj._session_db.get_messages_as_conversation.return_value = [
             {"role": "user", "content": "hello"},
             {"role": "assistant", "content": "hi"},
@@ -100,9 +128,11 @@ class TestCliResumeCommand:
 
     def test_handle_resume_by_index_out_of_range(self):
         cli_obj = _make_cli()
-        cli_obj._list_recent_sessions = MagicMock(return_value=[
-            {"id": "sess_002", "title": "Coding"},
-        ])
+        cli_obj._list_recent_sessions = MagicMock(
+            return_value=[
+                {"id": "sess_002", "title": "Coding"},
+            ]
+        )
 
         with patch("cli._cprint") as mock_cprint:
             cli_obj._handle_resume_command("/resume 9")
@@ -119,14 +149,20 @@ class TestCliResumeCommand:
         ``/resume <abc123>`` works the same as ``/resume abc123``.
         """
         cli_obj = _make_cli()
-        cli_obj._session_db.get_session.return_value = {"id": "sess_alpha", "title": "Alpha"}
+        cli_obj._session_db.get_session.return_value = {
+            "id": "sess_alpha",
+            "title": "Alpha",
+        }
         cli_obj._session_db.get_messages_as_conversation.return_value = []
         cli_obj._session_db.resolve_resume_session_id.return_value = "sess_alpha"
 
         for raw in ("<sess_alpha>", "[sess_alpha]", '"sess_alpha"', "'sess_alpha'"):
             cli_obj.session_id = "current_session"
             with (
-                patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="sess_alpha"),
+                patch(
+                    "clawk_cli.main._resolve_session_by_name_or_id",
+                    return_value="sess_alpha",
+                ),
                 patch("cli._cprint"),
             ):
                 cli_obj._handle_resume_command(f"/resume {raw}")
@@ -178,10 +214,16 @@ class TestCliResumeRestoresCwd:
 
     def test_handle_resume_restores_recorded_cwd(self, tmp_path):
         recorded = str(tmp_path)
-        cli_obj = self._resumable_cli({"id": "sess_dir", "title": "Dir", "cwd": recorded})
+        cli_obj = self._resumable_cli({
+            "id": "sess_dir",
+            "title": "Dir",
+            "cwd": recorded,
+        })
 
         with (
-            patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="sess_dir"),
+            patch(
+                "clawk_cli.main._resolve_session_by_name_or_id", return_value="sess_dir"
+            ),
             patch("cli._cprint"),
             patch.object(cli_obj, "_console_print"),
             patch("os.chdir") as mock_chdir,
@@ -198,7 +240,9 @@ class TestCliResumeRestoresCwd:
         cli_obj = self._resumable_cli({"id": "sess_dir", "title": "Dir"})
 
         with (
-            patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="sess_dir"),
+            patch(
+                "clawk_cli.main._resolve_session_by_name_or_id", return_value="sess_dir"
+            ),
             patch("cli._cprint"),
             patch.object(cli_obj, "_console_print"),
             patch("os.chdir") as mock_chdir,
@@ -210,10 +254,16 @@ class TestCliResumeRestoresCwd:
     def test_sessions_command_restores_recorded_cwd(self, tmp_path):
         # /sessions <id> delegates to the resume flow, so it restores cwd too.
         recorded = str(tmp_path)
-        cli_obj = self._resumable_cli({"id": "sess_dir", "title": "Dir", "cwd": recorded})
+        cli_obj = self._resumable_cli({
+            "id": "sess_dir",
+            "title": "Dir",
+            "cwd": recorded,
+        })
 
         with (
-            patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="sess_dir"),
+            patch(
+                "clawk_cli.main._resolve_session_by_name_or_id", return_value="sess_dir"
+            ),
             patch("cli._cprint"),
             patch.object(cli_obj, "_console_print"),
             patch("os.chdir") as mock_chdir,
@@ -269,7 +319,10 @@ class TestPendingResumeNumberedSelection:
         # _handle_resume_command("/resume 2") re-resolves the index via
         # _list_recent_sessions, so it must return the same list.
         cli_obj._list_recent_sessions = MagicMock(return_value=sessions)
-        cli_obj._session_db.get_session.return_value = {"id": "sess_001", "title": "Research"}
+        cli_obj._session_db.get_session.return_value = {
+            "id": "sess_001",
+            "title": "Research",
+        }
         cli_obj._session_db.get_messages_as_conversation.return_value = [
             {"role": "user", "content": "hello"},
         ]
@@ -357,6 +410,7 @@ class TestRestoreSessionCwdMarkup:
     def test_chdir_failure_does_not_raise_markup_error(self, tmp_path):
         """os.chdir fails → dim warning, no MarkupError."""
         import os
+
         cli_obj = _make_cli()
         console = MagicMock()
         cli_obj._output_console = MagicMock(return_value=console)
@@ -367,6 +421,7 @@ class TestRestoreSessionCwdMarkup:
 
         # Patch os.chdir to raise OSError for our target path.
         original_chdir = os.chdir
+
         def fake_chdir(path):
             if str(path) == str(target):
                 raise OSError("Permission denied")
@@ -382,6 +437,7 @@ class TestRestoreSessionCwdMarkup:
     def test_success_path_does_not_raise_markup_error(self, tmp_path):
         """Successful cwd switch → dim info, no MarkupError."""
         import os
+
         cli_obj = _make_cli()
         console = MagicMock()
         cli_obj._output_console = MagicMock(return_value=console)
@@ -415,12 +471,15 @@ class TestResumeFlushesBeforeEndSession:
         cli_obj._session_db.resolve_resume_session_id.return_value = "target"
 
         with (
-            patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="target"),
+            patch(
+                "clawk_cli.main._resolve_session_by_name_or_id", return_value="target"
+            ),
             patch("cli._cprint"),
         ):
             cli_obj._handle_resume_command("/resume target")
 
-        agent._flush_messages_to_session_db.assert_called_once_with(
-            [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "hi"}]
-        )
+        agent._flush_messages_to_session_db.assert_called_once_with([
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "hi"},
+        ])
         cli_obj._session_db.end_session.assert_called_once()

@@ -10,6 +10,7 @@ used to load zero rows and show a blank chat.
 and redirects to the first descendant that actually has messages. These
 tests pin that behaviour.
 """
+
 import time
 
 import pytest
@@ -36,18 +37,23 @@ def _make_chain(db: SessionDB, ids_with_parent):
 
 def test_redirects_from_empty_head_to_descendant_with_messages(db):
     # Reproducer shape from #15000: 6 sessions, only the 5th holds messages.
-    _make_chain(db, [
-        ("head",   None),
-        ("mid1",   "head"),
-        ("mid2",   "mid1"),
-        ("mid3",   "mid2"),
-        ("bulk",   "mid3"),    # has messages
-        ("tail",   "bulk"),    # empty tail after another compression
-    ])
+    _make_chain(
+        db,
+        [
+            ("head", None),
+            ("mid1", "head"),
+            ("mid2", "mid1"),
+            ("mid3", "mid2"),
+            ("bulk", "mid3"),  # has messages
+            ("tail", "bulk"),  # empty tail after another compression
+        ],
+    )
     for i in range(5):
         db.append_message("bulk", role="user", content=f"msg {i}")
 
     assert db.resolve_resume_session_id("head") == "bulk"
+
+
 def test_returns_self_when_only_parent_has_messages(db):
     # When a session already has messages AND no descendant has messages,
     # it should still be returned.  The chain walk finds no better candidate.
@@ -102,7 +108,10 @@ def test_follows_compression_tip_when_parent_retains_messages(db):
     # at/after the parent's ended_at (the get_compression_tip discriminator).
     conn = db._conn
     assert conn is not None
-    conn.execute("UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = 'root'", (base, base + 50))
+    conn.execute(
+        "UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = 'root'",
+        (base, base + 50),
+    )
     conn.execute("UPDATE sessions SET started_at = ? WHERE id = 'cont'", (base + 100,))
     conn.commit()
 
@@ -129,7 +138,9 @@ def test_compression_tip_not_confused_with_delegation_child(db):
     conn = db._conn
     assert conn is not None
     conn.execute("UPDATE sessions SET started_at = ? WHERE id = 'conv'", (base,))
-    conn.execute("UPDATE sessions SET started_at = ? WHERE id = 'subagent'", (base + 100,))
+    conn.execute(
+        "UPDATE sessions SET started_at = ? WHERE id = 'subagent'", (base + 100,)
+    )
     conn.commit()
 
     assert db.resolve_resume_session_id("conv") == "conv"
@@ -139,11 +150,14 @@ def test_prefers_most_recent_child_when_fork_exists(db):
     # If a session was somehow forked (two children), pick the latest one.
     # In practice, compression only produces single-chain shape, but the helper
     # should degrade gracefully.
-    _make_chain(db, [
-        ("parent", None),
-        ("older_fork", "parent"),
-        ("newer_fork", "parent"),
-    ])
+    _make_chain(
+        db,
+        [
+            ("parent", None),
+            ("older_fork", "parent"),
+            ("newer_fork", "parent"),
+        ],
+    )
     db.append_message("newer_fork", role="user", content="x")
     assert db.resolve_resume_session_id("parent") == "newer_fork"
 
@@ -156,10 +170,13 @@ def test_redirects_from_message_bearing_parent_to_child(db):
     prefer the latest descendant with messages, not short-circuit on the
     parent.
     """
-    _make_chain(db, [
-        ("original", None),
-        ("continued", "original"),
-    ])
+    _make_chain(
+        db,
+        [
+            ("original", None),
+            ("continued", "original"),
+        ],
+    )
     # Both parent and child have messages
     db.append_message("original", role="user", content="old msg")
     db.append_message("original", role="assistant", content="old reply")
@@ -198,12 +215,23 @@ def test_compression_tip_handles_pre_ended_real_child_and_ws_orphan_sibling(db):
 
     conn = db._conn
     assert conn is not None
-    conn.execute("UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = 'root'", (base, base + 1000))
+    conn.execute(
+        "UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = 'root'",
+        (base, base + 1000),
+    )
     # The real continuation starts before root.ended_at, exactly the race that
     # broke the old timestamp-based chain walk.
-    conn.execute("UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = 'real_cont'", (base + 500, base + 2000))
-    conn.execute("UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = 'ws_orphan'", (base + 1000, base + 3000))
-    conn.execute("UPDATE sessions SET started_at = ? WHERE id = 'live_tip'", (base + 2000,))
+    conn.execute(
+        "UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = 'real_cont'",
+        (base + 500, base + 2000),
+    )
+    conn.execute(
+        "UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = 'ws_orphan'",
+        (base + 1000, base + 3000),
+    )
+    conn.execute(
+        "UPDATE sessions SET started_at = ? WHERE id = 'live_tip'", (base + 2000,)
+    )
     conn.commit()
 
     assert db.get_compression_tip("root") == "live_tip"
@@ -214,4 +242,3 @@ def test_compression_tip_handles_pre_ended_real_child_and_ws_orphan_sibling(db):
     assert "live_tip" in ids
     assert "real_cont" not in ids
     assert "ws_orphan" not in ids
-

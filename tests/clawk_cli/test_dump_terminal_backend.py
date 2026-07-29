@@ -33,7 +33,11 @@ def test_dump_surfaces_terminal_env_override(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(dump, "get_project_root", lambda: tmp_path / "noproject")
 
     home = get_clawk_home()
-    _seed(home, config_yaml="terminal:\n  backend: local\n", env_text="TERMINAL_ENV=docker\n")
+    _seed(
+        home,
+        config_yaml="terminal:\n  backend: local\n",
+        env_text="TERMINAL_ENV=docker\n",
+    )
 
     dump.run_dump(SimpleNamespace(show_keys=False))
 
@@ -71,7 +75,11 @@ def test_dump_no_override_when_env_matches_config(monkeypatch, capsys, tmp_path)
 
     home = get_clawk_home()
     # TERMINAL_ENV agrees with config — no spurious "override" note.
-    _seed(home, config_yaml="terminal:\n  backend: docker\n", env_text="TERMINAL_ENV=docker\n")
+    _seed(
+        home,
+        config_yaml="terminal:\n  backend: docker\n",
+        env_text="TERMINAL_ENV=docker\n",
+    )
 
     dump.run_dump(SimpleNamespace(show_keys=False))
 

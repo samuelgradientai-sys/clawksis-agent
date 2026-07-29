@@ -100,7 +100,9 @@ def test_component_check_explicit_allow_all_passes(monkeypatch, env_name, env_va
     "env_name",
     ["DISCORD_ALLOW_ALL_USERS", "GATEWAY_ALLOW_ALL_USERS"],
 )
-def test_component_check_missing_user_rejected_even_with_allow_all(monkeypatch, env_name):
+def test_component_check_missing_user_rejected_even_with_allow_all(
+    monkeypatch, env_name
+):
     """Component clicks without interaction.user stay fail-closed with allow-all."""
     monkeypatch.setenv(env_name, "true")
     interaction = _interaction(11111, drop_user=True)
@@ -284,7 +286,9 @@ def test_clarify_choice_view_accepts_role_allowlist():
     "view_factory",
     [
         lambda: ExecApprovalView(session_key="s", allowed_user_ids=set()),
-        lambda: SlashConfirmView(session_key="s", confirm_id="c", allowed_user_ids=set()),
+        lambda: SlashConfirmView(
+            session_key="s", confirm_id="c", allowed_user_ids=set()
+        ),
         lambda: UpdatePromptView(session_key="s", allowed_user_ids=set()),
         lambda: ClarifyChoiceView(
             choices=["one"],
@@ -377,22 +381,24 @@ def test_admin_gate_resolver_default_off():
     """Absent / falsey toggle -> gate disabled, no admin set."""
     assert _resolve_exec_approval_admin_gate(None) == (False, set())
     assert _resolve_exec_approval_admin_gate({}) == (False, set())
-    assert _resolve_exec_approval_admin_gate(
-        {"require_admin_for_exec_approval": False}
-    ) == (False, set())
+    assert _resolve_exec_approval_admin_gate({
+        "require_admin_for_exec_approval": False
+    }) == (False, set())
 
 
 def test_admin_gate_resolver_on_parses_admins():
     """Toggle true -> gate enabled, admins coerced from allow_admin_from."""
-    require_admin, admins = _resolve_exec_approval_admin_gate(
-        {"require_admin_for_exec_approval": True, "allow_admin_from": "111, 222"}
-    )
+    require_admin, admins = _resolve_exec_approval_admin_gate({
+        "require_admin_for_exec_approval": True,
+        "allow_admin_from": "111, 222",
+    })
     assert require_admin is True
     assert admins == {"111", "222"}
     # list form normalizes identically
-    _, admins_list = _resolve_exec_approval_admin_gate(
-        {"require_admin_for_exec_approval": "true", "allow_admin_from": [111, 222]}
-    )
+    _, admins_list = _resolve_exec_approval_admin_gate({
+        "require_admin_for_exec_approval": "true",
+        "allow_admin_from": [111, 222],
+    })
     assert admins_list == {"111", "222"}
 
 
@@ -437,9 +443,7 @@ def test_exec_view_gate_on_no_admins_fails_closed(caplog):
     )
     with caplog.at_level(logging.WARNING):
         assert view._check_auth(_interaction(11111)) is False
-    assert any(
-        "require_admin_for_exec_approval" in r.message for r in caplog.records
-    )
+    assert any("require_admin_for_exec_approval" in r.message for r in caplog.records)
 
 
 def test_exec_view_gate_on_non_admitted_user_rejected_before_admin_check():
@@ -458,8 +462,5 @@ def test_other_views_not_admin_gated():
     """Lower-stakes views never take the admin gate — they stay user-scope."""
     # SlashConfirmView/ModelPickerView/etc. construct without require_admin and
     # delegate straight to _component_check_auth.
-    sc = SlashConfirmView(
-        session_key="s", confirm_id="c", allowed_user_ids={"11111"}
-    )
+    sc = SlashConfirmView(session_key="s", confirm_id="c", allowed_user_ids={"11111"})
     assert sc._check_auth(_interaction(11111)) is True
-

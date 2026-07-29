@@ -19,6 +19,7 @@ from gateway.config import PlatformConfig
 # Mock the telegram package if it's not installed
 # ---------------------------------------------------------------------------
 
+
 def _ensure_telegram_mock():
     if "telegram" in sys.modules and hasattr(sys.modules["telegram"], "__file__"):
         return
@@ -47,6 +48,7 @@ from plugins.platforms.telegram.adapter import (  # noqa: E402
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def adapter():
     config = PlatformConfig(enabled=True, token="fake-token")
@@ -60,13 +62,13 @@ def adapter():
 
 class TestEscapeMdv2:
     def test_escapes_all_special_characters(self):
-        special = r'_*[]()~`>#+-=|{}.!\ '
+        special = r"_*[]()~`>#+-=|{}.!\ "
         escaped = _escape_mdv2(special)
         # Every special char should be preceded by backslash
-        for ch in r'_*[]()~`>#+-=|{}.!\  ':
-            if ch == ' ':
+        for ch in r"_*[]()~`>#+-=|{}.!\  ":
+            if ch == " ":
                 continue
-            assert f'\\{ch}' in escaped
+            assert f"\\{ch}" in escaped
 
     def test_empty_string(self):
         assert _escape_mdv2("") == ""
@@ -205,7 +207,9 @@ async def test_legacy_send_keeps_chunk_indicators_outside_fenced_code_lines(adap
     result = await adapter.send("12345", content, metadata={"expect_edits": True})
 
     assert result.success is True
-    sent_texts = [call.kwargs["text"] for call in adapter._bot.send_message.await_args_list]
+    sent_texts = [
+        call.kwargs["text"] for call in adapter._bot.send_message.await_args_list
+    ]
     assert len(sent_texts) > 1
     for text in sent_texts:
         for line in text.splitlines():
@@ -379,7 +383,11 @@ class TestItalicNewlineBug:
         assert "Item two" in result
         assert "Item three" in result
         # Should NOT contain _ (italic markers) wrapping list items
-        assert "_" not in result or "Item" not in result.split("_")[1] if "_" in result else True
+        assert (
+            "_" not in result or "Item" not in result.split("_")[1]
+            if "_" in result
+            else True
+        )
 
     def test_asterisk_list_items_preserved(self, adapter):
         """Each * list item should remain as a separate line, not become italic."""
@@ -667,11 +675,7 @@ class TestWrapMarkdownTables:
 
     def test_alignment_separators(self):
         """Separator rows with :--- / ---: / :---: alignment markers match."""
-        text = (
-            "| Name | Age | City |\n"
-            "|:-----|----:|:----:|\n"
-            "| Ada  |  30 | NYC  |"
-        )
+        text = "| Name | Age | City |\n|:-----|----:|:----:|\n| Ada  |  30 | NYC  |"
         out = _wrap_markdown_tables(text)
         assert "**Ada**" in out
         # 'Ada' is the heading (first cell); skip the redundant Name bullet.
@@ -682,15 +686,7 @@ class TestWrapMarkdownTables:
         assert "**Ada**\n• Age: 30\n• City: NYC" in out
 
     def test_two_consecutive_tables_rewritten_separately(self):
-        text = (
-            "| A | B |\n"
-            "|---|---|\n"
-            "| 1 | 2 |\n"
-            "\n"
-            "| X | Y |\n"
-            "|---|---|\n"
-            "| 9 | 8 |"
-        )
+        text = "| A | B |\n|---|---|\n| 1 | 2 |\n\n| X | Y |\n|---|---|\n| 9 | 8 |"
         out = _wrap_markdown_tables(text)
         assert out.count("**1**") == 1
         assert out.count("**9**") == 1
@@ -712,13 +708,7 @@ class TestWrapMarkdownTables:
 
     def test_existing_code_block_with_pipes_left_alone(self):
         """A table already inside a fenced code block must not be re-wrapped."""
-        text = (
-            "```\n"
-            "| a | b |\n"
-            "|---|---|\n"
-            "| 1 | 2 |\n"
-            "```"
-        )
+        text = "```\n| a | b |\n|---|---|\n| 1 | 2 |\n```"
         assert _wrap_markdown_tables(text) == text
 
     def test_no_pipe_character_short_circuits(self):
@@ -792,12 +782,7 @@ class TestFormatMessageTables:
     of escaped pipe syntax or fenced code blocks."""
 
     def test_table_rendered_as_bullets(self, adapter):
-        text = (
-            "Data:\n\n"
-            "| Col1 | Col2 |\n"
-            "|------|------|\n"
-            "| A    | B    |\n"
-        )
+        text = "Data:\n\n| Col1 | Col2 |\n|------|------|\n| A    | B    |\n"
         out = adapter.format_message(text)
         assert "*A*" in out
         # Heading 'A' duplicates the Col1 value — skip that bullet.
@@ -807,13 +792,7 @@ class TestFormatMessageTables:
         assert "\\|" not in out
 
     def test_text_after_table_still_formatted(self, adapter):
-        text = (
-            "| A | B |\n"
-            "|---|---|\n"
-            "| 1 | 2 |\n"
-            "\n"
-            "Nice **work** team!"
-        )
+        text = "| A | B |\n|---|---|\n| 1 | 2 |\n\nNice **work** team!"
         out = adapter.format_message(text)
         # MarkdownV2 bold conversion still happens outside the table
         assert "*work*" in out
@@ -878,7 +857,9 @@ class TestEditMessageStreamingSafety:
         adapter._bot = MagicMock()
         adapter._bot.edit_message_text = AsyncMock()
 
-        result = await adapter.edit_message("123", "456", "partial **bold", finalize=False)
+        result = await adapter.edit_message(
+            "123", "456", "partial **bold", finalize=False
+        )
 
         assert result.success is True
         adapter._bot.edit_message_text.assert_awaited_once_with(
@@ -891,9 +872,13 @@ class TestEditMessageStreamingSafety:
     async def test_final_edit_uses_markdownv2_with_plain_fallback(self):
         adapter = TelegramAdapter(PlatformConfig(enabled=True, token="fake-token"))
         adapter._bot = MagicMock()
-        adapter._bot.edit_message_text = AsyncMock(side_effect=[Exception("bad markdown"), None])
+        adapter._bot.edit_message_text = AsyncMock(
+            side_effect=[Exception("bad markdown"), None]
+        )
 
-        result = await adapter.edit_message("123", "456", "final **bold**", finalize=True)
+        result = await adapter.edit_message(
+            "123", "456", "final **bold**", finalize=True
+        )
 
         assert result.success is True
         first_call = adapter._bot.edit_message_text.await_args_list[0].kwargs
@@ -907,7 +892,9 @@ class TestEditMessageStreamingSafety:
         }
 
     @pytest.mark.asyncio
-    async def test_message_too_long_splits_into_continuations_not_silent_truncation(self):
+    async def test_message_too_long_splits_into_continuations_not_silent_truncation(
+        self,
+    ):
         """When edit_message_text exceeds Telegram's 4096 UTF-16 limit on
         finalize, the adapter must split the content across the existing
         message + new continuation messages so the user gets the full reply.
@@ -919,9 +906,11 @@ class TestEditMessageStreamingSafety:
         adapter._bot.edit_message_text = AsyncMock()
         # Continuation sends return monotonically increasing message ids.
         _next_id = [1000]
+
         async def _fake_send(**kwargs):
             _next_id[0] += 1
             return SimpleNamespace(message_id=_next_id[0])
+
         adapter._bot.send_message = AsyncMock(side_effect=_fake_send)
 
         # 6000-char content well over the 4096 UTF-16 limit.
@@ -941,7 +930,9 @@ class TestEditMessageStreamingSafety:
         first_edit = adapter._bot.edit_message_text.call_args
         assert first_edit.kwargs["message_id"] == 456
         # Continuations were sent threaded as replies for visual grouping.
-        assert adapter._bot.send_message.await_count == len(result.continuation_message_ids)
+        assert adapter._bot.send_message.await_count == len(
+            result.continuation_message_ids
+        )
 
     @pytest.mark.asyncio
     async def test_message_too_long_continuations_preserve_topic_metadata(self):
@@ -1135,7 +1126,9 @@ def _guest_test_adapter(*, guest_mode=True, require_mention=True, allowed_chats=
 
 
 def _guest_group_message(text, *, chat_id=-100201, entities=None, reply_to_bot=False):
-    reply_to_message = SimpleNamespace(from_user=SimpleNamespace(id=999)) if reply_to_bot else None
+    reply_to_message = (
+        SimpleNamespace(from_user=SimpleNamespace(id=999)) if reply_to_bot else None
+    )
     return SimpleNamespace(
         text=text,
         caption=None,
@@ -1149,7 +1142,9 @@ def _guest_group_message(text, *, chat_id=-100201, entities=None, reply_to_bot=F
 
 
 def _guest_mention_entity(text, mention="@clawk_bot"):
-    return SimpleNamespace(type="mention", offset=text.index(mention), length=len(mention))
+    return SimpleNamespace(
+        type="mention", offset=text.index(mention), length=len(mention)
+    )
 
 
 class TestTelegramGuestMentionGating:
@@ -1166,7 +1161,9 @@ class TestTelegramGuestMentionGating:
 
     def test_guest_mode_does_not_allow_reply_outside_allowed_chats(self):
         adapter = _guest_test_adapter(guest_mode=True, allowed_chats=["-100200"])
-        message = _guest_group_message("replying without mention", chat_id=-100201, reply_to_bot=True)
+        message = _guest_group_message(
+            "replying without mention", chat_id=-100201, reply_to_bot=True
+        )
 
         assert adapter._should_process_message(message) is False
 
@@ -1199,7 +1196,14 @@ class TestTelegramGuestMentionGating:
         message = _guest_group_message(
             "hey there",
             chat_id=-100201,
-            entities=[SimpleNamespace(type="text_mention", offset=0, length=3, user=SimpleNamespace(id=999))],
+            entities=[
+                SimpleNamespace(
+                    type="text_mention",
+                    offset=0,
+                    length=3,
+                    user=SimpleNamespace(id=999),
+                )
+            ],
         )
 
         assert adapter._should_process_message(message) is True

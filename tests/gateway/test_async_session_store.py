@@ -64,7 +64,9 @@ def test_gateway_async_code_uses_one_awaited_session_store_boundary() -> None:
             for parent in ast.walk(tree)
             for child in ast.iter_child_nodes(parent)
         }
-        for owner in (node for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef)):
+        for owner in (
+            node for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef)
+        ):
             raw_aliases = {
                 target.id
                 for node in ast.walk(owner)
@@ -77,7 +79,9 @@ def test_gateway_async_code_uses_one_awaited_session_store_boundary() -> None:
                 if isinstance(target, ast.Name)
             }
             for node in ast.walk(owner):
-                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                if not isinstance(node, ast.Call) or not isinstance(
+                    node.func, ast.Attribute
+                ):
                     continue
                 if _nearest_function(node, parents) is not owner:
                     # A nested sync helper (for example run_sync) executes off-loop.

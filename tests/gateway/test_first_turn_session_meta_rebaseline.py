@@ -152,13 +152,11 @@ def _source():
 
 def _live_count(db, session_id):
     row = db.get_session(session_id)
-    return (row.get("message_count", 0) if row else 0)
+    return row.get("message_count", 0) if row else 0
 
 
 @pytest.mark.asyncio
-async def test_first_turn_session_meta_is_captured_by_rebaseline(
-    monkeypatch, tmp_path
-):
+async def test_first_turn_session_meta_is_captured_by_rebaseline(monkeypatch, tmp_path):
     """After a fresh first turn, the cache snapshot must equal the live
     message_count — including the first-turn ``session_meta`` row.
 
@@ -233,7 +231,9 @@ async def test_next_turn_guard_reuses_cached_agent_after_first_turn(
     runner = _bootstrap(monkeypatch, tmp_path, db)
     with runner._agent_cache_lock:
         runner._agent_cache[SESSION_KEY] = (
-            object(), "sig", _live_count(db, SESSION_ID),
+            object(),
+            "sig",
+            _live_count(db, SESSION_ID),
         )
 
     runner._run_agent = AsyncMock(
@@ -256,7 +256,7 @@ async def test_next_turn_guard_reuses_cached_agent_after_first_turn(
     live = _live_count(db, SESSION_ID)
     with runner._agent_cache_lock:
         snapshot = runner._agent_cache[SESSION_KEY][2]
-    would_reuse = (live == snapshot)
+    would_reuse = live == snapshot
     assert would_reuse, (
         "turn-2 cross-process guard would rebuild the cached agent because "
         "the first-turn session_meta write was not re-baselined into the "

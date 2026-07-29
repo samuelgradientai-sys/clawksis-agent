@@ -65,7 +65,9 @@ class TestCompressionProtectsSummaryCall:
             class _Choice:
                 class _Msg:
                     content = "[CONTEXT SUMMARY]: ok"
+
                 message = _Msg()
+
             choices = [_Choice()]
 
         def fake_call_llm(**kwargs):
@@ -74,7 +76,9 @@ class TestCompressionProtectsSummaryCall:
             seen["task"] = kwargs.get("task")
             return _Resp()
 
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(model="test", quiet_mode=True)
 
         msgs = [

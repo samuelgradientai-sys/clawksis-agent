@@ -3,6 +3,7 @@
 Covers convert_base64_images_to_links, _truncate_with_footer, _store_full_text,
 _get_extract_char_limit, and the end-to-end web_extract_tool truncation behavior.
 """
+
 import asyncio
 import json
 import os
@@ -52,7 +53,9 @@ class TestTruncation:
     def test_long_content_truncated_with_footer(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         body = "\n".join(f"line {i} " + "x" * 50 for i in range(2000))
-        out, truncated = wt._truncate_with_footer(body, "https://example.com/page", 4000)
+        out, truncated = wt._truncate_with_footer(
+            body, "https://example.com/page", 4000
+        )
         assert truncated is True
         assert "[TRUNCATED]" in out
         assert "Full text saved to:" in out
@@ -85,15 +88,23 @@ class TestCharLimitConfig:
             assert wt._get_extract_char_limit() == wt.DEFAULT_EXTRACT_CHAR_LIMIT
 
     def test_config_override(self):
-        with patch("tools.web_tools._load_web_config", return_value={"extract_char_limit": 40000}):
+        with patch(
+            "tools.web_tools._load_web_config",
+            return_value={"extract_char_limit": 40000},
+        ):
             assert wt._get_extract_char_limit() == 40000
 
     def test_clamps_floor(self):
-        with patch("tools.web_tools._load_web_config", return_value={"extract_char_limit": 100}):
+        with patch(
+            "tools.web_tools._load_web_config", return_value={"extract_char_limit": 100}
+        ):
             assert wt._get_extract_char_limit() == 2000
 
     def test_bad_value_falls_back(self):
-        with patch("tools.web_tools._load_web_config", return_value={"extract_char_limit": "nope"}):
+        with patch(
+            "tools.web_tools._load_web_config",
+            return_value={"extract_char_limit": "nope"},
+        ):
             assert wt._get_extract_char_limit() == wt.DEFAULT_EXTRACT_CHAR_LIMIT
 
 
@@ -110,16 +121,29 @@ class TestEndToEnd:
                 return True
 
             async def extract(self, urls, **kwargs):
-                return [{"url": urls[0], "title": "Big Page", "content": big,
-                         "raw_content": big, "metadata": {}}]
+                return [
+                    {
+                        "url": urls[0],
+                        "title": "Big Page",
+                        "content": big,
+                        "raw_content": big,
+                        "metadata": {},
+                    }
+                ]
 
-        with patch("tools.web_tools._ensure_web_plugins_loaded"), \
-             patch("tools.web_tools._get_extract_backend", return_value="fake"), \
-             patch("tools.web_tools.async_is_safe_url", new=_AsyncTrue()), \
-             patch("agent.web_search_registry.get_provider", return_value=FakeProvider()):
-            result = json.loads(asyncio.new_event_loop().run_until_complete(
-                wt.web_extract_tool(["https://example.com/big"], char_limit=5000)
-            ))
+        with (
+            patch("tools.web_tools._ensure_web_plugins_loaded"),
+            patch("tools.web_tools._get_extract_backend", return_value="fake"),
+            patch("tools.web_tools.async_is_safe_url", new=_AsyncTrue()),
+            patch(
+                "agent.web_search_registry.get_provider", return_value=FakeProvider()
+            ),
+        ):
+            result = json.loads(
+                asyncio.new_event_loop().run_until_complete(
+                    wt.web_extract_tool(["https://example.com/big"], char_limit=5000)
+                )
+            )
 
         assert "results" in result
         content = result["results"][0]["content"]
@@ -133,10 +157,12 @@ class TestEndToEnd:
 def _make_awaitable(value):
     async def _coro(*a, **k):
         return value
+
     return _coro()
 
 
 class _AsyncTrue:
     """Async callable that always returns True (re-awaitable per call)."""
+
     async def __call__(self, *a, **k):
         return True

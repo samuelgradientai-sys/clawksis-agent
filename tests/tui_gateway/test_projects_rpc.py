@@ -49,7 +49,9 @@ def test_repo_root_cache_does_not_freeze_a_not_yet_repo(monkeypatch):
     cwd = "/tmp/baby pics"
     git_probe.invalidate()
     state = {"root": ""}  # flips once the folder becomes a repo
-    monkeypatch.setattr(git_probe, "run_git", lambda c, *a: state["root"] if c == cwd else "")
+    monkeypatch.setattr(
+        git_probe, "run_git", lambda c, *a: state["root"] if c == cwd else ""
+    )
 
     assert git_probe.repo_root(cwd) == ""  # pre-init: not a repo (expires at once)
 
@@ -108,7 +110,10 @@ def test_repo_root_cache_is_single_flight(monkeypatch):
 
     monkeypatch.setattr(git_probe, "run_git", slow)
     out: list[str] = []
-    threads = [threading.Thread(target=lambda: out.append(git_probe.repo_root("/repo/x"))) for _ in range(6)]
+    threads = [
+        threading.Thread(target=lambda: out.append(git_probe.repo_root("/repo/x")))
+        for _ in range(6)
+    ]
     for t in threads:
         t.start()
     for t in threads:
@@ -151,7 +156,9 @@ def test_warm_roots_probes_in_parallel_and_fills_the_cache(monkeypatch):
 
 
 def test_create_list_roundtrip(tmp_path):
-    created = _call("projects.create", {"name": "Demo", "folders": [str(tmp_path)], "use": True})
+    created = _call(
+        "projects.create", {"name": "Demo", "folders": [str(tmp_path)], "use": True}
+    )
     assert created["project"]["slug"] == "demo"
 
     listing = _call("projects.list")
@@ -162,7 +169,9 @@ def test_create_list_roundtrip(tmp_path):
 def test_add_folder_and_for_cwd(tmp_path):
     folder = tmp_path / "repo"
     folder.mkdir()
-    pid = _call("projects.create", {"name": "Repo", "folders": [str(folder)]})["project"]["id"]
+    pid = _call("projects.create", {"name": "Repo", "folders": [str(folder)]})[
+        "project"
+    ]["id"]
 
     nested = folder / "src"
     nested.mkdir()
@@ -177,7 +186,9 @@ def test_project_info_for_cwd_returns_status_payload(tmp_path):
     # nested cwd — the shape the TUI status label + /status read.
     folder = tmp_path / "repo"
     folder.mkdir()
-    created = _call("projects.create", {"name": "Repo", "folders": [str(folder)]})["project"]
+    created = _call("projects.create", {"name": "Repo", "folders": [str(folder)]})[
+        "project"
+    ]
 
     nested = folder / "src"
     nested.mkdir()
@@ -222,7 +233,9 @@ def test_session_info_carries_project_for_owned_cwd(tmp_path):
 
 
 def test_update_and_archive(tmp_path):
-    pid = _call("projects.create", {"name": "Orig", "folders": [str(tmp_path)]})["project"]["id"]
+    pid = _call("projects.create", {"name": "Orig", "folders": [str(tmp_path)]})[
+        "project"
+    ]["id"]
 
     updated = _call("projects.update", {"id": pid, "name": "Renamed"})
     assert updated["project"]["name"] == "Renamed"
@@ -237,7 +250,9 @@ def test_get_unknown_returns_error():
 
 
 def test_delete_removes_project(tmp_path):
-    pid = _call("projects.create", {"name": "Doomed", "folders": [str(tmp_path)]})["project"]["id"]
+    pid = _call("projects.create", {"name": "Doomed", "folders": [str(tmp_path)]})[
+        "project"
+    ]["id"]
     payload = _call("projects.delete", {"id": pid})
 
     assert all(p["id"] != pid for p in payload["projects"])
@@ -256,7 +271,9 @@ def test_record_repos_persists_and_shows_zero_session_repo(tmp_path):
     repo.mkdir()
 
     # Repo-first: a scanned repo with no clawk sessions still surfaces.
-    _call("projects.record_repos", {"repos": [{"root": str(repo), "label": "fresh-repo"}]})
+    _call(
+        "projects.record_repos", {"repos": [{"root": str(repo), "label": "fresh-repo"}]}
+    )
 
     by_label = {r["label"]: r for r in _call("projects.discover_repos")["repos"]}
     assert "fresh-repo" in by_label
@@ -283,4 +300,6 @@ def test_discover_repos_from_full_history(tmp_path):
     assert "plain" not in by_label  # non-git dir never promoted
 
     # The probe is persisted back onto the session rows (membership at the source).
-    assert os.path.realpath(db.get_session("s1")["git_repo_root"]) == os.path.realpath(str(repo))
+    assert os.path.realpath(db.get_session("s1")["git_repo_root"]) == os.path.realpath(
+        str(repo)
+    )

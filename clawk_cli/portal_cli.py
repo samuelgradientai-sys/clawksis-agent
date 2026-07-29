@@ -18,6 +18,7 @@ This command is intentionally minimal — it does not duplicate functionality
 already in ``clawk auth`` or ``clawk tools``. It's the onboarding + discovery
 surface for the Portal subscription itself.
 """
+
 from __future__ import annotations
 
 import sys
@@ -29,6 +30,8 @@ from clawk_cli.config import load_config
 DEFAULT_PORTAL_URL = "https://portal.nousresearch.com"
 SUBSCRIPTION_URL = "https://portal.nousresearch.com/manage-subscription"
 DOCS_URL = "https://github.com/samuelgradientai-sys/clawksis-agent"
+
+
 def _cmd_status(args) -> int:
     """Show Portal auth + Tool Gateway routing summary."""
     from clawk_cli.auth import get_nous_auth_status
@@ -129,11 +132,11 @@ def _cmd_tools(args) -> int:
 
     # Static catalog — the partners Tool Gateway routes to today.
     catalog = [
-        ("web",       "Web search & extract",  "Firecrawl"),
-        ("image_gen", "Image generation",      "FAL"),
-        ("tts",       "Text-to-speech",        "OpenAI TTS"),
-        ("browser",   "Browser automation",    "Browser Use"),
-        ("modal",     "Cloud terminal",        "Modal"),
+        ("web", "Web search & extract", "Firecrawl"),
+        ("image_gen", "Image generation", "FAL"),
+        ("tts", "Text-to-speech", "OpenAI TTS"),
+        ("browser", "Browser automation", "Browser Use"),
+        ("modal", "Cloud terminal", "Modal"),
     ]
 
     print()
@@ -141,7 +144,12 @@ def _cmd_tools(args) -> int:
     print(color("  ────────────────────", Colors.MAGENTA))
 
     if not features.nous_auth_present:
-        print(color("  Not logged into Nous Portal — sign in with `clawk portal`.", Colors.YELLOW))
+        print(
+            color(
+                "  Not logged into Nous Portal — sign in with `clawk portal`.",
+                Colors.YELLOW,
+            )
+        )
         print()
 
     label_width = max(len(label) for _, label, _ in catalog)

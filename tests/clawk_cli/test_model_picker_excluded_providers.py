@@ -33,6 +33,7 @@ def config_home(tmp_path, monkeypatch):
 
 def _write_config(home, **top_level):
     import yaml
+
     cfg = {"model": "old-model", "custom_providers": []}
     cfg.update(top_level)
     (home / "config.yaml").write_text(yaml.safe_dump(cfg))
@@ -52,9 +53,12 @@ def _capture_provider_labels(config_home):
             captured["labels"] = list(labels)
         return None  # cancel
 
-    with patch("clawk_cli.main._prompt_provider_choice",
-               side_effect=_capture_and_cancel), \
-         patch("builtins.print"):
+    with (
+        patch(
+            "clawk_cli.main._prompt_provider_choice", side_effect=_capture_and_cancel
+        ),
+        patch("builtins.print"),
+    ):
         select_provider_and_model()
 
     return captured.get("labels", [])
@@ -63,7 +67,9 @@ def _capture_provider_labels(config_home):
 def test_cli_picker_hides_excluded_provider(config_home):
     """``excluded_providers: [openrouter]`` must remove the OpenRouter row
     from the ``clawk model`` provider menu."""
-    _write_config(config_home, **{"model_catalog": {"excluded_providers": ["openrouter"]}})
+    _write_config(
+        config_home, **{"model_catalog": {"excluded_providers": ["openrouter"]}}
+    )
 
     labels = _capture_provider_labels(config_home)
     assert labels, "provider menu was empty"
@@ -95,6 +101,7 @@ def test_cli_picker_hides_excluded_provider_by_alias(config_home):
         pytest.skip("no aliased canonical provider available to test")
 
     from clawk_cli.models import _PROVIDER_LABELS
+
     target_label_fragment = _PROVIDER_LABELS.get(target_slug, target_slug)
 
     # Baseline: the provider appears without exclusion.

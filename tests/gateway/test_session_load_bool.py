@@ -23,6 +23,7 @@ class TestSessionLoadBoolCorruption:
         (sessions_dir / "sessions.json").write_text(
             json.dumps(sessions_data), encoding="utf-8"
         )
+
         # SessionStore requires a config object with session reset policy
         class FakeConfig:
             session_idle_ttl = 0
@@ -30,6 +31,7 @@ class TestSessionLoadBoolCorruption:
             group_sessions_per_user = True
             thread_sessions_per_user = False
             multiplex_profiles = False
+
             def get_reset_policy(self, *a, **kw):
                 return None
 

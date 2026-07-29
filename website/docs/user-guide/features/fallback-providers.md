@@ -405,7 +405,7 @@ cronjob(
     schedule="every 2h",
     prompt="Check server status",
     provider="openrouter",
-    model="google/gemini-3-flash-preview"
+    model="google/gemini-3-flash-preview",
 )
 ```
 

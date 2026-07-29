@@ -105,8 +105,10 @@ def _read_script_for_scanning(script_path: str) -> str:
     only when the file cannot be read at all.
     """
     try:
-        return _resolve_script_path(script_path).read_bytes().decode(
-            "utf-8", errors="replace"
+        return (
+            _resolve_script_path(script_path)
+            .read_bytes()
+            .decode("utf-8", errors="replace")
         )
     except OSError:
         return ""

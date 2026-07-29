@@ -7,6 +7,7 @@ Previously the handler rebuilt the event with only text/type/source/
 message_id/channel_prompt, silently dropping any photo/document/reply
 metadata the user attached to the /queue message.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -93,7 +94,9 @@ async def test_queue_text_only_queues_and_does_not_interrupt():
     sk = _running(runner)
     running_agent = runner._running_agents[sk]
 
-    event = MessageEvent(text="/queue do this next", source=_make_source(), message_id="q1")
+    event = MessageEvent(
+        text="/queue do this next", source=_make_source(), message_id="q1"
+    )
     result = await runner._handle_message(event)
 
     assert result is not None and "queued" in result.lower()

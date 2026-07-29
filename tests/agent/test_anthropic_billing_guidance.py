@@ -9,6 +9,7 @@ guidance ("add credits with that provider") is wrong for a subscription —
 the user waits for the cycle reset or switches to an API key. This branch
 gives Anthropic-specific, actionable guidance (folds in PR #40073's UX).
 """
+
 from __future__ import annotations
 
 from agent.conversation_loop import _billing_or_entitlement_message

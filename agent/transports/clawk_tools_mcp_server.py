@@ -64,7 +64,9 @@ _JSON_TO_PY = {
 }
 
 
-def _signature_from_schema(schema: dict | None) -> tuple[inspect.Signature, dict[str, type]]:
+def _signature_from_schema(
+    schema: dict | None,
+) -> tuple[inspect.Signature, dict[str, type]]:
     """Build a Python function signature and annotations from a JSON schema.
 
     Args:
@@ -83,9 +85,7 @@ def _signature_from_schema(schema: dict | None) -> tuple[inspect.Signature, dict
             continue
         py = _JSON_TO_PY.get((pspec or {}).get("type"), Any)
         ann, default = (
-            (py, inspect.Parameter.empty)
-            if pname in required
-            else (Optional[py], None)
+            (py, inspect.Parameter.empty) if pname in required else (Optional[py], None)
         )
         annots[pname] = ann
         params.append(
@@ -190,9 +190,7 @@ def _build_server() -> Any:
     for name in EXPOSED_TOOLS:
         spec = all_defs.get(name)
         if spec is None:
-            logger.debug(
-                "skipping %s — not registered in this Clawksis process", name
-            )
+            logger.debug("skipping %s — not registered in this Clawksis process", name)
             continue
 
         description = spec.get("description") or f"Clawksis {name} tool"

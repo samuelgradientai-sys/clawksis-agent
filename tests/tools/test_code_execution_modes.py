@@ -46,12 +46,13 @@ from tools.code_execution_tool import (
 @contextmanager
 def _mock_mode(mode):
     """Context manager that pins code_execution.mode to the given value."""
-    with patch("tools.code_execution_tool._load_config",
-               return_value={"mode": mode}):
+    with patch("tools.code_execution_tool._load_config", return_value={"mode": mode}):
         yield
 
 
-def _mock_handle_function_call(function_name, function_args, task_id=None, user_task=None):
+def _mock_handle_function_call(
+    function_name, function_args, task_id=None, user_task=None
+):
     """Minimal mock dispatcher reused across tests."""
     if function_name == "terminal":
         return json.dumps({"output": "mock", "exit_code": 0})
@@ -64,6 +65,7 @@ def _mock_handle_function_call(function_name, function_args, task_id=None, user_
 # Mode resolution
 # ---------------------------------------------------------------------------
 
+
 class TestGetExecutionMode(unittest.TestCase):
     """_get_execution_mode reads config.yaml only (no env var surface)."""
 
@@ -71,23 +73,28 @@ class TestGetExecutionMode(unittest.TestCase):
         self.assertEqual(DEFAULT_EXECUTION_MODE, "project")
 
     def test_config_project(self):
-        with patch("tools.code_execution_tool._load_config",
-                   return_value={"mode": "project"}):
+        with patch(
+            "tools.code_execution_tool._load_config", return_value={"mode": "project"}
+        ):
             self.assertEqual(_get_execution_mode(), "project")
 
     def test_config_strict(self):
-        with patch("tools.code_execution_tool._load_config",
-                   return_value={"mode": "strict"}):
+        with patch(
+            "tools.code_execution_tool._load_config", return_value={"mode": "strict"}
+        ):
             self.assertEqual(_get_execution_mode(), "strict")
 
     def test_config_case_insensitive(self):
-        with patch("tools.code_execution_tool._load_config",
-                   return_value={"mode": "STRICT"}):
+        with patch(
+            "tools.code_execution_tool._load_config", return_value={"mode": "STRICT"}
+        ):
             self.assertEqual(_get_execution_mode(), "strict")
 
     def test_config_strips_whitespace(self):
-        with patch("tools.code_execution_tool._load_config",
-                   return_value={"mode": "  project  "}):
+        with patch(
+            "tools.code_execution_tool._load_config",
+            return_value={"mode": "  project  "},
+        ):
             self.assertEqual(_get_execution_mode(), "project")
 
     def test_empty_config_falls_back_to_default(self):
@@ -95,13 +102,15 @@ class TestGetExecutionMode(unittest.TestCase):
             self.assertEqual(_get_execution_mode(), DEFAULT_EXECUTION_MODE)
 
     def test_bogus_config_falls_back_to_default(self):
-        with patch("tools.code_execution_tool._load_config",
-                   return_value={"mode": "banana"}):
+        with patch(
+            "tools.code_execution_tool._load_config", return_value={"mode": "banana"}
+        ):
             self.assertEqual(_get_execution_mode(), DEFAULT_EXECUTION_MODE)
 
     def test_none_config_falls_back_to_default(self):
-        with patch("tools.code_execution_tool._load_config",
-                   return_value={"mode": None}):
+        with patch(
+            "tools.code_execution_tool._load_config", return_value={"mode": None}
+        ):
             # str(None).lower() = "none" → not in EXECUTION_MODES → default
             self.assertEqual(_get_execution_mode(), DEFAULT_EXECUTION_MODE)
 
@@ -114,6 +123,7 @@ class TestGetExecutionMode(unittest.TestCase):
 # Interpreter resolver
 # ---------------------------------------------------------------------------
 
+
 class TestResolveChildPython(unittest.TestCase):
     """_resolve_child_python — picks the right interpreter per mode."""
 
@@ -124,8 +134,11 @@ class TestResolveChildPython(unittest.TestCase):
 
     def test_project_with_no_venv_falls_back(self):
         """Project mode without VIRTUAL_ENV or CONDA_PREFIX → sys.executable."""
-        env = {k: v for k, v in os.environ.items()
-               if k not in {"VIRTUAL_ENV", "CONDA_PREFIX"}}
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in {"VIRTUAL_ENV", "CONDA_PREFIX"}
+        }
         with patch.dict(os.environ, env, clear=True):
             self.assertEqual(_resolve_child_python("project"), sys.executable)
 
@@ -138,6 +151,7 @@ class TestResolveChildPython(unittest.TestCase):
                 "requires elevated privileges (WinError 1314)."
             )
         import tempfile, pathlib
+
         with tempfile.TemporaryDirectory() as td:
             fake_venv = pathlib.Path(td)
             (fake_venv / "bin").mkdir()
@@ -152,6 +166,7 @@ class TestResolveChildPython(unittest.TestCase):
     def test_project_with_broken_venv_falls_back(self):
         """VIRTUAL_ENV set but bin/python missing → sys.executable."""
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             # No bin/python inside — broken venv
             with patch.dict(os.environ, {"VIRTUAL_ENV": td}):
@@ -167,7 +182,11 @@ class TestResolveChildPython(unittest.TestCase):
                 "requires elevated privileges (WinError 1314)."
             )
         import tempfile, pathlib
-        with tempfile.TemporaryDirectory() as ve_td, tempfile.TemporaryDirectory() as conda_td:
+
+        with (
+            tempfile.TemporaryDirectory() as ve_td,
+            tempfile.TemporaryDirectory() as conda_td,
+        ):
             ve = pathlib.Path(ve_td)
             (ve / "bin").mkdir()
             (ve / "bin" / "python").symlink_to(sys.executable)
@@ -176,7 +195,9 @@ class TestResolveChildPython(unittest.TestCase):
             (conda / "bin").mkdir()
             (conda / "bin" / "python").symlink_to(sys.executable)
 
-            with patch.dict(os.environ, {"VIRTUAL_ENV": str(ve), "CONDA_PREFIX": str(conda)}):
+            with patch.dict(
+                os.environ, {"VIRTUAL_ENV": str(ve), "CONDA_PREFIX": str(conda)}
+            ):
                 _is_usable_python.cache_clear()
                 result = _resolve_child_python("project")
                 self.assertEqual(result, str(ve / "bin" / "python"))
@@ -194,8 +215,8 @@ class TestResolveChildPython(unittest.TestCase):
 # CWD resolver
 # ---------------------------------------------------------------------------
 
-class TestResolveChildCwd(unittest.TestCase):
 
+class TestResolveChildCwd(unittest.TestCase):
     def test_strict_uses_staging_dir(self):
         self.assertEqual(_resolve_child_cwd("strict", "/tmp/staging"), "/tmp/staging")
 
@@ -206,6 +227,7 @@ class TestResolveChildCwd(unittest.TestCase):
 
     def test_project_uses_terminal_cwd_when_set(self):
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             with patch.dict(os.environ, {"TERMINAL_CWD": td}):
                 self.assertEqual(_resolve_child_cwd("project", "/tmp/staging"), td)
@@ -216,6 +238,7 @@ class TestResolveChildCwd(unittest.TestCase):
 
     def test_project_expands_tilde(self):
         import pathlib
+
         home = str(pathlib.Path.home())
         with patch.dict(os.environ, {"TERMINAL_CWD": "~"}):
             self.assertEqual(_resolve_child_cwd("project", "/tmp/staging"), home)
@@ -227,9 +250,14 @@ class TestResolveChildCwd(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             task_id = "session-cwd-test"
             with patch.dict(os.environ, {"TERMINAL_CWD": "/does/not/exist"}):
-                with patch.object(terminal_tool, "_task_env_overrides", {}, create=False):
+                with patch.object(
+                    terminal_tool, "_task_env_overrides", {}, create=False
+                ):
                     terminal_tool.register_task_env_overrides(task_id, {"cwd": td})
-                    self.assertEqual(_resolve_child_cwd("project", "/tmp/staging", task_id=task_id), td)
+                    self.assertEqual(
+                        _resolve_child_cwd("project", "/tmp/staging", task_id=task_id),
+                        td,
+                    )
 
     def test_project_prefers_session_cwd_record_over_override(self):
         """The session's cwd RECORD (its live `cd` state) outranks the
@@ -238,16 +266,24 @@ class TestResolveChildCwd(unittest.TestCase):
         import tempfile
         import tools.terminal_tool as terminal_tool
 
-        with tempfile.TemporaryDirectory() as reg, tempfile.TemporaryDirectory() as cded:
+        with (
+            tempfile.TemporaryDirectory() as reg,
+            tempfile.TemporaryDirectory() as cded,
+        ):
             task_id = "session-record-test"
             with patch.dict(os.environ, {"TERMINAL_CWD": "/does/not/exist"}):
-                with patch.object(terminal_tool, "_task_env_overrides", {}, create=False), \
-                     patch.object(terminal_tool, "_session_cwd", {}, create=False):
+                with (
+                    patch.object(
+                        terminal_tool, "_task_env_overrides", {}, create=False
+                    ),
+                    patch.object(terminal_tool, "_session_cwd", {}, create=False),
+                ):
                     terminal_tool.register_task_env_overrides(task_id, {"cwd": reg})
                     # Simulate a later `cd`: post-command tracking rewrites the record.
                     terminal_tool.record_session_cwd(task_id, cded)
                     self.assertEqual(
-                        _resolve_child_cwd("project", "/tmp/staging", task_id=task_id), cded
+                        _resolve_child_cwd("project", "/tmp/staging", task_id=task_id),
+                        cded,
                     )
 
     def test_project_uses_session_cwd_record_without_any_override(self):
@@ -259,11 +295,16 @@ class TestResolveChildCwd(unittest.TestCase):
         with tempfile.TemporaryDirectory() as cded:
             task_id = "record-only-test"
             with patch.dict(os.environ, {"TERMINAL_CWD": "/does/not/exist"}):
-                with patch.object(terminal_tool, "_task_env_overrides", {}, create=False), \
-                     patch.object(terminal_tool, "_session_cwd", {}, create=False):
+                with (
+                    patch.object(
+                        terminal_tool, "_task_env_overrides", {}, create=False
+                    ),
+                    patch.object(terminal_tool, "_session_cwd", {}, create=False),
+                ):
                     terminal_tool.record_session_cwd(task_id, cded)
                     self.assertEqual(
-                        _resolve_child_cwd("project", "/tmp/staging", task_id=task_id), cded
+                        _resolve_child_cwd("project", "/tmp/staging", task_id=task_id),
+                        cded,
                     )
 
     def test_project_stale_record_falls_through_to_override(self):
@@ -275,12 +316,17 @@ class TestResolveChildCwd(unittest.TestCase):
         with tempfile.TemporaryDirectory() as reg:
             task_id = "stale-record-test"
             with patch.dict(os.environ, {"TERMINAL_CWD": "/does/not/exist"}):
-                with patch.object(terminal_tool, "_task_env_overrides", {}, create=False), \
-                     patch.object(terminal_tool, "_session_cwd", {}, create=False):
+                with (
+                    patch.object(
+                        terminal_tool, "_task_env_overrides", {}, create=False
+                    ),
+                    patch.object(terminal_tool, "_session_cwd", {}, create=False),
+                ):
                     terminal_tool.register_task_env_overrides(task_id, {"cwd": reg})
                     terminal_tool.record_session_cwd(task_id, "/deleted/dir/gone")
                     self.assertEqual(
-                        _resolve_child_cwd("project", "/tmp/staging", task_id=task_id), reg
+                        _resolve_child_cwd("project", "/tmp/staging", task_id=task_id),
+                        reg,
                     )
 
 
@@ -288,8 +334,8 @@ class TestResolveChildCwd(unittest.TestCase):
 # Schema description
 # ---------------------------------------------------------------------------
 
-class TestModeAwareSchema(unittest.TestCase):
 
+class TestModeAwareSchema(unittest.TestCase):
     def test_strict_description_mentions_temp_dir(self):
         desc = build_execute_code_schema(mode="strict")["description"]
         self.assertIn("temp dir", desc)
@@ -309,8 +355,11 @@ class TestModeAwareSchema(unittest.TestCase):
         for mode in EXECUTION_MODES:
             desc = build_execute_code_schema(mode=mode)["description"].lower()
             for forbidden in ("sandbox", "isolated", "cloud"):
-                self.assertNotIn(forbidden, desc,
-                                 f"mode={mode}: '{forbidden}' leaked into description")
+                self.assertNotIn(
+                    forbidden,
+                    desc,
+                    f"mode={mode}: '{forbidden}' leaked into description",
+                )
 
     def test_descriptions_are_similar_length(self):
         """Both modes should have roughly the same-size description."""
@@ -332,6 +381,7 @@ class TestModeAwareSchema(unittest.TestCase):
 # Integration: what actually happens when execute_code runs per mode
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(
     sys.platform == "win32",
     reason=(
@@ -348,8 +398,10 @@ class TestExecuteCodeModeIntegration(unittest.TestCase):
         env_overrides = extra_env or {}
         with _mock_mode(mode):
             with patch.dict(os.environ, env_overrides):
-                with patch("model_tools.handle_function_call",
-                           side_effect=_mock_handle_function_call):
+                with patch(
+                    "model_tools.handle_function_call",
+                    side_effect=_mock_handle_function_call,
+                ):
                     raw = execute_code(
                         code=code,
                         task_id=f"test-{mode}",
@@ -366,6 +418,7 @@ class TestExecuteCodeModeIntegration(unittest.TestCase):
     def test_project_mode_runs_in_session_cwd(self):
         """Project mode: script's os.getcwd() is the session's working dir."""
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             result = self._run(
                 "import os; print(os.getcwd())",
@@ -388,10 +441,15 @@ class TestExecuteCodeModeIntegration(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             task_id = "session-cwd-test"
             with patch.dict(os.environ, {"TERMINAL_CWD": "/does/not/exist"}):
-                with patch.object(terminal_tool, "_task_env_overrides", {}, create=False):
+                with patch.object(
+                    terminal_tool, "_task_env_overrides", {}, create=False
+                ):
                     terminal_tool.register_task_env_overrides(task_id, {"cwd": td})
                     with _mock_mode("project"):
-                        with patch("model_tools.handle_function_call", side_effect=_mock_handle_function_call):
+                        with patch(
+                            "model_tools.handle_function_call",
+                            side_effect=_mock_handle_function_call,
+                        ):
                             raw = execute_code(
                                 code="import os; print(os.getcwd())",
                                 task_id=task_id,
@@ -399,7 +457,9 @@ class TestExecuteCodeModeIntegration(unittest.TestCase):
                             )
             result = json.loads(raw)
             self.assertEqual(result["status"], "success")
-            self.assertEqual(os.path.realpath(result["output"].strip()), os.path.realpath(td))
+            self.assertEqual(
+                os.path.realpath(result["output"].strip()), os.path.realpath(td)
+            )
 
     def test_project_mode_interpreter_is_venv_python(self):
         """Project mode: sys.executable inside the child is the venv's python
@@ -426,6 +486,7 @@ class TestExecuteCodeModeIntegration(unittest.TestCase):
         breaks `from clawk_tools import terminal`.
         """
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             code = (
                 "from clawk_tools import terminal\n"
@@ -456,6 +517,7 @@ class TestExecuteCodeModeIntegration(unittest.TestCase):
 # changes CWD + interpreter, not the security posture.
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(
     sys.platform == "win32",
     reason=(
@@ -466,11 +528,12 @@ class TestExecuteCodeModeIntegration(unittest.TestCase):
     ),
 )
 class TestSecurityInvariantsAcrossModes(unittest.TestCase):
-
     def _run(self, code, mode):
         with _mock_mode(mode):
-            with patch("model_tools.handle_function_call",
-                       side_effect=_mock_handle_function_call):
+            with patch(
+                "model_tools.handle_function_call",
+                side_effect=_mock_handle_function_call,
+            ):
                 raw = execute_code(
                     code=code,
                     task_id=f"test-sec-{mode}",
@@ -484,10 +547,13 @@ class TestSecurityInvariantsAcrossModes(unittest.TestCase):
             "print('KEY=' + os.environ.get('OPENAI_API_KEY', 'MISSING'))\n"
             "print('TOK=' + os.environ.get('ANTHROPIC_API_KEY', 'MISSING'))\n"
         )
-        with patch.dict(os.environ, {
-            "OPENAI_API_KEY": "sk-should-not-leak",
-            "ANTHROPIC_API_KEY": "ant-should-not-leak",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "OPENAI_API_KEY": "sk-should-not-leak",
+                "ANTHROPIC_API_KEY": "ant-should-not-leak",
+            },
+        ):
             result = self._run(code, mode="strict")
         self.assertEqual(result["status"], "success")
         self.assertIn("KEY=MISSING", result["output"])
@@ -503,16 +569,23 @@ class TestSecurityInvariantsAcrossModes(unittest.TestCase):
             "print('TOK=' + os.environ.get('ANTHROPIC_API_KEY', 'MISSING'))\n"
             "print('SEC=' + os.environ.get('GITHUB_TOKEN', 'MISSING'))\n"
         )
-        with patch.dict(os.environ, {
-            "OPENAI_API_KEY": "sk-should-not-leak",
-            "ANTHROPIC_API_KEY": "ant-should-not-leak",
-            "GITHUB_TOKEN": "ghp-should-not-leak",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "OPENAI_API_KEY": "sk-should-not-leak",
+                "ANTHROPIC_API_KEY": "ant-should-not-leak",
+                "GITHUB_TOKEN": "ghp-should-not-leak",
+            },
+        ):
             result = self._run(code, mode="project")
         self.assertEqual(result["status"], "success")
         for needle in ("KEY=MISSING", "TOK=MISSING", "SEC=MISSING"):
             self.assertIn(needle, result["output"])
-        for leaked in ("sk-should-not-leak", "ant-should-not-leak", "ghp-should-not-leak"):
+        for leaked in (
+            "sk-should-not-leak",
+            "ant-should-not-leak",
+            "ghp-should-not-leak",
+        ):
             self.assertNotIn(leaked, result["output"])
 
     def test_secret_substrings_scrubbed_in_project_mode(self):
@@ -523,18 +596,25 @@ class TestSecurityInvariantsAcrossModes(unittest.TestCase):
             "'LDAP_PASSWD', 'AUTH_TOKEN'):\n"
             "    print(f'{k}=' + os.environ.get(k, 'MISSING'))\n"
         )
-        with patch.dict(os.environ, {
-            "MY_SECRET": "secret-should-not-leak",
-            "DB_PASSWORD": "password-should-not-leak",
-            "VAULT_CREDENTIAL": "cred-should-not-leak",
-            "LDAP_PASSWD": "passwd-should-not-leak",
-            "AUTH_TOKEN": "auth-should-not-leak",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "MY_SECRET": "secret-should-not-leak",
+                "DB_PASSWORD": "password-should-not-leak",
+                "VAULT_CREDENTIAL": "cred-should-not-leak",
+                "LDAP_PASSWD": "passwd-should-not-leak",
+                "AUTH_TOKEN": "auth-should-not-leak",
+            },
+        ):
             result = self._run(code, mode="project")
         self.assertEqual(result["status"], "success")
-        for leaked in ("secret-should-not-leak", "password-should-not-leak",
-                       "cred-should-not-leak", "passwd-should-not-leak",
-                       "auth-should-not-leak"):
+        for leaked in (
+            "secret-should-not-leak",
+            "password-should-not-leak",
+            "cred-should-not-leak",
+            "passwd-should-not-leak",
+            "auth-should-not-leak",
+        ):
             self.assertNotIn(leaked, result["output"])
 
     def test_tool_whitelist_enforced_in_strict_mode(self):

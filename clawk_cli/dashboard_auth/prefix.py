@@ -17,6 +17,7 @@ The single source of truth for both helpers lives here so the gate
 middleware, the OAuth routes, the cookie helpers, and the SPA mount
 all agree on validation rules.
 """
+
 from __future__ import annotations
 
 import logging
@@ -112,11 +113,7 @@ def normalise_prefix(raw: Optional[str]) -> str:
     if not p.startswith("/"):
         p = "/" + p
     p = p.rstrip("/")
-    if (
-        "//" in p
-        or ".." in p
-        or any(c in p for c in _REJECT_CHARS)
-    ):
+    if "//" in p or ".." in p or any(c in p for c in _REJECT_CHARS):
         _warn_if_malformed_prefix(
             raw,
             "it contains a disallowed character or path sequence",

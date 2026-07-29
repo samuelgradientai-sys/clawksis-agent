@@ -1,11 +1,11 @@
 """Tests for _stream_delta's handling of <think> tags in prose vs real reasoning blocks."""
+
 import sys
 import os
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-
 
 
 def _make_cli_stub():
@@ -31,12 +31,15 @@ def _make_cli_stub():
     # Mock _emit_stream_text to capture output
     def mock_emit(text):
         cli._emitted.append(text)
+
     cli._emit_stream_text = mock_emit
 
     # Mock _stream_reasoning_delta
     cli._reasoning_emitted = []
+
     def mock_reasoning(text):
         cli._reasoning_emitted.append(text)
+
     cli._stream_reasoning_delta = mock_reasoning
 
     return cli
@@ -57,9 +60,13 @@ class TestThinkTagInProse:
         ]
         for t in tokens:
             cli._stream_delta(t)
-        assert not cli._in_reasoning_block, "<think> in prose should not enter reasoning block"
+        assert not cli._in_reasoning_block, (
+            "<think> in prose should not enter reasoning block"
+        )
         full = "".join(cli._emitted)
-        assert "<think>" in full, "The literal <think> tag should be in the emitted text"
+        assert "<think>" in full, (
+            "The literal <think> tag should be in the emitted text"
+        )
         assert "Launch production" in full
 
     def test_think_tag_after_text_on_same_line(self):
@@ -143,7 +150,10 @@ class TestFlushRecovery:
         # Call flush
         from unittest.mock import patch
         import shutil
-        with patch.object(shutil, "get_terminal_size", return_value=os.terminal_size((80, 24))):
+
+        with patch.object(
+            shutil, "get_terminal_size", return_value=os.terminal_size((80, 24))
+        ):
             with patch("cli._cprint"):
                 cli._flush_stream()
 

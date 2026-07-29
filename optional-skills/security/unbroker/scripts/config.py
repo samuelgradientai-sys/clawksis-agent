@@ -10,6 +10,7 @@ setting when a flag opts in.
              opt-outs without pausing per submission (default).
   assisted - the agent pauses for operator confirmation before each submission.
 """
+
 from __future__ import annotations
 
 import os
@@ -21,12 +22,12 @@ import paths
 import storage
 
 DEFAULT_CONFIG = {
-    "autonomy": "full",                # hands-off after intake+consent
-    "email_mode": "draft_only",        # zero credentials
-    "browser_backend": "auto",         # auto = Browserbase when BROWSERBASE_API_KEY is set
-                                       # (recommended default; clears soft CAPTCHAs), else plain browser
-    "tracker_backend": "local-json",   # no external dependency
-    "encryption": "none",              # files still written 0600
+    "autonomy": "full",  # hands-off after intake+consent
+    "email_mode": "draft_only",  # zero credentials
+    "browser_backend": "auto",  # auto = Browserbase when BROWSERBASE_API_KEY is set
+    # (recommended default; clears soft CAPTCHAs), else plain browser
+    "tracker_backend": "local-json",  # no external dependency
+    "encryption": "none",  # files still written 0600
     "default_rescan_interval_days": 120,
     "email_min_interval_seconds": 20,  # pace SMTP sends so a run can't torch the account
 }
@@ -58,7 +59,9 @@ def save_config(cfg: dict) -> Path:
     merged.update(cfg)
     for key, allowed in VALID.items():
         if merged.get(key) not in allowed:
-            raise ValueError(f"invalid {key!r}: {merged.get(key)!r} (allowed: {sorted(allowed)})")
+            raise ValueError(
+                f"invalid {key!r}: {merged.get(key)!r} (allowed: {sorted(allowed)})"
+            )
     return storage.write_json(paths.config_path(), merged)
 
 
@@ -96,8 +99,8 @@ def detect_capabilities(env: dict | None = None) -> dict:
         "browserbase": bool(env.get("BROWSERBASE_API_KEY")),
         "agentmail": bool(env.get("AGENTMAIL_API_KEY")),
         "email_imap_smtp": bool(env.get("EMAIL_ADDRESS") and env.get("EMAIL_PASSWORD")),
-        "smtp_send": mail["smtp"],      # CLI can SEND opt-out emails itself
-        "imap_read": mail["imap"],      # CLI can POLL verification links itself
+        "smtp_send": mail["smtp"],  # CLI can SEND opt-out emails itself
+        "imap_read": mail["imap"],  # CLI can POLL verification links itself
         "google_workspace": google,
         "age": which("age") is not None,
     }

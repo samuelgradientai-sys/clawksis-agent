@@ -25,8 +25,11 @@ from gateway.shutdown_watchdog import (
     write_loop_heartbeat,
 )
 
+
 def test_resolve_shutdown_watchdog_delay_adds_grace():
-    assert resolve_shutdown_watchdog_delay(180) == 180 + DEFAULT_SHUTDOWN_WATCHDOG_GRACE_S
+    assert (
+        resolve_shutdown_watchdog_delay(180) == 180 + DEFAULT_SHUTDOWN_WATCHDOG_GRACE_S
+    )
     assert resolve_shutdown_watchdog_delay(0) == DEFAULT_SHUTDOWN_WATCHDOG_GRACE_S
     assert resolve_shutdown_watchdog_delay("bad") == DEFAULT_SHUTDOWN_WATCHDOG_GRACE_S
     assert resolve_shutdown_watchdog_delay(10, grace_s=5) == 15.0
@@ -98,7 +101,10 @@ def test_arm_shutdown_watchdog_fires_with_dump_and_exit(tmp_path):
     text = dump.read_text(encoding="utf-8")
     assert "shutdown_watchdog_fired" in text
     assert "faulthandler dump" in text
-    assert get_shutdown_watchdog_dump_path(tmp_path).name == "gateway-shutdown-watchdog.log"
+    assert (
+        get_shutdown_watchdog_dump_path(tmp_path).name
+        == "gateway-shutdown-watchdog.log"
+    )
 
 
 @pytest.mark.asyncio

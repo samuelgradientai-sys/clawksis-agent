@@ -63,7 +63,10 @@ def _is_image_generation_unsupported_error(status_code: int, body: str) -> bool:
         message = error.get("message") if isinstance(error, dict) else None
     except (TypeError, ValueError):
         message = body
-    return isinstance(message, str) and message.strip() == _IMAGE_GENERATION_UNSUPPORTED_ERROR
+    return (
+        isinstance(message, str)
+        and message.strip() == _IMAGE_GENERATION_UNSUPPORTED_ERROR
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -117,9 +120,7 @@ _MAX_INPUT_IMAGE_BYTES = 25 * 1024 * 1024
 # shared magic-byte sniffer also recognizes SVG/TIFF/ICO, which the API
 # rejects server-side — gate to this allowlist so unsupported inputs fail
 # locally with a clear error instead of an opaque HTTP 400.
-_ACCEPTED_INPUT_MIME = frozenset(
-    {"image/png", "image/jpeg", "image/gif", "image/webp"}
-)
+_ACCEPTED_INPUT_MIME = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +210,9 @@ def _data_url_to_input_image_url(value: str) -> str:
     header, data = value.split(",", 1)
     header_lc = header.lower()
     if not header_lc.startswith("data:image/") or ";base64" not in header_lc:
-        raise ValueError("Only base64 data:image URLs are supported as Codex image inputs")
+        raise ValueError(
+            "Only base64 data:image URLs are supported as Codex image inputs"
+        )
     raw = base64.b64decode(data, validate=True)
     if len(raw) > _MAX_INPUT_IMAGE_BYTES:
         raise ValueError("Image data URL exceeds 25MB cap")
@@ -272,7 +275,7 @@ def _normalize_input_images(
     values: List[str] = []
     if isinstance(image_url, str) and image_url.strip():
         values.append(image_url.strip())
-    for ref in (normalize_reference_images(reference_image_urls) or []):
+    for ref in normalize_reference_images(reference_image_urls) or []:
         values.append(ref)
     values = values[:_MAX_REFERENCE_IMAGES]
     return [_to_input_image_part(value) for value in values]
@@ -293,20 +296,24 @@ def _build_responses_payload(
         "model": _CODEX_CHAT_MODEL,
         "store": False,
         "instructions": _CODEX_INSTRUCTIONS,
-        "input": [{
-            "type": "message",
-            "role": "user",
-            "content": content,
-        }],
-        "tools": [{
-            "type": "image_generation",
-            "model": API_MODEL,
-            "size": size,
-            "quality": quality,
-            "output_format": "png",
-            "background": "opaque",
-            "partial_images": 1,
-        }],
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": content,
+            }
+        ],
+        "tools": [
+            {
+                "type": "image_generation",
+                "model": API_MODEL,
+                "size": size,
+                "quality": quality,
+                "output_format": "png",
+                "background": "opaque",
+                "partial_images": 1,
+            }
+        ],
         "tool_choice": {
             "type": "allowed_tools",
             "mode": "required",
@@ -377,9 +384,9 @@ def _iter_sse_json(response: Any):
         if line.startswith(":"):
             continue
         if line.startswith("event:"):
-            event_name = line[len("event:"):].strip()
+            event_name = line[len("event:") :].strip()
         elif line.startswith("data:"):
-            data_lines.append(line[len("data:"):].lstrip())
+            data_lines.append(line[len("data:") :].lstrip())
 
     payload = flush()
     if payload is not None:
@@ -414,7 +421,9 @@ def _collect_image_b64(
 
     image_b64: Optional[str] = None
     with httpx.Client(timeout=timeout, headers=headers) as http:
-        with http.stream("POST", f"{_CODEX_BASE_URL}/responses", json=payload) as response:
+        with http.stream(
+            "POST", f"{_CODEX_BASE_URL}/responses", json=payload
+        ) as response:
             try:
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
@@ -495,7 +504,10 @@ class OpenAICodexImageGenProvider(ImageGenProvider):
         # images as `input_image` message content parts. Keep this capability
         # honest so the dynamic `image_generate` schema encourages identity-
         # preserving edits instead of unrelated text-to-image redraws.
-        return {"modalities": ["text", "image"], "max_reference_images": _MAX_REFERENCE_IMAGES}
+        return {
+            "modalities": ["text", "image"],
+            "max_reference_images": _MAX_REFERENCE_IMAGES,
+        }
 
     def generate(
         self,
@@ -628,7 +640,11 @@ class OpenAICodexImageGenProvider(ImageGenProvider):
             aspect_ratio=aspect,
             provider="openai-codex",
             modality="image" if input_images else "text",
-            extra={"size": size, "quality": meta["quality"], "input_image_count": len(input_images)},
+            extra={
+                "size": size,
+                "quality": meta["quality"],
+                "input_image_count": len(input_images),
+            },
         )
 
 

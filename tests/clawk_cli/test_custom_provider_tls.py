@@ -66,7 +66,10 @@ def test_get_custom_provider_tls_settings_no_substring_bypass():
         }
     ]
     # A different host that shares a prefix must not pick up ssl_verify:false.
-    assert get_custom_provider_tls_settings(
-        "https://ollama.example.com.attacker.test/v1",
-        custom_providers=providers,
-    ) == {}
+    assert (
+        get_custom_provider_tls_settings(
+            "https://ollama.example.com.attacker.test/v1",
+            custom_providers=providers,
+        )
+        == {}
+    )

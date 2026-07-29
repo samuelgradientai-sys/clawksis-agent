@@ -21,9 +21,7 @@ def test_refresh_fallback_model_rereads_config(tmp_path, monkeypatch):
     monkeypatch.setattr("gateway.run._clawk_home", tmp_path)
     cfg = tmp_path / "config.yaml"
     cfg.write_text(
-        "fallback_providers:\n"
-        "  - provider: deepseek\n"
-        "    model: deepseek-v4-flash\n"
+        "fallback_providers:\n  - provider: deepseek\n    model: deepseek-v4-flash\n"
     )
 
     runner = SimpleNamespace(
@@ -54,9 +52,7 @@ def test_refresh_fallback_model_clears_when_config_removed(tmp_path, monkeypatch
     monkeypatch.setattr("gateway.run._clawk_home", tmp_path)
     cfg = tmp_path / "config.yaml"
     cfg.write_text(
-        "fallback_providers:\n"
-        "  - provider: deepseek\n"
-        "    model: deepseek-v4-flash\n"
+        "fallback_providers:\n  - provider: deepseek\n    model: deepseek-v4-flash\n"
     )
 
     runner = SimpleNamespace(
@@ -72,7 +68,8 @@ def test_refresh_fallback_model_clears_when_config_removed(tmp_path, monkeypatch
 
 
 def test_refresh_fallback_model_keeps_last_known_good_on_read_failure(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """A transient config.yaml read/parse failure (user mid-edit, non-atomic
     write) must NOT wipe the last known-good chain — only a successful read
@@ -82,9 +79,7 @@ def test_refresh_fallback_model_keeps_last_known_good_on_read_failure(
     monkeypatch.setattr("gateway.run._clawk_home", tmp_path)
     cfg = tmp_path / "config.yaml"
     cfg.write_text(
-        "fallback_providers:\n"
-        "  - provider: deepseek\n"
-        "    model: deepseek-v4-flash\n"
+        "fallback_providers:\n  - provider: deepseek\n    model: deepseek-v4-flash\n"
     )
 
     runner = SimpleNamespace(_fallback_model=None)

@@ -15,6 +15,7 @@ installer writes ``git`` into $INSTALL_DIR (the git checkout, e.g.
 ``~/.clawksis/clawksis-agent``), which is unique to this install and immune to the
 shared data dir.
 """
+
 from __future__ import annotations
 
 import re

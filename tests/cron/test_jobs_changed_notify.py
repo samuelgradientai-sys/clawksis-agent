@@ -64,6 +64,7 @@ def test_builtin_notify_is_harmless(monkeypatch):
     """With the built-in provider (default), notify is a no-op and never
     raises."""
     import cron.scheduler as sched
+
     # default resolution → built-in; just assert it doesn't blow up.
     sched._notify_provider_jobs_changed()
 
@@ -71,14 +72,18 @@ def test_builtin_notify_is_harmless(monkeypatch):
 def test_tool_create_notifies_provider(temp_home, monkeypatch):
     """Creating a job via the cronjob tool path invokes on_jobs_changed."""
     import cron.scheduler as sched
+
     calls = []
-    monkeypatch.setattr(sched, "_notify_provider_jobs_changed",
-                        lambda: calls.append("changed"))
+    monkeypatch.setattr(
+        sched, "_notify_provider_jobs_changed", lambda: calls.append("changed")
+    )
 
     from tools.cronjob_tools import cronjob
     import json
 
-    out = json.loads(cronjob(action="create", prompt="echo hi", schedule="every 5m", name="w"))
+    out = json.loads(
+        cronjob(action="create", prompt="echo hi", schedule="every 5m", name="w")
+    )
     assert out["success"] is True
     assert calls == ["changed"]
 
@@ -88,13 +93,17 @@ def test_tool_remove_notifies_provider(temp_home, monkeypatch):
     import json
     from tools.cronjob_tools import cronjob
 
-    created = json.loads(cronjob(action="create", prompt="x", schedule="every 5m", name="r"))
+    created = json.loads(
+        cronjob(action="create", prompt="x", schedule="every 5m", name="r")
+    )
     jid = created["job_id"]
 
     import cron.scheduler as sched
+
     calls = []
-    monkeypatch.setattr(sched, "_notify_provider_jobs_changed",
-                        lambda: calls.append("changed"))
+    monkeypatch.setattr(
+        sched, "_notify_provider_jobs_changed", lambda: calls.append("changed")
+    )
 
     out = json.loads(cronjob(action="remove", job_id=jid))
     assert out["success"] is True

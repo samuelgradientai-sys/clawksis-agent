@@ -19,12 +19,10 @@ class TestAnthropicNullTextBlock:
         assert result["role"] == "user"
 
     def test_mixed_null_and_real_text_blocks(self):
-        result = _convert_user_message(
-            [
-                {"type": "text", "text": None},
-                {"type": "text", "text": "hello"},
-            ]
-        )
+        result = _convert_user_message([
+            {"type": "text", "text": None},
+            {"type": "text", "text": "hello"},
+        ])
         assert result["role"] == "user"
 
 

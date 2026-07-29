@@ -25,6 +25,7 @@ Usage:
 
 NEVER prints secret values — only lengths, scope, expiry, and HTTP status.
 """
+
 import json, os, sys, time, argparse, urllib.request, urllib.error, urllib.parse
 
 UA = "python-httpx/0.27"  # CF blocks default urllib UA on many providers
@@ -34,6 +35,7 @@ def _clawk_home():
     # Prefer Clawksis' own resolver (profile-safe); fall back to env then ~/.clawksis.
     try:
         from clawk_constants import get_clawk_home
+
         return str(get_clawk_home())
     except Exception:
         return os.environ.get("CLAWK_HOME") or os.path.expanduser("~/.clawksis")
@@ -68,9 +70,14 @@ def _mcp_initialize(mcp_url, access_token):
     status, hdrs, body = _post(
         mcp_url,
         data={
-            "jsonrpc": "2.0", "id": 1, "method": "initialize",
-            "params": {"protocolVersion": "2025-06-18", "capabilities": {},
-                       "clientInfo": {"name": "clawk-diag", "version": "1.0"}},
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "clawk-diag", "version": "1.0"},
+            },
         },
         headers={
             "Authorization": "Bearer " + access_token,
@@ -81,7 +88,11 @@ def _mcp_initialize(mcp_url, access_token):
     )
     txt = body[:400].decode(errors="replace")
     ok = status == 200 and ("serverInfo" in txt or '"result"' in txt)
-    expired = "-32002" in txt or "Session expired" in txt or "invalid_token" in (hdrs.get("WWW-Authenticate") or "")
+    expired = (
+        "-32002" in txt
+        or "Session expired" in txt
+        or "invalid_token" in (hdrs.get("WWW-Authenticate") or "")
+    )
     return ok, expired, status, txt
 
 
@@ -90,7 +101,9 @@ def main():
     ap.add_argument("server")
     ap.add_argument("--mcp-url")
     ap.add_argument("--token-endpoint")
-    ap.add_argument("--write", action="store_true", help="persist a working refreshed token")
+    ap.add_argument(
+        "--write", action="store_true", help="persist a working refreshed token"
+    )
     args = ap.parse_args()
 
     tdir = _tokens_dir()
@@ -101,24 +114,29 @@ def main():
 
     mcp_url = args.mcp_url or tok.get("resource")
     if not mcp_url:
-        print("FATAL: no --mcp-url and no `resource` in token file"); sys.exit(2)
+        print("FATAL: no --mcp-url and no `resource` in token file")
+        sys.exit(2)
     resource = tok.get("resource") or mcp_url
 
     print(f"server={args.server} mcp_url={mcp_url}")
     exp = tok.get("expires_at")
     if isinstance(exp, (int, float)):
-        print(f"stored expires_at in {round((exp - time.time())/60)} min")
+        print(f"stored expires_at in {round((exp - time.time()) / 60)} min")
 
     # Step 1: stored token
     ok, expired, status, txt = _mcp_initialize(mcp_url, tok["access_token"])
     print(f"[1] stored-token initialize -> HTTP {status} ok={ok} expired={expired}")
     if ok:
-        print("BRANCH=TOKEN_OK  -> stored token works; 'not connected' is the breaker (7). Restart the gateway.")
+        print(
+            "BRANCH=TOKEN_OK  -> stored token works; 'not connected' is the breaker (7). Restart the gateway."
+        )
         return
 
     # Step 2: refresh
     if not tok.get("refresh_token"):
-        print("BRANCH=REFRESH_DEAD  -> no refresh_token present; full re-auth required.")
+        print(
+            "BRANCH=REFRESH_DEAD  -> no refresh_token present; full re-auth required."
+        )
         return
     token_ep = args.token_endpoint
     if not token_ep:
@@ -128,23 +146,33 @@ def main():
         try:
             token_ep = _get_json(as_url)["token_endpoint"]
         except Exception as e:
-            print(f"FATAL: cannot discover token_endpoint ({e}); pass --token-endpoint"); sys.exit(2)
+            print(f"FATAL: cannot discover token_endpoint ({e}); pass --token-endpoint")
+            sys.exit(2)
     print(f"[2] token_endpoint={token_ep}")
 
     rstatus, _rh, rbody = _post(
-        token_ep, form=True,
-        data={"grant_type": "refresh_token", "refresh_token": tok["refresh_token"],
-              "client_id": client["client_id"], "resource": resource},
+        token_ep,
+        form=True,
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": tok["refresh_token"],
+            "client_id": client["client_id"],
+            "resource": resource,
+        },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     if rstatus != 200:
         print(f"[2] refresh -> HTTP {rstatus} {rbody[:200].decode(errors='replace')}")
-        print("BRANCH=REFRESH_DEAD  -> refresh grant rejected (9). Full re-auth or switch to static API key.")
+        print(
+            "BRANCH=REFRESH_DEAD  -> refresh grant rejected (9). Full re-auth or switch to static API key."
+        )
         return
     j = json.loads(rbody)
     new_at = j["access_token"]
-    print(f"[2] refresh -> HTTP 200 new_token_len={len(new_at)} scope={j.get('scope')} "
-          f"expires_in={j.get('expires_in')} rotated_refresh={bool(j.get('refresh_token'))}")
+    print(
+        f"[2] refresh -> HTTP 200 new_token_len={len(new_at)} scope={j.get('scope')} "
+        f"expires_in={j.get('expires_in')} rotated_refresh={bool(j.get('refresh_token'))}"
+    )
 
     # Step 2b: smoke-test the freshly-minted token
     ok2, expired2, status2, txt2 = _mcp_initialize(mcp_url, new_at)
@@ -152,24 +180,37 @@ def main():
     if ok2:
         if args.write:
             new = dict(tok)
-            new.update({"access_token": new_at, "token_type": j.get("token_type", "Bearer"),
-                        "expires_in": j.get("expires_in", tok.get("expires_in")),
-                        "scope": j.get("scope", tok.get("scope")),
-                        "expires_at": time.time() + float(j.get("expires_in", 3600))})
+            new.update({
+                "access_token": new_at,
+                "token_type": j.get("token_type", "Bearer"),
+                "expires_in": j.get("expires_in", tok.get("expires_in")),
+                "scope": j.get("scope", tok.get("scope")),
+                "expires_at": time.time() + float(j.get("expires_in", 3600)),
+            })
             if j.get("refresh_token"):
                 new["refresh_token"] = j["refresh_token"]
             tmp = tpath + ".tmp"
             open(tmp, "w").write(json.dumps(new, indent=2))
             os.chmod(tmp, 0o600)
             os.replace(tmp, tpath)
-            print(f"     wrote {tpath} (0600). NOW RESTART the gateway to clear the breaker.")
-        print("BRANCH=REFRESH_FIXED  -> refreshed token works. Persist (--write) + restart gateway.")
+            print(
+                f"     wrote {tpath} (0600). NOW RESTART the gateway to clear the breaker."
+            )
+        print(
+            "BRANCH=REFRESH_FIXED  -> refreshed token works. Persist (--write) + restart gateway."
+        )
         return
 
     if expired2:
-        print("BRANCH=SESSION_REVOKED  -> refresh succeeds but new token STILL -32002 'Session expired' (10).")
-        print("     Refresh loop will NOT help. Full interactive authorization_code re-auth required.")
-        print("     For an unattended gateway, prefer a static Personal API key instead.")
+        print(
+            "BRANCH=SESSION_REVOKED  -> refresh succeeds but new token STILL -32002 'Session expired' (10)."
+        )
+        print(
+            "     Refresh loop will NOT help. Full interactive authorization_code re-auth required."
+        )
+        print(
+            "     For an unattended gateway, prefer a static Personal API key instead."
+        )
         return
     print(f"BRANCH=UNKNOWN  -> new token failed for a non-session reason: {txt2[:200]}")
 

@@ -25,8 +25,16 @@ def _disable_live_custom_provider_model_probe(monkeypatch):
     monkeypatch.setattr("clawk_cli.models.fetch_api_models", lambda *_a, **_kw: None)
 
 
-def _make_provider(slug, name=None, models=None, *, is_current=False,
-                   is_user_defined=False, source="built-in", api_url=None):
+def _make_provider(
+    slug,
+    name=None,
+    models=None,
+    *,
+    is_current=False,
+    is_user_defined=False,
+    source="built-in",
+    api_url=None,
+):
     """Build a dict shaped like ``list_authenticated_providers`` output."""
     entry = {
         "slug": slug,
@@ -49,10 +57,12 @@ def test_openrouter_models_replaced_with_live_catalog(monkeypatch):
     ]
     live = [("openai/gpt-5.4", "recommended"), ("moonshotai/kimi-k2.6", "")]
 
-    monkeypatch.setattr(model_switch, "list_authenticated_providers",
-                        lambda **kw: list(base))
-    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models",
-                        lambda *a, **kw: list(live))
+    monkeypatch.setattr(
+        model_switch, "list_authenticated_providers", lambda **kw: list(base)
+    )
+    monkeypatch.setattr(
+        "clawk_cli.models.fetch_openrouter_models", lambda *a, **kw: list(live)
+    )
 
     result = model_switch.list_picker_providers(max_models=50)
 
@@ -71,8 +81,9 @@ def test_openrouter_falls_back_to_base_models_on_fetch_failure(monkeypatch):
     def _raise(*_a, **_kw):
         raise RuntimeError("network down")
 
-    monkeypatch.setattr(model_switch, "list_authenticated_providers",
-                        lambda **kw: list(base))
+    monkeypatch.setattr(
+        model_switch, "list_authenticated_providers", lambda **kw: list(base)
+    )
     monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models", _raise)
 
     result = model_switch.list_picker_providers(max_models=50)
@@ -85,10 +96,10 @@ def test_openrouter_empty_live_catalog_drops_row(monkeypatch):
     """If the live catalog returns nothing for OpenRouter, drop the row."""
     base = [_make_provider("openrouter", models=["something/stale"])]
 
-    monkeypatch.setattr(model_switch, "list_authenticated_providers",
-                        lambda **kw: list(base))
-    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models",
-                        lambda *a, **kw: [])
+    monkeypatch.setattr(
+        model_switch, "list_authenticated_providers", lambda **kw: list(base)
+    )
+    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models", lambda *a, **kw: [])
 
     result = model_switch.list_picker_providers(max_models=50)
 
@@ -102,11 +113,14 @@ def test_non_openrouter_rows_passed_through_unchanged(monkeypatch):
         _make_provider("gemini", models=["gemini-3-flash-preview"]),
     ]
 
-    monkeypatch.setattr(model_switch, "list_authenticated_providers",
-                        lambda **kw: list(base))
+    monkeypatch.setattr(
+        model_switch, "list_authenticated_providers", lambda **kw: list(base)
+    )
     # fetch_openrouter_models must not be consulted when there's no openrouter row
-    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models",
-                        lambda *a, **kw: pytest.fail("should not be called"))
+    monkeypatch.setattr(
+        "clawk_cli.models.fetch_openrouter_models",
+        lambda *a, **kw: pytest.fail("should not be called"),
+    )
 
     result = model_switch.list_picker_providers(max_models=50)
 
@@ -128,11 +142,14 @@ def test_include_moa_adds_virtual_provider_with_named_presets(monkeypatch):
         }
     }
 
-    monkeypatch.setattr(model_switch, "list_authenticated_providers",
-                        lambda **kw: list(base))
+    monkeypatch.setattr(
+        model_switch, "list_authenticated_providers", lambda **kw: list(base)
+    )
     monkeypatch.setattr("clawk_cli.config.load_config", lambda: moa_config)
-    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models",
-                        lambda *a, **kw: pytest.fail("should not be called"))
+    monkeypatch.setattr(
+        "clawk_cli.models.fetch_openrouter_models",
+        lambda *a, **kw: pytest.fail("should not be called"),
+    )
 
     result = model_switch.list_picker_providers(
         current_provider="moa",
@@ -156,10 +173,13 @@ def test_empty_models_row_dropped(monkeypatch):
         _make_provider("openrouter", models=["anything"]),  # replaced by live
     ]
 
-    monkeypatch.setattr(model_switch, "list_authenticated_providers",
-                        lambda **kw: list(base))
-    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models",
-                        lambda *a, **kw: [("openai/gpt-5.4", "recommended")])
+    monkeypatch.setattr(
+        model_switch, "list_authenticated_providers", lambda **kw: list(base)
+    )
+    monkeypatch.setattr(
+        "clawk_cli.models.fetch_openrouter_models",
+        lambda *a, **kw: [("openai/gpt-5.4", "recommended")],
+    )
 
     result = model_switch.list_picker_providers(max_models=50)
 
@@ -173,15 +193,19 @@ def test_custom_endpoint_with_api_url_kept_when_models_empty(monkeypatch):
     the picker still shows the row so the user can enter one manually.
     """
     base = [
-        _make_provider("local-ollama", is_user_defined=True,
-                       api_url="http://localhost:11434/v1", models=[],
-                       source="user-config"),
+        _make_provider(
+            "local-ollama",
+            is_user_defined=True,
+            api_url="http://localhost:11434/v1",
+            models=[],
+            source="user-config",
+        ),
     ]
 
-    monkeypatch.setattr(model_switch, "list_authenticated_providers",
-                        lambda **kw: list(base))
-    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models",
-                        lambda *a, **kw: [])
+    monkeypatch.setattr(
+        model_switch, "list_authenticated_providers", lambda **kw: list(base)
+    )
+    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models", lambda *a, **kw: [])
 
     result = model_switch.list_picker_providers(max_models=50)
 
@@ -200,10 +224,10 @@ def test_user_defined_without_api_url_and_empty_models_dropped(monkeypatch):
         _make_provider("orphan", is_user_defined=True, api_url=None, models=[]),
     ]
 
-    monkeypatch.setattr(model_switch, "list_authenticated_providers",
-                        lambda **kw: list(base))
-    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models",
-                        lambda *a, **kw: [])
+    monkeypatch.setattr(
+        model_switch, "list_authenticated_providers", lambda **kw: list(base)
+    )
+    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models", lambda *a, **kw: [])
 
     result = model_switch.list_picker_providers(max_models=50)
 
@@ -215,10 +239,12 @@ def test_max_models_caps_openrouter_live_output(monkeypatch):
     live = [(f"vendor/model-{i}", "") for i in range(20)]
     base = [_make_provider("openrouter", models=["placeholder"])]
 
-    monkeypatch.setattr(model_switch, "list_authenticated_providers",
-                        lambda **kw: list(base))
-    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models",
-                        lambda *a, **kw: list(live))
+    monkeypatch.setattr(
+        model_switch, "list_authenticated_providers", lambda **kw: list(base)
+    )
+    monkeypatch.setattr(
+        "clawk_cli.models.fetch_openrouter_models", lambda *a, **kw: list(live)
+    )
 
     result = model_switch.list_picker_providers(max_models=5)
 
@@ -243,8 +269,7 @@ def test_passthrough_kwargs_to_base(monkeypatch):
         return []
 
     monkeypatch.setattr(model_switch, "list_authenticated_providers", _capture)
-    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models",
-                        lambda *a, **kw: [])
+    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models", lambda *a, **kw: [])
 
     model_switch.list_picker_providers(
         current_provider="openrouter",
@@ -268,8 +293,7 @@ def test_current_custom_endpoint_passthrough_marks_current_row(monkeypatch):
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", lambda: {})
     monkeypatch.setattr("agent.models_dev.PROVIDER_TO_MODELS_DEV", {})
     monkeypatch.setattr("clawk_cli.providers.CLAWK_OVERLAYS", {})
-    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models",
-                        lambda *a, **kw: [])
+    monkeypatch.setattr("clawk_cli.models.fetch_openrouter_models", lambda *a, **kw: [])
 
     result = model_switch.list_picker_providers(
         current_provider="custom:ollama",
@@ -334,7 +358,8 @@ def _stub_kimi_discovery(monkeypatch, *, canonical):
     }
     monkeypatch.setattr(md, "PROVIDER_TO_MODELS_DEV", kimi_map)
     monkeypatch.setattr(
-        md, "fetch_models_dev",
+        md,
+        "fetch_models_dev",
         lambda *a, **k: {
             "kimi-for-coding": {"name": "Kimi For Coding", "env": ["KIMI_API_KEY"]},
         },
@@ -346,8 +371,9 @@ def _stub_kimi_discovery(monkeypatch, *, canonical):
     monkeypatch.setattr(md, "get_provider_info", lambda _pid: _PInfo())
     monkeypatch.setattr("clawk_cli.providers.CLAWK_OVERLAYS", {})
     monkeypatch.setattr(hm, "CANONICAL_PROVIDERS", canonical)
-    monkeypatch.setattr(hm, "cached_provider_model_ids",
-                        lambda *a, **k: ["kimi-k2.6", "kimi-k2.5"])
+    monkeypatch.setattr(
+        hm, "cached_provider_model_ids", lambda *a, **k: ["kimi-k2.6", "kimi-k2.5"]
+    )
     monkeypatch.setattr(hm, "clear_provider_models_cache", lambda *a, **k: None)
 
 
@@ -395,7 +421,7 @@ def test_distinct_kimi_china_credential_still_listed(monkeypatch):
     rows = model_switch.list_authenticated_providers(max_models=10)
     slugs = [r["slug"] for r in rows]
 
-    assert "kimi-coding" in slugs       # canonical global row
+    assert "kimi-coding" in slugs  # canonical global row
     assert slugs.count("kimi-coding") == 1
-    assert "kimi" not in slugs          # alias collapsed into the canonical row
-    assert "kimi-coding-cn" in slugs    # distinct China endpoint preserved
+    assert "kimi" not in slugs  # alias collapsed into the canonical row
+    assert "kimi-coding-cn" in slugs  # distinct China endpoint preserved

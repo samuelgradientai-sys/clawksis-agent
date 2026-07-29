@@ -5,6 +5,7 @@ clawk_cli.config.load_config, so the managed overlay has to be wired into each.
 This is the regression guard for the whole bug class (a managed display.skin was
 silently ignored by the TUI; the same gap existed in the gateway and cron).
 """
+
 import textwrap
 
 import pytest
@@ -40,7 +41,12 @@ def _seed(home, managed, *, user, mgd):
 
 def test_gateway_run_loader_honors_managed(homes, monkeypatch):
     home, managed = homes
-    _seed(home, managed, user="model:\n  default: user/m\n", mgd="model:\n  default: org/m\n")
+    _seed(
+        home,
+        managed,
+        user="model:\n  default: user/m\n",
+        mgd="model:\n  default: org/m\n",
+    )
     import gateway.run as gr
 
     monkeypatch.setattr(gr, "_clawk_home", home, raising=False)
@@ -66,7 +72,12 @@ def test_gateway_config_loader_honors_managed(homes, monkeypatch):
 
 def test_tui_loader_honors_managed(homes, monkeypatch):
     home, managed = homes
-    _seed(home, managed, user="display:\n  skin: user\n", mgd="display:\n  skin: charizard\n")
+    _seed(
+        home,
+        managed,
+        user="display:\n  skin: user\n",
+        mgd="display:\n  skin: charizard\n",
+    )
     import tui_gateway.server as ts
 
     monkeypatch.setattr(ts, "_clawk_home", home, raising=False)
@@ -80,7 +91,12 @@ def test_tui_loader_honors_managed(homes, monkeypatch):
 def test_tui_loader_does_not_persist_managed_back(homes, monkeypatch):
     """The TUI caches RAW config so _save_cfg never writes managed values to disk."""
     home, managed = homes
-    _seed(home, managed, user="display:\n  skin: user\n", mgd="display:\n  skin: charizard\n")
+    _seed(
+        home,
+        managed,
+        user="display:\n  skin: user\n",
+        mgd="display:\n  skin: charizard\n",
+    )
     import tui_gateway.server as ts
 
     monkeypatch.setattr(ts, "_clawk_home", home, raising=False)
@@ -95,7 +111,12 @@ def test_tui_loader_does_not_persist_managed_back(homes, monkeypatch):
 
 def test_logging_config_honors_managed(homes, monkeypatch):
     home, managed = homes
-    _seed(home, managed, user="logging:\n  level: INFO\n", mgd="logging:\n  level: DEBUG\n")
+    _seed(
+        home,
+        managed,
+        user="logging:\n  level: INFO\n",
+        mgd="logging:\n  level: DEBUG\n",
+    )
     import clawk_logging
 
     level, _max, _bk = clawk_logging._read_logging_config()
@@ -107,7 +128,9 @@ def test_timezone_honors_managed(homes, monkeypatch):
     # clawk_time checks an env override first; ensure it's unset so config wins.
     monkeypatch.delenv("CLAWK_TIMEZONE", raising=False)
     monkeypatch.delenv("TZ", raising=False)
-    _seed(home, managed, user="timezone: America/New_York\n", mgd="timezone: Asia/Tokyo\n")
+    _seed(
+        home, managed, user="timezone: America/New_York\n", mgd="timezone: Asia/Tokyo\n"
+    )
     import clawk_time
 
     assert clawk_time._resolve_timezone_name() == "Asia/Tokyo"
@@ -129,7 +152,9 @@ def test_gateway_env_bridge_honors_managed(homes, monkeypatch):
     here proves the env var gets the managed value.
     """
     home, managed = homes
-    _seed(home, managed, user="timezone: America/New_York\n", mgd="timezone: Asia/Tokyo\n")
+    _seed(
+        home, managed, user="timezone: America/New_York\n", mgd="timezone: Asia/Tokyo\n"
+    )
     from clawk_cli import managed_scope
 
     managed_scope.invalidate_managed_cache()

@@ -15,8 +15,14 @@ import types
 import pytest
 
 
-def _install_fake_google_auth(monkeypatch, *, adc_ok=True, adc_project="adc-project",
-                              sa_project="sa-project", token="ya29.FAKE"):
+def _install_fake_google_auth(
+    monkeypatch,
+    *,
+    adc_ok=True,
+    adc_project="adc-project",
+    sa_project="sa-project",
+    token="ya29.FAKE",
+):
     """Register a fake google-auth tree in sys.modules and return the module set."""
     ga = types.ModuleType("google.auth")
     gt = types.ModuleType("google.auth.transport")
@@ -58,8 +64,11 @@ def _install_fake_google_auth(monkeypatch, *, adc_ok=True, adc_project="adc-proj
     gp.oauth2 = go
 
     for name, mod in [
-        ("google", gp), ("google.auth", ga), ("google.auth.transport", gt),
-        ("google.auth.transport.requests", gtr), ("google.oauth2", go),
+        ("google", gp),
+        ("google.auth", ga),
+        ("google.auth.transport", gt),
+        ("google.auth.transport.requests", gtr),
+        ("google.oauth2", go),
         ("google.oauth2.service_account", gsa),
     ]:
         monkeypatch.setitem(sys.modules, name, mod)
@@ -69,11 +78,17 @@ def _install_fake_google_auth(monkeypatch, *, adc_ok=True, adc_project="adc-proj
 @pytest.fixture
 def vertex_adapter(monkeypatch):
     """Fresh vertex_adapter with a fake google-auth and clean caches/env."""
-    for var in ("VERTEX_CREDENTIALS_PATH", "GOOGLE_APPLICATION_CREDENTIALS",
-                "VERTEX_PROJECT_ID", "VERTEX_REGION", "GOOGLE_CLOUD_PROJECT"):
+    for var in (
+        "VERTEX_CREDENTIALS_PATH",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "VERTEX_PROJECT_ID",
+        "VERTEX_REGION",
+        "GOOGLE_CLOUD_PROJECT",
+    ):
         monkeypatch.delenv(var, raising=False)
     _install_fake_google_auth(monkeypatch)
     import agent.vertex_adapter as va
+
     va = importlib.reload(va)
     va._creds_cache.clear()
     # Neutralize config.yaml by default; individual tests re-patch _vertex_config.
@@ -108,7 +123,8 @@ def test_get_vertex_config_uses_adc_and_default_region(vertex_adapter):
 
 def test_config_yaml_supplies_project_and_region(vertex_adapter, monkeypatch):
     monkeypatch.setattr(
-        vertex_adapter, "_vertex_config",
+        vertex_adapter,
+        "_vertex_config",
         lambda: {"project_id": "cfg-project", "region": "europe-west4"},
     )
     token, base = vertex_adapter.get_vertex_config()
@@ -120,7 +136,8 @@ def test_config_yaml_supplies_project_and_region(vertex_adapter, monkeypatch):
 
 def test_env_overrides_config_yaml(vertex_adapter, monkeypatch):
     monkeypatch.setattr(
-        vertex_adapter, "_vertex_config",
+        vertex_adapter,
+        "_vertex_config",
         lambda: {"project_id": "cfg-project", "region": "cfg-region"},
     )
     monkeypatch.setenv("VERTEX_PROJECT_ID", "env-project")
@@ -139,10 +156,15 @@ def test_has_vertex_credentials_false_when_nothing_set(vertex_adapter):
 
 
 def test_missing_google_auth_returns_none(monkeypatch):
-    for var in ("VERTEX_CREDENTIALS_PATH", "GOOGLE_APPLICATION_CREDENTIALS",
-                "VERTEX_PROJECT_ID", "VERTEX_REGION"):
+    for var in (
+        "VERTEX_CREDENTIALS_PATH",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "VERTEX_PROJECT_ID",
+        "VERTEX_REGION",
+    ):
         monkeypatch.delenv(var, raising=False)
     import agent.vertex_adapter as va
+
     va = importlib.reload(va)
     monkeypatch.setattr(va, "google", None)
     va._creds_cache.clear()
@@ -222,6 +244,7 @@ def test_adc_failure_falls_back_to_service_account(monkeypatch, tmp_path):
     monkeypatch.delenv("VERTEX_CREDENTIALS_PATH", raising=False)
     _install_fake_google_auth(monkeypatch, adc_ok=False)
     import agent.vertex_adapter as va
+
     va = importlib.reload(va)
     va._creds_cache.clear()
     monkeypatch.setattr(va, "_vertex_config", lambda: {})

@@ -155,7 +155,9 @@ def test_empty_first_pass_retries_with_rewritten_query():
 
     provider._run_dialectic_depth("What should we deploy?")
 
-    prompts = [call.args[1] for call in provider._manager.dialectic_query.call_args_list]
+    prompts = [
+        call.args[1] for call in provider._manager.dialectic_query.call_args_list
+    ]
     assert prompts == [rewritten, rewritten]
 
 

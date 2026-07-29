@@ -29,6 +29,7 @@ def _reload_resolver():
     # _enter_buffered_busy) — same flake class as PR #34217. Name kept for
     # the existing call sites.
     import tui_gateway.server as _srv
+
     return _srv
 
 

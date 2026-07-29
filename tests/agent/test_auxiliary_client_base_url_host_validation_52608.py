@@ -7,6 +7,7 @@ non-Anthropic provider's endpoint while keeping `provider: anthropic` would
 otherwise have every side-channel call (memory extractors, reflection,
 vision, title generation) 401 from the foreign host.
 """
+
 from unittest.mock import MagicMock, patch
 
 
@@ -21,18 +22,23 @@ def _extract_base_url_passed_to_build(mock_build):
 class TestTryAnthropicBaseUrlHostValidation:
     """Issue #52608: side-channel calls must not be sent to a non-Anthropic host."""
 
-    def test_openrouter_base_url_does_not_leak_into_auxiliary(self, tmp_path, monkeypatch):
+    def test_openrouter_base_url_does_not_leak_into_auxiliary(
+        self, tmp_path, monkeypatch
+    ):
         """cfg.model.base_url=https://openrouter.ai/api/v1 must NOT override aux base_url."""
         import yaml
         from agent.auxiliary_client import _try_anthropic
+
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-            "model": {
-                "provider": "anthropic",
-                "model": "claude-haiku-4-5-20251001",
-                "base_url": "https://openrouter.ai/api/v1",
-            }
-        }))
+        (tmp_path / "config.yaml").write_text(
+            yaml.safe_dump({
+                "model": {
+                    "provider": "anthropic",
+                    "model": "claude-haiku-4-5-20251001",
+                    "base_url": "https://openrouter.ai/api/v1",
+                }
+            })
+        )
 
         with (
             patch(
@@ -42,9 +48,7 @@ class TestTryAnthropicBaseUrlHostValidation:
                 "agent.anthropic_adapter.resolve_anthropic_token",
                 return_value="***",
             ),
-            patch(
-                "agent.anthropic_adapter.build_anthropic_client"
-            ) as mock_build,
+            patch("agent.anthropic_adapter.build_anthropic_client") as mock_build,
         ):
             mock_build.return_value = MagicMock()
             client, _model = _try_anthropic()
@@ -60,14 +64,17 @@ class TestTryAnthropicBaseUrlHostValidation:
         """The common case (operator sets model.base_url to api.anthropic.com) must still apply."""
         import yaml
         from agent.auxiliary_client import _try_anthropic
+
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-            "model": {
-                "provider": "anthropic",
-                "model": "claude-haiku-4-5-20251001",
-                "base_url": "https://api.anthropic.com",
-            }
-        }))
+        (tmp_path / "config.yaml").write_text(
+            yaml.safe_dump({
+                "model": {
+                    "provider": "anthropic",
+                    "model": "claude-haiku-4-5-20251001",
+                    "base_url": "https://api.anthropic.com",
+                }
+            })
+        )
 
         with (
             patch(
@@ -77,9 +84,7 @@ class TestTryAnthropicBaseUrlHostValidation:
                 "agent.anthropic_adapter.resolve_anthropic_token",
                 return_value="***",
             ),
-            patch(
-                "agent.anthropic_adapter.build_anthropic_client"
-            ) as mock_build,
+            patch("agent.anthropic_adapter.build_anthropic_client") as mock_build,
         ):
             mock_build.return_value = MagicMock()
             client, _model = _try_anthropic()
@@ -92,14 +97,17 @@ class TestTryAnthropicBaseUrlHostValidation:
         """Generic non-Anthropic host must not be applied as auxiliary base_url."""
         import yaml
         from agent.auxiliary_client import _try_anthropic
+
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-            "model": {
-                "provider": "anthropic",
-                "model": "claude-haiku-4-5-20251001",
-                "base_url": "https://api.openai.com/v1",
-            }
-        }))
+        (tmp_path / "config.yaml").write_text(
+            yaml.safe_dump({
+                "model": {
+                    "provider": "anthropic",
+                    "model": "claude-haiku-4-5-20251001",
+                    "base_url": "https://api.openai.com/v1",
+                }
+            })
+        )
 
         with (
             patch(
@@ -109,9 +117,7 @@ class TestTryAnthropicBaseUrlHostValidation:
                 "agent.anthropic_adapter.resolve_anthropic_token",
                 return_value="***",
             ),
-            patch(
-                "agent.anthropic_adapter.build_anthropic_client"
-            ) as mock_build,
+            patch("agent.anthropic_adapter.build_anthropic_client") as mock_build,
         ):
             mock_build.return_value = MagicMock()
             client, _model = _try_anthropic()
@@ -126,14 +132,17 @@ class TestTryAnthropicBaseUrlHostValidation:
         """Empty model.base_url must not crash and must fall back to default."""
         import yaml
         from agent.auxiliary_client import _try_anthropic
+
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-            "model": {
-                "provider": "anthropic",
-                "model": "claude-haiku-4-5-20251001",
-                "base_url": "",
-            }
-        }))
+        (tmp_path / "config.yaml").write_text(
+            yaml.safe_dump({
+                "model": {
+                    "provider": "anthropic",
+                    "model": "claude-haiku-4-5-20251001",
+                    "base_url": "",
+                }
+            })
+        )
 
         with (
             patch(
@@ -143,9 +152,7 @@ class TestTryAnthropicBaseUrlHostValidation:
                 "agent.anthropic_adapter.resolve_anthropic_token",
                 return_value="***",
             ),
-            patch(
-                "agent.anthropic_adapter.build_anthropic_client"
-            ) as mock_build,
+            patch("agent.anthropic_adapter.build_anthropic_client") as mock_build,
         ):
             mock_build.return_value = MagicMock()
             client, _model = _try_anthropic()
@@ -158,14 +165,17 @@ class TestTryAnthropicBaseUrlHostValidation:
         """api.anthropic.com with a path suffix must still pass the host check."""
         import yaml
         from agent.auxiliary_client import _try_anthropic
+
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-            "model": {
-                "provider": "anthropic",
-                "model": "claude-haiku-4-5-20251001",
-                "base_url": "https://api.anthropic.com/v1/messages",
-            }
-        }))
+        (tmp_path / "config.yaml").write_text(
+            yaml.safe_dump({
+                "model": {
+                    "provider": "anthropic",
+                    "model": "claude-haiku-4-5-20251001",
+                    "base_url": "https://api.anthropic.com/v1/messages",
+                }
+            })
+        )
 
         with (
             patch(
@@ -175,9 +185,7 @@ class TestTryAnthropicBaseUrlHostValidation:
                 "agent.anthropic_adapter.resolve_anthropic_token",
                 return_value="***",
             ),
-            patch(
-                "agent.anthropic_adapter.build_anthropic_client"
-            ) as mock_build,
+            patch("agent.anthropic_adapter.build_anthropic_client") as mock_build,
         ):
             mock_build.return_value = MagicMock()
             client, _model = _try_anthropic()

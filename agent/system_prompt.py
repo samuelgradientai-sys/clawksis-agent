@@ -424,7 +424,9 @@ def build_system_prompt_parts(
     if active_profile == "default":
         stable_parts.append(
             "Active Clawksis profile: default. Other profiles (if any) live "
-            "under " + str(get_clawk_home()) + "/profiles/<name>/. Each profile has its own "
+            "under "
+            + str(get_clawk_home())
+            + "/profiles/<name>/. Each profile has its own "
             "skills/, plugins/, cron/, and memories/ that affect a different "
             "session than this one. Do not modify another profile's "
             "skills/plugins/cron/memories unless the user explicitly directs "
@@ -469,12 +471,13 @@ def build_system_prompt_parts(
             from clawk_cli.config import load_config_readonly
 
             _cfg = load_config_readonly()
-            _tg_extra = (
-                ((_cfg.get("platforms") or {}).get("telegram") or {}).get("extra")
-                or {}
-            )
+            _tg_extra = ((_cfg.get("platforms") or {}).get("telegram") or {}).get(
+                "extra"
+            ) or {}
             if _tg_extra.get("rich_messages"):
-                _default_hint = _default_hint.rstrip() + " " + TELEGRAM_RICH_MESSAGES_HINT
+                _default_hint = (
+                    _default_hint.rstrip() + " " + TELEGRAM_RICH_MESSAGES_HINT
+                )
         except Exception:
             pass  # Config read failure — fall back to base hint only
 

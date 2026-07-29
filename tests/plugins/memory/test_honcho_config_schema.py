@@ -66,7 +66,12 @@ def test_selects_constrain_their_values():
     assert environment.allowed_values() == {"production", "local"}
 
     strategy = next(f for f in provider.fields if f.key == "sessionStrategy")
-    assert strategy.allowed_values() == {"per-directory", "per-repo", "per-session", "global"}
+    assert strategy.allowed_values() == {
+        "per-directory",
+        "per-repo",
+        "per-session",
+        "global",
+    }
 
 
 def test_api_key_is_a_secret_bound_to_env():

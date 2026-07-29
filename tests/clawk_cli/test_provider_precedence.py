@@ -6,6 +6,7 @@ over a stale logged-in OAuth `active_provider` in auth.json. Before the fix,
 explicit choice — e.g. a user OAuth-logged-into Anthropic but with
 OPENAI_API_KEY exported (or model.provider set) got routed to Anthropic.
 """
+
 import pytest
 
 from clawk_cli.auth import resolve_provider, AuthError
@@ -13,10 +14,12 @@ from clawk_cli.auth import resolve_provider, AuthError
 
 def _login(monkeypatch, provider_id):
     """Simulate a logged-in OAuth active_provider in auth.json."""
-    monkeypatch.setattr("clawk_cli.auth._load_auth_store",
-                        lambda: {"active_provider": provider_id})
-    monkeypatch.setattr("clawk_cli.auth.get_auth_status",
-                        lambda p: {"logged_in": p == provider_id})
+    monkeypatch.setattr(
+        "clawk_cli.auth._load_auth_store", lambda: {"active_provider": provider_id}
+    )
+    monkeypatch.setattr(
+        "clawk_cli.auth.get_auth_status", lambda p: {"logged_in": p == provider_id}
+    )
 
 
 def _config(monkeypatch, model_cfg):
@@ -29,8 +32,15 @@ def _no_aws(monkeypatch):
 
 
 def _clear_provider_env(monkeypatch):
-    for var in ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "GLM_API_KEY", "ZAI_API_KEY",
-                "KIMI_API_KEY", "MINIMAX_API_KEY", "CLAWK_INFERENCE_PROVIDER"):
+    for var in (
+        "OPENAI_API_KEY",
+        "OPENROUTER_API_KEY",
+        "GLM_API_KEY",
+        "ZAI_API_KEY",
+        "KIMI_API_KEY",
+        "MINIMAX_API_KEY",
+        "CLAWK_INFERENCE_PROVIDER",
+    ):
         monkeypatch.delenv(var, raising=False)
 
 
@@ -39,7 +49,7 @@ class TestProviderPrecedence:
         """config.yaml model.provider wins over a logged-in OAuth active_provider."""
         _clear_provider_env(monkeypatch)
         _no_aws(monkeypatch)
-        _login(monkeypatch, "anthropic")           # stale OAuth login
+        _login(monkeypatch, "anthropic")  # stale OAuth login
         _config(monkeypatch, {"provider": "zai", "default": "glm-4.6"})
         assert resolve_provider("auto") == "zai"
 
@@ -80,6 +90,7 @@ class TestProviderPrecedence:
         """A populated model dict lacking `provider` that falls through to OAuth
         emits a WARN so the silent override is visible (#29285)."""
         import logging
+
         _clear_provider_env(monkeypatch)
         _no_aws(monkeypatch)
         _login(monkeypatch, "anthropic")
@@ -92,9 +103,10 @@ class TestProviderPrecedence:
         """When an exported API key preempts a logged-in OAuth provider, a WARN
         makes the silent routing switch visible (#29285)."""
         import logging
+
         _clear_provider_env(monkeypatch)
         _no_aws(monkeypatch)
-        _login(monkeypatch, "anthropic")           # OAuth into anthropic
+        _login(monkeypatch, "anthropic")  # OAuth into anthropic
         _config(monkeypatch, {})
         monkeypatch.setenv("GLM_API_KEY", "test-glm-key")  # unrelated key present
         with caplog.at_level(logging.WARNING, logger="clawk_cli.auth"):

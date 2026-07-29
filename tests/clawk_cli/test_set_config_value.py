@@ -31,24 +31,28 @@ def _read_config(tmp_path):
 # Explicit allowlist keys → .env
 # ---------------------------------------------------------------------------
 
+
 class TestExplicitAllowlist:
     """Keys in the hardcoded allowlist should always go to .env."""
 
-    @pytest.mark.parametrize("key", [
-        "OPENROUTER_API_KEY",
-        "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "HONCHO_API_KEY",
-        "FIRECRAWL_API_KEY",
-        "BROWSERBASE_API_KEY",
-        "FAL_KEY",
-        "SUDO_PASSWORD",
-        "GITHUB_TOKEN",
-        "TELEGRAM_BOT_TOKEN",
-        "DISCORD_BOT_TOKEN",
-        "SLACK_BOT_TOKEN",
-        "SLACK_APP_TOKEN",
-    ])
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "OPENROUTER_API_KEY",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "HONCHO_API_KEY",
+            "FIRECRAWL_API_KEY",
+            "BROWSERBASE_API_KEY",
+            "FAL_KEY",
+            "SUDO_PASSWORD",
+            "GITHUB_TOKEN",
+            "TELEGRAM_BOT_TOKEN",
+            "DISCORD_BOT_TOKEN",
+            "SLACK_BOT_TOKEN",
+            "SLACK_APP_TOKEN",
+        ],
+    )
     def test_explicit_key_routes_to_env(self, key, _isolated_clawk_home):
         set_config_value(key, "test-value-123")
         env_content = _read_env(_isolated_clawk_home)
@@ -61,16 +65,20 @@ class TestExplicitAllowlist:
 # Catch-all patterns → .env
 # ---------------------------------------------------------------------------
 
+
 class TestCatchAllPatterns:
     """Any key ending in _API_KEY or _TOKEN should route to .env."""
 
-    @pytest.mark.parametrize("key", [
-        "DAYTONA_API_KEY",
-        "ELEVENLABS_API_KEY",
-        "SOME_FUTURE_SERVICE_API_KEY",
-        "MY_CUSTOM_TOKEN",
-        "WHATSAPP_BOT_TOKEN",
-    ])
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "DAYTONA_API_KEY",
+            "ELEVENLABS_API_KEY",
+            "SOME_FUTURE_SERVICE_API_KEY",
+            "MY_CUSTOM_TOKEN",
+            "WHATSAPP_BOT_TOKEN",
+        ],
+    )
     def test_api_key_suffix_routes_to_env(self, key, _isolated_clawk_home):
         set_config_value(key, "secret-456")
         env_content = _read_env(_isolated_clawk_home)
@@ -93,6 +101,7 @@ class TestCatchAllPatterns:
 # Non-secret keys → config.yaml
 # ---------------------------------------------------------------------------
 
+
 class TestConfigYamlRouting:
     """Regular config keys should go to config.yaml, NOT .env."""
 
@@ -114,11 +123,16 @@ class TestConfigYamlRouting:
         config = _read_config(_isolated_clawk_home)
         assert "python:3.12" in config
 
-    def test_terminal_docker_cwd_mount_flag_goes_to_config_and_env(self, _isolated_clawk_home):
+    def test_terminal_docker_cwd_mount_flag_goes_to_config_and_env(
+        self, _isolated_clawk_home
+    ):
         set_config_value("terminal.docker_mount_cwd_to_workspace", "true")
         config = _read_config(_isolated_clawk_home)
         env_content = _read_env(_isolated_clawk_home)
-        assert "docker_mount_cwd_to_workspace: 'true'" in config or "docker_mount_cwd_to_workspace: true" in config
+        assert (
+            "docker_mount_cwd_to_workspace: 'true'" in config
+            or "docker_mount_cwd_to_workspace: true" in config
+        )
         assert (
             "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE=true" in env_content
             or "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE=True" in env_content
@@ -128,6 +142,7 @@ class TestConfigYamlRouting:
 # ---------------------------------------------------------------------------
 # Empty / falsy values — regression tests for #4277
 # ---------------------------------------------------------------------------
+
 
 class TestFalsyValues:
     """config set should accept empty strings and falsy values like '0'."""
@@ -142,7 +157,7 @@ class TestFalsyValues:
         """Blanking a config key should write an empty string to config.yaml."""
         set_config_value("model", "")
         config = _read_config(_isolated_clawk_home)
-        assert "model: ''" in config or "model: \"\"" in config
+        assert "model: ''" in config or 'model: ""' in config
 
     def test_zero_routes_to_config(self, _isolated_clawk_home):
         """Setting a config key to '0' should write 0 to config.yaml."""
@@ -169,11 +184,15 @@ class TestFalsyValues:
 class TestConfigGetUnset:
     """config get/unset should mirror config set for scriptable workflows."""
 
-    def test_config_get_prints_resolved_nested_value(self, _isolated_clawk_home, capsys):
+    def test_config_get_prints_resolved_nested_value(
+        self, _isolated_clawk_home, capsys
+    ):
         set_config_value("terminal.timeout", "120")
         capsys.readouterr()
 
-        args = argparse.Namespace(config_command="get", key="terminal.timeout", json=False)
+        args = argparse.Namespace(
+            config_command="get", key="terminal.timeout", json=False
+        )
         config_command(args)
 
         assert capsys.readouterr().out.strip() == "120"
@@ -186,16 +205,21 @@ class TestConfigGetUnset:
         config_command(args)
 
         import json
+
         assert json.loads(capsys.readouterr().out)["backend"] == "docker"
 
     def test_config_get_prints_null_for_resolved_null_value(self, capsys):
-        args = argparse.Namespace(config_command="get", key="cron.max_parallel_jobs", json=False)
+        args = argparse.Namespace(
+            config_command="get", key="cron.max_parallel_jobs", json=False
+        )
         config_command(args)
 
         assert capsys.readouterr().out.strip() == "null"
 
     def test_config_get_missing_env_key_exits(self, capsys):
-        args = argparse.Namespace(config_command="get", key="OPENROUTER_API_KEY", json=False)
+        args = argparse.Namespace(
+            config_command="get", key="OPENROUTER_API_KEY", json=False
+        )
 
         with pytest.raises(SystemExit) as exc:
             config_command(args)
@@ -205,10 +229,7 @@ class TestConfigGetUnset:
 
     def test_config_get_dotted_token_yaml_key(self, _isolated_clawk_home, capsys):
         (_isolated_clawk_home / "config.yaml").write_text(
-            "platforms:\n"
-            "  teams:\n"
-            "    extra:\n"
-            "      access_token: yaml-token\n"
+            "platforms:\n  teams:\n    extra:\n      access_token: yaml-token\n"
         )
 
         args = argparse.Namespace(
@@ -221,7 +242,9 @@ class TestConfigGetUnset:
         assert capsys.readouterr().out.strip() == "yaml-token"
 
     def test_config_get_missing_key_exits(self, capsys):
-        args = argparse.Namespace(config_command="get", key="not.a.real.key", json=False)
+        args = argparse.Namespace(
+            config_command="get", key="not.a.real.key", json=False
+        )
 
         with pytest.raises(SystemExit) as exc:
             config_command(args)
@@ -229,7 +252,9 @@ class TestConfigGetUnset:
         assert exc.value.code == 1
         assert "Config key not set: not.a.real.key" in capsys.readouterr().err
 
-    def test_config_unset_removes_yaml_key_and_synced_env(self, _isolated_clawk_home, capsys):
+    def test_config_unset_removes_yaml_key_and_synced_env(
+        self, _isolated_clawk_home, capsys
+    ):
         set_config_value("terminal.backend", "docker")
         assert "TERMINAL_ENV=docker" in _read_env(_isolated_clawk_home)
         capsys.readouterr()
@@ -238,6 +263,7 @@ class TestConfigGetUnset:
         config_command(args)
 
         import yaml
+
         reloaded = yaml.safe_load(_read_config(_isolated_clawk_home)) or {}
         assert reloaded == {}
         assert "TERMINAL_ENV=" not in _read_env(_isolated_clawk_home)
@@ -254,7 +280,9 @@ class TestConfigGetUnset:
         assert "OPENROUTER_API_KEY=" not in _read_env(_isolated_clawk_home)
         assert "Unset OPENROUTER_API_KEY" in capsys.readouterr().out
 
-    def test_config_unset_removes_dotted_token_yaml_key(self, _isolated_clawk_home, capsys):
+    def test_config_unset_removes_dotted_token_yaml_key(
+        self, _isolated_clawk_home, capsys
+    ):
         (_isolated_clawk_home / "config.yaml").write_text(
             "platforms:\n"
             "  teams:\n"
@@ -263,10 +291,13 @@ class TestConfigGetUnset:
             "      tenant_id: tenant\n"
         )
 
-        args = argparse.Namespace(config_command="unset", key="platforms.teams.extra.access_token")
+        args = argparse.Namespace(
+            config_command="unset", key="platforms.teams.extra.access_token"
+        )
         config_command(args)
 
         import yaml
+
         reloaded = yaml.safe_load(_read_config(_isolated_clawk_home))
         assert "access_token" not in reloaded["platforms"]["teams"]["extra"]
         assert reloaded["platforms"]["teams"]["extra"]["tenant_id"] == "tenant"
@@ -286,6 +317,7 @@ class TestConfigGetUnset:
 # List navigation — regression tests for #17876
 # ---------------------------------------------------------------------------
 
+
 class TestListNavigation:
     """clawk config set must preserve YAML list fields when using numeric
     indices.  Before #17876, _set_nested would silently replace the entire
@@ -297,19 +329,23 @@ class TestListNavigation:
 
     def test_indexed_set_preserves_sibling_list_entries(self, _isolated_clawk_home):
         """Setting custom_providers.0.api_key must not destroy entry 1."""
-        self._write_config(_isolated_clawk_home, (
-            "custom_providers:\n"
-            "- name: provider-a\n"
-            "  api_key: old-a\n"
-            "  base_url: https://a.example.com\n"
-            "- name: provider-b\n"
-            "  api_key: old-b\n"
-            "  base_url: https://b.example.com\n"
-        ))
+        self._write_config(
+            _isolated_clawk_home,
+            (
+                "custom_providers:\n"
+                "- name: provider-a\n"
+                "  api_key: old-a\n"
+                "  base_url: https://a.example.com\n"
+                "- name: provider-b\n"
+                "  api_key: old-b\n"
+                "  base_url: https://b.example.com\n"
+            ),
+        )
 
         set_config_value("custom_providers.0.api_key", "new-a")
 
         import yaml
+
         reloaded = yaml.safe_load(_read_config(_isolated_clawk_home))
         # The list must still be a list
         assert isinstance(reloaded["custom_providers"], list)
@@ -325,19 +361,23 @@ class TestListNavigation:
 
     def test_indexed_set_preserves_non_targeted_fields(self, _isolated_clawk_home):
         """Setting one field in a list entry must not drop other fields."""
-        self._write_config(_isolated_clawk_home, (
-            "custom_providers:\n"
-            "- name: provider-a\n"
-            "  api_key: old\n"
-            "  base_url: https://a.example.com\n"
-            "  models:\n"
-            "    foo: {}\n"
-            "    bar: {}\n"
-        ))
+        self._write_config(
+            _isolated_clawk_home,
+            (
+                "custom_providers:\n"
+                "- name: provider-a\n"
+                "  api_key: old\n"
+                "  base_url: https://a.example.com\n"
+                "  models:\n"
+                "    foo: {}\n"
+                "    bar: {}\n"
+            ),
+        )
 
         set_config_value("custom_providers.0.api_key", "rotated")
 
         import yaml
+
         reloaded = yaml.safe_load(_read_config(_isolated_clawk_home))
         entry = reloaded["custom_providers"][0]
         assert entry["api_key"] == "rotated"
@@ -347,14 +387,17 @@ class TestListNavigation:
 
     def test_deeper_nesting_through_list(self, _isolated_clawk_home):
         """Navigation path mixing dict → list → dict → scalar."""
-        self._write_config(_isolated_clawk_home, (
-            "telegram:\n"
-            "  allowlist:\n"
-            "    - name: alice\n"
-            "      role: admin\n"
-            "    - name: bob\n"
-            "      role: user\n"
-        ))
+        self._write_config(
+            _isolated_clawk_home,
+            (
+                "telegram:\n"
+                "  allowlist:\n"
+                "    - name: alice\n"
+                "      role: admin\n"
+                "    - name: bob\n"
+                "      role: user\n"
+            ),
+        )
 
         # NOTE: original test path was ``platforms.telegram.allowlist.1.role``,
         # which #34067 schema validation correctly rejects (platform configs
@@ -363,6 +406,7 @@ class TestListNavigation:
         set_config_value("telegram.allowlist.1.role", "admin")
 
         import yaml
+
         reloaded = yaml.safe_load(_read_config(_isolated_clawk_home))
         allowlist = reloaded["telegram"]["allowlist"]
         assert isinstance(allowlist, list)
@@ -374,6 +418,7 @@ class TestListNavigation:
 # String-typed config values — regression tests for #47515
 # ---------------------------------------------------------------------------
 
+
 class TestStringTypedConfigValues:
     @pytest.mark.parametrize("value", ["off", "on", "yes", "no", "true", "false", "01"])
     def test_string_typed_values_are_not_coerced(self, _isolated_clawk_home, value):
@@ -381,20 +426,25 @@ class TestStringTypedConfigValues:
         set_config_value("approvals.mode", value)
 
         import yaml
+
         saved = yaml.safe_load(_read_config(_isolated_clawk_home))
         assert saved["approvals"]["mode"] == value
         assert isinstance(saved["approvals"]["mode"], str)
 
-    @pytest.mark.parametrize("key, value, expected", [
-        ("terminal.persistent_shell", "off", False),
-        ("approvals.timeout", "30", 30),
-    ])
+    @pytest.mark.parametrize(
+        "key, value, expected",
+        [
+            ("terminal.persistent_shell", "off", False),
+            ("approvals.timeout", "30", 30),
+        ],
+    )
     def test_non_string_defaults_keep_existing_coercion(
         self, _isolated_clawk_home, key, value, expected
     ):
         set_config_value(key, value)
 
         import yaml
+
         saved = yaml.safe_load(_read_config(_isolated_clawk_home))
         node = saved
         for part in key.split("."):
@@ -408,6 +458,7 @@ class TestStringTypedConfigValues:
         set_config_value("custom.enabled", "off", force=True)
 
         import yaml
+
         saved = yaml.safe_load(_read_config(_isolated_clawk_home))
         assert saved["custom"]["enabled"] is False
 
@@ -416,11 +467,13 @@ class TestStringTypedConfigValues:
 # Secret redaction in display output (issue #50245)
 # ---------------------------------------------------------------------------
 
+
 class TestSecretRedactionInDisplay:
     """`config set`/`config show` must not echo credential values in plaintext."""
 
     def test_redact_config_value_masks_nested_api_key(self):
         from clawk_cli.config import redact_config_value
+
         secret = "cfut_SUPERSECRETTOKEN1234567890abcdef"
         model = {"default": "@cf/foo", "provider": "custom", "api_key": secret}
 
@@ -434,6 +487,7 @@ class TestSecretRedactionInDisplay:
 
     def test_redact_config_value_walks_lists(self):
         from clawk_cli.config import redact_config_value
+
         secret = "sk-deadbeefdeadbeefdeadbeef"
         cfg = {"custom_providers": [{"name": "p", "api_key": secret}]}
 
@@ -444,6 +498,7 @@ class TestSecretRedactionInDisplay:
 
     def test_redact_config_value_ignores_benign_keys(self):
         from clawk_cli.config import redact_config_value
+
         cfg = {"token_count": 1234, "secret_santa": "alice", "max_turns": 90}
 
         out = redact_config_value(cfg)
@@ -465,8 +520,10 @@ class TestSecretRedactionInDisplay:
         captured = capsys.readouterr()
         assert "Set model.reasoning_effort = high" in captured.out
 
+
 # #34067: Schema validation for unknown keys
 # ---------------------------------------------------------------------------
+
 
 class TestSchemaValidation:
     """#34067: ``clawk config set`` must not report bare success for
@@ -478,7 +535,9 @@ class TestSchemaValidation:
     ``discord.gateway_restart_notification``).
     """
 
-    def test_unknown_top_level_key_written_with_notice(self, _isolated_clawk_home, capsys):
+    def test_unknown_top_level_key_written_with_notice(
+        self, _isolated_clawk_home, capsys
+    ):
         """An unknown top-level key is saved AND a notice is printed."""
         set_config_value("totally_made_up_key", "value")
         out = capsys.readouterr().out
@@ -513,7 +572,9 @@ class TestSchemaValidation:
         assert "token: abc" in content
         assert "not a recognized config key" not in capsys.readouterr().out
 
-    def test_unknown_approvals_subkey_warns_but_writes(self, _isolated_clawk_home, capsys):
+    def test_unknown_approvals_subkey_warns_but_writes(
+        self, _isolated_clawk_home, capsys
+    ):
         """``approvals`` is a defined schema, so a typo'd sub-key gets the
         notice — but is still written."""
         set_config_value("approvals.notarealkey", "true")
@@ -525,6 +586,7 @@ class TestSchemaValidation:
         """Real ``approvals.*`` keys still validate silently."""
         set_config_value("approvals.mode", "off")
         import yaml
+
         saved = yaml.safe_load(_read_config(_isolated_clawk_home))
         assert saved["approvals"]["mode"] == "off"
         assert "not a recognized config key" not in capsys.readouterr().out
@@ -578,49 +640,65 @@ class TestSchemaValidation:
 class TestValidateConfigKey:
     """Unit tests for the validator itself."""
 
-    @pytest.mark.parametrize("key", [
-        "model",
-        "terminal.backend",
-        "agent.max_turns",
-        "discord.gateway_restart_notification",
-        "telegram.bot_token",
-        "mcp_servers.foo.command",
-        "providers.openrouter.api_key",
-        "gateway.strict",
-        "platforms.discord.enabled",
-        "gateway.platforms.my_platform.extra.token",
-        "approvals.mode",
-    ])
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "model",
+            "terminal.backend",
+            "agent.max_turns",
+            "discord.gateway_restart_notification",
+            "telegram.bot_token",
+            "mcp_servers.foo.command",
+            "providers.openrouter.api_key",
+            "gateway.strict",
+            "platforms.discord.enabled",
+            "gateway.platforms.my_platform.extra.token",
+            "approvals.mode",
+        ],
+    )
     def test_known_keys_pass(self, key):
         from clawk_cli.config import _validate_config_key
+
         is_known, _ = _validate_config_key(key)
         assert is_known, f"Expected {key!r} to validate as known"
 
-    @pytest.mark.parametrize("key,expected_in_suggestion", [
-        ("gateway.discord.gateway_restart_notification", None),  # no close suggestion
-        ("disco", "discord"),
-        ("agent.max_turn", "agent.max_turns"),
-    ])
+    @pytest.mark.parametrize(
+        "key,expected_in_suggestion",
+        [
+            (
+                "gateway.discord.gateway_restart_notification",
+                None,
+            ),  # no close suggestion
+            ("disco", "discord"),
+            ("agent.max_turn", "agent.max_turns"),
+        ],
+    )
     def test_unknown_keys_with_suggestion(self, key, expected_in_suggestion):
         from clawk_cli.config import _validate_config_key
+
         is_known, suggestion = _validate_config_key(key)
         assert not is_known, f"Expected {key!r} to validate as unknown"
         if expected_in_suggestion is not None:
-            assert suggestion is not None and expected_in_suggestion in suggestion, \
+            assert suggestion is not None and expected_in_suggestion in suggestion, (
                 f"Expected suggestion to contain {expected_in_suggestion!r}, got {suggestion!r}"
+            )
 
-    @pytest.mark.parametrize("key", [
-        "_test.shim_marker",
-        "_internal",
-        "_test.nested.deep.marker",
-        "_x",
-    ])
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "_test.shim_marker",
+            "_internal",
+            "_test.nested.deep.marker",
+            "_x",
+        ],
+    )
     def test_underscore_prefixed_keys_are_accepted(self, key):
         """Underscore-prefixed top-level keys are internal/test markers and
         bypass schema validation. The Docker privilege-drop shim test writes
         ``_test.shim_marker`` to probe config.yaml ownership; that must not
         be rejected. (Regression: #34250 schema validation broke this.)"""
         from clawk_cli.config import _validate_config_key
+
         is_known, _ = _validate_config_key(key)
         assert is_known, f"Expected underscore-prefixed {key!r} to be accepted"
 
@@ -628,5 +706,8 @@ class TestValidateConfigKey:
         """The underscore escape only applies to the FIRST segment. A real
         typo in a sub-key (e.g. agent._max_turns) is still caught."""
         from clawk_cli.config import _validate_config_key
+
         is_known, suggestion = _validate_config_key("agent._max_turns")
-        assert not is_known, "Sub-key typo under a known top-level key must still be flagged"
+        assert not is_known, (
+            "Sub-key typo under a known top-level key must still be flagged"
+        )

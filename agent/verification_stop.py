@@ -21,36 +21,32 @@ _MAX_CHANGED_PATHS_IN_NUDGE = 8
 # suppressed (this is fix "C" for the doc/markdown/skill false-positive — a
 # SKILL.md or README edit must never demand a /tmp verification script). A turn
 # that edits any non-listed path (a real source/code/config file) still nudges.
-_NON_CODE_VERIFY_EXTENSIONS = frozenset(
-    {
-        ".md",
-        ".markdown",
-        ".mdx",
-        ".rst",
-        ".txt",
-        ".text",
-        ".adoc",
-        ".asciidoc",
-        ".org",
-        ".log",
-        ".csv",
-        ".tsv",
-    }
-)
+_NON_CODE_VERIFY_EXTENSIONS = frozenset({
+    ".md",
+    ".markdown",
+    ".mdx",
+    ".rst",
+    ".txt",
+    ".text",
+    ".adoc",
+    ".asciidoc",
+    ".org",
+    ".log",
+    ".csv",
+    ".tsv",
+})
 
 # Filenames (case-insensitive, extension-less or otherwise) that are pure prose
 # even without a recognized doc extension.
-_NON_CODE_VERIFY_FILENAMES = frozenset(
-    {
-        "license",
-        "licence",
-        "notice",
-        "authors",
-        "contributors",
-        "changelog",
-        "codeowners",
-    }
-)
+_NON_CODE_VERIFY_FILENAMES = frozenset({
+    "license",
+    "licence",
+    "notice",
+    "authors",
+    "contributors",
+    "changelog",
+    "codeowners",
+})
 
 
 def _is_non_code_path(raw: str) -> bool:
@@ -83,21 +79,19 @@ def _filter_verifiable_paths(paths: Iterable[str]) -> list[str]:
 # local or programmatic surface. Default-deny by design: an unrecognized
 # identity is treated as messaging (OFF) so a new chat platform never leaks the
 # verification receipt before this set is updated.
-_NON_MESSAGING_SESSION_SURFACES = frozenset(
-    {
-        "",
-        "cli",
-        "codex",
-        "desktop",
-        "gateway",
-        "local",
-        "tui",
-        "tool",
-        "api_server",
-        "webhook",
-        "msgraph_webhook",
-    }
-)
+_NON_MESSAGING_SESSION_SURFACES = frozenset({
+    "",
+    "cli",
+    "codex",
+    "desktop",
+    "gateway",
+    "local",
+    "tui",
+    "tool",
+    "api_server",
+    "webhook",
+    "msgraph_webhook",
+})
 
 
 def _session_is_messaging_surface() -> bool:
@@ -115,9 +109,8 @@ def _session_is_messaging_surface() -> bool:
     try:
         from gateway.session_context import get_session_env
 
-        platform = (
-            os.getenv("CLAWK_PLATFORM")
-            or get_session_env("CLAWK_SESSION_PLATFORM", "")
+        platform = os.getenv("CLAWK_PLATFORM") or get_session_env(
+            "CLAWK_SESSION_PLATFORM", ""
         )
         source = get_session_env("CLAWK_SESSION_SOURCE", "")
     except Exception:
@@ -225,7 +218,9 @@ def _format_changed_paths(paths: list[str]) -> str:
 
 def _status_detail(status: dict[str, Any]) -> str:
     state = str(status.get("status") or "unverified")
-    evidence = status.get("evidence") if isinstance(status.get("evidence"), dict) else None
+    evidence = (
+        status.get("evidence") if isinstance(status.get("evidence"), dict) else None
+    )
     if not evidence:
         return state
 

@@ -17,7 +17,10 @@ class TestParseSessionListingArgs:
 
     def test_target_passthrough(self):
         assert parse_session_listing_args("My Cool Session") == (
-            False, False, "My Cool Session", None,
+            False,
+            False,
+            "My Cool Session",
+            None,
         )
 
     def test_search_query(self):
@@ -25,7 +28,10 @@ class TestParseSessionListingArgs:
 
     def test_find_alias_multiword(self):
         assert parse_session_listing_args("find winton email") == (
-            False, False, "", "winton email",
+            False,
+            False,
+            "",
+            "winton email",
         )
 
     def test_all_search(self):
@@ -37,7 +43,10 @@ class TestParseSessionListingArgs:
     def test_search_word_inside_target_is_not_a_flag(self):
         # Flags/keywords only apply before the first positional word.
         assert parse_session_listing_args("deep search notes") == (
-            False, False, "deep search notes", None,
+            False,
+            False,
+            "deep search notes",
+            None,
         )
 
 
@@ -45,6 +54,7 @@ class TestQuerySessionListingSearch:
     @pytest.fixture
     def db(self, tmp_path):
         from clawk_state import SessionDB
+
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("sess_an94", "telegram", user_id="1", chat_id="2")
         db.set_session_title("sess_an94", "AN-94 Prestige Barrel Build #2")
@@ -58,18 +68,24 @@ class TestQuerySessionListingSearch:
         return [r["id"] for r in query_session_listing(db, **kw)]
 
     def test_title_substring_match(self, db):
-        assert self._ids(db, source="telegram", search_query="prestige") == ["sess_an94"]
+        assert self._ids(db, source="telegram", search_query="prestige") == [
+            "sess_an94"
+        ]
 
     def test_punctuation_normalized_match(self, db):
         # "an94" should match the title "AN-94 ..." via compact matching.
         assert self._ids(db, source="telegram", search_query="an94") == ["sess_an94"]
 
     def test_id_substring_match_includes_unnamed(self, db):
-        assert self._ids(db, source="telegram", search_query="untitled") == ["sess_untitled"]
+        assert self._ids(db, source="telegram", search_query="untitled") == [
+            "sess_untitled"
+        ]
 
     def test_source_scoping(self, db):
         assert self._ids(db, source="telegram", search_query="winton") == []
-        assert self._ids(db, source="whatsapp", search_query="winton") == ["sess_winton"]
+        assert self._ids(db, source="whatsapp", search_query="winton") == [
+            "sess_winton"
+        ]
 
     def test_no_match(self, db):
         assert self._ids(db, source="telegram", search_query="zzz-nope") == []
@@ -80,6 +96,7 @@ class TestQuerySessionListingSearch:
     def test_search_matches_compression_root_title(self, tmp_path):
         """Searching an old (compressed-away) title surfaces the live tip."""
         from clawk_state import SessionDB
+
         db = SessionDB(db_path=tmp_path / "chain.db")
         db.create_session("root_1", "telegram", user_id="1", chat_id="2")
         db.set_session_title("root_1", "Old Chat")

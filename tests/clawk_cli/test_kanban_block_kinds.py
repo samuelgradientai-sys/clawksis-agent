@@ -122,8 +122,9 @@ def test_block_loop_detected_event_emitted(kanban_home: Path) -> None:
         kb.unblock_task(conn, tid)
         _make_running_again(conn, tid)
         kb.block_task(conn, tid, reason="x", kind="capability")
-        events = [e for e in kb.list_events(conn, tid)
-                  if e.kind == "block_loop_detected"]
+        events = [
+            e for e in kb.list_events(conn, tid) if e.kind == "block_loop_detected"
+        ]
         assert events, "expected a block_loop_detected event"
         payload = events[-1].payload or {}
         assert payload.get("recurrences") == 2

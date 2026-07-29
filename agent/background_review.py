@@ -71,21 +71,27 @@ def _resolve_review_runtime(agent: Any) -> Dict[str, Any]:
     }
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config()
     except Exception:
         return parent
     aux = cfg.get("auxiliary", {}) if isinstance(cfg.get("auxiliary"), dict) else {}
-    task = aux.get("background_review", {}) if isinstance(aux.get("background_review"), dict) else {}
-    task_provider = (str(task.get("provider", "")).strip() or None)
-    task_model = (str(task.get("model", "")).strip() or None)
-    task_base_url = (str(task.get("base_url", "")).strip() or None)
-    task_api_key = (str(task.get("api_key", "")).strip() or None)
+    task = (
+        aux.get("background_review", {})
+        if isinstance(aux.get("background_review"), dict)
+        else {}
+    )
+    task_provider = str(task.get("provider", "")).strip() or None
+    task_model = str(task.get("model", "")).strip() or None
+    task_base_url = str(task.get("base_url", "")).strip() or None
+    task_api_key = str(task.get("api_key", "")).strip() or None
     if not (task_provider and task_provider != "auto" and task_model):
         return parent
     if task_provider == (agent.provider or "") and task_model == (agent.model or ""):
         return parent  # same model/provider as parent -> not routed
     try:
         from clawk_cli.runtime_provider import resolve_runtime_provider
+
         rp = resolve_runtime_provider(
             requested=task_provider,
             target_model=task_model,
@@ -136,7 +142,7 @@ def _digest_history(messages_snapshot: List[Dict], tail: int = 24) -> List[Dict]
         if len(msgs) <= tail:
             return msgs
         keep = msgs[-tail:]
-    old = msgs[:-len(keep)]
+    old = msgs[: -len(keep)]
     lines: List[str] = []
     for m in old:
         if not isinstance(m, dict):
@@ -148,7 +154,11 @@ def _digest_history(messages_snapshot: List[Dict], tail: int = 24) -> List[Dict]
         elif role == "assistant":
             tcs = m.get("tool_calls") or []
             if tcs:
-                names = [(tc.get("function") or {}).get("name", "?") for tc in tcs if isinstance(tc, dict)]
+                names = [
+                    (tc.get("function") or {}).get("name", "?")
+                    for tc in tcs
+                    if isinstance(tc, dict)
+                ]
                 lines.append(f"ASSISTANT[tools: {', '.join(names)}]")
             if text:
                 lines.append(f"ASSISTANT: {text[:200]}")
@@ -369,7 +379,6 @@ _COMBINED_REVIEW_PROMPT = (
 )
 
 
-
 def summarize_background_review_actions(
     review_messages: List[Dict],
     prior_snapshot: List[Dict],
@@ -492,7 +501,13 @@ def summarize_background_review_actions(
         if is_skill:
             label = "Skill"
         elif target:
-            label = "Memory" if target == "memory" else "User profile" if target == "user" else target
+            label = (
+                "Memory"
+                if target == "memory"
+                else "User profile"
+                if target == "user"
+                else target
+            )
         else:
             continue
 
@@ -505,9 +520,7 @@ def summarize_background_review_actions(
             # arguments.  Anything non-iterable that isn't a list[str]
             # of dicts becomes unusable here, so coerce defensively.
             ops_raw = detail.get("operations")
-            operations: list = (
-                ops_raw if isinstance(ops_raw, list) else []
-            )
+            operations: list = ops_raw if isinstance(ops_raw, list) else []
             max_preview = 120
             if is_skill:
                 # ``_change`` is a free-form dict the skill tool leaves in
@@ -516,15 +529,9 @@ def summarize_background_review_actions(
                 # to a dict so the .get() calls downstream don't
                 # AttributeError (#59437).
                 change_raw = data.get("_change")
-                change: dict = (
-                    change_raw if isinstance(change_raw, dict) else {}
-                )
-                old_string = (
-                    change.get("old", "") or detail.get("old_string", "")
-                )
-                new_string = (
-                    change.get("new", "") or detail.get("new_string", "")
-                )
+                change: dict = change_raw if isinstance(change_raw, dict) else {}
+                old_string = change.get("old", "") or detail.get("old_string", "")
+                new_string = change.get("new", "") or detail.get("new_string", "")
                 description = change.get("description", "")
                 if action == "patch" and (old_string or new_string):
                     old_preview = old_string[:80].replace("\n", " ") + (
@@ -535,7 +542,7 @@ def summarize_background_review_actions(
                     )
                     actions.append(
                         f"📝 Skill '{skill_name}' patched: "
-                        f"\"{old_preview}\" → \"{new_preview}\""
+                        f'"{old_preview}" → "{new_preview}"'
                     )
                 elif action == "create" and description:
                     actions.append(f"📝 Skill '{skill_name}' created: {description}")
@@ -553,22 +560,30 @@ def summarize_background_review_actions(
                     if not isinstance(op, dict):
                         continue
                     op_act = op.get("action", "")
-                    op_content = (op.get("content") or "")
-                    op_old = (op.get("old_text") or "")
+                    op_content = op.get("content") or ""
+                    op_old = op.get("old_text") or ""
                     if op_act == "add" and op_content:
-                        preview = op_content[:max_preview] + ("…" if len(op_content) > max_preview else "")
+                        preview = op_content[:max_preview] + (
+                            "…" if len(op_content) > max_preview else ""
+                        )
                         actions.append(f"{label} ➕ {preview}")
                     elif op_act == "replace" and op_content:
-                        preview = op_content[:max_preview] + ("…" if len(op_content) > max_preview else "")
+                        preview = op_content[:max_preview] + (
+                            "…" if len(op_content) > max_preview else ""
+                        )
                         actions.append(f"{label} ✏️ {preview}")
                     elif op_act == "remove" and op_old:
                         preview = op_old[:60] + ("…" if len(op_old) > 60 else "")
                         actions.append(f"{label} ➖ {preview}")
             elif action == "add" and content:
-                preview = content[:max_preview] + ("…" if len(content) > max_preview else "")
+                preview = content[:max_preview] + (
+                    "…" if len(content) > max_preview else ""
+                )
                 actions.append(f"{label} ➕ {preview}")
             elif action == "replace" and content:
-                preview = content[:max_preview] + ("…" if len(content) > max_preview else "")
+                preview = content[:max_preview] + (
+                    "…" if len(content) > max_preview else ""
+                )
                 actions.append(f"{label} ✏️ {preview}")
             elif action == "remove" and old_text:
                 preview = old_text[:60] + ("…" if len(old_text) > 60 else "")
@@ -597,10 +612,10 @@ def build_memory_write_metadata(
 ) -> Dict[str, Any]:
     """Build provenance metadata for external memory-provider mirrors."""
     metadata: Dict[str, Any] = {
-        "write_origin": write_origin or getattr(agent, "_memory_write_origin", "assistant_tool"),
+        "write_origin": write_origin
+        or getattr(agent, "_memory_write_origin", "assistant_tool"),
         "execution_context": (
-            execution_context
-            or getattr(agent, "_memory_write_context", "foreground")
+            execution_context or getattr(agent, "_memory_write_context", "foreground")
         ),
         "session_id": agent.session_id or "",
         "parent_session_id": agent._parent_session_id or "",
@@ -637,9 +652,11 @@ def _run_review_in_thread(
     def _bg_review_auto_deny(command, description, **kwargs):
         logger.warning(
             "Background review auto-denied dangerous command: %s (%s)",
-            command, description,
+            command,
+            description,
         )
         return "deny"
+
     try:
         _set_approval_callback(_bg_review_auto_deny)
     except Exception:
@@ -708,7 +725,9 @@ def _run_review_in_thread(
             # provider defaults — matching the ``not _routed`` gate on
             # _cached_system_prompt below.
             if not _routed:
-                _fork_kwargs["reasoning_config"] = getattr(agent, "reasoning_config", None)
+                _fork_kwargs["reasoning_config"] = getattr(
+                    agent, "reasoning_config", None
+                )
             review_agent = AIAgent(
                 model=_rt.get("model") or agent.model,
                 max_iterations=16,
@@ -845,13 +864,11 @@ def _run_review_in_thread(
                 # on that model anyway, so minimise cold-written tokens). Same
                 # model -> replay the full snapshot (warm cache reads).
                 _review_history = (
-                    _digest_history(messages_snapshot) if _routed
-                    else messages_snapshot
+                    _digest_history(messages_snapshot) if _routed else messages_snapshot
                 )
                 review_agent.run_conversation(
                     user_message=(
-                        prompt
-                        + "\n\nYou can only call memory and skill "
+                        prompt + "\n\nYou can only call memory and skill "
                         "management tools. Other tools will be denied "
                         "at runtime — do not attempt them."
                     ),
@@ -911,15 +928,11 @@ def _run_review_in_thread(
 
         if actions:
             summary = " · ".join(dict.fromkeys(actions))
-            agent._safe_print(
-                f"  💾 Self-improvement review: {summary}"
-            )
+            agent._safe_print(f"  💾 Self-improvement review: {summary}")
             _bg_cb = agent.background_review_callback
             if _bg_cb:
                 try:
-                    _bg_cb(
-                        f"💾 Self-improvement review: {summary}"
-                    )
+                    _bg_cb(f"💾 Self-improvement review: {summary}")
                 except Exception:
                     pass
 

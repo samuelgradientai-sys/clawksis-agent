@@ -56,9 +56,9 @@ def record(chat_id, message_id, text: Optional[str]) -> None:
         }
         # Trim oldest by timestamp when over cap.
         if len(data) > _MAX_ENTRIES:
-            for k, _ in sorted(
-                data.items(), key=lambda kv: kv[1].get("ts", 0)
-            )[: len(data) - _MAX_ENTRIES]:
+            for k, _ in sorted(data.items(), key=lambda kv: kv[1].get("ts", 0))[
+                : len(data) - _MAX_ENTRIES
+            ]:
                 data.pop(k, None)
         tmp = f"{path}.tmp.{os.getpid()}"
         with open(tmp, "w", encoding="utf-8") as fh:

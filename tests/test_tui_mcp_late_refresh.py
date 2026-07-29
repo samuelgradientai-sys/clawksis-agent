@@ -26,7 +26,10 @@ def _make_fake_agent(initial_tools, *, user_turns=0, api_calls=0):
 
 
 def _tool(name):
-    return {"type": "function", "function": {"name": name, "description": "", "parameters": {}}}
+    return {
+        "type": "function",
+        "function": {"name": name, "description": "", "parameters": {}},
+    }
 
 
 def _drain_refresh_threads(timeout=5.0):
@@ -40,12 +43,20 @@ def _install(monkeypatch, *, in_flight, join_result, new_defs):
     """Wire entry discovery accessors + get_tool_definitions, capture emits."""
     monkeypatch.setattr(entry, "mcp_discovery_in_flight", lambda: in_flight)
     monkeypatch.setattr(entry, "join_mcp_discovery", lambda timeout=None: join_result)
-    monkeypatch.setattr(model_tools, "get_tool_definitions", lambda **kw: list(new_defs))
+    monkeypatch.setattr(
+        model_tools, "get_tool_definitions", lambda **kw: list(new_defs)
+    )
     monkeypatch.setattr(server, "_load_enabled_toolsets", lambda: None)
-    monkeypatch.setattr(server, "_session_info", lambda agent, session: {"tools_len": len(agent.tools)})
+    monkeypatch.setattr(
+        server, "_session_info", lambda agent, session: {"tools_len": len(agent.tools)}
+    )
 
     emitted = []
-    monkeypatch.setattr(server, "_emit", lambda event, sid, payload=None: emitted.append((event, sid, payload)))
+    monkeypatch.setattr(
+        server,
+        "_emit",
+        lambda event, sid, payload=None: emitted.append((event, sid, payload)),
+    )
     return emitted
 
 
@@ -74,7 +85,9 @@ def test_no_refresh_when_discovery_not_in_flight(monkeypatch):
     server._sessions[sid] = {"agent": agent}
     try:
         # in_flight=False → helper returns immediately, no thread, no rebuild.
-        emitted = _install(monkeypatch, in_flight=False, join_result=True, new_defs=base + [_tool("x")])
+        emitted = _install(
+            monkeypatch, in_flight=False, join_result=True, new_defs=base + [_tool("x")]
+        )
         server._schedule_mcp_late_refresh(sid, agent)
         _drain_refresh_threads()
 
@@ -111,7 +124,9 @@ def test_no_reemit_when_discovery_added_nothing(monkeypatch):
     try:
         # Discovery finished but the registry is unchanged (same count) →
         # don't churn the client with a redundant session.info.
-        emitted = _install(monkeypatch, in_flight=True, join_result=True, new_defs=list(base))
+        emitted = _install(
+            monkeypatch, in_flight=True, join_result=True, new_defs=list(base)
+        )
         server._schedule_mcp_late_refresh(sid, agent)
         _drain_refresh_threads()
 
@@ -129,7 +144,9 @@ def test_no_refresh_when_join_times_out(monkeypatch):
     server._sessions[sid] = {"agent": agent}
     try:
         # Server never connected within the bound → join returns False, no rebuild.
-        emitted = _install(monkeypatch, in_flight=True, join_result=False, new_defs=full)
+        emitted = _install(
+            monkeypatch, in_flight=True, join_result=False, new_defs=full
+        )
         server._schedule_mcp_late_refresh(sid, agent)
         _drain_refresh_threads()
 

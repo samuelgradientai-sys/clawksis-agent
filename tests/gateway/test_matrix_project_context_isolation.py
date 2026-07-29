@@ -39,7 +39,10 @@ def _make_adapter():
         PlatformConfig(
             enabled=True,
             token="test-token",
-            extra={"homeserver": "https://matrix.example.org", "user_id": "@bot:example.org"},
+            extra={
+                "homeserver": "https://matrix.example.org",
+                "user_id": "@bot:example.org",
+            },
         )
     )
     adapter._user_id = "@bot:example.org"
@@ -56,7 +59,9 @@ def _make_adapter():
 class _FakeMatrixClient:
     def __init__(self):
         self.state_store = MagicMock()
-        self.state_store.get_members = AsyncMock(return_value=["@bot:example.org", SENDER])
+        self.state_store.get_members = AsyncMock(
+            return_value=["@bot:example.org", SENDER]
+        )
 
     async def get_state_event(self, room_id, event_type):
         rid = str(room_id)
@@ -268,7 +273,9 @@ async def test_matrix_inbound_handler_keeps_project_a_and_b_distinct():
         PROJECT_A_NAME,
         PROJECT_B_NAME,
     ]
-    assert build_session_key(captured[0].source) != build_session_key(captured[1].source)
+    assert build_session_key(captured[0].source) != build_session_key(
+        captured[1].source
+    )
 
 
 def test_matrix_room_scope_group_sessions_per_user_true_separates_users():
@@ -309,7 +316,9 @@ def _make_matrix_source(room_id: str, room_name: str, topic: str) -> SessionSour
     )
 
 
-def _entry(source: SessionSource, session_id: str, title: str | None = None) -> SessionEntry:
+def _entry(
+    source: SessionSource, session_id: str, title: str | None = None
+) -> SessionEntry:
     return SessionEntry(
         session_key=build_session_key(source),
         session_id=session_id,
@@ -326,16 +335,23 @@ def _make_runner(current_source: SessionSource, entries: list[SessionEntry]):
     from gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
-    runner.config = GatewayConfig(platforms={Platform.MATRIX: PlatformConfig(enabled=True)})
+    runner.config = GatewayConfig(
+        platforms={Platform.MATRIX: PlatformConfig(enabled=True)}
+    )
     adapter = MagicMock()
     adapter._matrix_session_scope = "room"
     runner.adapters = {Platform.MATRIX: adapter}
     runner.session_store = MagicMock()
     runner.session_store._entries = {entry.session_key: entry for entry in entries}
-    current = next((e for e in entries if e.origin and e.origin.chat_id == current_source.chat_id), entries[0])
+    current = next(
+        (e for e in entries if e.origin and e.origin.chat_id == current_source.chat_id),
+        entries[0],
+    )
     runner.session_store.get_or_create_session.return_value = current
     runner.session_store.switch_session.return_value = current
-    runner.session_store.load_transcript.return_value = [{"role": "user", "content": "hello"}]
+    runner.session_store.load_transcript.return_value = [
+        {"role": "user", "content": "hello"}
+    ]
     runner._running_agents = {}
     runner._session_run_generation = {}
     runner._pending_messages = {}
@@ -366,7 +382,9 @@ async def test_matrix_status_reports_current_matrix_room_scope():
     source_a = _make_matrix_source(PROJECT_A_ROOM_ID, PROJECT_A_NAME, PROJECT_A_TOPIC)
     source_b = _make_matrix_source(PROJECT_B_ROOM_ID, PROJECT_B_NAME, PROJECT_B_TOPIC)
     entry_b = _entry(source_b, "session-b", "Project B Plan")
-    runner = _make_runner(source_b, [_entry(source_a, "session-a", "Project A Plan"), entry_b])
+    runner = _make_runner(
+        source_b, [_entry(source_a, "session-a", "Project A Plan"), entry_b]
+    )
 
     result = await runner._handle_status_command(_event("/status", source_b))
 
@@ -391,7 +409,9 @@ async def test_matrix_resume_does_not_cross_rooms_by_default():
     runner = _make_runner(source_b, [entry_a, entry_b])
     runner._session_db._db.resolve_session_by_title.return_value = "session-a"
 
-    result = await runner._handle_resume_command(_event("/resume Project A Plan", source_b))
+    result = await runner._handle_resume_command(
+        _event("/resume Project A Plan", source_b)
+    )
 
     assert "blocked" in result
     assert PROJECT_A_NAME in result
@@ -409,7 +429,9 @@ async def test_matrix_resume_allows_same_room_session():
     runner.session_store.switch_session.return_value = entry_b
     runner._session_db._db.resolve_session_by_title.return_value = "session-b-old"
 
-    result = await runner._handle_resume_command(_event("/resume Project B Plan", source_b))
+    result = await runner._handle_resume_command(
+        _event("/resume Project B Plan", source_b)
+    )
 
     assert "Resumed session" in result
     runner.session_store.switch_session.assert_called_once()
@@ -431,7 +453,9 @@ async def test_matrix_resume_quoted_title_same_room():
     )
 
     assert "Resumed session" in result
-    runner._session_db._db.resolve_session_by_title.assert_called_once_with("Project B Plan")
+    runner._session_db._db.resolve_session_by_title.assert_called_once_with(
+        "Project B Plan"
+    )
 
 
 @pytest.mark.asyncio
@@ -489,7 +513,10 @@ async def test_matrix_resume_lists_only_current_room_by_default():
     source_b = _make_matrix_source(PROJECT_B_ROOM_ID, PROJECT_B_NAME, PROJECT_B_TOPIC)
     runner = _make_runner(
         source_b,
-        [_entry(source_a, "session-a", "Project A Plan"), _entry(source_b, "session-b", "Project B Plan")],
+        [
+            _entry(source_a, "session-a", "Project A Plan"),
+            _entry(source_b, "session-b", "Project B Plan"),
+        ],
     )
 
     result = await runner._handle_resume_command(_event("/resume", source_b))
@@ -504,7 +531,10 @@ async def test_matrix_resume_all_lists_room_names():
     source_b = _make_matrix_source(PROJECT_B_ROOM_ID, PROJECT_B_NAME, PROJECT_B_TOPIC)
     runner = _make_runner(
         source_b,
-        [_entry(source_a, "session-a", "Project A Plan"), _entry(source_b, "session-b", "Project B Plan")],
+        [
+            _entry(source_a, "session-a", "Project A Plan"),
+            _entry(source_b, "session-b", "Project B Plan"),
+        ],
     )
     # Cross-room `/resume --all` listing is admin-gated (IDOR scoping), so this
     # cross-room listing test must run as a configured admin.

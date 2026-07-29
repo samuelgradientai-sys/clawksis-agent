@@ -16,12 +16,15 @@ from unittest.mock import MagicMock, patch
 def _make_adapter(address="clawk@test.com"):
     from gateway.config import PlatformConfig
 
-    with patch.dict(os.environ, {
-        "EMAIL_ADDRESS": address,
-        "EMAIL_PASSWORD": "secret",
-        "EMAIL_IMAP_HOST": "imap.test.com",
-        "EMAIL_SMTP_HOST": "smtp.test.com",
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "EMAIL_ADDRESS": address,
+            "EMAIL_PASSWORD": "secret",
+            "EMAIL_IMAP_HOST": "imap.test.com",
+            "EMAIL_SMTP_HOST": "smtp.test.com",
+        },
+    ):
         from plugins.platforms.email.adapter import EmailAdapter
 
         adapter = EmailAdapter(PlatformConfig(enabled=True))
@@ -41,9 +44,7 @@ class TestImapResponseGuard(unittest.TestCase):
 
     def _fetch_with(self, fetch_responses):
         adapter = _make_adapter()
-        uids = b" ".join(
-            str(i + 1).encode() for i in range(len(fetch_responses))
-        )
+        uids = b" ".join(str(i + 1).encode() for i in range(len(fetch_responses)))
         fetch_iter = iter(fetch_responses)
 
         def uid_handler(command, *args):
@@ -83,7 +84,7 @@ class TestImapResponseGuard(unittest.TestCase):
     def test_malformed_does_not_abort_batch(self):
         """A malformed response mid-batch must not lose the messages after it."""
         results = self._fetch_with([
-            ("OK", [None]),                                # UID 1 malformed
+            ("OK", [None]),  # UID 1 malformed
             ("OK", [(b"2 (RFC822 {123}", _raw_email())]),  # UID 2 fine
         ])
         self.assertEqual(len(results), 1)

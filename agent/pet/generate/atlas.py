@@ -143,7 +143,9 @@ def _defringe(rgba):
     return rgba
 
 
-def remove_background(image, *, chroma_key: tuple[int, int, int] | None = None, threshold: float = 90.0):
+def remove_background(
+    image, *, chroma_key: tuple[int, int, int] | None = None, threshold: float = 90.0
+):
     """Return *image* (RGBA) with its flat background keyed out to transparent.
 
     If the strip already has a transparent background we leave it alone; else we
@@ -179,7 +181,9 @@ def remove_background(image, *, chroma_key: tuple[int, int, int] | None = None, 
         near = _near_key_mask(rgba, key)  # L mask, 255 where near key
         opaque = rgba.getchannel("A").point(lambda a: 255 if a > _ALPHA_FLOOR else 0)
         remove_mask = ImageChops.darker(near, opaque)
-        keyed = Image.composite(Image.new("RGBA", rgba.size, (0, 0, 0, 0)), rgba, remove_mask)
+        keyed = Image.composite(
+            Image.new("RGBA", rgba.size, (0, 0, 0, 0)), rgba, remove_mask
+        )
         return _defringe(keyed)
 
     visited = bytearray(w * h)
@@ -226,7 +230,9 @@ def remove_background(image, *, chroma_key: tuple[int, int, int] | None = None, 
     # One C-level composite instead of millions of per-pixel writes: paint the
     # flooded pixels to (0,0,0,0) wherever the mask is set.
     mask = Image.frombytes("L", (w, h), bytes(remove)).point(lambda v: 255 if v else 0)
-    return _defringe(Image.composite(Image.new("RGBA", rgba.size, (0, 0, 0, 0)), rgba, mask))
+    return _defringe(
+        Image.composite(Image.new("RGBA", rgba.size, (0, 0, 0, 0)), rgba, mask)
+    )
 
 
 def _repair_internal_alpha_holes(image):
@@ -536,7 +542,9 @@ def _slot_bounds(width: int, frame_count: int) -> list[tuple[int, int]]:
     ]
 
 
-def _group_component_rows(boxes: list[tuple[int, int, int, int]]) -> list[list[tuple[int, int, int, int]]]:
+def _group_component_rows(
+    boxes: list[tuple[int, int, int, int]],
+) -> list[list[tuple[int, int, int, int]]]:
     """Group component boxes into visual rows, then sort left→right."""
     if not boxes:
         return []
@@ -554,13 +562,20 @@ def _group_component_rows(boxes: list[tuple[int, int, int, int]]) -> list[list[t
         else:
             rows.append([box])
             centers.append(cy)
-    ordered = [row for _center, row in sorted(zip(centers, rows, strict=False), key=lambda item: item[0])]
+    ordered = [
+        row
+        for _center, row in sorted(
+            zip(centers, rows, strict=False), key=lambda item: item[0]
+        )
+    ]
     for row in ordered:
         row.sort(key=lambda b: (b[0] + b[2]) / 2)
     return ordered
 
 
-def _merge_related_boxes(boxes: list[tuple[int, int, int, int]]) -> list[tuple[int, int, int, int]]:
+def _merge_related_boxes(
+    boxes: list[tuple[int, int, int, int]],
+) -> list[tuple[int, int, int, int]]:
     """Merge disconnected parts that clearly belong to one subject.
 
     Capes, tails, horns, and held props sometimes key as separate components.
@@ -596,7 +611,9 @@ def _merge_related_boxes(boxes: list[tuple[int, int, int, int]]) -> list[tuple[i
     return boxes
 
 
-def _component_crops(strip, frame_count: int, *, require_padding: bool = False) -> list | None:
+def _component_crops(
+    strip, frame_count: int, *, require_padding: bool = False
+) -> list | None:
     """Extract frame subjects as connected non-background objects.
 
     This is the robust path for models that ignore "one horizontal row" and emit a
@@ -613,7 +630,9 @@ def _component_crops(strip, frame_count: int, *, require_padding: bool = False) 
             return None
 
         max_mass = max(m for _box, m in comps)
-        subjects = _merge_related_boxes([box for box, mass in comps if mass >= max(64, max_mass * 0.12)])
+        subjects = _merge_related_boxes([
+            box for box, mass in comps if mass >= max(64, max_mass * 0.12)
+        ])
         if len(subjects) < frame_count:
             return None
 
@@ -626,7 +645,12 @@ def _component_crops(strip, frame_count: int, *, require_padding: bool = False) 
             min_x = max(4, min(12, round(source.width * 0.01)))
             min_y = max(4, min(16, round(source.height * 0.015)))
             for left, top, right, bottom in ordered:
-                if left < min_x or top < min_y or source.width - right < min_x or source.height - bottom < min_y:
+                if (
+                    left < min_x
+                    or top < min_y
+                    or source.width - right < min_x
+                    or source.height - bottom < min_y
+                ):
                     return None
 
         multirow = len(rows) > 1
@@ -646,10 +670,26 @@ def _component_crops(strip, frame_count: int, *, require_padding: bool = False) 
             else:
                 # Preserve vertical motion for true one-row strips (jumping,
                 # bobbing) while still narrowing X around the object.
-                crop_box = (max(0, left - pad_x), 0, min(source.width, right + pad_x), source.height)
-            frame = Image.new("RGBA", (crop_box[2] - crop_box[0], crop_box[3] - crop_box[1]), (0, 0, 0, 0))
-            rel = (left - crop_box[0], top - crop_box[1], right - crop_box[0], bottom - crop_box[1])
-            frame.alpha_composite(source.crop((left, top, right, bottom)), (rel[0], rel[1]))
+                crop_box = (
+                    max(0, left - pad_x),
+                    0,
+                    min(source.width, right + pad_x),
+                    source.height,
+                )
+            frame = Image.new(
+                "RGBA",
+                (crop_box[2] - crop_box[0], crop_box[3] - crop_box[1]),
+                (0, 0, 0, 0),
+            )
+            rel = (
+                left - crop_box[0],
+                top - crop_box[1],
+                right - crop_box[0],
+                bottom - crop_box[1],
+            )
+            frame.alpha_composite(
+                source.crop((left, top, right, bottom)), (rel[0], rel[1])
+            )
             # The global component pass already chose the subject box. Do not run
             # another component filter here: capes/tails can be legitimate
             # disconnected lobes inside the chosen subject box.
@@ -687,7 +727,9 @@ def _sever_expected_gutters(strip, frame_count: int):
     return out
 
 
-def _slot_crops(strip, frame_count: int, *, require_padding: bool = False) -> list | None:
+def _slot_crops(
+    strip, frame_count: int, *, require_padding: bool = False
+) -> list | None:
     """Slice *strip* into *frame_count* uniform columns (one coordinate space).
 
     Equal-width columns keep every frame in a single shared coordinate frame, so
@@ -766,7 +808,9 @@ def _significant_subject_boxes(image) -> list[tuple[int, int, int, int]]:
     if not comps:
         return []
     max_mass = max(mass for _box, mass in comps)
-    return _merge_related_boxes([box for box, mass in comps if mass >= max(32, max_mass * 0.12)])
+    return _merge_related_boxes([
+        box for box, mass in comps if mass >= max(32, max_mass * 0.12)
+    ])
 
 
 def _validate_extracted_frames(frames: list, frame_count: int) -> None:
@@ -850,7 +894,9 @@ def extract_strip_frames(
         frames = _slot_crops(strip, frame_count, require_padding=True)
     if frames is None:
         if method == "components":
-            raise ValueError(f"could not segment {frame_count} padded sprites from strip")
+            raise ValueError(
+                f"could not segment {frame_count} padded sprites from strip"
+            )
 
         # Lenient salvage for the final attempt: prefer real gutters when they
         # exist, then sever expected boundaries, then fall back to raw slots. Still
@@ -870,7 +916,16 @@ def extract_strip_frames(
             h = source.height
             pad = max(2, min(16, round((source.width / max(1, frame_count)) * 0.04)))
             frames = [
-                _drop_side_bleed(_isolate_slot_subject(source.crop((max(0, left - pad), 0, min(source.width, right + pad), h))))
+                _drop_side_bleed(
+                    _isolate_slot_subject(
+                        source.crop((
+                            max(0, left - pad),
+                            0,
+                            min(source.width, right + pad),
+                            h,
+                        ))
+                    )
+                )
                 for left, right in ranges
             ]
     _validate_extracted_frames(frames, frame_count)
@@ -881,7 +936,9 @@ def _column_profile(image) -> list[int]:
     """Per-column alpha mass — collapse the frame to a 1px-tall strip (fast in C)."""
     from PIL import Image
 
-    return list(image.getchannel("A").resize((image.width, 1), Image.BILINEAR).getdata())
+    return list(
+        image.getchannel("A").resize((image.width, 1), Image.BILINEAR).getdata()
+    )
 
 
 def _best_shift(ref: list[int], prof: list[int], window: int) -> int:
@@ -905,7 +962,9 @@ def _best_shift(ref: list[int], prof: list[int], window: int) -> int:
     return best
 
 
-def normalize_cells(frames_by_state: dict[str, list], *, pad: int = _NORMALIZE_PAD) -> dict[str, list]:
+def normalize_cells(
+    frames_by_state: dict[str, list], *, pad: int = _NORMALIZE_PAD
+) -> dict[str, list]:
     """Register every frame into a 192x208 cell — the deterministic anti-jitter math.
 
     A per-frame "crop→scale→center" pipeline jitters because a moving limb/cape
@@ -923,7 +982,9 @@ def normalize_cells(frames_by_state: dict[str, list], *, pad: int = _NORMALIZE_P
     from PIL import Image
 
     blank = lambda: Image.new("RGBA", (CELL_WIDTH, CELL_HEIGHT), (0, 0, 0, 0))
-    med = lambda vs: sorted(vs)[len(vs) // 2]  # robust center; ignores a limb/cape outlier
+    med = lambda vs: sorted(vs)[
+        len(vs) // 2
+    ]  # robust center; ignores a limb/cape outlier
 
     out: dict[str, list] = {}
     prepared: dict[str, tuple[list, tuple[int, int, int, int], tuple[int, int]]] = {}
@@ -981,11 +1042,15 @@ def normalize_cells(frames_by_state: dict[str, list], *, pad: int = _NORMALIZE_P
     # keeps the tallest/widest motion envelope (a jump's lift) inside the cell —
     # for a still row union ≈ pose so its term ≈ target_h (full fill).
     K = target_h
-    for (_aligned, (left, top, right, bottom), (_pose_w, pose_h)) in prepared.values():
+    for _aligned, (left, top, right, bottom), (_pose_w, pose_h) in prepared.values():
         uw, uh = right - left, bottom - top
         K = min(K, target_h * pose_h / max(1, uh), target_w * pose_h / max(1, uw))
 
-    for state, (aligned, (left, top, right, bottom), (_pose_w, pose_h)) in prepared.items():
+    for state, (
+        aligned,
+        (left, top, right, bottom),
+        (_pose_w, pose_h),
+    ) in prepared.items():
         uw, uh = right - left, bottom - top
         scale = K / max(1, pose_h)
         sw, sh = max(1, round(uw * scale)), max(1, round(uh * scale))
@@ -1094,8 +1159,17 @@ def validate_atlas(atlas) -> dict:
     warnings: list[str] = []
 
     if atlas.size != (ATLAS_WIDTH, ATLAS_HEIGHT):
-        errors.append(f"expected {ATLAS_WIDTH}x{ATLAS_HEIGHT}, got {atlas.width}x{atlas.height}")
-        return {"ok": False, "width": atlas.width, "height": atlas.height, "errors": errors, "warnings": warnings, "filled_states": []}
+        errors.append(
+            f"expected {ATLAS_WIDTH}x{ATLAS_HEIGHT}, got {atlas.width}x{atlas.height}"
+        )
+        return {
+            "ok": False,
+            "width": atlas.width,
+            "height": atlas.height,
+            "errors": errors,
+            "warnings": warnings,
+            "filled_states": [],
+        }
 
     filled_states: list[str] = []
     cell_boxes_by_state: dict[str, list[tuple[int, int, int, int]]] = {}
@@ -1141,7 +1215,9 @@ def validate_atlas(atlas) -> dict:
         global_med_h = median_h
         min_h = max(56, round(CELL_HEIGHT * 0.28))
         if median_h < min_h:
-            errors.append(f"atlas sprites are too small after normalization (median frame height {median_h}px)")
+            errors.append(
+                f"atlas sprites are too small after normalization (median frame height {median_h}px)"
+            )
 
     for state, boxes in cell_boxes_by_state.items():
         if len(boxes) <= 1:

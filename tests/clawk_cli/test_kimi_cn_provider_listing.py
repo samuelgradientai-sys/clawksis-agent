@@ -32,9 +32,7 @@ def test_kimi_cn_appears_when_only_cn_key_set():
 
     # kimi-coding-cn must be listed (it has credentials)
     cn = next((p for p in providers if p["slug"] == "kimi-coding-cn"), None)
-    assert cn is not None, (
-        "kimi-coding-cn should appear when KIMI_CN_API_KEY is set"
-    )
+    assert cn is not None, "kimi-coding-cn should appear when KIMI_CN_API_KEY is set"
     assert cn["is_current"] is True
     assert cn["total_models"] > 0
 
@@ -54,24 +52,25 @@ def test_kimi_intl_appears_when_only_intl_key_set():
     providers = list_authenticated_providers(current_provider="kimi-coding")
 
     intl = next((p for p in providers if p["slug"] == "kimi-coding"), None)
-    assert intl is not None, (
-        "kimi-coding should appear when KIMI_API_KEY is set"
-    )
+    assert intl is not None, "kimi-coding should appear when KIMI_API_KEY is set"
     assert intl["is_current"] is True
 
     # kimi-coding-cn must NOT appear (no KIMI_CN_API_KEY)
     cn = next((p for p in providers if p["slug"] == "kimi-coding-cn"), None)
-    assert cn is None, (
-        "kimi-coding-cn should NOT appear when only KIMI_API_KEY is set"
-    )
+    assert cn is None, "kimi-coding-cn should NOT appear when only KIMI_API_KEY is set"
 
 
 # -- Both keys set -----------------------------------------------------------
 
-@patch.dict(os.environ, {
-    "KIMI_API_KEY": "sk-intl-fake",
-    "KIMI_CN_API_KEY": "sk-cn-fake",
-}, clear=False)
+
+@patch.dict(
+    os.environ,
+    {
+        "KIMI_API_KEY": "sk-intl-fake",
+        "KIMI_CN_API_KEY": "sk-cn-fake",
+    },
+    clear=False,
+)
 def test_both_kimi_providers_appear_when_both_keys_set():
     """Both kimi-coding and kimi-coding-cn should appear when both keys set.
 
@@ -87,14 +86,14 @@ def test_both_kimi_providers_appear_when_both_keys_set():
     assert intl["is_current"] is True
 
     cn = next((p for p in providers if p["slug"] == "kimi-coding-cn"), None)
-    assert cn is not None, (
-        "kimi-coding-cn should appear when KIMI_CN_API_KEY is set"
-    )
+    assert cn is not None, "kimi-coding-cn should appear when KIMI_CN_API_KEY is set"
     assert cn["is_current"] is False  # `current_provider` is kimi-coding
 
     # Exactly 2 Kimi entries — no duplicates for aliases (kimi, moonshot,
     # moonshot-cn, kimi-cn)
-    kimi_slugs = [p["slug"] for p in providers if "kimi" in p["slug"] or "moonshot" in p["slug"]]
+    kimi_slugs = [
+        p["slug"] for p in providers if "kimi" in p["slug"] or "moonshot" in p["slug"]
+    ]
     assert len(kimi_slugs) == 2, (
         f"Expected exactly 2 Kimi entries (kimi-coding, kimi-coding-cn), "
         f"got {kimi_slugs}"
@@ -103,10 +102,15 @@ def test_both_kimi_providers_appear_when_both_keys_set():
 
 # -- Both aliases deduped correctly ------------------------------------------
 
-@patch.dict(os.environ, {
-    "KIMI_API_KEY": "sk-intl-fake",
-    "KIMI_CN_API_KEY": "sk-cn-fake",
-}, clear=False)
+
+@patch.dict(
+    os.environ,
+    {
+        "KIMI_API_KEY": "sk-intl-fake",
+        "KIMI_CN_API_KEY": "sk-cn-fake",
+    },
+    clear=False,
+)
 def test_kimi_aliases_not_listed_separately():
     """Alias clawk_ids (kimi, moonshot) must NOT create phantom picker rows.
 
@@ -124,10 +128,14 @@ def test_kimi_aliases_not_listed_separately():
         )
 
 
-@patch.dict(os.environ, {
-    "KIMI_API_KEY": "sk-intl-fake",
-    "KIMI_CN_API_KEY": "sk-cn-fake",
-}, clear=False)
+@patch.dict(
+    os.environ,
+    {
+        "KIMI_API_KEY": "sk-intl-fake",
+        "KIMI_CN_API_KEY": "sk-cn-fake",
+    },
+    clear=False,
+)
 def test_resolve_provider_full_preserves_kimi_cn_provider_identity():
     """Explicit kimi-coding-cn must not collapse to shared models.dev alias.
 
@@ -143,10 +151,14 @@ def test_resolve_provider_full_preserves_kimi_cn_provider_identity():
     assert pdef.api_key_env_vars == ("KIMI_CN_API_KEY",)
 
 
-@patch.dict(os.environ, {
-    "KIMI_API_KEY": "sk-intl-fake",
-    "KIMI_CN_API_KEY": "sk-cn-fake",
-}, clear=False)
+@patch.dict(
+    os.environ,
+    {
+        "KIMI_API_KEY": "sk-intl-fake",
+        "KIMI_CN_API_KEY": "sk-cn-fake",
+    },
+    clear=False,
+)
 def test_switch_model_with_explicit_kimi_cn_provider_stays_on_cn_endpoint():
     """/model ... --provider kimi-coding-cn must stay on moonshot.cn.
 

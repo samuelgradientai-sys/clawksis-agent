@@ -31,8 +31,10 @@ def test_transient_retry_count_default(monkeypatch):
 
     # No config value -> default.
     monkeypatch.setattr(ac, "load_config", lambda: {}, raising=False)
-    with patch("clawk_cli.config.load_config", return_value={}), \
-         patch("clawk_cli.config.cfg_get", return_value=None):
+    with (
+        patch("clawk_cli.config.load_config", return_value={}),
+        patch("clawk_cli.config.cfg_get", return_value=None),
+    ):
         assert ac._transient_retry_count() == ac._DEFAULT_TRANSIENT_RETRIES
 
 
@@ -57,18 +59,27 @@ def test_model_participates_in_client_cache_key():
     from agent.auxiliary_client import _client_cache_key
 
     k_opus = _client_cache_key(
-        "openrouter", async_mode=False, base_url="https://openrouter.ai/api/v1",
-        api_key="K", model="anthropic/claude-opus-4.8",
+        "openrouter",
+        async_mode=False,
+        base_url="https://openrouter.ai/api/v1",
+        api_key="K",
+        model="anthropic/claude-opus-4.8",
     )
     k_gpt = _client_cache_key(
-        "openrouter", async_mode=False, base_url="https://openrouter.ai/api/v1",
-        api_key="K", model="openai/gpt-5.5",
+        "openrouter",
+        async_mode=False,
+        base_url="https://openrouter.ai/api/v1",
+        api_key="K",
+        model="openai/gpt-5.5",
     )
     assert k_opus != k_gpt
     # Same model still collides (cache still works for reuse).
     k_opus2 = _client_cache_key(
-        "openrouter", async_mode=False, base_url="https://openrouter.ai/api/v1",
-        api_key="K", model="anthropic/claude-opus-4.8",
+        "openrouter",
+        async_mode=False,
+        base_url="https://openrouter.ai/api/v1",
+        api_key="K",
+        model="anthropic/claude-opus-4.8",
     )
     assert k_opus == k_opus2
 

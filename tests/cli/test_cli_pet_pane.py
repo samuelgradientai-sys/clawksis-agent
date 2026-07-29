@@ -95,7 +95,10 @@ def test_pet_pane_collapsed_when_disabled():
 def test_pet_fragments_render_half_blocks(boba_like):
     cli_obj = _make_cli()
     cli_obj._pet_renderer = PetRenderer(
-        str(store.load_pet("boba").spritesheet), mode="unicode", scale=0.4, unicode_cols=14
+        str(store.load_pet("boba").spritesheet),
+        mode="unicode",
+        scale=0.4,
+        unicode_cols=14,
     )
     cli_obj._pet_cols = 14
     cli_obj._pet_enabled = True

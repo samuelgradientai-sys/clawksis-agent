@@ -44,6 +44,7 @@ def _make_event(text: str) -> MessageEvent:
 
 def _clear_approval_state():
     from tools import approval as mod
+
     mod._gateway_queues.clear()
     mod._gateway_notify_cbs.clear()
     mod._session_approved.clear()
@@ -85,6 +86,7 @@ def _make_runner():
 def _register_blocking_approval(runner):
     """Register a real blocking approval entry for the runner's session."""
     from tools.approval import _ApprovalEntry, _gateway_queues
+
     source = _make_source()
     session_key = runner._session_key_for_source(source)
     entry = _ApprovalEntry({"command": "rm -rf /tmp/test"})
@@ -174,6 +176,7 @@ def test_no_pending_approval_does_not_consume_conversational_yes():
     # (It still flows through normal busy handling, which may send a busy
     # ack; the contract here is only that no approval was consumed.)
     from tools.approval import _gateway_queues
+
     assert session_key not in _gateway_queues
     _clear_approval_state()
 

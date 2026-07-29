@@ -171,9 +171,18 @@ def record_obligation(
                 content, state, attempts, created_at, updated_at,
                 owner_pid, owner_started_at)
                VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?, ?)""",
-            (obligation_id, session_key, platform, str(chat_id),
-             str(thread_id) if thread_id else None, content, now, now,
-             pid, started),
+            (
+                obligation_id,
+                session_key,
+                platform,
+                str(chat_id),
+                str(thread_id) if thread_id else None,
+                content,
+                now,
+                now,
+                pid,
+                started,
+            ),
         )
     _prune()
 
@@ -232,8 +241,19 @@ def sweep_recoverable(
                FROM delivery_obligations
                WHERE state IN ('pending', 'attempting', 'failed')"""
         ).fetchall()
-        for (oid, session_key, platform, chat_id, thread_id, content, state,
-             attempts, created_at, owner_pid, owner_started_at) in rows:
+        for (
+            oid,
+            session_key,
+            platform,
+            chat_id,
+            thread_id,
+            content,
+            state,
+            attempts,
+            created_at,
+            owner_pid,
+            owner_started_at,
+        ) in rows:
             if _owner_alive(owner_pid, owner_started_at):
                 continue  # a live gateway still owns this row
             if attempts >= MAX_ATTEMPTS or (now - created_at) > STALE_AFTER_SECONDS:
@@ -332,8 +352,13 @@ def debug_rows(limit: int = 20) -> str:
     return json.dumps(
         [
             {
-                "id": r[0], "session": r[1], "state": r[2], "attempts": r[3],
-                "created_at": r[4], "updated_at": r[5], "last_error": r[6],
+                "id": r[0],
+                "session": r[1],
+                "state": r[2],
+                "attempts": r[3],
+                "created_at": r[4],
+                "updated_at": r[5],
+                "last_error": r[6],
             }
             for r in rows
         ],

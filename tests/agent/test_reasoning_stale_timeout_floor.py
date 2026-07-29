@@ -41,47 +41,54 @@ import pytest
 # ── pure-function resolver ────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("model,expected", [
-    # NVIDIA Nemotron reasoning family (longest keys first).
-    ("nvidia/nemotron-3-ultra-550b-a55b", 600.0),
-    ("nvidia/nemotron-3-super-120b-a12b", 600.0),
-    ("nvidia/nemotron-3-nano-30b-a3b", 300.0),
-    # DeepSeek R1 + DeepSeek reasoner + V4 reasoning series.
-    # V4 emits reasoning_content in a separate delta before final
-    # content (same shape as R1), so it needs the same 600s floor.
-    ("deepseek/deepseek-r1", 600.0),
-    ("deepseek/deepseek-r1-distill-llama-70b", 600.0),
-    ("deepseek/deepseek-reasoner", 600.0),
-    ("deepseek/deepseek-v4-flash", 600.0),
-    ("deepseek/deepseek-v4-pro", 600.0),
-    ("deepseek-v4-flash-free", 600.0),   # catalog -free variant inherits via separator anchor
-    # Qwen QwQ + Qwen3 thinking variants (qwen3 family entry matches all).
-    ("qwen/qwq-32b-preview", 300.0),
-    ("qwen/qwen3-235b-a22b-thinking", 180.0),
-    ("qwen/qwen3-32b", 180.0),
-    # OpenAI o-series — each variant enumerated explicitly.
-    # Longest match wins (o3-mini beats o3 on shared prefix).
-    ("openai/o1", 600.0),
-    ("openai/o1-mini", 600.0),
-    ("openai/o1-pro", 600.0),
-    ("openai/o1-preview", 600.0),
-    ("openai/o3", 600.0),
-    ("openai/o3-pro", 600.0),
-    ("openai/o3-mini", 300.0),
-    ("openai/o4-mini", 300.0),
-    # Anthropic Claude 4.x thinking variants.
-    ("anthropic/claude-opus-4-6", 240.0),
-    ("anthropic/claude-opus-4-20250514", 240.0),
-    ("anthropic/claude-sonnet-4.5", 180.0),
-    ("anthropic/claude-sonnet-4.6", 180.0),
-    # xAI Grok reasoning variants — explicit, not bare `grok`.
-    ("x-ai/grok-4-fast-reasoning", 300.0),
-    ("x-ai/grok-4.20-reasoning", 300.0),
-    ("x-ai/grok-4.5", 300.0),
-    ("x-ai/grok-4-fast-non-reasoning", 180.0),
-])
+@pytest.mark.parametrize(
+    "model,expected",
+    [
+        # NVIDIA Nemotron reasoning family (longest keys first).
+        ("nvidia/nemotron-3-ultra-550b-a55b", 600.0),
+        ("nvidia/nemotron-3-super-120b-a12b", 600.0),
+        ("nvidia/nemotron-3-nano-30b-a3b", 300.0),
+        # DeepSeek R1 + DeepSeek reasoner + V4 reasoning series.
+        # V4 emits reasoning_content in a separate delta before final
+        # content (same shape as R1), so it needs the same 600s floor.
+        ("deepseek/deepseek-r1", 600.0),
+        ("deepseek/deepseek-r1-distill-llama-70b", 600.0),
+        ("deepseek/deepseek-reasoner", 600.0),
+        ("deepseek/deepseek-v4-flash", 600.0),
+        ("deepseek/deepseek-v4-pro", 600.0),
+        (
+            "deepseek-v4-flash-free",
+            600.0,
+        ),  # catalog -free variant inherits via separator anchor
+        # Qwen QwQ + Qwen3 thinking variants (qwen3 family entry matches all).
+        ("qwen/qwq-32b-preview", 300.0),
+        ("qwen/qwen3-235b-a22b-thinking", 180.0),
+        ("qwen/qwen3-32b", 180.0),
+        # OpenAI o-series — each variant enumerated explicitly.
+        # Longest match wins (o3-mini beats o3 on shared prefix).
+        ("openai/o1", 600.0),
+        ("openai/o1-mini", 600.0),
+        ("openai/o1-pro", 600.0),
+        ("openai/o1-preview", 600.0),
+        ("openai/o3", 600.0),
+        ("openai/o3-pro", 600.0),
+        ("openai/o3-mini", 300.0),
+        ("openai/o4-mini", 300.0),
+        # Anthropic Claude 4.x thinking variants.
+        ("anthropic/claude-opus-4-6", 240.0),
+        ("anthropic/claude-opus-4-20250514", 240.0),
+        ("anthropic/claude-sonnet-4.5", 180.0),
+        ("anthropic/claude-sonnet-4.6", 180.0),
+        # xAI Grok reasoning variants — explicit, not bare `grok`.
+        ("x-ai/grok-4-fast-reasoning", 300.0),
+        ("x-ai/grok-4.20-reasoning", 300.0),
+        ("x-ai/grok-4.5", 300.0),
+        ("x-ai/grok-4-fast-non-reasoning", 180.0),
+    ],
+)
 def test_reasoning_stale_timeout_floor_positive_cases(model, expected):
     from agent.reasoning_timeouts import get_reasoning_stale_timeout_floor
+
     assert get_reasoning_stale_timeout_floor(model) == expected, (
         f"get_reasoning_stale_timeout_floor({model!r}) should return "
         f"{expected}; bare substrings and shared prefixes must not "
@@ -89,39 +96,43 @@ def test_reasoning_stale_timeout_floor_positive_cases(model, expected):
     )
 
 
-@pytest.mark.parametrize("model", [
-    # Non-reasoning chat models — no floor.
-    "gpt-4o",
-    "gpt-5",
-    "claude-3-5-sonnet-20240620",
-    "llama-3.3-70b-instruct",
-    "gemini-2.5-pro",
-    # Start-of-slug anchor traps — the slug must be at the START of
-    # the bare model name (after aggregator-prefix strip).  Bare
-    # substring matching would over-match these.
-    "olmo-1",
-    "olmo-13b",
-    "llama-4-70b-o1-preview",     # embedded `o1-preview`, NOT start of slug
-    "some-model-o3-mini-fork",    # embedded `o3-mini`, NOT start of slug
-    # Bare "grok" must not over-match non-reasoning Grok SKUs.
-    "x-ai/grok-3",
-    "x-ai/grok-4",
-    "x-ai/grok-4-0709",
-    "x-ai/grok-code-fast-1",
-    # Qwen2 must not match Qwen3 (different family).
-    "qwen2-72b-instruct",
-    # Non-reasoning DeepSeek chat must not match the v4 reasoning entries.
-    "deepseek-chat",
-    "deepseek/deepseek-chat",
-    "some-deepseek-v4-flash",     # embedded v4 slug, NOT start of slug
-    # Empty / None / non-string inputs — must return None, not raise.
-    "",
-    None,
-    12345,
-    [],
-])
+@pytest.mark.parametrize(
+    "model",
+    [
+        # Non-reasoning chat models — no floor.
+        "gpt-4o",
+        "gpt-5",
+        "claude-3-5-sonnet-20240620",
+        "llama-3.3-70b-instruct",
+        "gemini-2.5-pro",
+        # Start-of-slug anchor traps — the slug must be at the START of
+        # the bare model name (after aggregator-prefix strip).  Bare
+        # substring matching would over-match these.
+        "olmo-1",
+        "olmo-13b",
+        "llama-4-70b-o1-preview",  # embedded `o1-preview`, NOT start of slug
+        "some-model-o3-mini-fork",  # embedded `o3-mini`, NOT start of slug
+        # Bare "grok" must not over-match non-reasoning Grok SKUs.
+        "x-ai/grok-3",
+        "x-ai/grok-4",
+        "x-ai/grok-4-0709",
+        "x-ai/grok-code-fast-1",
+        # Qwen2 must not match Qwen3 (different family).
+        "qwen2-72b-instruct",
+        # Non-reasoning DeepSeek chat must not match the v4 reasoning entries.
+        "deepseek-chat",
+        "deepseek/deepseek-chat",
+        "some-deepseek-v4-flash",  # embedded v4 slug, NOT start of slug
+        # Empty / None / non-string inputs — must return None, not raise.
+        "",
+        None,
+        12345,
+        [],
+    ],
+)
 def test_reasoning_stale_timeout_floor_negative_cases(model):
     from agent.reasoning_timeouts import get_reasoning_stale_timeout_floor
+
     assert get_reasoning_stale_timeout_floor(model) is None, (
         f"get_reasoning_stale_timeout_floor({model!r}) must return None "
         f"for non-reasoning models and start-of-slug-anchor traps."
@@ -131,14 +142,17 @@ def test_reasoning_stale_timeout_floor_negative_cases(model):
 def test_longest_substring_wins_on_shared_prefix():
     """`o3-mini` must beat `o3` so the smaller floor applies."""
     from agent.reasoning_timeouts import get_reasoning_stale_timeout_floor
+
     # o3-mini (7 chars) wins over o3 (2 chars) on shared prefix.
     assert get_reasoning_stale_timeout_floor("openai/o3-mini") == 300.0
     assert get_reasoning_stale_timeout_floor("openai/o3") == 600.0
     # Even with deep aggregator prefix chains the model name resolves
     # correctly (start-of-slug anchor + rsplit('/') strip).
     assert get_reasoning_stale_timeout_floor("openrouter/openai/o3-mini") == 300.0
-    assert get_reasoning_stale_timeout_floor("openrouter/anthropic/claude-opus-4-6") == 240.0
-
+    assert (
+        get_reasoning_stale_timeout_floor("openrouter/anthropic/claude-opus-4-6")
+        == 240.0
+    )
 
 
 # ── integration: _resolved_api_call_stale_timeout_base ─────────────────────
@@ -150,6 +164,7 @@ def _write_config(tmp_path: Path, body: str) -> None:
 
 def _make_agent(tmp_path: Path, **overrides):
     from run_agent import AIAgent
+
     kwargs = dict(
         model="gpt-5.5",
         provider="openai-codex",
@@ -177,6 +192,7 @@ def test_reasoning_floor_applies_to_nemotron_3_ultra(monkeypatch, tmp_path):
     # rather than relying on importlib.reload of shared config modules, which
     # races other tests in the same xdist worker (#52217 flake).
     import run_agent
+
     monkeypatch.setattr(run_agent, "get_provider_stale_timeout", lambda *a, **k: None)
 
     agent = _make_agent(
@@ -204,6 +220,7 @@ def test_reasoning_floor_applies_to_opus_4_thinking(monkeypatch, tmp_path):
 
     # Deterministic floor path — see test_reasoning_floor_applies_to_nemotron_3_ultra.
     import run_agent
+
     monkeypatch.setattr(run_agent, "get_provider_stale_timeout", lambda *a, **k: None)
 
     agent = _make_agent(
@@ -232,6 +249,7 @@ def test_reasoning_floor_never_overrides_explicit_user_config(monkeypatch, tmp_p
     # Explicit per-model config resolves to 60s (priority 1). The resolver
     # must short-circuit on this and never consult the reasoning floor.
     import run_agent
+
     monkeypatch.setattr(run_agent, "get_provider_stale_timeout", lambda *a, **k: 60.0)
 
     agent = _make_agent(
@@ -257,6 +275,7 @@ def test_reasoning_floor_loses_to_env_var_when_no_floor_match(monkeypatch, tmp_p
 
     # No provider config -> resolver consults the env var (priority 3).
     import run_agent
+
     monkeypatch.setattr(run_agent, "get_provider_stale_timeout", lambda *a, **k: None)
 
     agent = _make_agent(
@@ -279,6 +298,7 @@ def test_non_reasoning_model_keeps_default(monkeypatch, tmp_path):
 
     # No provider config, no env var, no floor match -> 90s implicit default.
     import run_agent
+
     monkeypatch.setattr(run_agent, "get_provider_stale_timeout", lambda *a, **k: None)
 
     agent = _make_agent(

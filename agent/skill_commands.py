@@ -89,7 +89,7 @@ def _extract_single_skill_user_instruction(message: str) -> Optional[str]:
     if marker_idx < 0:
         return None
 
-    instruction = message[marker_idx + len(_SINGLE_SKILL_INSTRUCTION):]
+    instruction = message[marker_idx + len(_SINGLE_SKILL_INSTRUCTION) :]
     runtime_idx = instruction.find(_RUNTIME_NOTE)
     if runtime_idx >= 0:
         instruction = instruction[:runtime_idx]
@@ -104,7 +104,7 @@ def _extract_bundle_user_instruction(message: str) -> Optional[str]:
     if marker_idx < 0:
         return None
 
-    instruction = message[marker_idx + len(_BUNDLE_USER_INSTRUCTION):]
+    instruction = message[marker_idx + len(_BUNDLE_USER_INSTRUCTION) :]
     first_skill_idx = instruction.find(_BUNDLE_FIRST_SKILL_BLOCK)
     if first_skill_idx >= 0:
         instruction = instruction[:first_skill_idx]
@@ -127,15 +127,17 @@ def _resolve_skill_commands_platform() -> Optional[str]:
     try:
         from gateway.session_context import get_session_env
 
-        resolved_platform = (
-            os.getenv("CLAWK_PLATFORM")
-            or get_session_env("CLAWK_SESSION_PLATFORM")
+        resolved_platform = os.getenv("CLAWK_PLATFORM") or get_session_env(
+            "CLAWK_SESSION_PLATFORM"
         )
     except Exception:
         resolved_platform = os.getenv("CLAWK_PLATFORM")
     return resolved_platform or None
 
-def _load_skill_payload(skill_identifier: str, task_id: str | None = None) -> tuple[dict[str, Any], Path | None, str] | None:
+
+def _load_skill_payload(
+    skill_identifier: str, task_id: str | None = None
+) -> tuple[dict[str, Any], Path | None, str] | None:
     """Load a skill by name/path and return (loaded_payload, skill_dir, display_name)."""
     raw_identifier = (skill_identifier or "").strip()
     if not raw_identifier:
@@ -191,7 +193,9 @@ def _inject_skill_config(loaded_skill: dict[str, Any], parts: list[str]) -> None
         )
 
         # The loaded_skill dict contains the raw content which includes frontmatter
-        raw_content = str(loaded_skill.get("raw_content") or loaded_skill.get("content") or "")
+        raw_content = str(
+            loaded_skill.get("raw_content") or loaded_skill.get("content") or ""
+        )
         if not raw_content:
             return
 
@@ -254,26 +258,20 @@ def _build_skill_message(
     _inject_skill_config(loaded_skill, parts)
 
     if loaded_skill.get("setup_skipped"):
-        parts.extend(
-            [
-                "",
-                "[Skill setup note: Required environment setup was skipped. Continue loading the skill and explain any reduced functionality if it matters.]",
-            ]
-        )
+        parts.extend([
+            "",
+            "[Skill setup note: Required environment setup was skipped. Continue loading the skill and explain any reduced functionality if it matters.]",
+        ])
     elif loaded_skill.get("gateway_setup_hint"):
-        parts.extend(
-            [
-                "",
-                f"[Skill setup note: {loaded_skill['gateway_setup_hint']}]",
-            ]
-        )
+        parts.extend([
+            "",
+            f"[Skill setup note: {loaded_skill['gateway_setup_hint']}]",
+        ])
     elif loaded_skill.get("setup_needed") and loaded_skill.get("setup_note"):
-        parts.extend(
-            [
-                "",
-                f"[Skill setup note: {loaded_skill['setup_note']}]",
-            ]
-        )
+        parts.extend([
+            "",
+            f"[Skill setup note: {loaded_skill['setup_note']}]",
+        ])
 
     supporting = []
     linked_files = loaded_skill.get("linked_files") or {}
@@ -308,7 +306,9 @@ def _build_skill_message(
 
     if user_instruction:
         parts.append("")
-        parts.append(f"The user has provided the following instruction alongside the skill invocation: {user_instruction}")
+        parts.append(
+            f"The user has provided the following instruction alongside the skill invocation: {user_instruction}"
+        )
 
     if runtime_note:
         parts.append("")
@@ -327,9 +327,16 @@ def scan_skill_commands() -> Dict[str, Dict[str, Any]]:
     _skill_commands_platform = _resolve_skill_commands_platform()
     _skill_commands = {}
     try:
-        from tools.skills_tool import SKILLS_DIR, _parse_frontmatter, skill_matches_platform, skill_matches_environment, _get_disabled_skill_names
+        from tools.skills_tool import (
+            SKILLS_DIR,
+            _parse_frontmatter,
+            skill_matches_platform,
+            skill_matches_environment,
+            _get_disabled_skill_names,
+        )
         from agent.skill_utils import get_external_skills_dirs, iter_skill_index_files
         from clawk_cli.commands import resolve_command
+
         disabled = _get_disabled_skill_names()
         seen_names: set = set()
 
@@ -341,10 +348,13 @@ def scan_skill_commands() -> Dict[str, Dict[str, Any]]:
 
         for scan_dir in dirs_to_scan:
             for skill_md in iter_skill_index_files(scan_dir, "SKILL.md"):
-                if any(part in {'.git', '.github', '.hub', '.archive'} for part in skill_md.parts):
+                if any(
+                    part in {".git", ".github", ".hub", ".archive"}
+                    for part in skill_md.parts
+                ):
                     continue
                 try:
-                    content = skill_md.read_text(encoding='utf-8')
+                    content = skill_md.read_text(encoding="utf-8")
                     frontmatter, body = _parse_frontmatter(content)
                     # Skip skills incompatible with the current OS platform
                     if not skill_matches_platform(frontmatter):
@@ -353,26 +363,26 @@ def scan_skill_commands() -> Dict[str, Dict[str, Any]]:
                     # (kanban/docker/s6). Offer-time only; explicit load bypasses.
                     if not skill_matches_environment(frontmatter):
                         continue
-                    name = frontmatter.get('name', skill_md.parent.name)
+                    name = frontmatter.get("name", skill_md.parent.name)
                     if name in seen_names:
                         continue
                     # Respect user's disabled skills config
                     if name in disabled:
                         continue
-                    description = frontmatter.get('description', '')
+                    description = frontmatter.get("description", "")
                     if not description:
-                        for line in body.strip().split('\n'):
+                        for line in body.strip().split("\n"):
                             line = line.strip()
-                            if line and not line.startswith('#'):
+                            if line and not line.startswith("#"):
                                 description = line[:80]
                                 break
                     seen_names.add(name)
                     # Normalize to hyphen-separated slug, stripping
                     # non-alnum chars (e.g. +, /) to avoid invalid
                     # Telegram command names downstream.
-                    cmd_name = name.lower().replace(' ', '-').replace('_', '-')
-                    cmd_name = _SKILL_INVALID_CHARS.sub('', cmd_name)
-                    cmd_name = _SKILL_MULTI_HYPHEN.sub('-', cmd_name).strip('-')
+                    cmd_name = name.lower().replace(" ", "-").replace("_", "-")
+                    cmd_name = _SKILL_INVALID_CHARS.sub("", cmd_name)
+                    cmd_name = _SKILL_MULTI_HYPHEN.sub("-", cmd_name).strip("-")
                     if not cmd_name:
                         continue
                     # Skip if this skill's auto-generated /command collides
@@ -385,7 +395,9 @@ def scan_skill_commands() -> Dict[str, Dict[str, Any]]:
                             "Skill %r generates slash command '/%s' which "
                             "collides with a core Clawksis command; skipping "
                             "auto-registration. Use '/skill %s' instead.",
-                            name, cmd_name, name,
+                            name,
+                            cmd_name,
+                            name,
                         )
                         continue
                     # Dedup on the resolved slug, not just the raw name: two
@@ -397,7 +409,9 @@ def scan_skill_commands() -> Dict[str, Dict[str, Any]]:
                         logger.warning(
                             "Skill %r maps to slash command %s already claimed "
                             "by %r; keeping the first and skipping this one.",
-                            name, cmd_key, _skill_commands[cmd_key]["name"],
+                            name,
+                            cmd_key,
+                            _skill_commands[cmd_key]["name"],
                         )
                         continue
                     _skill_commands[cmd_key] = {
@@ -456,6 +470,7 @@ def reload_skills() -> Dict[str, Any]:
         ``description:`` field — the same string the system prompt renders
         as ``    - name: description`` for pre-existing skills.
     """
+
     # Snapshot pre-reload state (name -> description) from the current
     # slash-command cache. Using dicts lets the post-rescan diff carry
     # descriptions for newly-visible or just-removed skills without a
@@ -541,6 +556,7 @@ def build_skill_invocation_message(
     # Track active usage for Curator lifecycle management (#17782)
     try:
         from tools.skill_usage import bump_use
+
         bump_use(skill_name)
     except Exception:
         pass  # Non-critical — skill invocation proceeds regardless
@@ -649,6 +665,7 @@ def build_stacked_skill_invocation_message(
         # Track active usage for Curator lifecycle management (#17782)
         try:
             from tools.skill_usage import bump_use
+
             bump_use(skill_name)
         except Exception:
             pass  # Non-critical
@@ -711,6 +728,7 @@ def build_preloaded_skills_prompt(
 
     try:
         from agent.skill_utils import get_disabled_skill_names
+
         disabled_names = get_disabled_skill_names()
     except Exception:
         disabled_names = set()
@@ -736,6 +754,7 @@ def build_preloaded_skills_prompt(
         # Track active usage for Curator lifecycle management (#17782)
         try:
             from tools.skill_usage import bump_use
+
             bump_use(skill_name)
         except Exception:
             pass  # Non-critical

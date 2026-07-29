@@ -107,7 +107,9 @@ class SubscriptionState:
     logged_in: bool
     org_name: Optional[str] = None
     org_id: Optional[str] = None  # org.id from the NAS response
-    role: Optional[str] = None  # "OWNER" | "ADMIN" | "FINANCE_ADMIN" | "SECURITY_ADMIN" | "MEMBER"
+    role: Optional[str] = (
+        None  # "OWNER" | "ADMIN" | "FINANCE_ADMIN" | "SECURITY_ADMIN" | "MEMBER"
+    )
     can_change_plan_raw: Optional[bool] = None
     context: str = "personal"  # "personal" | "team"
     current: Optional[CurrentSubscription] = None
@@ -286,8 +288,12 @@ def build_subscription_state(*, timeout: float = 15.0) -> SubscriptionState:
         logger.debug("subscription ▸ /state fetch failed (fail-open)", exc_info=True)
         return SubscriptionState(logged_in=False, error=str(exc))
     except Exception:
-        logger.debug("subscription ▸ /state unexpected error (fail-open)", exc_info=True)
-        return SubscriptionState(logged_in=False, error="could not load subscription state")
+        logger.debug(
+            "subscription ▸ /state unexpected error (fail-open)", exc_info=True
+        )
+        return SubscriptionState(
+            logged_in=False, error="could not load subscription state"
+        )
 
     raw_portal = payload.get("portalUrl") if isinstance(payload, dict) else None
     portal_url = _absolutize_portal_url(raw_portal) if raw_portal else None
@@ -382,40 +388,77 @@ def dev_fixture_subscription_state() -> Optional[SubscriptionState]:
     if not name:
         return None
 
-    common = dict(org_name="Acme Inc", org_id="org_acme", role="OWNER", portal_url=_DEV_FIXTURE_PORTAL)
+    common = dict(
+        org_name="Acme Inc",
+        org_id="org_acme",
+        role="OWNER",
+        portal_url=_DEV_FIXTURE_PORTAL,
+    )
 
     if name in ("logged-out", "logged_out", "loggedout"):
         return SubscriptionState(logged_in=False)
     if name == "free":
-        return SubscriptionState(logged_in=True, current=None, tiers=_dev_tiers(None), **common)
+        return SubscriptionState(
+            logged_in=True, current=None, tiers=_dev_tiers(None), **common
+        )
     if name in ("mid", "mid-tier"):
-        return SubscriptionState(logged_in=True, current=_dev_current(), tiers=_dev_tiers("plus"), **common)
+        return SubscriptionState(
+            logged_in=True, current=_dev_current(), tiers=_dev_tiers("plus"), **common
+        )
     if name in ("top", "top-tier"):
         return SubscriptionState(
             logged_in=True,
-            current=_dev_current(tier_id="ultra", tier_name="Ultra", monthly_credits=Decimal("7000"), credits_remaining=Decimal("5000")),
+            current=_dev_current(
+                tier_id="ultra",
+                tier_name="Ultra",
+                monthly_credits=Decimal("7000"),
+                credits_remaining=Decimal("5000"),
+            ),
             tiers=_dev_tiers("ultra"),
             **common,
         )
     if name in ("not-admin", "member"):
-        return SubscriptionState(logged_in=True, current=_dev_current(), tiers=_dev_tiers("plus"), **{**common, "role": "MEMBER"})
+        return SubscriptionState(
+            logged_in=True,
+            current=_dev_current(),
+            tiers=_dev_tiers("plus"),
+            **{**common, "role": "MEMBER"},
+        )
     if name == "downgrade":
         return SubscriptionState(
             logged_in=True,
-            current=_dev_current(tier_id="super", tier_name="Super", monthly_credits=Decimal("3000"), credits_remaining=Decimal("1500"), pending_downgrade_tier_name="Plus", pending_downgrade_at="2026-07-15"),
+            current=_dev_current(
+                tier_id="super",
+                tier_name="Super",
+                monthly_credits=Decimal("3000"),
+                credits_remaining=Decimal("1500"),
+                pending_downgrade_tier_name="Plus",
+                pending_downgrade_at="2026-07-15",
+            ),
             tiers=_dev_tiers("super"),
             **common,
         )
     if name == "cancel":
         return SubscriptionState(
             logged_in=True,
-            current=_dev_current(cancel_at_period_end=True, cancellation_effective_at="2026-07-01"),
+            current=_dev_current(
+                cancel_at_period_end=True, cancellation_effective_at="2026-07-01"
+            ),
             tiers=_dev_tiers("plus"),
             **common,
         )
     if name == "team":
-        return SubscriptionState(logged_in=True, context="team", current=None, org_name="Acme Engineering", org_id="org_eng", role="OWNER", portal_url=_DEV_FIXTURE_PORTAL)
+        return SubscriptionState(
+            logged_in=True,
+            context="team",
+            current=None,
+            org_name="Acme Engineering",
+            org_id="org_eng",
+            role="OWNER",
+            portal_url=_DEV_FIXTURE_PORTAL,
+        )
 
     # Unknown name → behave as logged-out so the misconfiguration is visible.
-    return SubscriptionState(logged_in=False, error=f"unknown CLAWK_DEV_SUBSCRIPTION_FIXTURE: {name}")
-
+    return SubscriptionState(
+        logged_in=False, error=f"unknown CLAWK_DEV_SUBSCRIPTION_FIXTURE: {name}"
+    )

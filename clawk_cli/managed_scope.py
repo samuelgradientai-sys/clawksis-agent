@@ -15,6 +15,7 @@ is the single seam for adding macOS / Windows native locations later.
 
 Attribution: do not reference any third-party product by name in this file.
 """
+
 from __future__ import annotations
 
 import copy
@@ -159,7 +160,11 @@ def apply_managed_overlay(config: dict) -> dict:
         if not managed:
             return config
         # Imported lazily to avoid an import cycle (config imports managed_scope).
-        from clawk_cli.config import _deep_merge, _expand_env_vars, _normalize_root_model_keys
+        from clawk_cli.config import (
+            _deep_merge,
+            _expand_env_vars,
+            _normalize_root_model_keys,
+        )
 
         managed_expanded = _normalize_root_model_keys(_expand_env_vars(managed))
         # A bare ``model: x/y`` string in the managed file must merge as

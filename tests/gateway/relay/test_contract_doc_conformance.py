@@ -73,8 +73,7 @@ def test_descriptor_fields_match_contract_doc():
     code_required = {
         name
         for name, f in dc_fields.items()
-        if f.default is dataclasses.MISSING
-        and f.default_factory is dataclasses.MISSING  # type: ignore[misc]
+        if f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING  # type: ignore[misc]
     }
     code_names = set(dc_fields.keys())
     doc_names = set(documented.keys())
@@ -163,7 +162,9 @@ def test_internal_only_session_fields_stay_off_the_wire():
     )
 
 
-@pytest.mark.parametrize("discriminator", ["chat_id", "chat_type", "user_id", "thread_id", "guild_id"])
+@pytest.mark.parametrize(
+    "discriminator", ["chat_id", "chat_type", "user_id", "thread_id", "guild_id"]
+)
 def test_discord_telegram_discriminator_columns_present(discriminator):
     """§3's per-platform table headers must exist as SessionSource fields.
 

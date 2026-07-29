@@ -28,13 +28,11 @@ def test_normalize_extra_headers_rejects_non_dict_and_empty():
 
 
 def test_normalize_entry_keeps_extra_headers():
-    normalized = _normalize_custom_provider_entry(
-        {
-            "name": "my-proxy",
-            "base_url": "https://llm.internal.example.com/v1",
-            "extra_headers": {"X-Custom-Auth": "tok", "X-Client-Name": "clawk"},
-        }
-    )
+    normalized = _normalize_custom_provider_entry({
+        "name": "my-proxy",
+        "base_url": "https://llm.internal.example.com/v1",
+        "extra_headers": {"X-Custom-Auth": "tok", "X-Client-Name": "clawk"},
+    })
     assert normalized is not None
     assert normalized["extra_headers"] == {
         "X-Custom-Auth": "tok",
@@ -44,25 +42,21 @@ def test_normalize_entry_keeps_extra_headers():
 
 def test_normalize_entry_drops_invalid_extra_headers():
     for bad in ("not-a-dict", {}, 42, ["a"]):
-        normalized = _normalize_custom_provider_entry(
-            {
-                "name": "my-proxy",
-                "base_url": "https://llm.internal.example.com/v1",
-                "extra_headers": bad,
-            }
-        )
+        normalized = _normalize_custom_provider_entry({
+            "name": "my-proxy",
+            "base_url": "https://llm.internal.example.com/v1",
+            "extra_headers": bad,
+        })
         assert normalized is not None
         assert "extra_headers" not in normalized
 
 
 def test_normalize_entry_stringifies_values_and_skips_none():
-    normalized = _normalize_custom_provider_entry(
-        {
-            "name": "my-proxy",
-            "base_url": "https://llm.internal.example.com/v1",
-            "extra_headers": {"X-Int": 7, "X-None": None},
-        }
-    )
+    normalized = _normalize_custom_provider_entry({
+        "name": "my-proxy",
+        "base_url": "https://llm.internal.example.com/v1",
+        "extra_headers": {"X-Int": 7, "X-None": None},
+    })
     assert normalized is not None
     assert normalized["extra_headers"] == {"X-Int": "7"}
 
@@ -91,14 +85,21 @@ def test_get_custom_provider_extra_headers_no_match_returns_empty():
             "extra_headers": {"X-Secret": "s"},
         }
     ]
-    assert get_custom_provider_extra_headers(
-        "https://other.example.com/v1", custom_providers=providers,
-    ) == {}
+    assert (
+        get_custom_provider_extra_headers(
+            "https://other.example.com/v1",
+            custom_providers=providers,
+        )
+        == {}
+    )
     # prefix look-alike host must not match (no substring bypass)
-    assert get_custom_provider_extra_headers(
-        "https://llm.internal.example.com.attacker.test/v1",
-        custom_providers=providers,
-    ) == {}
+    assert (
+        get_custom_provider_extra_headers(
+            "https://llm.internal.example.com.attacker.test/v1",
+            custom_providers=providers,
+        )
+        == {}
+    )
 
 
 def test_apply_extra_headers_merges_onto_existing_defaults():
@@ -121,7 +122,7 @@ def test_apply_extra_headers_merges_onto_existing_defaults():
     )
     assert client_kwargs["default_headers"] == {
         "User-Agent": "override",  # provider-specific value wins
-        "X-Keep": "1",             # untouched defaults preserved
+        "X-Keep": "1",  # untouched defaults preserved
         "X-New": "2",
     }
 
@@ -160,8 +161,7 @@ def test_fetch_api_models_sends_extra_headers_to_models_probe(monkeypatch):
         captured["url"] = request.full_url
         captured["timeout"] = timeout
         captured["headers"] = {
-            key.lower(): value
-            for key, value in request.header_items()
+            key.lower(): value for key, value in request.header_items()
         }
         return FakeResponse()
 

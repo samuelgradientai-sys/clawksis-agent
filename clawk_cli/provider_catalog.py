@@ -42,30 +42,28 @@ from dataclasses import dataclass
 # (api_key, and aws_sdk which is configured via AWS_REGION/AWS_PROFILE) routes
 # to the "API keys" tab.  Mirrors the auth_type strings used in
 # clawk_cli.auth.PROVIDER_REGISTRY and providers.base.ProviderProfile.
-_ACCOUNTS_AUTH_TYPES: frozenset[str] = frozenset(
-    {
-        "oauth_device_code",
-        "oauth_external",
-        "oauth_minimax",
-        "external_process",  # copilot-acp: spawns `copilot --acp --stdio`
-        "copilot",           # GitHub Copilot token / gh auth
-    }
-)
+_ACCOUNTS_AUTH_TYPES: frozenset[str] = frozenset({
+    "oauth_device_code",
+    "oauth_external",
+    "oauth_minimax",
+    "external_process",  # copilot-acp: spawns `copilot --acp --stdio`
+    "copilot",  # GitHub Copilot token / gh auth
+})
 
 
 @dataclass(frozen=True)
 class ProviderDescriptor:
     """One provider, as seen by every surface (CLI picker + both GUI tabs)."""
 
-    slug: str                      # canonical id, e.g. "openai-codex"
-    label: str                     # human display name
-    description: str               # one-line description
-    auth_type: str                 # api_key | oauth_* | external_process | copilot | aws_sdk
-    tab: str                       # "keys" | "accounts"
+    slug: str  # canonical id, e.g. "openai-codex"
+    label: str  # human display name
+    description: str  # one-line description
+    auth_type: str  # api_key | oauth_* | external_process | copilot | aws_sdk
+    tab: str  # "keys" | "accounts"
     api_key_env_vars: tuple[str, ...]  # credential env vars (may be empty)
-    base_url_env_var: str          # base-URL override env var (may be "")
-    signup_url: str                # signup / console URL (may be "")
-    order: int                     # CANONICAL_PROVIDERS index — mirrors `clawk model`
+    base_url_env_var: str  # base-URL override env var (may be "")
+    signup_url: str  # signup / console URL (may be "")
+    order: int  # CANONICAL_PROVIDERS index — mirrors `clawk model`
 
 
 def tab_for_auth_type(auth_type: str) -> str:
@@ -75,8 +73,12 @@ def tab_for_auth_type(auth_type: str) -> str:
 
 def _split_env_vars(env_vars: tuple[str, ...]) -> tuple[tuple[str, ...], str]:
     """Split a profile's ``env_vars`` into (api_key_vars, base_url_var)."""
-    keys = tuple(v for v in env_vars if not (v.endswith("_BASE_URL") or v.endswith("_URL")))
-    base = next((v for v in env_vars if v.endswith("_BASE_URL") or v.endswith("_URL")), "")
+    keys = tuple(
+        v for v in env_vars if not (v.endswith("_BASE_URL") or v.endswith("_URL"))
+    )
+    base = next(
+        (v for v in env_vars if v.endswith("_BASE_URL") or v.endswith("_URL")), ""
+    )
     return keys, base
 
 
@@ -146,9 +148,7 @@ def provider_catalog() -> list[ProviderDescriptor]:
             api_key_vars, base_url_var = (), ""
 
         label = (
-            (getattr(prof, "display_name", "") if prof else "")
-            or entry.label
-            or slug
+            (getattr(prof, "display_name", "") if prof else "") or entry.label or slug
         )
         description = (
             (getattr(prof, "description", "") if prof else "")

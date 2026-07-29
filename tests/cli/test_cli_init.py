@@ -45,12 +45,17 @@ def _make_cli(env_overrides=None, config_overrides=None, **kwargs):
         "prompt_toolkit.formatted_text": MagicMock(),
         "prompt_toolkit.auto_suggest": MagicMock(),
     }
-    with patch.dict(sys.modules, prompt_toolkit_stubs), \
-         patch.dict("os.environ", clean_env, clear=False):
+    with (
+        patch.dict(sys.modules, prompt_toolkit_stubs),
+        patch.dict("os.environ", clean_env, clear=False),
+    ):
         import cli as _cli_mod
+
         _cli_mod = importlib.reload(_cli_mod)
-        with patch.object(_cli_mod, "get_tool_definitions", return_value=[]), \
-             patch.dict(_cli_mod.__dict__, {"CLI_CONFIG": _clean_config}):
+        with (
+            patch.object(_cli_mod, "get_tool_definitions", return_value=[]),
+            patch.dict(_cli_mod.__dict__, {"CLI_CONFIG": _clean_config}),
+        ):
             return _cli_mod.ClawksisCLI(**kwargs)
 
 
@@ -104,12 +109,14 @@ class TestVerboseAndToolProgress:
 
 class TestFallbackChainInit:
     def test_merges_new_and_legacy_fallback_config(self):
-        cli = _make_cli(config_overrides={
-            "fallback_providers": [
-                {"provider": "openrouter", "model": "anthropic/claude-sonnet-4.6"},
-            ],
-            "fallback_model": {"provider": "nous", "model": "Hermes-4"},
-        })
+        cli = _make_cli(
+            config_overrides={
+                "fallback_providers": [
+                    {"provider": "openrouter", "model": "anthropic/claude-sonnet-4.6"},
+                ],
+                "fallback_model": {"provider": "nous", "model": "Hermes-4"},
+            }
+        )
         assert cli._fallback_model == [
             {"provider": "openrouter", "model": "anthropic/claude-sonnet-4.6"},
             {"provider": "nous", "model": "Hermes-4"},
@@ -197,34 +204,59 @@ class TestPromptToolkitTerminalCompatibility:
             return None
 
         # Bare local POSIX (no SSH/WSL markers): both enter and c-j submit.
-        with _patch.object(_sys, "platform", "linux"), \
-             _patch.dict(_os.environ, {}, clear=True), \
-             _patch("builtins.open", side_effect=OSError("no /proc")):
+        with (
+            _patch.object(_sys, "platform", "linux"),
+            _patch.dict(_os.environ, {}, clear=True),
+            _patch("builtins.open", side_effect=OSError("no /proc")),
+        ):
             kb = KeyBindings()
             _bind_prompt_submit_keys(kb, submit_handler)
-            bindings = {tuple(key.value for key in binding.keys): binding.handler for binding in kb.bindings}
+            bindings = {
+                tuple(key.value for key in binding.keys): binding.handler
+                for binding in kb.bindings
+            }
             assert bindings[("c-m",)] is submit_handler
             assert bindings[("c-j",)] is submit_handler
 
         # POSIX over SSH: c-j stays free so Ctrl+Enter (sent as LF by
         # Windows Terminal / Kitty / mintty over SSH) inserts a newline.
-        with _patch.object(_sys, "platform", "linux"), \
-             _patch.dict(_os.environ, {"SSH_CONNECTION": "1.2.3.4 5 6.7.8.9 22"}, clear=True), \
-             _patch("builtins.open", side_effect=OSError("no /proc")):
+        with (
+            _patch.object(_sys, "platform", "linux"),
+            _patch.dict(
+                _os.environ, {"SSH_CONNECTION": "1.2.3.4 5 6.7.8.9 22"}, clear=True
+            ),
+            _patch("builtins.open", side_effect=OSError("no /proc")),
+        ):
             kb = KeyBindings()
             _bind_prompt_submit_keys(kb, submit_handler)
-            bindings = {tuple(key.value for key in binding.keys): binding.handler for binding in kb.bindings}
+            bindings = {
+                tuple(key.value for key in binding.keys): binding.handler
+                for binding in kb.bindings
+            }
             assert bindings[("c-m",)] is submit_handler
             assert ("c-j",) not in bindings
 
         # Ghostty through tmux: TERM_PROGRAM is tmux, but Ghostty exports a
         # stable env marker. Keep c-j free so Ctrl+J inserts a newline.
-        with _patch.object(_sys, "platform", "linux"), \
-             _patch.dict(_os.environ, {"TERM": "tmux-256color", "TERM_PROGRAM": "tmux", "GHOSTTY_RESOURCES_DIR": "/usr/share/ghostty"}, clear=True), \
-             _patch("builtins.open", side_effect=OSError("no /proc")):
+        with (
+            _patch.object(_sys, "platform", "linux"),
+            _patch.dict(
+                _os.environ,
+                {
+                    "TERM": "tmux-256color",
+                    "TERM_PROGRAM": "tmux",
+                    "GHOSTTY_RESOURCES_DIR": "/usr/share/ghostty",
+                },
+                clear=True,
+            ),
+            _patch("builtins.open", side_effect=OSError("no /proc")),
+        ):
             kb = KeyBindings()
             _bind_prompt_submit_keys(kb, submit_handler)
-            bindings = {tuple(key.value for key in binding.keys): binding.handler for binding in kb.bindings}
+            bindings = {
+                tuple(key.value for key in binding.keys): binding.handler
+                for binding in kb.bindings
+            }
             assert bindings[("c-m",)] is submit_handler
             assert ("c-j",) not in bindings
 
@@ -233,7 +265,10 @@ class TestPromptToolkitTerminalCompatibility:
         with _patch.object(_sys, "platform", "win32"):
             kb = KeyBindings()
             _bind_prompt_submit_keys(kb, submit_handler)
-            bindings = {tuple(key.value for key in binding.keys): binding.handler for binding in kb.bindings}
+            bindings = {
+                tuple(key.value for key in binding.keys): binding.handler
+                for binding in kb.bindings
+            }
             assert bindings[("c-m",)] is submit_handler
             assert ("c-j",) not in bindings
 
@@ -423,7 +458,9 @@ class TestHistoryDisplay:
         cli._session_db = SessionDB(db_path=tmp_path / "state.db")
         cli._session_db.create_session("current_session", "cli")
         cli._session_db.create_session("target_session", "cli")
-        cli._session_db.append_message("target_session", "user", "hello from resumed session")
+        cli._session_db.append_message(
+            "target_session", "user", "hello from resumed session"
+        )
 
         os.environ["CLAWK_SESSION_ID"] = "current_session"
         _VAR_MAP["CLAWK_SESSION_ID"].set("current_session")
@@ -529,9 +566,7 @@ class TestHistoryDisplay:
         with patch.object(cli, "_handle_resume_command") as mock_resume:
             cli.process_command("/sessions Checking Running Clawksis")
 
-        mock_resume.assert_called_once_with(
-            "/resume Checking Running Clawksis"
-        )
+        mock_resume.assert_called_once_with("/resume Checking Running Clawksis")
 
     def test_sessions_command_is_dispatched(self):
         """/sessions must hit _handle_sessions_command, not fall through.
@@ -563,21 +598,26 @@ class TestRootLevelProviderOverride:
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
         config_path = clawk_home / "config.yaml"
-        config_path.write_text(yaml.safe_dump({
-            "provider": "opencode-go",  # stale root-level key
-            "model": {
-                "default": "google/gemini-3-flash-preview",
-                "provider": "openrouter",  # correct canonical key
-            },
-        }))
+        config_path.write_text(
+            yaml.safe_dump({
+                "provider": "opencode-go",  # stale root-level key
+                "model": {
+                    "default": "google/gemini-3-flash-preview",
+                    "provider": "openrouter",  # correct canonical key
+                },
+            })
+        )
 
         import cli
+
         monkeypatch.setattr(cli, "_clawk_home", clawk_home)
         cfg = cli.load_cli_config()
 
         assert cfg["model"]["provider"] == "openrouter"
 
-    def test_root_provider_used_as_fallback_when_model_provider_missing(self, tmp_path, monkeypatch):
+    def test_root_provider_used_as_fallback_when_model_provider_missing(
+        self, tmp_path, monkeypatch
+    ):
         """Legacy root-level provider still populates model.provider in the CLI loader."""
         import yaml
 
@@ -586,21 +626,26 @@ class TestRootLevelProviderOverride:
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
         config_path = clawk_home / "config.yaml"
-        config_path.write_text(yaml.safe_dump({
-            "provider": "opencode-go",  # stale root key
-            "model": {
-                "default": "google/gemini-3-flash-preview",
-                # no explicit model.provider — defaults provide "auto"
-            },
-        }))
+        config_path.write_text(
+            yaml.safe_dump({
+                "provider": "opencode-go",  # stale root key
+                "model": {
+                    "default": "google/gemini-3-flash-preview",
+                    # no explicit model.provider — defaults provide "auto"
+                },
+            })
+        )
 
         import cli
+
         monkeypatch.setattr(cli, "_clawk_home", clawk_home)
         cfg = cli.load_cli_config()
 
         assert cfg["model"]["provider"] == "opencode-go"
 
-    def test_root_base_url_used_as_fallback_when_model_base_url_missing(self, tmp_path, monkeypatch):
+    def test_root_base_url_used_as_fallback_when_model_base_url_missing(
+        self, tmp_path, monkeypatch
+    ):
         """Legacy root-level base_url still populates model.base_url in the CLI loader."""
         import yaml
 
@@ -609,14 +654,17 @@ class TestRootLevelProviderOverride:
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
         config_path = clawk_home / "config.yaml"
-        config_path.write_text(yaml.safe_dump({
-            "base_url": "https://example.com/v1",
-            "model": {
-                "default": "google/gemini-3-flash-preview",
-            },
-        }))
+        config_path.write_text(
+            yaml.safe_dump({
+                "base_url": "https://example.com/v1",
+                "model": {
+                    "default": "google/gemini-3-flash-preview",
+                },
+            })
+        )
 
         import cli
+
         monkeypatch.setattr(cli, "_clawk_home", clawk_home)
         cfg = cli.load_cli_config()
 
@@ -759,18 +807,18 @@ class TestRootLevelProviderOverride:
         """An explicit model.default is never overridden, and a stale alias is dropped."""
         from clawk_cli.config import _normalize_root_model_keys
 
-        result = _normalize_root_model_keys(
-            {"model": {"default": "real-model", "name": "ignored"}}
-        )
+        result = _normalize_root_model_keys({
+            "model": {"default": "real-model", "name": "ignored"}
+        })
         assert result["model"]["default"] == "real-model"
         assert "name" not in result["model"]
 
     def test_normalize_explicit_default_wins_over_model(self):
         from clawk_cli.config import _normalize_root_model_keys
 
-        result = _normalize_root_model_keys(
-            {"model": {"default": "real-model", "model": "ignored"}}
-        )
+        result = _normalize_root_model_keys({
+            "model": {"default": "real-model", "model": "ignored"}
+        })
         assert result["model"]["default"] == "real-model"
         assert "model" not in result["model"]
 
@@ -778,7 +826,9 @@ class TestRootLevelProviderOverride:
         """Precedence: model > name when both are aliases and default is empty."""
         from clawk_cli.config import _normalize_root_model_keys
 
-        result = _normalize_root_model_keys({"model": {"model": "m-key", "name": "n-key"}})
+        result = _normalize_root_model_keys({
+            "model": {"model": "m-key", "name": "n-key"}
+        })
         assert result["model"]["default"] == "m-key"
         assert "model" not in result["model"] and "name" not in result["model"]
 
@@ -789,7 +839,9 @@ class TestRootLevelProviderOverride:
         result = _normalize_root_model_keys({"model": {"provider": "my-litellm"}})
         assert (result["model"].get("default") or "") == ""
 
-    def test_normalize_model_name_save_roundtrip_migrates_key(self, tmp_path, monkeypatch):
+    def test_normalize_model_name_save_roundtrip_migrates_key(
+        self, tmp_path, monkeypatch
+    ):
         """A model.name config is permanently migrated to model.default on save."""
         import clawk_cli.config as cfgmod
 
@@ -823,4 +875,4 @@ class TestProviderResolution:
     def test_model_is_string(self):
         cli = _make_cli()
         assert isinstance(cli.model, str)
-        assert isinstance(cli.model, str) and '/' in cli.model
+        assert isinstance(cli.model, str) and "/" in cli.model

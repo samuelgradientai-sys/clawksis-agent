@@ -146,5 +146,10 @@ class TestSlackFullManifest:
         for scope in ("commands", "channels:history", "groups:read", "im:history"):
             assert scope in bot_scopes
         bot_events = manifest["settings"]["event_subscriptions"]["bot_events"]
-        for event in ("message.im", "message.channels", "message.groups", "app_mention"):
+        for event in (
+            "message.im",
+            "message.channels",
+            "message.groups",
+            "app_mention",
+        ):
             assert event in bot_events

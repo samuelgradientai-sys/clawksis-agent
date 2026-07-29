@@ -16,7 +16,9 @@ def test_gateway_config_stt_disabled_from_dict_nested():
     assert config.stt_enabled is False
 
 
-def test_load_gateway_config_bridges_stt_enabled_from_config_yaml(tmp_path, monkeypatch):
+def test_load_gateway_config_bridges_stt_enabled_from_config_yaml(
+    tmp_path, monkeypatch
+):
     clawk_home = tmp_path / ".clawk"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
@@ -38,14 +40,21 @@ async def test_enrich_message_with_transcription_surfaces_path_when_stt_disabled
 
     runner = GatewayRunner.__new__(GatewayRunner)
     runner.config = GatewayConfig(stt_enabled=False)
-    runner._has_setup_skill = lambda: True  # Should NOT be consulted in disabled branch.
+    runner._has_setup_skill = lambda: (
+        True
+    )  # Should NOT be consulted in disabled branch.
 
-    with patch(
-        "tools.transcription_tools.transcribe_audio",
-        side_effect=AssertionError("transcribe_audio should not be called when STT is disabled"),
-    ), patch(
-        "gateway.run._probe_audio_duration",
-        new=AsyncMock(return_value="0:12"),
+    with (
+        patch(
+            "tools.transcription_tools.transcribe_audio",
+            side_effect=AssertionError(
+                "transcribe_audio should not be called when STT is disabled"
+            ),
+        ),
+        patch(
+            "gateway.run._probe_audio_duration",
+            new=AsyncMock(return_value="0:12"),
+        ),
     ):
         result, transcripts = await runner._enrich_message_with_transcription(
             "caption",

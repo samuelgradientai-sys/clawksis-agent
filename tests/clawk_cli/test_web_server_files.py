@@ -111,7 +111,9 @@ def test_forced_root_file_upload_list_read_delete_roundtrip(forced_files_client)
     assert not file_path.exists()
 
 
-def test_directory_management_requires_recursive_delete_for_nonempty_dirs(forced_files_client):
+def test_directory_management_requires_recursive_delete_for_nonempty_dirs(
+    forced_files_client,
+):
     client, root = forced_files_client
     runs_path = root / "runs"
     checkpoints_path = runs_path / "checkpoints"
@@ -171,7 +173,9 @@ def test_forced_root_paths_stay_under_root(forced_files_client, tmp_path):
     assert escaped.status_code == 403
 
 
-def test_local_mode_defaults_to_home_and_can_jump_to_absolute_path(local_files_client, tmp_path):
+def test_local_mode_defaults_to_home_and_can_jump_to_absolute_path(
+    local_files_client, tmp_path
+):
     client, home = local_files_client
     (home / "home.txt").write_text("home")
 
@@ -291,12 +295,16 @@ def test_download_authenticates_via_query_token(forced_files_client):
     assert ok.status_code == 200
     assert ok.content == b"hello"
 
-    assert client.get(
-        "/api/files/download", params={"path": str(file_path), "token": "nope"}
-    ).status_code == 401
-    assert client.get(
-        "/api/files/download", params={"path": str(file_path)}
-    ).status_code == 401
+    assert (
+        client.get(
+            "/api/files/download", params={"path": str(file_path), "token": "nope"}
+        ).status_code
+        == 401
+    )
+    assert (
+        client.get("/api/files/download", params={"path": str(file_path)}).status_code
+        == 401
+    )
 
 
 def test_query_token_does_not_authenticate_other_endpoints(forced_files_client):
@@ -356,7 +364,9 @@ def test_stream_upload_roundtrip(forced_files_client):
     assert file_path.read_bytes() == payload
 
 
-def test_stream_upload_rejects_oversized_without_clobbering(forced_files_client, monkeypatch):
+def test_stream_upload_rejects_oversized_without_clobbering(
+    forced_files_client, monkeypatch
+):
     """Over-limit uploads return 413 and never overwrite an existing file.
 
     The size cap is enforced while streaming (not after buffering), and the
@@ -380,7 +390,13 @@ def test_stream_upload_rejects_oversized_without_clobbering(forced_files_client,
     rejected = client.post(
         "/api/files/upload-stream",
         data={"path": str(file_path), "overwrite": "true"},
-        files={"file": ("big.bin", b"way too many bytes for the cap", "application/octet-stream")},
+        files={
+            "file": (
+                "big.bin",
+                b"way too many bytes for the cap",
+                "application/octet-stream",
+            )
+        },
     )
     assert rejected.status_code == 413
     # The original file must survive a rejected overwrite.
@@ -547,7 +563,10 @@ def test_sensitive_env_suffix_variants_blocked(forced_files_client):
         p = root / f".env.{suffix}"
         p.write_text(f"SECRET_{suffix}=abc123")
         assert client.get("/api/files/read", params={"path": str(p)}).status_code == 403
-        assert client.get("/api/files/download", params={"path": str(p)}).status_code == 403
+        assert (
+            client.get("/api/files/download", params={"path": str(p)}).status_code
+            == 403
+        )
 
 
 def test_sensitive_env_case_insensitive_blocked(forced_files_client):
@@ -559,7 +578,10 @@ def test_sensitive_env_case_insensitive_blocked(forced_files_client):
         p = root / name
         p.write_text("SECRET=abc123")
         assert client.get("/api/files/read", params={"path": str(p)}).status_code == 403
-        assert client.get("/api/files/download", params={"path": str(p)}).status_code == 403
+        assert (
+            client.get("/api/files/download", params={"path": str(p)}).status_code
+            == 403
+        )
 
 
 def test_envrc_blocked(forced_files_client):
@@ -600,8 +622,13 @@ def test_other_credential_store_basenames_blocked(forced_files_client):
     ):
         p = root / name
         p.write_text("SECRET=abc123")
-        assert client.get("/api/files/read", params={"path": str(p)}).status_code == 403, name
-        assert client.get("/api/files/download", params={"path": str(p)}).status_code == 403, name
+        assert (
+            client.get("/api/files/read", params={"path": str(p)}).status_code == 403
+        ), name
+        assert (
+            client.get("/api/files/download", params={"path": str(p)}).status_code
+            == 403
+        ), name
 
     listing = client.get("/api/files", params={"path": str(root)})
     names = [e["name"] for e in listing.json()["entries"]]
@@ -647,16 +674,23 @@ def test_credential_dir_trees_blocked_on_subdir_descent(forced_files_client):
     pairing_file.write_text("PAIRING-SECRET\n")
 
     # The token dirs themselves must not appear in the root listing.
-    root_names = [e["name"] for e in client.get(
-        "/api/files", params={"path": str(root)}).json()["entries"]]
+    root_names = [
+        e["name"]
+        for e in client.get("/api/files", params={"path": str(root)}).json()["entries"]
+    ]
     assert "mcp-tokens" not in root_names
     assert "pairing" not in root_names
 
     # Read/download of the per-server files must be denied even though their
     # basenames aren't in _SENSITIVE_MANAGED_FILE_BASENAMES.
     for p in (mcp_file, pairing_file):
-        assert client.get("/api/files/read", params={"path": str(p)}).status_code == 403, str(p)
-        assert client.get("/api/files/download", params={"path": str(p)}).status_code == 403, str(p)
+        assert (
+            client.get("/api/files/read", params={"path": str(p)}).status_code == 403
+        ), str(p)
+        assert (
+            client.get("/api/files/download", params={"path": str(p)}).status_code
+            == 403
+        ), str(p)
 
     # Listing the credential dir itself yields nothing exploitable: every child
     # is filtered because the parent component is a credential dir.

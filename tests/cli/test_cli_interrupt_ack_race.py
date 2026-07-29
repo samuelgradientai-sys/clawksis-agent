@@ -63,14 +63,16 @@ def _make_cli():
         "prompt_toolkit.formatted_text": MagicMock(),
         "prompt_toolkit.auto_suggest": MagicMock(),
     }
-    with patch.dict(sys.modules, prompt_toolkit_stubs), patch.dict(
-        "os.environ", clean_env, clear=False
+    with (
+        patch.dict(sys.modules, prompt_toolkit_stubs),
+        patch.dict("os.environ", clean_env, clear=False),
     ):
         import cli as _cli_mod
 
         _cli_mod = importlib.reload(_cli_mod)
-        with patch.object(_cli_mod, "get_tool_definitions", return_value=[]), patch.dict(
-            _cli_mod.__dict__, {"CLI_CONFIG": _clean_config}
+        with (
+            patch.object(_cli_mod, "get_tool_definitions", return_value=[]),
+            patch.dict(_cli_mod.__dict__, {"CLI_CONFIG": _clean_config}),
         ):
             return _cli_mod.ClawksisCLI()
 
@@ -130,12 +132,20 @@ def test_unacknowledged_interrupt_message_is_requeued_not_dropped():
     cli._pending_input = queue.Queue()
     cli._interrupt_queue.put("urgent new message")
 
-    with patch.object(cli, "_ensure_runtime_credentials", return_value=True), \
-         patch.object(cli, "_resolve_turn_agent_config", return_value={
-             "signature": cli._active_agent_route_signature,
-             "model": None, "runtime": None, "request_overrides": None,
-         }), \
-         patch.object(cli, "_init_agent", return_value=True):
+    with (
+        patch.object(cli, "_ensure_runtime_credentials", return_value=True),
+        patch.object(
+            cli,
+            "_resolve_turn_agent_config",
+            return_value={
+                "signature": cli._active_agent_route_signature,
+                "model": None,
+                "runtime": None,
+                "request_overrides": None,
+            },
+        ),
+        patch.object(cli, "_init_agent", return_value=True),
+    ):
         cli.chat("original")
 
     # The interrupt fired against the agent...
@@ -181,12 +191,20 @@ def test_acknowledged_interrupt_still_requeues_message():
     cli._pending_input = queue.Queue()
     cli._interrupt_queue.put("redirect please")
 
-    with patch.object(cli, "_ensure_runtime_credentials", return_value=True), \
-         patch.object(cli, "_resolve_turn_agent_config", return_value={
-             "signature": cli._active_agent_route_signature,
-             "model": None, "runtime": None, "request_overrides": None,
-         }), \
-         patch.object(cli, "_init_agent", return_value=True):
+    with (
+        patch.object(cli, "_ensure_runtime_credentials", return_value=True),
+        patch.object(
+            cli,
+            "_resolve_turn_agent_config",
+            return_value={
+                "signature": cli._active_agent_route_signature,
+                "model": None,
+                "runtime": None,
+                "request_overrides": None,
+            },
+        ),
+        patch.object(cli, "_init_agent", return_value=True),
+    ):
         cli.chat("original")
 
     queued = []
@@ -222,12 +240,20 @@ def test_chat_persists_clean_input_when_a_queued_note_changes_api_message():
     cli._pending_input = queue.Queue()
     cli._pending_model_switch_note = "[MODEL SWITCH NOTE]"
 
-    with patch.object(cli, "_ensure_runtime_credentials", return_value=True), \
-         patch.object(cli, "_resolve_turn_agent_config", return_value={
-             "signature": cli._active_agent_route_signature,
-             "model": None, "runtime": None, "request_overrides": None,
-         }), \
-         patch.object(cli, "_init_agent", return_value=True):
+    with (
+        patch.object(cli, "_ensure_runtime_credentials", return_value=True),
+        patch.object(
+            cli,
+            "_resolve_turn_agent_config",
+            return_value={
+                "signature": cli._active_agent_route_signature,
+                "model": None,
+                "runtime": None,
+                "request_overrides": None,
+            },
+        ),
+        patch.object(cli, "_init_agent", return_value=True),
+    ):
         cli.chat("clean prompt")
 
     assert agent.captured is not None
@@ -265,12 +291,20 @@ def test_chat_preserves_clean_multimodal_input_when_note_changes_api_message():
     cli._pending_input = queue.Queue()
     cli._pending_model_switch_note = "[MODEL SWITCH NOTE]"
 
-    with patch.object(cli, "_ensure_runtime_credentials", return_value=True), \
-         patch.object(cli, "_resolve_turn_agent_config", return_value={
-             "signature": cli._active_agent_route_signature,
-             "model": None, "runtime": None, "request_overrides": None,
-         }), \
-         patch.object(cli, "_init_agent", return_value=True):
+    with (
+        patch.object(cli, "_ensure_runtime_credentials", return_value=True),
+        patch.object(
+            cli,
+            "_resolve_turn_agent_config",
+            return_value={
+                "signature": cli._active_agent_route_signature,
+                "model": None,
+                "runtime": None,
+                "request_overrides": None,
+            },
+        ),
+        patch.object(cli, "_init_agent", return_value=True),
+    ):
         cli.chat(clean_parts)
 
     assert agent.captured is not None
@@ -339,7 +373,9 @@ def test_chat_multimodal_note_persists_clean_input_once(tmp_path, monkeypatch):
         agent.disabled_toolsets = None
         agent._skip_mcp_refresh = True
         agent.compression_enabled = False
-        agent.context_compressor = types.SimpleNamespace(protect_first_n=2, protect_last_n=2)
+        agent.context_compressor = types.SimpleNamespace(
+            protect_first_n=2, protect_last_n=2
+        )
         agent._memory_store = None
         agent._memory_manager = None
         agent._memory_nudge_interval = 0
@@ -394,16 +430,27 @@ def test_chat_multimodal_note_persists_clean_input_once(tmp_path, monkeypatch):
     cli._pending_input = queue.Queue()
     cli._pending_model_switch_note = "[MODEL SWITCH NOTE]"
 
-    with patch.object(cli, "_ensure_runtime_credentials", return_value=True), \
-         patch.object(cli, "_resolve_turn_agent_config", return_value={
-             "signature": cli._active_agent_route_signature,
-             "model": None, "runtime": None, "request_overrides": None,
-         }), \
-         patch.object(cli, "_init_agent", return_value=True):
+    with (
+        patch.object(cli, "_ensure_runtime_credentials", return_value=True),
+        patch.object(
+            cli,
+            "_resolve_turn_agent_config",
+            return_value={
+                "signature": cli._active_agent_route_signature,
+                "model": None,
+                "runtime": None,
+                "request_overrides": None,
+            },
+        ),
+        patch.object(cli, "_init_agent", return_value=True),
+    ):
         cli.chat(clean_parts)
 
     assert captured["persist_user_message"] == clean_parts
-    assert captured["user_message"][0]["text"] == "[MODEL SWITCH NOTE]\n\nDescribe this screenshot"
+    assert (
+        captured["user_message"][0]["text"]
+        == "[MODEL SWITCH NOTE]\n\nDescribe this screenshot"
+    )
     assert [m["content"] for m in db.get_messages_as_conversation(session_id)] == [
         "Describe this screenshot\n[screenshot]"
     ]
@@ -440,12 +487,20 @@ def test_chat_clears_previous_turn_persistence_override_before_staging():
     cli._interrupt_queue = queue.Queue()
     cli._pending_input = queue.Queue()
 
-    with patch.object(cli, "_ensure_runtime_credentials", return_value=True), \
-         patch.object(cli, "_resolve_turn_agent_config", return_value={
-             "signature": cli._active_agent_route_signature,
-             "model": None, "runtime": None, "request_overrides": None,
-         }), \
-         patch.object(cli, "_init_agent", return_value=True):
+    with (
+        patch.object(cli, "_ensure_runtime_credentials", return_value=True),
+        patch.object(
+            cli,
+            "_resolve_turn_agent_config",
+            return_value={
+                "signature": cli._active_agent_route_signature,
+                "model": None,
+                "runtime": None,
+                "request_overrides": None,
+            },
+        ),
+        patch.object(cli, "_init_agent", return_value=True),
+    ):
         cli.chat("new prompt")
 
     assert agent.staged_override is None
@@ -518,12 +573,20 @@ def test_chat_close_does_not_persist_previous_turn_override(tmp_path, monkeypatc
     cli._interrupt_queue = queue.Queue()
     cli._pending_input = queue.Queue()
 
-    with patch.object(cli, "_ensure_runtime_credentials", return_value=True), \
-         patch.object(cli, "_resolve_turn_agent_config", return_value={
-             "signature": cli._active_agent_route_signature,
-             "model": None, "runtime": None, "request_overrides": None,
-         }), \
-         patch.object(cli, "_init_agent", return_value=True):
+    with (
+        patch.object(cli, "_ensure_runtime_credentials", return_value=True),
+        patch.object(
+            cli,
+            "_resolve_turn_agent_config",
+            return_value={
+                "signature": cli._active_agent_route_signature,
+                "model": None,
+                "runtime": None,
+                "request_overrides": None,
+            },
+        ),
+        patch.object(cli, "_init_agent", return_value=True),
+    ):
         chat_thread = threading.Thread(target=lambda: cli.chat("new prompt"))
         chat_thread.start()
         assert entered.wait(timeout=5)
@@ -620,12 +683,20 @@ def test_close_waits_for_atomic_cli_staging_before_snapshot(tmp_path, monkeypatc
     cli._interrupt_queue = queue.Queue()
     cli._pending_input = queue.Queue()
 
-    with patch.object(cli, "_ensure_runtime_credentials", return_value=True), \
-         patch.object(cli, "_resolve_turn_agent_config", return_value={
-             "signature": cli._active_agent_route_signature,
-             "model": None, "runtime": None, "request_overrides": None,
-         }), \
-         patch.object(cli, "_init_agent", return_value=True):
+    with (
+        patch.object(cli, "_ensure_runtime_credentials", return_value=True),
+        patch.object(
+            cli,
+            "_resolve_turn_agent_config",
+            return_value={
+                "signature": cli._active_agent_route_signature,
+                "model": None,
+                "runtime": None,
+                "request_overrides": None,
+            },
+        ),
+        patch.object(cli, "_init_agent", return_value=True),
+    ):
         chat_thread = threading.Thread(target=lambda: cli.chat("new prompt"))
         chat_thread.start()
         assert staging_entered.wait(timeout=5)

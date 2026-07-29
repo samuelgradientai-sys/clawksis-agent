@@ -52,9 +52,9 @@ class TestUpstageProfile:
         # Behavior contract (not a frozen list): non-empty, no denied families.
         assert upstage_profile.fallback_models
         for denied in ("solar-mini", "syn-pro"):
-            assert not any(
-                denied in m for m in upstage_profile.fallback_models
-            ), f"non-agentic family {denied!r} must not be a fallback default"
+            assert not any(denied in m for m in upstage_profile.fallback_models), (
+                f"non-agentic family {denied!r} must not be a fallback default"
+            )
 
     def test_default_model_is_solar_pro3(self, upstage_profile):
         # Entry [0] is the setup default (get_default_model_for_provider).

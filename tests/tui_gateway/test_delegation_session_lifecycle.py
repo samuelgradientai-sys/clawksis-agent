@@ -37,39 +37,73 @@ class TestSessionOwnsNotificationEvent:
         return {"session_key": key, "_finalized": False}
 
     def test_origin_ui_match_owns(self):
-        evt = {"type": "async_delegation", "origin_ui_session_id": "tab1", "session_key": "other"}
+        evt = {
+            "type": "async_delegation",
+            "origin_ui_session_id": "tab1",
+            "session_key": "other",
+        }
         assert _session_owns_notification_event("tab1", self._session(), evt) is True
 
     def test_session_key_match_owns(self):
-        evt = {"type": "async_delegation", "origin_ui_session_id": "", "session_key": "sess_key_1"}
-        assert _session_owns_notification_event("tabX", self._session("sess_key_1"), evt) is True
+        evt = {
+            "type": "async_delegation",
+            "origin_ui_session_id": "",
+            "session_key": "sess_key_1",
+        }
+        assert (
+            _session_owns_notification_event("tabX", self._session("sess_key_1"), evt)
+            is True
+        )
 
     def test_orphan_is_not_owned(self):
         """No origin match, no key match, owner gone → NOT ours (fail closed)."""
-        evt = {"type": "async_delegation", "origin_ui_session_id": "dead_tab", "session_key": "gone_key"}
+        evt = {
+            "type": "async_delegation",
+            "origin_ui_session_id": "dead_tab",
+            "session_key": "gone_key",
+        }
         assert _session_owns_notification_event("tab1", self._session(), evt) is False
 
     def test_empty_key_and_origin_not_owned(self):
         """A delegation event with no return address at all is never adopted."""
-        evt = {"type": "async_delegation", "origin_ui_session_id": "", "session_key": ""}
+        evt = {
+            "type": "async_delegation",
+            "origin_ui_session_id": "",
+            "session_key": "",
+        }
         assert _session_owns_notification_event("tab1", self._session(), evt) is False
 
     def test_finalized_session_owns_nothing(self):
-        evt = {"type": "async_delegation", "origin_ui_session_id": "tab1", "session_key": "sess_key_1"}
+        evt = {
+            "type": "async_delegation",
+            "origin_ui_session_id": "tab1",
+            "session_key": "sess_key_1",
+        }
         sess = self._session()
         sess["_finalized"] = True
         assert _session_owns_notification_event("tab1", sess, evt) is False
 
     def test_compression_chain_resolution_owns(self):
-        evt = {"type": "async_delegation", "origin_ui_session_id": "", "session_key": "parent_key"}
+        evt = {
+            "type": "async_delegation",
+            "origin_ui_session_id": "",
+            "session_key": "parent_key",
+        }
         db = MagicMock()
         db.resolve_resume_session_id.return_value = "child_key"
         with patch("tui_gateway.server._get_db", return_value=db):
-            assert _session_owns_notification_event("tabX", self._session("child_key"), evt) is True
+            assert (
+                _session_owns_notification_event(
+                    "tabX", self._session("child_key"), evt
+                )
+                is True
+            )
 
 
 class TestInterruptForSession:
-    def _seed_record(self, delegation_id, session_key="", origin_ui_session_id="", status="running"):
+    def _seed_record(
+        self, delegation_id, session_key="", origin_ui_session_id="", status="running"
+    ):
         fn = MagicMock()
         with ad._records_lock:
             ad._records[delegation_id] = {
@@ -149,7 +183,9 @@ class TestFinalizeInterruptsOwnDelegations:
 
         with patch("tools.async_delegation.interrupt_for_session") as mock_int:
             _finalize_session(
-                self._make_session(session_key="agent:main:telegram:dm:123", sid="tab9"),
+                self._make_session(
+                    session_key="agent:main:telegram:dm:123", sid="tab9"
+                ),
                 end_reason="ws_orphan_reap",
             )
 

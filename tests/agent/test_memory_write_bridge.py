@@ -104,17 +104,29 @@ def test_preserves_old_text_for_replace_and_remove_batch():
         {
             "target": "user",
             "operations": [
-                {"action": "replace", "old_text": "old preference", "content": "updated"},
+                {
+                    "action": "replace",
+                    "old_text": "old preference",
+                    "content": "updated",
+                },
                 {"action": "remove", "old_text": "obsolete preference"},
                 {"action": "add", "content": "new fact"},
             ],
         },
     )
     assert provider.calls == [
-        {"action": "replace", "target": "user", "content": "updated",
-         "metadata": {"old_text": "old preference"}},
-        {"action": "remove", "target": "user", "content": "",
-         "metadata": {"old_text": "obsolete preference"}},
+        {
+            "action": "replace",
+            "target": "user",
+            "content": "updated",
+            "metadata": {"old_text": "old preference"},
+        },
+        {
+            "action": "remove",
+            "target": "user",
+            "content": "",
+            "metadata": {"old_text": "obsolete preference"},
+        },
         {"action": "add", "target": "user", "content": "new fact", "metadata": {}},
     ]
 

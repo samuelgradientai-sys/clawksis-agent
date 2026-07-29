@@ -115,7 +115,9 @@ def test_lint_and_typecheck_are_not_reported_as_full_tests(tmp_path, monkeypatch
     assert test.scope == "targeted"
 
 
-def test_package_script_shorthand_matches_canonical_verify_command(tmp_path, monkeypatch):
+def test_package_script_shorthand_matches_canonical_verify_command(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     _node_project(tmp_path)
 
@@ -170,7 +172,9 @@ def test_uv_run_pytest_matches_detected_pytest(tmp_path, monkeypatch):
     assert evidence.scope == "targeted"
 
 
-def test_temp_script_records_ad_hoc_evidence_without_canonical_suite(tmp_path, monkeypatch):
+def test_temp_script_records_ad_hoc_evidence_without_canonical_suite(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     (tmp_path / "package.json").write_text("{}", encoding="utf-8")
     script = Path(tempfile.gettempdir()) / f"clawk-ad-hoc-{tmp_path.name}.py"
@@ -271,7 +275,9 @@ def test_edit_without_prior_evidence_stays_unverified(tmp_path, monkeypatch):
     assert status["changed_paths"] == [str(tmp_path / "src" / "app.ts")]
 
 
-def test_file_tool_stales_evidence_by_session_id_for_absolute_edit(tmp_path, monkeypatch):
+def test_file_tool_stales_evidence_by_session_id_for_absolute_edit(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     _node_project(tmp_path)
     target = tmp_path / "src" / "app.ts"
@@ -297,8 +303,13 @@ def test_file_tool_stales_evidence_by_session_id_for_absolute_edit(tmp_path, mon
     )
 
     assert result["files_modified"] == [str(target.resolve())]
-    assert verification_status(session_id="conversation", cwd=tmp_path)["status"] == "stale"
-    assert verification_status(session_id="turn", cwd=tmp_path)["status"] == "unverified"
+    assert (
+        verification_status(session_id="conversation", cwd=tmp_path)["status"]
+        == "stale"
+    )
+    assert (
+        verification_status(session_id="turn", cwd=tmp_path)["status"] == "unverified"
+    )
 
 
 def test_recording_prunes_old_events_but_keeps_latest_state(tmp_path, monkeypatch):
@@ -316,7 +327,9 @@ def test_recording_prunes_old_events_but_keeps_latest_state(tmp_path, monkeypatc
         )
 
     with sqlite3.connect(home / "verification_evidence.db") as conn:
-        event_count = conn.execute("SELECT COUNT(*) FROM verification_events").fetchone()[0]
+        event_count = conn.execute(
+            "SELECT COUNT(*) FROM verification_events"
+        ).fetchone()[0]
         latest_summary = conn.execute(
             """
             SELECT output_summary
@@ -356,8 +369,14 @@ def test_recording_expires_old_current_evidence(tmp_path, monkeypatch):
         output="new green",
     )
 
-    assert verification_status(session_id="old-session", cwd=tmp_path)["status"] == "unverified"
-    assert verification_status(session_id="new-session", cwd=tmp_path)["status"] == "passed"
+    assert (
+        verification_status(session_id="old-session", cwd=tmp_path)["status"]
+        == "unverified"
+    )
+    assert (
+        verification_status(session_id="new-session", cwd=tmp_path)["status"]
+        == "passed"
+    )
     with sqlite3.connect(home / "verification_evidence.db") as conn:
         old_rows = conn.execute(
             "SELECT COUNT(*) FROM verification_events WHERE session_id = 'old-session'"

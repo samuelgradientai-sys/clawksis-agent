@@ -184,7 +184,9 @@ class SmsAdapter(BasePlatformAdapter):
                 form_data.add_field("Body", chunk)
 
                 try:
-                    async with session.post(url, data=form_data, headers=headers) as resp:
+                    async with session.post(
+                        url, data=form_data, headers=headers
+                    ) as resp:
                         body = await resp.json()
                         if resp.status >= 400:
                             error_msg = body.get("message", str(body))
@@ -226,7 +228,10 @@ class SmsAdapter(BasePlatformAdapter):
     # ------------------------------------------------------------------
 
     def _validate_twilio_signature(
-        self, url: str, post_params: dict, signature: str,
+        self,
+        url: str,
+        post_params: dict,
+        signature: str,
     ) -> bool:
         """Validate ``X-Twilio-Signature`` header (HMAC-SHA1, base64).
 
@@ -245,7 +250,10 @@ class SmsAdapter(BasePlatformAdapter):
         return False
 
     def _check_signature(
-        self, url: str, post_params: dict, signature: str,
+        self,
+        url: str,
+        post_params: dict,
+        signature: str,
     ) -> bool:
         """Compute and compare a single Twilio signature."""
         data_to_sign = url
@@ -276,17 +284,25 @@ class SmsAdapter(BasePlatformAdapter):
 
         if parsed.port == default_port:
             # Has explicit default port → strip it
-            return urllib.parse.urlunparse(
-                (parsed.scheme, parsed.hostname, parsed.path,
-                 parsed.params, parsed.query, parsed.fragment)
-            )
+            return urllib.parse.urlunparse((
+                parsed.scheme,
+                parsed.hostname,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            ))
         elif parsed.port is None:
             # No port → add default
             netloc = f"{parsed.hostname}:{default_port}"
-            return urllib.parse.urlunparse(
-                (parsed.scheme, netloc, parsed.path,
-                 parsed.params, parsed.query, parsed.fragment)
-            )
+            return urllib.parse.urlunparse((
+                parsed.scheme,
+                netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            ))
 
         # Non-standard port — no variant
         return None
@@ -300,7 +316,10 @@ class SmsAdapter(BasePlatformAdapter):
 
         try:
             content_length = request.content_length
-            if content_length is not None and content_length > _TWILIO_WEBHOOK_MAX_BODY_BYTES:
+            if (
+                content_length is not None
+                and content_length > _TWILIO_WEBHOOK_MAX_BODY_BYTES
+            ):
                 return web.Response(
                     text='<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
                     content_type="application/xml",
@@ -358,7 +377,9 @@ class SmsAdapter(BasePlatformAdapter):
 
         # Ignore messages from our own number (echo prevention)
         if from_number == self._from_number:
-            logger.debug("[sms] ignoring echo from own number %s", redact_phone(from_number))
+            logger.debug(
+                "[sms] ignoring echo from own number %s", redact_phone(from_number)
+            )
             return web.Response(
                 text='<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
                 content_type="application/xml",
@@ -445,36 +466,51 @@ async def _standalone_send(
     account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
     from_number = os.getenv("TWILIO_PHONE_NUMBER", "")
     if not account_sid or not auth_token or not from_number:
-        return {"error": "SMS not configured (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER required)"}
+        return {
+            "error": "SMS not configured (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER required)"
+        }
 
     message = _strip_markdown_for_sms(message)
 
     def _redacted_error(text):
         try:
             from tools.send_message_tool import _error as _e
+
             return _e(text)
         except Exception:
             return {"error": text}
 
     try:
         from gateway.platforms.base import resolve_proxy_url, proxy_kwargs_for_aiohttp
+
         _proxy = resolve_proxy_url()
         _sess_kw, _req_kw = proxy_kwargs_for_aiohttp(_proxy)
         creds = f"{account_sid}:{auth_token}"
         encoded = base64.b64encode(creds.encode("ascii")).decode("ascii")
         url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
         headers = {"Authorization": f"Basic {encoded}"}
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30), **_sess_kw) as session:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=30), **_sess_kw
+        ) as session:
             form_data = aiohttp.FormData()
             form_data.add_field("From", from_number)
             form_data.add_field("To", chat_id)
             form_data.add_field("Body", message)
-            async with session.post(url, data=form_data, headers=headers, **_req_kw) as resp:
+            async with session.post(
+                url, data=form_data, headers=headers, **_req_kw
+            ) as resp:
                 body = await resp.json()
                 if resp.status >= 400:
                     error_msg = body.get("message", str(body))
-                    return _redacted_error(f"Twilio API error ({resp.status}): {error_msg}")
-                return {"success": True, "platform": "sms", "chat_id": chat_id, "message_id": body.get("sid", "")}
+                    return _redacted_error(
+                        f"Twilio API error ({resp.status}): {error_msg}"
+                    )
+                return {
+                    "success": True,
+                    "platform": "sms",
+                    "chat_id": chat_id,
+                    "message_id": body.get("sid", ""),
+                }
     except Exception as e:
         return _redacted_error(f"SMS send failed: {e}")
 
@@ -483,6 +519,7 @@ def _is_connected(config) -> bool:
     """SMS is connected when Twilio credentials are present. Mirrors the legacy
     _PLATFORM_CONNECTED_CHECKERS[Platform.SMS] = bool(TWILIO_ACCOUNT_SID)."""
     import clawk_cli.gateway as gateway_mod
+
     return bool((gateway_mod.get_env_value("TWILIO_ACCOUNT_SID") or "").strip())
 
 

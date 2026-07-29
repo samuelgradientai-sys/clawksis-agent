@@ -32,7 +32,11 @@ def _make_cli(config_overrides=None, env_overrides=None, **kwargs):
     }
     if config_overrides:
         for k, v in config_overrides.items():
-            if isinstance(v, dict) and k in _clean_config and isinstance(_clean_config[k], dict):
+            if (
+                isinstance(v, dict)
+                and k in _clean_config
+                and isinstance(_clean_config[k], dict)
+            ):
                 _clean_config[k].update(v)
             else:
                 _clean_config[k] = v
@@ -56,7 +60,10 @@ def _simple_history():
     return [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is Python?"},
-        {"role": "assistant", "content": "Python is a high-level programming language."},
+        {
+            "role": "assistant",
+            "content": "Python is a high-level programming language.",
+        },
         {"role": "user", "content": "How do I install it?"},
         {"role": "assistant", "content": "You can install Python from python.org."},
     ]
@@ -74,18 +81,27 @@ def _tool_call_history():
                 {
                     "id": "call_1",
                     "type": "function",
-                    "function": {"name": "web_search", "arguments": '{"query":"python tutorials"}'},
+                    "function": {
+                        "name": "web_search",
+                        "arguments": '{"query":"python tutorials"}',
+                    },
                 },
                 {
                     "id": "call_2",
                     "type": "function",
-                    "function": {"name": "web_extract", "arguments": '{"urls":["https://example.com"]}'},
+                    "function": {
+                        "name": "web_extract",
+                        "arguments": '{"urls":["https://example.com"]}',
+                    },
                 },
             ],
         },
         {"role": "tool", "tool_call_id": "call_1", "content": "Found 5 results..."},
         {"role": "tool", "tool_call_id": "call_2", "content": "Page content..."},
-        {"role": "assistant", "content": "Here are some great Python tutorials I found."},
+        {
+            "role": "assistant",
+            "content": "Here are some great Python tutorials I found.",
+        },
     ]
 
 
@@ -93,8 +109,14 @@ def _large_history(n_exchanges=15):
     """Build a history with many exchanges to test truncation."""
     msgs = [{"role": "system", "content": "system prompt"}]
     for i in range(n_exchanges):
-        msgs.append({"role": "user", "content": f"Question #{i + 1}: What is item {i + 1}?"})
-        msgs.append({"role": "assistant", "content": f"Answer #{i + 1}: Item {i + 1} is great."})
+        msgs.append({
+            "role": "user",
+            "content": f"Question #{i + 1}: What is item {i + 1}?",
+        })
+        msgs.append({
+            "role": "assistant",
+            "content": f"Answer #{i + 1}: Item {i + 1} is great.",
+        })
     return msgs
 
 
@@ -106,7 +128,10 @@ def _multimodal_history():
             "role": "user",
             "content": [
                 {"type": "text", "text": "What's in this image?"},
-                {"type": "image_url", "image_url": {"url": "https://example.com/cat.jpg"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "https://example.com/cat.jpg"},
+                },
             ],
         },
         {"role": "assistant", "content": "I see a cat in the image."},
@@ -158,11 +183,20 @@ class TestDisplayResumedHistory:
         cli = _make_cli(config_overrides={"display": {"resume_skip_tool_only": False}})
         cli.conversation_history = _tool_call_history()
         import cli as _cli_mod
+
         # CLI_CONFIG is read at call-time inside _display_resumed_history, so
         # apply the override for the duration of the capture, not just at init.
-        with patch.dict(_cli_mod.__dict__, {"CLI_CONFIG": {
-            "display": {"resume_skip_tool_only": False, "resume_display": "full"}
-        }}):
+        with patch.dict(
+            _cli_mod.__dict__,
+            {
+                "CLI_CONFIG": {
+                    "display": {
+                        "resume_skip_tool_only": False,
+                        "resume_display": "full",
+                    }
+                }
+            },
+        ):
             output = self._capture_display(cli)
 
         assert "2 tool calls" in output
@@ -512,7 +546,10 @@ class TestDisplayResumedHistory:
                     {
                         "id": "call_1",
                         "type": "function",
-                        "function": {"name": "terminal", "arguments": '{"command":"ls"}'},
+                        "function": {
+                            "name": "terminal",
+                            "arguments": '{"command":"ls"}',
+                        },
                     }
                 ],
             },
@@ -572,7 +609,10 @@ class TestPreloadResumedSession:
         cli = _make_cli(resume="good_session")
         messages = _simple_history()
         mock_db = MagicMock()
-        mock_db.get_session.return_value = {"id": "good_session", "title": "Test Session"}
+        mock_db.get_session.return_value = {
+            "id": "good_session",
+            "title": "Test Session",
+        }
         mock_db.get_messages_as_conversation.return_value = messages
         cli._session_db = mock_db
 
@@ -642,14 +682,20 @@ class TestHandleResumeCommandRecap:
         messages = _simple_history()
 
         mock_db = MagicMock()
-        mock_db.get_session.return_value = {"id": "target_session", "title": "Test Session"}
+        mock_db.get_session.return_value = {
+            "id": "target_session",
+            "title": "Test Session",
+        }
         mock_db.get_messages_as_conversation.return_value = messages
         # resolve_resume_session_id passes the id through when no compression chain.
         mock_db.resolve_resume_session_id.return_value = "target_session"
         cli._session_db = mock_db
 
         with (
-            patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="target_session"),
+            patch(
+                "clawk_cli.main._resolve_session_by_name_or_id",
+                return_value="target_session",
+            ),
             patch.object(cli, "_display_resumed_history") as display_mock,
         ):
             cli._handle_resume_command("/resume test session")
@@ -671,7 +717,10 @@ class TestHandleResumeCommandRecap:
         cli._session_db = mock_db
 
         with (
-            patch("clawk_cli.main._resolve_session_by_name_or_id", return_value="target_session"),
+            patch(
+                "clawk_cli.main._resolve_session_by_name_or_id",
+                return_value="target_session",
+            ),
             patch.object(cli, "_display_resumed_history") as display_mock,
         ):
             cli._handle_resume_command("/resume target_session")
@@ -712,6 +761,7 @@ class TestResumeDisplayConfig:
     def test_default_config_has_resume_display(self):
         """DEFAULT_CONFIG in clawk_cli/config.py includes resume_display."""
         from clawk_cli.config import DEFAULT_CONFIG
+
         display = DEFAULT_CONFIG.get("display", {})
         assert "resume_display" in display
         assert display["resume_display"] == "full"

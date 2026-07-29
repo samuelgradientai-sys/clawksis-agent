@@ -36,6 +36,7 @@ that doesn't recognise the token returns ``None`` and the seam moves on; a
 provider whose backing store is unreachable raises ``ProviderError``, which the
 seam remembers and surfaces as 503 only if NO provider accepts the token.
 """
+
 from __future__ import annotations
 
 import logging
@@ -125,7 +126,8 @@ def authenticate_token(
         except ProviderError as e:
             _log.warning(
                 "dashboard-auth: token provider %r unreachable during verify: %s",
-                provider.name, e,
+                provider.name,
+                e,
             )
             if unreachable is None:
                 unreachable = provider.name
@@ -133,7 +135,8 @@ def authenticate_token(
         except Exception as e:  # noqa: BLE001 — a buggy provider must not 500 the gate
             _log.warning(
                 "dashboard-auth: token provider %r raised during verify: %s",
-                provider.name, e,
+                provider.name,
+                e,
             )
             continue
         if principal is not None:

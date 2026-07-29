@@ -67,18 +67,22 @@ def _format_timestamp(ts: Union[int, float, str, None]) -> str:
     try:
         if isinstance(ts, (int, float)):
             from datetime import datetime
+
             dt = datetime.fromtimestamp(ts)
             return dt.strftime("%B %d, %Y at %I:%M %p")
         if isinstance(ts, str):
             if ts.replace(".", "").replace("-", "").isdigit():
                 from datetime import datetime
+
                 dt = datetime.fromtimestamp(float(ts))
                 return dt.strftime("%B %d, %Y at %I:%M %p")
             return ts
     except (ValueError, OSError, OverflowError) as e:
         logging.debug("Failed to format timestamp %s: %s", ts, e, exc_info=True)
     except Exception as e:
-        logging.debug("Unexpected error formatting timestamp %s: %s", ts, e, exc_info=True)
+        logging.debug(
+            "Unexpected error formatting timestamp %s: %s", ts, e, exc_info=True
+        )
     return str(ts)
 
 
@@ -121,7 +125,9 @@ def _order_for_recall(raw_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     )
 
 
-def _shape_message(m: Dict[str, Any], anchor_id: Optional[int] = None) -> Dict[str, Any]:
+def _shape_message(
+    m: Dict[str, Any], anchor_id: Optional[int] = None
+) -> Dict[str, Any]:
     """Slim a message row for the tool response. Keeps content even if empty."""
     entry = {
         "id": m.get("id"),
@@ -162,7 +168,9 @@ def _resolve_profile_db(profile: str):
     if not profiles_mod.profile_exists(canon):
         raise ValueError(f"profile '{canon}' does not exist")
 
-    return SessionDB(db_path=profiles_mod.get_profile_dir(canon) / "state.db", read_only=True)
+    return SessionDB(
+        db_path=profiles_mod.get_profile_dir(canon) / "state.db", read_only=True
+    )
 
 
 def _locate_session_db(session_id: str):
@@ -203,7 +211,9 @@ def _locate_session_db(session_id: str):
             if pdb.get_session(session_id):
                 return pdb, name
         except Exception:
-            logging.debug("get_session probe failed for %s in %s", session_id, name, exc_info=True)
+            logging.debug(
+                "get_session probe failed for %s in %s", session_id, name, exc_info=True
+            )
         pdb.close()
 
     return None, None
@@ -267,7 +277,9 @@ def _list_recent_sessions(db, limit: int, current_session_id: str = None) -> str
             order_by_last_active=True,
         )  # fetch extra so we can skip current
 
-        current_root = _resolve_to_parent(db, current_session_id) if current_session_id else None
+        current_root = (
+            _resolve_to_parent(db, current_session_id) if current_session_id else None
+        )
 
         results = []
         for s in sessions:
@@ -289,13 +301,16 @@ def _list_recent_sessions(db, limit: int, current_session_id: str = None) -> str
             if len(results) >= limit:
                 break
 
-        return json.dumps({
-            "success": True,
-            "mode": "browse",
-            "results": results,
-            "count": len(results),
-            "message": f"Showing {len(results)} most recent sessions. Pass a query= to search, or session_id+around_message_id to scroll.",
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "success": True,
+                "mode": "browse",
+                "results": results,
+                "count": len(results),
+                "message": f"Showing {len(results)} most recent sessions. Pass a query= to search, or session_id+around_message_id to scroll.",
+            },
+            ensure_ascii=False,
+        )
     except Exception as e:
         logging.error("Error listing recent sessions: %s", e, exc_info=True)
         return tool_error(f"Failed to list recent sessions: {e}", success=False)
@@ -382,7 +397,9 @@ def _scroll(
             o_root = _resolve_to_parent(db, owning)
             if a_root and o_root and a_root == o_root:
                 try:
-                    rebind_view = db.get_messages_around(owning, around_message_id, window=window)
+                    rebind_view = db.get_messages_around(
+                        owning, around_message_id, window=window
+                    )
                     messages = rebind_view.get("window") or []
                     if messages:
                         view = rebind_view
@@ -396,7 +413,9 @@ def _scroll(
                             pass
                         session_id = owning
                 except Exception as e:
-                    logging.debug("rebind get_messages_around failed: %s", e, exc_info=True)
+                    logging.debug(
+                        "rebind get_messages_around failed: %s", e, exc_info=True
+                    )
 
     if not messages:
         return tool_error(
@@ -443,7 +462,9 @@ def _title_match_result(
     try:
         session_id = db.resolve_session_by_title(title_query)
     except Exception:
-        logging.debug("resolve_session_by_title failed for %r", title_query, exc_info=True)
+        logging.debug(
+            "resolve_session_by_title failed for %r", title_query, exc_info=True
+        )
         return None
     if not session_id:
         return None
@@ -455,7 +476,9 @@ def _title_match_result(
     try:
         session_meta = db.get_session(lineage_root) or db.get_session(session_id) or {}
     except Exception:
-        logging.debug("get_session failed for title match %s", session_id, exc_info=True)
+        logging.debug(
+            "get_session failed for title match %s", session_id, exc_info=True
+        )
         session_meta = {}
     if session_meta.get("source") in _HIDDEN_SESSION_SOURCES:
         return None
@@ -463,7 +486,9 @@ def _title_match_result(
     try:
         messages = db.get_messages(session_id)
     except Exception:
-        logging.debug("get_messages failed for title match %s", session_id, exc_info=True)
+        logging.debug(
+            "get_messages failed for title match %s", session_id, exc_info=True
+        )
         messages = []
 
     anchor_id = messages[0].get("id") if messages else None
@@ -471,7 +496,12 @@ def _title_match_result(
         try:
             view = db.get_anchored_view(session_id, anchor_id, window=5, bookend=3)
         except Exception:
-            logging.debug("get_anchored_view failed for title match %s/%s", session_id, anchor_id, exc_info=True)
+            logging.debug(
+                "get_anchored_view failed for title match %s/%s",
+                session_id,
+                anchor_id,
+                exc_info=True,
+            )
             view = {}
     else:
         view = {}
@@ -485,9 +515,16 @@ def _title_match_result(
         "matched_role": "session_title",
         "match_message_id": anchor_id,
         "snippet": f"Session title matched: {session_meta.get('title') or title_query}",
-        "bookend_start": [_shape_message(m) for m in (view.get("bookend_start") or messages[:3])],
-        "messages": [_shape_message(m, anchor_id=anchor_id) for m in (view.get("window") or messages[:5])],
-        "bookend_end": [_shape_message(m) for m in (view.get("bookend_end") or messages[-3:])],
+        "bookend_start": [
+            _shape_message(m) for m in (view.get("bookend_start") or messages[:3])
+        ],
+        "messages": [
+            _shape_message(m, anchor_id=anchor_id)
+            for m in (view.get("window") or messages[:5])
+        ],
+        "bookend_end": [
+            _shape_message(m) for m in (view.get("bookend_end") or messages[-3:])
+        ],
         "messages_before": view.get("messages_before", 0),
         "messages_after": view.get("messages_after", max(len(messages) - 5, 0)),
         "_lineage_root": lineage_root,
@@ -507,7 +544,9 @@ def _discover(
 ) -> str:
     """Discovery shape: FTS5 + anchored window + bookends per hit. Single call."""
     role_list = role_filter if role_filter else ["user", "assistant"]
-    current_lineage_root = _resolve_to_parent(db, current_session_id) if current_session_id else None
+    current_lineage_root = (
+        _resolve_to_parent(db, current_session_id) if current_session_id else None
+    )
     title_result = _title_match_result(db, query, current_lineage_root)
 
     try:
@@ -532,14 +571,17 @@ def _discover(
     raw_results = _order_for_recall(raw_results)
 
     if not raw_results and not title_result:
-        return json.dumps({
-            "success": True,
-            "mode": "discover",
-            "query": query,
-            "results": [],
-            "count": 0,
-            "message": "No matching sessions found.",
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "success": True,
+                "mode": "discover",
+                "query": query,
+                "results": [],
+                "count": 0,
+                "message": "No matching sessions found.",
+            },
+            ensure_ascii=False,
+        )
 
     # Dedupe by lineage. Keep the raw owning session_id on the surviving
     # row — only that pairs validly with the FTS5 match id for the anchored
@@ -578,7 +620,13 @@ def _discover(
         try:
             view = db.get_anchored_view(hit_sid, msg_id, window=5, bookend=3)
         except Exception as e:
-            logging.warning("get_anchored_view failed for %s/%s: %s", hit_sid, msg_id, e, exc_info=True)
+            logging.warning(
+                "get_anchored_view failed for %s/%s: %s",
+                hit_sid,
+                msg_id,
+                e,
+                exc_info=True,
+            )
             continue
 
         try:
@@ -597,8 +645,12 @@ def _discover(
             "matched_role": match_info.get("role"),
             "match_message_id": msg_id,
             "snippet": match_info.get("snippet") or "",
-            "bookend_start": [_shape_message(m) for m in (view.get("bookend_start") or [])],
-            "messages": [_shape_message(m, anchor_id=msg_id) for m in (view.get("window") or [])],
+            "bookend_start": [
+                _shape_message(m) for m in (view.get("bookend_start") or [])
+            ],
+            "messages": [
+                _shape_message(m, anchor_id=msg_id) for m in (view.get("window") or [])
+            ],
             "bookend_end": [_shape_message(m) for m in (view.get("bookend_end") or [])],
             "messages_before": view.get("messages_before", 0),
             "messages_after": view.get("messages_after", 0),
@@ -607,14 +659,17 @@ def _discover(
             entry["parent_session_id"] = lineage_root
         results.append(entry)
 
-    return json.dumps({
-        "success": True,
-        "mode": "discover",
-        "query": query,
-        "results": results,
-        "count": len(results),
-        "sessions_searched": len(seen_sessions),
-    }, ensure_ascii=False)
+    return json.dumps(
+        {
+            "success": True,
+            "mode": "discover",
+            "query": query,
+            "results": results,
+            "count": len(results),
+            "sessions_searched": len(seen_sessions),
+        },
+        ensure_ascii=False,
+    )
 
 
 def session_search(
@@ -646,10 +701,12 @@ def session_search(
     if db is None:
         try:
             from clawk_state import SessionDB
+
             db = SessionDB()
         except Exception:
             logging.debug("SessionDB unavailable for session_search", exc_info=True)
             from clawk_state import format_session_db_unavailable
+
             return tool_error(format_session_db_unavailable(), success=False)
 
     # Normalise a raw `@session:<profile>/<id>` link value passed as session_id.
@@ -677,7 +734,9 @@ def session_search(
             current_session_id = None
 
     # Scroll shape takes precedence — explicit anchor beats any query.
-    if (isinstance(session_id, str) and session_id.strip()) and around_message_id is not None:
+    if (
+        isinstance(session_id, str) and session_id.strip()
+    ) and around_message_id is not None:
         return _scroll(
             db=db,
             session_id=session_id,
@@ -745,6 +804,7 @@ def check_session_search_requirements() -> bool:
     """Requires the SQLite state database."""
     try:
         from clawk_state import DEFAULT_DB_PATH
+
         return DEFAULT_DB_PATH.parent.exists()
     except ImportError:
         return False
@@ -769,7 +829,7 @@ SESSION_SEARCH_SCHEMA = {
         "was provided.\n\n"
         "FOUR CALLING SHAPES\n\n"
         "  1) DISCOVERY — pass `query`:\n"
-        "     session_search(query=\"auth refactor\", limit=3)\n"
+        '     session_search(query="auth refactor", limit=3)\n'
         "     Runs FTS5, dedupes hits by session lineage, returns the top N sessions. "
         "Each result carries:\n"
         "       - session_id, title, when, source\n"
@@ -784,7 +844,7 @@ SESSION_SEARCH_SCHEMA = {
         "     Bookends + window together let you reconstruct goal → match → resolution "
         "without paying for the whole transcript.\n\n"
         "  2) SCROLL — pass `session_id` + `around_message_id`:\n"
-        "     session_search(session_id=\"...\", around_message_id=12345, window=10)\n"
+        '     session_search(session_id="...", around_message_id=12345, window=10)\n'
         "     Returns a window of ±`window` messages centered on the anchor. No FTS5, "
         "no bookends — just the slice. Use after a discovery call when you need more "
         "context than the ±5 default window.\n"
@@ -794,7 +854,7 @@ SESSION_SEARCH_SCHEMA = {
         "       - When messages_before or messages_after is < window, you're at the "
         "start or end of the session.\n\n"
         "  3) READ — pass `session_id` only (no around_message_id):\n"
-        "     session_search(session_id=\"...\", profile=\"work\")\n"
+        '     session_search(session_id="...", profile="work")\n'
         "     Dumps the whole session by id (first 20 + last 10 messages when "
         "large). This is how you resolve an `@session:<profile>/<id>` link the "
         "user dropped into the chat: split the value on `/` into profile + id "
@@ -802,16 +862,16 @@ SESSION_SEARCH_SCHEMA = {
         "  4) BROWSE — no args:\n"
         "     session_search()\n"
         "     Returns recent sessions chronologically: titles, previews, timestamps. "
-        "Use when the user asks \"what was I working on\" without naming a topic.\n\n"
+        'Use when the user asks "what was I working on" without naming a topic.\n\n'
         "FTS5 SYNTAX\n\n"
         "  AND is the default — multi-word queries require all terms. Use OR explicitly "
         "for broader recall (`alpha OR beta OR gamma`), quoted phrases for exact match "
-        "(`\"docker networking\"`), boolean (`python NOT java`), or prefix wildcards "
+        '(`"docker networking"`), boolean (`python NOT java`), or prefix wildcards '
         "(`deploy*`).\n\n"
         "WHEN TO USE\n\n"
         "  Reach for this on questions about Clawksis conversation history itself, such "
-        "as \"what did we do about X\", \"where did we leave Y\", or \"find the "
-        "session where Z\". If the user provided a direct source identifier, inspect "
+        'as "what did we do about X", "where did we leave Y", or "find the '
+        'session where Z". If the user provided a direct source identifier, inspect '
         "that source first when accessible; session_search can then supply historical "
         "context. The session DB carries what was said when; external tools show "
         "current source/world state."
@@ -845,7 +905,7 @@ SESSION_SEARCH_SCHEMA = {
                     "to keep relevance-only ordering (suitable for exploratory recall — "
                     "\"what do we know about X\"). Set 'newest' for recency-shaped "
                     "questions (\"where did we leave X\"). Set 'oldest' for "
-                    "origin-shaped questions (\"how did X start\"). Ignored in scroll "
+                    'origin-shaped questions ("how did X start"). Ignored in scroll '
                     "and browse shapes."
                 ),
             },

@@ -85,6 +85,7 @@ class TestClassifierOverride:
 
     def test_reasoning_model_disconnect_on_large_session_is_timeout(self):
         from agent.error_classifier import classify_api_error, FailoverReason
+
         e, kwargs = _make_session(
             "server disconnected without sending complete message",
             model="nvidia/nemotron-3-ultra-550b-a55b",
@@ -102,16 +103,20 @@ class TestClassifierOverride:
             "a phantom overflow — must not fire for reasoning models."
         )
 
-    @pytest.mark.parametrize("model", [
-        "nvidia/nemotron-3-ultra-550b-a55b",
-        "openai/o3-mini",
-        "anthropic/claude-opus-4-6",
-        "deepseek/deepseek-r1",
-        "qwen/qwq-32b-preview",
-        "x-ai/grok-4-fast-reasoning",
-    ])
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "nvidia/nemotron-3-ultra-550b-a55b",
+            "openai/o3-mini",
+            "anthropic/claude-opus-4-6",
+            "deepseek/deepseek-r1",
+            "qwen/qwq-32b-preview",
+            "x-ai/grok-4-fast-reasoning",
+        ],
+    )
     def test_all_known_reasoning_models_override(self, model):
         from agent.error_classifier import classify_api_error, FailoverReason
+
         e, kwargs = _make_session(
             "server disconnected without sending complete message",
             model=model,
@@ -130,6 +135,7 @@ class TestClassifierOverride:
         disconnect).  With the override, it stays that way.
         """
         from agent.error_classifier import classify_api_error, FailoverReason
+
         e, kwargs = _make_session(
             "server disconnected without sending complete message",
             model="gpt-4o",
@@ -138,16 +144,20 @@ class TestClassifierOverride:
         assert result.reason == FailoverReason.context_overflow
         assert result.should_compress is True
 
-    @pytest.mark.parametrize("model", [
-        "olmo-1",
-        "gpt-4o",
-        "claude-3-5-sonnet-20240620",
-        "llama-3.3-70b-instruct",
-        "qwen2-72b-instruct",
-        "x-ai/grok-3",
-    ])
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "olmo-1",
+            "gpt-4o",
+            "claude-3-5-sonnet-20240620",
+            "llama-3.3-70b-instruct",
+            "qwen2-72b-instruct",
+            "x-ai/grok-3",
+        ],
+    )
     def test_non_reasoning_models_all_keep_context_overflow(self, model):
         from agent.error_classifier import classify_api_error, FailoverReason
+
         e, kwargs = _make_session(
             "server disconnected without sending complete message",
             model=model,
@@ -161,6 +171,7 @@ class TestClassifierOverride:
         override since the override's result matches the small-session
         branch's result)."""
         from agent.error_classifier import classify_api_error, FailoverReason
+
         e = Exception("server disconnected")
         result = classify_api_error(
             e,
@@ -177,6 +188,7 @@ class TestClassifierOverride:
         The reasoning-model override is INSIDE the disconnect branch
         and doesn't fire for HTTP errors."""
         from agent.error_classifier import classify_api_error, FailoverReason
+
         e = Exception("server disconnected")
         # Inject a status_code attribute to simulate an HTTP error
         # whose message happens to contain "server disconnected".
@@ -203,93 +215,138 @@ class TestClassifierOverride:
 class TestIsThinkingTimeout:
     def test_returns_true_for_reasoning_model_with_transport_signature(self):
         from agent.thinking_timeout_guidance import is_thinking_timeout
-        classified = _classified(reason="timeout")
-        assert is_thinking_timeout(
-            classified,
-            "nvidia/nemotron-3-ultra-550b-a55b",
-            "Error communicating with OpenAI: [Errno 32] Broken pipe",
-        ) is True
 
-    @pytest.mark.parametrize("model,msg", [
-        ("nvidia/nemotron-3-ultra-550b-a55b", "connection reset by peer"),
-        ("openai/o3-mini", "remote protocol error"),
-        ("anthropic/claude-opus-4-6", "peer closed connection"),
-        ("deepseek/deepseek-r1", "connection lost"),
-        ("x-ai/grok-4-fast-reasoning", "server disconnected"),
-    ])
+        classified = _classified(reason="timeout")
+        assert (
+            is_thinking_timeout(
+                classified,
+                "nvidia/nemotron-3-ultra-550b-a55b",
+                "Error communicating with OpenAI: [Errno 32] Broken pipe",
+            )
+            is True
+        )
+
+    @pytest.mark.parametrize(
+        "model,msg",
+        [
+            ("nvidia/nemotron-3-ultra-550b-a55b", "connection reset by peer"),
+            ("openai/o3-mini", "remote protocol error"),
+            ("anthropic/claude-opus-4-6", "peer closed connection"),
+            ("deepseek/deepseek-r1", "connection lost"),
+            ("x-ai/grok-4-fast-reasoning", "server disconnected"),
+        ],
+    )
     def test_known_reasoning_models_match(self, model, msg):
         from agent.thinking_timeout_guidance import is_thinking_timeout
+
         classified = _classified(reason="timeout")
         assert is_thinking_timeout(classified, model, msg) is True
 
-    @pytest.mark.parametrize("model", [
-        "gpt-4o",
-        "claude-3-5-sonnet-20240620",
-        "llama-3.3-70b-instruct",
-        "qwen2-72b-instruct",
-    ])
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "gpt-4o",
+            "claude-3-5-sonnet-20240620",
+            "llama-3.3-70b-instruct",
+            "qwen2-72b-instruct",
+        ],
+    )
     def test_non_reasoning_models_never_match(self, model):
         """Non-reasoning models must always return False even with
         matching transport signature — the guidance is
         reasoning-specific."""
         from agent.thinking_timeout_guidance import is_thinking_timeout
-        classified = _classified(reason="timeout")
-        assert is_thinking_timeout(
-            classified, model, "connection reset by peer",
-        ) is False
 
-    @pytest.mark.parametrize("reason", [
-        "billing",
-        "rate_limit",
-        "auth",
-        "context_overflow",
-        "format_error",
-        "provider_policy_blocked",
-        "content_policy_blocked",
-        "thinking_signature",
-        "unknown",
-    ])
+        classified = _classified(reason="timeout")
+        assert (
+            is_thinking_timeout(
+                classified,
+                model,
+                "connection reset by peer",
+            )
+            is False
+        )
+
+    @pytest.mark.parametrize(
+        "reason",
+        [
+            "billing",
+            "rate_limit",
+            "auth",
+            "context_overflow",
+            "format_error",
+            "provider_policy_blocked",
+            "content_policy_blocked",
+            "thinking_signature",
+            "unknown",
+        ],
+    )
     def test_non_timeout_reasons_never_match(self, reason):
         """The detection only fires when the classifier says timeout.
         Other reasons have their own distinct guidance paths."""
         from agent.thinking_timeout_guidance import is_thinking_timeout
-        classified = _classified(reason=reason)
-        assert is_thinking_timeout(
-            classified,
-            "nvidia/nemotron-3-ultra-550b-a55b",
-            "connection reset by peer",
-        ) is False
 
-    @pytest.mark.parametrize("msg", [
-        "Insufficient credits",
-        "Rate limit exceeded",
-        "Invalid API key",
-        "Context length exceeded",
-        "Tool call argument malformed",
-    ])
+        classified = _classified(reason=reason)
+        assert (
+            is_thinking_timeout(
+                classified,
+                "nvidia/nemotron-3-ultra-550b-a55b",
+                "connection reset by peer",
+            )
+            is False
+        )
+
+    @pytest.mark.parametrize(
+        "msg",
+        [
+            "Insufficient credits",
+            "Rate limit exceeded",
+            "Invalid API key",
+            "Context length exceeded",
+            "Tool call argument malformed",
+        ],
+    )
     def test_non_transport_messages_never_match(self, msg):
         """The detection only fires for transport-kill signatures.
         A reasoning model that returns a billing/rate-limit/auth/etc
         error gets the classifier-default guidance, not this one."""
         from agent.thinking_timeout_guidance import is_thinking_timeout
+
         classified = _classified(reason="timeout")
-        assert is_thinking_timeout(
-            classified, "nvidia/nemotron-3-ultra-550b-a55b", msg,
-        ) is False
+        assert (
+            is_thinking_timeout(
+                classified,
+                "nvidia/nemotron-3-ultra-550b-a55b",
+                msg,
+            )
+            is False
+        )
 
     def test_empty_error_msg_returns_false(self):
         from agent.thinking_timeout_guidance import is_thinking_timeout
+
         classified = _classified(reason="timeout")
-        assert is_thinking_timeout(
-            classified, "nvidia/nemotron-3-ultra-550b-a55b", "",
-        ) is False
+        assert (
+            is_thinking_timeout(
+                classified,
+                "nvidia/nemotron-3-ultra-550b-a55b",
+                "",
+            )
+            is False
+        )
 
     def test_none_error_msg_returns_false(self):
         from agent.thinking_timeout_guidance import is_thinking_timeout
+
         classified = _classified(reason="timeout")
-        assert is_thinking_timeout(
-            classified, "nvidia/nemotron-3-ultra-550b-a55b", None,
-        ) is False
+        assert (
+            is_thinking_timeout(
+                classified,
+                "nvidia/nemotron-3-ultra-550b-a55b",
+                None,
+            )
+            is False
+        )
 
 
 # ── Part 2: guidance text (agent/thinking_timeout_guidance.py:build_thinking_timeout_guidance) ──
@@ -298,13 +355,19 @@ class TestIsThinkingTimeout:
 class TestBuildThinkingTimeoutGuidance:
     def test_guidance_mentions_config_path(self):
         from agent.thinking_timeout_guidance import build_thinking_timeout_guidance
+
         text = build_thinking_timeout_guidance(
-            provider="nvidia", model="nvidia/nemotron-3-ultra-550b-a55b",
+            provider="nvidia",
+            model="nvidia/nemotron-3-ultra-550b-a55b",
         )
-        assert "providers.nvidia.models.nvidia/nemotron-3-ultra-550b-a55b.stale_timeout_seconds" in text
+        assert (
+            "providers.nvidia.models.nvidia/nemotron-3-ultra-550b-a55b.stale_timeout_seconds"
+            in text
+        )
 
     def test_guidance_mentions_three_workarounds(self):
         from agent.thinking_timeout_guidance import build_thinking_timeout_guidance
+
         text = build_thinking_timeout_guidance(provider="nvidia", model="x")
         assert "1." in text
         assert "2." in text
@@ -312,18 +375,26 @@ class TestBuildThinkingTimeoutGuidance:
 
     def test_guidance_mentions_known_providers(self):
         from agent.thinking_timeout_guidance import build_thinking_timeout_guidance
+
         text = build_thinking_timeout_guidance(provider="nvidia", model="x")
         # At least one of the known cloud providers should be mentioned
         # to give the user context.
-        assert any(p in text for p in (
-            "NVIDIA NIM", "OpenAI", "Anthropic", "DeepSeek",
-        ))
+        assert any(
+            p in text
+            for p in (
+                "NVIDIA NIM",
+                "OpenAI",
+                "Anthropic",
+                "DeepSeek",
+            )
+        )
 
     def test_guidance_mentions_built_in_floor(self):
         """User should know that 600s is already set by default for
         known reasoning models — if they hit the error after raising,
         it's the upstream cap, not clawk."""
         from agent.thinking_timeout_guidance import build_thinking_timeout_guidance
+
         text = build_thinking_timeout_guidance(provider="nvidia", model="x")
         assert "600s" in text
 
@@ -333,12 +404,14 @@ class TestBuildThinkingTimeoutGuidance:
         — that's the misleading advice from the existing _is_stream_drop
         guidance that was wrong for the thinking-timeout case."""
         from agent.thinking_timeout_guidance import build_thinking_timeout_guidance
+
         text = build_thinking_timeout_guidance(provider="nvidia", model="x")
         assert "execute_code" not in text
         assert "open()" not in text
 
     def test_guidance_uses_label_when_provided(self):
         from agent.thinking_timeout_guidance import build_thinking_timeout_guidance
+
         text = build_thinking_timeout_guidance(
             provider="nvidia",
             model="nvidia/nemotron-3-ultra-550b-a55b",
@@ -348,6 +421,7 @@ class TestBuildThinkingTimeoutGuidance:
 
     def test_guidance_falls_back_to_slug_when_no_label(self):
         from agent.thinking_timeout_guidance import build_thinking_timeout_guidance
+
         text = build_thinking_timeout_guidance(
             provider="nvidia",
             model="nvidia/nemotron-3-ultra-550b-a55b",

@@ -24,6 +24,7 @@ try/except and returns ``None`` on failure.  The tool layer then
 falls back to its in-process syntax checker, exactly as if the user
 hadn't enabled LSP at all.
 """
+
 from __future__ import annotations
 
 import logging
@@ -93,7 +94,11 @@ INSTALL_RECIPES: Dict[str, Dict[str, Any]] = {
         "bin": "docker-langserver",
     },
     # Go
-    "gopls": {"strategy": "go", "pkg": "golang.org/x/tools/gopls@latest", "bin": "gopls"},
+    "gopls": {
+        "strategy": "go",
+        "pkg": "golang.org/x/tools/gopls@latest",
+        "bin": "gopls",
+    },
     # Rust — too heavy (hundreds of MB to bootstrap).  We do NOT
     # auto-install rust-analyzer; users install via rustup.
     "rust-analyzer": {"strategy": "manual", "pkg": "", "bin": "rust-analyzer"},
@@ -101,7 +106,11 @@ INSTALL_RECIPES: Dict[str, Dict[str, Any]] = {
     "clangd": {"strategy": "manual", "pkg": "", "bin": "clangd"},
     # Lua — manual (LuaLS is platform-specific binaries from GitHub
     # releases; complex enough that we punt to the user)
-    "lua-language-server": {"strategy": "manual", "pkg": "", "bin": "lua-language-server"},
+    "lua-language-server": {
+        "strategy": "manual",
+        "pkg": "",
+        "bin": "lua-language-server",
+    },
     # PowerShell — PowerShellEditorServices ships as a GitHub release
     # zip driven by a pwsh bootstrap script, not a single binary.  We
     # require a manual bundle install and probe for the pwsh host so
@@ -180,7 +189,9 @@ def try_install(pkg: str, strategy: str = "auto") -> Optional[str]:
     same path (or ``None``) without reinstalling.  Concurrent calls
     are serialized.
     """
-    if strategy not in {"auto",}:
+    if strategy not in {
+        "auto",
+    }:
         # Only ``auto`` triggers an actual install.  In manual/off,
         # we still check whether the binary already exists.
         recipe = INSTALL_RECIPES.get(pkg, {})
@@ -262,7 +273,16 @@ def _install_npm(
             " ".join(install_targets),
         )
         proc = subprocess.run(
-            [npm, "install", "--prefix", str(staging), "--silent", "--no-fund", "--no-audit", *install_targets],
+            [
+                npm,
+                "install",
+                "--prefix",
+                str(staging),
+                "--silent",
+                "--no-fund",
+                "--no-audit",
+                *install_targets,
+            ],
             check=False,
             capture_output=True,
             text=True,
@@ -271,7 +291,9 @@ def _install_npm(
         )
         if proc.returncode != 0:
             logger.warning(
-                "[install] npm install failed for %s: %s", pkg, proc.stderr.strip()[:500]
+                "[install] npm install failed for %s: %s",
+                pkg,
+                proc.stderr.strip()[:500],
             )
             return None
     except (subprocess.TimeoutExpired, OSError) as e:
@@ -294,7 +316,9 @@ def _install_npm(
                     except OSError:
                         return str(c)
             return str(link if link.exists() else c)
-    logger.warning("[install] npm install for %s succeeded but bin %s not found", pkg, bin_name)
+    logger.warning(
+        "[install] npm install for %s succeeded but bin %s not found", pkg, bin_name
+    )
     return None
 
 
@@ -331,7 +355,9 @@ def _install_go(pkg: str, bin_name: str) -> Optional[str]:
         bin_path = bin_path.with_suffix(".exe")
     if bin_path.exists():
         return str(bin_path)
-    logger.warning("[install] go install for %s succeeded but bin %s not found", pkg, bin_name)
+    logger.warning(
+        "[install] go install for %s succeeded but bin %s not found", pkg, bin_name
+    )
     return None
 
 
@@ -356,7 +382,9 @@ def _install_pip(pkg: str, bin_name: str) -> Optional[str]:
         )
         if proc.returncode != 0:
             logger.warning(
-                "[install] pip install failed for %s: %s", pkg, (proc.stderr or "").strip()[:500]
+                "[install] pip install failed for %s: %s",
+                pkg,
+                (proc.stderr or "").strip()[:500],
             )
             return None
     except (subprocess.TimeoutExpired, OSError) as e:

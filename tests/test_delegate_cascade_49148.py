@@ -28,7 +28,9 @@ def _make_conn():
 
 
 def _add_session(conn, sid, *, delegate_from=None, parent_session_id=None, messages=0):
-    model_config = json.dumps({"_delegate_from": delegate_from}) if delegate_from else None
+    model_config = (
+        json.dumps({"_delegate_from": delegate_from}) if delegate_from else None
+    )
     conn.execute(
         "INSERT INTO sessions (id, parent_session_id, model_config) VALUES (?, ?, ?)",
         (sid, parent_session_id, model_config),
@@ -97,7 +99,23 @@ class TestDeleteDelegateChildrenPreservesParent:
 
         assert "A" not in removed
         # Parent A and its messages survive; only delegate child B is gone.
-        assert conn.execute("SELECT COUNT(*) FROM sessions WHERE id='A'").fetchone()[0] == 1
-        assert conn.execute("SELECT COUNT(*) FROM messages WHERE session_id='A'").fetchone()[0] == 3
-        assert conn.execute("SELECT COUNT(*) FROM sessions WHERE id='B'").fetchone()[0] == 0
-        assert conn.execute("SELECT COUNT(*) FROM messages WHERE session_id='B'").fetchone()[0] == 0
+        assert (
+            conn.execute("SELECT COUNT(*) FROM sessions WHERE id='A'").fetchone()[0]
+            == 1
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE session_id='A'"
+            ).fetchone()[0]
+            == 3
+        )
+        assert (
+            conn.execute("SELECT COUNT(*) FROM sessions WHERE id='B'").fetchone()[0]
+            == 0
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE session_id='B'"
+            ).fetchone()[0]
+            == 0
+        )

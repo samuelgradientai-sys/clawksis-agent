@@ -65,7 +65,9 @@ class TestSignalArmLogic:
             cli._arm_exit_watchdog_on_shutdown_signal()  # must not raise
 
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 
 # A minimal stand-in for the wedged-CLI shape: signal handlers mirror the
 # production wiring (arm-on-signal, then a graceful unwind that wedges), and

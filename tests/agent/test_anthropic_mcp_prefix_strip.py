@@ -23,7 +23,10 @@ from unittest.mock import patch
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_tool_use_block(name: str, block_id: str = "tc_1", input_data: dict | None = None):
+
+def _make_tool_use_block(
+    name: str, block_id: str = "tc_1", input_data: dict | None = None
+):
     """Create a fake Anthropic tool_use content block."""
     return SimpleNamespace(
         type="tool_use",
@@ -59,11 +62,13 @@ class _FakeRegistry:
 # Response side: mcp__ wire name -> registry name
 # ---------------------------------------------------------------------------
 
+
 class TestAnthropicMcpPrefixStrip:
     """Verify strip_tool_prefix reverses the ``mcp__`` wire prefix correctly."""
 
     def _get_transport(self):
         from agent.transports.anthropic import AnthropicTransport
+
         return AnthropicTransport()
 
     def test_strips_prefix_for_oauth_injected_native_tool(self):
@@ -176,12 +181,14 @@ class TestAnthropicMcpPrefixStrip:
 # Request side: registry name -> mcp__ wire name (no single-underscore leaks)
 # ---------------------------------------------------------------------------
 
+
 class TestAnthropicOAuthOutgoingPrefix:
     """build_anthropic_kwargs must emit ZERO single-underscore ``mcp_`` names on
     the OAuth wire — bare names and MCP server names both land on ``mcp__``."""
 
     def _build(self, tools, is_oauth=True):
         from agent.anthropic_adapter import build_anthropic_kwargs
+
         return build_anthropic_kwargs(
             model="claude-sonnet-4-6",
             messages=[{"role": "user", "content": "Hi"}],
@@ -193,10 +200,12 @@ class TestAnthropicOAuthOutgoingPrefix:
 
     def test_oauth_adds_double_prefix_to_bare_tool_name(self):
         """OAuth + bare name -> ``mcp__`` prefix added."""
-        kwargs = self._build([{
-            "type": "function",
-            "function": {"name": "read_file", "description": "x", "parameters": {}},
-        }])
+        kwargs = self._build([
+            {
+                "type": "function",
+                "function": {"name": "read_file", "description": "x", "parameters": {}},
+            }
+        ])
         assert [t["name"] for t in kwargs["tools"]] == ["mcp__read_file"]
 
     def test_oauth_promotes_single_underscore_mcp_server_tool(self):
@@ -206,14 +215,16 @@ class TestAnthropicOAuthOutgoingPrefix:
         to be *skipped* and went on the wire single-underscore, still tripping
         the classifier.  They must become ``mcp__`` and NOT be double-prefixed.
         """
-        kwargs = self._build([{
-            "type": "function",
-            "function": {
-                "name": "mcp_linear_get_issue",
-                "description": "x",
-                "parameters": {},
-            },
-        }])
+        kwargs = self._build([
+            {
+                "type": "function",
+                "function": {
+                    "name": "mcp_linear_get_issue",
+                    "description": "x",
+                    "parameters": {},
+                },
+            }
+        ])
         names = [t["name"] for t in kwargs["tools"]]
         assert names == ["mcp__linear_get_issue"]
         # never double-prefixed
@@ -221,21 +232,37 @@ class TestAnthropicOAuthOutgoingPrefix:
 
     def test_oauth_already_double_prefixed_left_alone(self):
         """OAuth + already-``mcp__`` name -> unchanged (no triple underscore)."""
-        kwargs = self._build([{
-            "type": "function",
-            "function": {"name": "mcp__already", "description": "x", "parameters": {}},
-        }])
+        kwargs = self._build([
+            {
+                "type": "function",
+                "function": {
+                    "name": "mcp__already",
+                    "description": "x",
+                    "parameters": {},
+                },
+            }
+        ])
         assert [t["name"] for t in kwargs["tools"]] == ["mcp__already"]
 
     def test_oauth_no_single_underscore_mcp_on_wire(self):
         """Mixed set: every wire name is bare-free of single-underscore mcp_."""
         kwargs = self._build([
-            {"type": "function", "function": {"name": "read_file",
-                                              "description": "x", "parameters": {}}},
-            {"type": "function", "function": {"name": "mcp_linear_get_issue",
-                                              "description": "y", "parameters": {}}},
-            {"type": "function", "function": {"name": "terminal",
-                                              "description": "z", "parameters": {}}},
+            {
+                "type": "function",
+                "function": {"name": "read_file", "description": "x", "parameters": {}},
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "mcp_linear_get_issue",
+                    "description": "y",
+                    "parameters": {},
+                },
+            },
+            {
+                "type": "function",
+                "function": {"name": "terminal", "description": "z", "parameters": {}},
+            },
         ])
         names = sorted(t["name"] for t in kwargs["tools"])
         assert names == ["mcp__linear_get_issue", "mcp__read_file", "mcp__terminal"]
@@ -245,11 +272,26 @@ class TestAnthropicOAuthOutgoingPrefix:
 
     def test_non_oauth_path_untouched(self):
         """Non-OAuth requests never get the prefix — schemas pass through as-is."""
-        kwargs = self._build([
-            {"type": "function", "function": {"name": "read_file",
-                                              "description": "x", "parameters": {}}},
-            {"type": "function", "function": {"name": "mcp_linear_get_issue",
-                                              "description": "y", "parameters": {}}},
-        ], is_oauth=False)
+        kwargs = self._build(
+            [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "read_file",
+                        "description": "x",
+                        "parameters": {},
+                    },
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "mcp_linear_get_issue",
+                        "description": "y",
+                        "parameters": {},
+                    },
+                },
+            ],
+            is_oauth=False,
+        )
         names = sorted(t["name"] for t in kwargs["tools"])
         assert names == ["mcp_linear_get_issue", "read_file"]

@@ -61,8 +61,8 @@ async def test_write_tool_log_writes_and_rotates_handler(tmp_path, monkeypatch):
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
 
     log_queue: queue.Queue = queue.Queue()
-    log_queue.put("2026-07-02 10:00:00  terminal: \"echo hi\"")
-    log_queue.put("2026-07-02 10:00:01  read_file: \"foo.py\"")
+    log_queue.put('2026-07-02 10:00:00  terminal: "echo hi"')
+    log_queue.put('2026-07-02 10:00:01  read_file: "foo.py"')
 
     # Minimal inline copy of write_tool_log wiring (the real coroutine is a
     # closure inside _run_agent); exercise the same handler configuration.
@@ -74,7 +74,9 @@ async def test_write_tool_log_writes_and_rotates_handler(tmp_path, monkeypatch):
     log_dir = tmp_path / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     handler = RotatingFileHandler(
-        log_dir / "tool_calls.log", maxBytes=5 * 1024 * 1024, backupCount=3,
+        log_dir / "tool_calls.log",
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
         encoding="utf-8",
     )
     handler.setFormatter(RedactingFormatter("%(message)s"))

@@ -171,26 +171,31 @@ def _cleanup_oneshot_runtime() -> None:
     _oneshot_cleanup_done = True
     try:
         from tools.terminal_tool import cleanup_all_environments
+
         cleanup_all_environments()
     except Exception:
         pass
     try:
         from tools.async_delegation import interrupt_all
+
         interrupt_all(reason="oneshot shutdown")
     except Exception:
         pass
     try:
         from tools.browser_tool import _emergency_cleanup_all_sessions
+
         _emergency_cleanup_all_sessions()
     except Exception:
         pass
     try:
         from tools.mcp_tool import shutdown_mcp_servers
+
         shutdown_mcp_servers()
     except BaseException:
         pass
     try:
         from agent.auxiliary_client import shutdown_cached_clients
+
         shutdown_cached_clients()
     except Exception:
         pass
@@ -228,6 +233,7 @@ def _run_and_exit_oneshot(
         # fall through to normal interpreter teardown, which is the exact path
         # that aborts with SIGABRT on AL2023 (the bug this routine fixes).
         import traceback
+
         try:
             traceback.print_exc()
         except Exception:
@@ -344,9 +350,14 @@ def _config_default_interface_early() -> str:
             import yaml as _yaml_iface
 
             with open(cfg_path, encoding="utf-8") as _f:
-                raw = _yaml_iface.load(
-                    _f, Loader=getattr(_yaml_iface, "CSafeLoader", None) or _yaml_iface.SafeLoader
-                ) or {}
+                raw = (
+                    _yaml_iface.load(
+                        _f,
+                        Loader=getattr(_yaml_iface, "CSafeLoader", None)
+                        or _yaml_iface.SafeLoader,
+                    )
+                    or {}
+                )
 
             disp = raw.get("display", {})
 
@@ -1038,9 +1049,14 @@ try:
 
     if _cfg_path.exists():
         with open(_cfg_path, encoding="utf-8") as _f:
-            _early_cfg_raw = _yaml_early.load(
-                _f, Loader=getattr(_yaml_early, "CSafeLoader", None) or _yaml_early.SafeLoader
-            ) or {}
+            _early_cfg_raw = (
+                _yaml_early.load(
+                    _f,
+                    Loader=getattr(_yaml_early, "CSafeLoader", None)
+                    or _yaml_early.SafeLoader,
+                )
+                or {}
+            )
         # Managed scope: overlay administrator-pinned values so a managed
         # security.redact_secrets / network.force_ipv4 wins here too. This early
         # bridge reads config.yaml directly (before load_config is usable), so
@@ -1048,6 +1064,7 @@ try:
         # Fail-open via the shared helper.
         try:
             from clawk_cli import managed_scope
+
             _early_cfg_raw = managed_scope.apply_managed_overlay(_early_cfg_raw)
         except Exception:
             pass
@@ -2328,9 +2345,10 @@ def _termux_workspace_install_context(
         if packages_dir.is_dir():
             for child in sorted(packages_dir.iterdir()):
                 if child.is_dir() and (child / "package.json").is_file():
-                    workspace_args.extend(
-                        ["--workspace", child.relative_to(ws_root).as_posix()]
-                    )
+                    workspace_args.extend([
+                        "--workspace",
+                        child.relative_to(ws_root).as_posix(),
+                    ])
 
     workspace_args.append("--include-workspace-root=false")
 
@@ -3561,10 +3579,16 @@ def cmd_chat(args):
         try:
             from clawk_state import SessionDB
 
-            _saved_cwd = ((SessionDB().get_session(args.resume) or {}).get("cwd") or "").strip()
+            _saved_cwd = (
+                (SessionDB().get_session(args.resume) or {}).get("cwd") or ""
+            ).strip()
             if _saved_cwd and not os.path.isdir(_saved_cwd):
-                print(f"⚠ session's recorded dir is gone ({_saved_cwd}); staying in {os.getcwd()}")
-            elif _saved_cwd and os.path.realpath(_saved_cwd) != os.path.realpath(os.getcwd()):
+                print(
+                    f"⚠ session's recorded dir is gone ({_saved_cwd}); staying in {os.getcwd()}"
+                )
+            elif _saved_cwd and os.path.realpath(_saved_cwd) != os.path.realpath(
+                os.getcwd()
+            ):
                 os.chdir(_saved_cwd)
                 print(f"↪ restored workspace dir: {_saved_cwd}")
         except Exception:
@@ -4699,7 +4723,8 @@ def select_provider_and_model(args=None):
         for _alias, _canon in _alias_to_canon.items():
             _names_for.setdefault(_canon, {_canon.lower()}).add(_alias.lower())
         _visible_slugs = [
-            p.slug for p in CANONICAL_PROVIDERS
+            p.slug
+            for p in CANONICAL_PROVIDERS
             if not _names_for.get(p.slug, {p.slug.lower()}) & _cli_excluded
         ]
     else:

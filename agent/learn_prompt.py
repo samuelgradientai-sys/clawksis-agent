@@ -120,15 +120,15 @@ def build_learn_prompt(user_request: str) -> str:
         "request below, and save it.\n\n"
         f"THE REQUEST:\n{req}\n\n"
         "The request is open-ended and may mix two kinds of content, in any "
-        "order: SOURCES to gather (directories, file paths, URLs, \"what we "
-        "just did\", pasted notes) AND REQUIREMENTS that shape the skill "
+        'order: SOURCES to gather (directories, file paths, URLs, "what we '
+        'just did", pasted notes) AND REQUIREMENTS that shape the skill '
         "(what to focus on, what to leave out, scope, naming, the angle to "
         "take). Treat EVERY part of the request as load-bearing. In "
         "particular, prose that comes after a path or link is NOT incidental "
         "— it is the user telling you what they want from that source. A "
         "request like `<url> focus on the auth flow, skip the deprecated "
-        "endpoints` means: gather the URL AND honor \"focus on auth, skip "
-        "deprecated\" as authoring requirements. Never fetch the first source "
+        'endpoints` means: gather the URL AND honor "focus on auth, skip '
+        'deprecated" as authoring requirements. Never fetch the first source '
         "and ignore the rest.\n\n"
         "Do this:\n"
         "1. Gather every source the user named, using the tools you already "
@@ -141,7 +141,7 @@ def build_learn_prompt(user_request: str) -> str:
         "the skill you author — these govern what the SKILL.md covers and "
         "emphasizes, not just which sources you read.\n"
         "2. Author ONE SKILL.md and save it with the `skill_manage` tool "
-        "(action=\"create\"). Pick a sensible category. If the procedure needs "
+        '(action="create"). Pick a sensible category. If the procedure needs '
         "a non-trivial script, add it under the skill's `scripts/` with "
         "`skill_manage` write_file and reference it by relative path.\n\n"
         f"{_AUTHORING_STANDARDS}\n\n"

@@ -35,9 +35,11 @@ def _estimate_tokens(agent: Any, messages: Optional[List[dict]]) -> Optional[int
         return None
 
     if messages is not None:
-        protect = int(getattr(cc, "protect_first_n", 3)) + int(
-            getattr(cc, "protect_last_n", 20)
-        ) + 1
+        protect = (
+            int(getattr(cc, "protect_first_n", 3))
+            + int(getattr(cc, "protect_last_n", 20))
+            + 1
+        )
         if len(messages) <= protect:
             return None
         try:
@@ -107,9 +109,7 @@ def merge_preflight_compression_warning(
 
     parts: list[str] = []
     if old_ctx and new_ctx < old_ctx:
-        parts.append(
-            f"Context window shrinks ({old_ctx:,} → {new_ctx:,}). "
-        )
+        parts.append(f"Context window shrinks ({old_ctx:,} → {new_ctx:,}). ")
     parts.append(
         f"Session is ~{estimate:,} tokens; "
         f"{result.new_model} allows {new_ctx:,} "
@@ -145,7 +145,10 @@ def enrich_model_switch_warnings_for_gateway(
         try:
             cfg = load_gateway_config()
             model_cfg = cfg.get("model", {}) if isinstance(cfg, dict) else {}
-            if isinstance(model_cfg, dict) and model_cfg.get("context_length") is not None:
+            if (
+                isinstance(model_cfg, dict)
+                and model_cfg.get("context_length") is not None
+            ):
                 cfg_ctx = int(model_cfg["context_length"])
         except Exception:
             pass

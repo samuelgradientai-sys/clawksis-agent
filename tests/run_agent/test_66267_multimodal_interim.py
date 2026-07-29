@@ -43,8 +43,8 @@ def _make_agent():
 
     agent = MagicMock(spec=AIAgent)
     agent._extract_reasoning = lambda msg: AIAgent._extract_reasoning(agent, msg)
-    agent._extract_codex_interim_visible_text = (
-        lambda msg: AIAgent._extract_codex_interim_visible_text(agent, msg)
+    agent._extract_codex_interim_visible_text = lambda msg: (
+        AIAgent._extract_codex_interim_visible_text(agent, msg)
     )
     agent._strip_think_blocks = lambda text: AIAgent._strip_think_blocks(agent, text)
     agent._sanitize_surrogates = lambda text: _sanitize_surrogates(text)
@@ -82,7 +82,10 @@ class TestBuildAssistantMessageMultimodal:
         sdk_msg = SimpleNamespace(
             content=[
                 {"type": "text", "text": "answer after seeing the screenshot"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,AAAA"},
+                },
             ],
             tool_calls=None,
             reasoning_content=None,
@@ -104,7 +107,10 @@ class TestBuildAssistantMessageMultimodal:
         agent = _make_agent()
         sdk_msg = SimpleNamespace(
             content=[
-                {"type": "text", "text": "<think>hidden reasoning</think>visible answer"},
+                {
+                    "type": "text",
+                    "text": "<think>hidden reasoning</think>visible answer",
+                },
             ],
             tool_calls=None,
             reasoning_content=None,
@@ -175,7 +181,10 @@ class TestInterimVisibleTextMultimodal:
             "role": "assistant",
             "content": [
                 {"type": "text", "text": "Let me look at the screenshot."},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,AAAA"},
+                },
             ],
             "finish_reason": "incomplete",
         }
@@ -207,7 +216,9 @@ class TestDuplicatePreviousInterimDedup:
         }
         previous_msg = _vision_tool_result("some tool output")
 
-        current_interim_visible = AIAgent._interim_assistant_visible_text(agent, assistant_msg)
+        current_interim_visible = AIAgent._interim_assistant_visible_text(
+            agent, assistant_msg
+        )
         previous_interim_visible = (
             AIAgent._interim_assistant_visible_text(agent, previous_msg)
             if isinstance(previous_msg, dict)
@@ -241,8 +252,12 @@ class TestDuplicatePreviousInterimDedup:
             "finish_reason": "incomplete",
         }
 
-        current_interim_visible = AIAgent._interim_assistant_visible_text(agent, assistant_msg)
-        previous_interim_visible = AIAgent._interim_assistant_visible_text(agent, previous_msg)
+        current_interim_visible = AIAgent._interim_assistant_visible_text(
+            agent, assistant_msg
+        )
+        previous_interim_visible = AIAgent._interim_assistant_visible_text(
+            agent, previous_msg
+        )
         duplicate_previous_interim = (
             bool(current_interim_visible)
             and isinstance(previous_msg, dict)

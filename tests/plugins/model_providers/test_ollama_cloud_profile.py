@@ -155,7 +155,9 @@ class TestOllamaCloudFullKwargsIntegration:
         assert kwargs["model"] == "deepseek-v4-pro:cloud"
         assert kwargs["reasoning_effort"] == "max"
         # No extra_body — Ollama Cloud uses top-level reasoning_effort
-        assert "extra_body" not in kwargs or "reasoning" not in kwargs.get("extra_body", {})
+        assert "extra_body" not in kwargs or "reasoning" not in kwargs.get(
+            "extra_body", {}
+        )
 
     def test_full_kwargs_with_disabled(self, ollama_cloud_profile):
         from agent.transports.chat_completions import ChatCompletionsTransport
@@ -202,14 +204,18 @@ class TestOllamaCloudCapabilityGating:
 class TestOllamaModelSupportsThinking:
     """The /api/show capability probe used to resolve supports_reasoning."""
 
-    def _patch_show(self, monkeypatch, *, status=200, capabilities=None, raise_exc=None):
+    def _patch_show(
+        self, monkeypatch, *, status=200, capabilities=None, raise_exc=None
+    ):
         import httpx
 
         class _Resp:
             status_code = status
 
             def json(self):
-                return {"capabilities": capabilities} if capabilities is not None else {}
+                return (
+                    {"capabilities": capabilities} if capabilities is not None else {}
+                )
 
         class _Client:
             def __init__(self, *a, **k):

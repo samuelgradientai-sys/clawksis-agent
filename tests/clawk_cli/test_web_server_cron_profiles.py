@@ -36,7 +36,9 @@ def _drain_queue(q):
             return values
 
 
-def test_call_cron_for_profile_routes_storage_without_mutating_globals(isolated_profiles):
+def test_call_cron_for_profile_routes_storage_without_mutating_globals(
+    isolated_profiles,
+):
     from cron import jobs as cron_jobs
     from clawk_cli import web_server
 
@@ -97,7 +99,9 @@ def test_fire_cron_job_scopes_store_and_runtime_home_together(
 
     outer_token = set_clawk_home_override(default_home)
     try:
-        assert web_server._fire_cron_job_for_profile("worker_alpha", "worker-job") is True
+        assert (
+            web_server._fire_cron_job_for_profile("worker_alpha", "worker-job") is True
+        )
         assert captured == {
             "job_id": "worker-job",
             "runtime_home": worker_home,
@@ -171,7 +175,9 @@ def test_profile_call_cannot_retarget_ticker_store_mid_write(
             ticker_done.set()
 
     monkeypatch.setattr(cron_jobs, "load_jobs", blocking_load_jobs)
-    monkeypatch.setattr(cron_jobs, "_hold_profile_call", hold_profile_call, raising=False)
+    monkeypatch.setattr(
+        cron_jobs, "_hold_profile_call", hold_profile_call, raising=False
+    )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         ticker_future = pool.submit(run_ticker_write)
@@ -194,7 +200,9 @@ def test_profile_call_cannot_retarget_ticker_store_mid_write(
 
 
 @pytest.mark.asyncio
-async def test_list_cron_jobs_all_includes_default_and_named_profiles(isolated_profiles):
+async def test_list_cron_jobs_all_includes_default_and_named_profiles(
+    isolated_profiles,
+):
     from clawk_cli import web_server
 
     default_job = web_server._call_cron_for_profile(
@@ -221,7 +229,9 @@ async def test_list_cron_jobs_all_includes_default_and_named_profiles(isolated_p
     assert by_id[default_job["id"]]["clawk_home"] == str(isolated_profiles["default"])
     assert by_id[worker_job["id"]]["profile"] == "worker_alpha"
     assert by_id[worker_job["id"]]["is_default_profile"] is False
-    assert by_id[worker_job["id"]]["clawk_home"] == str(isolated_profiles["worker_alpha"])
+    assert by_id[worker_job["id"]]["clawk_home"] == str(
+        isolated_profiles["worker_alpha"]
+    )
 
 
 @pytest.mark.asyncio
@@ -355,9 +365,10 @@ async def test_cron_dashboard_io_rejects_async_callables():
         await web_server._run_cron_dashboard_io(async_callable)
 
 
-
 @pytest.mark.asyncio
-async def test_update_cron_job_normalizes_dashboard_core_fields(isolated_profiles, tmp_path):
+async def test_update_cron_job_normalizes_dashboard_core_fields(
+    isolated_profiles, tmp_path
+):
     from clawk_cli import web_server
 
     scripts_dir = isolated_profiles["worker_alpha"] / "scripts"
@@ -746,9 +757,7 @@ async def test_create_cron_job_without_profile_uses_backend_own_profile(
     Desktop app's pre-profileScoped clients sent none)."""
     from clawk_cli import web_server
 
-    monkeypatch.setenv(
-        "CLAWK_HOME", str(isolated_profiles["worker_alpha"])
-    )
+    monkeypatch.setenv("CLAWK_HOME", str(isolated_profiles["worker_alpha"]))
 
     job = await web_server.create_cron_job(
         web_server.CronJobCreate(

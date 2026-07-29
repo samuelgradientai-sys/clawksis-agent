@@ -37,7 +37,6 @@ class TestGpt56SortInvariants:
         models.sort(key=lambda m: _model_sort_key(m, "openai/gpt"))
         assert models[0] == "openai/gpt-5.6-sol"
 
-
     def test_base_sol_outranks_sol_pro_for_alias_default(self):
         # "-pro" high-effort variants parse as suffix "sol-pro" (rank 1), so
         # `/model gpt` defaults to base Sol rather than the high-effort mode.
@@ -100,8 +99,7 @@ class TestGpt56CodexCompaction:
             "gpt-5.6-luna-pro",
         ):
             assert (
-                _compression_threshold_for_model(slug, provider="openai-codex")
-                == 0.85
+                _compression_threshold_for_model(slug, provider="openai-codex") == 0.85
             ), slug
 
     def test_no_autoraise_on_direct_api_route(self):
@@ -110,8 +108,7 @@ class TestGpt56CodexCompaction:
         # Direct OpenAI API / OpenRouter expose the full 1.05M window, so the
         # 272K-cap override must NOT apply there.
         assert (
-            _compression_threshold_for_model("gpt-5.6-sol", provider="openai")
-            is None
+            _compression_threshold_for_model("gpt-5.6-sol", provider="openai") is None
         )
         assert (
             _compression_threshold_for_model(

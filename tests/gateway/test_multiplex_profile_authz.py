@@ -115,16 +115,19 @@ def test_adapter_for_source_resolves_secondary_profile_adapter(monkeypatch):
     )
 
     assert runner._adapter_for_source(source) is secondary_adapter
-    assert runner._adapter_for_source(
-        SessionSource(
-            platform=Platform.WECOM,
-            user_id="allowed-user",
-            chat_id="dm-chat",
-            user_name="allowed-user",
-            chat_type="dm",
-            profile=None,
+    assert (
+        runner._adapter_for_source(
+            SessionSource(
+                platform=Platform.WECOM,
+                user_id="allowed-user",
+                chat_id="dm-chat",
+                user_name="allowed-user",
+                chat_type="dm",
+                profile=None,
+            )
         )
-    ) is default_adapter
+        is default_adapter
+    )
 
 
 def test_secondary_allowlist_dm_behavior_ignores_unauthorized(monkeypatch):
@@ -132,10 +135,13 @@ def test_secondary_allowlist_dm_behavior_ignores_unauthorized(monkeypatch):
     runner, _default_adapter, secondary_adapter = _make_multiplex_runner(monkeypatch)
     secondary_adapter._dm_policy = "allowlist"
 
-    assert runner._get_unauthorized_dm_behavior(
-        Platform.WECOM,
-        profile="coder",
-    ) == "ignore"
+    assert (
+        runner._get_unauthorized_dm_behavior(
+            Platform.WECOM,
+            profile="coder",
+        )
+        == "ignore"
+    )
     assert runner._get_unauthorized_dm_behavior(Platform.WECOM) == "ignore"
 
 

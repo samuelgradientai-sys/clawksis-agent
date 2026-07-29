@@ -132,7 +132,9 @@ def _make_channel_update(msg):
     )
 
 
-def test_build_message_event_uses_channel_identity_for_channel_posts(telegram_adapter_cls):
+def test_build_message_event_uses_channel_identity_for_channel_posts(
+    telegram_adapter_cls,
+):
     adapter = _make_adapter(telegram_adapter_cls)
     msg = _make_channel_message()
 
@@ -148,7 +150,9 @@ def test_build_message_event_uses_channel_identity_for_channel_posts(telegram_ad
 
 
 @pytest.mark.asyncio
-async def test_text_handler_uses_effective_message_for_channel_post(telegram_adapter_cls):
+async def test_text_handler_uses_effective_message_for_channel_post(
+    telegram_adapter_cls,
+):
     adapter = _make_adapter(telegram_adapter_cls)
     msg = _make_channel_message()
     update = _make_channel_update(msg)
@@ -165,7 +169,9 @@ async def test_text_handler_uses_effective_message_for_channel_post(telegram_ada
 
 
 @pytest.mark.asyncio
-async def test_command_handler_uses_effective_message_for_channel_post(telegram_adapter_cls):
+async def test_command_handler_uses_effective_message_for_channel_post(
+    telegram_adapter_cls,
+):
     adapter = _make_adapter(telegram_adapter_cls)
     msg = _make_channel_message(text="/status")
     update = _make_channel_update(msg)

@@ -103,7 +103,9 @@ def generate_title(
     if runtime_validator is not None:
         try:
             if not runtime_validator():
-                logger.debug("Title generation skipped: runtime validator returned False")
+                logger.debug(
+                    "Title generation skipped: runtime validator returned False"
+                )
                 return None
         except Exception:
             # Fail open: a broken validator must not disable titling.
@@ -114,11 +116,18 @@ def generate_title(
     assistant_snippet = assistant_response[:500] if assistant_response else ""
 
     language = _title_language()
-    prompt = _TITLE_PROMPT_PINNED_LANGUAGE.format(language=language) if language else _TITLE_PROMPT
+    prompt = (
+        _TITLE_PROMPT_PINNED_LANGUAGE.format(language=language)
+        if language
+        else _TITLE_PROMPT
+    )
 
     messages = [
         {"role": "system", "content": prompt},
-        {"role": "user", "content": f"User: {user_snippet}\n\nAssistant: {assistant_snippet}"},
+        {
+            "role": "user",
+            "content": f"User: {user_snippet}\n\nAssistant: {assistant_snippet}",
+        },
     ]
 
     try:
@@ -138,9 +147,10 @@ def generate_title(
         # tag variants (unterminated blocks, orphan closes, mixed case)
         # are handled, not just a single literal <think> pair.
         from agent.agent_runtime_helpers import strip_think_blocks
+
         title = strip_think_blocks(None, content).strip()
         # Clean up: remove quotes, trailing punctuation, prefixes like "Title: "
-        title = title.strip('"\'')
+        title = title.strip("\"'")
         if title.lower().startswith("title:"):
             title = title[6:].strip()
         # Enforce reasonable length
@@ -190,9 +200,7 @@ def _persist_session_title(session_db, session_id, title):
             return t
         ok = session_db.set_session_title(session_id, t)
         if ok is False:
-            raise RuntimeError(
-                f"session {session_id} not found when storing title"
-            )
+            raise RuntimeError(f"session {session_id} not found when storing title")
         return t
 
     try:
@@ -351,7 +359,9 @@ def maybe_auto_title(
     # conversation_history includes the exchange that just happened,
     # so for a first exchange we expect exactly 1 user message
     # (or 2 counting system). Be generous: generate on first 2 exchanges.
-    user_msg_count = sum(1 for m in (conversation_history or []) if m.get("role") == "user")
+    user_msg_count = sum(
+        1 for m in (conversation_history or []) if m.get("role") == "user"
+    )
     if user_msg_count > 2:
         return
 

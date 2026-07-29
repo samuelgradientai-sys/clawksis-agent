@@ -396,6 +396,7 @@ def _hermetic_environment(tmp_path, monkeypatch):
     #    singleton might still be cached from a previous test).
     try:
         import clawk_cli.plugins as _plugins_mod
+
         monkeypatch.setattr(_plugins_mod, "_plugin_manager", None)
     except Exception:
         pass
@@ -551,7 +552,10 @@ def pytest_configure(config):  # noqa: D401 — pytest hook
     # raises AttributeError at timer setup and the whole run aborts before any
     # test executes. Fall back to the thread-based timer on Windows so the
     # suite runs natively there (POSIX keeps the more reliable signal method).
-    if sys.platform == "win32" and getattr(config.option, "timeout_method", None) == "signal":
+    if (
+        sys.platform == "win32"
+        and getattr(config.option, "timeout_method", None) == "signal"
+    ):
         config.option.timeout_method = "thread"
 
 
@@ -591,6 +595,7 @@ def _live_system_guard(request, monkeypatch):
     # the live psutil walk below. Static set keeps the fast path cheap.
     try:
         import psutil as _psutil
+
         _initial_children = {
             c.pid for c in _psutil.Process(test_pid).children(recursive=True)
         }
@@ -682,9 +687,19 @@ def _live_system_guard(request, monkeypatch):
         "clawk gateway",
     )
     _MUTATING_VERBS = (
-        "restart", "start", "stop", "kill", "reload",
-        "reset-failed", "enable", "disable", "mask", "unmask",
-        "daemon-reload", "try-restart", "reload-or-restart",
+        "restart",
+        "start",
+        "stop",
+        "kill",
+        "reload",
+        "reset-failed",
+        "enable",
+        "disable",
+        "mask",
+        "unmask",
+        "daemon-reload",
+        "try-restart",
+        "reload-or-restart",
     )
     _PROCESS_KILLERS = ("pkill", "killall", "taskkill", "skill", "fuser")
 
@@ -801,6 +816,7 @@ def _live_system_guard(request, monkeypatch):
         def _guarded(cmd, *args, **kwargs):
             _check_subprocess_cmd(name, cmd)
             return real(cmd, *args, **kwargs)
+
         _guarded.__name__ = f"_guarded_{name}"
         # Make the wrapper subscriptable like the wrapped callable when
         # the wrapped object is. ``subprocess.Popen[bytes]`` is used as
@@ -870,6 +886,7 @@ def _live_system_guard(request, monkeypatch):
     # pty.spawn — POSIX-only.
     try:
         import pty as _pty
+
         if hasattr(_pty, "spawn"):
             real_pty_spawn = _pty.spawn
 
@@ -884,13 +901,12 @@ def _live_system_guard(request, monkeypatch):
     # asyncio.create_subprocess_* — bypasses subprocess module entirely.
     try:
         import asyncio as _asyncio
+
         real_async_exec = _asyncio.create_subprocess_exec
         real_async_shell = _asyncio.create_subprocess_shell
 
         async def _guarded_async_exec(program, *args, **kwargs):
-            _check_subprocess_cmd(
-                "asyncio.create_subprocess_exec", [program, *args]
-            )
+            _check_subprocess_cmd("asyncio.create_subprocess_exec", [program, *args])
             return await real_async_exec(program, *args, **kwargs)
 
         async def _guarded_async_shell(cmd, *args, **kwargs):
@@ -898,9 +914,7 @@ def _live_system_guard(request, monkeypatch):
             return await real_async_shell(cmd, *args, **kwargs)
 
         monkeypatch.setattr(_asyncio, "create_subprocess_exec", _guarded_async_exec)
-        monkeypatch.setattr(
-            _asyncio, "create_subprocess_shell", _guarded_async_shell
-        )
+        monkeypatch.setattr(_asyncio, "create_subprocess_shell", _guarded_async_shell)
     except Exception:
         pass
 

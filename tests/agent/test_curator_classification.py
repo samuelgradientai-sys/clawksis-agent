@@ -31,8 +31,10 @@ def curator_env(tmp_path, monkeypatch):
 
     import importlib
     import clawk_constants
+
     importlib.reload(clawk_constants)
     from agent import curator
+
     importlib.reload(curator)
     yield curator
 
@@ -69,10 +71,15 @@ def test_classify_pruned_when_no_destination_reference(curator_env):
         after_names={"keeper"},
         tool_calls=[
             {"name": "skills_list", "arguments": "{}"},
-            {"name": "skill_manage", "arguments": json.dumps({
-                "action": "patch", "name": "keeper",
-                "old_string": "foo", "new_string": "bar",
-            })},
+            {
+                "name": "skill_manage",
+                "arguments": json.dumps({
+                    "action": "patch",
+                    "name": "keeper",
+                    "old_string": "foo",
+                    "new_string": "bar",
+                }),
+            },
         ],
     )
     assert result["consolidated"] == []
@@ -458,11 +465,13 @@ def test_reconcile_model_wins_when_umbrella_exists(curator_env):
         removed=["anthropic-api"],
         heuristic={"consolidated": [], "pruned": [{"name": "anthropic-api"}]},
         model_block={
-            "consolidations": [{
-                "from": "anthropic-api",
-                "into": "llm-providers",
-                "reason": "duplicate",
-            }],
+            "consolidations": [
+                {
+                    "from": "anthropic-api",
+                    "into": "llm-providers",
+                    "reason": "duplicate",
+                }
+            ],
             "prunings": [],
         },
         destinations={"llm-providers"},
@@ -481,15 +490,19 @@ def test_reconcile_model_hallucinates_umbrella(curator_env):
     out = curator_env._reconcile_classification(
         removed=["thing"],
         heuristic={
-            "consolidated": [{"name": "thing", "into": "real-umbrella", "evidence": "..."}],
+            "consolidated": [
+                {"name": "thing", "into": "real-umbrella", "evidence": "..."}
+            ],
             "pruned": [],
         },
         model_block={
-            "consolidations": [{
-                "from": "thing",
-                "into": "nonexistent-umbrella",
-                "reason": "confused",
-            }],
+            "consolidations": [
+                {
+                    "from": "thing",
+                    "into": "nonexistent-umbrella",
+                    "reason": "confused",
+                }
+            ],
             "prunings": [],
         },
         destinations={"real-umbrella"},
@@ -507,11 +520,13 @@ def test_reconcile_model_hallucinates_with_no_heuristic_evidence(curator_env):
         removed=["ghost"],
         heuristic={"consolidated": [], "pruned": [{"name": "ghost"}]},
         model_block={
-            "consolidations": [{
-                "from": "ghost",
-                "into": "nonexistent",
-                "reason": "wrong",
-            }],
+            "consolidations": [
+                {
+                    "from": "ghost",
+                    "into": "nonexistent",
+                    "reason": "wrong",
+                }
+            ],
             "prunings": [],
         },
         destinations={"real-umbrella"},
@@ -526,11 +541,13 @@ def test_reconcile_heuristic_catches_model_omission(curator_env):
     out = curator_env._reconcile_classification(
         removed=["forgotten"],
         heuristic={
-            "consolidated": [{
-                "name": "forgotten",
-                "into": "umbrella",
-                "evidence": "write_file on umbrella referenced forgotten.md",
-            }],
+            "consolidated": [
+                {
+                    "name": "forgotten",
+                    "into": "umbrella",
+                    "evidence": "write_file on umbrella referenced forgotten.md",
+                }
+            ],
             "pruned": [],
         },
         model_block={"consolidations": [], "prunings": []},
@@ -549,7 +566,9 @@ def test_reconcile_model_prunes_with_reason(curator_env):
         heuristic={"consolidated": [], "pruned": [{"name": "stale-skill"}]},
         model_block={
             "consolidations": [],
-            "prunings": [{"name": "stale-skill", "reason": "superseded by bundled skill"}],
+            "prunings": [
+                {"name": "stale-skill", "reason": "superseded by bundled skill"}
+            ],
         },
         destinations=set(),
     )
@@ -600,11 +619,14 @@ def test_reconcile_model_block_visible_in_full_report(curator_env):
             "provider": "p",
             "error": None,
             "tool_calls": [
-                {"name": "skill_manage", "arguments": _json.dumps({
-                    "action": "create",
-                    "name": "llm-providers",
-                    "content": "# llm-providers\nIncludes anthropic-api",
-                })},
+                {
+                    "name": "skill_manage",
+                    "arguments": _json.dumps({
+                        "action": "create",
+                        "name": "llm-providers",
+                        "content": "# llm-providers\nIncludes anthropic-api",
+                    }),
+                },
             ],
         },
     )
@@ -795,7 +817,9 @@ def test_reconcile_absorbed_into_nonexistent_target_falls_through(curator_env):
     out = curator_env._reconcile_classification(
         removed=["thing"],
         heuristic={
-            "consolidated": [{"name": "thing", "into": "real-umbrella", "evidence": "..."}],
+            "consolidated": [
+                {"name": "thing", "into": "real-umbrella", "evidence": "..."}
+            ],
             "pruned": [],
         },
         model_block={"consolidations": [], "prunings": []},
@@ -816,11 +840,13 @@ def test_reconcile_declaration_preserves_yaml_reason(curator_env):
         removed=["narrow"],
         heuristic={"consolidated": [], "pruned": []},
         model_block={
-            "consolidations": [{
-                "from": "narrow",
-                "into": "umbrella",
-                "reason": "duplicate of umbrella's main content",
-            }],
+            "consolidations": [
+                {
+                    "from": "narrow",
+                    "into": "umbrella",
+                    "reason": "duplicate of umbrella's main content",
+                }
+            ],
             "prunings": [],
         },
         destinations={"umbrella"},
@@ -1030,7 +1056,9 @@ def test_rename_summary_mixed_consolidation_and_pruning(curator_env):
 # ---------------------------------------------------------------------------
 
 
-def test_rename_summary_pin_hint_appears_when_consolidation_produced_umbrella(curator_env):
+def test_rename_summary_pin_hint_appears_when_consolidation_produced_umbrella(
+    curator_env,
+):
     """When at least one skill was absorbed into an umbrella, hint at pinning it."""
     result = curator_env._build_rename_summary(
         before_names={"pdf-extraction", "docx-extraction", "document-tools"},

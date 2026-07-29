@@ -69,18 +69,16 @@ def test_markdown_table_uses_post_not_text():
     A message whose only markdown is a table must take the ``post`` path,
     not be downgraded to plain text.
     """
-    content = (
-        "| col A | col B |\n"
-        "| ----- | ----- |\n"
-        "| 1     | 2     |"
-    )
+    content = "| col A | col B |\n| ----- | ----- |\n| 1     | 2     |"
     msg_type, payload_str = _call_build_outbound_payload(content)
     assert msg_type == "post", (
         f"expected 'post' for a markdown table (issue #52786), got {msg_type!r}; "
         "the table-downgrade branch in _build_outbound_payload has been re-introduced"
     )
     md_texts = _md_texts_from_post_payload(payload_str)
-    assert md_texts, f"post payload must include at least one md element; got {payload_str!r}"
+    assert md_texts, (
+        f"post payload must include at least one md element; got {payload_str!r}"
+    )
     joined = "".join(md_texts)
     assert "col A" in joined and "|" in joined, (
         "table text was lost or reformatted when switching from text to post"

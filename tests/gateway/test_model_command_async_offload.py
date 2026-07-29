@@ -47,7 +47,9 @@ def _make_event():
     return MessageEvent(
         text="/model",
         message_type=MessageType.TEXT,
-        source=SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"),
+        source=SessionSource(
+            platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"
+        ),
     )
 
 
@@ -74,7 +76,10 @@ def _isolated_config(tmp_path, monkeypatch):
 
     clawk_home = tmp_path / ".clawk"
     clawk_home.mkdir()
-    (clawk_home / "config.yaml").write_text("model:\n  default: gpt-x\n  provider: openrouter\nproviders: {}\n", encoding="utf-8")
+    (clawk_home / "config.yaml").write_text(
+        "model:\n  default: gpt-x\n  provider: openrouter\nproviders: {}\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(gateway_run, "_clawk_home", clawk_home)
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", lambda: {})
     return clawk_home
@@ -84,7 +89,9 @@ def _isolated_config(tmp_path, monkeypatch):
 # Text-fallback path  ->  list_authenticated_providers
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
-async def test_text_fallback_offloads_list_authenticated_providers(_isolated_config, monkeypatch):
+async def test_text_fallback_offloads_list_authenticated_providers(
+    _isolated_config, monkeypatch
+):
     """No picker-capable adapter registered => handler takes the text fallback,
     which must offload ``list_authenticated_providers`` to a worker thread."""
     spy = _ToThreadSpy()
@@ -132,7 +139,9 @@ class _FakePickerAdapter:
 
 
 @pytest.mark.asyncio
-async def test_picker_path_offloads_list_picker_providers(_isolated_config, monkeypatch):
+async def test_picker_path_offloads_list_picker_providers(
+    _isolated_config, monkeypatch
+):
     """A picker-capable adapter => handler takes the picker branch, which must
     offload ``list_picker_providers`` to a worker thread."""
     spy = _ToThreadSpy()
@@ -140,8 +149,15 @@ async def test_picker_path_offloads_list_picker_providers(_isolated_config, monk
 
     # Non-empty providers so the handler proceeds to send_model_picker (and
     # returns None), proving we got past the offloaded listing call.
-    fake_providers = [{"slug": "openrouter", "name": "OpenRouter", "is_current": True,
-                       "models": ["gpt-x"], "total_models": 1}]
+    fake_providers = [
+        {
+            "slug": "openrouter",
+            "name": "OpenRouter",
+            "is_current": True,
+            "models": ["gpt-x"],
+            "total_models": 1,
+        }
+    ]
 
     def _fake_list_picker_providers(**kwargs):
         return fake_providers
@@ -154,8 +170,12 @@ async def test_picker_path_offloads_list_picker_providers(_isolated_config, monk
     runner = _make_runner()
     runner.adapters = {Platform.TELEGRAM: _FakePickerAdapter()}
     # Stub the metadata/anchor helpers the picker branch calls before sending.
-    monkeypatch.setattr(runner, "_thread_metadata_for_source", lambda *a, **k: None, raising=False)
-    monkeypatch.setattr(runner, "_reply_anchor_for_event", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(
+        runner, "_thread_metadata_for_source", lambda *a, **k: None, raising=False
+    )
+    monkeypatch.setattr(
+        runner, "_reply_anchor_for_event", lambda *a, **k: None, raising=False
+    )
 
     result = await runner._handle_model_command(_make_event())
 
@@ -175,8 +195,15 @@ async def test_picker_path_requests_moa_presets(_isolated_config, monkeypatch):
 
     def _fake_list_picker_providers(**kwargs):
         captured.update(kwargs)
-        return [{"slug": "moa", "name": "Mixture of Agents", "is_current": False,
-                 "models": ["battle", "smart"], "total_models": 2}]
+        return [
+            {
+                "slug": "moa",
+                "name": "Mixture of Agents",
+                "is_current": False,
+                "models": ["battle", "smart"],
+                "total_models": 2,
+            }
+        ]
 
     monkeypatch.setattr(
         "clawk_cli.model_switch.list_picker_providers",
@@ -185,8 +212,12 @@ async def test_picker_path_requests_moa_presets(_isolated_config, monkeypatch):
 
     runner = _make_runner()
     runner.adapters = {Platform.TELEGRAM: _FakePickerAdapter()}
-    monkeypatch.setattr(runner, "_thread_metadata_for_source", lambda *a, **k: None, raising=False)
-    monkeypatch.setattr(runner, "_reply_anchor_for_event", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(
+        runner, "_thread_metadata_for_source", lambda *a, **k: None, raising=False
+    )
+    monkeypatch.setattr(
+        runner, "_reply_anchor_for_event", lambda *a, **k: None, raising=False
+    )
 
     result = await runner._handle_model_command(_make_event())
 

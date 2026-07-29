@@ -29,7 +29,7 @@ def _fake_editor(body: str, mode: str = "append") -> str:
         f.write("#!/usr/bin/env bash\n")
         f.write(f"cat >> \"$1\" <<'EOF'\n{body}\nEOF\n")
     else:  # clear
-        f.write("#!/usr/bin/env bash\n: > \"$1\"\n")
+        f.write('#!/usr/bin/env bash\n: > "$1"\n')
     f.close()
     os.chmod(f.name, os.stat(f.name).st_mode | stat.S_IEXEC)
     return f.name

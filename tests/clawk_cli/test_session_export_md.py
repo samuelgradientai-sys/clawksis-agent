@@ -31,11 +31,21 @@ def _session(**overrides):
                 "role": "assistant",
                 "content": "",
                 "tool_calls": [
-                    {"function": {"name": "terminal", "arguments": "{\"command\": \"pwd\"}"}}
+                    {
+                        "function": {
+                            "name": "terminal",
+                            "arguments": '{"command": "pwd"}',
+                        }
+                    }
                 ],
                 "created_at": 1783331698.0,
             },
-            {"role": "tool", "name": "terminal", "content": "output", "created_at": 1783331699.0},
+            {
+                "role": "tool",
+                "name": "terminal",
+                "content": "output",
+                "created_at": 1783331699.0,
+            },
         ],
     }
     data.update(overrides)
@@ -67,7 +77,9 @@ def test_render_session_markdown_includes_frontmatter_messages_and_verification(
 
 def test_render_session_markdown_renders_structured_content_as_json_fence():
     rendered = render_session_markdown(
-        _session(messages=[{"role": "user", "content": [{"type": "text", "text": "hi"}]}])
+        _session(
+            messages=[{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
+        )
     )
 
     assert "```json" in rendered
@@ -94,8 +106,12 @@ def test_render_session_markdown_includes_logical_lineage_segments():
             title="Logical",
             lineage_session_ids=["root", "tip"],
             segments=[
-                _session(id="root", messages=[{"role": "user", "content": "root text"}]),
-                _session(id="tip", messages=[{"role": "assistant", "content": "tip text"}]),
+                _session(
+                    id="root", messages=[{"role": "user", "content": "root text"}]
+                ),
+                _session(
+                    id="tip", messages=[{"role": "assistant", "content": "tip text"}]
+                ),
             ],
         )
     )
@@ -128,7 +144,9 @@ def test_verify_export_file_checks_count_and_sha(tmp_path):
     assert ok is True
     assert reason == "ok"
 
-    path.write_text(path.read_text(encoding="utf-8").replace("Hello", "Tampered"), encoding="utf-8")
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("Hello", "Tampered"), encoding="utf-8"
+    )
     ok, reason = verify_export_file(path, session)
     assert ok is False
     assert "sha256" in reason

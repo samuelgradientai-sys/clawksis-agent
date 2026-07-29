@@ -82,9 +82,9 @@ def _ws_dial_url(url: str) -> str:
     """
     raw = (url or "").strip()
     if raw.startswith("https://"):
-        raw = "wss://" + raw[len("https://"):]
+        raw = "wss://" + raw[len("https://") :]
     elif raw.startswith("http://"):
-        raw = "ws://" + raw[len("http://"):]
+        raw = "ws://" + raw[len("http://") :]
     raw = raw.rstrip("/")
     if not raw.endswith("/relay"):
         raw = f"{raw}/relay"
@@ -427,7 +427,9 @@ class WebSocketRelayTransport:
             return self._descriptor
         if self._descriptor_ready is None:
             raise RuntimeError("handshake() called before connect()")
-        return await asyncio.wait_for(self._descriptor_ready, timeout=self._connect_timeout_s)
+        return await asyncio.wait_for(
+            self._descriptor_ready, timeout=self._connect_timeout_s
+        )
 
     @property
     def auth_revoked(self) -> bool:
@@ -479,8 +481,14 @@ class WebSocketRelayTransport:
         info = result.get("chat_info") or result
         return {"name": info.get("name", chat_id), "type": info.get("type", "dm")}
 
-    async def send_interrupt(self, session_key: str, reason: Optional[str] = None) -> None:
-        await self._send({"type": "interrupt", "session_key": session_key, "reason": reason})
+    async def send_interrupt(
+        self, session_key: str, reason: Optional[str] = None
+    ) -> None:
+        await self._send({
+            "type": "interrupt",
+            "session_key": session_key,
+            "reason": reason,
+        })
 
     # ── going-idle / buffered-flip (Phase 5 §5.3) ────────────────────────
     async def go_idle(self, timeout_s: float = 10.0) -> bool:
@@ -577,7 +585,11 @@ class WebSocketRelayTransport:
         loop = asyncio.get_running_loop()
         fut: asyncio.Future[Dict[str, Any]] = loop.create_future()
         self._pending[request_id] = fut
-        frame: Dict[str, Any] = {"type": frame_type, "requestId": request_id, "action": action}
+        frame: Dict[str, Any] = {
+            "type": frame_type,
+            "requestId": request_id,
+            "action": action,
+        }
         # Phase 1.5: tag the per-frame egress platform on the OutboundFrame
         # envelope (gateway-gateway D-Q1.5b.1), with its MATCHING advertised botId
         # so the connector's `${platform}:${botId}` advertised-set check passes.
@@ -622,7 +634,10 @@ class WebSocketRelayTransport:
             # the per-gateway secret is gone, so reconnecting is futile. Latch a
             # terminal "auth revoked" state and DON'T re-dial. Before any
             # successful handshake a 4401 stays retryable (cold-start race).
-            if self._close_code_of(exc) == _RELAY_UNAUTHORIZED_CLOSE_CODE and self._handshake_succeeded:
+            if (
+                self._close_code_of(exc) == _RELAY_UNAUTHORIZED_CLOSE_CODE
+                and self._handshake_succeeded
+            ):
                 self._auth_revoked = True
                 if not self._closing:
                     logger.warning(
@@ -703,7 +718,9 @@ class WebSocketRelayTransport:
             return
         ftype = frame.get("type")
         if ftype == "descriptor":
-            descriptor = CapabilityDescriptor.from_json(json.dumps(frame.get("descriptor", {})))
+            descriptor = CapabilityDescriptor.from_json(
+                json.dumps(frame.get("descriptor", {}))
+            )
             self._descriptor = descriptor
             # Phase 7 Unit 7d-B: a received descriptor means the WS upgrade auth
             # passed and the connector accepted us — record that we've handshaked

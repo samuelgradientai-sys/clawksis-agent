@@ -89,7 +89,9 @@ class TestGenericProviderLiveCuratedMerge:
         live = ["a", "b"]
         # zai = curated-first
         with (
-            patch("providers.get_provider_profile", return_value=self._make_profile(live)),
+            patch(
+                "providers.get_provider_profile", return_value=self._make_profile(live)
+            ),
             patch(
                 "clawk_cli.auth.resolve_api_key_provider_credentials",
                 return_value={"api_key": "k", "base_url": ""},
@@ -101,12 +103,16 @@ class TestGenericProviderLiveCuratedMerge:
 
         # opencode-zen = live-first
         with (
-            patch("providers.get_provider_profile", return_value=self._make_profile(live)),
+            patch(
+                "providers.get_provider_profile", return_value=self._make_profile(live)
+            ),
             patch(
                 "clawk_cli.auth.resolve_api_key_provider_credentials",
                 return_value={"api_key": "k", "base_url": ""},
             ),
-            patch.dict("clawk_cli.models._PROVIDER_MODELS", {"opencode-zen": ["c", "b"]}),
+            patch.dict(
+                "clawk_cli.models._PROVIDER_MODELS", {"opencode-zen": ["c", "b"]}
+            ),
         ):
             zen_result = set(provider_model_ids("opencode-zen"))
         assert {"a", "b", "c"} <= zen_result

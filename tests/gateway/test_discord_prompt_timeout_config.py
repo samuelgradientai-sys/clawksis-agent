@@ -26,14 +26,24 @@ def _ensure_discord_mock():
     discord_mod.DMChannel = type("DMChannel", (), {})
     discord_mod.Thread = type("Thread", (), {})
     discord_mod.ForumChannel = type("ForumChannel", (), {})
-    discord_mod.ui = SimpleNamespace(View=object, button=lambda *a, **k: (lambda fn: fn), Button=object)
-    discord_mod.ButtonStyle = SimpleNamespace(success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3)
-    discord_mod.Color = SimpleNamespace(orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4, purple=lambda: 5)
+    discord_mod.ui = SimpleNamespace(
+        View=object, button=lambda *a, **k: lambda fn: fn, Button=object
+    )
+    discord_mod.ButtonStyle = SimpleNamespace(
+        success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3
+    )
+    discord_mod.Color = SimpleNamespace(
+        orange=lambda: 1,
+        green=lambda: 2,
+        blue=lambda: 3,
+        red=lambda: 4,
+        purple=lambda: 5,
+    )
     discord_mod.Interaction = object
     discord_mod.Embed = MagicMock
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: (lambda fn: fn),
-        choices=lambda **kwargs: (lambda fn: fn),
+        describe=lambda **kwargs: lambda fn: fn,
+        choices=lambda **kwargs: lambda fn: fn,
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
     )
 
@@ -60,6 +70,7 @@ from plugins.platforms.discord.adapter import (  # noqa: E402
 def _patch_config(monkeypatch, cfg):
     """Stub ``clawk_cli.config.read_raw_config`` to return ``cfg``."""
     import clawk_cli.config
+
     monkeypatch.setattr(clawk_cli.config, "read_raw_config", lambda: cfg)
 
 
@@ -129,8 +140,10 @@ def test_config_read_exception_falls_back_to_default(monkeypatch):
     falling back to the historical 300s default preserves existing behavior.
     """
     import clawk_cli.config
+
     def _boom():
         raise RuntimeError("config file corrupt")
+
     monkeypatch.setattr(clawk_cli.config, "read_raw_config", _boom)
     assert _read_discord_prompt_timeout() == _DISCORD_PROMPT_TIMEOUT_DEFAULT
 
@@ -147,4 +160,8 @@ def test_clamp_range_includes_default():
     """Sanity: the default must lie inside the clamp range, or every fresh
     install would hit the clamp on its very first read.
     """
-    assert _DISCORD_PROMPT_TIMEOUT_MIN <= _DISCORD_PROMPT_TIMEOUT_DEFAULT <= _DISCORD_PROMPT_TIMEOUT_MAX
+    assert (
+        _DISCORD_PROMPT_TIMEOUT_MIN
+        <= _DISCORD_PROMPT_TIMEOUT_DEFAULT
+        <= _DISCORD_PROMPT_TIMEOUT_MAX
+    )

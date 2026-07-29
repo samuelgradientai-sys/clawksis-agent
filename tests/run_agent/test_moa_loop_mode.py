@@ -269,9 +269,7 @@ def test_moa_slot_runtime_falls_back_on_resolution_error(monkeypatch):
     def boom(*, requested, target_model=None):
         raise RuntimeError("unknown provider")
 
-    monkeypatch.setattr(
-        "clawk_cli.runtime_provider.resolve_runtime_provider", boom
-    )
+    monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", boom)
 
     rt = moa_loop._slot_runtime({"provider": "mystery", "model": "x"})
     assert rt == {"provider": "mystery", "model": "x"}
@@ -409,22 +407,32 @@ def test_reference_messages_drops_empty_user_turns():
     messages = [
         {"role": "system", "content": "sys"},
         {"role": "user", "content": "real question"},
-        {"role": "assistant", "content": "", "tool_calls": [
-            {"function": {"name": "read_file", "arguments": '{"path":"c.yaml"}'}}
-        ]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"function": {"name": "read_file", "arguments": '{"path":"c.yaml"}'}}
+            ],
+        },
         {"role": "tool", "content": "some result"},
         {"role": "user", "content": ""},  # empty string user turn
-        {"role": "user", "content": [{"type": "text", "text": "multimodal"}]},  # non-string -> ""
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": "multimodal"}],
+        },  # non-string -> ""
     ]
 
     view = _reference_messages(messages)
 
     # No user turn in the view may be empty/whitespace-only.
     empty_users = [
-        m for m in view
+        m
+        for m in view
         if m.get("role") == "user" and not str(m.get("content", "")).strip()
     ]
-    assert empty_users == [], f"empty user turn leaked into advisory view: {empty_users}"
+    assert empty_users == [], (
+        f"empty user turn leaked into advisory view: {empty_users}"
+    )
     # The real user prompt survives and the view still ends on a user turn.
     assert view[0] == {"role": "user", "content": "real question"}
     assert view[-1]["role"] == "user"
@@ -496,7 +504,9 @@ moa:
             {
                 "role": "assistant",
                 "content": "checking",
-                "tool_calls": [{"id": "x", "function": {"name": "lookup", "arguments": "{}"}}],
+                "tool_calls": [
+                    {"id": "x", "function": {"name": "lookup", "arguments": "{}"}}
+                ],
             },
             {"role": "tool", "tool_call_id": "x", "content": "tool output"},
         ],
@@ -555,7 +565,9 @@ moa:
     from agent.moa_loop import MoAChatCompletions
 
     facade = MoAChatCompletions("review")
-    facade.create(messages=[{"role": "user", "content": "question"}], tools=[{"type": "function"}])
+    facade.create(
+        messages=[{"role": "user", "content": "question"}], tools=[{"type": "function"}]
+    )
 
     tasks = [c["task"] for c in calls]
     # No reference fan-out — only the aggregator runs.
@@ -653,8 +665,12 @@ def test_moa_facade_emits_reference_then_aggregating(monkeypatch, tmp_path):
     from agent.moa_loop import MoAChatCompletions
 
     events = []
-    facade = MoAChatCompletions("review", reference_callback=lambda ev, **kw: events.append((ev, kw)))
-    facade.create(messages=[{"role": "user", "content": "q"}], tools=[{"type": "function"}])
+    facade = MoAChatCompletions(
+        "review", reference_callback=lambda ev, **kw: events.append((ev, kw))
+    )
+    facade.create(
+        messages=[{"role": "user", "content": "q"}], tools=[{"type": "function"}]
+    )
 
     ref_events = [e for e in events if e[0] == "moa.reference"]
     agg_events = [e for e in events if e[0] == "moa.aggregating"]
@@ -694,13 +710,19 @@ def test_moa_facade_reruns_references_on_new_tool_result(monkeypatch, tmp_path):
     from agent.moa_loop import MoAChatCompletions
 
     events = []
-    facade = MoAChatCompletions("review", reference_callback=lambda ev, **kw: events.append(ev))
+    facade = MoAChatCompletions(
+        "review", reference_callback=lambda ev, **kw: events.append(ev)
+    )
 
     base_msgs = [{"role": "user", "content": "do the thing"}]
     # Iteration 1: fresh user turn — references run (2 models).
     facade.create(messages=base_msgs, tools=[{"type": "function"}])
     after_tool = base_msgs + [
-        {"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "function": {"name": "f", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{"id": "c1", "function": {"name": "f", "arguments": "{}"}}],
+        },
         {"role": "tool", "tool_call_id": "c1", "content": "result"},
     ]
     # Iteration 2: a NEW tool result advanced the state → references re-run.
@@ -766,9 +788,10 @@ def test_slot_runtime_anthropic_oauth_routes_through_provider_branch(monkeypatch
     )
 
     # _slot_runtime forwards the resolved endpoint for anthropic like any slot.
-    anthropic_rt = moa_loop._slot_runtime(
-        {"provider": "anthropic", "model": "claude-opus-4-8"}
-    )
+    anthropic_rt = moa_loop._slot_runtime({
+        "provider": "anthropic",
+        "model": "claude-opus-4-8",
+    })
     assert anthropic_rt["provider"] == "anthropic"
     assert anthropic_rt["base_url"] == "https://resolved.example/v1"
 
@@ -784,9 +807,7 @@ def test_slot_runtime_anthropic_oauth_routes_through_provider_branch(monkeypatch
     assert resolved_provider == "anthropic"
 
     # A generic provider (openrouter) is likewise forwarded and preserved.
-    other_rt = moa_loop._slot_runtime(
-        {"provider": "openrouter", "model": "some-model"}
-    )
+    other_rt = moa_loop._slot_runtime({"provider": "openrouter", "model": "some-model"})
     assert other_rt["provider"] == "openrouter"
     assert other_rt["model"] == "some-model"
     assert other_rt["base_url"] == "https://resolved.example/v1"
@@ -827,7 +848,9 @@ def test_run_reference_captures_usage_and_cost(monkeypatch):
     )
     monkeypatch.setattr(
         "agent.usage_pricing.estimate_usage_cost",
-        lambda *a, **k: SimpleNamespace(amount_usd=0.0123, status="estimated", source="table"),
+        lambda *a, **k: SimpleNamespace(
+            amount_usd=0.0123, status="estimated", source="table"
+        ),
     )
 
     label, text, acct = _run_reference(
@@ -885,7 +908,9 @@ moa:
     )
     monkeypatch.setattr(
         "agent.usage_pricing.estimate_usage_cost",
-        lambda *a, **k: SimpleNamespace(amount_usd=0.01, status="estimated", source="table"),
+        lambda *a, **k: SimpleNamespace(
+            amount_usd=0.01, status="estimated", source="table"
+        ),
     )
 
     from agent.moa_loop import MoAChatCompletions
@@ -962,7 +987,9 @@ moa:
         if kwargs["task"] == "moa_reference":
             # Echo the model so we can prove per-reference output is captured.
             model = kwargs.get("model", "?")
-            return _response_with_usage(content=f"advice from {model}", prompt=500, completion=80)
+            return _response_with_usage(
+                content=f"advice from {model}", prompt=500, completion=80
+            )
         return _response("AGGREGATOR FINAL ANSWER")
 
     monkeypatch.setattr("agent.moa_loop.call_llm", fake_call_llm)
@@ -972,14 +999,18 @@ moa:
     )
     monkeypatch.setattr(
         "agent.usage_pricing.estimate_usage_cost",
-        lambda *a, **k: SimpleNamespace(amount_usd=0.001, status="estimated", source="table"),
+        lambda *a, **k: SimpleNamespace(
+            amount_usd=0.001, status="estimated", source="table"
+        ),
     )
 
     from agent.moa_loop import MoAChatCompletions
 
     facade = MoAChatCompletions("review")
     # Non-streaming create() → aggregator output captured inline.
-    facade.create(messages=[{"role": "user", "content": "please review the plan"}], tools=[])
+    facade.create(
+        messages=[{"role": "user", "content": "please review the plan"}], tools=[]
+    )
     facade.consume_and_save_trace(session_id="sess-xyz")
 
     trace_file = home / "moa-traces" / "sess-xyz.jsonl"
@@ -998,7 +1029,9 @@ moa:
         assert ref["model"] in ("adv-a", "adv-b")
         assert ref["provider"] == "openrouter"
         # Full input messages present (system advisory prompt + advisory view).
-        assert isinstance(ref["input_messages"], list) and len(ref["input_messages"]) >= 2
+        assert (
+            isinstance(ref["input_messages"], list) and len(ref["input_messages"]) >= 2
+        )
         assert ref["input_messages"][0]["role"] == "system"
         # Full output present and model-specific.
         assert ref["output"] == f"advice from {ref['model']}"
@@ -1142,10 +1175,16 @@ def test_reference_messages_flattens_multimodal_user_turn():
     from agent.moa_loop import _reference_messages
 
     messages = [
-        {"role": "user", "content": [
-            {"type": "text", "text": "what is in this screenshot?"},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
-        ]},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "what is in this screenshot?"},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,AAAA"},
+                },
+            ],
+        },
     ]
 
     view = _reference_messages(messages)
@@ -1165,9 +1204,15 @@ def test_reference_messages_image_only_user_turn_gets_placeholder():
     from agent.moa_loop import _reference_messages
 
     messages = [
-        {"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
-        ]},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,AAAA"},
+                },
+            ],
+        },
         {"role": "assistant", "content": "I see a diagram."},
         {"role": "user", "content": "now explain it"},
     ]
@@ -1194,12 +1239,21 @@ def test_reference_messages_flattens_structured_assistant_and_tool_content():
         {
             "role": "assistant",
             "content": [{"type": "text", "text": "taking a screenshot"}],
-            "tool_calls": [{"id": "c1", "function": {"name": "capture", "arguments": "{}"}}],
+            "tool_calls": [
+                {"id": "c1", "function": {"name": "capture", "arguments": "{}"}}
+            ],
         },
-        {"role": "tool", "tool_call_id": "c1", "content": [
-            {"type": "text", "text": "screenshot captured: login page visible"},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,BBBB"}},
-        ]},
+        {
+            "role": "tool",
+            "tool_call_id": "c1",
+            "content": [
+                {"type": "text", "text": "screenshot captured: login page visible"},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,BBBB"},
+                },
+            ],
+        },
     ]
 
     view = _reference_messages(messages)

@@ -77,7 +77,8 @@ def _jwt_with_exp(exp_epoch: int) -> str:
     """Build a minimal JWT-shaped string with the given exp claim."""
     payload = {"exp": exp_epoch}
     encoded = (
-        base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8"))
+        base64
+        .urlsafe_b64encode(json.dumps(payload).encode("utf-8"))
         .rstrip(b"=")
         .decode("utf-8")
     )
@@ -88,7 +89,9 @@ class _StubHTTPResponse:
     def __init__(self, status_code: int, payload):
         self.status_code = status_code
         self._payload = payload
-        self.text = json.dumps(payload) if isinstance(payload, (dict, list)) else str(payload)
+        self.text = (
+            json.dumps(payload) if isinstance(payload, (dict, list)) else str(payload)
+        )
 
     def json(self):
         if isinstance(self._payload, Exception):
@@ -174,7 +177,12 @@ def test_xai_access_token_is_expiring_returns_false_for_non_jwt():
 
 def test_xai_access_token_is_expiring_returns_false_for_jwt_without_exp():
     payload = {"sub": "user"}
-    encoded = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).rstrip(b"=").decode()
+    encoded = (
+        base64
+        .urlsafe_b64encode(json.dumps(payload).encode("utf-8"))
+        .rstrip(b"=")
+        .decode()
+    )
     token = f"h.{encoded}.s"
     assert _xai_access_token_is_expiring(token, 0) is False
 
@@ -257,7 +265,10 @@ def test_xai_oauth_poll_device_token_waits_until_authorized(monkeypatch):
 
     assert payload["access_token"] == "xai-access"
     assert len(client.calls) == 2
-    assert client.calls[0][1]["data"]["grant_type"] == "urn:ietf:params:oauth:grant-type:device_code"
+    assert (
+        client.calls[0][1]["data"]["grant_type"]
+        == "urn:ietf:params:oauth:grant-type:device_code"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -346,7 +357,9 @@ def test_resolve_xai_runtime_credentials_returns_singleton_state(tmp_path, monke
     assert creds["auth_mode"] == "oauth_device_code"
 
 
-def test_resolve_xai_runtime_credentials_refreshes_expiring_token(tmp_path, monkeypatch):
+def test_resolve_xai_runtime_credentials_refreshes_expiring_token(
+    tmp_path, monkeypatch
+):
     clawk_home = tmp_path / "clawk"
     expiring = _jwt_with_exp(int(time.time()) - 10)
     _setup_clawk_auth(
@@ -395,7 +408,9 @@ def test_resolve_xai_runtime_credentials_force_refresh(tmp_path, monkeypatch):
 
     monkeypatch.setattr("clawk_cli.auth._refresh_xai_oauth_tokens", _fake_refresh)
 
-    creds = resolve_xai_oauth_runtime_credentials(force_refresh=True, refresh_if_expiring=False)
+    creds = resolve_xai_oauth_runtime_credentials(
+        force_refresh=True, refresh_if_expiring=False
+    )
     assert called["count"] == 1
     assert creds["api_key"] == forced
 
@@ -426,7 +441,8 @@ def test_resolve_xai_runtime_credentials_honours_env_base_url(tmp_path, monkeypa
 def test_xai_inference_base_url_accepts_default():
     assert (
         _xai_validate_inference_base_url(
-            "https://api.x.ai/v1", fallback=DEFAULT_XAI_OAUTH_BASE_URL,
+            "https://api.x.ai/v1",
+            fallback=DEFAULT_XAI_OAUTH_BASE_URL,
         )
         == "https://api.x.ai/v1"
     )
@@ -435,7 +451,8 @@ def test_xai_inference_base_url_accepts_default():
 def test_xai_inference_base_url_accepts_bare_apex():
     assert (
         _xai_validate_inference_base_url(
-            "https://x.ai/v1", fallback=DEFAULT_XAI_OAUTH_BASE_URL,
+            "https://x.ai/v1",
+            fallback=DEFAULT_XAI_OAUTH_BASE_URL,
         )
         == "https://x.ai/v1"
     )
@@ -444,7 +461,8 @@ def test_xai_inference_base_url_accepts_bare_apex():
 def test_xai_inference_base_url_accepts_subdomain():
     assert (
         _xai_validate_inference_base_url(
-            "https://custom.x.ai/v1", fallback=DEFAULT_XAI_OAUTH_BASE_URL,
+            "https://custom.x.ai/v1",
+            fallback=DEFAULT_XAI_OAUTH_BASE_URL,
         )
         == "https://custom.x.ai/v1"
     )
@@ -453,7 +471,8 @@ def test_xai_inference_base_url_accepts_subdomain():
 def test_xai_inference_base_url_strips_trailing_slash():
     assert (
         _xai_validate_inference_base_url(
-            "https://api.x.ai/v1/", fallback=DEFAULT_XAI_OAUTH_BASE_URL,
+            "https://api.x.ai/v1/",
+            fallback=DEFAULT_XAI_OAUTH_BASE_URL,
         )
         == "https://api.x.ai/v1"
     )
@@ -473,7 +492,8 @@ def test_xai_inference_base_url_empty_returns_fallback():
 def test_xai_inference_base_url_rejects_off_origin_host():
     # The headline attack: env var pointing at an attacker-controlled host.
     result = _xai_validate_inference_base_url(
-        "https://attacker.example/v1", fallback=DEFAULT_XAI_OAUTH_BASE_URL,
+        "https://attacker.example/v1",
+        fallback=DEFAULT_XAI_OAUTH_BASE_URL,
     )
     assert result == DEFAULT_XAI_OAUTH_BASE_URL
 
@@ -490,7 +510,8 @@ def test_xai_inference_base_url_rejects_suffix_lookalike():
     ):
         assert (
             _xai_validate_inference_base_url(
-                hostile, fallback=DEFAULT_XAI_OAUTH_BASE_URL,
+                hostile,
+                fallback=DEFAULT_XAI_OAUTH_BASE_URL,
             )
             == DEFAULT_XAI_OAUTH_BASE_URL
         ), hostile
@@ -500,7 +521,8 @@ def test_xai_inference_base_url_rejects_http():
     # http:// would put the bearer on the wire in cleartext.
     assert (
         _xai_validate_inference_base_url(
-            "http://api.x.ai/v1", fallback=DEFAULT_XAI_OAUTH_BASE_URL,
+            "http://api.x.ai/v1",
+            fallback=DEFAULT_XAI_OAUTH_BASE_URL,
         )
         == DEFAULT_XAI_OAUTH_BASE_URL
     )
@@ -514,13 +536,16 @@ def test_xai_inference_base_url_rejects_other_schemes():
     ):
         assert (
             _xai_validate_inference_base_url(
-                hostile, fallback=DEFAULT_XAI_OAUTH_BASE_URL,
+                hostile,
+                fallback=DEFAULT_XAI_OAUTH_BASE_URL,
             )
             == DEFAULT_XAI_OAUTH_BASE_URL
         ), hostile
 
 
-def test_resolve_xai_runtime_credentials_rejects_off_origin_env_base_url(tmp_path, monkeypatch, caplog):
+def test_resolve_xai_runtime_credentials_rejects_off_origin_env_base_url(
+    tmp_path, monkeypatch, caplog
+):
     # The end-to-end guarantee: if the env var points at an attacker host,
     # the resolver MUST silently fall back to the default rather than ship
     # the OAuth bearer to the attacker.
@@ -580,7 +605,9 @@ def test_resolve_credentials_quarantines_dead_tokens_on_terminal_refresh_failure
     Mirrors the credential_pool.py quarantine for the singleton/direct resolve path.
     """
     clawk_home = tmp_path / "clawk"
-    _seed_xai_oauth_state(clawk_home, dict(_STALE_XAI_OAUTH_STATE), active_provider="nous")
+    _seed_xai_oauth_state(
+        clawk_home, dict(_STALE_XAI_OAUTH_STATE), active_provider="nous"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     def _terminal_refresh(tokens, **kwargs):
@@ -927,9 +954,7 @@ def test_refresh_xai_oauth_pure_rejects_lookalike_suffix(monkeypatch):
     ``.x.ai`` subdomain. The validator must enforce the leading-dot suffix
     so attacker-registered apex lookalikes can't slip through."""
     with pytest.raises(AuthError) as exc:
-        refresh_xai_oauth_pure(
-            "at", "rt", token_endpoint="https://evilx.ai/token"
-        )
+        refresh_xai_oauth_pure("at", "rt", token_endpoint="https://evilx.ai/token")
     assert exc.value.code == "xai_discovery_invalid"
 
 
@@ -1068,7 +1093,9 @@ def test_credential_pool_seeds_xai_oauth_device_code_source(tmp_path, monkeypatc
     assert entry.access_token == fresh
 
 
-def test_credential_pool_does_not_seed_when_singleton_missing_access_token(tmp_path, monkeypatch):
+def test_credential_pool_does_not_seed_when_singleton_missing_access_token(
+    tmp_path, monkeypatch
+):
     from agent.credential_pool import load_pool
 
     clawk_home = tmp_path / "clawk"
@@ -1299,7 +1326,9 @@ def test_runtime_provider_uses_pool_entry_for_xai_oauth(tmp_path, monkeypatch):
     assert runtime["base_url"] == DEFAULT_XAI_OAUTH_BASE_URL
 
 
-def test_runtime_provider_default_base_url_when_pool_entry_missing_url(tmp_path, monkeypatch):
+def test_runtime_provider_default_base_url_when_pool_entry_missing_url(
+    tmp_path, monkeypatch
+):
     """Edge case: a pool entry that somehow has an empty base_url should still
     surface the default xAI inference base URL instead of an empty string."""
     from agent.credential_pool import load_pool, AUTH_TYPE_OAUTH, PooledCredential
@@ -1524,7 +1553,9 @@ def test_pool_refresh_marks_entry_exhausted_on_failure(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     def _fake_refresh_fail(*args, **kwargs):
-        raise AuthError("refresh_token_reused", code="xai_refresh_failed", relogin_required=True)
+        raise AuthError(
+            "refresh_token_reused", code="xai_refresh_failed", relogin_required=True
+        )
 
     monkeypatch.setattr("clawk_cli.auth.refresh_xai_oauth_pure", _fake_refresh_fail)
 
@@ -1558,7 +1589,9 @@ def test_pool_seeded_entry_sync_back_after_refresh(tmp_path, monkeypatch):
 
     clawk_home = tmp_path / "clawk"
     near_expiry = _jwt_with_exp(int(time.time()) + 30)
-    _setup_clawk_auth(clawk_home, access_token=near_expiry, refresh_token="rt-singleton")
+    _setup_clawk_auth(
+        clawk_home, access_token=near_expiry, refresh_token="rt-singleton"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     new_access = _jwt_with_exp(int(time.time()) + 2 * 60 * 60)
@@ -1587,7 +1620,9 @@ def test_pool_seeded_entry_sync_back_after_refresh(tmp_path, monkeypatch):
     assert tokens["refresh_token"] == "rt-rotated"
 
 
-def test_pool_refresh_adopts_singleton_tokens_when_consumed_elsewhere(tmp_path, monkeypatch):
+def test_pool_refresh_adopts_singleton_tokens_when_consumed_elsewhere(
+    tmp_path, monkeypatch
+):
     """Multi-process race: another Clawksis process refreshed the singleton
     (rotating the refresh_token) while this process held a stale in-memory
     pool entry.  ``_refresh_entry`` must adopt the fresher singleton tokens
@@ -1645,7 +1680,9 @@ def test_pool_refresh_adopts_singleton_tokens_when_consumed_elsewhere(tmp_path, 
     assert selected.access_token == final_at
 
 
-def test_pool_refresh_recovers_when_other_process_already_refreshed(tmp_path, monkeypatch):
+def test_pool_refresh_recovers_when_other_process_already_refreshed(
+    tmp_path, monkeypatch
+):
     """Variant of the multi-process race where the other process refreshes
     BETWEEN our proactive sync and the HTTP POST.  Our refresh fails with a
     consumed-token error; we must re-check auth.json, find the fresh pair
@@ -1692,7 +1729,9 @@ def test_pool_refresh_recovers_when_other_process_already_refreshed(tmp_path, mo
     assert selected.refresh_token == "rt-rotated"
 
 
-def test_pool_exhausted_xai_entry_recovers_after_singleton_refresh(tmp_path, monkeypatch):
+def test_pool_exhausted_xai_entry_recovers_after_singleton_refresh(
+    tmp_path, monkeypatch
+):
     """When a singleton-seeded entry is parked as STATUS_EXHAUSTED and the
     user runs ``clawk model`` -> xAI Grok OAuth (or another process
     refreshes), the next ``_available_entries`` pass must adopt the fresh
@@ -1757,7 +1796,9 @@ def test_pool_manual_xai_entry_not_synced_from_singleton(tmp_path, monkeypatch):
 
     clawk_home = tmp_path / "clawk"
     singleton_at = _jwt_with_exp(int(time.time()) + 2 * 60 * 60)
-    _setup_clawk_auth(clawk_home, access_token=singleton_at, refresh_token="rt-singleton")
+    _setup_clawk_auth(
+        clawk_home, access_token=singleton_at, refresh_token="rt-singleton"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     pool = load_pool("xai-oauth")
@@ -1795,7 +1836,9 @@ def test_pool_manual_entry_does_not_sync_back_to_singleton(tmp_path, monkeypatch
     clawk_home = tmp_path / "clawk"
     # Singleton has its own tokens (separate login).
     singleton_at = _jwt_with_exp(int(time.time()) + 2 * 60 * 60)
-    _setup_clawk_auth(clawk_home, access_token=singleton_at, refresh_token="rt-singleton")
+    _setup_clawk_auth(
+        clawk_home, access_token=singleton_at, refresh_token="rt-singleton"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     manual_at_old = _jwt_with_exp(int(time.time()) + 30)
@@ -1883,7 +1926,9 @@ def test_auxiliary_client_routes_xai_oauth_through_responses_api(tmp_path, monke
     assert client.api_key == fresh
 
 
-def test_auxiliary_client_xai_oauth_returns_none_when_unauthenticated(tmp_path, monkeypatch):
+def test_auxiliary_client_xai_oauth_returns_none_when_unauthenticated(
+    tmp_path, monkeypatch
+):
     """No xAI OAuth tokens in the auth store → ``resolve_provider_client``
     must return ``(None, None)`` so ``_resolve_auto`` falls through to the
     next provider in the chain instead of crashing or constructing a

@@ -26,16 +26,17 @@ from plugins.platforms.telegram.telegram_ids import (
 # Helper-level behavior (no telegram import needed)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "value,expected",
     [
-        ("123456789", 123456789),             # positive numeric DM id
-        ("-1001234567890", -1001234567890),   # negative channel/supergroup id
-        (123456789, 123456789),               # already int
-        ("  42 ", 42),                        # surrounding whitespace
-        ("@some_user", "@some_user"),         # username passes through as str
+        ("123456789", 123456789),  # positive numeric DM id
+        ("-1001234567890", -1001234567890),  # negative channel/supergroup id
+        (123456789, 123456789),  # already int
+        ("  42 ", 42),  # surrounding whitespace
+        ("@some_user", "@some_user"),  # username passes through as str
         ("@a_channel", "@a_channel"),
-        ("not_numeric", "not_numeric"),       # any other non-numeric string
+        ("not_numeric", "not_numeric"),  # any other non-numeric string
     ],
 )
 def test_normalize_returns_int_or_passthrough_string(value, expected):
@@ -60,9 +61,9 @@ def test_username_normalizes_to_str_type():
     [
         ("@some_user", True),
         ("@a_chan", True),
-        ("@abcd", True),       # 4-char minimum
-        ("@abc", False),       # too short
-        ("123456", False),     # numeric
+        ("@abcd", True),  # 4-char minimum
+        ("@abc", False),  # too short
+        ("123456", False),  # numeric
         ("-100123", False),
         ("@with space", False),
         ("plain", False),
@@ -88,6 +89,7 @@ def test_chat_id_key_is_stable_string():
 # ---------------------------------------------------------------------------
 # Fake telegram module tree (mirrors test_telegram_thread_fallback.py)
 # ---------------------------------------------------------------------------
+
 
 class FakeNetworkError(Exception):
     pass
@@ -126,16 +128,24 @@ _fake_telegram_error.TimedOut = FakeTimedOut
 _fake_telegram.error = _fake_telegram_error
 _fake_telegram_constants = types.ModuleType("telegram.constants")
 _fake_telegram_constants.ParseMode = SimpleNamespace(
-    MARKDOWN_V2="MarkdownV2", MARKDOWN="Markdown", HTML="HTML",
+    MARKDOWN_V2="MarkdownV2",
+    MARKDOWN="Markdown",
+    HTML="HTML",
 )
 _fake_telegram_constants.ChatType = SimpleNamespace(
-    GROUP="group", SUPERGROUP="supergroup", CHANNEL="channel", PRIVATE="private",
+    GROUP="group",
+    SUPERGROUP="supergroup",
+    CHANNEL="channel",
+    PRIVATE="private",
 )
 _fake_telegram.constants = _fake_telegram_constants
 _fake_telegram_ext = types.ModuleType("telegram.ext")
 for _attr in (
-    "Application", "CommandHandler", "CallbackQueryHandler",
-    "MessageHandler", "TypeHandler",
+    "Application",
+    "CommandHandler",
+    "CallbackQueryHandler",
+    "MessageHandler",
+    "TypeHandler",
 ):
     setattr(_fake_telegram_ext, _attr, object)
 _fake_telegram_ext.ContextTypes = SimpleNamespace(DEFAULT_TYPE=object)
@@ -176,6 +186,7 @@ def _make_adapter():
 # ---------------------------------------------------------------------------
 # Adapter send path: username chat_id reaches the Bot API without int() crash
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_send_passes_username_chat_id_through_unchanged():

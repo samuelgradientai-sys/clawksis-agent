@@ -32,7 +32,9 @@ def test_test_node_prepends_node_dir_before_success() -> None:
     assert re.search(
         r"if \(Test-NodeVersionOk \$version\) \{[\s\S]{0,200}?Ensure-NodeExeOnPath",
         text,
-    ), "Test-Node must call Ensure-NodeExeOnPath when a system Node passes the version floor"
+    ), (
+        "Test-Node must call Ensure-NodeExeOnPath when a system Node passes the version floor"
+    )
 
 
 def test_install_node_deps_prepends_node_dir_before_npm() -> None:

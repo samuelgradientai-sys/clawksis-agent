@@ -116,8 +116,14 @@ class LiveTranscriptWriter:
     and subsequent calls become no-ops (debug-logged). Never raises.
     """
 
-    def __init__(self, delegation_id: str, task_index: int, goal: str,
-                 context: Optional[str] = None, root: Optional[Path] = None):
+    def __init__(
+        self,
+        delegation_id: str,
+        task_index: int,
+        goal: str,
+        context: Optional[str] = None,
+        root: Optional[Path] = None,
+    ):
         self.delegation_id = delegation_id
         self.task_index = task_index
         self._ok = True
@@ -125,7 +131,7 @@ class LiveTranscriptWriter:
         self._stream_buf: List[str] = []
         self._stream_len = 0
         try:
-            base = (root if root is not None else live_transcript_root())
+            base = root if root is not None else live_transcript_root()
             d = base / delegation_id
             d.mkdir(parents=True, exist_ok=True)
             self.path: Optional[Path] = d / f"task-{task_index}.log"
@@ -140,11 +146,21 @@ class LiveTranscriptWriter:
                 "=" * 40,
             ]
             self.path.write_text("\n".join(header) + "\n", encoding="utf-8")
-            self.event("user", "kickoff: " + _one_line(goal, _KICKOFF_MAX)
-                       + (f" | context: {_one_line(context, _KICKOFF_MAX)}" if context else ""))
+            self.event(
+                "user",
+                "kickoff: "
+                + _one_line(goal, _KICKOFF_MAX)
+                + (
+                    f" | context: {_one_line(context, _KICKOFF_MAX)}" if context else ""
+                ),
+            )
         except Exception as exc:
-            logger.debug("Live transcript init failed (%s task %s): %s",
-                         delegation_id, task_index, exc)
+            logger.debug(
+                "Live transcript init failed (%s task %s): %s",
+                delegation_id,
+                task_index,
+                exc,
+            )
             self._ok = False
             self.path = None
 
@@ -183,8 +199,13 @@ class LiveTranscriptWriter:
         args = _one_line(args_preview, _ARGS_MAX)
         self.event("tool", f"-> {name or '?'}({args})")
 
-    def tool_result(self, name: str, result: Any = None,
-                    duration: Any = None, is_error: bool = False) -> None:
+    def tool_result(
+        self,
+        name: str,
+        result: Any = None,
+        duration: Any = None,
+        is_error: bool = False,
+    ) -> None:
         status = "ERROR" if is_error else "ok"
         dur = ""
         try:
@@ -192,8 +213,9 @@ class LiveTranscriptWriter:
                 dur = f" {float(duration):.1f}s"
         except (TypeError, ValueError):
             pass
-        self.event("result", f"{name or '?'} {status}{dur}: "
-                             f"{_one_line(result, _RESULT_MAX)}")
+        self.event(
+            "result", f"{name or '?'} {status}{dur}: {_one_line(result, _RESULT_MAX)}"
+        )
 
     def marker(self, text: str) -> None:
         """Lifecycle marker: start / final / error / interrupt / budget."""
@@ -219,8 +241,14 @@ class LiveTranscriptWriter:
         self.assistant_text(text)
 
     # ── event demux (the tool_progress_callback surface) ─────────────────
-    def observe(self, event_type: Any, tool_name: Any = None,
-                preview: Any = None, args: Any = None, **kwargs: Any) -> None:
+    def observe(
+        self,
+        event_type: Any,
+        tool_name: Any = None,
+        preview: Any = None,
+        args: Any = None,
+        **kwargs: Any,
+    ) -> None:
         """Map a child tool_progress_callback event onto transcript lines.
 
         Mirrors the shapes emitted by agent/tool_executor.py,
@@ -309,6 +337,7 @@ def wrap_progress_callback(inner_cb, writer: LiveTranscriptWriter):
 
 # ── dispatch-time helpers ────────────────────────────────────────────────
 
+
 def create_live_transcripts(
     task_list: List[Dict[str, Any]],
     context: Optional[str] = None,
@@ -331,7 +360,9 @@ def create_live_transcripts(
         paths: List[str] = []
         for i, t in enumerate(task_list):
             w = LiveTranscriptWriter(
-                deleg_id, i, str(t.get("goal", "")),
+                deleg_id,
+                i,
+                str(t.get("goal", "")),
                 context=t.get("context") or context,
             )
             writers.append(w if w.path is not None else None)
@@ -350,8 +381,9 @@ def _manifest_path(delegation_id: str) -> Path:
     return live_transcript_root() / delegation_id / "manifest.json"
 
 
-def _write_manifest(delegation_id: str, task_list: List[Dict[str, Any]],
-                    paths: List[str]) -> None:
+def _write_manifest(
+    delegation_id: str, task_list: List[Dict[str, Any]], paths: List[str]
+) -> None:
     try:
         manifest = {
             "delegation_id": delegation_id,
@@ -379,8 +411,9 @@ def _write_manifest(delegation_id: str, task_list: List[Dict[str, Any]],
         logger.debug("Live transcript manifest write failed: %s", exc)
 
 
-def update_manifest_statuses(delegation_id: Optional[str],
-                             results: List[Dict[str, Any]]) -> None:
+def update_manifest_statuses(
+    delegation_id: Optional[str], results: List[Dict[str, Any]]
+) -> None:
     """Best-effort per-task status update once the batch has aggregated."""
     if not delegation_id:
         return
@@ -395,8 +428,9 @@ def update_manifest_statuses(delegation_id: Optional[str],
                 if r.get("exit_reason"):
                     task["exit_reason"] = r["exit_reason"]
         manifest["completed"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        mp.write_text(json.dumps(manifest, indent=2, ensure_ascii=False),
-                      encoding="utf-8")
+        mp.write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
     except Exception as exc:
         logger.debug("Live transcript manifest update failed: %s", exc)
 

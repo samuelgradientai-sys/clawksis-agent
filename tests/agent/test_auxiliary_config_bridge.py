@@ -23,10 +23,14 @@ def _run_auxiliary_bridge(config_dict, monkeypatch):
     """
     # Clear env vars
     for key in (
-        "AUXILIARY_VISION_PROVIDER", "AUXILIARY_VISION_MODEL",
-        "AUXILIARY_VISION_BASE_URL", "AUXILIARY_VISION_API_KEY",
-        "AUXILIARY_WEB_EXTRACT_PROVIDER", "AUXILIARY_WEB_EXTRACT_MODEL",
-        "AUXILIARY_WEB_EXTRACT_BASE_URL", "AUXILIARY_WEB_EXTRACT_API_KEY",
+        "AUXILIARY_VISION_PROVIDER",
+        "AUXILIARY_VISION_MODEL",
+        "AUXILIARY_VISION_BASE_URL",
+        "AUXILIARY_VISION_API_KEY",
+        "AUXILIARY_WEB_EXTRACT_PROVIDER",
+        "AUXILIARY_WEB_EXTRACT_MODEL",
+        "AUXILIARY_WEB_EXTRACT_BASE_URL",
+        "AUXILIARY_WEB_EXTRACT_API_KEY",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -163,7 +167,10 @@ class TestAuxiliaryConfigBridge:
     def test_all_tasks_with_overrides(self, monkeypatch):
         config = {
             "auxiliary": {
-                "vision": {"provider": "openrouter", "model": "google/gemini-2.5-flash"},
+                "vision": {
+                    "provider": "openrouter",
+                    "model": "google/gemini-2.5-flash",
+                },
                 "web_extract": {"provider": "nous", "model": "gemini-3-flash"},
             }
         }
@@ -244,12 +251,21 @@ class TestVisionModelOverride:
     async def test_env_var_overrides_default(self, monkeypatch):
         monkeypatch.setenv("AUXILIARY_VISION_MODEL", "openai/gpt-4o")
         from tools.vision_tools import _handle_vision_analyze
+
         with (
-            patch("tools.vision_tools.vision_analyze_tool", new_callable=AsyncMock) as mock_tool,
-            patch("tools.vision_tools._should_use_native_vision_fast_path", return_value=False),
+            patch(
+                "tools.vision_tools.vision_analyze_tool", new_callable=AsyncMock
+            ) as mock_tool,
+            patch(
+                "tools.vision_tools._should_use_native_vision_fast_path",
+                return_value=False,
+            ),
         ):
             mock_tool.return_value = '{"success": true}'
-            await _handle_vision_analyze({"image_url": "http://test.jpg", "question": "test"})
+            await _handle_vision_analyze({
+                "image_url": "http://test.jpg",
+                "question": "test",
+            })
             call_args = mock_tool.call_args
             # 3rd positional arg = model
             assert call_args[0][2] == "openai/gpt-4o"
@@ -258,12 +274,21 @@ class TestVisionModelOverride:
     async def test_default_model_when_no_override(self, monkeypatch):
         monkeypatch.delenv("AUXILIARY_VISION_MODEL", raising=False)
         from tools.vision_tools import _handle_vision_analyze
+
         with (
-            patch("tools.vision_tools.vision_analyze_tool", new_callable=AsyncMock) as mock_tool,
-            patch("tools.vision_tools._should_use_native_vision_fast_path", return_value=False),
+            patch(
+                "tools.vision_tools.vision_analyze_tool", new_callable=AsyncMock
+            ) as mock_tool,
+            patch(
+                "tools.vision_tools._should_use_native_vision_fast_path",
+                return_value=False,
+            ),
         ):
             mock_tool.return_value = '{"success": true}'
-            await _handle_vision_analyze({"image_url": "http://test.jpg", "question": "test"})
+            await _handle_vision_analyze({
+                "image_url": "http://test.jpg",
+                "question": "test",
+            })
             call_args = mock_tool.call_args
             # With no AUXILIARY_VISION_MODEL env var, model should be None
             # (the centralized call_llm router picks the provider default)
@@ -278,10 +303,12 @@ class TestDefaultConfigShape:
 
     def test_auxiliary_section_exists(self):
         from clawk_cli.config import DEFAULT_CONFIG
+
         assert "auxiliary" in DEFAULT_CONFIG
 
     def test_vision_task_structure(self):
         from clawk_cli.config import DEFAULT_CONFIG
+
         vision = DEFAULT_CONFIG["auxiliary"]["vision"]
         assert "provider" in vision
         assert "model" in vision
@@ -290,6 +317,7 @@ class TestDefaultConfigShape:
 
     def test_web_extract_task_structure(self):
         from clawk_cli.config import DEFAULT_CONFIG
+
         web = DEFAULT_CONFIG["auxiliary"]["web_extract"]
         assert "provider" in web
         assert "model" in web
@@ -312,9 +340,10 @@ class TestCLIDefaultsHaveAuxiliaryKeys:
         # So auxiliary config from config.yaml gets merged even though
         # cli.py's defaults dict doesn't define it.
         import cli as _cli_mod
+
         # See note in test_gateway_has_auxiliary_bridge — pin UTF-8 so the
         # test runs on Windows where the default locale is cp1252.
         source = Path(_cli_mod.__file__).read_text(encoding="utf-8")
-        assert "auxiliary_config = defaults.get(\"auxiliary\"" in source
+        assert 'auxiliary_config = defaults.get("auxiliary"' in source
         assert "AUXILIARY_VISION_PROVIDER" in source
         assert "AUXILIARY_VISION_MODEL" in source

@@ -110,7 +110,9 @@ def generate_base_drafts(
     # Each draft is its own one-shot generation, run concurrently so the user
     # waits for one image, not N. A single draft failing must not sink the set.
     # Each gets a distinct variation nudge so the options aren't near-duplicates.
-    logger.info("pet generate: drafting %d base looks for %r (style=%s)", n, concept, style)
+    logger.info(
+        "pet generate: drafting %d base looks for %r (style=%s)", n, concept, style
+    )
 
     def _one(index: int) -> tuple[int, Path | None, str | None]:
         if cancelled():
@@ -119,14 +121,23 @@ def generate_base_drafts(
         variation = prompts.BASE_VARIATIONS[index % len(prompts.BASE_VARIATIONS)]
         prompt = prompts.build_base_prompt(concept, style=style, variation=variation)
         try:
-            out = imagegen.generate(prompt, n=1, reference_images=refs, provider=sprite, prefix="pet_base")
+            out = imagegen.generate(
+                prompt, n=1, reference_images=refs, provider=sprite, prefix="pet_base"
+            )
         except Exception as exc:  # noqa: BLE001 - tolerate a single failed draft
-            logger.warning("pet generate: draft %d failed after %.1fs: %s", index, time.monotonic() - t0, exc)
+            logger.warning(
+                "pet generate: draft %d failed after %.1fs: %s",
+                index,
+                time.monotonic() - t0,
+                exc,
+            )
             return index, None, str(exc)
         if not out:
             logger.warning("pet generate: draft %d produced no image", index)
             return index, None, "the image provider returned no image"
-        logger.info("pet generate: draft %d ready in %.1fs", index, time.monotonic() - t0)
+        logger.info(
+            "pet generate: draft %d ready in %.1fs", index, time.monotonic() - t0
+        )
         return index, _harden_transparency(out[0]), None
 
     workers = max(1, min(n, _MAX_PARALLEL_GENERATIONS))
@@ -180,7 +191,15 @@ def _humanize_image_error(error: str) -> str:
     real people (e.g. "minion"), which reads as an opaque 400 otherwise.
     """
     low = error.lower()
-    if any(s in low for s in ("moderation_blocked", "safety system", "content policy", "content_policy")):
+    if any(
+        s in low
+        for s in (
+            "moderation_blocked",
+            "safety system",
+            "content policy",
+            "content_policy",
+        )
+    ):
         return (
             "The image provider blocked this prompt — its safety filter rejects "
             "trademarked characters and real people. Try an original description."
@@ -262,21 +281,33 @@ def hatch_pet(
                 # uses ``auto`` (equal-slot fallback, never raises). Raw (fit=False)
                 # so normalize_cells registers the whole pet at once.
                 method = "components" if strict else "auto"
-                frames = atlas.extract_strip_frames(strips[0], count, method=method, fit=False)
+                frames = atlas.extract_strip_frames(
+                    strips[0], count, method=method, fit=False
+                )
                 logger.info(
                     "pet hatch %r: row %r ready in %.1fs (attempt %d)",
-                    slug, state, time.monotonic() - t0, attempt + 1,
+                    slug,
+                    state,
+                    time.monotonic() - t0,
+                    attempt + 1,
                 )
                 return state, frames
             except Exception as exc:  # noqa: BLE001 - retried; one bad row is tolerated
                 last_exc = exc
                 logger.warning(
                     "pet hatch %r: row %r attempt %d/%d failed: %s",
-                    slug, state, attempt + 1, _ROW_GEN_ATTEMPTS, exc,
+                    slug,
+                    state,
+                    attempt + 1,
+                    _ROW_GEN_ATTEMPTS,
+                    exc,
                 )
         logger.warning(
             "pet hatch %r: row %r gave up after %.1fs: %s",
-            slug, state, time.monotonic() - t0, last_exc,
+            slug,
+            state,
+            time.monotonic() - t0,
+            last_exc,
         )
         return state, None
 
@@ -313,9 +344,13 @@ def hatch_pet(
         done += 1
         progress("row", f"running-left:{done}:{total_rows}")
         frames_by_state["running-left"] = atlas.mirror_frames(right)
-        logger.info("pet hatch %r: row 'running-left' mirrored from running-right", slug)
+        logger.info(
+            "pet hatch %r: row 'running-left' mirrored from running-right", slug
+        )
     else:
-        logger.warning("pet hatch %r: no running-right to mirror; left walk left empty", slug)
+        logger.warning(
+            "pet hatch %r: no running-right to mirror; left walk left empty", slug
+        )
 
     # Idle is the resting state the renderer falls back to — guarantee it.
     if not frames_by_state.get("idle"):
@@ -323,17 +358,23 @@ def hatch_pet(
         frames_by_state["idle"] = [atlas.single_frame(base, fit=False)]
 
     progress("compose", "")
-    logger.info("pet hatch %r: composing atlas from %d states", slug, len(frames_by_state))
+    logger.info(
+        "pet hatch %r: composing atlas from %d states", slug, len(frames_by_state)
+    )
     # One shared scale + baseline across every state so the pet never slides or
     # pulses size between frames; compose just packs the normalized cells.
     sheet = atlas.compose_atlas(atlas.normalize_cells(frames_by_state))
     validation = atlas.validate_atlas(sheet)
     if not validation["ok"]:
-        raise GenerationError("; ".join(validation["errors"]) or "atlas validation failed")
+        raise GenerationError(
+            "; ".join(validation["errors"]) or "atlas validation failed"
+        )
     filled_states = set(validation["filled_states"])
     missing_required = sorted(_REQUIRED_STATES - filled_states)
     if missing_required:
-        raise GenerationError(f"missing required animation row(s): {', '.join(missing_required)}")
+        raise GenerationError(
+            f"missing required animation row(s): {', '.join(missing_required)}"
+        )
     if len(filled_states) < _MIN_FILLED_STATES:
         raise GenerationError(
             f"only {len(filled_states)}/{len(atlas.ROW_SPECS)} animation rows were usable; regenerate"

@@ -97,7 +97,9 @@ def free_port() -> int:
 
 
 # ── scratch CLAWK_HOME ─────────────────────────────────────────────────
-def seed_scratch_home(home: Path, *, isolation: str, heartbeat_secs: int, respawn_max: int) -> None:
+def seed_scratch_home(
+    home: Path, *, isolation: str, heartbeat_secs: int, respawn_max: int
+) -> None:
     """Write a minimal config.yaml with the isolation knob set."""
     home.mkdir(parents=True, exist_ok=True)
     (home / "state").mkdir(parents=True, exist_ok=True)
@@ -122,9 +124,13 @@ def seed_scratch_home(home: Path, *, isolation: str, heartbeat_secs: int, respaw
     # config.yaml is the canonical config; write it directly.
     import yaml  # provided by the runtime venv
 
-    (home / "config.yaml").write_text(yaml.safe_dump(cfg, sort_keys=True), encoding="utf-8")
+    (home / "config.yaml").write_text(
+        yaml.safe_dump(cfg, sort_keys=True), encoding="utf-8"
+    )
     # A stub .env so credential resolution doesn't spelunk the real home.
-    (home / ".env").write_text("OPENAI_API_KEY=sk-synthetic-not-used\n", encoding="utf-8")
+    (home / ".env").write_text(
+        "OPENAI_API_KEY=sk-synthetic-not-used\n", encoding="utf-8"
+    )
 
 
 # ── dashboard process ───────────────────────────────────────────────────
@@ -168,19 +174,35 @@ class ScratchDashboard:
         env = dict(os.environ)
         env.update(self.env_extra)
         env["CLAWK_HOME"] = str(self.home)
-        env["HOME"] = str(self.home.parent) if str(self.home.parent) else env.get("HOME", "")
+        env["HOME"] = (
+            str(self.home.parent) if str(self.home.parent) else env.get("HOME", "")
+        )
         env["CLAWK_HOME"] = str(self.home)
         env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
         env["CLAWK_ISO_CERTIFY_SYNTH_TURN"] = "1"
         cmd = [
-            python, "-m", "clawk_cli.main", "dashboard",
-            "--no-open", "--host", "127.0.0.1", "--port", str(self.port),
+            python,
+            "-m",
+            "clawk_cli.main",
+            "dashboard",
+            "--no-open",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(self.port),
         ]
         self.proc = subprocess.Popen(
-            cmd, cwd=str(REPO_ROOT), env=env,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
+            cmd,
+            cwd=str(REPO_ROOT),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
         )
-        threading.Thread(target=self._drain, args=(self.proc.stdout,), name="dash-log", daemon=True).start()
+        threading.Thread(
+            target=self._drain, args=(self.proc.stdout,), name="dash-log", daemon=True
+        ).start()
         if not self._ready.wait(timeout=90.0):
             self._dump_tail()
             raise RuntimeError("scratch dashboard did not become ready within 90s")
@@ -246,12 +268,26 @@ class WSClient:
 
     def rpc(self, method: str, params: dict, timeout: float = 30.0) -> dict:
         rid = self._next_id()
-        self.ws.send(json.dumps({"jsonrpc": "2.0", "id": rid, "method": method, "params": params}))
+        self.ws.send(
+            json.dumps({
+                "jsonrpc": "2.0",
+                "id": rid,
+                "method": method,
+                "params": params,
+            })
+        )
         return self._recv_until(lambda o: o.get("id") == rid, timeout=timeout)
 
     def send_only(self, method: str, params: dict) -> str:
         rid = self._next_id()
-        self.ws.send(json.dumps({"jsonrpc": "2.0", "id": rid, "method": method, "params": params}))
+        self.ws.send(
+            json.dumps({
+                "jsonrpc": "2.0",
+                "id": rid,
+                "method": method,
+                "params": params,
+            })
+        )
         return rid
 
     def close(self) -> None:
@@ -262,9 +298,16 @@ class WSClient:
 
 
 # ── heavy-turn lane ─────────────────────────────────────────────────────
-def drive_heavy_turn(port: int, token: str, turn_spec: dict, stop_at: float, results: list[dict]) -> None:
+def drive_heavy_turn(
+    port: int, token: str, turn_spec: dict, stop_at: float, results: list[dict]
+) -> None:
     """One lane: create a session, submit heavy turns until the deadline."""
-    lane: dict[str, Any] = {"turns": 0, "errors": [], "turn_durations_s": [], "min_deltas": None}
+    lane: dict[str, Any] = {
+        "turns": 0,
+        "errors": [],
+        "turn_durations_s": [],
+        "min_deltas": None,
+    }
     try:
         cli = WSClient(port, token)
     except Exception as exc:
@@ -272,8 +315,12 @@ def drive_heavy_turn(port: int, token: str, turn_spec: dict, stop_at: float, res
         results.append(lane)
         return
     try:
-        resp = cli.rpc("session.create", {"cols": 80, "source": "iso-certify"}, timeout=30)
-        sid = ((resp.get("result") or {}).get("session_id")) or ((resp.get("result") or {}).get("id"))
+        resp = cli.rpc(
+            "session.create", {"cols": 80, "source": "iso-certify"}, timeout=30
+        )
+        sid = ((resp.get("result") or {}).get("session_id")) or (
+            (resp.get("result") or {}).get("id")
+        )
         if not sid:
             lane["errors"].append(f"session.create bad resp: {resp}")
             results.append(lane)
@@ -282,7 +329,9 @@ def drive_heavy_turn(port: int, token: str, turn_spec: dict, stop_at: float, res
         spec_text = json.dumps(turn_spec)
         while time.monotonic() < stop_at:
             # prompt.submit returns immediately ("streaming"); the turn runs async.
-            r = cli.rpc("prompt.submit", {"session_id": sid, "text": spec_text}, timeout=30)
+            r = cli.rpc(
+                "prompt.submit", {"session_id": sid, "text": spec_text}, timeout=30
+            )
             if r.get("error"):
                 lane["errors"].append(f"prompt.submit: {r['error']}")
                 break
@@ -303,9 +352,16 @@ def drive_heavy_turn(port: int, token: str, turn_spec: dict, stop_at: float, res
             while time.monotonic() < deadline:
                 try:
                     o = cli._recv_until(
-                        lambda o: o.get("method") == "event"
-                        and (o.get("params") or {}).get("type")
-                        in {"message.start", "message.delta", "message.complete", "error"},
+                        lambda o: (
+                            o.get("method") == "event"
+                            and (o.get("params") or {}).get("type")
+                            in {
+                                "message.start",
+                                "message.delta",
+                                "message.complete",
+                                "error",
+                            }
+                        ),
                         timeout=max(0.5, deadline - time.monotonic()),
                     )
                 except TimeoutError:
@@ -325,7 +381,10 @@ def drive_heavy_turn(port: int, token: str, turn_spec: dict, stop_at: float, res
                     deltas += 1
                     continue
                 if ptype == "error":
-                    msg = str(((o.get("params") or {}).get("payload") or {}).get("message") or "")
+                    msg = str(
+                        ((o.get("params") or {}).get("payload") or {}).get("message")
+                        or ""
+                    )
                     lane["errors"].append(f"turn error: {msg[:160]}")
                     errored = True
                     break
@@ -336,7 +395,11 @@ def drive_heavy_turn(port: int, token: str, turn_spec: dict, stop_at: float, res
             if done:
                 lane["turns"] += 1
                 lane["turn_durations_s"].append(round(turn_dur, 2))
-                lane["min_deltas"] = deltas if lane["min_deltas"] is None else min(lane["min_deltas"], deltas)
+                lane["min_deltas"] = (
+                    deltas
+                    if lane["min_deltas"] is None
+                    else min(lane["min_deltas"], deltas)
+                )
             if errored:
                 break
     except Exception as exc:
@@ -380,7 +443,14 @@ def warmup_serving(port: int, token: str, rounds: int = 6) -> None:
         warm_ws.close()
 
 
-def probe_loop(port: int, token: str, stop_at: float, cadence_s: float, ws_samples: list[float], rest_samples: list[float]) -> None:
+def probe_loop(
+    port: int,
+    token: str,
+    stop_at: float,
+    cadence_s: float,
+    ws_samples: list[float],
+    rest_samples: list[float],
+) -> None:
     """Probe ws session.list + REST /api/status every ``cadence_s`` seconds."""
     probe_ws: WSClient | None = None
     try:
@@ -427,6 +497,7 @@ def probe_loop(port: int, token: str, stop_at: float, cadence_s: float, ws_sampl
 def run_certify(args: argparse.Namespace) -> dict[str, Any]:
     port = free_port()
     import secrets
+
     token = secrets.token_urlsafe(24)
     parent_tmp = Path(tempfile.mkdtemp(prefix="iso-certify-"))
     home = parent_tmp / "clawk-home"
@@ -462,7 +533,9 @@ def run_certify(args: argparse.Namespace) -> dict[str, Any]:
 
     try:
         with ScratchDashboard(
-            home=home, port=port, isolation=args.isolation,
+            home=home,
+            port=port,
+            isolation=args.isolation,
             env_extra={"CLAWK_DASHBOARD_SESSION_TOKEN": token},
         ) as dash:
             actual_port = dash.actual_port
@@ -482,22 +555,41 @@ def run_certify(args: argparse.Namespace) -> dict[str, Any]:
             stop_at = time.monotonic() + duration_s
             probe_thread = threading.Thread(
                 target=probe_loop,
-                args=(actual_port, token, stop_at, args.cadence_s, ws_samples, rest_samples),
-                name="probe", daemon=True,
+                args=(
+                    actual_port,
+                    token,
+                    stop_at,
+                    args.cadence_s,
+                    ws_samples,
+                    rest_samples,
+                ),
+                name="probe",
+                daemon=True,
             )
             probe_thread.start()
 
             with ThreadPoolExecutor(max_workers=concurrency) as pool:
                 for _ in range(concurrency):
-                    pool.submit(drive_heavy_turn, actual_port, token, turn_spec, stop_at, lane_results)
+                    pool.submit(
+                        drive_heavy_turn,
+                        actual_port,
+                        token,
+                        turn_spec,
+                        stop_at,
+                        lane_results,
+                    )
                 # Pool context waits for all lanes.
             probe_thread.join(timeout=30)
 
             stall_after = dash.stall_log_count
             total_turns = sum(l.get("turns", 0) for l in lane_results)
             lane_errors = [e for l in lane_results for e in l.get("errors", [])]
-            all_durations = [d for l in lane_results for d in l.get("turn_durations_s", [])]
-            min_deltas = [l["min_deltas"] for l in lane_results if l.get("min_deltas") is not None]
+            all_durations = [
+                d for l in lane_results for d in l.get("turn_durations_s", [])
+            ]
+            min_deltas = [
+                l["min_deltas"] for l in lane_results if l.get("min_deltas") is not None
+            ]
             lanes_with_turn = sum(1 for l in lane_results if l.get("turns", 0) > 0)
 
             ws_stat = summarize(ws_samples)
@@ -543,7 +635,11 @@ def run_certify(args: argparse.Namespace) -> dict[str, Any]:
             serving_p99 = max(ws_stat["p99_ms"], rest_stat["p99_ms"])
             result["serving_p99_ms"] = serving_p99
             if args.dry_run:
-                result["verdict"] = "SMOKE-OK" if (total_turns > 0 and not lane_errors) else "SMOKE-FAIL"
+                result["verdict"] = (
+                    "SMOKE-OK"
+                    if (total_turns > 0 and not lane_errors)
+                    else "SMOKE-FAIL"
+                )
                 result["is_verdict"] = False
             else:
                 serving_ok = (
@@ -583,27 +679,75 @@ def probe_thread_samples_ok(ws_samples: list[float], rest_samples: list[float]) 
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="AC-4 dashboard turn-isolation certify harness")
-    p.add_argument("--isolation", choices=["on", "off"], default="on",
-                   help="set dashboard.turn_isolation in the scratch CLAWK_HOME")
-    p.add_argument("--dry-run", action="store_true",
-                   help="1 short light turn plumbing smoke — NOT an AC-4 verdict")
-    p.add_argument("--concurrency", type=int, default=6, help="concurrent heavy-turn lanes (AC-4: 6)")
-    p.add_argument("--duration-s", type=float, default=600.0, dest="duration_s",
-                   help="sustained run window seconds (AC-4: ~600 = 10 min)")
-    p.add_argument("--turn-duration-s", type=float, default=12.0, dest="turn_duration_s",
-                   help="wall seconds of GIL-holding compute per heavy turn")
-    p.add_argument("--delta-interval-s", type=float, default=0.05, dest="delta_interval_s",
-                   help="streamed-delta cadence per heavy turn")
+    p = argparse.ArgumentParser(
+        description="AC-4 dashboard turn-isolation certify harness"
+    )
+    p.add_argument(
+        "--isolation",
+        choices=["on", "off"],
+        default="on",
+        help="set dashboard.turn_isolation in the scratch CLAWK_HOME",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="1 short light turn plumbing smoke — NOT an AC-4 verdict",
+    )
+    p.add_argument(
+        "--concurrency",
+        type=int,
+        default=6,
+        help="concurrent heavy-turn lanes (AC-4: 6)",
+    )
+    p.add_argument(
+        "--duration-s",
+        type=float,
+        default=600.0,
+        dest="duration_s",
+        help="sustained run window seconds (AC-4: ~600 = 10 min)",
+    )
+    p.add_argument(
+        "--turn-duration-s",
+        type=float,
+        default=12.0,
+        dest="turn_duration_s",
+        help="wall seconds of GIL-holding compute per heavy turn",
+    )
+    p.add_argument(
+        "--delta-interval-s",
+        type=float,
+        default=0.05,
+        dest="delta_interval_s",
+        help="streamed-delta cadence per heavy turn",
+    )
     p.add_argument("--tokens-per-delta", type=int, default=512, dest="tokens_per_delta")
-    p.add_argument("--chunk", type=int, default=20000, help="pure-Python ops per interrupt-check chunk")
-    p.add_argument("--cadence-s", type=float, default=0.5, dest="cadence_s",
-                   help="serving-path probe cadence (AC-4: 500ms)")
-    p.add_argument("--threshold-ms", type=float, default=1000.0, dest="threshold_ms",
-                   help="serving p99 threshold (AC-4: <1s)")
+    p.add_argument(
+        "--chunk",
+        type=int,
+        default=20000,
+        help="pure-Python ops per interrupt-check chunk",
+    )
+    p.add_argument(
+        "--cadence-s",
+        type=float,
+        default=0.5,
+        dest="cadence_s",
+        help="serving-path probe cadence (AC-4: 500ms)",
+    )
+    p.add_argument(
+        "--threshold-ms",
+        type=float,
+        default=1000.0,
+        dest="threshold_ms",
+        help="serving p99 threshold (AC-4: <1s)",
+    )
     p.add_argument("--heartbeat-secs", type=int, default=15, dest="heartbeat_secs")
     p.add_argument("--respawn-max", type=int, default=3, dest="respawn_max")
-    p.add_argument("--keep-home", action="store_true", help="do not delete the scratch CLAWK_HOME on exit")
+    p.add_argument(
+        "--keep-home",
+        action="store_true",
+        help="do not delete the scratch CLAWK_HOME on exit",
+    )
     p.add_argument("--json-out", type=Path, help="write JSON metrics to this path")
     args = p.parse_args(argv)
 

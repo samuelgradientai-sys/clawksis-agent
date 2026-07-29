@@ -14,6 +14,7 @@ Every ``docker exec`` here runs as the unprivileged ``clawk`` user
 (via :func:`docker_exec` / :func:`docker_exec_sh` in conftest); see
 the conftest module docstring.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -21,18 +22,24 @@ import time
 
 import pytest
 
-from tests.docker.conftest import docker_exec, docker_exec_sh, wait_for_path, wait_for_log, wait_for_docker_logs, poll_container
+from tests.docker.conftest import (
+    docker_exec,
+    docker_exec_sh,
+    wait_for_path,
+    wait_for_log,
+    wait_for_docker_logs,
+    poll_container,
+)
 
 
 def _docker(*args: str, **kw) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["docker", *args],
-        capture_output=True, text=True, timeout=kw.pop("timeout", 60),
+        capture_output=True,
+        text=True,
+        timeout=kw.pop("timeout", 60),
         **kw,
     )
-
-
-
 
 
 def _wait_for_reconcile_log_mention(
@@ -42,9 +49,10 @@ def _wait_for_reconcile_log_mention(
     deadline_s: float = 30.0,
     interval_s: float = 0.25,
 ) -> str:
-    """Poll until /opt/data/logs/container-boot.log mentions `profile`.
-    """
-    return wait_for_log(container, "/opt/data/logs/container-boot.log",  f"profile={profile}")
+    """Poll until /opt/data/logs/container-boot.log mentions `profile`."""
+    return wait_for_log(
+        container, "/opt/data/logs/container-boot.log", f"profile={profile}"
+    )
 
 
 @pytest.fixture
@@ -58,9 +66,15 @@ def restart_container(request, built_image: str):
     _docker("volume", "rm", "-f", volume)
     _docker("volume", "create", volume, timeout=10).check_returncode()
     r = _docker(
-        "run", "-d", "--name", name,
-        "-v", f"{volume}:/opt/data",
-        built_image, "sleep", "infinity",
+        "run",
+        "-d",
+        "--name",
+        name,
+        "-v",
+        f"{volume}:/opt/data",
+        built_image,
+        "sleep",
+        "infinity",
         timeout=30,
     )
     r.check_returncode()
@@ -88,7 +102,9 @@ def test_running_gateway_survives_container_restart(restart_container: str) -> N
     assert r.returncode == 0, f"gateway start failed: {r.stderr}"
 
     # Give the service time to actually come up under supervision.
-    poll_container(container, "/command/s6-svstat /run/service/gateway-coder | grep -q 'up '")
+    poll_container(
+        container, "/command/s6-svstat /run/service/gateway-coder | grep -q 'up '"
+    )
 
     # Persist state so the reconciler will treat the slot as 'running'
     # post-restart. The gateway process itself writes gateway_state.json
@@ -113,7 +129,10 @@ def test_running_gateway_survives_container_restart(restart_container: str) -> N
 
     # Service slot exists.
     assert wait_for_path(
-        container, "/run/service/gateway-coder", kind="d", deadline_s=10.0,
+        container,
+        "/run/service/gateway-coder",
+        kind="d",
+        deadline_s=10.0,
     ), "slot not recreated after restart"
 
     # No `down` marker — we asked for auto-start.
@@ -140,7 +159,10 @@ def test_stopped_gateway_stays_stopped_after_restart(restart_container: str) -> 
 
     # Slot exists.
     assert wait_for_path(
-        container, "/run/service/gateway-writer", kind="d", deadline_s=10.0,
+        container,
+        "/run/service/gateway-writer",
+        kind="d",
+        deadline_s=10.0,
     )
 
     # Down marker present.
@@ -203,14 +225,22 @@ def test_live_gateway_autostarts_after_real_restart_without_manual_state_stamp(
 
     # Wait for the gateway to actually come up under supervision AND write
     # its own gateway_state=running (we do NOT stamp it ourselves).
-    poll_container(container, "/command/s6-svstat /run/service/gateway-live |  grep -q 'up '")
+    poll_container(
+        container, "/command/s6-svstat /run/service/gateway-live |  grep -q 'up '"
+    )
 
     # Confirm the gateway persisted its own 'running' state. The gateway has
     # to boot Python, discover ~50 plugins, construct GatewayRunner, and
     # reach write_runtime_status("running") at run.py start() — on a loaded
     # CI runner with parallel docker test containers competing for CPU, this
     # can take a while.
-    wait_for_log(container, "/opt/data/profiles/live/gateway_state.json", '"running"', deadline_s=45, interval_s=1)
+    wait_for_log(
+        container,
+        "/opt/data/profiles/live/gateway_state.json",
+        '"running"',
+        deadline_s=45,
+        interval_s=1,
+    )
 
     # Real restart — Docker sends SIGTERM to PID 1; s6 propagates it to the
     # supervised gateway. No planned-stop marker is written (this is not an
@@ -226,7 +256,10 @@ def test_live_gateway_autostarts_after_real_restart_without_manual_state_stamp(
 
     # Slot recreated, and NO down marker (we expect auto-start).
     assert wait_for_path(
-        container, "/run/service/gateway-live", kind="d", deadline_s=10.0,
+        container,
+        "/run/service/gateway-live",
+        kind="d",
+        deadline_s=10.0,
     ), "slot not recreated after restart"
     r = docker_exec_sh(container, "test -f /run/service/gateway-live/down")
     assert r.returncode != 0, (

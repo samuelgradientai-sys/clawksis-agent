@@ -14,7 +14,12 @@ logger = logging.getLogger(__name__)
 def _coerce_insecure(ssl_verify: Any) -> bool:
     if ssl_verify is False:
         return True
-    if isinstance(ssl_verify, str) and ssl_verify.strip().lower() in {"false", "0", "no", "off"}:
+    if isinstance(ssl_verify, str) and ssl_verify.strip().lower() in {
+        "false",
+        "0",
+        "no",
+        "off",
+    }:
         return True
     return False
 

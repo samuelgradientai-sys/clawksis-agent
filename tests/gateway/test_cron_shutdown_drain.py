@@ -8,6 +8,7 @@ future. The shutdown wait therefore must NOT block the loop with a synchronous
 and the message is silently lost. ``_await_thread_exit`` waits cooperatively so
 the pending delivery completes first.
 """
+
 import asyncio
 import threading
 
@@ -41,7 +42,9 @@ async def test_await_thread_exit_lets_loop_scheduled_delivery_complete():
     exited = await gateway_run._await_thread_exit(thread, timeout=10)
 
     assert exited is True
-    assert delivered.is_set(), "in-flight delivery coroutine never ran (loop was blocked)"
+    assert delivered.is_set(), (
+        "in-flight delivery coroutine never ran (loop was blocked)"
+    )
     assert worker_done.is_set()
 
 

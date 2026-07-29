@@ -50,7 +50,9 @@ def codex_usage_payload():
     }
 
 
-def test_codex_usage_prefers_explicit_live_agent_credentials(monkeypatch, codex_usage_payload):
+def test_codex_usage_prefers_explicit_live_agent_credentials(
+    monkeypatch, codex_usage_payload
+):
     calls = []
     monkeypatch.setattr(
         account_usage.httpx,
@@ -60,7 +62,9 @@ def test_codex_usage_prefers_explicit_live_agent_credentials(monkeypatch, codex_
     monkeypatch.setattr(
         account_usage,
         "resolve_codex_runtime_credentials",
-        lambda **kwargs: (_ for _ in ()).throw(AssertionError("legacy auth should not be used")),
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy auth should not be used")
+        ),
     )
 
     snapshot = account_usage.fetch_account_usage(
@@ -78,7 +82,9 @@ def test_codex_usage_prefers_explicit_live_agent_credentials(monkeypatch, codex_
     assert calls[0]["headers"]["Authorization"] == "Bearer live-agent-token"
 
 
-def test_codex_usage_falls_back_to_native_credential_pool(monkeypatch, codex_usage_payload):
+def test_codex_usage_falls_back_to_native_credential_pool(
+    monkeypatch, codex_usage_payload
+):
     calls = []
     monkeypatch.setattr(
         account_usage.httpx,
@@ -92,7 +98,9 @@ def test_codex_usage_falls_back_to_native_credential_pool(monkeypatch, codex_usa
         account_usage,
         "resolve_codex_runtime_credentials",
         lambda **kwargs: (_ for _ in ()).throw(
-            account_usage.AuthError("no singleton auth", provider="openai-codex", code="codex_auth_missing")
+            account_usage.AuthError(
+                "no singleton auth", provider="openai-codex", code="codex_auth_missing"
+            )
         ),
     )
 
@@ -118,7 +126,9 @@ def test_codex_usage_falls_back_to_native_credential_pool(monkeypatch, codex_usa
     assert "ChatGPT-Account-Id" not in calls[0]["headers"]
 
 
-def test_codex_usage_does_not_swap_to_pool_on_transient_resolver_error(monkeypatch, codex_usage_payload):
+def test_codex_usage_does_not_swap_to_pool_on_transient_resolver_error(
+    monkeypatch, codex_usage_payload
+):
     """A transient refresh/network failure (non-AuthError) must NOT silently
     downgrade to a possibly-different pool account. It fails open (no snapshot)
     instead of reporting the wrong account's usage."""
@@ -152,7 +162,9 @@ def test_codex_usage_does_not_swap_to_pool_on_transient_resolver_error(monkeypat
     assert calls == []  # HTTP usage endpoint never hit with a wrong-account token
 
 
-def test_codex_usage_account_id_read_failure_keeps_singleton_token(monkeypatch, codex_usage_payload):
+def test_codex_usage_account_id_read_failure_keeps_singleton_token(
+    monkeypatch, codex_usage_payload
+):
     """When the resolver succeeds but the separate account_id read raises, the
     working singleton token must still be used (best-effort account_id), NOT
     abandoned in favor of a header-less pool credential."""
@@ -174,7 +186,11 @@ def test_codex_usage_account_id_read_failure_keeps_singleton_token(monkeypatch, 
         account_usage,
         "_read_codex_tokens",
         lambda *a, **k: (_ for _ in ()).throw(
-            account_usage.AuthError("partial store", provider="openai-codex", code="codex_auth_invalid_shape")
+            account_usage.AuthError(
+                "partial store",
+                provider="openai-codex",
+                code="codex_auth_invalid_shape",
+            )
         ),
     )
 
@@ -183,7 +199,9 @@ def test_codex_usage_account_id_read_failure_keeps_singleton_token(monkeypatch, 
     monkeypatch.setattr(
         credential_pool,
         "load_pool",
-        lambda provider: (_ for _ in ()).throw(AssertionError("pool must not be consulted")),
+        lambda provider: (_ for _ in ()).throw(
+            AssertionError("pool must not be consulted")
+        ),
     )
 
     snapshot = account_usage.fetch_account_usage("openai-codex")
@@ -219,7 +237,9 @@ def test_codex_usage_treats_wham_used_percent_as_used_not_remaining(monkeypatch)
     monkeypatch.setattr(
         account_usage,
         "resolve_codex_runtime_credentials",
-        lambda **kwargs: (_ for _ in ()).throw(AssertionError("explicit auth should be used")),
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("explicit auth should be used")
+        ),
     )
 
     snapshot = account_usage.fetch_account_usage(
@@ -230,7 +250,9 @@ def test_codex_usage_treats_wham_used_percent_as_used_not_remaining(monkeypatch)
 
     assert snapshot is not None
     assert [window.used_percent for window in snapshot.windows] == [85, 14]
-    rendered = "\n".join(account_usage.render_account_usage_lines(snapshot, markdown=True))
+    rendered = "\n".join(
+        account_usage.render_account_usage_lines(snapshot, markdown=True)
+    )
     assert "85% used" in rendered
     assert "14% used" in rendered
     assert "15% used" not in rendered
@@ -259,7 +281,12 @@ class _FakeResetClient:
         return _FakeResponse(self.usage_payload)
 
     def post(self, url, headers=None, json=None):
-        self.calls.append({"method": "POST", "url": url, "headers": headers, "json": json})
+        self.calls.append({
+            "method": "POST",
+            "url": url,
+            "headers": headers,
+            "json": json,
+        })
         return _FakeResponse(self.consume_payload)
 
 
@@ -268,7 +295,10 @@ def _usage_payload_with_resets(primary_used, secondary_used, banked):
         "plan_type": "plus",
         "rate_limit": {
             "primary_window": {"used_percent": primary_used, "reset_at": 1779846359},
-            "secondary_window": {"used_percent": secondary_used, "reset_at": 1780230796},
+            "secondary_window": {
+                "used_percent": secondary_used,
+                "reset_at": 1780230796,
+            },
         },
         "rate_limit_reset_credits": {"available_count": banked},
         "credits": {"has_credits": False},
@@ -294,7 +324,9 @@ def test_usage_snapshot_shows_banked_resets_hint(monkeypatch):
     assert "You have 2 resets banked - use /usage reset to activate" in rendered
 
 
-def test_usage_snapshot_hides_reset_hint_when_none_banked(monkeypatch, codex_usage_payload):
+def test_usage_snapshot_hides_reset_hint_when_none_banked(
+    monkeypatch, codex_usage_payload
+):
     calls = []
     monkeypatch.setattr(
         account_usage.httpx,
@@ -358,7 +390,10 @@ def test_redeem_force_bypasses_exhaustion_guard(monkeypatch):
     assert result.available_count == 1  # 2 banked - 1 spent
     assert "1 banked reset remaining" in result.message
     post = [c for c in calls if c["method"] == "POST"][0]
-    assert post["url"] == "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume"
+    assert (
+        post["url"]
+        == "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume"
+    )
     assert post["json"]["redeem_request_id"]  # idempotency key present
     assert "credit_id" not in post["json"]
 
@@ -390,7 +425,9 @@ def test_redeem_refuses_when_no_credits_banked(monkeypatch):
     monkeypatch.setattr(
         account_usage.httpx,
         "Client",
-        lambda timeout: _FakeResetClient(calls, _usage_payload_with_resets(100, 100, 0)),
+        lambda timeout: _FakeResetClient(
+            calls, _usage_payload_with_resets(100, 100, 0)
+        ),
     )
 
     result = account_usage.redeem_codex_reset_credit(

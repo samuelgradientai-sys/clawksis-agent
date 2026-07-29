@@ -24,6 +24,7 @@ import gateway.run as gw_mod
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class _FakeGateway:
     """Minimal stand-in with just enough state for ``stop()`` to run."""
 
@@ -125,6 +126,7 @@ def _make_mock_agent():
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestCachedAgentCleanupOnShutdown:
     """Verify that ``stop()`` calls ``_cleanup_agent_resources`` on idle

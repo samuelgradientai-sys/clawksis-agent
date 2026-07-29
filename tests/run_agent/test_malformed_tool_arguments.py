@@ -90,8 +90,14 @@ def test_malformed_arguments_are_rejected_without_blocking_valid_sibling(
         execute(assistant_message, messages, "task-1")
 
     assert executed == [("web_search", {"query": "valid"}, "call-good")]
-    assert [message["tool_call_id"] for message in messages] == ["call-bad", "call-good"]
-    assert len([message for message in messages if message["tool_call_id"] == "call-bad"]) == 1
+    assert [message["tool_call_id"] for message in messages] == [
+        "call-bad",
+        "call-good",
+    ]
+    assert (
+        len([message for message in messages if message["tool_call_id"] == "call-bad"])
+        == 1
+    )
 
     assert '"error": "Invalid tool arguments"' in messages[0]["content"]
     assert "JSON object" in messages[0]["content"]

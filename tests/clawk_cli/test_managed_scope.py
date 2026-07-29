@@ -1,4 +1,5 @@
 """Unit tests for clawk_cli.managed_scope (resolver + loaders + key helpers)."""
+
 import textwrap
 
 import pytest
@@ -70,7 +71,9 @@ def test_load_managed_config(tmp_path, monkeypatch):
           default: managed/model
         """,
     )
-    assert managed_scope.load_managed_config() == {"model": {"default": "managed/model"}}
+    assert managed_scope.load_managed_config() == {
+        "model": {"default": "managed/model"}
+    }
 
 
 def test_load_managed_config_absent_is_empty(tmp_path, monkeypatch):

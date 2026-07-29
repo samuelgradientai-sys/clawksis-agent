@@ -44,11 +44,16 @@ from plugins.platforms.discord.adapter import DiscordAdapter  # noqa: E402
 # and do NOT monkeypatch discord.DMChannel to it.
 # ---------------------------------------------------------------------------
 
+
 class _TextChannel:
     """Fake Discord text channel (not a DM, not a Thread)."""
 
-    def __init__(self, channel_id: int = 100, name: str = "general",
-                 guild_name: str = "Test Server"):
+    def __init__(
+        self,
+        channel_id: int = 100,
+        name: str = "general",
+        guild_name: str = "Test Server",
+    ):
         self.id = channel_id
         self.name = name
         self.guild = SimpleNamespace(name=guild_name, id=1)
@@ -58,14 +63,20 @@ class _TextChannel:
         async def _empty():
             return
             yield
+
         return _empty()
 
 
 class _Thread:
     """Fake Discord thread (not a DM, not a top-level channel)."""
 
-    def __init__(self, thread_id: int, name: str = "thread",
-                 parent=None, guild_name: str = "Test Server"):
+    def __init__(
+        self,
+        thread_id: int,
+        name: str = "thread",
+        parent=None,
+        guild_name: str = "Test Server",
+    ):
         self.id = thread_id
         self.name = name
         self.parent = parent
@@ -79,6 +90,7 @@ class _Thread:
         async def _empty():
             return
             yield
+
         return _empty()
 
 
@@ -118,6 +130,7 @@ def _make_message(
 # Adapter fixture
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def adapter(monkeypatch):
     # Clear relevant env vars so tests are hermetic
@@ -145,6 +158,7 @@ def adapter(monkeypatch):
 # ---------------------------------------------------------------------------
 # Scenario 1 — thread-starter message duplicate via on_message (the main bug)
 # ---------------------------------------------------------------------------
+
 
 class TestThreadStarterDedup:
     """Pre-seeding dedup with thread.id prevents a second dispatch when the
@@ -279,7 +293,9 @@ class TestThreadStarterDedup:
         await adapter._handle_message(user_msg)
 
         # _auto_create_thread should NOT have been called
-        assert not auto_create_called, "_auto_create_thread should not run when disabled"
+        assert not auto_create_called, (
+            "_auto_create_thread should not run when disabled"
+        )
         # thread.id should NOT be pre-seeded
         assert "55555" not in adapter._dedup._seen, (
             "thread.id should not be in dedup when auto-threading is disabled"
@@ -355,6 +371,7 @@ class TestThreadStarterDedup:
 # Scenario 2 — direct double-call to _handle_message with same message id
 # ---------------------------------------------------------------------------
 
+
 class TestDirectDoubleDispatch:
     """on_message dedup (checked before _handle_message) prevents double dispatch.
 
@@ -411,6 +428,7 @@ class TestDirectDoubleDispatch:
 # Scenario 3 — message_type=thread_starter filtered by type guard
 # ---------------------------------------------------------------------------
 
+
 class TestThreadStarterTypeFilter:
     """Discord sometimes sends thread starter messages with the correct
     type=21 (thread_starter_message).  Verify the type filter in on_message
@@ -458,6 +476,7 @@ class TestThreadStarterTypeFilter:
 # Scenario 4 — dedup cache integrity after thread pre-seeding
 # ---------------------------------------------------------------------------
 
+
 class TestDedupCacheIntegrity:
     """Verify the dedup cache state is correct after pre-seeding."""
 
@@ -491,9 +510,7 @@ class TestDedupCacheIntegrity:
         )
 
     @pytest.mark.asyncio
-    async def test_multiple_thread_creations_each_preseeded(
-        self, adapter, monkeypatch
-    ):
+    async def test_multiple_thread_creations_each_preseeded(self, adapter, monkeypatch):
         """Each thread creation pre-seeds its own thread.id independently."""
         monkeypatch.setenv("DISCORD_REQUIRE_MENTION", "false")
         monkeypatch.setenv("DISCORD_AUTO_THREAD", "true")

@@ -8,6 +8,7 @@ Covers the two behaviors this change adds:
 
 Pure-function / config-driven; no live model calls.
 """
+
 from typing import Any
 from unittest.mock import patch
 
@@ -24,6 +25,7 @@ def _msg(role, content, tool_calls=None):
 # ---------------------------------------------------------------------------
 # _resolve_review_runtime — the aux-model selector
 # ---------------------------------------------------------------------------
+
 
 class _FakeAgent:
     def __init__(self, provider="openai-codex", model="gpt-5.5"):
@@ -49,23 +51,36 @@ def test_routing_auto_inherits_parent_and_downgrades_codex_app_server():
     assert rt["routed"] is False
     assert rt["provider"] == "openai-codex"
     assert rt["model"] == "gpt-5.5"
-    assert rt["api_mode"] == "codex_responses"  # downgraded so agent-loop tools dispatch
+    assert (
+        rt["api_mode"] == "codex_responses"
+    )  # downgraded so agent-loop tools dispatch
 
 
 def test_routing_to_different_model_marks_routed_and_resolves_credentials():
     agent = _FakeAgent()
-    cfg = {"auxiliary": {"background_review": {
-        "provider": "openrouter", "model": "google/gemini-3-flash-preview",
-    }}}
+    cfg = {
+        "auxiliary": {
+            "background_review": {
+                "provider": "openrouter",
+                "model": "google/gemini-3-flash-preview",
+            }
+        }
+    }
     fake_rp = {
-        "provider": "openrouter", "api_key": "or-key",
-        "base_url": "https://openrouter.ai/api/v1", "api_mode": "chat_completions",
+        "provider": "openrouter",
+        "api_key": "or-key",
+        "base_url": "https://openrouter.ai/api/v1",
+        "api_mode": "chat_completions",
         "credential_pool": "routed-pool",
         "request_overrides": {"extra_body": {"store": False}},
         "max_output_tokens": 2048,
     }
-    with patch("clawk_cli.config.load_config", return_value=cfg), \
-         patch("clawk_cli.runtime_provider.resolve_runtime_provider", return_value=fake_rp):
+    with (
+        patch("clawk_cli.config.load_config", return_value=cfg),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider", return_value=fake_rp
+        ),
+    ):
         rt = br._resolve_review_runtime(agent)
     assert rt["routed"] is True
     assert rt["provider"] == "openrouter"
@@ -90,9 +105,14 @@ def test_unrouted_runtime_keeps_parent_pool_and_overrides():
 
 def test_routing_same_model_as_parent_is_not_routed():
     agent = _FakeAgent(provider="openrouter", model="anthropic/claude-opus-4.8")
-    cfg = {"auxiliary": {"background_review": {
-        "provider": "openrouter", "model": "anthropic/claude-opus-4.8",
-    }}}
+    cfg = {
+        "auxiliary": {
+            "background_review": {
+                "provider": "openrouter",
+                "model": "anthropic/claude-opus-4.8",
+            }
+        }
+    }
     with patch("clawk_cli.config.load_config", return_value=cfg):
         rt = br._resolve_review_runtime(agent)
     assert rt["routed"] is False  # same model/provider → keep full-replay path
@@ -100,12 +120,21 @@ def test_routing_same_model_as_parent_is_not_routed():
 
 def test_routing_resolution_failure_falls_back_to_parent():
     agent = _FakeAgent()
-    cfg = {"auxiliary": {"background_review": {
-        "provider": "openrouter", "model": "google/gemini-3-flash-preview",
-    }}}
-    with patch("clawk_cli.config.load_config", return_value=cfg), \
-         patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-               side_effect=RuntimeError("boom")):
+    cfg = {
+        "auxiliary": {
+            "background_review": {
+                "provider": "openrouter",
+                "model": "google/gemini-3-flash-preview",
+            }
+        }
+    }
+    with (
+        patch("clawk_cli.config.load_config", return_value=cfg),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider",
+            side_effect=RuntimeError("boom"),
+        ),
+    ):
         rt = br._resolve_review_runtime(agent)
     assert rt["routed"] is False
     assert rt["provider"] == "openai-codex"
@@ -114,6 +143,7 @@ def test_routing_resolution_failure_falls_back_to_parent():
 # ---------------------------------------------------------------------------
 # _digest_history — routed-path compact replay
 # ---------------------------------------------------------------------------
+
 
 def test_digest_under_tail_returns_full():
     msgs = [_msg("user", "hi"), _msg("assistant", "hello")]
@@ -138,8 +168,13 @@ def test_digest_does_not_open_tail_on_a_tool_message():
     msgs = []
     for i in range(40):
         msgs.append(_msg("user", "u" + "x" * 50))
-        msgs.append(_msg("assistant", "", tool_calls=[
-            {"function": {"name": "terminal", "arguments": "{}"}}]))
+        msgs.append(
+            _msg(
+                "assistant",
+                "",
+                tool_calls=[{"function": {"name": "terminal", "arguments": "{}"}}],
+            )
+        )
         msgs.append({"role": "tool", "content": "result " + "w" * 50})
     out = br._digest_history(msgs, tail=2)
     # The verbatim tail (after the digest) must not begin on a bare tool message.
@@ -149,9 +184,14 @@ def test_digest_does_not_open_tail_on_a_tool_message():
 def test_digest_records_tool_names_in_arc():
     old = [
         _msg("user", "do the thing"),
-        _msg("assistant", "", tool_calls=[
-            {"function": {"name": "skill_view", "arguments": "{}"}},
-            {"function": {"name": "patch", "arguments": "{}"}}]),
+        _msg(
+            "assistant",
+            "",
+            tool_calls=[
+                {"function": {"name": "skill_view", "arguments": "{}"}},
+                {"function": {"name": "patch", "arguments": "{}"}},
+            ],
+        ),
     ]
     msgs = old + [_msg("user", f"tail{i}") for i in range(30)]
     out = br._digest_history(msgs, tail=10)

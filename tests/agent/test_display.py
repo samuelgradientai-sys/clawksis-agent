@@ -58,7 +58,7 @@ class TestBuildToolPreview:
             "terminal",
             {
                 "command": (
-                    'cd /Users/brooklyn/www/bb-rainbows && pnpm run lint 2>&1 '
+                    "cd /Users/brooklyn/www/bb-rainbows && pnpm run lint 2>&1 "
                     '| tail -20; echo "lint_exit=${PIPESTATUS[0]}"'
                 )
             },
@@ -72,7 +72,7 @@ class TestBuildToolPreview:
                 "command": (
                     'which node pnpm corepack; node -v; echo "---"; '
                     'corepack --version 2>&1; echo "---pnpm via corepack---"; '
-                    'pnpm --version 2>&1 | tail -5'
+                    "pnpm --version 2>&1 | tail -5"
                 )
             },
         )
@@ -81,7 +81,9 @@ class TestBuildToolPreview:
     def test_execute_code_preview_uses_same_shell_summary(self):
         result = build_tool_preview(
             "execute_code",
-            {"code": 'cd /tmp/demo && python -m pytest -q 2>&1 | tail -5; echo "exit=$?"'},
+            {
+                "code": 'cd /tmp/demo && python -m pytest -q 2>&1 | tail -5; echo "exit=$?"'
+            },
         )
         assert result == "python -m pytest -q"
 
@@ -96,7 +98,9 @@ class TestBuildToolPreview:
         assert result == "test.py L1"
 
     def test_read_file_preview_includes_requested_line_range(self):
-        result = build_tool_preview("read_file", {"path": "./package.json", "offset": 1, "limit": 5})
+        result = build_tool_preview(
+            "read_file", {"path": "./package.json", "offset": 1, "limit": 5}
+        )
         assert result == "package.json L1-5"
 
     def test_browser_type_preview_redacts_api_key(self):
@@ -151,7 +155,9 @@ class TestBuildToolPreview:
         assert build_tool_preview("process", None) is None
 
     def test_process_tool_normal(self):
-        result = build_tool_preview("process", {"action": "poll", "session_id": "abc123"})
+        result = build_tool_preview(
+            "process", {"action": "poll", "session_id": "abc123"}
+        )
         assert result is not None
         assert "poll" in result
 
@@ -161,12 +167,16 @@ class TestBuildToolPreview:
         assert "reading" in result
 
     def test_todo_tool_with_todos(self):
-        result = build_tool_preview("todo", {"todos": [{"id": "1", "content": "test", "status": "pending"}]})
+        result = build_tool_preview(
+            "todo", {"todos": [{"id": "1", "content": "test", "status": "pending"}]}
+        )
         assert result is not None
         assert "1 task" in result
 
     def test_memory_tool_add(self):
-        result = build_tool_preview("memory", {"action": "add", "target": "user", "content": "test note"})
+        result = build_tool_preview(
+            "memory", {"action": "add", "target": "user", "content": "test note"}
+        )
         assert result is not None
         assert "user" in result
 
@@ -174,7 +184,9 @@ class TestBuildToolPreview:
         # Avoid empty quotes "" in the preview when old_text is missing/None.
         result = build_tool_preview("memory", {"action": "replace", "target": "memory"})
         assert result == '~memory: "<missing old_text>"'
-        result = build_tool_preview("memory", {"action": "remove", "target": "memory", "old_text": None})
+        result = build_tool_preview(
+            "memory", {"action": "remove", "target": "memory", "old_text": None}
+        )
         assert result == '-memory: "<missing old_text>"'
 
     def test_session_search_preview(self):
@@ -223,7 +235,10 @@ class TestCuteToolMessagePreviewLength:
 
         line = get_cute_tool_message("terminal", {"command": command}, 0.1)
 
-        assert "curl -s http://localhost:9222/json/list | jq -r '.[] | select(.type==\"page\")'" in line
+        assert (
+            "curl -s http://localhost:9222/json/list | jq -r '.[] | select(.type==\"page\")'"
+            in line
+        )
         assert "head -5" not in line
         assert "..." not in line
 
@@ -233,13 +248,18 @@ class TestCuteToolMessagePreviewLength:
 
         line = get_cute_tool_message("terminal", {"command": command}, 0.1)
 
-        assert "curl -s http://localhost:9222/json/list | jq -r '.[] | select(.type==\"page\")'" in line
+        assert (
+            "curl -s http://localhost:9222/json/list | jq -r '.[] | select(.type==\"page\")'"
+            in line
+        )
         assert "..." not in line
         assert "head -5" not in line
 
     def test_search_files_preview_uses_positive_configured_limit_not_default(self):
         set_tool_preview_max_len(80)
-        pattern = "function.formatToolCall.context.preview.compactPreview.maxLength.truncate"
+        pattern = (
+            "function.formatToolCall.context.preview.compactPreview.maxLength.truncate"
+        )
 
         line = get_cute_tool_message("search_files", {"pattern": pattern}, 0.1)
 
@@ -261,7 +281,9 @@ class TestCuteToolMessagePreviewLength:
             "lint": {"status": "error", "output": "SyntaxError: invalid syntax"},
         })
 
-        line = get_cute_tool_message("write_file", {"path": "/tmp/a.py"}, 0.1, result=result)
+        line = get_cute_tool_message(
+            "write_file", {"path": "/tmp/a.py"}, 0.1, result=result
+        )
 
         assert "[error]" not in line
 
@@ -310,7 +332,9 @@ class TestCuteToolMessagePreviewLength:
 
 class TestEditDiffPreview:
     def test_extract_edit_diff_for_patch(self):
-        diff = extract_edit_diff("patch", '{"success": true, "diff": "--- a/x\\n+++ b/x\\n"}')
+        diff = extract_edit_diff(
+            "patch", '{"success": true, "diff": "--- a/x\\n+++ b/x\\n"}'
+        )
         assert diff is not None
         assert "+++ b/x" in diff
 
@@ -381,7 +405,10 @@ class TestEditDiffPreview:
     def test_render_edit_diff_with_delta_handles_renderer_errors(self, monkeypatch):
         printer = MagicMock()
 
-        monkeypatch.setattr("agent.display._summarize_rendered_diff_sections", MagicMock(side_effect=RuntimeError("boom")))
+        monkeypatch.setattr(
+            "agent.display._summarize_rendered_diff_sections",
+            MagicMock(side_effect=RuntimeError("boom")),
+        )
 
         rendered = render_edit_diff_with_delta(
             "patch",
@@ -402,8 +429,7 @@ class TestEditDiffPreview:
 
     def test_summarize_rendered_diff_sections_limits_file_count(self):
         diff = "".join(
-            f"--- a/file{i}.py\n+++ b/file{i}.py\n+line{i}\n"
-            for i in range(8)
+            f"--- a/file{i}.py\n+++ b/file{i}.py\n+line{i}\n" for i in range(8)
         )
 
         rendered = _summarize_rendered_diff_sections(diff, max_files=3, max_lines=50)
@@ -421,17 +447,20 @@ class TestBuildToolLabel:
     @pytest.fixture(autouse=True)
     def _enable_friendly(self):
         from agent.display import set_friendly_tool_labels
+
         set_friendly_tool_labels(True)
         yield
         set_friendly_tool_labels(True)
 
     def test_web_search_uses_for_connector(self):
         from agent.display import build_tool_label
+
         label = build_tool_label("web_search", {"query": "weather in NYC"})
-        assert label == 'Searching the web for weather in NYC'
+        assert label == "Searching the web for weather in NYC"
 
     def test_web_extract_reads_url(self):
         from agent.display import build_tool_label
+
         label = build_tool_label("web_extract", {"urls": ["https://example.com/page"]})
         assert label is not None
         assert label.startswith("Reading ")
@@ -439,11 +468,13 @@ class TestBuildToolLabel:
 
     def test_browser_navigate_browses_url(self):
         from agent.display import build_tool_label
+
         label = build_tool_label("browser_navigate", {"url": "https://news.site"})
         assert label == "Browsing https://news.site"
 
     def test_read_file_uses_basename(self):
         from agent.display import build_tool_label
+
         label = build_tool_label("read_file", {"path": "/home/u/project/main.py"})
         assert label is not None
         assert label.startswith("Reading ")
@@ -451,23 +482,27 @@ class TestBuildToolLabel:
 
     def test_search_files_uses_for_connector(self):
         from agent.display import build_tool_label
+
         label = build_tool_label("search_files", {"pattern": "TODO"})
         assert label == "Searching files for TODO"
 
     def test_verb_only_for_no_preview_tools(self):
         from agent.display import build_tool_label
+
         # session_search is verb-only — no redundant query echo
         label = build_tool_label("session_search", {"query": "auth refactor"})
         assert label == "Searching past sessions"
 
     def test_verb_only_when_no_preview_available(self):
         from agent.display import build_tool_label
+
         # image_generate with empty args still yields the verb (no preview)
         label = build_tool_label("image_generate", {})
         assert label == "Generating image"
 
     def test_unknown_tool_falls_back_to_preview(self):
         from agent.display import build_tool_label, build_tool_preview
+
         args = {"some_arg": "value"}
         # A custom/plugin/MCP tool with no verb entry → raw preview behavior
         label = build_tool_label("custom_mcp_tool", args)
@@ -479,6 +514,7 @@ class TestBuildToolLabel:
             build_tool_preview,
             set_friendly_tool_labels,
         )
+
         set_friendly_tool_labels(False)
         args = {"query": "weather in NYC"}
         label = build_tool_label("web_search", args)
@@ -488,6 +524,7 @@ class TestBuildToolLabel:
 
     def test_every_known_verb_renders_without_error(self):
         from agent.display import build_tool_label, _TOOL_VERBS
+
         # Each built-in verb must produce a non-empty label given minimal args.
         for tool_name in _TOOL_VERBS:
             label = build_tool_label(tool_name, {"query": "x", "path": "x", "url": "x"})
@@ -499,48 +536,52 @@ class TestBuildStatusPhrase:
 
     def test_builtin_tool_with_preview(self):
         from agent.display import build_status_phrase
+
         phrase = build_status_phrase("terminal", {"command": "pytest tests/"})
         assert phrase == "is running pytest tests/…"
 
     def test_search_tool_uses_for_connector(self):
         from agent.display import build_status_phrase
+
         phrase = build_status_phrase("web_search", {"query": "slack api limits"})
         assert phrase == "is searching the web for slack api limits…"
 
     def test_verb_only_when_args_none(self):
         # live_status: "verb" mode passes args=None to suppress previews.
         from agent.display import build_status_phrase
+
         assert build_status_phrase("terminal", None) == "is running…"
         assert build_status_phrase("read_file", None) == "is reading…"
 
     def test_unknown_tool_generic_phrase(self):
         from agent.display import build_status_phrase
+
         phrase = build_status_phrase("my_mcp_tool", {"x": 1})
         assert phrase == "is using my_mcp_tool…"
 
     def test_thinking_pseudo_tool_returns_none(self):
         from agent.display import build_status_phrase
+
         assert build_status_phrase("_thinking", None) is None
         assert build_status_phrase("", None) is None
 
     def test_caps_length_for_slack_status_line(self):
         from agent.display import build_status_phrase
-        phrase = build_status_phrase(
-            "terminal", {"command": "x" * 300}, max_len=49
-        )
+
+        phrase = build_status_phrase("terminal", {"command": "x" * 300}, max_len=49)
         assert phrase is not None and len(phrase) <= 49
         assert phrase.endswith("…")
 
     def test_multiline_command_keeps_first_line(self):
         from agent.display import build_status_phrase
-        phrase = build_status_phrase(
-            "terminal", {"command": "make build\nmake test"}
-        )
+
+        phrase = build_status_phrase("terminal", {"command": "make build\nmake test"})
         assert phrase is not None
         assert "\n" not in phrase
 
     def test_respects_friendly_labels_toggle(self):
         from agent.display import build_status_phrase, set_friendly_tool_labels
+
         set_friendly_tool_labels(False)
         try:
             assert build_status_phrase("terminal", {"command": "ls"}) is None
@@ -549,5 +590,6 @@ class TestBuildStatusPhrase:
 
     def test_no_preview_tools_stay_verb_only(self):
         from agent.display import build_status_phrase
+
         phrase = build_status_phrase("skills_list", {"category": "devops"})
         assert phrase == "is listing skills…"

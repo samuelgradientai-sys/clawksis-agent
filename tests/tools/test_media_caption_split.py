@@ -20,7 +20,9 @@ from tools.send_message_tool import (
 
 def test_single_image_short_text_becomes_caption():
     caption, body = _media_caption_split(
-        "This Caption", [("/tmp/F22.png", False)], max_caption_len=_DEFAULT_CAPTION_LIMIT
+        "This Caption",
+        [("/tmp/F22.png", False)],
+        max_caption_len=_DEFAULT_CAPTION_LIMIT,
     )
     assert caption == "This Caption"
     assert body == ""
@@ -28,7 +30,9 @@ def test_single_image_short_text_becomes_caption():
 
 def test_single_video_short_text_becomes_caption():
     caption, body = _media_caption_split(
-        "Model unit tour", [("/tmp/tour.mp4", False)], max_caption_len=_DEFAULT_CAPTION_LIMIT
+        "Model unit tour",
+        [("/tmp/tour.mp4", False)],
+        max_caption_len=_DEFAULT_CAPTION_LIMIT,
     )
     assert caption == "Model unit tour"
     assert body == ""
@@ -36,7 +40,9 @@ def test_single_video_short_text_becomes_caption():
 
 def test_single_document_short_text_becomes_caption():
     caption, body = _media_caption_split(
-        "Q3 report", [("/tmp/report.pdf", False)], max_caption_len=_DEFAULT_CAPTION_LIMIT
+        "Q3 report",
+        [("/tmp/report.pdf", False)],
+        max_caption_len=_DEFAULT_CAPTION_LIMIT,
     )
     assert caption == "Q3 report"
     assert body == ""
@@ -99,7 +105,9 @@ def test_text_at_limit_still_captions():
 
 def test_caption_is_stripped():
     caption, body = _media_caption_split(
-        "  padded caption  ", [("/tmp/a.png", False)], max_caption_len=_DEFAULT_CAPTION_LIMIT
+        "  padded caption  ",
+        [("/tmp/a.png", False)],
+        max_caption_len=_DEFAULT_CAPTION_LIMIT,
     )
     assert caption == "padded caption"
     assert body == ""

@@ -48,9 +48,19 @@ from utils import env_int, env_bool
 logger = logging.getLogger(__name__)
 # Automated sender patterns — emails from these are silently ignored
 _NOREPLY_PATTERNS = (
-    "noreply", "no-reply", "no_reply", "donotreply", "do-not-reply",
-    "mailer-daemon", "postmaster", "bounce", "notifications@",
-    "automated@", "auto-confirm", "auto-reply", "automailer",
+    "noreply",
+    "no-reply",
+    "no_reply",
+    "donotreply",
+    "do-not-reply",
+    "mailer-daemon",
+    "postmaster",
+    "bounce",
+    "notifications@",
+    "automated@",
+    "auto-confirm",
+    "auto-reply",
+    "automailer",
 )
 
 # RFC headers that indicate bulk/automated mail
@@ -121,8 +131,10 @@ class _IPv4SMTP_SSL(smtplib.SMTP_SSL):
             server_hostname=getattr(self, "_host", host),
         )
 
+
 # Supported image extensions for inline detection
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
 
 def _send_imap_id(imap: "imaplib.IMAP4") -> None:
     """Send RFC 2971 IMAP ID command identifying this client.
@@ -157,7 +169,8 @@ def _is_automated_sender(address: str, headers: dict) -> bool:
         if value and check(value):
             return True
     return False
-    
+
+
 def check_email_requirements() -> bool:
     """Check if email platform settings are available and non-blank.
 
@@ -268,9 +281,7 @@ def _domains_aligned(a: str, b: str) -> bool:
 
 # Match a single "method=result" token in an Authentication-Results header,
 # e.g. ``dmarc=pass`` or ``spf=fail``.
-_AUTH_METHOD_RE = re.compile(
-    r"\b(dmarc|dkim|spf)\s*=\s*([a-z]+)", re.IGNORECASE
-)
+_AUTH_METHOD_RE = re.compile(r"\b(dmarc|dkim|spf)\s*=\s*([a-z]+)", re.IGNORECASE)
 # Match a property value like ``header.from=example.com`` or
 # ``smtp.mailfrom=user@example.com``.
 _AUTH_PROP_RE = re.compile(
@@ -342,9 +353,11 @@ def _verify_sender_authentication(
     # 2) SPF pass aligned with the From domain (the envelope/MAIL FROM domain
     #    must match the From domain).
     if methods.get("spf") == "pass":
-        spf_domain = _domain_of(props.get("smtp.mailfrom", "")) or props.get(
-            "smtp.from", ""
-        ) or props.get("envelope-from", "")
+        spf_domain = (
+            _domain_of(props.get("smtp.mailfrom", ""))
+            or props.get("smtp.from", "")
+            or props.get("envelope-from", "")
+        )
         spf_domain = _domain_of(spf_domain) if "@" in spf_domain else spf_domain
         if _domains_aligned(spf_domain, from_domain):
             return True, "spf=pass aligned"
@@ -352,7 +365,9 @@ def _verify_sender_authentication(
     # 3) DKIM pass aligned with the From domain (the signing domain header.d
     #    must align with the From domain).
     if methods.get("dkim") == "pass":
-        dkim_domain = props.get("header.d", "") or _domain_of(props.get("header.from", ""))
+        dkim_domain = props.get("header.d", "") or _domain_of(
+            props.get("header.from", "")
+        )
         if _domains_aligned(dkim_domain, from_domain):
             return True, "dkim=pass aligned"
 
@@ -374,13 +389,18 @@ def _extract_attachments(
 
     for part in msg.walk():
         disposition = str(part.get("Content-Disposition", ""))
-        if skip_attachments and ("attachment" in disposition or "inline" in disposition):
+        if skip_attachments and (
+            "attachment" in disposition or "inline" in disposition
+        ):
             continue
         if "attachment" not in disposition and "inline" not in disposition:
             continue
         # Skip text/plain and text/html body parts
         content_type = part.get_content_type()
-        if content_type in {"text/plain", "text/html"} and "attachment" not in disposition:
+        if (
+            content_type in {"text/plain", "text/html"}
+            and "attachment" not in disposition
+        ):
             continue
 
         filename = part.get_filename()
@@ -399,7 +419,9 @@ def _extract_attachments(
             try:
                 cached_path = cache_image_from_bytes(payload, ext)
             except ValueError:
-                logger.debug("Skipping non-image attachment %s (invalid magic bytes)", filename)
+                logger.debug(
+                    "Skipping non-image attachment %s (invalid magic bytes)", filename
+                )
                 continue
             attachments.append({
                 "path": cached_path,
@@ -434,11 +456,17 @@ class EmailAdapter(BasePlatformAdapter):
         # misleading ``[Errno 8] nodename nor servname`` (an unresolvable name)
         # instead of an obvious "host not set" error.
         extra = config.extra or {}
-        self._address = (os.getenv("EMAIL_ADDRESS", "") or extra.get("address", "")).strip()
+        self._address = (
+            os.getenv("EMAIL_ADDRESS", "") or extra.get("address", "")
+        ).strip()
         self._password = os.getenv("EMAIL_PASSWORD", "")
-        self._imap_host = (os.getenv("EMAIL_IMAP_HOST", "") or extra.get("imap_host", "")).strip()
+        self._imap_host = (
+            os.getenv("EMAIL_IMAP_HOST", "") or extra.get("imap_host", "")
+        ).strip()
         self._imap_port = env_int("EMAIL_IMAP_PORT", 993)
-        self._smtp_host = (os.getenv("EMAIL_SMTP_HOST", "") or extra.get("smtp_host", "")).strip()
+        self._smtp_host = (
+            os.getenv("EMAIL_SMTP_HOST", "") or extra.get("smtp_host", "")
+        ).strip()
         self._smtp_port = env_int("EMAIL_SMTP_PORT", 587)
         self._poll_interval = env_int("EMAIL_POLL_INTERVAL", 15)
 
@@ -463,7 +491,9 @@ class EmailAdapter(BasePlatformAdapter):
         # has already chosen to accept any sender, so the check is moot and the
         # gate below is skipped.
         if "require_authenticated_sender" in extra:
-            self._require_authenticated_sender = bool(extra["require_authenticated_sender"])
+            self._require_authenticated_sender = bool(
+                extra["require_authenticated_sender"]
+            )
         elif env_bool("EMAIL_TRUST_FROM_HEADER", False):
             self._require_authenticated_sender = False
         else:
@@ -473,12 +503,14 @@ class EmailAdapter(BasePlatformAdapter):
         # own receiving server (defends against an injected header that sorts
         # first). Defaults to the From-domain of the agent's own address.
         self._authserv_id = (
-            extra.get("authserv_id", "") or os.getenv("EMAIL_AUTHSERV_ID", "")
-        ).strip().lower()
+            (extra.get("authserv_id", "") or os.getenv("EMAIL_AUTHSERV_ID", ""))
+            .strip()
+            .lower()
+        )
 
         # Track message IDs we've already processed to avoid duplicates
         self._seen_uids: set = set()
-        self._seen_uids_max: int = 2000   # cap to prevent unbounded memory growth
+        self._seen_uids_max: int = 2000  # cap to prevent unbounded memory growth
         self._poll_task: Optional[asyncio.Task] = None
 
         # Map chat_id (sender email) -> last subject + message-id for threading
@@ -501,10 +533,12 @@ class EmailAdapter(BasePlatformAdapter):
             sorted_uids = sorted(self._seen_uids, key=lambda u: int(u))
             keep = self._seen_uids_max // 2
             self._seen_uids = set(sorted_uids[-keep:])
-            logger.debug("[Email] Trimmed seen UIDs to %d entries", len(self._seen_uids))
+            logger.debug(
+                "[Email] Trimmed seen UIDs to %d entries", len(self._seen_uids)
+            )
         except (ValueError, TypeError):
             # Fallback: just clear old entries if sort fails
-            self._seen_uids = set(list(self._seen_uids)[-self._seen_uids_max // 2:])
+            self._seen_uids = set(list(self._seen_uids)[-self._seen_uids_max // 2 :])
 
     def _connect_smtp(self) -> smtplib.SMTP:
         """Create an SMTP connection, selecting the correct protocol for the port.
@@ -530,7 +564,9 @@ class EmailAdapter(BasePlatformAdapter):
             smtp_cls = _IPv4SMTP if ipv4_only else smtplib.SMTP
             smtp_ssl_cls = _IPv4SMTP_SSL if ipv4_only else smtplib.SMTP_SSL
             if port == 465:
-                return smtp_ssl_cls(host, port, timeout=SMTP_CONNECT_TIMEOUT, context=ctx)
+                return smtp_ssl_cls(
+                    host, port, timeout=SMTP_CONNECT_TIMEOUT, context=ctx
+                )
             smtp = smtp_cls(host, port, timeout=SMTP_CONNECT_TIMEOUT)
             try:
                 smtp.starttls(context=ctx)
@@ -594,7 +630,10 @@ class EmailAdapter(BasePlatformAdapter):
             # Keep only the most recent UIDs to prevent unbounded growth
             self._trim_seen_uids()
             imap.logout()
-            logger.info("[Email] IMAP connection test passed. %d existing messages skipped.", len(self._seen_uids))
+            logger.info(
+                "[Email] IMAP connection test passed. %d existing messages skipped.",
+                len(self._seen_uids),
+            )
         except Exception as e:
             logger.error("[Email] IMAP connection failed: %s", e)
             return False
@@ -707,7 +746,9 @@ class EmailAdapter(BasePlatformAdapter):
                     # Skip automated/noreply senders before any processing
                     msg_headers = dict(msg.items())
                     if _is_automated_sender(sender_addr, msg_headers):
-                        logger.debug("[Email] Skipping automated sender: %s", sender_addr)
+                        logger.debug(
+                            "[Email] Skipping automated sender: %s", sender_addr
+                        )
                         continue
 
                     # Verify the From: domain is authenticated (SPF/DKIM/DMARC)
@@ -721,7 +762,9 @@ class EmailAdapter(BasePlatformAdapter):
                     )
 
                     body = _extract_text_body(msg)
-                    attachments = _extract_attachments(msg, skip_attachments=self._skip_attachments)
+                    attachments = _extract_attachments(
+                        msg, skip_attachments=self._skip_attachments
+                    )
 
                     results.append({
                         "uid": uid,
@@ -785,7 +828,9 @@ class EmailAdapter(BasePlatformAdapter):
 
         # Never reply to automated senders
         if _is_automated_sender(sender_addr, {}):
-            logger.debug("[Email] Dropping automated sender at dispatch: %s", sender_addr)
+            logger.debug(
+                "[Email] Dropping automated sender at dispatch: %s", sender_addr
+            )
             return
 
         # Skip senders not in EMAIL_ALLOWED_USERS — prevents the adapter
@@ -795,8 +840,13 @@ class EmailAdapter(BasePlatformAdapter):
         # sending a reply even though the handler returned None.
         allowed_raw = os.getenv("EMAIL_ALLOWED_USERS", "").strip()
         if not allowed_raw:
-            if os.getenv("EMAIL_ALLOW_ALL_USERS", "").strip().lower() not in {"true", "1", "yes"} and (
-                os.getenv("GATEWAY_ALLOW_ALL_USERS", "").strip().lower() not in {"true", "1", "yes"}
+            if os.getenv("EMAIL_ALLOW_ALL_USERS", "").strip().lower() not in {
+                "true",
+                "1",
+                "yes",
+            } and (
+                os.getenv("GATEWAY_ALLOW_ALL_USERS", "").strip().lower()
+                not in {"true", "1", "yes"}
             ):
                 logger.debug(
                     "[Email] Dropping sender at dispatch — EMAIL_ALLOWED_USERS is unset "
@@ -805,9 +855,14 @@ class EmailAdapter(BasePlatformAdapter):
                 )
                 return
         else:
-            allowed = {addr.strip().lower() for addr in allowed_raw.split(",") if addr.strip()}
+            allowed = {
+                addr.strip().lower() for addr in allowed_raw.split(",") if addr.strip()
+            }
             if sender_addr.lower() not in allowed:
-                logger.debug("[Email] Dropping non-allowlisted sender at dispatch: %s", sender_addr)
+                logger.debug(
+                    "[Email] Dropping non-allowlisted sender at dispatch: %s",
+                    sender_addr,
+                )
                 return
 
         # Reject spoofed senders. The allowlist (and the gateway's own authz)
@@ -961,7 +1016,9 @@ class EmailAdapter(BasePlatformAdapter):
         logger.info("[Email] Sent reply to %s (subject: %s)", to_addr, subject)
         return msg_id
 
-    async def send_typing(self, chat_id: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+    async def send_typing(
+        self, chat_id: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> None:
         """Email has no typing indicator — no-op."""
 
     async def send_image(
@@ -1030,7 +1087,9 @@ class EmailAdapter(BasePlatformAdapter):
                 local_paths,
             )
         except Exception as e:
-            logger.error("[Email] Multi-image send failed, falling back: %s", e, exc_info=True)
+            logger.error(
+                "[Email] Multi-image send failed, falling back: %s", e, exc_info=True
+            )
             await super().send_multiple_images(chat_id, images, metadata, human_delay)
 
     def _send_email_with_attachments(
@@ -1069,7 +1128,9 @@ class EmailAdapter(BasePlatformAdapter):
                     part = MIMEBase("application", "octet-stream")
                     part.set_payload(f.read())
                     encoders.encode_base64(part)
-                    part.add_header("Content-Disposition", f"attachment; filename={p.name}")
+                    part.add_header(
+                        "Content-Disposition", f"attachment; filename={p.name}"
+                    )
                     msg.attach(part)
             except Exception as e:
                 logger.warning("[Email] Failed to attach %s: %s", file_path, e)
@@ -1084,7 +1145,11 @@ class EmailAdapter(BasePlatformAdapter):
             except Exception:
                 smtp.close()
 
-        logger.info("[Email] Sent multi-attachment email to %s (%d files)", to_addr, len(file_paths))
+        logger.info(
+            "[Email] Sent multi-attachment email to %s (%d files)",
+            to_addr,
+            len(file_paths),
+        )
         return msg_id
 
     async def send_document(
@@ -1213,7 +1278,9 @@ async def _standalone_send(
         smtp_port = 587
 
     if not all([address, password, smtp_host]):
-        return {"error": "Email not configured (EMAIL_ADDRESS, EMAIL_PASSWORD, EMAIL_SMTP_HOST required)"}
+        return {
+            "error": "Email not configured (EMAIL_ADDRESS, EMAIL_PASSWORD, EMAIL_SMTP_HOST required)"
+        }
 
     try:
         msg = MIMEText(message, "plain", "utf-8")
@@ -1231,6 +1298,7 @@ async def _standalone_send(
     except Exception as e:
         try:
             from tools.send_message_tool import _error as _e
+
             return _e(f"Email send failed: {e}")
         except Exception:
             return {"error": f"Email send failed: {e}"}
@@ -1244,6 +1312,7 @@ def _is_connected(config) -> bool:
     if extra.get("address"):
         return True
     import clawk_cli.gateway as gateway_mod
+
     return bool((gateway_mod.get_env_value("EMAIL_ADDRESS") or "").strip())
 
 

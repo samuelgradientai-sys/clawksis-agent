@@ -52,7 +52,7 @@ BYTE_BUDGET = 4 * 1024 * 1024
 # are the ones that bricked: tall/large screenshots whose downscale re-encodes
 # to MORE PNG bytes than the original.
 CASES = [
-    (2344, 778),   # wide — shrank even before the fix
+    (2344, 778),  # wide — shrank even before the fix
     (2374, 1144),  # wide — shrank even before the fix
     (2097, 1476),  # REJECTED before fix
     (2247, 1544),  # REJECTED before fix
@@ -102,12 +102,15 @@ def run_proof(verbose: bool = False) -> list[dict]:
         under_byte_budget = len(url) <= BYTE_BUDGET
         over_pixel_cap = max(width, height) > MANY_IMAGE_CAP
 
-        msgs = [{
-            "role": "user",
-            "content": [{"type": "image_url", "image_url": {"url": url}}],
-        }]
+        msgs = [
+            {
+                "role": "user",
+                "content": [{"type": "image_url", "image_url": {"url": url}}],
+            }
+        ]
         changed = try_shrink_image_parts_in_messages(
-            msgs, max_dimension=MANY_IMAGE_CAP,
+            msgs,
+            max_dimension=MANY_IMAGE_CAP,
         )
         out_url = msgs[0]["content"][0]["image_url"]["url"]
         out_dims = _decode_dims(out_url)
@@ -125,7 +128,7 @@ def run_proof(verbose: bool = False) -> list[dict]:
         if verbose:
             status = "OK" if result["under_cap_after"] else "BRICK"
             print(
-                f"  {width}x{height} ({len(raw)//1024:>3} KB)"
+                f"  {width}x{height} ({len(raw) // 1024:>3} KB)"
                 f" -> changed={changed!s:>5}"
                 f"  result={out_dims[0]}x{out_dims[1]}"
                 f"  [{status}]"
@@ -157,8 +160,10 @@ def test_issue_48013_dimension_shrink_does_not_brick():
 
 def main() -> int:
     print("Issue #48013 proof — image-dimension shrink must not brick sessions")
-    print(f"(many-image per-side cap = {MANY_IMAGE_CAP}px, byte budget = "
-          f"{BYTE_BUDGET // (1024 * 1024)} MB)\n")
+    print(
+        f"(many-image per-side cap = {MANY_IMAGE_CAP}px, byte budget = "
+        f"{BYTE_BUDGET // (1024 * 1024)} MB)\n"
+    )
     results = run_proof(verbose=True)
     bricked = [r for r in results if not r["under_cap_after"]]
     no_progress = [r for r in results if r["under_cap_after"] and not r["changed"]]
@@ -167,11 +172,15 @@ def main() -> int:
         print(f"FAIL: {len(bricked)} image(s) still over the pixel cap (BRICK).")
         return 1
     if no_progress:
-        print(f"FAIL: {len(no_progress)} image(s) shrank but helper reported "
-              f"no progress (would burn the retry).")
+        print(
+            f"FAIL: {len(no_progress)} image(s) shrank but helper reported "
+            f"no progress (would burn the retry)."
+        )
         return 1
-    print(f"PASS: all {len(results)} dimension-oversized screenshots brought "
-          f"under {MANY_IMAGE_CAP}px and reported as progress.")
+    print(
+        f"PASS: all {len(results)} dimension-oversized screenshots brought "
+        f"under {MANY_IMAGE_CAP}px and reported as progress."
+    )
     return 0
 
 

@@ -70,7 +70,10 @@ def test_verify_on_stop_preserves_composed_report_at_budget_limit(agent, monkeyp
     monkeypatch.setenv("CLAWK_VERIFY_ON_STOP", "1")
 
     with (
-        patch("agent.verification_stop.build_verify_on_stop_nudge", return_value="verify it"),
+        patch(
+            "agent.verification_stop.build_verify_on_stop_nudge",
+            return_value="verify it",
+        ),
         patch("clawk_cli.plugins.invoke_hook", return_value=[]),
     ):
         result = agent.run_conversation("edit changed.py")
@@ -90,7 +93,9 @@ def test_pre_verify_preserves_composed_report_at_budget_limit(agent, monkeypatch
     monkeypatch.setenv("CLAWK_VERIFY_ON_STOP", "0")
 
     with (
-        patch("clawk_cli.plugins.has_hook", side_effect=lambda name: name == "pre_verify"),
+        patch(
+            "clawk_cli.plugins.has_hook", side_effect=lambda name: name == "pre_verify"
+        ),
         patch(
             "clawk_cli.plugins.get_pre_verify_continue_message",
             return_value="run project tests",
@@ -109,7 +114,9 @@ def test_intermediate_ack_uses_summary_instead_of_premature_text(agent, monkeypa
     agent.valid_tool_names = ["web_search"]
     agent._intent_ack_continuation = True
     agent._looks_like_codex_intermediate_ack = MagicMock(return_value=True)
-    agent._interruptible_api_call = lambda _kwargs: _response("I'll inspect the files now")
+    agent._interruptible_api_call = lambda _kwargs: _response(
+        "I'll inspect the files now"
+    )
     agent._handle_max_iterations = MagicMock(return_value="verified summary.")
     monkeypatch.setenv("CLAWK_VERIFY_ON_STOP", "0")
 
@@ -230,7 +237,10 @@ def test_verify_on_stop_emits_interim_response_to_ui(agent, monkeypatch):
     agent.interim_assistant_callback = capture_callback
 
     with (
-        patch("agent.verification_stop.build_verify_on_stop_nudge", return_value="verify it"),
+        patch(
+            "agent.verification_stop.build_verify_on_stop_nudge",
+            return_value="verify it",
+        ),
         patch("clawk_cli.plugins.invoke_hook", return_value=[]),
     ):
         result = agent.run_conversation("edit changed.py")
@@ -244,7 +254,9 @@ def test_verify_on_stop_emits_interim_response_to_ui(agent, monkeypatch):
     assert result["final_response"] == "composed report"
 
 
-def test_streamed_interim_then_different_summary_not_marked_previewed(agent, monkeypatch):
+def test_streamed_interim_then_different_summary_not_marked_previewed(
+    agent, monkeypatch
+):
     """Ordinary interim narration followed by a different non-streamed summary.
 
     The model streams "I'll inspect the files now" as an intermediate ack.
@@ -258,8 +270,12 @@ def test_streamed_interim_then_different_summary_not_marked_previewed(agent, mon
     agent.valid_tool_names = ["web_search"]
     agent._intent_ack_continuation = True
     agent._looks_like_codex_intermediate_ack = MagicMock(return_value=True)
-    agent._interruptible_api_call = lambda _kwargs: _response("I'll inspect the files now")
-    agent._handle_max_iterations = MagicMock(return_value="Here is the summary of what I found.")
+    agent._interruptible_api_call = lambda _kwargs: _response(
+        "I'll inspect the files now"
+    )
+    agent._handle_max_iterations = MagicMock(
+        return_value="Here is the summary of what I found."
+    )
     monkeypatch.setenv("CLAWK_VERIFY_ON_STOP", "0")
 
     emitted = []
@@ -306,7 +322,10 @@ def test_streamed_verification_candidate_reused_marked_previewed(agent, monkeypa
     # was streamed, the previewed flag propagates to the finalizer.
     with (
         patch.object(agent, "_interim_content_was_streamed", return_value=True),
-        patch("agent.verification_stop.build_verify_on_stop_nudge", return_value="verify it"),
+        patch(
+            "agent.verification_stop.build_verify_on_stop_nudge",
+            return_value="verify it",
+        ),
         patch("clawk_cli.plugins.invoke_hook", return_value=[]),
     ):
         result = agent.run_conversation("edit changed.py")

@@ -8,6 +8,7 @@ Covers the three Phase 0 deliverables:
      on, without disturbing the positional key layout downstream parsers rely
      on.
 """
+
 import pytest
 from datetime import datetime
 from unittest.mock import patch
@@ -47,15 +48,18 @@ class TestSessionKeyByteIdenticalWhenOff:
 
     @pytest.mark.parametrize("profile", [None, "default"])
     def test_group_per_user(self, profile):
-        s = _src(platform=Platform.DISCORD, chat_id="g1", chat_type="group", user_id="alice")
+        s = _src(
+            platform=Platform.DISCORD, chat_id="g1", chat_type="group", user_id="alice"
+        )
         assert (
-            build_session_key(s, profile=profile)
-            == "agent:main:discord:group:g1:alice"
+            build_session_key(s, profile=profile) == "agent:main:discord:group:g1:alice"
         )
 
     @pytest.mark.parametrize("profile", [None, "default"])
     def test_group_shared_when_disabled(self, profile):
-        s = _src(platform=Platform.DISCORD, chat_id="g1", chat_type="group", user_id="alice")
+        s = _src(
+            platform=Platform.DISCORD, chat_id="g1", chat_type="group", user_id="alice"
+        )
         assert (
             build_session_key(s, group_sessions_per_user=False, profile=profile)
             == "agent:main:discord:group:g1"
@@ -70,7 +74,9 @@ class TestSessionKeyNamespacedWhenOn:
         assert build_session_key(s, profile="coder") == "agent:coder:telegram:dm:99"
 
     def test_named_profile_group_per_user(self):
-        s = _src(platform=Platform.DISCORD, chat_id="g1", chat_type="group", user_id="alice")
+        s = _src(
+            platform=Platform.DISCORD, chat_id="g1", chat_type="group", user_id="alice"
+        )
         assert (
             build_session_key(s, profile="coder")
             == "agent:coder:discord:group:g1:alice"
@@ -87,7 +93,9 @@ class TestSessionKeyNamespacedWhenOn:
         """Downstream parsers split on ':' and read parts[2]=platform,
         parts[3]=chat_type, parts[4]=chat_id (see qqbot adapter
         _parse_gateway_session_key). The profile must occupy parts[1] only."""
-        s = _src(platform=Platform.DISCORD, chat_id="g1", chat_type="group", user_id="alice")
+        s = _src(
+            platform=Platform.DISCORD, chat_id="g1", chat_type="group", user_id="alice"
+        )
         parts = build_session_key(s, profile="coder").split(":")
         assert parts[0] == "agent"
         assert parts[1] == "coder"  # namespace slot (was always 'main')
@@ -97,7 +105,9 @@ class TestSessionKeyNamespacedWhenOn:
 
     def test_default_namespace_layout_matches_named(self):
         """Default and named keys differ ONLY in parts[1]."""
-        s = _src(platform=Platform.SLACK, chat_id="c1", chat_type="channel", user_id="u1")
+        s = _src(
+            platform=Platform.SLACK, chat_id="c1", chat_type="channel", user_id="u1"
+        )
         d = build_session_key(s, profile="default").split(":")
         n = build_session_key(s, profile="coder").split(":")
         assert d[0] == n[0] == "agent"
@@ -130,7 +140,9 @@ class TestMultiplexConfigFlag:
         cfg = GatewayConfig.from_dict(GatewayConfig(multiplex_profiles=True).to_dict())
         assert cfg.multiplex_profiles is True
 
-    def test_gateway_config_loader_honors_profile_runtime_scope(self, tmp_path, monkeypatch):
+    def test_gateway_config_loader_honors_profile_runtime_scope(
+        self, tmp_path, monkeypatch
+    ):
         """Multiplexed turns must resolve display settings from the routed profile."""
         import gateway.run as gateway_run
 
@@ -141,14 +153,24 @@ class TestMultiplexConfigFlag:
 
         (root_home / "config.yaml").write_text(
             yaml.safe_dump(
-                {"display": {"tool_progress": "all", "interim_assistant_messages": True}},
+                {
+                    "display": {
+                        "tool_progress": "all",
+                        "interim_assistant_messages": True,
+                    }
+                },
                 sort_keys=False,
             ),
             encoding="utf-8",
         )
         (profile_home / "config.yaml").write_text(
             yaml.safe_dump(
-                {"display": {"tool_progress": False, "interim_assistant_messages": False}},
+                {
+                    "display": {
+                        "tool_progress": False,
+                        "interim_assistant_messages": False,
+                    }
+                },
                 sort_keys=False,
             ),
             encoding="utf-8",
@@ -199,7 +221,9 @@ class TestSessionStoreProfileResolution:
     def test_flag_on_default_profile_stays_legacy(self, tmp_path):
         store = self._store(tmp_path, multiplex_profiles=True)
         s = _src(chat_id="99", chat_type="dm")
-        with patch("clawk_cli.profiles.get_active_profile_name", return_value="default"):
+        with patch(
+            "clawk_cli.profiles.get_active_profile_name", return_value="default"
+        ):
             assert store._generate_session_key(s) == "agent:main:telegram:dm:99"
 
 
@@ -235,7 +259,9 @@ class TestSessionStoreUnmultiplexedRecovery:
         store = self._store_with_row(tmp_path, row)
         source = _src(chat_id="99", chat_type="dm")
 
-        with patch("clawk_cli.profiles.get_active_profile_name", return_value="default"):
+        with patch(
+            "clawk_cli.profiles.get_active_profile_name", return_value="default"
+        ):
             recovered = store._recover_session_from_db(
                 session_key="agent:main:telegram:dm:99",
                 source=source,

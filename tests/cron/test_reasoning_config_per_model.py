@@ -35,7 +35,10 @@ class TestCronPerModelReasoningConfig:
 
     def test_cron_falls_back_to_global_when_no_override(self):
         """When no per-model override matches, global effort is used."""
-        from clawk_constants import parse_reasoning_effort, resolve_per_model_reasoning_effort
+        from clawk_constants import (
+            parse_reasoning_effort,
+            resolve_per_model_reasoning_effort,
+        )
 
         _cfg = {
             "model": {"default": "gpt-5"},
@@ -68,8 +71,12 @@ class TestCronPerModelReasoningConfig:
                 "reasoning_overrides": {"claude-opus-4.5": "high"},
             },
         }
-        _model_cfg = _cfg.get("model", {}) if isinstance(_cfg.get("model", {}), dict) else {}
-        _model = str(_model_cfg.get("default", "") or _model_cfg.get("model", "") or "").strip()
+        _model_cfg = (
+            _cfg.get("model", {}) if isinstance(_cfg.get("model", {}), dict) else {}
+        )
+        _model = str(
+            _model_cfg.get("default", "") or _model_cfg.get("model", "") or ""
+        ).strip()
         _overrides = (_cfg.get("agent", {}) or {}).get("reasoning_overrides", {}) or {}
 
         # Empty model → resolve returns None → scheduler uses global
@@ -83,7 +90,10 @@ class TestCronPerModelReasoningConfig:
         re-enabling thinking. The raw value must pass through so
         parse_reasoning_effort(False) returns {'enabled': False}.
         """
-        from clawk_constants import parse_reasoning_effort, resolve_per_model_reasoning_effort
+        from clawk_constants import (
+            parse_reasoning_effort,
+            resolve_per_model_reasoning_effort,
+        )
 
         _cfg = {
             "model": {"default": "gpt-5"},

@@ -108,7 +108,9 @@ def test_acp_restore_heals_alternation_for_live_replay(db):
     # No consecutive user turns — the durable user;user wedge was healed.
     assert roles == ["user", "assistant", "user", "assistant"], roles
     for a, b in zip(roles, roles[1:]):
-        assert not (a == "user" and b == "user"), "unhealed user;user in ACP live replay"
+        assert not (a == "user" and b == "user"), (
+            "unhealed user;user in ACP live replay"
+        )
     # No user input lost — both user texts survive, merged in order.
     merged = state.history[2]["content"]
     assert "unanswered turn" in merged and "next turn" in merged

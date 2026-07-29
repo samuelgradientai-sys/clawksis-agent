@@ -16,7 +16,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 
-
 # ── Text aux tasks — _resolve_auto ──────────────────────────────────────────
 
 
@@ -27,15 +26,17 @@ class TestResolveAutoMainFirst:
         """OpenRouter main user → aux uses their picked OR model, not Gemini Flash."""
         monkeypatch.setenv("OPENROUTER_API_KEY", "or-test-key")
 
-        with patch(
-            "agent.auxiliary_client._read_main_provider",
-            return_value="openrouter",
-        ), patch(
-            "agent.auxiliary_client._read_main_model",
-            return_value="anthropic/claude-sonnet-4.6",
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client"
-        ) as mock_resolve:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="openrouter",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="anthropic/claude-sonnet-4.6",
+            ),
+            patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve,
+        ):
             mock_client = MagicMock()
             mock_resolve.return_value = (mock_client, "anthropic/claude-sonnet-4.6")
 
@@ -65,27 +66,29 @@ class TestResolveAutoMainFirst:
         home = tmp_path / ".clawk"
         home.mkdir()
         (home / "config.yaml").write_text(
-            yaml.safe_dump(
-                {
-                    "moa": {
-                        "default_preset": "opus-gpt",
-                        "presets": {
-                            "opus-gpt": {
-                                "enabled": True,
-                                "reference_models": [{"provider": "openrouter", "model": "openai/gpt-5.5"}],
-                                "aggregator": {"provider": "openrouter", "model": "anthropic/claude-opus-4.8"},
-                            }
-                        },
-                    }
+            yaml.safe_dump({
+                "moa": {
+                    "default_preset": "opus-gpt",
+                    "presets": {
+                        "opus-gpt": {
+                            "enabled": True,
+                            "reference_models": [
+                                {"provider": "openrouter", "model": "openai/gpt-5.5"}
+                            ],
+                            "aggregator": {
+                                "provider": "openrouter",
+                                "model": "anthropic/claude-opus-4.8",
+                            },
+                        }
+                    },
                 }
-            )
+            })
         )
         monkeypatch.setenv("CLAWK_HOME", str(home))
 
-        with patch(
-            "agent.auxiliary_client.resolve_provider_client"
-        ) as mock_resolve, patch(
-            "agent.auxiliary_client._is_provider_unhealthy", return_value=False
+        with (
+            patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve,
+            patch("agent.auxiliary_client._is_provider_unhealthy", return_value=False),
         ):
             mock_client = MagicMock()
             mock_resolve.return_value = (mock_client, "anthropic/claude-opus-4.8")
@@ -114,14 +117,17 @@ class TestResolveAutoMainFirst:
     def test_nous_main_uses_main_model_for_aux(self, monkeypatch):
         """Nous Portal main user → aux uses their picked Nous model, not free-tier MiMo."""
         # No OPENROUTER_API_KEY → ensures if main failed we'd fall to chain
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="nous",
-        ), patch(
-            "agent.auxiliary_client._read_main_model",
-            return_value="anthropic/claude-opus-4.6",
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client"
-        ) as mock_resolve:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="nous",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="anthropic/claude-opus-4.6",
+            ),
+            patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve,
+        ):
             mock_client = MagicMock()
             mock_resolve.return_value = (mock_client, "anthropic/claude-opus-4.6")
 
@@ -137,13 +143,17 @@ class TestResolveAutoMainFirst:
         """Non-aggregator main (DeepSeek) → unchanged behavior, main model used."""
         monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
 
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="deepseek",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="deepseek-chat",
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client"
-        ) as mock_resolve:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="deepseek",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="deepseek-chat",
+            ),
+            patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve,
+        ):
             mock_client = MagicMock()
             mock_resolve.return_value = (mock_client, "deepseek-chat")
 
@@ -160,16 +170,23 @@ class TestResolveAutoMainFirst:
         monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
 
         chain_client = MagicMock()
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="anthropic",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="claude-opus",
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(None, None),  # main provider has no client
-        ), patch(
-            "agent.auxiliary_client._try_openrouter",
-            return_value=(chain_client, "google/gemini-3-flash-preview"),
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="anthropic",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="claude-opus",
+            ),
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(None, None),  # main provider has no client
+            ),
+            patch(
+                "agent.auxiliary_client._try_openrouter",
+                return_value=(chain_client, "google/gemini-3-flash-preview"),
+            ),
         ):
             from agent.auxiliary_client import _resolve_auto
 
@@ -181,21 +198,34 @@ class TestResolveAutoMainFirst:
     def test_main_unavailable_uses_task_fallback_chain_before_builtin_chain(self):
         """Auto aux resolution honors auxiliary.<task>.fallback_chain before built-ins."""
         task_client = MagicMock()
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="nvidia",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="qwen/qwen3.5-122b-a10b",
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(None, None),  # main provider has no client
-        ), patch(
-            "agent.auxiliary_client._try_configured_fallback_chain",
-            return_value=(task_client, "task-free-model", "fallback_chain[0](openrouter)"),
-        ) as mock_task_chain, patch(
-            "agent.auxiliary_client._try_main_fallback_chain",
-        ) as mock_main_chain, patch(
-            "agent.auxiliary_client._try_openrouter",
-        ) as mock_openrouter:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="nvidia",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="qwen/qwen3.5-122b-a10b",
+            ),
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(None, None),  # main provider has no client
+            ),
+            patch(
+                "agent.auxiliary_client._try_configured_fallback_chain",
+                return_value=(
+                    task_client,
+                    "task-free-model",
+                    "fallback_chain[0](openrouter)",
+                ),
+            ) as mock_task_chain,
+            patch(
+                "agent.auxiliary_client._try_main_fallback_chain",
+            ) as mock_main_chain,
+            patch(
+                "agent.auxiliary_client._try_openrouter",
+            ) as mock_openrouter,
+        ):
             from agent.auxiliary_client import _resolve_auto
 
             client, model = _resolve_auto(task="title_generation")
@@ -203,29 +233,43 @@ class TestResolveAutoMainFirst:
         assert client is task_client
         assert model == "task-free-model"
         mock_task_chain.assert_called_once_with(
-            "title_generation", "nvidia", reason="main provider unavailable")
+            "title_generation", "nvidia", reason="main provider unavailable"
+        )
         mock_main_chain.assert_not_called()
         mock_openrouter.assert_not_called()
 
     def test_main_unavailable_uses_main_fallback_chain_before_builtin_chain(self):
         """Auto aux resolution honors top-level fallback_providers before built-ins."""
         main_fallback_client = MagicMock()
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="nvidia",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="qwen/qwen3.5-122b-a10b",
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(None, None),  # main provider has no client
-        ), patch(
-            "agent.auxiliary_client._try_configured_fallback_chain",
-            return_value=(None, None, ""),
-        ), patch(
-            "agent.auxiliary_client._try_main_fallback_chain",
-            return_value=(main_fallback_client, "inclusionai/ring-2.6-1t:free", "openrouter"),
-        ) as mock_main_chain, patch(
-            "agent.auxiliary_client._try_openrouter",
-        ) as mock_openrouter:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="nvidia",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="qwen/qwen3.5-122b-a10b",
+            ),
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(None, None),  # main provider has no client
+            ),
+            patch(
+                "agent.auxiliary_client._try_configured_fallback_chain",
+                return_value=(None, None, ""),
+            ),
+            patch(
+                "agent.auxiliary_client._try_main_fallback_chain",
+                return_value=(
+                    main_fallback_client,
+                    "inclusionai/ring-2.6-1t:free",
+                    "openrouter",
+                ),
+            ) as mock_main_chain,
+            patch(
+                "agent.auxiliary_client._try_openrouter",
+            ) as mock_openrouter,
+        ):
             from agent.auxiliary_client import _resolve_auto
 
             client, model = _resolve_auto(task="title_generation")
@@ -233,19 +277,26 @@ class TestResolveAutoMainFirst:
         assert client is main_fallback_client
         assert model == "inclusionai/ring-2.6-1t:free"
         mock_main_chain.assert_called_once_with(
-            "title_generation", "nvidia", reason="main provider unavailable")
+            "title_generation", "nvidia", reason="main provider unavailable"
+        )
         mock_openrouter.assert_not_called()
 
     def test_no_main_config_uses_chain_directly(self):
         """No main provider configured → skip step 1, use chain (no regression)."""
         chain_client = MagicMock()
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="",
-        ), patch(
-            "agent.auxiliary_client._try_openrouter",
-            return_value=(chain_client, "google/gemini-3-flash-preview"),
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="",
+            ),
+            patch(
+                "agent.auxiliary_client._try_openrouter",
+                return_value=(chain_client, "google/gemini-3-flash-preview"),
+            ),
         ):
             from agent.auxiliary_client import _resolve_auto
 
@@ -255,25 +306,30 @@ class TestResolveAutoMainFirst:
 
     def test_runtime_override_wins_over_config(self, monkeypatch):
         """main_runtime kwarg overrides config-read main provider/model."""
-        with patch(
-            "agent.auxiliary_client._read_main_provider",
-            return_value="openrouter",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="config-model",
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client"
-        ) as mock_resolve:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="openrouter",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="config-model",
+            ),
+            patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve,
+        ):
             mock_resolve.return_value = (MagicMock(), "runtime-model")
 
             from agent.auxiliary_client import _resolve_auto
 
-            _resolve_auto(main_runtime={
-                "provider": "anthropic",
-                "model": "runtime-model",
-                "base_url": "",
-                "api_key": "",
-                "api_mode": "",
-            })
+            _resolve_auto(
+                main_runtime={
+                    "provider": "anthropic",
+                    "model": "runtime-model",
+                    "base_url": "",
+                    "api_key": "",
+                    "api_mode": "",
+                }
+            )
 
         # Runtime override wins
         assert mock_resolve.call_args.args[0] == "anthropic"
@@ -282,13 +338,16 @@ class TestResolveAutoMainFirst:
     def test_resolve_provider_auto_returns_runtime_model_not_stale_config_default(self):
         """Blank auto aux requests must not pair a stale config model with live fallback provider."""
         runtime_client = MagicMock()
-        with patch(
-            "agent.auxiliary_client._read_main_model",
-            return_value="claude-opus-4-8",
-        ) as mock_read_main_model, patch(
-            "agent.auxiliary_client._resolve_auto",
-            return_value=(runtime_client, "gpt-5.5"),
-        ) as mock_resolve_auto:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="claude-opus-4-8",
+            ) as mock_read_main_model,
+            patch(
+                "agent.auxiliary_client._resolve_auto",
+                return_value=(runtime_client, "gpt-5.5"),
+            ) as mock_resolve_auto,
+        ):
             from agent.auxiliary_client import resolve_provider_client
 
             client, model = resolve_provider_client(
@@ -310,25 +369,30 @@ class TestResolveAutoMainFirst:
     def test_runtime_base_url_passed_for_named_api_key_provider(self):
         """Named API-key providers inherit the live session endpoint for aux work."""
         token_plan_url = "https://token-plan-sgp.xiaomimimo.com/v1"
-        with patch(
-            "agent.auxiliary_client._read_main_provider",
-            return_value="openrouter",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="config-model",
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client"
-        ) as mock_resolve:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="openrouter",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="config-model",
+            ),
+            patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve,
+        ):
             mock_resolve.return_value = (MagicMock(), "mimo-v2.5-pro")
 
             from agent.auxiliary_client import _resolve_auto
 
-            _resolve_auto(main_runtime={
-                "provider": "xiaomi",
-                "model": "mimo-v2.5-pro",
-                "base_url": token_plan_url,
-                "api_key": "tp-test-key",
-                "api_mode": "chat_completions",
-            })
+            _resolve_auto(
+                main_runtime={
+                    "provider": "xiaomi",
+                    "model": "mimo-v2.5-pro",
+                    "base_url": token_plan_url,
+                    "api_key": "tp-test-key",
+                    "api_mode": "chat_completions",
+                }
+            )
 
         assert mock_resolve.call_args.args[0] == "xiaomi"
         assert mock_resolve.call_args.args[1] == "mimo-v2.5-pro"
@@ -347,16 +411,20 @@ class TestResolveVisionMainFirst:
         """OpenRouter main with vision-capable model → aux vision uses main model."""
         monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
 
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="openrouter",
-        ), patch(
-            "agent.auxiliary_client._read_main_model",
-            return_value="anthropic/claude-sonnet-4.6",
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client"
-        ) as mock_resolve, patch(
-            "agent.auxiliary_client._resolve_task_provider_model",
-            return_value=("auto", None, None, None, None),
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="openrouter",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="anthropic/claude-sonnet-4.6",
+            ),
+            patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve,
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("auto", None, None, None, None),
+            ),
         ):
             mock_client = MagicMock()
             mock_resolve.return_value = (mock_client, "anthropic/claude-sonnet-4.6")
@@ -377,17 +445,23 @@ class TestResolveVisionMainFirst:
 
     def test_nous_main_vision_uses_paid_nous_vision_backend(self):
         """Paid Nous main → aux vision uses the dedicated Nous vision backend."""
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="nous",
-        ), patch(
-            "agent.auxiliary_client._read_main_model",
-            return_value="openai/gpt-5",
-        ), patch(
-            "agent.auxiliary_client._resolve_task_provider_model",
-            return_value=("auto", None, None, None, None),
-        ), patch(
-            "agent.auxiliary_client._resolve_strict_vision_backend",
-            return_value=(MagicMock(), "google/gemini-3-flash-preview"),
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="nous",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="openai/gpt-5",
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("auto", None, None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_strict_vision_backend",
+                return_value=(MagicMock(), "google/gemini-3-flash-preview"),
+            ),
         ):
             from agent.auxiliary_client import resolve_vision_provider_client
 
@@ -399,17 +473,23 @@ class TestResolveVisionMainFirst:
 
     def test_nous_main_vision_uses_free_tier_nous_vision_backend(self):
         """Free-tier Nous main → aux vision uses MiMo omni, not the text main model."""
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="nous",
-        ), patch(
-            "agent.auxiliary_client._read_main_model",
-            return_value="xiaomi/mimo-v2-pro",
-        ), patch(
-            "agent.auxiliary_client._resolve_task_provider_model",
-            return_value=("auto", None, None, None, None),
-        ), patch(
-            "agent.auxiliary_client._resolve_strict_vision_backend",
-            return_value=(MagicMock(), "xiaomi/mimo-v2-omni"),
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="nous",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="xiaomi/mimo-v2-pro",
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("auto", None, None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_strict_vision_backend",
+                return_value=(MagicMock(), "xiaomi/mimo-v2-omni"),
+            ),
         ):
             from agent.auxiliary_client import resolve_vision_provider_client
 
@@ -421,16 +501,20 @@ class TestResolveVisionMainFirst:
 
     def test_exotic_provider_with_vision_override_preserved(self):
         """xiaomi → mimo-v2.5 override still wins over main_model."""
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="xiaomi",
-        ), patch(
-            "agent.auxiliary_client._read_main_model",
-            return_value="mimo-v2-pro",  # text model
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client"
-        ) as mock_resolve, patch(
-            "agent.auxiliary_client._resolve_task_provider_model",
-            return_value=("auto", None, None, None, None),
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="xiaomi",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="mimo-v2-pro",  # text model
+            ),
+            patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve,
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("auto", None, None, None, None),
+            ),
         ):
             mock_resolve.return_value = (MagicMock(), "mimo-v2.5")
 
@@ -454,25 +538,34 @@ class TestResolveVisionMainFirst:
             captured["is_vision"] = is_vision
             return {"Copilot-Vision-Request": "true"} if is_vision else {}
 
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="copilot",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="configured-copilot-model",
-        ), patch(
-            "agent.auxiliary_client._resolve_task_provider_model",
-            return_value=("auto", None, None, None, None),
-        ), patch(
-            "agent.auxiliary_client.OpenAI",
-        ) as mock_openai, patch(
-            "clawk_cli.auth.resolve_api_key_provider_credentials",
-            return_value={
-                "provider": "copilot",
-                "api_key": "copilot-api-token",
-                "base_url": "https://api.githubcopilot.com",
-            },
-        ), patch(
-            "clawk_cli.copilot_auth.copilot_request_headers",
-            side_effect=fake_headers,
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="copilot",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="configured-copilot-model",
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("auto", None, None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client.OpenAI",
+            ) as mock_openai,
+            patch(
+                "clawk_cli.auth.resolve_api_key_provider_credentials",
+                return_value={
+                    "provider": "copilot",
+                    "api_key": "copilot-api-token",
+                    "base_url": "https://api.githubcopilot.com",
+                },
+            ),
+            patch(
+                "clawk_cli.copilot_auth.copilot_request_headers",
+                side_effect=fake_headers,
+            ),
         ):
             mock_client = MagicMock()
             mock_openai.return_value = mock_client
@@ -485,7 +578,10 @@ class TestResolveVisionMainFirst:
         assert client is mock_client
         assert model == "configured-copilot-model"
         assert captured == {"is_agent_turn": True, "is_vision": True}
-        assert mock_openai.call_args.kwargs["default_headers"]["Copilot-Vision-Request"] == "true"
+        assert (
+            mock_openai.call_args.kwargs["default_headers"]["Copilot-Vision-Request"]
+            == "true"
+        )
 
     def test_text_copilot_does_not_set_vision_header(self, monkeypatch):
         """Text Copilot requests keep the vision-only header off."""
@@ -498,18 +594,22 @@ class TestResolveVisionMainFirst:
             captured["is_vision"] = is_vision
             return {"Copilot-Vision-Request": "true"} if is_vision else {}
 
-        with patch(
-            "agent.auxiliary_client.OpenAI",
-        ) as mock_openai, patch(
-            "clawk_cli.auth.resolve_api_key_provider_credentials",
-            return_value={
-                "provider": "copilot",
-                "api_key": "copilot-api-token",
-                "base_url": "https://api.githubcopilot.com",
-            },
-        ), patch(
-            "clawk_cli.copilot_auth.copilot_request_headers",
-            side_effect=fake_headers,
+        with (
+            patch(
+                "agent.auxiliary_client.OpenAI",
+            ) as mock_openai,
+            patch(
+                "clawk_cli.auth.resolve_api_key_provider_credentials",
+                return_value={
+                    "provider": "copilot",
+                    "api_key": "copilot-api-token",
+                    "base_url": "https://api.githubcopilot.com",
+                },
+            ),
+            patch(
+                "clawk_cli.copilot_auth.copilot_request_headers",
+                side_effect=fake_headers,
+            ),
         ):
             mock_client = MagicMock()
             mock_openai.return_value = mock_client
@@ -526,19 +626,27 @@ class TestResolveVisionMainFirst:
     def test_main_unavailable_vision_falls_through_to_aggregators(self):
         """Main provider fails → fall back to OpenRouter/Nous strict backends."""
         fallback_client = MagicMock()
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="deepseek",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="deepseek-chat",
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(None, None),
-        ), patch(
-            "agent.auxiliary_client._resolve_strict_vision_backend",
-            return_value=(fallback_client, "google/gemini-3-flash-preview"),
-        ), patch(
-            "agent.auxiliary_client._resolve_task_provider_model",
-            return_value=("auto", None, None, None, None),
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="deepseek",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="deepseek-chat",
+            ),
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_strict_vision_backend",
+                return_value=(fallback_client, "google/gemini-3-flash-preview"),
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("auto", None, None, None, None),
+            ),
         ):
             from agent.auxiliary_client import resolve_vision_provider_client
 
@@ -549,17 +657,23 @@ class TestResolveVisionMainFirst:
 
     def test_explicit_provider_override_still_wins(self):
         """Explicit config override bypasses main-first policy."""
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="openrouter",
-        ), patch(
-            "agent.auxiliary_client._read_main_model",
-            return_value="anthropic/claude-opus-4.6",
-        ), patch(
-            "agent.auxiliary_client._resolve_task_provider_model",
-            return_value=("nous", None, None, None, None),  # explicit override
-        ), patch(
-            "agent.auxiliary_client._resolve_strict_vision_backend"
-        ) as mock_strict:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="openrouter",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="anthropic/claude-opus-4.6",
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("nous", None, None, None, None),  # explicit override
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_strict_vision_backend"
+            ) as mock_strict,
+        ):
             mock_strict.return_value = (MagicMock(), "nous-default-model")
 
             from agent.auxiliary_client import resolve_vision_provider_client
@@ -591,20 +705,27 @@ class TestResolveVisionCustomProvider:
         """custom main with recorded runtime endpoint → Step 1 builds a client."""
         import agent.auxiliary_client as aux
 
-        monkeypatch.setattr(aux, "_RUNTIME_MAIN_BASE_URL", "https://my.endpoint.example/v1")
+        monkeypatch.setattr(
+            aux, "_RUNTIME_MAIN_BASE_URL", "https://my.endpoint.example/v1"
+        )
         monkeypatch.setattr(aux, "_RUNTIME_MAIN_API_KEY", "sk-runtime-key")
         monkeypatch.setattr(aux, "_RUNTIME_MAIN_API_MODE", "anthropic_messages")
 
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="custom",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="claude-opus-4-8",
-        ), patch(
-            "agent.auxiliary_client._resolve_task_provider_model",
-            return_value=("auto", None, None, None, None),
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client"
-        ) as mock_resolve:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="custom",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="claude-opus-4-8",
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("auto", None, None, None, None),
+            ),
+            patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve,
+        ):
             mock_client = MagicMock()
             mock_resolve.return_value = (mock_client, "claude-opus-4-8")
 
@@ -630,17 +751,21 @@ class TestResolveVisionCustomProvider:
         monkeypatch.setattr(aux, "_RUNTIME_MAIN_API_KEY", "sk-named")
         monkeypatch.setattr(aux, "_RUNTIME_MAIN_API_MODE", "")
 
-        with patch(
-            "agent.auxiliary_client._read_main_provider",
-            return_value="custom:copilot-gateway",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="claude-opus-4-8",
-        ), patch(
-            "agent.auxiliary_client._resolve_task_provider_model",
-            return_value=("auto", None, None, None, None),
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client"
-        ) as mock_resolve:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="custom:copilot-gateway",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="claude-opus-4-8",
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("auto", None, None, None, None),
+            ),
+            patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve,
+        ):
             mock_client = MagicMock()
             mock_resolve.return_value = (mock_client, "claude-opus-4-8")
 
@@ -655,7 +780,9 @@ class TestResolveVisionCustomProvider:
         assert kwargs.get("explicit_api_key") == "sk-named"
         assert kwargs.get("is_vision") is True
 
-    def test_custom_main_no_runtime_falls_back_to_configured_endpoint(self, monkeypatch):
+    def test_custom_main_no_runtime_falls_back_to_configured_endpoint(
+        self, monkeypatch
+    ):
         """No recorded runtime endpoint → resolve the configured custom endpoint."""
         import agent.auxiliary_client as aux
 
@@ -663,19 +790,29 @@ class TestResolveVisionCustomProvider:
         monkeypatch.setattr(aux, "_RUNTIME_MAIN_API_KEY", "")
         monkeypatch.setattr(aux, "_RUNTIME_MAIN_API_MODE", "")
 
-        with patch(
-            "agent.auxiliary_client._read_main_provider", return_value="custom",
-        ), patch(
-            "agent.auxiliary_client._read_main_model", return_value="claude-opus-4-8",
-        ), patch(
-            "agent.auxiliary_client._resolve_task_provider_model",
-            return_value=("auto", None, None, None, None),
-        ), patch(
-            "agent.auxiliary_client._resolve_custom_runtime",
-            return_value=("https://configured.example/v1", "sk-configured", "chat_completions"),
-        ), patch(
-            "agent.auxiliary_client.resolve_provider_client"
-        ) as mock_resolve:
+        with (
+            patch(
+                "agent.auxiliary_client._read_main_provider",
+                return_value="custom",
+            ),
+            patch(
+                "agent.auxiliary_client._read_main_model",
+                return_value="claude-opus-4-8",
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("auto", None, None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_custom_runtime",
+                return_value=(
+                    "https://configured.example/v1",
+                    "sk-configured",
+                    "chat_completions",
+                ),
+            ),
+            patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve,
+        ):
             mock_client = MagicMock()
             mock_resolve.return_value = (mock_client, "claude-opus-4-8")
 

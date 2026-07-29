@@ -28,11 +28,11 @@ Debug Mode:
 
 Usage:
     from web_tools import web_search_tool, web_extract_tool
-    
+
     # Search the web
     results = web_search_tool("Python machine learning libraries", limit=3)
-    
-    # Extract content from URLs  
+
+    # Extract content from URLs
     content = web_extract_tool(["https://example.com"], format="markdown")
 """
 
@@ -43,6 +43,7 @@ import re
 import asyncio
 from typing import List, Dict, Any, Optional, TYPE_CHECKING
 import httpx  # noqa: F401 — kept at module top so tests can patch tools.web_tools.httpx
+
 # After the web-provider plugin migration (PR #25182), the Firecrawl SDK
 # proxy, client construction, and response-shape normalizers all live in
 # plugins.web.firecrawl.provider. We re-export the names that external
@@ -58,6 +59,7 @@ from plugins.web.firecrawl.provider import (
     _is_tool_gateway_ready,
     check_firecrawl_api_key,
 )
+
 # Tavily helpers re-exported for backward-compat with existing unit tests
 # (tests/tools/test_web_tools_tavily.py imports these names directly).
 from plugins.web.tavily.provider import (  # noqa: F401 — backward-compat names
@@ -65,6 +67,7 @@ from plugins.web.tavily.provider import (  # noqa: F401 — backward-compat name
     _normalize_tavily_search_results,
     _tavily_request,
 )
+
 # Parallel + Exa clients re-exported for backward-compat with existing
 # unit tests (tests/tools/test_web_tools_config.py imports _get_parallel_client
 # / _get_async_parallel_client / _get_exa_client directly).
@@ -84,6 +87,7 @@ _async_parallel_client: Optional[Any] = None
 _exa_client: Optional[Any] = None
 
 from tools.debug_helpers import DebugSession
+
 # Imported solely so unit tests can monkeypatch these names on
 # tools.web_tools (the firecrawl plugin reads them via its own import chain).
 from tools.managed_tool_gateway import (  # noqa: F401 — backward-compat names for tests
@@ -139,6 +143,7 @@ def _web_extract_url(value: Any) -> Optional[str]:
 
 # ─── Backend Selection ────────────────────────────────────────────────────────
 
+
 def _env_value(name: str) -> str:
     """Resolve ``name`` via Clawksis config-aware env, falling back to process env.
 
@@ -162,10 +167,12 @@ def _env_value(name: str) -> str:
 def _has_env(name: str) -> bool:
     return bool(_env_value(name))
 
+
 def _load_web_config() -> dict:
     """Load the ``web:`` section from ~/.clawksis/config.yaml."""
     try:
         from clawk_cli.config import load_config
+
         # ``or {}``: a present-but-null ``web:`` section (YAML ``web:`` with no
         # body) makes ``.get("web", {})`` return None, which would break every
         # caller that does ``_load_web_config().get(...)``. Honor the ``-> dict``
@@ -187,9 +194,16 @@ def _load_web_config() -> dict:
 # ``has_xai_credentials()`` (env var OR auth.json OAuth), not a registered
 # WebSearchProvider. Keep the two sets aligned by hand: if xai ever ships as
 # a registered provider, drop it here so the registry path takes over.
-_LEGACY_WEB_BACKENDS = frozenset(
-    {"parallel", "firecrawl", "tavily", "exa", "searxng", "brave-free", "ddgs", "xai"}
-)
+_LEGACY_WEB_BACKENDS = frozenset({
+    "parallel",
+    "firecrawl",
+    "tavily",
+    "exa",
+    "searxng",
+    "brave-free",
+    "ddgs",
+    "xai",
+})
 
 
 def _registered_web_provider(backend: str):
@@ -247,7 +261,10 @@ def _get_backend() -> str:
     keys manually without running setup.
     """
     configured = (_load_web_config().get("backend") or "").lower().strip()
-    if configured in _LEGACY_WEB_BACKENDS or _registered_web_provider(configured) is not None:
+    if (
+        configured in _LEGACY_WEB_BACKENDS
+        or _registered_web_provider(configured) is not None
+    ):
         return configured
 
     # Fallback for manual / legacy config — pick the highest-priority
@@ -284,7 +301,9 @@ def _get_backend() -> str:
             if provider.is_available():
                 return provider.name
         except Exception as exc:  # noqa: BLE001 — a broken provider is skipped
-            logger.debug("web provider %r.is_available() raised: %s", provider.name, exc)
+            logger.debug(
+                "web provider %r.is_available() raised: %s", provider.name, exc
+            )
 
     return "firecrawl"  # default (backward compat)
 
@@ -394,6 +413,7 @@ def _is_backend_available(backend: str) -> bool:
         # runs on every web_search dispatch + every `clawk tools` repaint.
         try:
             from tools.xai_http import has_xai_credentials
+
             return has_xai_credentials()
         except Exception:
             return False
@@ -410,9 +430,11 @@ def _ddgs_package_importable() -> bool:
     """
     try:
         import ddgs  # noqa: F401
+
         return True
     except ImportError:
         return False
+
 
 # ─── Firecrawl Client ────────────────────────────────────────────────────────
 
@@ -509,6 +531,7 @@ def convert_base64_images_to_links(text: str) -> str:
       ``(data:image/png;base64,AAAA...)``        -> ``[IMAGE]``
       bare ``data:image/...;base64,AAAA...``     -> ``[IMAGE]``
     """
+
     # 1. Markdown image with base64 source -> keep alt text, drop the blob.
     def _md_repl(m: "re.Match[str]") -> str:
         alt = (m.group("alt") or "").strip()
@@ -589,7 +612,7 @@ def _truncate_with_footer(
     # Snap the tail cut forward to the next newline for the same reason.
     nl = tail.find("\n")
     if 0 <= nl < tail_budget * 0.5:
-        tail = tail[nl + 1:]
+        tail = tail[nl + 1 :]
 
     total = len(content)
     stored_path = _store_full_text(url, content)
@@ -623,7 +646,6 @@ def _truncate_with_footer(
     model_text = head + "\n\n[... middle omitted — see footer ...]\n\n" + tail
     model_text += "\n" + "\n".join(footer_lines)
     return model_text, True
-
 
 
 # ─── Exa / Parallel inline helpers — moved into plugins ──────────────────────
@@ -673,11 +695,11 @@ def web_search_tool(query: str, limit: int = 5) -> str:
 
     Note: This function returns search result metadata only (URLs, titles, descriptions).
     Use web_extract_tool to get full content from specific URLs.
-    
+
     Args:
         query (str): The search query to look up
         limit (int): Maximum number of results to return (default: 5)
-    
+
     Returns:
         str: JSON string containing search results with the following structure:
              {
@@ -694,7 +716,7 @@ def web_search_tool(query: str, limit: int = 5) -> str:
                      ]
                  }
              }
-    
+
     Raises:
         Exception: If search fails or API key is not set
     """
@@ -705,18 +727,16 @@ def web_search_tool(query: str, limit: int = 5) -> str:
     limit = min(max(limit, 1), 100)
 
     debug_call_data = {
-        "parameters": {
-            "query": query,
-            "limit": limit
-        },
+        "parameters": {"query": query, "limit": limit},
         "error": None,
         "results_count": 0,
         "original_response_size": 0,
-        "final_response_size": 0
+        "final_response_size": 0,
     }
-    
+
     try:
         from tools.interrupt import is_interrupted
+
         if is_interrupted():
             return tool_error("Interrupted", success=False)
 
@@ -766,11 +786,15 @@ def web_search_tool(query: str, limit: int = 5) -> str:
         else:
             logger.info(
                 "Web search via %s: '%s' (limit: %d)",
-                provider.name, query, limit,
+                provider.name,
+                query,
+                limit,
             )
             response_data = provider.search(query, limit)
 
-        debug_call_data["results_count"] = len(response_data.get("data", {}).get("web", []))
+        debug_call_data["results_count"] = len(
+            response_data.get("data", {}).get("web", [])
+        )
         result_json = json.dumps(response_data, indent=2, ensure_ascii=False)
         debug_call_data["final_response_size"] = len(result_json)
         _debug.log_call("web_search_tool", debug_call_data)
@@ -825,6 +849,7 @@ async def web_extract_tool(
     # URL-decode first so percent-encoded secrets (%73k- = sk-) are caught.
     from agent.redact import _PREFIX_RE
     from urllib.parse import unquote
+
     normalized_urls: List[str] = []
     normalized_indices: List[int] = []
     invalid_urls: Dict[int, Dict[str, Any]] = {}
@@ -851,7 +876,7 @@ async def web_extract_tool(
             return json.dumps({
                 "success": False,
                 "error": "Blocked: URL contains what appears to be an API key or token. "
-                         "Secrets must not be sent in URLs.",
+                "Secrets must not be sent in URLs.",
             })
         sensitive_query_key = sensitive_query_param_name(normalized_url)
         if sensitive_query_key:
@@ -879,9 +904,9 @@ async def web_extract_tool(
         "original_response_size": 0,
         "final_response_size": 0,
         "truncation_metrics": [],
-        "processing_applied": []
+        "processing_applied": [],
     }
-    
+
     try:
         logger.info("Extracting content from %d URL(s)", len(normalized_urls))
 
@@ -892,7 +917,9 @@ async def web_extract_tool(
         for index, url in zip(normalized_indices, normalized_urls):
             if not await async_is_safe_url(url):
                 ssrf_blocked[index] = {
-                    "url": url, "title": "", "content": "",
+                    "url": url,
+                    "title": "",
+                    "content": "",
                     "error": "Blocked: URL targets a private or internal network address",
                 }
             else:
@@ -975,13 +1002,12 @@ async def web_extract_tool(
                         ensure_ascii=False,
                     )
 
-            logger.info(
-                "Web extract via %s: %d URL(s)", provider.name, len(safe_urls)
-            )
+            logger.info("Web extract via %s: %d URL(s)", provider.name, len(safe_urls))
 
             # Async-or-sync dispatch: parallel + firecrawl have async
             # extract(); exa + tavily are sync.
             import inspect
+
             if inspect.iscoroutinefunction(provider.extract):
                 results = await provider.extract(safe_urls, format=format)
             else:
@@ -1012,14 +1038,16 @@ async def web_extract_tool(
             results = [by_index[index] for index in range(len(urls))]
 
         response = {"results": results}
-        
-        pages_extracted = len(response.get('results', []))
+
+        pages_extracted = len(response.get("results", []))
         logger.info("Extracted content from %d pages", pages_extracted)
-        
+
         debug_call_data["pages_extracted"] = pages_extracted
         debug_call_data["original_response_size"] = len(json.dumps(response))
 
-        effective_char_limit = char_limit if char_limit is not None else _get_extract_char_limit()
+        effective_char_limit = (
+            char_limit if char_limit is not None else _get_extract_char_limit()
+        )
         try:
             effective_char_limit = max(2000, min(int(effective_char_limit), 500_000))
         except (TypeError, ValueError):
@@ -1038,7 +1066,9 @@ async def web_extract_tool(
             if not raw_content:
                 continue
             clean = convert_base64_images_to_links(raw_content)
-            model_text, truncated = _truncate_with_footer(clean, url, effective_char_limit)
+            model_text, truncated = _truncate_with_footer(
+                clean, url, effective_char_limit
+            )
             result["content"] = model_text
             if truncated:
                 debug_call_data["pages_truncated"] += 1
@@ -1047,7 +1077,9 @@ async def web_extract_tool(
                     "original_size": len(clean),
                     "sent_size": len(model_text),
                 })
-                logger.info("%s (truncated %d -> %d chars)", url, len(clean), len(model_text))
+                logger.info(
+                    "%s (truncated %d -> %d chars)", url, len(clean), len(model_text)
+                )
             else:
                 logger.info("%s (%d chars, whole)", url, len(clean))
 
@@ -1058,7 +1090,11 @@ async def web_extract_tool(
                 "title": r.get("title", ""),
                 "content": r.get("content", ""),
                 "error": r.get("error"),
-                **({  "blocked_by_policy": r["blocked_by_policy"]} if "blocked_by_policy" in r else {}),
+                **(
+                    {"blocked_by_policy": r["blocked_by_policy"]}
+                    if "blocked_by_policy" in r
+                    else {}
+                ),
             }
             for r in response.get("results", [])
         ]
@@ -1094,21 +1130,21 @@ async def web_extract_tool(
 
         debug_call_data["final_response_size"] = len(cleaned_result)
         debug_call_data["processing_applied"].append("base64_image_conversion")
-        
+
         # Log debug information
         _debug.log_call("web_extract_tool", debug_call_data)
         _debug.save()
-        
+
         return cleaned_result
-            
+
     except Exception as e:
         error_msg = f"Error extracting content: {str(e)}"
         logger.debug("%s", error_msg)
-        
+
         debug_call_data["error"] = error_msg
         _debug.log_call("web_extract_tool", debug_call_data)
         _debug.save()
-        
+
         return tool_error(error_msg)
 
 
@@ -1162,6 +1198,7 @@ if __name__ == "__main__":
     web_available = check_web_api_key()
     tool_gateway_available = _is_tool_gateway_ready()
     from clawk_cli.config import get_env_value as _gev
+
     firecrawl_key_available = bool((_gev("FIRECRAWL_API_KEY") or "").strip())
     firecrawl_url_available = bool((_gev("FIRECRAWL_API_URL") or "").strip())
 
@@ -1181,7 +1218,9 @@ if __name__ == "__main__":
         elif backend == "ddgs":
             print("   Using DuckDuckGo via ddgs package (search only)")
         elif firecrawl_url_available:
-            print(f"   Using self-hosted Firecrawl: {(_gev('FIRECRAWL_API_URL') or '').strip().rstrip('/')}")
+            print(
+                f"   Using self-hosted Firecrawl: {(_gev('FIRECRAWL_API_URL') or '').strip().rstrip('/')}"
+            )
         elif firecrawl_key_available:
             print("   Using direct Firecrawl cloud API")
         elif tool_gateway_available:
@@ -1199,13 +1238,17 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print("🛠️  Web tools ready for use!")
-    print(f"   Extract char limit: {_get_extract_char_limit()} chars "
-          "(pages over this are truncated; full text stored in cache/web)")
+    print(
+        f"   Extract char limit: {_get_extract_char_limit()} chars "
+        "(pages over this are truncated; full text stored in cache/web)"
+    )
 
     # Show debug mode status
     if _debug.active:
         print(f"🐛 Debug mode ENABLED - Session ID: {_debug.session_id}")
-        print(f"   Debug logs will be saved to: {_debug.log_dir}/web_tools_debug_{_debug.session_id}.json")
+        print(
+            f"   Debug logs will be saved to: {_debug.log_dir}/web_tools_debug_{_debug.session_id}.json"
+        )
     else:
         print("🐛 Debug mode disabled (set WEB_TOOLS_DEBUG=true to enable)")
 
@@ -1220,7 +1263,9 @@ if __name__ == "__main__":
     print("  async def main():")
     print("      content = await web_extract_tool(['https://example.com'])")
     print("      # bigger budget for one call:")
-    print("      content = await web_extract_tool(['https://docs.python.org'], char_limit=40000)")
+    print(
+        "      content = await web_extract_tool(['https://docs.python.org'], char_limit=40000)"
+    )
     print("  asyncio.run(main())")
 
     print("\nDebug mode:")
@@ -1235,24 +1280,24 @@ from tools.registry import registry, tool_error
 
 WEB_SEARCH_SCHEMA = {
     "name": "web_search",
-    "description": "Search the web for information. Returns up to 5 results by default with titles, URLs, and descriptions. The query is passed through to the configured backend, so operators such as site:domain, filetype:pdf, intitle:word, -term, and \"exact phrase\" may work when the backend supports them.",
+    "description": 'Search the web for information. Returns up to 5 results by default with titles, URLs, and descriptions. The query is passed through to the configured backend, so operators such as site:domain, filetype:pdf, intitle:word, -term, and "exact phrase" may work when the backend supports them.',
     "parameters": {
         "type": "object",
         "properties": {
             "query": {
                 "type": "string",
-                "description": "The search query to look up on the web. You may include backend-supported operators such as site:example.com, filetype:pdf, intitle:word, -term, or \"exact phrase\"."
+                "description": 'The search query to look up on the web. You may include backend-supported operators such as site:example.com, filetype:pdf, intitle:word, -term, or "exact phrase".',
             },
             "limit": {
                 "type": "integer",
                 "description": "Maximum number of results to return. Defaults to 5.",
                 "minimum": 1,
                 "maximum": 100,
-                "default": 5
-            }
+                "default": 5,
+            },
         },
-        "required": ["query"]
-    }
+        "required": ["query"],
+    },
 }
 
 WEB_EXTRACT_SCHEMA = {
@@ -1265,23 +1310,25 @@ WEB_EXTRACT_SCHEMA = {
                 "type": "array",
                 "items": {"type": "string"},
                 "description": "List of URLs to extract content from (max 5 URLs per call)",
-                "maxItems": 5
+                "maxItems": 5,
             },
             "char_limit": {
                 "type": "integer",
                 "description": "Optional per-page character budget sent back (default 15000). Pages larger than this are head+tail truncated with the full text stored to disk. Raise it when you need more of a long page inline.",
-                "minimum": 2000
-            }
+                "minimum": 2000,
+            },
         },
-        "required": ["urls"]
-    }
+        "required": ["urls"],
+    },
 }
 
 registry.register(
     name="web_search",
     toolset="web",
     schema=WEB_SEARCH_SCHEMA,
-    handler=lambda args, **kw: web_search_tool(args.get("query", ""), limit=args.get("limit", 5)),
+    handler=lambda args, **kw: web_search_tool(
+        args.get("query", ""), limit=args.get("limit", 5)
+    ),
     check_fn=check_web_api_key,
     requires_env=_web_requires_env(),
     emoji="🔍",

@@ -66,7 +66,7 @@ class MessageDeduplicator:
                 newest = sorted(
                     self._seen.items(),
                     key=lambda item: item[1],
-                )[-self._max_size:]
+                )[-self._max_size :]
                 self._seen = dict(newest)
         return False
 
@@ -157,7 +157,11 @@ class TextBatchAggregator:
         last_len = getattr(pending, "_last_chunk_len", 0) if pending else 0
 
         # Use longer delay when the last chunk looks like a split message
-        delay = self._split_delay if last_len >= self._split_threshold else self._batch_delay
+        delay = (
+            self._split_delay
+            if last_len >= self._split_threshold
+            else self._batch_delay
+        )
         await asyncio.sleep(delay)
 
         event = self._pending.pop(key, None)
@@ -165,7 +169,9 @@ class TextBatchAggregator:
             try:
                 await self._handler(event)
             except Exception:
-                logger.exception("[TextBatchAggregator] Error dispatching batched event for %s", key)
+                logger.exception(
+                    "[TextBatchAggregator] Error dispatching batched event for %s", key
+                )
 
         if self._pending_tasks.get(key) is current_task:
             self._pending_tasks.pop(key, None)
@@ -244,6 +250,7 @@ class ThreadParticipationTracker:
 
     def _state_path(self) -> Path:
         from clawk_constants import get_clawk_home
+
         return get_clawk_home() / f"{self._platform}_threads.json"
 
     def _load(self) -> list[str]:
@@ -261,7 +268,7 @@ class ThreadParticipationTracker:
         path = self._state_path()
         thread_list = list(self._threads)
         if len(thread_list) > self._max_tracked:
-            thread_list = thread_list[-self._max_tracked:]
+            thread_list = thread_list[-self._max_tracked :]
             self._threads = dict.fromkeys(thread_list)
         atomic_json_write(path, thread_list, indent=None)
 
@@ -303,15 +310,13 @@ def redact_phone(phone: str) -> str:
 # Matches a GFM table delimiter row: optional outer pipes, cells of dashes
 # (with optional alignment colons) separated by '|'.
 # Requires at least one internal '|' so lone '---' rules are NOT matched.
-TABLE_SEPARATOR_RE = re.compile(
-    r'^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*){1,}\|?\s*$'
-)
+TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*){1,}\|?\s*$")
 
 
 def is_table_row(line: str) -> bool:
     """Return True if *line* could plausibly be a table data row."""
     stripped = line.strip()
-    return bool(stripped) and '|' in stripped
+    return bool(stripped) and "|" in stripped
 
 
 def split_markdown_table_row(line: str) -> list[str]:
@@ -340,9 +345,7 @@ def _render_table_block(table_block: list[str]) -> str:
         return "\n".join(table_block)
 
     first_data_row = (
-        split_markdown_table_row(table_block[2])
-        if len(table_block) > 2
-        else []
+        split_markdown_table_row(table_block[2]) if len(table_block) > 2 else []
     )
     has_row_label_col = len(first_data_row) == len(headers) + 1
 
@@ -378,10 +381,10 @@ def convert_table_to_bullets(text: str) -> str:
 
     Tables inside fenced code blocks are left alone.
     """
-    if '|' not in text or '-' not in text:
+    if "|" not in text or "-" not in text:
         return text
 
-    lines = text.split('\n')
+    lines = text.split("\n")
     out: list[str] = []
     in_fence = False
     i = 0
@@ -389,7 +392,7 @@ def convert_table_to_bullets(text: str) -> str:
         line = lines[i]
         stripped = line.lstrip()
 
-        if stripped.startswith('```'):
+        if stripped.startswith("```"):
             in_fence = not in_fence
             out.append(line)
             i += 1
@@ -400,7 +403,7 @@ def convert_table_to_bullets(text: str) -> str:
             continue
 
         if (
-            '|' in line
+            "|" in line
             and i + 1 < len(lines)
             and TABLE_SEPARATOR_RE.match(lines[i + 1])
         ):
@@ -416,4 +419,4 @@ def convert_table_to_bullets(text: str) -> str:
         out.append(line)
         i += 1
 
-    return '\n'.join(out)
+    return "\n".join(out)

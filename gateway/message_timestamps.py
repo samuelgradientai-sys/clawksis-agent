@@ -21,9 +21,7 @@ _HUMAN_TIMESTAMP_RE = re.compile(
 )
 
 # Older gateway format: [2026-04-13T17:02:06+0200] or [+02:00]
-_ISO_TIMESTAMP_RE = re.compile(
-    r"^\[(?P<iso>\d{4}-\d{2}-\d{2}T[^\]]+)\]\s*"
-)
+_ISO_TIMESTAMP_RE = re.compile(r"^\[(?P<iso>\d{4}-\d{2}-\d{2}T[^\]]+)\]\s*")
 
 
 def coerce_message_timestamp(ts_value: Any, tz=None) -> Optional[float]:
@@ -85,7 +83,9 @@ def format_message_timestamp(ts_value: Any, tz=None) -> str:
     return "[" + dt.strftime("%a %Y-%m-%d %H:%M:%S %Z") + "]"
 
 
-def strip_leading_message_timestamps(content: str, tz=None) -> Tuple[str, Optional[float]]:
+def strip_leading_message_timestamps(
+    content: str, tz=None
+) -> Tuple[str, Optional[float]]:
     """Strip one or more leading gateway timestamp prefixes from ``content``.
 
     Returns ``(clean_content, embedded_epoch)``.  If multiple timestamp prefixes
@@ -106,12 +106,14 @@ def strip_leading_message_timestamps(content: str, tz=None) -> Tuple[str, Option
         parsed = _parse_timestamp_match(match, tz=tz)
         if parsed is not None:
             embedded_epoch = parsed
-        text = text[match.end():]
+        text = text[match.end() :]
 
     return text, embedded_epoch
 
 
-def render_user_content_with_timestamp(content: str, ts_value: Any = None, tz=None) -> str:
+def render_user_content_with_timestamp(
+    content: str, ts_value: Any = None, tz=None
+) -> str:
     """Render a user message for LLM context with exactly one timestamp prefix.
 
     Existing leading timestamp prefixes are removed first.  If such a prefix was

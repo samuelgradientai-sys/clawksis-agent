@@ -109,11 +109,13 @@ class TestWellFormedInputUnchanged:
     def test_merge_mode_still_works(self):
         store = TodoStore()
         store.write([{"id": "1", "content": "Original", "status": "pending"}])
-        result = json.loads(todo_tool(
-            todos=[{"id": "1", "status": "completed"}],
-            merge=True,
-            store=store,
-        ))
+        result = json.loads(
+            todo_tool(
+                todos=[{"id": "1", "status": "completed"}],
+                merge=True,
+                store=store,
+            )
+        )
         assert result["summary"]["completed"] == 1
         assert result["todos"][0]["content"] == "Original"
 

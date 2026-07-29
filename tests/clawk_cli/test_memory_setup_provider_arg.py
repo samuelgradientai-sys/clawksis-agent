@@ -17,8 +17,10 @@ class TestMemorySetupProviderRouting:
     def test_setup_with_provider_arg_skips_picker(self):
         """`memory setup honcho` routes straight to cmd_setup_provider."""
         args = SimpleNamespace(memory_command="setup", provider="honcho")
-        with patch.object(memory_setup, "cmd_setup_provider") as direct, \
-             patch.object(memory_setup, "cmd_setup") as picker:
+        with (
+            patch.object(memory_setup, "cmd_setup_provider") as direct,
+            patch.object(memory_setup, "cmd_setup") as picker,
+        ):
             memory_setup.memory_command(args)
         direct.assert_called_once_with("honcho")
         picker.assert_not_called()
@@ -26,8 +28,10 @@ class TestMemorySetupProviderRouting:
     def test_setup_without_provider_runs_picker(self):
         """`memory setup` (no provider) runs the interactive picker."""
         args = SimpleNamespace(memory_command="setup", provider=None)
-        with patch.object(memory_setup, "cmd_setup_provider") as direct, \
-             patch.object(memory_setup, "cmd_setup") as picker:
+        with (
+            patch.object(memory_setup, "cmd_setup_provider") as direct,
+            patch.object(memory_setup, "cmd_setup") as picker,
+        ):
             memory_setup.memory_command(args)
         picker.assert_called_once_with(args)
         direct.assert_not_called()
@@ -35,8 +39,10 @@ class TestMemorySetupProviderRouting:
     def test_setup_with_missing_provider_attr_runs_picker(self):
         """A SimpleNamespace lacking `provider` must not crash — fall back to picker."""
         args = SimpleNamespace(memory_command="setup")
-        with patch.object(memory_setup, "cmd_setup_provider") as direct, \
-             patch.object(memory_setup, "cmd_setup") as picker:
+        with (
+            patch.object(memory_setup, "cmd_setup_provider") as direct,
+            patch.object(memory_setup, "cmd_setup") as picker,
+        ):
             memory_setup.memory_command(args)
         picker.assert_called_once_with(args)
         direct.assert_not_called()
@@ -72,9 +78,11 @@ class TestInstallDependenciesRunner:
                 return run_behavior(cmd)
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-        with patch("plugins.memory.find_provider_dir", return_value=tmp_path), \
-             patch("clawk_cli.tools_config.shutil.which", side_effect=which_side_effect), \
-             patch("clawk_cli.tools_config.subprocess.run", fake_run):
+        with (
+            patch("plugins.memory.find_provider_dir", return_value=tmp_path),
+            patch("clawk_cli.tools_config.shutil.which", side_effect=which_side_effect),
+            patch("clawk_cli.tools_config.subprocess.run", fake_run),
+        ):
             memory_setup._install_dependencies("x")
         return calls, sys.executable
 
@@ -98,6 +106,7 @@ class TestInstallDependenciesRunner:
     # bootstrap de pip via ensurepip, que es justo lo que cubre este test.
     def test_bootstraps_pip_via_ensurepip_when_missing(self, tmp_path):
         """Neither uv nor pip -> ensurepip bootstrap, then pip install."""
+
         def behavior(cmd):
             if cmd[-1] == "--version":
                 return SimpleNamespace(returncode=1, stdout="", stderr="")

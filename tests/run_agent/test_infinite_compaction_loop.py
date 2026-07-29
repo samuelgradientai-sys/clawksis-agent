@@ -25,6 +25,7 @@ from agent.context_compressor import ContextCompressor, _CHARS_PER_TOKEN
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_compressor(**kwargs) -> ContextCompressor:
     defaults = dict(
         model="test-model",
@@ -47,13 +48,17 @@ def _build_session(n_turns: int, words_per_turn: int = 20) -> list:
     messages = [{"role": "system", "content": "You are a helpful agent."}]
     for i in range(n_turns):
         messages.append({"role": "user", "content": f"{base_text} (user turn {i})"})
-        messages.append({"role": "assistant", "content": f"{base_text} (assistant turn {i})"})
+        messages.append({
+            "role": "assistant",
+            "content": f"{base_text} (assistant turn {i})",
+        })
     return messages
 
 
 # ---------------------------------------------------------------------------
 # Test: compress_start >= compress_end registers as ineffective
 # ---------------------------------------------------------------------------
+
 
 class TestCompressNoOpRegistersIneffective:
     """When compress_start >= compress_end, the fix records this as
@@ -139,6 +144,7 @@ class TestCompressNoOpRegistersIneffective:
 # Test: _find_tail_cut_by_tokens raw-budget fallback
 # ---------------------------------------------------------------------------
 
+
 class TestTailCutRawBudgetFallback:
     """When the entire transcript fits within soft_ceiling, the fix
     re-walks with the raw budget to find a meaningful cut point."""
@@ -206,6 +212,7 @@ class TestTailCutRawBudgetFallback:
 # Test: Effective compression resets counter
 # ---------------------------------------------------------------------------
 
+
 class TestEffectiveCompressionResetsCounter:
     """When compression actually saves tokens, the ineffective counter resets."""
 
@@ -216,7 +223,9 @@ class TestEffectiveCompressionResetsCounter:
             config_context_length=96000,
         )
         messages = _build_session(30, words_per_turn=100)
-        comp._generate_summary = MagicMock(return_value="Compacted summary of earlier turns.")
+        comp._generate_summary = MagicMock(
+            return_value="Compacted summary of earlier turns."
+        )
         comp.last_prompt_tokens = 73_000
 
         comp.compress(messages, current_tokens=73_000)
@@ -230,6 +239,7 @@ class TestEffectiveCompressionResetsCounter:
 # ---------------------------------------------------------------------------
 # Test: anti-thrashing in should_compress
 # ---------------------------------------------------------------------------
+
 
 class TestAntiThrashing:
     """Directly test the should_compress anti-thrashing guard."""
@@ -258,6 +268,7 @@ class TestAntiThrashing:
 # ---------------------------------------------------------------------------
 # Test: summary-LLM cooldown guard in should_compress (#11529)
 # ---------------------------------------------------------------------------
+
 
 class TestCooldownGuard:
     """should_compress() must skip compression while the summary LLM is in
@@ -299,6 +310,7 @@ class TestCooldownGuard:
 # locks that behavior in for the exact #48621 parameters.
 # ---------------------------------------------------------------------------
 
+
 class TestCodexSparkShortSessionBoundary:
     """Verify that gpt-5.3-codex-spark's short-session scenario always yields
     a non-empty compressible window (no silent wipe)."""
@@ -322,13 +334,21 @@ class TestCodexSparkShortSessionBoundary:
         for i in range(3):
             messages.append({"role": "user", "content": f"Run command {i}"})
             messages.append({
-                "role": "assistant", "content": "",
-                "tool_calls": [{
-                    "id": f"tc{i}", "type": "function",
-                    "function": {"name": "terminal", "arguments": "{}"},
-                }],
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": f"tc{i}",
+                        "type": "function",
+                        "function": {"name": "terminal", "arguments": "{}"},
+                    }
+                ],
             })
-            messages.append({"role": "tool", "tool_call_id": f"tc{i}", "content": big_tool})
+            messages.append({
+                "role": "tool",
+                "tool_call_id": f"tc{i}",
+                "content": big_tool,
+            })
         messages.append({"role": "user", "content": "Final question"})
         messages.append({"role": "assistant", "content": "Final answer"})
 

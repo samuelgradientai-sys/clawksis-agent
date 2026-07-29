@@ -27,7 +27,8 @@ def strip_leaked_bracketed_paste_wrappers(text: str) -> str:
         return text
 
     text = (
-        text.replace("\x1b[200~", "")
+        text
+        .replace("\x1b[200~", "")
         .replace("\x1b[201~", "")
         .replace("^[[200~", "")
         .replace("^[[201~", "")

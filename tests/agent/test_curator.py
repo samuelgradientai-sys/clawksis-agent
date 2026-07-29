@@ -23,8 +23,10 @@ def curator_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
     import tools.skill_usage as usage
+
     importlib.reload(usage)
     import agent.curator as curator
+
     importlib.reload(curator)
 
     # Neutralize the real LLM pass by default — tests opt in per-case.
@@ -59,7 +61,8 @@ def _write_skill(skills_dir: Path, name: str):
     d = skills_dir / name
     d.mkdir(parents=True, exist_ok=True)
     (d / "SKILL.md").write_text(
-        f"---\nname: {name}\ndescription: x\n---\n", encoding="utf-8",
+        f"---\nname: {name}\ndescription: x\n---\n",
+        encoding="utf-8",
     )
     return d
 
@@ -67,6 +70,7 @@ def _write_skill(skills_dir: Path, name: str):
 # ---------------------------------------------------------------------------
 # Config gates
 # ---------------------------------------------------------------------------
+
 
 def test_curator_enabled_default_true(curator_env):
     assert curator_env["curator"].is_enabled() is True
@@ -89,12 +93,16 @@ def test_curator_defaults(curator_env):
 
 def test_curator_config_overrides(curator_env, monkeypatch):
     c = curator_env["curator"]
-    monkeypatch.setattr(c, "_load_config", lambda: {
-        "interval_hours": 12,
-        "min_idle_hours": 0.5,
-        "stale_after_days": 7,
-        "archive_after_days": 60,
-    })
+    monkeypatch.setattr(
+        c,
+        "_load_config",
+        lambda: {
+            "interval_hours": 12,
+            "min_idle_hours": 0.5,
+            "stale_after_days": 7,
+            "archive_after_days": 60,
+        },
+    )
     assert c.get_interval_hours() == 12
     assert c.get_min_idle_hours() == 0.5
     assert c.get_stale_after_days() == 7
@@ -104,6 +112,7 @@ def test_curator_config_overrides(curator_env, monkeypatch):
 # ---------------------------------------------------------------------------
 # should_run_now
 # ---------------------------------------------------------------------------
+
 
 def test_first_run_defers(curator_env):
     """The FIRST observation of the curator (fresh install, no state file)
@@ -137,9 +146,7 @@ def test_old_run_eligible(curator_env):
     2x-interval cushion so the test doesn't become coupled to the exact
     default — bumping DEFAULT_INTERVAL_HOURS shouldn't break it."""
     c = curator_env["curator"]
-    long_ago = datetime.now(timezone.utc) - timedelta(
-        hours=c.get_interval_hours() * 2
-    )
+    long_ago = datetime.now(timezone.utc) - timedelta(hours=c.get_interval_hours() * 2)
     c.save_state({"last_run_at": long_ago.isoformat(), "paused": False})
     assert c.should_run_now() is True
 
@@ -162,6 +169,7 @@ def test_set_paused_roundtrip(curator_env):
 # ---------------------------------------------------------------------------
 # Automatic state transitions
 # ---------------------------------------------------------------------------
+
 
 def test_unused_skill_transitions_to_stale(curator_env):
     c = curator_env["curator"]
@@ -378,7 +386,8 @@ def test_bundled_skill_not_touched_by_transitions(curator_env):
     skills_dir = curator_env["home"] / "skills"
     _write_skill(skills_dir, "bundled")
     (skills_dir / ".bundled_manifest").write_text(
-        "bundled:abc\n", encoding="utf-8",
+        "bundled:abc\n",
+        encoding="utf-8",
     )
 
     super_old = (datetime.now(timezone.utc) - timedelta(days=500)).isoformat()
@@ -396,6 +405,7 @@ def test_bundled_skill_not_touched_by_transitions(curator_env):
 # ---------------------------------------------------------------------------
 # prune_builtins: curator may archive bundled built-ins after inactivity
 # ---------------------------------------------------------------------------
+
 
 def _enable_prune_builtins(curator_env, monkeypatch):
     """Flip curator.prune_builtins on for both config-reading paths."""
@@ -561,6 +571,7 @@ def test_prune_builtins_never_touches_hub_skills(curator_env, monkeypatch):
 # run_curator_review orchestration
 # ---------------------------------------------------------------------------
 
+
 def test_run_review_records_state(curator_env):
     c = curator_env["curator"]
     u = curator_env["usage"]
@@ -589,10 +600,15 @@ def test_dry_run_does_not_advance_state(curator_env, monkeypatch):
 
     # Stub the LLM so the test doesn't need a provider.
     monkeypatch.setattr(
-        c, "_run_llm_review",
+        c,
+        "_run_llm_review",
         lambda prompt: {
-            "final": "", "summary": "dry preview", "model": "", "provider": "",
-            "tool_calls": [], "error": None,
+            "final": "",
+            "summary": "dry preview",
+            "model": "",
+            "provider": "",
+            "tool_calls": [],
+            "error": None,
         },
     )
 
@@ -617,10 +633,18 @@ def test_dry_run_injects_report_only_banner(curator_env, monkeypatch):
     u.mark_agent_created("a")
 
     captured = {}
+
     def _stub(prompt):
         captured["prompt"] = prompt
-        return {"final": "", "summary": "s", "model": "", "provider": "",
-                "tool_calls": [], "error": None}
+        return {
+            "final": "",
+            "summary": "s",
+            "model": "",
+            "provider": "",
+            "tool_calls": [],
+            "error": None,
+        }
+
     monkeypatch.setattr(c, "_run_llm_review", _stub)
 
     c.run_curator_review(synchronous=True, dry_run=True, consolidate=True)
@@ -639,14 +663,23 @@ def test_dry_run_skips_automatic_transitions(curator_env, monkeypatch):
     u.mark_agent_created("a")
 
     called = {"n": 0}
+
     def _explode(*_a, **_kw):
         called["n"] += 1
         return {"checked": 0, "marked_stale": 0, "archived": 0, "reactivated": 0}
+
     monkeypatch.setattr(c, "apply_automatic_transitions", _explode)
     monkeypatch.setattr(
-        c, "_run_llm_review",
-        lambda p: {"final": "", "summary": "s", "model": "", "provider": "",
-                   "tool_calls": [], "error": None},
+        c,
+        "_run_llm_review",
+        lambda p: {
+            "final": "",
+            "summary": "s",
+            "model": "",
+            "provider": "",
+            "tool_calls": [],
+            "error": None,
+        },
     )
 
     c.run_curator_review(synchronous=True, dry_run=True)
@@ -661,6 +694,7 @@ def test_run_review_synchronous_invokes_llm_stub(curator_env, monkeypatch):
     u.mark_agent_created("a")
 
     calls = []
+
     def _stub(prompt):
         calls.append(prompt)
         return {
@@ -671,6 +705,7 @@ def test_run_review_synchronous_invokes_llm_stub(curator_env, monkeypatch):
             "tool_calls": [],
             "error": None,
         }
+
     monkeypatch.setattr(c, "_run_llm_review", _stub)
 
     captured = []
@@ -691,7 +726,8 @@ def test_run_review_skips_llm_when_no_candidates(curator_env, monkeypatch):
     # No skills in the dir → no candidates
     calls = []
     monkeypatch.setattr(
-        c, "_run_llm_review",
+        c,
+        "_run_llm_review",
         lambda prompt: (calls.append(prompt), "never-called")[1],
     )
 
@@ -728,7 +764,8 @@ def test_run_review_skips_llm_when_consolidate_off(curator_env, monkeypatch):
 
     calls = []
     monkeypatch.setattr(
-        c, "_run_llm_review",
+        c,
+        "_run_llm_review",
         lambda prompt: (calls.append(prompt), "never-called")[1],
     )
 
@@ -754,11 +791,19 @@ def test_run_review_consolidate_override_runs_llm(curator_env, monkeypatch):
 
     calls = []
     monkeypatch.setattr(
-        c, "_run_llm_review",
-        lambda prompt: (calls.append(prompt), {
-            "final": "", "summary": "s", "model": "", "provider": "",
-            "tool_calls": [], "error": None,
-        })[1],
+        c,
+        "_run_llm_review",
+        lambda prompt: (
+            calls.append(prompt),
+            {
+                "final": "",
+                "summary": "s",
+                "model": "",
+                "provider": "",
+                "tool_calls": [],
+                "error": None,
+            },
+        )[1],
     )
 
     c.run_curator_review(synchronous=True, consolidate=True)
@@ -827,6 +872,7 @@ def test_maybe_run_curator_swallows_exceptions(curator_env, monkeypatch):
 # Persistence
 # ---------------------------------------------------------------------------
 
+
 def test_state_file_survives_corrupt_read(curator_env):
     c = curator_env["curator"]
     c._state_file().write_text("not json", encoding="utf-8")
@@ -858,6 +904,7 @@ def test_state_preserves_last_report_path(curator_env):
 def test_curator_review_prompt_has_invariants():
     """Core invariants must be in the review prompt text."""
     from agent.curator import CURATOR_REVIEW_PROMPT
+
     assert "MUST NOT" in CURATOR_REVIEW_PROMPT or "DO NOT" in CURATOR_REVIEW_PROMPT
     assert "bundled" in CURATOR_REVIEW_PROMPT.lower()
     assert "delete" in CURATOR_REVIEW_PROMPT.lower()
@@ -870,7 +917,10 @@ def test_curator_review_prompt_has_invariants():
     for verb in ("patch", "archive"):
         assert verb in CURATOR_REVIEW_PROMPT.lower()
     # Must mention consolidation (possibly via "merge" or "consolidat")
-    assert "consolidat" in CURATOR_REVIEW_PROMPT.lower() or "merge" in CURATOR_REVIEW_PROMPT.lower()
+    assert (
+        "consolidat" in CURATOR_REVIEW_PROMPT.lower()
+        or "merge" in CURATOR_REVIEW_PROMPT.lower()
+    )
 
 
 def test_curator_review_prompt_points_at_existing_tools_only():
@@ -878,6 +928,7 @@ def test_curator_review_prompt_points_at_existing_tools_only():
     and must NOT reference bespoke curator tools that are not registered
     model tools."""
     from agent.curator import CURATOR_REVIEW_PROMPT
+
     assert "skill_manage" in CURATOR_REVIEW_PROMPT
     assert "skills_list" in CURATOR_REVIEW_PROMPT
     assert "skill_view" in CURATOR_REVIEW_PROMPT
@@ -892,11 +943,13 @@ def test_curator_does_not_instruct_model_to_pin():
     """Pinning is a user opt-out, not a model decision. The prompt should
     not tell the reviewer to pin skills autonomously."""
     from agent.curator import CURATOR_REVIEW_PROMPT
+
     # "pinned" appears in the invariant ("skip pinned skills"), but "pin"
     # as a decision verb should not.
     lines = CURATOR_REVIEW_PROMPT.split("\n")
     decision_block = "\n".join(
-        l for l in lines
+        l
+        for l in lines
         if l.strip().startswith(("keep", "patch", "archive", "consolidate", "pin "))
     )
     # No standalone "pin" action line
@@ -909,6 +962,7 @@ def test_curator_review_prompt_is_umbrella_first():
     """The curator prompt must push umbrella-building / class-level thinking,
     not pair-level 'are these two the same?' analysis."""
     from agent.curator import CURATOR_REVIEW_PROMPT
+
     lower = CURATOR_REVIEW_PROMPT.lower()
     # Must frame the task as active umbrella-building, not a passive audit.
     assert "umbrella" in lower, (
@@ -944,28 +998,32 @@ def test_curator_review_prompt_preserves_skill_package_integrity():
         assert dirname in CURATOR_REVIEW_PROMPT
 
 
-
 def test_curator_review_prompt_offers_support_file_actions():
     """Support-file demotion (references/templates/scripts) must be one of
     the three consolidation methods, alongside merge-into-existing and
     create-new-umbrella."""
     from agent.curator import CURATOR_REVIEW_PROMPT
+
     # skill_manage action=write_file is how references/ are added to an
     # existing skill — this is the create-adjacent action the curator needs
     # to demote narrow siblings without touching their SKILL.md.
     assert "write_file" in CURATOR_REVIEW_PROMPT
     # Must offer creating a brand-new umbrella when no existing one fits
-    assert "action=create" in CURATOR_REVIEW_PROMPT or "create a new umbrella" in CURATOR_REVIEW_PROMPT.lower()
-
+    assert (
+        "action=create" in CURATOR_REVIEW_PROMPT
+        or "create a new umbrella" in CURATOR_REVIEW_PROMPT.lower()
+    )
 
 
 def test_cli_unpin_refuses_bundled_skill(curator_env, capsys):
     """clawk curator unpin must refuse bundled/hub skills too (matches pin)."""
     from clawk_cli import curator as cli
+
     skills_dir = curator_env["home"] / "skills"
     _write_skill(skills_dir, "ship-skill")
     (skills_dir / ".bundled_manifest").write_text(
-        "ship-skill:abc\n", encoding="utf-8",
+        "ship-skill:abc\n",
+        encoding="utf-8",
     )
 
     class _A:
@@ -979,10 +1037,12 @@ def test_cli_unpin_refuses_bundled_skill(curator_env, capsys):
 
 def test_cli_pin_refuses_bundled_skill(curator_env, capsys):
     from clawk_cli import curator as cli
+
     skills_dir = curator_env["home"] / "skills"
     _write_skill(skills_dir, "ship-skill")
     (skills_dir / ".bundled_manifest").write_text(
-        "ship-skill:abc\n", encoding="utf-8",
+        "ship-skill:abc\n",
+        encoding="utf-8",
     )
 
     class _A:
@@ -1031,7 +1091,8 @@ def test_review_model_honors_auxiliary_curator_slot(curator_env):
         },
     }
     assert curator._resolve_review_model(cfg) == (
-        "openrouter", "openai/gpt-5.4-mini",
+        "openrouter",
+        "openai/gpt-5.4-mini",
     )
 
 
@@ -1088,9 +1149,7 @@ def test_review_runtime_carries_auxiliary_extra_body(curator_env):
 
     binding = curator._resolve_review_runtime(cfg)
 
-    assert binding.request_overrides == {
-        "extra_body": {"slot_flag": "slot-value"}
-    }
+    assert binding.request_overrides == {"extra_body": {"slot_flag": "slot-value"}}
 
 
 def test_review_runtime_ignores_auxiliary_credentials_when_using_main(curator_env):
@@ -1127,6 +1186,7 @@ def test_review_runtime_legacy_auxiliary_carry_credentials(curator_env, caplog):
         },
     }
     import logging
+
     with caplog.at_level(logging.INFO, logger="agent.curator"):
         binding = curator._resolve_review_runtime(cfg)
     assert binding.explicit_api_key == "legacy-key"
@@ -1148,7 +1208,8 @@ def test_review_model_auxiliary_curator_partial_override_falls_back(curator_env)
         "auxiliary": {"curator": {"provider": "openrouter", "model": ""}},
     }
     assert curator._resolve_review_model(cfg_provider_only) == (
-        "openrouter", "openai/gpt-5.5",
+        "openrouter",
+        "openai/gpt-5.5",
     )
 
     cfg_model_only = {
@@ -1156,7 +1217,8 @@ def test_review_model_auxiliary_curator_partial_override_falls_back(curator_env)
         "auxiliary": {"curator": {"provider": "auto", "model": "gpt-5.4-mini"}},
     }
     assert curator._resolve_review_model(cfg_model_only) == (
-        "openrouter", "openai/gpt-5.5",
+        "openrouter",
+        "openai/gpt-5.5",
     )
 
 
@@ -1176,6 +1238,7 @@ def test_review_model_legacy_curator_auxiliary_still_works(curator_env, caplog):
         },
     }
     import logging
+
     with caplog.at_level(logging.INFO, logger="agent.curator"):
         result = curator._resolve_review_model(cfg)
     assert result == ("openrouter", "openai/gpt-5.4-mini")
@@ -1204,7 +1267,8 @@ def test_review_model_handles_missing_sections(curator_env):
     curator = curator_env["curator"]
     cfg = {"model": {"provider": "anthropic", "model": "claude-sonnet-4-6"}}
     assert curator._resolve_review_model(cfg) == (
-        "anthropic", "claude-sonnet-4-6",
+        "anthropic",
+        "claude-sonnet-4-6",
     )
 
     # Completely empty config → ("auto", "") — resolve_runtime_provider
@@ -1224,8 +1288,9 @@ def test_curator_slot_is_canonical_aux_task():
     from clawk_cli.web_server import _AUX_TASK_SLOTS
 
     # 1. DEFAULT_CONFIG.auxiliary — schema source
-    assert "curator" in DEFAULT_CONFIG["auxiliary"], \
+    assert "curator" in DEFAULT_CONFIG["auxiliary"], (
         "curator missing from DEFAULT_CONFIG['auxiliary']"
+    )
     slot = DEFAULT_CONFIG["auxiliary"]["curator"]
     assert slot["provider"] == "auto"
     assert slot["model"] == ""
@@ -1236,8 +1301,9 @@ def test_curator_slot_is_canonical_aux_task():
     assert "curator" in aux_keys, "curator missing from _AUX_TASKS (CLI picker)"
 
     # 3. clawk_cli/web_server.py _AUX_TASK_SLOTS — REST API allowlist
-    assert "curator" in _AUX_TASK_SLOTS, \
+    assert "curator" in _AUX_TASK_SLOTS, (
         "curator missing from _AUX_TASK_SLOTS (dashboard REST API)"
+    )
 
     # 4. web/src/pages/ModelsPage.tsx is checked at build time; the tsx
     #    array and this tuple share a ``Must match _AUX_TASK_SLOTS`` comment.
@@ -1261,6 +1327,7 @@ def test_review_fork_runs_under_background_review_origin(curator_env, monkeypatc
     # The curator_env fixture stubs out _run_llm_review wholesale; this test
     # exercises the real implementation, so reload the module to restore it.
     import importlib
+
     importlib.reload(curator)
     monkeypatch.setattr(curator, "_load_config", lambda: {})
 
@@ -1298,6 +1365,7 @@ def test_review_fork_forwards_runtime_pool_and_overrides(curator_env, monkeypatc
     """Curator must pass credential_pool + request_overrides from resolve_runtime_provider."""
     curator = curator_env["curator"]
     import importlib
+
     importlib.reload(curator)
 
     fake_pool = object()
@@ -1348,6 +1416,7 @@ def test_review_fork_forwards_runtime_pool_and_overrides(curator_env, monkeypatc
 def test_review_fork_uses_runtime_model_and_output_cap(curator_env, monkeypatch):
     curator = curator_env["curator"]
     import importlib
+
     importlib.reload(curator)
     captured = {}
 
@@ -1389,6 +1458,7 @@ def test_review_fork_uses_runtime_model_and_output_cap(curator_env, monkeypatch)
 def test_review_fork_merges_slot_extra_body_over_runtime(curator_env, monkeypatch):
     curator = curator_env["curator"]
     import importlib
+
     importlib.reload(curator)
     captured = {}
 

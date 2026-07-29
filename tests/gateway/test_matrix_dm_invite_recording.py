@@ -159,7 +159,9 @@ class TestRecordDMRoom:
         """When m.direct doesn't exist (404), creates it from scratch."""
         adapter = _make_adapter()
         adapter._client = MagicMock()
-        adapter._client.get_account_data = AsyncMock(side_effect=Exception("M_NOT_FOUND"))
+        adapter._client.get_account_data = AsyncMock(
+            side_effect=Exception("M_NOT_FOUND")
+        )
         adapter._client.set_account_data = AsyncMock()
 
         await adapter._record_dm_room("!new:example.org", "@alice:example.org")

@@ -639,10 +639,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
-        _run_tool(st._handle_scrape({
-            "url": "https://example.com",
-            "timeout": 3,  # below minimum → clamped to 10
-        }))
+        _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "timeout": 3,  # below minimum → clamped to 10
+            })
+        )
         # clamp_timeout clamps to [10, 300], so 3 becomes 10
         assert captured["timeout"] == 10
 
@@ -657,10 +659,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
-        _run_tool(st._handle_scrape({
-            "url": "https://example.com",
-            "timeout": 999,  # above maximum → clamped to 300
-        }))
+        _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "timeout": 999,  # above maximum → clamped to 300
+            })
+        )
         assert captured["timeout"] == 300  # clamped to max
 
     def test_timeout_non_int_uses_default(self, monkeypatch):

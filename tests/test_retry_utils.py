@@ -5,28 +5,42 @@ import threading
 import agent.retry_utils as retry_utils
 from types import SimpleNamespace
 
-from agent.retry_utils import adaptive_rate_limit_backoff, is_zai_coding_overload_error, jittered_backoff
+from agent.retry_utils import (
+    adaptive_rate_limit_backoff,
+    is_zai_coding_overload_error,
+    jittered_backoff,
+)
 
 
 def test_backoff_is_exponential():
     """Base delay should double each attempt (before jitter)."""
     for attempt in (1, 2, 3, 4):
-        delays = [jittered_backoff(attempt, base_delay=5.0, max_delay=120.0, jitter_ratio=0.0) for _ in range(100)]
+        delays = [
+            jittered_backoff(attempt, base_delay=5.0, max_delay=120.0, jitter_ratio=0.0)
+            for _ in range(100)
+        ]
         expected = min(5.0 * (2 ** (attempt - 1)), 120.0)
         mean = sum(delays) / len(delays)
-        assert abs(mean - expected) < 0.01, f"attempt {attempt}: expected {expected}, got {mean}"
+        assert abs(mean - expected) < 0.01, (
+            f"attempt {attempt}: expected {expected}, got {mean}"
+        )
 
 
 def test_backoff_respects_max_delay():
     """Even with high attempt numbers, delay should not exceed max_delay."""
     for attempt in (10, 20, 100):
-        delay = jittered_backoff(attempt, base_delay=5.0, max_delay=60.0, jitter_ratio=0.0)
+        delay = jittered_backoff(
+            attempt, base_delay=5.0, max_delay=60.0, jitter_ratio=0.0
+        )
         assert delay <= 60.0, f"attempt {attempt}: delay {delay} exceeds max 60s"
 
 
 def test_backoff_adds_jitter():
     """With jitter enabled, delays should vary across calls."""
-    delays = [jittered_backoff(1, base_delay=10.0, max_delay=120.0, jitter_ratio=0.5) for _ in range(50)]
+    delays = [
+        jittered_backoff(1, base_delay=10.0, max_delay=120.0, jitter_ratio=0.5)
+        for _ in range(50)
+    ]
     assert min(delays) != max(delays), "jitter should produce varying delays"
     assert all(d >= 10.0 for d in delays), "jittered delay should be >= base delay"
     assert all(d <= 15.0 for d in delays), "jittered delay should be bounded"
@@ -63,7 +77,9 @@ def test_backoff_thread_safety():
 
     def _call_backoff():
         barrier.wait()
-        results.append(jittered_backoff(1, base_delay=10.0, max_delay=120.0, jitter_ratio=0.5))
+        results.append(
+            jittered_backoff(1, base_delay=10.0, max_delay=120.0, jitter_ratio=0.5)
+        )
 
     threads = [threading.Thread(target=_call_backoff) for _ in range(8)]
     for t in threads:
@@ -152,12 +168,17 @@ def test_zai_coding_overload_classifier_is_narrow():
     assert not is_zai_coding_overload_error(
         base_url="https://api.z.ai/api/coding/paas/v4",
         model="glm-5.2",
-        error=SimpleNamespace(status_code=429, body={"error": {"code": "1113", "message": "Insufficient balance"}}),
+        error=SimpleNamespace(
+            status_code=429,
+            body={"error": {"code": "1113", "message": "Insufficient balance"}},
+        ),
     )
 
 
 def test_zai_coding_overload_backoff_keeps_first_retries_short(monkeypatch):
-    monkeypatch.setattr(retry_utils, "jittered_backoff", lambda *a, **kw: kw["base_delay"])
+    monkeypatch.setattr(
+        retry_utils, "jittered_backoff", lambda *a, **kw: kw["base_delay"]
+    )
     err = _zai_overload_error()
 
     wait, policy = adaptive_rate_limit_backoff(
@@ -182,7 +203,9 @@ def test_zai_coding_overload_backoff_keeps_first_retries_short(monkeypatch):
 
 
 def test_zai_coding_overload_backoff_grows_after_short_retries(monkeypatch):
-    monkeypatch.setattr(retry_utils, "jittered_backoff", lambda *a, **kw: kw["base_delay"])
+    monkeypatch.setattr(
+        retry_utils, "jittered_backoff", lambda *a, **kw: kw["base_delay"]
+    )
     err = _zai_overload_error()
 
     waits = []
@@ -230,14 +253,18 @@ def test_zai_overload_retry_ceiling_exceeds_short_attempts():
     # i.e. the largest attempt the loop still computes backoff for
     # (ceiling - 1) must reach the final long-tier index.
     last_attempt_with_backoff = ceiling - 1
-    assert last_attempt_with_backoff - short_attempts >= len(_ZAI_CODING_OVERLOAD_LONG_BACKOFF)
+    assert last_attempt_with_backoff - short_attempts >= len(
+        _ZAI_CODING_OVERLOAD_LONG_BACKOFF
+    )
 
 
 def test_zai_overload_ceiling_makes_long_tier_reachable(monkeypatch):
     """End-to-end over the attempt range the retry loop actually walks: with the
     extended ceiling, at least one attempt reaches the long-backoff tier and the
     full 30/60/90/120s schedule is exercised."""
-    monkeypatch.setattr(retry_utils, "jittered_backoff", lambda *a, **kw: kw["base_delay"])
+    monkeypatch.setattr(
+        retry_utils, "jittered_backoff", lambda *a, **kw: kw["base_delay"]
+    )
     from agent.retry_utils import zai_coding_overload_retry_ceiling
 
     err = _zai_overload_error()

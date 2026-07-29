@@ -31,9 +31,9 @@ _STATUS_GLYPH = {
     "skip": "⏭️",
 }
 _OVERALL_GLYPH = {
-    "ok":       "✅",
+    "ok": "✅",
     "degraded": "⚠️",
-    "failed":   "❌",
+    "failed": "❌",
 }
 
 
@@ -108,10 +108,15 @@ def _drive_health_report(
     )
     try:
         # 1. initialize
-        proc.stdin.write(json.dumps({
-            "jsonrpc": "2.0", "id": 1,
-            "method": "initialize", "params": {},
-        }) + "\n")
+        proc.stdin.write(
+            json.dumps({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            })
+            + "\n"
+        )
         proc.stdin.flush()
         init_line = proc.stdout.readline()
         if not init_line:
@@ -122,15 +127,21 @@ def _drive_health_report(
             )
 
         # 2. tools/call health_report
-        proc.stdin.write(json.dumps({
-            "jsonrpc": "2.0", "id": 2,
-            "method": "tools/call",
-            "params": {"name": "health_report", "arguments": args},
-        }) + "\n")
+        proc.stdin.write(
+            json.dumps({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "health_report", "arguments": args},
+            })
+            + "\n"
+        )
         proc.stdin.flush()
         call_line = proc.stdout.readline()
         if not call_line:
-            raise RuntimeError("cua-driver mcp closed stdout without responding to health_report.")
+            raise RuntimeError(
+                "cua-driver mcp closed stdout without responding to health_report."
+            )
     finally:
         try:
             proc.stdin.close()
@@ -145,7 +156,9 @@ def _drive_health_report(
     try:
         resp = json.loads(call_line)
     except (ValueError, TypeError) as e:
-        raise RuntimeError(f"health_report response was not valid JSON: {e}\nraw: {call_line[:200]}")
+        raise RuntimeError(
+            f"health_report response was not valid JSON: {e}\nraw: {call_line[:200]}"
+        )
 
     if "error" in resp:
         raise RuntimeError(f"health_report JSON-RPC error: {resp['error']}")
@@ -194,7 +207,9 @@ def _print_text_report(report: Dict[str, Any], color: bool) -> None:
         col_green = "\033[32m"
         col_reset = "\033[0m"
         col_dim = "\033[2m"
-        col_for = {"failed": col_red, "degraded": col_yellow, "ok": col_green}.get(overall, "")
+        col_for = {"failed": col_red, "degraded": col_yellow, "ok": col_green}.get(
+            overall, ""
+        )
     else:
         col_red = col_yellow = col_green = col_reset = col_dim = ""
         col_for = ""
@@ -211,7 +226,9 @@ def _print_text_report(report: Dict[str, Any], color: bool) -> None:
         message = check.get("message") or ""
         if color:
             status_col = {
-                "pass": col_green, "fail": col_red, "skip": col_dim,
+                "pass": col_green,
+                "fail": col_red,
+                "skip": col_dim,
             }.get(status, "")
             print(f"  {glyph} {status_col}{name}{col_reset}: {message}")
         else:
@@ -225,7 +242,9 @@ def _print_text_report(report: Dict[str, Any], color: bool) -> None:
         data = check.get("data")
         if isinstance(data, dict) and data:
             for key, value in data.items():
-                rendered = value if not isinstance(value, (dict, list)) else json.dumps(value)
+                rendered = (
+                    value if not isinstance(value, (dict, list)) else json.dumps(value)
+                )
                 print(f"      {col_dim}{key}={rendered}{col_reset}")
     _ = schema  # acknowledge field for forward-compat readers
 
@@ -258,6 +277,7 @@ def run_doctor(
     if driver_cmd is None:
         try:
             from clawk_cli.tools_config import _cua_driver_cmd
+
             driver_cmd = _cua_driver_cmd()
         except Exception:
             driver_cmd = os.environ.get("CLAWK_CUA_DRIVER_CMD") or "cua-driver"

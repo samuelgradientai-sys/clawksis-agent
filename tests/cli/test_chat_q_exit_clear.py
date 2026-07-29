@@ -9,6 +9,7 @@ import cli as cli_mod
 
 # ── A3.1 Test-First: verify _clear_terminal_on_exit gating ──────────────────
 
+
 def test_print_exit_summary_clears_screen_by_default(monkeypatch):
     """Default behavior: _print_exit_summary() calls _clear_terminal_on_exit()."""
     calls = []
@@ -20,13 +21,15 @@ def test_print_exit_summary_clears_screen_by_default(monkeypatch):
         def _clear_terminal_on_exit(self):
             calls.append("clear")
 
-    monkeypatch.setattr(cli_mod, "datetime", SimpleNamespace(
-        now=lambda: SimpleNamespace(
-            __sub__=lambda self, other: SimpleNamespace(
-                total_seconds=lambda: 0
+    monkeypatch.setattr(
+        cli_mod,
+        "datetime",
+        SimpleNamespace(
+            now=lambda: SimpleNamespace(
+                __sub__=lambda self, other: SimpleNamespace(total_seconds=lambda: 0)
             )
-        )
-    ))
+        ),
+    )
 
     fake = FakeCLI()
     cli_mod.ClawksisCLI._print_exit_summary(fake)  # default clear_screen=True
@@ -45,13 +48,15 @@ def test_print_exit_summary_skips_clear_when_clear_screen_false(monkeypatch):
         def _clear_terminal_on_exit(self):
             calls.append("clear")
 
-    monkeypatch.setattr(cli_mod, "datetime", SimpleNamespace(
-        now=lambda: SimpleNamespace(
-            __sub__=lambda self, other: SimpleNamespace(
-                total_seconds=lambda: 0
+    monkeypatch.setattr(
+        cli_mod,
+        "datetime",
+        SimpleNamespace(
+            now=lambda: SimpleNamespace(
+                __sub__=lambda self, other: SimpleNamespace(total_seconds=lambda: 0)
             )
-        )
-    ))
+        ),
+    )
 
     fake = FakeCLI()
     cli_mod.ClawksisCLI._print_exit_summary(fake, clear_screen=False)
@@ -63,6 +68,7 @@ def test_print_exit_summary_skips_clear_when_clear_screen_false(monkeypatch):
 
 # ── Production-path test: single-query -q path skips the clear ──────────────
 
+
 def test_single_query_main_skips_clear_on_exit_summary(monkeypatch):
     """The single-query (-q) path calls _print_exit_summary without clearing."""
     calls = []
@@ -70,7 +76,9 @@ def test_single_query_main_skips_clear_on_exit_summary(monkeypatch):
 
     class FakeCLI:
         def __init__(self, **_kwargs):
-            self.console = SimpleNamespace(print=lambda *_a, **_kw: calls.append("query-label"))
+            self.console = SimpleNamespace(
+                print=lambda *_a, **_kw: calls.append("query-label")
+            )
             self.session_id = "sq-test"
             self.agent = SimpleNamespace(
                 session_id="sq-test",
@@ -118,6 +126,7 @@ def test_single_query_main_skips_clear_on_exit_summary(monkeypatch):
 
 # ── Verify interactive mode still clears ────────────────────────────────────
 
+
 def test_print_exit_summary_still_clears_in_interactive_path(monkeypatch):
     """Interactive mode should still clear the screen (preserving #38928)."""
     from datetime import datetime as real_datetime
@@ -137,9 +146,13 @@ def test_print_exit_summary_still_clears_in_interactive_path(monkeypatch):
         def _clear_terminal_on_exit(self):
             calls.append("clear")
 
-    monkeypatch.setattr(cli_mod, "datetime", SimpleNamespace(
-        now=lambda: real_datetime(2026, 1, 1, 12, 1, 0)  # 1 min elapsed
-    ))
+    monkeypatch.setattr(
+        cli_mod,
+        "datetime",
+        SimpleNamespace(
+            now=lambda: real_datetime(2026, 1, 1, 12, 1, 0)  # 1 min elapsed
+        ),
+    )
 
     fake = FakeCLI()
     cli_mod.ClawksisCLI._print_exit_summary(fake)  # default clear_screen=True

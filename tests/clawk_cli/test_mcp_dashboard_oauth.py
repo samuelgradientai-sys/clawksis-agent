@@ -38,7 +38,9 @@ def test_hosted_auth_start_returns_public_authorization_url(monkeypatch):
     def fake_worker(flow, cfg):
         import asyncio
 
-        asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=s1"))
+        asyncio.run(
+            flow.publish_authorization_url("https://idp.example/authorize?state=s1")
+        )
 
     monkeypatch.setattr(web_server, "_run_dashboard_mcp_oauth", fake_worker)
     with patch(
@@ -70,16 +72,12 @@ def test_hosted_callback_is_public_and_delivers_code():
         redirect_uri="https://agent.example/api/mcp/oauth/callback/reports",
     )
     asyncio.run(
-        flow.publish_authorization_url(
-            "https://idp.example/authorize?state=expected"
-        )
+        flow.publish_authorization_url("https://idp.example/authorize?state=expected")
     )
     web_server._mcp_oauth_flows[flow.flow_id] = flow
 
     assert "/api/mcp/oauth/callback" not in PUBLIC_API_PATHS
-    response = _client().get(
-        "/api/mcp/oauth/callback/reports?code=abc&state=expected"
-    )
+    response = _client().get("/api/mcp/oauth/callback/reports?code=abc&state=expected")
     assert response.status_code == 200
     assert flow._callback == ("abc", "expected")
 
@@ -100,9 +98,7 @@ def test_hosted_callback_bypasses_gated_cookie_auth(monkeypatch):
         redirect_uri="https://agent.example/api/mcp/oauth/callback/reports",
     )
     asyncio.run(
-        flow.publish_authorization_url(
-            "https://idp.example/authorize?state=expected"
-        )
+        flow.publish_authorization_url("https://idp.example/authorize?state=expected")
     )
     web_server._mcp_oauth_flows[flow.flow_id] = flow
     monkeypatch.setattr(web_server.app.state, "auth_required", True, raising=False)
@@ -191,7 +187,9 @@ def test_hosted_auth_rejects_overlapping_flow_for_same_server():
     assert "already in progress" in response.text
 
 
-def test_hosted_auth_allows_same_server_name_in_different_profiles(tmp_path, monkeypatch):
+def test_hosted_auth_allows_same_server_name_in_different_profiles(
+    tmp_path, monkeypatch
+):
     from clawk_cli import web_server
     from tools.mcp_dashboard_oauth import DashboardOAuthFlow
 
@@ -211,10 +209,17 @@ def test_hosted_auth_allows_same_server_name_in_different_profiles(tmp_path, mon
     def fake_worker(flow, cfg):
         import asyncio
 
-        asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=work"))
+        asyncio.run(
+            flow.publish_authorization_url("https://idp.example/authorize?state=work")
+        )
 
-    with patch("clawk_cli.mcp_config._get_mcp_servers", return_value={"reports": {"url": "https://mcp.example"}}), \
-         patch.object(web_server, "_run_dashboard_mcp_oauth", fake_worker):
+    with (
+        patch(
+            "clawk_cli.mcp_config._get_mcp_servers",
+            return_value={"reports": {"url": "https://mcp.example"}},
+        ),
+        patch.object(web_server, "_run_dashboard_mcp_oauth", fake_worker),
+    ):
         response = _client().post("/api/mcp/servers/reports/auth?profile=work")
 
     assert response.status_code != 409
@@ -224,8 +229,12 @@ def test_callback_url_is_stable_for_a_server():
     from clawk_cli import web_server
 
     # The route helper's stable form must not depend on a one-time flow id.
-    first = web_server._mcp_oauth_callback_url_from_base("https://agent.example", "reports")
-    second = web_server._mcp_oauth_callback_url_from_base("https://agent.example", "reports")
+    first = web_server._mcp_oauth_callback_url_from_base(
+        "https://agent.example", "reports"
+    )
+    second = web_server._mcp_oauth_callback_url_from_base(
+        "https://agent.example", "reports"
+    )
     assert first == second == "https://agent.example/api/mcp/oauth/callback/reports"
 
 
@@ -242,12 +251,12 @@ def test_callback_route_supports_server_names_with_slashes():
         clawk_home="/tmp/clawk-test",
         redirect_uri="https://agent.example/api/mcp/oauth/callback/github/mcp",
     )
-    asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=slash"))
+    asyncio.run(
+        flow.publish_authorization_url("https://idp.example/authorize?state=slash")
+    )
     web_server._mcp_oauth_flows[flow.flow_id] = flow
 
-    response = _client().get(
-        "/api/mcp/oauth/callback/github/mcp?code=abc&state=slash"
-    )
+    response = _client().get("/api/mcp/oauth/callback/github/mcp?code=abc&state=slash")
 
     assert response.status_code == 200
     assert flow._callback == ("abc", "slash")

@@ -85,7 +85,14 @@ agent:
     assert captured["env"]["CLAWK_KANBAN_TASK"] == "t_spawn_tools"
     assert "--toolsets" in captured["cmd"]
     pinned = captured["cmd"][captured["cmd"].index("--toolsets") + 1].split(",")
-    for required in ("terminal", "web", "file", "skills", "code_execution", "delegation"):
+    for required in (
+        "terminal",
+        "web",
+        "file",
+        "skills",
+        "code_execution",
+        "delegation",
+    ):
         assert required in pinned
 
 
@@ -97,7 +104,9 @@ def test_default_spawn_never_boots_the_tui(monkeypatch, tmp_path):
     flag) and strips CLAWK_TUI from the child env."""
     root = tmp_path / ".clawk"
     (root / "profiles" / "elias").mkdir(parents=True)
-    root.joinpath("config.yaml").write_text("display:\n  interface: tui\n", encoding="utf-8")
+    root.joinpath("config.yaml").write_text(
+        "display:\n  interface: tui\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(root))
     monkeypatch.setenv("CLAWK_TUI", "1")
 
@@ -170,11 +179,15 @@ def test_default_spawn_model_override_survives_real_cli_parse(monkeypatch, tmp_p
     assert args.query == "work kanban task t_spawn_tools"
 
 
-def test_resolve_worker_cli_toolsets_uses_profile_home_not_parent_config(monkeypatch, tmp_path):
+def test_resolve_worker_cli_toolsets_uses_profile_home_not_parent_config(
+    monkeypatch, tmp_path
+):
     root = tmp_path / ".clawk"
     profile = root / "profiles" / "elias"
     profile.mkdir(parents=True)
-    root.joinpath("config.yaml").write_text("platform_toolsets:\n  cli:\n    - kanban\n", encoding="utf-8")
+    root.joinpath("config.yaml").write_text(
+        "platform_toolsets:\n  cli:\n    - kanban\n", encoding="utf-8"
+    )
     profile.joinpath("config.yaml").write_text(
         """
 platform_toolsets:

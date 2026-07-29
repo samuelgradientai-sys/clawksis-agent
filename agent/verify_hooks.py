@@ -44,7 +44,9 @@ def max_verify_nudges(config: Optional[dict[str, Any]] = None) -> int:
 
 def coding_verify_guidance(config: Optional[dict[str, Any]] = None) -> Optional[str]:
     """Return the optional guidance appended to verification-stop nudges."""
-    if not is_truthy_value(_agent_cfg(config).get("verify_guidance", True), default=True):
+    if not is_truthy_value(
+        _agent_cfg(config).get("verify_guidance", True), default=True
+    ):
         return None
     return CODING_VERIFY_GUIDANCE
 

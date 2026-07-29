@@ -359,9 +359,14 @@ class TestSpawnEnvSecretStripping:
 
         env = self._capture_spawn_env(monkeypatch)
         for var in (
-            "GH_TOKEN", "TELEGRAM_BOT_TOKEN", "MODAL_TOKEN_SECRET",
-            "CLAWK_DASHBOARD_SESSION_TOKEN", "AUXILIARY_VISION_API_KEY",
-            "GATEWAY_RELAY_SECRET", "GATEWAY_RELAY_ID", "GATEWAY_RELAY_DELIVERY_KEY",
+            "GH_TOKEN",
+            "TELEGRAM_BOT_TOKEN",
+            "MODAL_TOKEN_SECRET",
+            "CLAWK_DASHBOARD_SESSION_TOKEN",
+            "AUXILIARY_VISION_API_KEY",
+            "GATEWAY_RELAY_SECRET",
+            "GATEWAY_RELAY_ID",
+            "GATEWAY_RELAY_DELIVERY_KEY",
         ):
             assert var not in env, f"{var} leaked into codex app-server spawn env"
 

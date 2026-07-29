@@ -51,7 +51,9 @@ class TestOAuthUserAgentPrefix:
         lines = source.split("\n")
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
-            if "claude-cli/" in stripped and ("User-Agent" in stripped or "user-agent" in stripped):
+            if "claude-cli/" in stripped and (
+                "User-Agent" in stripped or "user-agent" in stripped
+            ):
                 pytest.fail(
                     f"Line {i}: claude-cli/ still used in User-Agent header: {stripped}"
                 )
@@ -83,7 +85,10 @@ class TestOAuthUserAgentPrefix:
             "run_clawk_oauth_login_pure should send the shared "
             "_OAUTH_TOKEN_USER_AGENT (non-claude-code) on the token endpoint"
         )
-        assert not mod._OAUTH_TOKEN_USER_AGENT.startswith(("claude-code/", "claude-cli/")), (
+        assert not mod._OAUTH_TOKEN_USER_AGENT.startswith((
+            "claude-code/",
+            "claude-cli/",
+        )), (
             f"_OAUTH_TOKEN_USER_AGENT must not be a throttled prefix: "
             f"{mod._OAUTH_TOKEN_USER_AGENT!r}"
         )
@@ -103,9 +108,7 @@ class TestOAuthUserAgentPrefix:
             if ("User-Agent" in stripped or "user-agent" in stripped) and (
                 "claude-cli/" in stripped or "claude-code/" in stripped
             ):
-                pytest.fail(
-                    f"Line {i}: throttled UA in refresh header: {stripped}"
-                )
+                pytest.fail(f"Line {i}: throttled UA in refresh header: {stripped}")
         assert "_OAUTH_TOKEN_USER_AGENT" in source, (
             "refresh_anthropic_oauth_pure should send the shared "
             "_OAUTH_TOKEN_USER_AGENT (non-claude-code) on the token endpoint"

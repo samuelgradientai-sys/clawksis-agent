@@ -22,71 +22,86 @@ from clawk_cli.cron import (
 # Defense 2: _contains_gateway_lifecycle_command pattern tests
 # ---------------------------------------------------------------------------
 
+
 class TestGatewayLifecyclePattern:
     """Verify the regex catches gateway lifecycle commands."""
 
-    @pytest.mark.parametrize("text", [
-        "clawk gateway restart",
-        "clawk gateway stop",
-        "clawk  gateway  restart",         # double spaces
-        "Hermez Gateway Restart".lower().replace("z", "s"),  # case handled
-        "CLAWKSIS GATEWAY RESTART",           # uppercase
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "clawk gateway restart",
+            "clawk gateway stop",
+            "clawk  gateway  restart",  # double spaces
+            "Hermez Gateway Restart".lower().replace("z", "s"),  # case handled
+            "CLAWKSIS GATEWAY RESTART",  # uppercase
+        ],
+    )
     def test_clawk_gateway_commands(self, text):
         assert _contains_gateway_lifecycle_command(text), f"Should match: {text!r}"
 
-    @pytest.mark.parametrize("text", [
-        "launchctl kickstart gui/501/ai.clawk.gateway",
-        "launchctl unload ~/Library/LaunchAgents/ai.clawk.gateway.plist",
-        "launchctl stop ai.clawk.gateway",
-        "systemctl restart clawk-gateway",
-        "systemctl stop clawk-gateway.service",
-        "systemctl start clawk-gateway",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "launchctl kickstart gui/501/ai.clawk.gateway",
+            "launchctl unload ~/Library/LaunchAgents/ai.clawk.gateway.plist",
+            "launchctl stop ai.clawk.gateway",
+            "systemctl restart clawk-gateway",
+            "systemctl stop clawk-gateway.service",
+            "systemctl start clawk-gateway",
+        ],
+    )
     def test_service_manager_commands(self, text):
         assert _contains_gateway_lifecycle_command(text), f"Should match: {text!r}"
 
-    @pytest.mark.parametrize("text", [
-        "kill clawk gateway process",
-        "pkill -f clawk.*gateway",
-        "pkill -f gateway.*clawk",          # inverse token order
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "kill clawk gateway process",
+            "pkill -f clawk.*gateway",
+            "pkill -f gateway.*clawk",  # inverse token order
+        ],
+    )
     def test_kill_commands(self, text):
         assert _contains_gateway_lifecycle_command(text), f"Should match: {text!r}"
 
-    @pytest.mark.parametrize("text", [
-        "restart the server application",
-        "clawk cron list",
-        "clawk update",
-        "clawk config set model claude",
-        "echo 'just a normal cron job'",
-        "run the backup script",
-        "gateway is running fine",
-        # `clawk gateway start` is benign — starting a gateway from inside a
-        # gateway is a no-op / "already running", and a legit cron job may
-        # start a sibling profile's gateway. Only restart/stop/kill are the
-        # foot-gun (#30719 lists only those).
-        "clawk gateway start",
-        "clawk gateway start --all",
-        # Tightened launchctl/systemctl branches: ops on NON-gateway clawk
-        # services must not be falsely blocked (the old `.*clawk` matched any
-        # clawk token).
-        "launchctl unload ai.clawk.update-checker.plist",
-        "launchctl restart ai.clawk.daemon",
-        "systemctl restart clawk-meta.service",
-        "systemctl restart clawk-cron-helper",
-        # Regression (#30728 follow-up): legit prompts that merely mention an
-        # unrelated gateway + a restart must NOT be blocked. The cron prompt is
-        # fed to an LLM, not a shell, so substring detection on English text is
-        # a high-FP no-op — only concrete command shapes trigger the block.
-        "Summarize the API gateway logs and report any restart events from last night",
-        "Check if the payment gateway needs a restart after the deploy",
-        "Monitor the gateway and tell me if a restart is recommended",
-        "research how the OpenAI API gateway handles restart after rate limiting",
-        "compare AWS API Gateway vs Cloudflare on restart latency",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "restart the server application",
+            "clawk cron list",
+            "clawk update",
+            "clawk config set model claude",
+            "echo 'just a normal cron job'",
+            "run the backup script",
+            "gateway is running fine",
+            # `clawk gateway start` is benign — starting a gateway from inside a
+            # gateway is a no-op / "already running", and a legit cron job may
+            # start a sibling profile's gateway. Only restart/stop/kill are the
+            # foot-gun (#30719 lists only those).
+            "clawk gateway start",
+            "clawk gateway start --all",
+            # Tightened launchctl/systemctl branches: ops on NON-gateway clawk
+            # services must not be falsely blocked (the old `.*clawk` matched any
+            # clawk token).
+            "launchctl unload ai.clawk.update-checker.plist",
+            "launchctl restart ai.clawk.daemon",
+            "systemctl restart clawk-meta.service",
+            "systemctl restart clawk-cron-helper",
+            # Regression (#30728 follow-up): legit prompts that merely mention an
+            # unrelated gateway + a restart must NOT be blocked. The cron prompt is
+            # fed to an LLM, not a shell, so substring detection on English text is
+            # a high-FP no-op — only concrete command shapes trigger the block.
+            "Summarize the API gateway logs and report any restart events from last night",
+            "Check if the payment gateway needs a restart after the deploy",
+            "Monitor the gateway and tell me if a restart is recommended",
+            "research how the OpenAI API gateway handles restart after rate limiting",
+            "compare AWS API Gateway vs Cloudflare on restart latency",
+        ],
+    )
     def test_safe_commands(self, text):
-        assert not _contains_gateway_lifecycle_command(text), f"Should NOT match: {text!r}"
+        assert not _contains_gateway_lifecycle_command(text), (
+            f"Should NOT match: {text!r}"
+        )
 
 
 class TestCronCreateLifecycleBlock:
@@ -216,12 +231,14 @@ class TestCronCreateLifecycleBlock:
 # Defense 1: gateway stop/restart refuse inside gateway
 # ---------------------------------------------------------------------------
 
+
 class TestGatewaySelfTargetingGuard:
     """Verify clawk gateway stop/restart refuse when _CLAWK_GATEWAY=1."""
 
     def test_stop_refuses_inside_gateway(self, monkeypatch):
         monkeypatch.setenv("_CLAWK_GATEWAY", "1")
         from clawk_cli.gateway import gateway_command
+
         args = Namespace(gateway_command="stop", all=False, system=False)
         with pytest.raises(SystemExit) as exc_info:
             gateway_command(args)
@@ -230,6 +247,7 @@ class TestGatewaySelfTargetingGuard:
     def test_restart_refuses_inside_gateway(self, monkeypatch):
         monkeypatch.setenv("_CLAWK_GATEWAY", "1")
         from clawk_cli.gateway import gateway_command
+
         args = Namespace(gateway_command="restart", all=False, system=False)
         with pytest.raises(SystemExit) as exc_info:
             gateway_command(args)
@@ -279,6 +297,7 @@ class TestGatewaySelfTargetingGuard:
 # Defense 3: terminal_tool hard-blocks gateway lifecycle commands inside gateway
 # ---------------------------------------------------------------------------
 
+
 class TestTerminalToolGatewayLifecycleGuard:
     """terminal_tool must refuse gateway lifecycle commands when _CLAWK_GATEWAY=1.
 
@@ -291,15 +310,23 @@ class TestTerminalToolGatewayLifecycleGuard:
     def _make_fake_env(self):
         class _FakeEnv:
             env = {}
+
             def execute(self, command, **kwargs):  # pragma: no cover
                 raise AssertionError("execute must not be reached")
+
         return _FakeEnv()
 
     def _minimal_config(self):
-        return {"env_type": "local", "cwd": "/tmp", "timeout": 60, "lifetime_seconds": 3600}
+        return {
+            "env_type": "local",
+            "cwd": "/tmp",
+            "timeout": 60,
+            "lifetime_seconds": 3600,
+        }
 
     def _patch_env(self, monkeypatch, fake_env, *, inside_gateway: bool):
         import tools.terminal_tool as tt
+
         eid = "default"
         monkeypatch.setattr(tt, "_active_environments", {eid: fake_env})
         monkeypatch.setattr(tt, "_last_activity", {eid: 0.0})
@@ -310,16 +337,20 @@ class TestTerminalToolGatewayLifecycleGuard:
         else:
             monkeypatch.delenv("_CLAWK_GATEWAY", raising=False)
 
-    @pytest.mark.parametrize("cmd", [
-        "systemctl restart clawk-gateway",
-        "systemctl --user restart clawk-gateway",
-        "systemctl stop clawk-gateway.service",
-        "clawk gateway restart",
-        "launchctl kickstart gui/501/ai.clawk.gateway",
-        "pkill -f clawk.*gateway",
-    ])
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "systemctl restart clawk-gateway",
+            "systemctl --user restart clawk-gateway",
+            "systemctl stop clawk-gateway.service",
+            "clawk gateway restart",
+            "launchctl kickstart gui/501/ai.clawk.gateway",
+            "pkill -f clawk.*gateway",
+        ],
+    )
     def test_blocks_lifecycle_commands_inside_gateway(self, monkeypatch, cmd):
         import tools.terminal_tool as tt
+
         self._patch_env(monkeypatch, self._make_fake_env(), inside_gateway=True)
 
         result = json.loads(tt.terminal_tool(command=cmd))
@@ -329,11 +360,12 @@ class TestTerminalToolGatewayLifecycleGuard:
 
     def test_force_true_cannot_bypass_block(self, monkeypatch):
         import tools.terminal_tool as tt
+
         self._patch_env(monkeypatch, self._make_fake_env(), inside_gateway=True)
 
-        result = json.loads(tt.terminal_tool(
-            command="systemctl restart clawk-gateway", force=True
-        ))
+        result = json.loads(
+            tt.terminal_tool(command="systemctl restart clawk-gateway", force=True)
+        )
 
         assert result["exit_code"] == 1
         assert "Blocked" in result["error"]
@@ -346,12 +378,15 @@ class TestTerminalToolGatewayLifecycleGuard:
 
         class _FakeEnv:
             env = {}
+
             def execute(self, command, **kwargs):
                 calls.append(command)
                 return {"output": "Active: running", "returncode": 0}
 
         self._patch_env(monkeypatch, _FakeEnv(), inside_gateway=True)
-        monkeypatch.setattr(tt, "_check_all_guards", lambda cmd, env, **kwargs: {"approved": True})
+        monkeypatch.setattr(
+            tt, "_check_all_guards", lambda cmd, env, **kwargs: {"approved": True}
+        )
 
         result = json.loads(tt.terminal_tool(command="systemctl status nginx"))
 
@@ -366,12 +401,15 @@ class TestTerminalToolGatewayLifecycleGuard:
 
         class _FakeEnv:
             env = {}
+
             def execute(self, command, **kwargs):
                 calls.append(command)
                 return {"output": "restarting...", "returncode": 0}
 
         self._patch_env(monkeypatch, _FakeEnv(), inside_gateway=False)
-        monkeypatch.setattr(tt, "_check_all_guards", lambda cmd, env, **kwargs: {"approved": True})
+        monkeypatch.setattr(
+            tt, "_check_all_guards", lambda cmd, env, **kwargs: {"approved": True}
+        )
 
         result = json.loads(tt.terminal_tool(command="systemctl restart clawk-gateway"))
 
@@ -385,22 +423,32 @@ class TestTerminalToolGatewayLifecycleGuard:
 # cron.lifecycle_guard module — the shared checker create_job/CLI/terminal use
 # ---------------------------------------------------------------------------
 
+
 class TestLifecycleGuardModule:
     """Direct tests for cron.lifecycle_guard.check_gateway_lifecycle."""
 
     def test_prompt_with_command_raises(self):
-        from cron.lifecycle_guard import GatewayLifecycleBlocked, check_gateway_lifecycle
+        from cron.lifecycle_guard import (
+            GatewayLifecycleBlocked,
+            check_gateway_lifecycle,
+        )
+
         with pytest.raises(GatewayLifecycleBlocked) as exc:
             check_gateway_lifecycle("please run clawk gateway restart", None)
         assert "#30719" in str(exc.value)
 
     def test_clean_prompt_does_not_raise(self):
         from cron.lifecycle_guard import check_gateway_lifecycle
+
         check_gateway_lifecycle("research the gateway architecture", None)
         check_gateway_lifecycle("check server health and restart watchers", None)
 
     def test_script_with_command_raises(self, tmp_path, monkeypatch):
-        from cron.lifecycle_guard import GatewayLifecycleBlocked, check_gateway_lifecycle
+        from cron.lifecycle_guard import (
+            GatewayLifecycleBlocked,
+            check_gateway_lifecycle,
+        )
+
         script = tmp_path / "restart.sh"
         script.write_text("#!/bin/bash\nclawk gateway restart\n")
         with pytest.raises(GatewayLifecycleBlocked):
@@ -409,7 +457,11 @@ class TestLifecycleGuardModule:
     def test_split_across_prompt_and_script_still_blocks(self, tmp_path):
         """Concatenated scan prevents splitting the command between prompt and
         script to slip through."""
-        from cron.lifecycle_guard import GatewayLifecycleBlocked, check_gateway_lifecycle
+        from cron.lifecycle_guard import (
+            GatewayLifecycleBlocked,
+            check_gateway_lifecycle,
+        )
+
         script = tmp_path / "ops.sh"
         script.write_text("clawk gateway stop\n")
         with pytest.raises(GatewayLifecycleBlocked):
@@ -418,7 +470,11 @@ class TestLifecycleGuardModule:
     def test_binary_script_does_not_silently_bypass(self, tmp_path):
         """Non-UTF-8 bytes used to be swallowed by UnicodeDecodeError; now we
         decode with errors='replace' so the scan always sees the command."""
-        from cron.lifecycle_guard import GatewayLifecycleBlocked, check_gateway_lifecycle
+        from cron.lifecycle_guard import (
+            GatewayLifecycleBlocked,
+            check_gateway_lifecycle,
+        )
+
         script = tmp_path / "weird.bin"
         script.write_bytes(b"\xfeclawk gateway restart\xff")
         with pytest.raises(GatewayLifecycleBlocked):
@@ -426,13 +482,18 @@ class TestLifecycleGuardModule:
 
     def test_missing_script_does_not_raise(self, tmp_path):
         from cron.lifecycle_guard import check_gateway_lifecycle
+
         check_gateway_lifecycle("clean prompt", str(tmp_path / "nonexistent.sh"))
 
     def test_relative_script_resolved_under_scripts_dir(self, tmp_path, monkeypatch):
         """A bare/relative script name resolves under CLAWK_HOME/scripts (the
         same place the scheduler runs it from) — otherwise the guard would read
         a nonexistent relative path and scan prompt-only content."""
-        from cron.lifecycle_guard import GatewayLifecycleBlocked, check_gateway_lifecycle
+        from cron.lifecycle_guard import (
+            GatewayLifecycleBlocked,
+            check_gateway_lifecycle,
+        )
+
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         scripts_dir = tmp_path / ".clawk" / "scripts"
         scripts_dir.mkdir(parents=True)
@@ -446,6 +507,7 @@ class TestLifecycleGuardModule:
 # ---------------------------------------------------------------------------
 # Defense 2 (chokepoint): cron.jobs.create_job blocks the AGENT model-tool path
 # ---------------------------------------------------------------------------
+
 
 class TestCreateJobBlocksLifecycleCommands:
     """The regression the CLI-layer-only guard could not catch: the agent's
@@ -461,13 +523,17 @@ class TestCreateJobBlocksLifecycleCommands:
     def test_create_job_blocks_prompt_command(self):
         from cron.jobs import create_job
         from cron.lifecycle_guard import GatewayLifecycleBlocked
+
         with pytest.raises(GatewayLifecycleBlocked):
             create_job(prompt="then run clawk gateway restart", schedule="30m")
 
     def test_create_job_allows_benign_prompt(self):
         from cron.jobs import create_job
-        job = create_job(prompt="summarize the API gateway logs and note restart events",
-                         schedule="30m")
+
+        job = create_job(
+            prompt="summarize the API gateway logs and note restart events",
+            schedule="30m",
+        )
         assert job["id"]
 
     def test_cronjob_tool_surfaces_block_as_error(self, tmp_path, monkeypatch):
@@ -476,10 +542,14 @@ class TestCreateJobBlocksLifecycleCommands:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         (tmp_path / ".clawk").mkdir(parents=True)
         from tools.cronjob_tools import cronjob
-        result = json.loads(cronjob(
-            action="create", schedule="0 9 * * *",
-            prompt="please run clawk gateway restart nightly",
-        ))
+
+        result = json.loads(
+            cronjob(
+                action="create",
+                schedule="0 9 * * *",
+                prompt="please run clawk gateway restart nightly",
+            )
+        )
         assert result.get("success") is False
         assert "#30719" in result.get("error", "")
 
@@ -487,6 +557,7 @@ class TestCreateJobBlocksLifecycleCommands:
 # ---------------------------------------------------------------------------
 # Defense 3: auto-resume restart-loop breaker
 # ---------------------------------------------------------------------------
+
 
 class TestRestartLoopGuard:
     """gateway.restart_loop_guard trips after >= max_restarts
@@ -498,27 +569,32 @@ class TestRestartLoopGuard:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         (tmp_path / ".clawk").mkdir(parents=True)
         import gateway.restart_loop_guard as rlg
+
         rlg.clear()
 
     def test_burst_trips_on_threshold(self):
         import gateway.restart_loop_guard as rlg
+
         assert rlg.check_and_record(3, 60, now=1000.0) is False
         assert rlg.check_and_record(3, 60, now=1005.0) is False
         assert rlg.check_and_record(3, 60, now=1010.0) is True
 
     def test_spread_boots_never_trip(self):
         import gateway.restart_loop_guard as rlg
+
         assert rlg.check_and_record(3, 60, now=1000.0) is False
         assert rlg.check_and_record(3, 60, now=1070.0) is False
         assert rlg.check_and_record(3, 60, now=1140.0) is False
 
     def test_disabled_when_max_restarts_zero(self):
         import gateway.restart_loop_guard as rlg
+
         for i in range(5):
             assert rlg.check_and_record(0, 60, now=1000.0 + i) is False
 
     def test_is_tripped_reads_without_recording(self):
         import gateway.restart_loop_guard as rlg
+
         rlg.record_restart_interrupted_boot(60, now=1000.0)
         rlg.record_restart_interrupted_boot(60, now=1001.0)
         assert rlg.is_restart_loop_tripped(3, 60, now=1002.0) is False
@@ -527,6 +603,7 @@ class TestRestartLoopGuard:
 
     def test_clear_resets(self):
         import gateway.restart_loop_guard as rlg
+
         rlg.check_and_record(3, 60, now=1000.0)
         rlg.check_and_record(3, 60, now=1001.0)
         rlg.clear()

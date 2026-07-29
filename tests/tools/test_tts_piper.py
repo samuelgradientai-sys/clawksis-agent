@@ -30,6 +30,7 @@ from tools.tts_tool import (
 # Registry / constants
 # ---------------------------------------------------------------------------
 
+
 class TestPiperRegistration:
     def test_piper_is_a_builtin_provider(self):
         assert "piper" in BUILTIN_TTS_PROVIDERS
@@ -42,6 +43,7 @@ class TestPiperRegistration:
 # _check_piper_available
 # ---------------------------------------------------------------------------
 
+
 class TestCheckPiperAvailable:
     def test_returns_bool_without_raising(self):
         # We don't care about the current environment's answer — just that
@@ -52,6 +54,7 @@ class TestCheckPiperAvailable:
 # ---------------------------------------------------------------------------
 # _resolve_piper_voice_path
 # ---------------------------------------------------------------------------
+
 
 class TestResolvePiperVoicePath:
     def test_direct_onnx_path_returned_as_is(self, tmp_path):
@@ -120,6 +123,7 @@ class TestResolvePiperVoicePath:
 # _generate_piper_tts — stubbed so we don't need piper-tts installed
 # ---------------------------------------------------------------------------
 
+
 class _StubPiperVoice:
     """Stand-in for piper.PiperVoice used by the synthesis tests."""
 
@@ -142,7 +146,11 @@ class _StubPiperVoice:
         wav_file.setsampwidth(2)
         wav_file.setframerate(22050)
         wav_file.writeframes(b"\x00\x00" * 1024)
-        _StubPiperVoice.calls.append((text, getattr(self, "model_path", ""), syn_config))
+        _StubPiperVoice.calls.append((
+            text,
+            getattr(self, "model_path", ""),
+            syn_config,
+        ))
 
 
 @pytest.fixture(autouse=True)
@@ -202,7 +210,9 @@ class TestGeneratePiperTts:
 
         monkeypatch.setattr(tts_tool, "_resolve_piper_voice_path", fake_resolve)
 
-        config = {"piper": {"voice": "en_US-lessac-medium", "voices_dir": str(tmp_path)}}
+        config = {
+            "piper": {"voice": "en_US-lessac-medium", "voices_dir": str(tmp_path)}
+        }
         result = tts_tool._generate_piper_tts("hi", str(tmp_path / "out.wav"), config)
 
         assert Path(result).exists()
@@ -231,7 +241,9 @@ class TestGeneratePiperTts:
             },
         }
         tts_tool._generate_piper_tts(
-            "slow voice", str(tmp_path / "out.wav"), config,
+            "slow voice",
+            str(tmp_path / "out.wav"),
+            config,
         )
 
         # SynthesisConfig was constructed with the advanced knobs.
@@ -246,7 +258,9 @@ class TestGeneratePiperTts:
         monkeypatch.setattr(tts_tool, "_import_piper", lambda: _StubPiperVoice)
 
         fake_syn_cls = MagicMock()
-        monkeypatch.setitem(sys.modules, "piper", types.SimpleNamespace(SynthesisConfig=fake_syn_cls))
+        monkeypatch.setitem(
+            sys.modules, "piper", types.SimpleNamespace(SynthesisConfig=fake_syn_cls)
+        )
 
         config = {"piper": {"voice": str(model), "speaker_id": 2}}
         tts_tool._generate_piper_tts("hi", str(tmp_path / "out.wav"), config)
@@ -264,7 +278,9 @@ class TestGeneratePiperTts:
         monkeypatch.setattr(tts_tool, "_import_piper", lambda: _StubPiperVoice)
 
         fake_syn_cls = MagicMock()
-        monkeypatch.setitem(sys.modules, "piper", types.SimpleNamespace(SynthesisConfig=fake_syn_cls))
+        monkeypatch.setitem(
+            sys.modules, "piper", types.SimpleNamespace(SynthesisConfig=fake_syn_cls)
+        )
 
         config = {"piper": {"voice": str(model), "speaker_id": 1}}
         tts_tool._generate_piper_tts("hi", str(tmp_path / "out.wav"), config)
@@ -277,7 +293,9 @@ class TestGeneratePiperTts:
         monkeypatch.setattr(tts_tool, "_import_piper", lambda: _StubPiperVoice)
 
         fake_syn_cls = MagicMock()
-        monkeypatch.setitem(sys.modules, "piper", types.SimpleNamespace(SynthesisConfig=fake_syn_cls))
+        monkeypatch.setitem(
+            sys.modules, "piper", types.SimpleNamespace(SynthesisConfig=fake_syn_cls)
+        )
 
         config = {"piper": {"voice": str(model), "length_scale": 1.5}}
         tts_tool._generate_piper_tts("hi", str(tmp_path / "out.wav"), config)
@@ -290,7 +308,9 @@ class TestGeneratePiperTts:
         monkeypatch.setattr(tts_tool, "_import_piper", lambda: _StubPiperVoice)
 
         fake_syn_cls = MagicMock()
-        monkeypatch.setitem(sys.modules, "piper", types.SimpleNamespace(SynthesisConfig=fake_syn_cls))
+        monkeypatch.setitem(
+            sys.modules, "piper", types.SimpleNamespace(SynthesisConfig=fake_syn_cls)
+        )
 
         for bad in (True, False):
             fake_syn_cls.reset_mock()
@@ -304,12 +324,16 @@ class TestGeneratePiperTts:
         monkeypatch.setattr(tts_tool, "_import_piper", lambda: _StubPiperVoice)
 
         fake_syn_cls = MagicMock()
-        monkeypatch.setitem(sys.modules, "piper", types.SimpleNamespace(SynthesisConfig=fake_syn_cls))
+        monkeypatch.setitem(
+            sys.modules, "piper", types.SimpleNamespace(SynthesisConfig=fake_syn_cls)
+        )
 
         for bad in ("two", [1, 2], {"k": 1}, None):
             fake_syn_cls.reset_mock()
             config = {"piper": {"voice": str(model), "speaker_id": bad}}
-            tts_tool._generate_piper_tts("hi", str(tmp_path / f"out-{type(bad).__name__}.wav"), config)
+            tts_tool._generate_piper_tts(
+                "hi", str(tmp_path / f"out-{type(bad).__name__}.wav"), config
+            )
             assert fake_syn_cls.call_args.kwargs["speaker_id"] == 0
 
     def test_speaker_id_does_not_invalidate_voice_cache(self, tmp_path, monkeypatch):
@@ -325,7 +349,9 @@ class TestGeneratePiperTts:
 
         for speaker in (0, 1, 2, 3):
             config = {"piper": {"voice": str(model), "speaker_id": speaker}}
-            tts_tool._generate_piper_tts("hi", str(tmp_path / f"out-{speaker}.wav"), config)
+            tts_tool._generate_piper_tts(
+                "hi", str(tmp_path / f"out-{speaker}.wav"), config
+            )
 
         # Only one PiperVoice.load() call across four calls with different speakers.
         assert _StubPiperVoice.loaded == [str(model)]
@@ -334,6 +360,7 @@ class TestGeneratePiperTts:
 # ---------------------------------------------------------------------------
 # text_to_speech_tool end-to-end (provider == "piper")
 # ---------------------------------------------------------------------------
+
 
 class TestTextToSpeechToolWithPiper:
     def test_dispatches_to_piper(self, tmp_path, monkeypatch):
@@ -373,20 +400,39 @@ class TestTextToSpeechToolWithPiper:
 # check_tts_requirements
 # ---------------------------------------------------------------------------
 
+
 class TestCheckTtsRequirementsPiper:
     def test_piper_install_satisfies_requirements(self, monkeypatch):
         # Drop every other provider so we can isolate the piper signal.
         monkeypatch.setattr(tts_tool, "_load_tts_config", lambda: {"provider": "piper"})
-        monkeypatch.setattr(tts_tool, "_import_edge_tts", lambda: (_ for _ in ()).throw(ImportError()))
-        monkeypatch.setattr(tts_tool, "_import_elevenlabs", lambda: (_ for _ in ()).throw(ImportError()))
-        monkeypatch.setattr(tts_tool, "_import_openai_client", lambda: (_ for _ in ()).throw(ImportError()))
-        monkeypatch.setattr(tts_tool, "_import_mistral_client", lambda: (_ for _ in ()).throw(ImportError()))
+        monkeypatch.setattr(
+            tts_tool, "_import_edge_tts", lambda: (_ for _ in ()).throw(ImportError())
+        )
+        monkeypatch.setattr(
+            tts_tool, "_import_elevenlabs", lambda: (_ for _ in ()).throw(ImportError())
+        )
+        monkeypatch.setattr(
+            tts_tool,
+            "_import_openai_client",
+            lambda: (_ for _ in ()).throw(ImportError()),
+        )
+        monkeypatch.setattr(
+            tts_tool,
+            "_import_mistral_client",
+            lambda: (_ for _ in ()).throw(ImportError()),
+        )
         monkeypatch.setattr(tts_tool, "_check_neutts_available", lambda: False)
         monkeypatch.setattr(tts_tool, "_check_kittentts_available", lambda: False)
         monkeypatch.setattr(tts_tool, "_has_any_command_tts_provider", lambda: False)
         monkeypatch.setattr(tts_tool, "_has_openai_audio_backend", lambda: False)
-        for env in ("MINIMAX_API_KEY", "XAI_API_KEY", "GEMINI_API_KEY",
-                    "GOOGLE_API_KEY", "MISTRAL_API_KEY", "ELEVENLABS_API_KEY"):
+        for env in (
+            "MINIMAX_API_KEY",
+            "XAI_API_KEY",
+            "GEMINI_API_KEY",
+            "GOOGLE_API_KEY",
+            "MISTRAL_API_KEY",
+            "ELEVENLABS_API_KEY",
+        ):
             monkeypatch.delenv(env, raising=False)
 
         # Now toggle the piper check on and off.

@@ -9,6 +9,7 @@ Task 2.2/2.3. Two layers:
 Mocked tests are necessary-not-sufficient here (the HARD live-validation gate,
 Q-B, exercises a real `clawk gateway run`); these lock the unit contract.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -242,7 +243,9 @@ class TestDrainStateMachine:
     def test_active_work_count_includes_api_and_cron_work(self, monkeypatch):
         runner, _ = _drain_runner()
         runner.adapters = {
-            Platform.API_SERVER: MagicMock(active_agent_work_count=MagicMock(return_value=2))
+            Platform.API_SERVER: MagicMock(
+                active_agent_work_count=MagicMock(return_value=2)
+            )
         }
         runner._running_agents = {"session": MagicMock()}
         monkeypatch.setattr("cron.scheduler.get_running_job_ids", lambda: {"job-1"})
@@ -301,7 +304,9 @@ class TestDrainStateMachine:
 
 class TestDrainWatcher:
     @pytest.mark.asyncio
-    async def test_watcher_persists_aggregate_work_during_external_drain(self, home, monkeypatch):
+    async def test_watcher_persists_aggregate_work_during_external_drain(
+        self, home, monkeypatch
+    ):
         runner, _ = _drain_runner()
         runner._drain_control_watcher = GatewayRunner._drain_control_watcher.__get__(
             runner, GatewayRunner

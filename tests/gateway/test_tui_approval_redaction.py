@@ -20,13 +20,18 @@ class TestTuiApprovalEmitRedaction:
 
         emitted = {}
         monkeypatch.setattr(
-            tui_server, "_emit",
-            lambda event, sid, payload=None: emitted.update(
-                {"event": event, "sid": sid, "payload": payload}
-            ),
+            tui_server,
+            "_emit",
+            lambda event, sid, payload=None: emitted.update({
+                "event": event,
+                "sid": sid,
+                "payload": payload,
+            }),
         )
         raw = "curl -H 'Authorization: token ghp_01...6789' https://api.github.com"
-        tui_server._emit_approval_request("sess-1", {"command": raw, "description": "x"})
+        tui_server._emit_approval_request(
+            "sess-1", {"command": raw, "description": "x"}
+        )
 
         assert emitted["event"] == "approval.request"
         # credential removed, non-command field + command structure preserved
@@ -39,7 +44,8 @@ class TestTuiApprovalEmitRedaction:
 
         emitted = {}
         monkeypatch.setattr(
-            tui_server, "_emit",
+            tui_server,
+            "_emit",
             lambda event, sid, payload=None: emitted.update({"payload": payload}),
         )
         tui_server._emit_approval_request("s", {"description": "no command here"})

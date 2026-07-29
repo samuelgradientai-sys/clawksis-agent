@@ -31,7 +31,11 @@ class TestRedactApprovalCommand:
     """Contract for the approval-prompt redaction seam used by the gateway."""
 
     def test_redacts_github_pat(self):
-        raw = "curl -H 'Authorization: token " + _FAKE_GHP + "' https://api.github.com/user"
+        raw = (
+            "curl -H 'Authorization: token "
+            + _FAKE_GHP
+            + "' https://api.github.com/user"
+        )
         out = _redact_approval_command(raw)
         assert _FAKE_GHP not in out
         # command structure preserved so the operator can still judge the action
@@ -45,7 +49,9 @@ class TestRedactApprovalCommand:
         assert "python s.py" in out
 
     def test_redacts_bearer_token(self):
-        raw = "curl -H 'Authorization: Bearer " + _FAKE_JWT + "' https://api.example.com"
+        raw = (
+            "curl -H 'Authorization: Bearer " + _FAKE_JWT + "' https://api.example.com"
+        )
         out = _redact_approval_command(raw)
         assert _FAKE_JWT not in out
 
@@ -91,10 +97,15 @@ class TestApprovalCommandWiring:
         tree = ast.parse(source)
         target_fn = None
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == func_name:
+            if (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == func_name
+            ):
                 target_fn = node
                 break
-        assert target_fn is not None, f"function {func_name} not found in {module.__name__}"
+        assert target_fn is not None, (
+            f"function {func_name} not found in {module.__name__}"
+        )
 
         redact_line = None
         for node in ast.walk(target_fn):
@@ -120,7 +131,9 @@ class TestApprovalCommandWiring:
     def test_chat_platform_path_redacts_before_send(self):
         import gateway.run as run
 
-        self._assert_redacts_then_uses(run, "_approval_notify_sync", "send_exec_approval")
+        self._assert_redacts_then_uses(
+            run, "_approval_notify_sync", "send_exec_approval"
+        )
 
     def test_sse_api_path_redacts_before_enqueue(self):
         from gateway.platforms import api_server
@@ -135,11 +148,14 @@ class TestApprovalCommandWiring:
 
         tree = ast.parse(inspect.getsource(run))
         notify = next(
-            node for node in ast.walk(tree)
-            if isinstance(node, ast.FunctionDef) and node.name == "_approval_notify_sync"
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_approval_notify_sync"
         )
         call = next(
-            node for node in ast.walk(notify)
+            node
+            for node in ast.walk(notify)
             if isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "send_exec_approval"
@@ -149,8 +165,13 @@ class TestApprovalCommandWiring:
             value = keywords[name]
             assert isinstance(value, ast.Call)
             assert isinstance(value.func, ast.Attribute) and value.func.attr == "get"
-            assert isinstance(value.args[0], ast.Constant) and value.args[0].value == name
-            assert isinstance(value.args[1], ast.Constant) and value.args[1].value is default
+            assert (
+                isinstance(value.args[0], ast.Constant) and value.args[0].value == name
+            )
+            assert (
+                isinstance(value.args[1], ast.Constant)
+                and value.args[1].value is default
+            )
 
 
 class TestApprovalTextFallbackContract:
@@ -158,8 +179,11 @@ class TestApprovalTextFallbackContract:
         from gateway.run import _format_exec_approval_fallback
 
         text = _format_exec_approval_fallback(
-            "rm -rf /", "dangerous deletion", "/",
-            allow_permanent=False, smart_denied=True,
+            "rm -rf /",
+            "dangerous deletion",
+            "/",
+            allow_permanent=False,
+            smart_denied=True,
         )
         assert "owner override" in text.lower()
         assert "one operation" in text.lower()
@@ -171,8 +195,11 @@ class TestApprovalTextFallbackContract:
         from gateway.run import _format_exec_approval_fallback
 
         text = _format_exec_approval_fallback(
-            "curl https://example.test", "content warning", "!",
-            allow_permanent=False, smart_denied=False,
+            "curl https://example.test",
+            "content warning",
+            "!",
+            allow_permanent=False,
+            smart_denied=False,
         )
         assert "`!approve session`" in text
         assert "approve always" not in text
@@ -181,8 +208,11 @@ class TestApprovalTextFallbackContract:
         from gateway.run import _format_exec_approval_fallback
 
         text = _format_exec_approval_fallback(
-            "rm -rf /", "dangerous deletion", "/",
-            allow_permanent=True, smart_denied=False,
+            "rm -rf /",
+            "dangerous deletion",
+            "/",
+            allow_permanent=True,
+            smart_denied=False,
         )
         assert "`/approve session`" in text
         assert "`/approve always`" in text

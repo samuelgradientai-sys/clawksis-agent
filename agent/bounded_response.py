@@ -142,7 +142,5 @@ def read_error_body_or_default(
 
     Convenience for callers that distinguish "no body" from "empty string".
     """
-    text = read_streaming_error_body(
-        response, max_bytes=max_bytes, timeout_s=timeout_s
-    )
+    text = read_streaming_error_body(response, max_bytes=max_bytes, timeout_s=timeout_s)
     return text or None

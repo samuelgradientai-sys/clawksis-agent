@@ -33,6 +33,7 @@ def test_mixin_writes_active_agent_ref_to_cli_module():
         # Reproduce the exact assignment the mixin performs after building
         # the agent (see CLIAgentSetupMixin near the AIAgent(...) construction).
         import cli as _cli
+
         _cli._active_agent_ref = sentinel
 
         # The cleanup path reads cli._active_agent_ref — it must see the value.

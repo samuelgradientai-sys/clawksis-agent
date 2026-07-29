@@ -6,6 +6,7 @@ opening with a long paragraph stayed invisible until the model produced a
 newline — seconds of blank box on slow models. Now partial lines are
 force-flushed at terminal width (mirroring the reasoning box's 80-char rule).
 """
+
 import os
 import re
 import sys

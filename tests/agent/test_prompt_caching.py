@@ -1,6 +1,5 @@
 """Tests for agent/prompt_caching.py — Anthropic cache control injection."""
 
-
 from agent.prompt_caching import (
     _apply_cache_marker,
     _can_carry_marker,
@@ -85,37 +84,86 @@ class TestApplyCacheMarker:
 
 class TestCanCarryMarker:
     def test_native_anthropic_always_true(self):
-        assert _can_carry_marker({"role": "assistant", "content": ""}, native_anthropic=True) is True
-        assert _can_carry_marker({"role": "tool", "content": ""}, native_anthropic=True) is True
+        assert (
+            _can_carry_marker(
+                {"role": "assistant", "content": ""}, native_anthropic=True
+            )
+            is True
+        )
+        assert (
+            _can_carry_marker({"role": "tool", "content": ""}, native_anthropic=True)
+            is True
+        )
 
     def test_openrouter_content_parts_carry_marker(self):
-        assert _can_carry_marker({"role": "user", "content": "text"}, native_anthropic=False) is True
-        assert _can_carry_marker({"role": "user", "content": [{"type": "text", "text": "a"}]}, native_anthropic=False) is True
+        assert (
+            _can_carry_marker(
+                {"role": "user", "content": "text"}, native_anthropic=False
+            )
+            is True
+        )
+        assert (
+            _can_carry_marker(
+                {"role": "user", "content": [{"type": "text", "text": "a"}]},
+                native_anthropic=False,
+            )
+            is True
+        )
 
     def test_openrouter_empty_or_none_does_not_carry_marker(self):
-        assert _can_carry_marker({"role": "assistant", "content": ""}, native_anthropic=False) is False
-        assert _can_carry_marker({"role": "assistant", "content": None}, native_anthropic=False) is False
-        assert _can_carry_marker({"role": "tool", "content": "result"}, native_anthropic=False) is True
-        assert _can_carry_marker({"role": "tool", "content": ""}, native_anthropic=False) is False
+        assert (
+            _can_carry_marker(
+                {"role": "assistant", "content": ""}, native_anthropic=False
+            )
+            is False
+        )
+        assert (
+            _can_carry_marker(
+                {"role": "assistant", "content": None}, native_anthropic=False
+            )
+            is False
+        )
+        assert (
+            _can_carry_marker(
+                {"role": "tool", "content": "result"}, native_anthropic=False
+            )
+            is True
+        )
+        assert (
+            _can_carry_marker({"role": "tool", "content": ""}, native_anthropic=False)
+            is False
+        )
 
     def test_openrouter_list_carrier_requires_last_part_dict(self):
         """Carrier predicate must agree with _apply_cache_marker, which only marks
         the LAST content part. A list whose last element isn't a dict cannot carry
         a marker and must not consume a breakpoint."""
         # Last part is a dict -> carrier.
-        assert _can_carry_marker(
-            {"role": "user", "content": [{"type": "text", "text": "a"}]},
-            native_anthropic=False,
-        ) is True
+        assert (
+            _can_carry_marker(
+                {"role": "user", "content": [{"type": "text", "text": "a"}]},
+                native_anthropic=False,
+            )
+            is True
+        )
         # Last part is a non-dict (stray raw string) -> NOT a carrier, even though
         # an earlier part is a dict. Previously this passed the gate but got no
         # marker, wasting a breakpoint.
-        assert _can_carry_marker(
-            {"role": "user", "content": [{"type": "text", "text": "a"}, "trailing raw"]},
-            native_anthropic=False,
-        ) is False
+        assert (
+            _can_carry_marker(
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "a"}, "trailing raw"],
+                },
+                native_anthropic=False,
+            )
+            is False
+        )
         # Empty list -> not a carrier.
-        assert _can_carry_marker({"role": "user", "content": []}, native_anthropic=False) is False
+        assert (
+            _can_carry_marker({"role": "user", "content": []}, native_anthropic=False)
+            is False
+        )
 
 
 class TestApplyAnthropicCacheControl:
@@ -195,7 +243,9 @@ class TestApplyAnthropicCacheControl:
                 count += 1
         assert count <= 4
 
-    def test_tool_loop_empty_assistant_and_tool_messages_do_not_consume_breakpoints(self):
+    def test_tool_loop_empty_assistant_and_tool_messages_do_not_consume_breakpoints(
+        self,
+    ):
         """Tool loops should keep breakpoints on messages that can carry markers."""
         msgs = [
             {"role": "system", "content": "You are helpful"},

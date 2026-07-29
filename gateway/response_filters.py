@@ -37,9 +37,17 @@ def _strip_edge_silence_punctuation(text: str) -> str:
     """
     start = 0
     end = len(text)
-    while start < end and text[start] not in "[]" and unicodedata.category(text[start]).startswith("P"):
+    while (
+        start < end
+        and text[start] not in "[]"
+        and unicodedata.category(text[start]).startswith("P")
+    ):
         start += 1
-    while end > start and text[end - 1] not in "[]" and unicodedata.category(text[end - 1]).startswith("P"):
+    while (
+        end > start
+        and text[end - 1] not in "[]"
+        and unicodedata.category(text[end - 1]).startswith("P")
+    ):
         end -= 1
     return text[start:end].strip()
 
@@ -67,10 +75,15 @@ def is_intentional_silence_response(response: Any) -> bool:
         return False
     if len(stripped) > 64:
         return False
-    return any(candidate in LIVE_GATEWAY_SILENT_MARKERS for candidate in _canonical_silence_candidates(stripped))
+    return any(
+        candidate in LIVE_GATEWAY_SILENT_MARKERS
+        for candidate in _canonical_silence_candidates(stripped)
+    )
 
 
-def is_intentional_silence_agent_result(agent_result: dict | None, response: Any) -> bool:
+def is_intentional_silence_agent_result(
+    agent_result: dict | None, response: Any
+) -> bool:
     """Silence markers suppress delivery only for successful agent turns."""
     if not isinstance(agent_result, dict):
         return False
@@ -101,6 +114,8 @@ def is_partial_silence_marker(text: Any) -> bool:
     if not stripped or len(stripped) > 64:
         return False
     for candidate in _canonical_silence_candidates(stripped):
-        if candidate and any(marker.startswith(candidate) for marker in LIVE_GATEWAY_SILENT_MARKERS):
+        if candidate and any(
+            marker.startswith(candidate) for marker in LIVE_GATEWAY_SILENT_MARKERS
+        ):
             return True
     return False

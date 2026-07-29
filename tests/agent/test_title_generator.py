@@ -58,7 +58,9 @@ class TestGenerateTitle:
             assert _title_language() == "French"
         with patch("clawk_cli.config.load_config", return_value={}):
             assert _title_language() == ""
-        with patch("clawk_cli.config.load_config", side_effect=RuntimeError("bad config")):
+        with patch(
+            "clawk_cli.config.load_config", side_effect=RuntimeError("bad config")
+        ):
             assert _title_language() == ""
 
     def test_default_timeout_delegates_to_auxiliary_config(self):
@@ -88,7 +90,10 @@ class TestGenerateTitle:
             return resp
 
         with patch("agent.title_generator.call_llm", side_effect=mock_call_llm):
-            assert generate_title("question", "answer", timeout=123.0) == "Explicit Timeout"
+            assert (
+                generate_title("question", "answer", timeout=123.0)
+                == "Explicit Timeout"
+            )
 
         assert captured_kwargs["timeout"] == 123.0
 
@@ -122,9 +127,9 @@ class TestGenerateTitle:
         stripped so the leaked reasoning doesn't become the title."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = (
-            "<think>Let me reason about a good title for this session"
-        )
+        mock_response.choices[
+            0
+        ].message.content = "<think>Let me reason about a good title for this session"
 
         with patch("agent.title_generator.call_llm", return_value=mock_response):
             title = generate_title("hello", "hi there")
@@ -160,7 +165,9 @@ class TestGenerateTitle:
             assert generate_title("question", "answer") is None
 
     def test_returns_none_on_exception(self):
-        with patch("agent.title_generator.call_llm", side_effect=RuntimeError("no provider")):
+        with patch(
+            "agent.title_generator.call_llm", side_effect=RuntimeError("no provider")
+        ):
             assert generate_title("question", "answer") is None
 
     def test_invokes_failure_callback_on_exception(self):
@@ -279,7 +286,9 @@ class TestAutoTitleSession:
         db.get_session_title.return_value = None
         db.set_auto_title_if_empty.return_value = True
         seen = []
-        with patch("agent.title_generator.generate_title", return_value="Readable Session"):
+        with patch(
+            "agent.title_generator.generate_title", return_value="Readable Session"
+        ):
             auto_title_session(
                 db,
                 "sess-1",
@@ -362,6 +371,7 @@ class TestMaybeAutoTitle:
             maybe_auto_title(db, "sess-1", "third", "response 3", history)
             # Wait briefly for any thread to start
             import time
+
             time.sleep(0.1)
             mock_auto.assert_not_called()
 
@@ -376,6 +386,7 @@ class TestMaybeAutoTitle:
 
         with patch("agent.title_generator.auto_title_session") as mock_auto:
             import threading
+
             called = threading.Event()
             mock_auto.side_effect = lambda *a, **k: called.set()
             maybe_auto_title(db, "sess-1", "hello", "hi there", history)
@@ -424,9 +435,12 @@ class TestMaybeAutoTitle:
 
         with patch("agent.title_generator.auto_title_session") as mock_auto:
             import threading
+
             called = threading.Event()
             mock_auto.side_effect = lambda *a, **k: called.set()
-            maybe_auto_title(db, "sess-1", "hello", "hi there", history, failure_callback=_cb)
+            maybe_auto_title(
+                db, "sess-1", "hello", "hi there", history, failure_callback=_cb
+            )
             assert called.wait(timeout=10), "auto_title thread never ran"
             mock_auto.assert_called_once_with(
                 db,
@@ -497,15 +511,14 @@ class TestAutoTitleDuplicateHandling:
         db = MagicMock(spec=["get_session_title", "set_session_title"])
         db.get_session_title.return_value = None
         db.set_session_title.side_effect = ValueError("in use")
-        with patch(
-            "agent.title_generator.generate_title", return_value="Dup Title"
-        ):
+        with patch("agent.title_generator.generate_title", return_value="Dup Title"):
             auto_title_session(db, "sess-1", "hi", "hello")  # must not raise
 
     def test_manual_title_race_skips_without_callback(self):
         # Atomic predicate fails (manual /title landed while generation was in
         # flight) -> nothing persisted, no callback fired.
         from agent.title_generator import _persist_session_title
+
         db = MagicMock()
         db.set_auto_title_if_empty.return_value = False
         assert _persist_session_title(db, "sess-1", "Some Title") is None
@@ -516,6 +529,7 @@ class TestAutoTitleDuplicateHandling:
         # (session vanished) -> RuntimeError in the persist helper, swallowed
         # by auto_title_session, no callback.
         from agent.title_generator import _persist_session_title
+
         db = MagicMock(spec=["get_session_title", "set_session_title"])
         db.set_session_title.return_value = False
         with pytest.raises(RuntimeError):
@@ -529,7 +543,8 @@ class TestRuntimeValidator:
     def test_skips_when_validator_returns_false(self):
         with patch("agent.title_generator.call_llm") as mock_llm:
             title = generate_title(
-                "question", "answer",
+                "question",
+                "answer",
                 runtime_validator=lambda: False,
             )
             assert title is None
@@ -540,9 +555,12 @@ class TestRuntimeValidator:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "Validated Title"
 
-        with patch("agent.title_generator.call_llm", return_value=mock_response) as mock_llm:
+        with patch(
+            "agent.title_generator.call_llm", return_value=mock_response
+        ) as mock_llm:
             title = generate_title(
-                "question", "answer",
+                "question",
+                "answer",
                 runtime_validator=lambda: True,
             )
             assert title == "Validated Title"
@@ -556,9 +574,12 @@ class TestRuntimeValidator:
         def _bad_validator():
             raise RuntimeError("validator gone")
 
-        with patch("agent.title_generator.call_llm", return_value=mock_response) as mock_llm:
+        with patch(
+            "agent.title_generator.call_llm", return_value=mock_response
+        ) as mock_llm:
             title = generate_title(
-                "question", "answer",
+                "question",
+                "answer",
                 runtime_validator=_bad_validator,
             )
             assert title == "Resilient Title"
@@ -577,9 +598,12 @@ class TestRuntimeValidator:
 
         with patch("agent.title_generator.auto_title_session") as mock_auto:
             import threading
+
             called = threading.Event()
             mock_auto.side_effect = lambda *a, **k: called.set()
-            maybe_auto_title(db, "sess-1", "hello", "hi there", history, runtime_validator=_v)
+            maybe_auto_title(
+                db, "sess-1", "hello", "hi there", history, runtime_validator=_v
+            )
             assert called.wait(timeout=10), "auto_title thread never ran"
             kwargs = mock_auto.call_args.kwargs
             assert kwargs["runtime_validator"] is _v

@@ -67,7 +67,9 @@ def test_prepare_agent_startup_applies_safe_mode_before_plugin_discovery(monkeyp
     setattr(plugins, "discover_plugins", discover_plugins)
     monkeypatch.setitem(sys.modules, "clawk_cli.plugins", plugins)
     monkeypatch.setattr(main_mod, "_should_background_mcp_startup", lambda _args: False)
-    monkeypatch.setattr(main_mod, "_command_has_dedicated_mcp_startup", lambda _args: True)
+    monkeypatch.setattr(
+        main_mod, "_command_has_dedicated_mcp_startup", lambda _args: True
+    )
 
     main_mod._prepare_agent_startup(args)
 

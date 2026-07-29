@@ -27,6 +27,7 @@ from gateway.session import SessionEntry, SessionSource
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_history(n_messages: int, content_size: int = 100) -> list:
     """Build a fake transcript with n_messages user/assistant pairs."""
     history = []
@@ -53,7 +54,9 @@ def _make_large_history_tokens(target_tokens: int) -> list:
 
 class HygieneCaptureAdapter(BasePlatformAdapter):
     def __init__(self):
-        super().__init__(PlatformConfig(enabled=True, token="fake-token"), Platform.TELEGRAM)
+        super().__init__(
+            PlatformConfig(enabled=True, token="fake-token"), Platform.TELEGRAM
+        )
         self.sent = []
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
@@ -63,14 +66,12 @@ class HygieneCaptureAdapter(BasePlatformAdapter):
         return None
 
     async def send(self, chat_id, content, reply_to=None, metadata=None) -> SendResult:
-        self.sent.append(
-            {
-                "chat_id": chat_id,
-                "content": content,
-                "reply_to": reply_to,
-                "metadata": metadata,
-            }
-        )
+        self.sent.append({
+            "chat_id": chat_id,
+            "content": content,
+            "reply_to": reply_to,
+            "metadata": metadata,
+        })
         return SendResult(success=True, message_id="hygiene-1")
 
     async def get_chat_info(self, chat_id: str):
@@ -80,6 +81,7 @@ class HygieneCaptureAdapter(BasePlatformAdapter):
 # ---------------------------------------------------------------------------
 # Detection threshold tests (model-aware, unified with compression config)
 # ---------------------------------------------------------------------------
+
 
 class TestSessionHygieneThresholds:
     """Test that the threshold logic correctly identifies large sessions.
@@ -212,9 +214,6 @@ class TestSessionHygieneWarnThreshold:
         assert post_compress_tokens < warn_threshold
 
 
-
-
-
 class TestEstimatedTokenThreshold:
     """Verify that hygiene thresholds are always below the model's context
     limit — for both actual and estimated token counts.
@@ -279,12 +278,16 @@ class TestTokenEstimation:
     def test_proportional_to_content(self):
         small = _make_history(10, content_size=100)
         large = _make_history(10, content_size=10_000)
-        assert estimate_messages_tokens_rough(large) > estimate_messages_tokens_rough(small)
+        assert estimate_messages_tokens_rough(large) > estimate_messages_tokens_rough(
+            small
+        )
 
     def test_proportional_to_count(self):
         few = _make_history(10, content_size=1000)
         many = _make_history(100, content_size=1000)
-        assert estimate_messages_tokens_rough(many) > estimate_messages_tokens_rough(few)
+        assert estimate_messages_tokens_rough(many) > estimate_messages_tokens_rough(
+            few
+        )
 
     def test_pathological_session_detected(self):
         """The reported pathological case: 648 messages, ~299K tokens.
@@ -299,7 +302,9 @@ class TestTokenEstimation:
 
 
 @pytest.mark.asyncio
-async def test_session_hygiene_messages_stay_in_originating_topic(monkeypatch, tmp_path):
+async def test_session_hygiene_messages_stay_in_originating_topic(
+    monkeypatch, tmp_path
+):
     fake_dotenv = types.ModuleType("dotenv")
     fake_dotenv.load_dotenv = lambda *args, **kwargs: None
     monkeypatch.setitem(sys.modules, "dotenv", fake_dotenv)
@@ -344,7 +349,9 @@ async def test_session_hygiene_messages_stay_in_originating_topic(monkeypatch, t
         platform=Platform.TELEGRAM,
         chat_type="group",
     )
-    runner.session_store.load_transcript.return_value = _make_history(6, content_size=400)
+    runner.session_store.load_transcript.return_value = _make_history(
+        6, content_size=400
+    )
     runner.session_store.has_any_sessions.return_value = True
     runner.session_store.rewrite_transcript = MagicMock()
     runner.session_store.append_to_transcript = MagicMock()
@@ -365,7 +372,9 @@ async def test_session_hygiene_messages_stay_in_originating_topic(monkeypatch, t
     )
 
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100,
@@ -396,7 +405,9 @@ async def test_session_hygiene_messages_stay_in_originating_topic(monkeypatch, t
 
 
 @pytest.mark.asyncio
-async def test_session_hygiene_preserves_transcript_when_no_rotation(monkeypatch, tmp_path):
+async def test_session_hygiene_preserves_transcript_when_no_rotation(
+    monkeypatch, tmp_path
+):
     """Regression for #21301: the hygiene agent is built without a session_db,
     so _compress_context cannot rotate. When it neither rotates NOR compacts
     in place, the transcript MUST be preserved — an unconditional
@@ -447,7 +458,9 @@ async def test_session_hygiene_preserves_transcript_when_no_rotation(monkeypatch
         platform=Platform.TELEGRAM,
         chat_type="group",
     )
-    runner.session_store.load_transcript.return_value = _make_history(6, content_size=400)
+    runner.session_store.load_transcript.return_value = _make_history(
+        6, content_size=400
+    )
     runner.session_store.has_any_sessions.return_value = True
     runner.session_store.rewrite_transcript = MagicMock()
     runner.session_store.append_to_transcript = MagicMock()
@@ -468,7 +481,9 @@ async def test_session_hygiene_preserves_transcript_when_no_rotation(monkeypatch
     )
 
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100,
@@ -495,7 +510,9 @@ async def test_session_hygiene_preserves_transcript_when_no_rotation(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_session_hygiene_preserves_transcript_when_in_place_configured_but_no_db(monkeypatch, tmp_path):
+async def test_session_hygiene_preserves_transcript_when_in_place_configured_but_no_db(
+    monkeypatch, tmp_path
+):
     """Regression: when compression.in_place is True but the hygiene agent has
     no session_db, archive_and_compact cannot run — _last_compaction_in_place
     stays False.  The guard must read the *result* flag, not the *config* flag,
@@ -545,7 +562,9 @@ async def test_session_hygiene_preserves_transcript_when_in_place_configured_but
         platform=Platform.TELEGRAM,
         chat_type="group",
     )
-    runner.session_store.load_transcript.return_value = _make_history(6, content_size=400)
+    runner.session_store.load_transcript.return_value = _make_history(
+        6, content_size=400
+    )
     runner.session_store.has_any_sessions.return_value = True
     runner.session_store.rewrite_transcript = MagicMock()
     runner.session_store.append_to_transcript = MagicMock()
@@ -566,7 +585,9 @@ async def test_session_hygiene_preserves_transcript_when_in_place_configured_but
     )
 
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100,
@@ -594,7 +615,9 @@ async def test_session_hygiene_preserves_transcript_when_in_place_configured_but
 
 
 @pytest.mark.asyncio
-async def test_session_hygiene_warns_user_when_compression_aborts(monkeypatch, tmp_path):
+async def test_session_hygiene_warns_user_when_compression_aborts(
+    monkeypatch, tmp_path
+):
     """When auxiliary compression's summary LLM call fails, the compressor
     ABORTS — returns messages unchanged, sets _last_compress_aborted=True,
     and drops nothing.  Gateway must surface a visible ⚠️ warning to the
@@ -651,7 +674,9 @@ async def test_session_hygiene_warns_user_when_compression_aborts(monkeypatch, t
         platform=Platform.TELEGRAM,
         chat_type="group",
     )
-    runner.session_store.load_transcript.return_value = _make_history(6, content_size=400)
+    runner.session_store.load_transcript.return_value = _make_history(
+        6, content_size=400
+    )
     runner.session_store.has_any_sessions.return_value = True
     runner.session_store.rewrite_transcript = MagicMock()
     runner.session_store.append_to_transcript = MagicMock()
@@ -672,7 +697,9 @@ async def test_session_hygiene_warns_user_when_compression_aborts(monkeypatch, t
     )
 
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100,
@@ -696,7 +723,9 @@ async def test_session_hygiene_warns_user_when_compression_aborts(monkeypatch, t
     assert result == "ok"
     # The compressor reported abort → exactly one warning message must
     # have been delivered to the user.
-    warning_messages = [s for s in adapter.sent if "Context compression aborted" in s["content"]]
+    warning_messages = [
+        s for s in adapter.sent if "Context compression aborted" in s["content"]
+    ]
     assert len(warning_messages) == 1, (
         f"Expected 1 compression-aborted warning, got {len(warning_messages)}: {adapter.sent}"
     )
@@ -713,7 +742,9 @@ async def test_session_hygiene_warns_user_when_compression_aborts(monkeypatch, t
 
 
 @pytest.mark.asyncio
-async def test_session_hygiene_informs_user_when_aux_model_fails_but_recovers(monkeypatch, tmp_path):
+async def test_session_hygiene_informs_user_when_aux_model_fails_but_recovers(
+    monkeypatch, tmp_path
+):
     """When the user's configured ``auxiliary.compression.model`` errors out
     and we recover via the main model, compression succeeds but the user's
     config is still broken.  Gateway hygiene must surface an ℹ note so the
@@ -771,7 +802,9 @@ async def test_session_hygiene_informs_user_when_aux_model_fails_but_recovers(mo
         platform=Platform.TELEGRAM,
         chat_type="group",
     )
-    runner.session_store.load_transcript.return_value = _make_history(6, content_size=400)
+    runner.session_store.load_transcript.return_value = _make_history(
+        6, content_size=400
+    )
     runner.session_store.has_any_sessions.return_value = True
     runner.session_store.rewrite_transcript = MagicMock()
     runner.session_store.append_to_transcript = MagicMock()
@@ -792,7 +825,9 @@ async def test_session_hygiene_informs_user_when_aux_model_fails_but_recovers(mo
     )
 
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100,
@@ -815,12 +850,13 @@ async def test_session_hygiene_informs_user_when_aux_model_fails_but_recovers(mo
 
     assert result == "ok"
     # No ⚠️ hard-failure warning (that's for dropped turns)
-    hard_warnings = [s for s in adapter.sent if "Context compression summary failed" in s["content"]]
+    hard_warnings = [
+        s for s in adapter.sent if "Context compression summary failed" in s["content"]
+    ]
     assert len(hard_warnings) == 0, adapter.sent
     # But an ℹ note about the configured aux model must be delivered.
     aux_notes = [
-        s for s in adapter.sent
-        if "Configured compression model" in s["content"]
+        s for s in adapter.sent if "Configured compression model" in s["content"]
     ]
     assert len(aux_notes) == 1, (
         f"Expected 1 aux-model fallback notice, got {len(aux_notes)}: {adapter.sent}"
@@ -904,7 +940,9 @@ async def test_session_hygiene_forces_in_place_compaction_with_bound_session_db(
         platform=Platform.TELEGRAM,
         chat_type="private",
     )
-    runner.session_store.load_transcript.return_value = _make_history(12, content_size=400)
+    runner.session_store.load_transcript.return_value = _make_history(
+        12, content_size=400
+    )
     runner.session_store.has_any_sessions.return_value = True
     runner.session_store.rewrite_transcript = MagicMock()
     runner.session_store.append_to_transcript = MagicMock()
@@ -949,7 +987,9 @@ async def test_session_hygiene_forces_in_place_compaction_with_bound_session_db(
     assert result == "ok"
     agent = FakeInPlaceCompressAgent.last_instance
     assert agent is not None
-    agent.context_compressor.bind_session_state.assert_called_once_with(fake_db, "sess-1")
+    agent.context_compressor.bind_session_state.assert_called_once_with(
+        fake_db, "sess-1"
+    )
     # In-place compaction already persisted via archive_and_compact() —
     # rewrite_transcript would replace_messages(active_only=False) and DELETE
     # the just-archived rows (#61145). The hygiene handler must skip it.
@@ -994,9 +1034,7 @@ async def test_session_hygiene_honors_configurable_hard_message_limit(
     # Write config.yaml with lowered hard-limit
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
-        "compression:\n"
-        "  enabled: true\n"
-        "  hygiene_hard_message_limit: 10\n"
+        "compression:\n  enabled: true\n  hygiene_hard_message_limit: 10\n"
     )
 
     gateway_run = importlib.import_module("gateway.run")
@@ -1021,7 +1059,9 @@ async def test_session_hygiene_honors_configurable_hard_message_limit(
     )
     # 12 messages: below default → no compression without override,
     # but above the configured limit of 10 → should compress.
-    runner.session_store.load_transcript.return_value = _make_history(12, content_size=40)
+    runner.session_store.load_transcript.return_value = _make_history(
+        12, content_size=40
+    )
     runner.session_store.has_any_sessions.return_value = True
     runner.session_store.rewrite_transcript = MagicMock()
     runner.session_store.append_to_transcript = MagicMock()
@@ -1124,7 +1164,9 @@ async def test_session_hygiene_default_hard_message_limit_does_not_fire_at_12_me
         platform=Platform.TELEGRAM,
         chat_type="private",
     )
-    runner.session_store.load_transcript.return_value = _make_history(12, content_size=40)
+    runner.session_store.load_transcript.return_value = _make_history(
+        12, content_size=40
+    )
     runner.session_store.has_any_sessions.return_value = True
     runner.session_store.rewrite_transcript = MagicMock()
     runner.session_store.append_to_transcript = MagicMock()

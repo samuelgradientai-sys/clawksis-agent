@@ -1,4 +1,5 @@
 """Regression tests for symlink-safe Docker stage2 ownership repair."""
+
 from __future__ import annotations
 
 import re
@@ -46,7 +47,9 @@ def _run_helper(
     return subprocess.run([shell, "-c", script], capture_output=True, text=True)
 
 
-def test_chown_helper_repairs_real_directories(stage2_text: str, tmp_path: Path) -> None:
+def test_chown_helper_repairs_real_directories(
+    stage2_text: str, tmp_path: Path
+) -> None:
     target = tmp_path / "home"
     target.mkdir()
     log_path = tmp_path / "chown.log"
@@ -59,7 +62,9 @@ def test_chown_helper_repairs_real_directories(stage2_text: str, tmp_path: Path)
     ]
 
 
-def test_chown_helper_refuses_symlinked_directories(stage2_text: str, tmp_path: Path) -> None:
+def test_chown_helper_refuses_symlinked_directories(
+    stage2_text: str, tmp_path: Path
+) -> None:
     real_home = tmp_path / "real-home"
     real_home.mkdir()
     symlinked_home = tmp_path / "clawk-home"

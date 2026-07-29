@@ -1,4 +1,5 @@
 """Abstract base + dataclasses + exceptions for dashboard auth providers."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -206,9 +207,7 @@ class DashboardAuthProvider(ABC):
     @abstractmethod
     def revoke_session(self, *, refresh_token: str) -> None: ...
 
-    def complete_password_login(
-        self, *, username: str, password: str
-    ) -> "Session":
+    def complete_password_login(self, *, username: str, password: str) -> "Session":
         """Verify a username/password pair and mint a :class:`Session`.
 
         Only called when ``supports_password`` is True (the
@@ -292,9 +291,7 @@ def assert_protocol_compliance(cls: type) -> None:
     for attr in required_attrs:
         val = getattr(cls, attr, "")
         if not val:
-            raise TypeError(
-                f"{cls.__name__} missing or empty attribute: {attr!r}"
-            )
+            raise TypeError(f"{cls.__name__} missing or empty attribute: {attr!r}")
     for method in required_methods:
         if not callable(getattr(cls, method, None)):
             raise TypeError(f"{cls.__name__} missing method: {method}")

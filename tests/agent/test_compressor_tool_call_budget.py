@@ -43,7 +43,9 @@ def _args_only_estimate(msg: dict) -> int:
     tokens = len(content) // _CHARS_PER_TOKEN + 10
     for tc in msg.get("tool_calls") or []:
         if isinstance(tc, dict):
-            tokens += len(tc.get("function", {}).get("arguments", "")) // _CHARS_PER_TOKEN
+            tokens += (
+                len(tc.get("function", {}).get("arguments", "")) // _CHARS_PER_TOKEN
+            )
     return tokens
 
 
@@ -76,7 +78,9 @@ class TestToolCallEnvelopeEstimate:
 
 @pytest.fixture()
 def compressor():
-    with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+    with patch(
+        "agent.context_compressor.get_model_context_length", return_value=100000
+    ):
         return ContextCompressor(
             model="test/model",
             threshold_percent=0.85,
@@ -93,11 +97,15 @@ class TestTailCutAccountsForToolCalls:
         messages = [{"role": "user", "content": "start"}] + heavy
 
         per_msg = _estimate_msg_budget_tokens(messages[-1])
-        assert per_msg > 30  # sanity: a heavy turn is non-trivial once the envelope counts
+        assert (
+            per_msg > 30
+        )  # sanity: a heavy turn is non-trivial once the envelope counts
 
         # Budget sized so ~6 heavy turns fit under the 1.5x soft ceiling.
         token_budget = int(per_msg * 6 / 1.5)
-        cut = compressor._find_tail_cut_by_tokens(messages, head_end=1, token_budget=token_budget)
+        cut = compressor._find_tail_cut_by_tokens(
+            messages, head_end=1, token_budget=token_budget
+        )
         protected = len(messages) - cut
 
         # With the envelope counted, the walk stops well short of protecting all

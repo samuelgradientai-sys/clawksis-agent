@@ -149,10 +149,10 @@ def test_aiagent_wrapper_resets_runtime_context_after_turn():
 
 def test_legacy_patched_globals_are_visible_only_without_an_active_runtime():
     """Direct legacy patches work, but never override context-local session state."""
-    with patch.object(aux, "_RUNTIME_MAIN_PROVIDER", "custom:legacy"), patch.object(
-        aux, "_RUNTIME_MAIN_MODEL", "legacy-model"
-    ), patch.object(
-        aux, "_RUNTIME_MAIN_BASE_URL", "https://legacy.test/v1"
+    with (
+        patch.object(aux, "_RUNTIME_MAIN_PROVIDER", "custom:legacy"),
+        patch.object(aux, "_RUNTIME_MAIN_MODEL", "legacy-model"),
+        patch.object(aux, "_RUNTIME_MAIN_BASE_URL", "https://legacy.test/v1"),
     ):
         assert aux._normalize_main_runtime(None)["model"] == "legacy-model"
 
@@ -181,10 +181,14 @@ def test_concurrent_vision_probes_use_each_sessions_endpoint_and_model():
         assert client is not None
         return provider, resolved_model, client.probed_base_url
 
-    with patch.object(
-        aux, "_resolve_task_provider_model", return_value=("auto", None, None, None, None)
-    ), patch.object(aux, "_main_model_supports_vision", return_value=True), patch.object(
-        aux, "resolve_provider_client", side_effect=fake_resolve
+    with (
+        patch.object(
+            aux,
+            "_resolve_task_provider_model",
+            return_value=("auto", None, None, None, None),
+        ),
+        patch.object(aux, "_main_model_supports_vision", return_value=True),
+        patch.object(aux, "resolve_provider_client", side_effect=fake_resolve),
     ):
         with ThreadPoolExecutor(max_workers=2) as pool:
             first = pool.submit(probe, "vision-a", "https://a.test/v1")
@@ -234,10 +238,14 @@ def test_explicit_vision_runtime_wins_over_stale_ambient_runtime():
         captured.update(provider=provider, model=model, **kwargs)
         return MagicMock(), model
 
-    with patch.object(
-        aux, "_resolve_task_provider_model", return_value=("auto", None, None, None, None)
-    ), patch.object(aux, "_main_model_supports_vision", return_value=True), patch.object(
-        aux, "resolve_provider_client", side_effect=fake_resolve
+    with (
+        patch.object(
+            aux,
+            "_resolve_task_provider_model",
+            return_value=("auto", None, None, None, None),
+        ),
+        patch.object(aux, "_main_model_supports_vision", return_value=True),
+        patch.object(aux, "resolve_provider_client", side_effect=fake_resolve),
     ):
         provider, _client, model = aux.resolve_vision_provider_client(
             main_runtime=explicit
@@ -261,8 +269,7 @@ def test_image_routing_does_not_borrow_base_url_from_different_provider():
     }
 
     assert (
-        _resolve_inference_base_url(cfg, "openrouter")
-        == "https://openrouter.ai/api/v1"
+        _resolve_inference_base_url(cfg, "openrouter") == "https://openrouter.ai/api/v1"
     )
 
 
@@ -274,11 +281,16 @@ def test_async_initial_cache_lookup_receives_explicit_runtime_snapshot():
     client = MagicMock()
     client.chat.completions.create = AsyncMock(return_value=response)
 
-    with patch.object(
-        aux,
-        "_resolve_task_provider_model",
-        return_value=("openrouter", None, None, None, None),
-    ), patch.object(aux, "_get_cached_client", return_value=(client, "async-new")) as get_client:
+    with (
+        patch.object(
+            aux,
+            "_resolve_task_provider_model",
+            return_value=("openrouter", None, None, None, None),
+        ),
+        patch.object(
+            aux, "_get_cached_client", return_value=(client, "async-new")
+        ) as get_client,
+    ):
         asyncio.run(
             aux.async_call_llm(
                 task="approval",
@@ -287,7 +299,9 @@ def test_async_initial_cache_lookup_receives_explicit_runtime_snapshot():
             )
         )
 
-    assert get_client.call_args.kwargs["main_runtime"] == aux._normalize_main_runtime(runtime)
+    assert get_client.call_args.kwargs["main_runtime"] == aux._normalize_main_runtime(
+        runtime
+    )
 
 
 def test_unhashable_callable_runtime_api_keys_are_safe_secret_free_discriminators():
@@ -305,10 +319,14 @@ def test_unhashable_callable_runtime_api_keys_are_safe_secret_free_discriminator
     second_provider = TokenProvider("second-super-secret-token")
 
     first = aux._client_cache_key(
-        "auto", async_mode=False, main_runtime={**_runtime("same"), "api_key": first_provider}
+        "auto",
+        async_mode=False,
+        main_runtime={**_runtime("same"), "api_key": first_provider},
     )
     second = aux._client_cache_key(
-        "auto", async_mode=False, main_runtime={**_runtime("same"), "api_key": second_provider}
+        "auto",
+        async_mode=False,
+        main_runtime={**_runtime("same"), "api_key": second_provider},
     )
 
     hash(first)

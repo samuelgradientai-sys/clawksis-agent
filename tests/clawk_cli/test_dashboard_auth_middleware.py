@@ -12,6 +12,7 @@ without any external IDP.  Exercises:
   * Invalid / missing cookies return 401 (api) or 302 (html)
   * Zero-providers + gate-on fails closed
 """
+
 from __future__ import annotations
 
 import pytest
@@ -68,22 +69,23 @@ def test_gated_status_is_public(gated_app):
     round trip.
     """
     r = gated_app.get("/api/status")
-    assert r.status_code == 200, (
-        f"Expected 200, got {r.status_code}: {r.text}"
-    )
+    assert r.status_code == 200, f"Expected 200, got {r.status_code}: {r.text}"
     body = r.json()
     assert body["auth_required"] is True
     assert "version" in body
     assert "gateway_state" in body
 
 
-@pytest.mark.parametrize("path", [
-    "/api/config/defaults",
-    "/api/config/schema",
-    "/api/model/info",
-    "/api/dashboard/themes",
-    "/api/dashboard/plugins",
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/config/defaults",
+        "/api/config/schema",
+        "/api/model/info",
+        "/api/dashboard/themes",
+        "/api/dashboard/plugins",
+    ],
+)
 def test_other_public_api_paths_are_public_under_gate(gated_app, path):
     """The remaining ``PUBLIC_API_PATHS`` entries must also bypass the
     gate. They're documented as non-sensitive read-only endpoints that
@@ -102,8 +104,7 @@ def test_other_public_api_paths_are_public_under_gate(gated_app, path):
     if r.status_code == 302:
         location = r.headers.get("location", "")
         assert "/login" not in location, (
-            f"{path} redirected to {location} — should be public, "
-            "not bounced to /login"
+            f"{path} redirected to {location} — should be public, not bounced to /login"
         )
 
 
@@ -152,8 +153,7 @@ def test_full_login_round_trip_unlocks_gated_api(gated_app):
     r1 = gated_app.get("/auth/login?provider=stub", follow_redirects=False)
     assert r1.status_code == 302
     pkce = next(
-        (c for c in r1.headers.get_list("set-cookie")
-         if "clawk_session_pkce" in c),
+        (c for c in r1.headers.get_list("set-cookie") if "clawk_session_pkce" in c),
         None,
     )
     assert pkce and "HttpOnly" in pkce
@@ -183,8 +183,7 @@ def test_full_login_round_trip_unlocks_gated_api(gated_app):
     #    distinguish "logged in" from "gate accidentally disabled".)
     r3 = gated_app.get("/api/sessions")
     assert r3.status_code == 200, (
-        f"Expected 200 for /api/sessions post-login, got {r3.status_code}: "
-        f"{r3.text}"
+        f"Expected 200 for /api/sessions post-login, got {r3.status_code}: {r3.text}"
     )
 
 
@@ -226,8 +225,11 @@ def test_gated_require_token_endpoint_accepts_cookie_session(gated_app):
     _complete_stub_login(gated_app)
     r = gated_app.post(
         "/api/dashboard/agent-plugins/install",
-        json={"identifier": "definitely not a valid identifier",
-              "force": False, "enable": False},
+        json={
+            "identifier": "definitely not a valid identifier",
+            "force": False,
+            "enable": False,
+        },
     )
     assert r.status_code != 401, (
         "A _require_token endpoint 401'd a cookie-authenticated request under "
@@ -388,12 +390,10 @@ def test_logout_clears_cookies_and_redirects_to_login(gated_app):
     assert r.headers["location"] == "/login"
     set_cookies = r.headers.get_list("set-cookie")
     assert any(
-        c.startswith("clawk_session_at=") and "Max-Age=0" in c
-        for c in set_cookies
+        c.startswith("clawk_session_at=") and "Max-Age=0" in c for c in set_cookies
     )
     assert any(
-        c.startswith("clawk_session_rt=") and "Max-Age=0" in c
-        for c in set_cookies
+        c.startswith("clawk_session_rt=") and "Max-Age=0" in c for c in set_cookies
     )
 
 
@@ -587,7 +587,7 @@ def test_unreachable_first_provider_does_not_block_second(_gated_state):
     """
     working = StubAuthProvider()
     register_provider(_UnreachableProvider())  # registered first → tried first
-    register_provider(working)                  # the one that can verify
+    register_provider(working)  # the one that can verify
 
     at = _mint_stub_at(working)
     client = _gated_state()

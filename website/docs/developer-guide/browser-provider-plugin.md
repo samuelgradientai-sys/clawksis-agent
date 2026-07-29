@@ -70,11 +70,11 @@ from agent.browser_provider import BrowserProvider
 class MyBackendProvider(BrowserProvider):
     @property
     def name(self) -> str:
-        return "my-backend"          # the browser.cloud_provider config value
+        return "my-backend"  # the browser.cloud_provider config value
 
     @property
     def display_name(self) -> str:
-        return "My Backend"          # shown in `clawk tools`
+        return "My Backend"  # shown in `clawk tools`
 
     def is_available(self) -> bool:
         """Cheap check only — env var present, dep importable.
@@ -87,9 +87,9 @@ class MyBackendProvider(BrowserProvider):
         session = my_api.create_browser(...)
         return {
             "session_name": f"my-backend-{task_id}",  # unique agent-browser session name
-            "bb_session_id": session.id,              # provider session ID (for cleanup)
-            "cdp_url": session.cdp_ws_url,            # CDP websocket URL
-            "features": {"stealth": True},            # feature flags you enabled
+            "bb_session_id": session.id,  # provider session ID (for cleanup)
+            "cdp_url": session.cdp_ws_url,  # CDP websocket URL
+            "features": {"stealth": True},  # feature flags you enabled
         }
 
     def close_session(self, session_id: str) -> bool:
@@ -122,11 +122,13 @@ def get_setup_schema(self) -> dict:
         "badge": "paid",
         "tag": "Cloud browser with stealth and proxies",
         "env_vars": [
-            {"key": "MY_BACKEND_API_KEY",
-             "prompt": "My Backend API key",
-             "url": "https://mybackend.example"},
+            {
+                "key": "MY_BACKEND_API_KEY",
+                "prompt": "My Backend API key",
+                "url": "https://mybackend.example",
+            },
         ],
-        "post_setup": "agent_browser",   # auto-installs the agent-browser npm dep
+        "post_setup": "agent_browser",  # auto-installs the agent-browser npm dep
     }
 ```
 

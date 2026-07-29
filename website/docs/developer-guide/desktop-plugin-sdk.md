@@ -465,9 +465,11 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
+
 @router.get("/board")
 async def board():
     return {"items": ["one", "two", "three"]}
+
 
 @router.post("/action")
 async def action(body: dict):

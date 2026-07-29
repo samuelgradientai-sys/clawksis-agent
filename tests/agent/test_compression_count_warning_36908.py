@@ -49,7 +49,9 @@ def _build_agent_with_db(db: SessionDB, session_id: str, compression_count: int)
     return agent
 
 
-def test_repeated_compression_warning_routed_through_emit_status(tmp_path: Path) -> None:
+def test_repeated_compression_warning_routed_through_emit_status(
+    tmp_path: Path,
+) -> None:
     db = SessionDB(db_path=tmp_path / "state.db")
     sid = "PARENT_36908"
     db.create_session(sid, source="cli")
@@ -68,7 +70,10 @@ def test_repeated_compression_warning_routed_through_emit_status(tmp_path: Path)
         f"repeated-compression warning not emitted via _emit_status: {emitted}"
     )
     # ...and was stored for late-bound gateway status_callback replay.
-    assert "compressed 2 times" in (getattr(agent, "_compression_warning", "") or "").lower()
+    assert (
+        "compressed 2 times"
+        in (getattr(agent, "_compression_warning", "") or "").lower()
+    )
 
 
 def test_no_warning_below_threshold(tmp_path: Path) -> None:

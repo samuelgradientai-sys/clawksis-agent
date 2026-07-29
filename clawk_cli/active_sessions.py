@@ -21,7 +21,9 @@ from clawk_constants import get_clawk_home
 logger = logging.getLogger(__name__)
 
 
-def coerce_max_concurrent_sessions(value: Any, key: str = "max_concurrent_sessions") -> Optional[int]:
+def coerce_max_concurrent_sessions(
+    value: Any, key: str = "max_concurrent_sessions"
+) -> Optional[int]:
     """Return a positive integer cap, or None when disabled/invalid."""
     if value is None:
         return None

@@ -17,6 +17,7 @@ Without this module, every ``docker restart`` would silently wipe
 every per-profile gateway, even though the user's profiles still
 exist on disk.
 """
+
 from __future__ import annotations
 
 import json
@@ -80,6 +81,7 @@ ReconcileActionLabel = Literal["started", "registered", "skipped"]
 @dataclass(frozen=True)
 class ReconcileAction:
     """One profile's outcome from a single reconciliation pass."""
+
     profile: str
     prior_state: str | None
     action: ReconcileActionLabel
@@ -152,11 +154,13 @@ def reconcile_profile_gateways(
     if not dry_run:
         _cleanup_stale_runtime_files(clawk_home)
         _register_service(scandir, "default", start=default_should_start)
-    actions.append(ReconcileAction(
-        profile="default",
-        prior_state=default_prior_state,
-        action="started" if default_should_start else "registered",
-    ))
+    actions.append(
+        ReconcileAction(
+            profile="default",
+            prior_state=default_prior_state,
+            action="started" if default_should_start else "registered",
+        )
+    )
 
     profiles_root = clawk_home / "profiles"
     if profiles_root.is_dir():
@@ -183,19 +187,19 @@ def reconcile_profile_gateways(
                 continue
 
             prior_state = _read_desired_state(entry)
-            should_start = (
-                not multiplex_profiles and prior_state in _AUTOSTART_STATES
-            )
+            should_start = not multiplex_profiles and prior_state in _AUTOSTART_STATES
 
             if not dry_run:
                 _cleanup_stale_runtime_files(entry)
                 _register_service(scandir, entry.name, start=should_start)
 
-            actions.append(ReconcileAction(
-                profile=entry.name,
-                prior_state=prior_state,
-                action="started" if should_start else "registered",
-            ))
+            actions.append(
+                ReconcileAction(
+                    profile=entry.name,
+                    prior_state=prior_state,
+                    action="started" if should_start else "registered",
+                )
+            )
 
     if not dry_run:
         _write_reconcile_log(clawk_home, actions)
@@ -225,18 +229,24 @@ def _maybe_migrate_legacy_gateway_run_state(
     if os.environ.get("CLAWK_GATEWAY_NO_SUPERVISE", "").lower() in ("1", "true", "yes"):
         return None
 
-    argv = tuple(container_argv) if container_argv is not None else _read_container_argv()
+    argv = (
+        tuple(container_argv) if container_argv is not None else _read_container_argv()
+    )
     if not _is_legacy_gateway_run_request(argv):
         return None
 
     if not dry_run:
         import time
-        state_file.write_text(json.dumps({
-            "gateway_state": "running",
-            "desired_state": "running",
-            "timestamp": int(time.time()),
-            "migrated_from": "legacy-container-cmd",
-        }) + "\n")
+
+        state_file.write_text(
+            json.dumps({
+                "gateway_state": "running",
+                "desired_state": "running",
+                "timestamp": int(time.time()),
+                "migrated_from": "legacy-container-cmd",
+            })
+            + "\n"
+        )
     return "running"
 
 
@@ -274,9 +284,7 @@ def _read_container_argv() -> tuple[str, ...]:
             except OSError:
                 continue
             argv = tuple(
-                part.decode("utf-8", "replace")
-                for part in raw.split(b"\0")
-                if part
+                part.decode("utf-8", "replace") for part in raw.split(b"\0") if part
             )
             if any("main-wrapper.sh" in part for part in argv):
                 return argv
@@ -392,7 +400,8 @@ def _read_desired_state(profile_dir: Path) -> str | None:
         return gateway_state
     except (OSError, json.JSONDecodeError):
         log.warning(
-            "could not read %s; treating as no prior state", state_file,
+            "could not read %s; treating as no prior state",
+            state_file,
         )
         return None
 
@@ -504,7 +513,8 @@ def _register_service(scandir: Path, profile: str, *, start: bool) -> None:
 
 
 def _write_reconcile_log(
-    clawk_home: Path, actions: list[ReconcileAction],
+    clawk_home: Path,
+    actions: list[ReconcileAction],
 ) -> None:
     """Append one line per profile to $CLAWK_HOME/logs/container-boot.log.
 
@@ -522,6 +532,7 @@ def _write_reconcile_log(
     one append-only file (PR #30136 review item O3).
     """
     import time
+
     log_dir = clawk_home / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "container-boot.log"
@@ -574,7 +585,8 @@ def main() -> int:
     clawk_home = Path(os.environ.get("CLAWK_HOME", "/opt/data"))
     scandir = Path(os.environ.get("S6_PROFILE_GATEWAY_SCANDIR", "/run/service"))
     actions = reconcile_profile_gateways(
-        clawk_home=clawk_home, scandir=scandir,
+        clawk_home=clawk_home,
+        scandir=scandir,
     )
     for a in actions:
         print(

@@ -41,6 +41,7 @@ from gateway.platforms.webhook import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_config(
     routes=None,
     secret="",
@@ -94,9 +95,7 @@ def _mock_request(headers=None, body=b"", content_length=None, match_info=None):
 
 def _github_signature(body: bytes, secret: str) -> str:
     """Compute X-Hub-Signature-256 for *body* using *secret*."""
-    return "sha256=" + hmac.new(
-        secret.encode(), body, hashlib.sha256
-    ).hexdigest()
+    return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
 def _generic_signature(body: bytes, secret: str) -> str:
@@ -186,10 +185,12 @@ class TestValidateSignature:
     def test_non_ascii_generic_v2_signature_rejected(self):
         """V2 branch (timestamp-bound) also rejects a non-ASCII signature."""
         adapter = _make_adapter()
-        req = _mock_request(headers={
-            "X-Webhook-Signature-V2": "ské-bad",
-            "X-Webhook-Timestamp": str(int(time.time())),
-        })
+        req = _mock_request(
+            headers={
+                "X-Webhook-Signature-V2": "ské-bad",
+                "X-Webhook-Timestamp": str(int(time.time())),
+            }
+        )
         assert adapter._validate_signature(req, b"{}", "secret") is False
 
     def test_non_ascii_svix_signature_rejected(self):
@@ -197,11 +198,13 @@ class TestValidateSignature:
         hardened helper: a valid svix-id + fresh timestamp reaches the compare,
         and a non-ASCII signature must reject rather than raise."""
         adapter = _make_adapter()
-        req = _mock_request(headers={
-            "svix-id": "msg_2xabc",
-            "svix-timestamp": str(int(time.time())),  # inside the replay window
-            "svix-signature": "v1,ské-not-a-valid-base64-sig",
-        })
+        req = _mock_request(
+            headers={
+                "svix-id": "msg_2xabc",
+                "svix-timestamp": str(int(time.time())),  # inside the replay window
+                "svix-signature": "v1,ské-not-a-valid-base64-sig",
+            }
+        )
         assert adapter._validate_signature(req, b'{"x":1}', "shh-secret") is False
 
     def test_non_ascii_secret_still_validates_a_matching_token(self):
@@ -245,10 +248,12 @@ class TestValidateSignature:
         secret = "generic-secret"
         timestamp = str(int(time.time()))
         sig = _generic_v2_signature(body, secret, timestamp)
-        req = _mock_request(headers={
-            "X-Webhook-Signature-V2": sig,
-            "X-Webhook-Timestamp": timestamp,
-        })
+        req = _mock_request(
+            headers={
+                "X-Webhook-Signature-V2": sig,
+                "X-Webhook-Timestamp": timestamp,
+            }
+        )
         assert adapter._validate_signature(req, body, secret) is True
 
     def test_validate_generic_v2_old_timestamp_rejects(self):
@@ -262,10 +267,12 @@ class TestValidateSignature:
         secret = "generic-secret"
         timestamp = str(int(time.time()) - 301)
         sig = _generic_v2_signature(body, secret, timestamp)
-        req = _mock_request(headers={
-            "X-Webhook-Signature-V2": sig,
-            "X-Webhook-Timestamp": timestamp,
-        })
+        req = _mock_request(
+            headers={
+                "X-Webhook-Signature-V2": sig,
+                "X-Webhook-Timestamp": timestamp,
+            }
+        )
         assert adapter._validate_signature(req, body, secret) is False
 
     def test_validate_generic_v2_wrong_timestamp_rejects(self):
@@ -281,20 +288,24 @@ class TestValidateSignature:
         real_timestamp = str(int(time.time()))
         sig = _generic_v2_signature(body, secret, real_timestamp)
         forged_timestamp = str(int(time.time()) + 1)
-        req = _mock_request(headers={
-            "X-Webhook-Signature-V2": sig,
-            "X-Webhook-Timestamp": forged_timestamp,
-        })
+        req = _mock_request(
+            headers={
+                "X-Webhook-Signature-V2": sig,
+                "X-Webhook-Timestamp": forged_timestamp,
+            }
+        )
         assert adapter._validate_signature(req, body, secret) is False
 
     def test_validate_generic_v2_malformed_timestamp_rejects(self):
         adapter = _make_adapter()
         body = b'{"event": "push"}'
         secret = "generic-secret"
-        req = _mock_request(headers={
-            "X-Webhook-Signature-V2": "deadbeef",
-            "X-Webhook-Timestamp": "not-a-number",
-        })
+        req = _mock_request(
+            headers={
+                "X-Webhook-Signature-V2": "deadbeef",
+                "X-Webhook-Timestamp": "not-a-number",
+            }
+        )
         assert adapter._validate_signature(req, body, secret) is False
 
     def test_validate_generic_v1_still_works_without_timestamp(self):
@@ -316,12 +327,14 @@ class TestValidateSignature:
         secret = "generic-secret"
         timestamp = str(int(time.time()))
         v2_sig = _generic_v2_signature(body, secret, timestamp)
-        req = _mock_request(headers={
-            "X-Webhook-Signature-V2": v2_sig,
-            "X-Webhook-Timestamp": timestamp,
-            # Deliberately wrong V1 — must be ignored since V2 is checked first.
-            "X-Webhook-Signature": "0" * 64,
-        })
+        req = _mock_request(
+            headers={
+                "X-Webhook-Signature-V2": v2_sig,
+                "X-Webhook-Timestamp": timestamp,
+                # Deliberately wrong V1 — must be ignored since V2 is checked first.
+                "X-Webhook-Signature": "0" * 64,
+            }
+        )
         assert adapter._validate_signature(req, body, secret) is True
 
     def test_validate_generic_v2_stripped_timestamp_does_not_downgrade_to_v1(self):
@@ -345,11 +358,13 @@ class TestValidateSignature:
         # Simulates a captured mixed V1+V2 request replayed with the
         # timestamp header stripped — V1 signature is still valid on its
         # own, but must not be reachable via this path.
-        req = _mock_request(headers={
-            "X-Webhook-Signature-V2": v2_sig,
-            "X-Webhook-Signature": v1_sig,
-            # X-Webhook-Timestamp deliberately omitted.
-        })
+        req = _mock_request(
+            headers={
+                "X-Webhook-Signature-V2": v2_sig,
+                "X-Webhook-Signature": v1_sig,
+                # X-Webhook-Timestamp deliberately omitted.
+            }
+        )
         assert adapter._validate_signature(req, body, secret) is False
 
     def test_v1_replay_attack_succeeds_demonstrating_the_hole_v2_closes(self):
@@ -550,7 +565,11 @@ class TestRenderDeliveryExtra:
     def test_render_delivery_extra_templates(self):
         """String values in deliver_extra are rendered with payload data."""
         adapter = _make_adapter()
-        extra = {"repo": "{repository.full_name}", "pr_number": "{number}", "static": 42}
+        extra = {
+            "repo": "{repository.full_name}",
+            "pr_number": "{number}",
+            "static": 42,
+        }
         payload = {"repository": {"full_name": "org/repo"}, "number": 7}
         result = adapter._render_delivery_extra(extra, payload)
         assert result["repo"] == "org/repo"
@@ -782,7 +801,9 @@ class TestPayloadFilters:
         mock_target.send.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_script_transforms_payload_before_prompt_rendering(self, tmp_path, monkeypatch):
+    async def test_script_transforms_payload_before_prompt_rendering(
+        self, tmp_path, monkeypatch
+    ):
         """A script can replace the payload used by prompt templates."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         scripts = tmp_path / "scripts"
@@ -824,7 +845,9 @@ class TestPayloadFilters:
         assert captured[0].raw_message["body"] == "PAY BILLS"
 
     @pytest.mark.asyncio
-    async def test_script_tilde_clawk_path_resolves_to_active_profile_home(self, tmp_path, monkeypatch):
+    async def test_script_tilde_clawk_path_resolves_to_active_profile_home(
+        self, tmp_path, monkeypatch
+    ):
         """~/.clawksis/scripts paths must resolve through CLAWK_HOME for profiles."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         scripts = tmp_path / "scripts"
@@ -864,7 +887,9 @@ class TestPayloadFilters:
         assert captured[0].text == "Task: profile-safe"
 
     @pytest.mark.asyncio
-    async def test_script_silent_stdout_ignores_without_idempotency_hit(self, tmp_path, monkeypatch):
+    async def test_script_silent_stdout_ignores_without_idempotency_hit(
+        self, tmp_path, monkeypatch
+    ):
         """Empty or [SILENT] script stdout filters the webhook out."""
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         scripts = tmp_path / "scripts"
@@ -940,11 +965,12 @@ class TestPayloadFilters:
 
 
 class TestHTTPHandling:
-
     @pytest.mark.asyncio
     async def test_unknown_route_returns_404(self):
         """POST to an unknown route returns 404."""
-        adapter = _make_adapter(routes={"real": {"secret": _INSECURE_NO_AUTH, "prompt": "x"}})
+        adapter = _make_adapter(
+            routes={"real": {"secret": _INSECURE_NO_AUTH, "prompt": "x"}}
+        )
         app = _create_app(adapter)
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.post("/webhooks/nonexistent", json={"a": 1})
@@ -1001,8 +1027,10 @@ class TestHTTPHandling:
         # Use port 0 — the OS picks a free port, but aiohttp requires a real bind.
         # We just test that the method completes and marks connected.
         # Need to mock TCPSite to avoid actual binding.
-        with patch("gateway.platforms.webhook.web.AppRunner") as MockRunner, \
-             patch("gateway.platforms.webhook.web.TCPSite") as MockSite:
+        with (
+            patch("gateway.platforms.webhook.web.AppRunner") as MockRunner,
+            patch("gateway.platforms.webhook.web.TCPSite") as MockSite,
+        ):
             mock_runner_inst = AsyncMock()
             MockRunner.return_value = mock_runner_inst
             mock_site_inst = AsyncMock()
@@ -1037,7 +1065,6 @@ class TestHTTPHandling:
 
 
 class TestIdempotency:
-
     @pytest.mark.asyncio
     async def test_duplicate_delivery_id_returns_200(self):
         """Second request with same delivery ID returns 200 duplicate."""
@@ -1103,7 +1130,6 @@ class TestIdempotency:
 
 
 class TestRateLimiting:
-
     @pytest.mark.asyncio
     async def test_rate_limit_rejects_excess(self):
         """Exceeding the rate limit returns 429."""
@@ -1190,7 +1216,6 @@ class TestRateLimiting:
 
 
 class TestBodySize:
-
     @pytest.mark.asyncio
     async def test_oversized_payload_rejected(self):
         """Content-Length > max_body_bytes returns 413."""
@@ -1237,7 +1262,6 @@ class TestBodySize:
 
 
 class TestInsecureNoAuth:
-
     @pytest.mark.asyncio
     async def test_insecure_no_auth_skips_validation(self):
         """Setting secret to _INSECURE_NO_AUTH bypasses signature check."""
@@ -1258,7 +1282,6 @@ class TestInsecureNoAuth:
 
 
 class TestSessionIsolation:
-
     @pytest.mark.asyncio
     async def test_concurrent_webhooks_get_independent_sessions(self):
         """Two events on the same route produce different session keys."""
@@ -1302,7 +1325,6 @@ class TestSessionIsolation:
 
 
 class TestDeliveryCleanup:
-
     @pytest.mark.asyncio
     async def test_delivery_info_survives_multiple_sends(self):
         """send() must NOT pop delivery_info.
@@ -1406,9 +1428,7 @@ class TestRawTemplateToken:
         """{__raw__} in a template dumps the entire payload as JSON."""
         adapter = _make_adapter()
         payload = {"action": "opened", "number": 42}
-        result = adapter._render_prompt(
-            "Payload: {__raw__}", payload, "push", "test"
-        )
+        result = adapter._render_prompt("Payload: {__raw__}", payload, "push", "test")
         expected_json = json.dumps(payload, indent=2)
         assert result == f"Payload: {expected_json}"
 
@@ -1493,9 +1513,7 @@ class TestDeliverCrossPlatformThreadId:
             }
         }
         await adapter._deliver_cross_platform("telegram", "hello", delivery)
-        mock_target.send.assert_awaited_once_with(
-            "12345", "hello", metadata=None
-        )
+        mock_target.send.assert_awaited_once_with("12345", "hello", metadata=None)
 
 
 class TestInsecureNoAuthSafetyRail:
@@ -1550,6 +1568,7 @@ class TestInsecureNoAuthSafetyRail:
     def test_is_loopback_host_accepts(self, host):
         """_is_loopback_host covers all documented loopback spellings."""
         from gateway.platforms.webhook import _is_loopback_host
+
         assert _is_loopback_host(host) is True
 
     @pytest.mark.parametrize(
@@ -1559,6 +1578,7 @@ class TestInsecureNoAuthSafetyRail:
     def test_is_loopback_host_rejects(self, host):
         """_is_loopback_host treats public/LAN/empty as non-loopback."""
         from gateway.platforms.webhook import _is_loopback_host
+
         assert _is_loopback_host(host) is False
 
     @pytest.mark.asyncio
@@ -1593,6 +1613,7 @@ class TestDualStackBind:
     def test_default_host_is_none_for_dual_stack(self):
         """The module default is None (bind all families), not 0.0.0.0/::."""
         from gateway.platforms.webhook import DEFAULT_HOST
+
         assert DEFAULT_HOST is None
 
     def test_missing_host_key_resolves_to_none(self):
@@ -1650,9 +1671,7 @@ class TestDualStackBind:
             has_v6 = any(len(a) == 4 for a in addrs)
             has_v4 = any(len(a) == 2 for a in addrs)
             assert has_v4, f"IPv4 bind missing — got {addrs}"
-            assert has_v6, (
-                f"IPv6 bind missing (the 6PN reachability bug) — got {addrs}"
-            )
+            assert has_v6, f"IPv6 bind missing (the 6PN reachability bug) — got {addrs}"
         finally:
             await adapter.disconnect()
 
@@ -1671,9 +1690,7 @@ class TestDualStackBind:
             enabled=True,
             extra={
                 "port": port,
-                "routes": {
-                    "r1": {"secret": "real-secret-abc123", "prompt": "x"}
-                },
+                "routes": {"r1": {"secret": "real-secret-abc123", "prompt": "x"}},
             },
         )
         adapter = WebhookAdapter(cfg)

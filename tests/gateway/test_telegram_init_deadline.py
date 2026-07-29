@@ -68,8 +68,12 @@ async def test_connect_retries_when_initialize_wall_deadline_expires(monkeypatch
     monkeypatch.setattr(adapter, "_acquire_platform_lock", lambda *a, **k: True)
     monkeypatch.setattr(adapter, "_fallback_ips", lambda: [])
     monkeypatch.setattr(adapter, "_delete_webhook_best_effort", AsyncMock())
-    monkeypatch.setattr(adapter, "_start_polling_resilient", AsyncMock(return_value=True))
-    monkeypatch.setattr(adapter, "_polling_heartbeat_loop", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        adapter, "_start_polling_resilient", AsyncMock(return_value=True)
+    )
+    monkeypatch.setattr(
+        adapter, "_polling_heartbeat_loop", AsyncMock(return_value=None)
+    )
     monkeypatch.setattr(adapter, "_start_post_connect_housekeeping", MagicMock())
 
     assert await adapter.connect() is True
@@ -84,6 +88,7 @@ async def test_connect_retries_when_initialize_wall_deadline_expires(monkeypatch
 @pytest.mark.asyncio
 async def test_await_with_thread_deadline_returns_value_on_happy_path():
     """The real helper returns the awaited result and raises no timeout."""
+
     async def _ok():
         return 42
 

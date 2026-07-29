@@ -56,7 +56,9 @@ def _cmd_list(args) -> int:
     shown = entries[:limit] if limit > 0 else entries
     installed = {p.slug for p in store.installed_pets()}
 
-    _print(f"petdex gallery — {len(entries)} pet(s){' matching ' + repr(query) if query else ''}:")
+    _print(
+        f"petdex gallery — {len(entries)} pet(s){' matching ' + repr(query) if query else ''}:"
+    )
     for entry in shown:
         mark = "✓" if entry.slug in installed else " "
         _print(f"  {mark} {entry.slug:<28} {entry.display_name}  ({entry.kind})")
@@ -81,7 +83,9 @@ def _cmd_install(args) -> int:
 
     if getattr(args, "select", False) or not _has_active_pet():
         _set_active(slug)
-        _print(f"✓ {pet.display_name} is now the active pet (display.pet.slug={slug}, enabled)")
+        _print(
+            f"✓ {pet.display_name} is now the active pet (display.pet.slug={slug}, enabled)"
+        )
     else:
         _print(f"  Make it active with: clawk pets select {slug}")
     return 0
@@ -147,7 +151,13 @@ def _cmd_show(args) -> int:
     import time
 
     from agent.pet import store
-    from agent.pet.constants import DEFAULT_SCALE, LOOP_MS, STATE_ROWS, PetState, resolve_cols
+    from agent.pet.constants import (
+        DEFAULT_SCALE,
+        LOOP_MS,
+        STATE_ROWS,
+        PetState,
+        resolve_cols,
+    )
     from agent.pet.render import build_renderer
 
     cfg = _pet_config()
@@ -157,8 +167,12 @@ def _cmd_show(args) -> int:
         _err("✗ no pet to show — run: clawk pets install boba")
         return 1
 
-    mode_cfg = getattr(args, "mode", None) or str(cfg.get("render_mode", "auto") or "auto")
-    scale = float(getattr(args, "scale", 0) or cfg.get("scale", DEFAULT_SCALE) or DEFAULT_SCALE)
+    mode_cfg = getattr(args, "mode", None) or str(
+        cfg.get("render_mode", "auto") or "auto"
+    )
+    scale = float(
+        getattr(args, "scale", 0) or cfg.get("scale", DEFAULT_SCALE) or DEFAULT_SCALE
+    )
     cols = resolve_cols(scale, cfg.get("unicode_cols", 0))
 
     renderer = build_renderer(
@@ -184,7 +198,9 @@ def _cmd_show(args) -> int:
         states = [PetState.IDLE.value]
 
     is_unicode = renderer.mode == "unicode"
-    frame_delay = max(0.05, (LOOP_MS / 1000.0) / max(1, renderer.frame_count(states[0]) or 1))
+    frame_delay = max(
+        0.05, (LOOP_MS / 1000.0) / max(1, renderer.frame_count(states[0]) or 1)
+    )
 
     # Right-align the sprite against the terminal's right edge — half-blocks by
     # indenting each row, graphics protocols by padding the cursor to the right
@@ -214,9 +230,13 @@ def _cmd_show(args) -> int:
                     encoded = renderer.frame(state, i)
                     if is_unicode:
                         if indent:
-                            encoded = "\n".join(indent + ln for ln in encoded.split("\n"))
+                            encoded = "\n".join(
+                                indent + ln for ln in encoded.split("\n")
+                            )
                         if prev_lines:
-                            out.write(f"\x1b[{prev_lines}F")  # cursor up to redraw in place
+                            out.write(
+                                f"\x1b[{prev_lines}F"
+                            )  # cursor up to redraw in place
                         out.write(encoded)
                         out.write("\x1b[0m\n")
                         # Lines drawn = sprite rows + the trailing newline; move
@@ -258,7 +278,9 @@ def _cmd_doctor(args) -> int:
 
     _print("petdex doctor")
     _print(f"  pets dir:        {store.pets_dir()}")
-    _print(f"  installed:       {len(pets)} ({', '.join(p.slug for p in pets) or 'none'})")
+    _print(
+        f"  installed:       {len(pets)} ({', '.join(p.slug for p in pets) or 'none'})"
+    )
     _print(f"  display.pet.enabled:     {enabled}")
     _print(f"  display.pet.slug:        {configured_slug or '(unset)'}")
     _print(f"  active (resolved):       {active.slug if active else '(none)'}")
@@ -282,13 +304,18 @@ def _cmd_doctor(args) -> int:
         _print("  ✗ Pillow not importable — sprite decoding will be unavailable")
         ok = False
 
-    _print("  ✓ ready" if ok and enabled else "  (run the suggestions above to finish setup)")
+    _print(
+        "  ✓ ready"
+        if ok and enabled
+        else "  (run the suggestions above to finish setup)"
+    )
     return 0
 
 
 # ─────────────────────────────────────────────────────────────────────────
 # config helpers
 # ─────────────────────────────────────────────────────────────────────────
+
 
 def _pet_config() -> dict:
     from clawk_cli.config import load_config
@@ -371,7 +398,11 @@ def toggle_pet_display() -> tuple[bool, str | None, str | None]:
     if pet is None:
         installed = store.installed_pets()
         if not installed:
-            return False, None, "no pets installed — /pet list to browse, or /pet <slug> to adopt"
+            return (
+                False,
+                None,
+                "no pets installed — /pet list to browse, or /pet <slug> to adopt",
+            )
         pet = installed[0]
         _set_active(pet.slug)
     else:
@@ -457,39 +488,66 @@ def _interactive_pick(pets) -> str:
 # argparse wiring
 # ─────────────────────────────────────────────────────────────────────────
 
+
 def register_cli(parent: argparse.ArgumentParser) -> None:
     """Attach ``pets`` subcommands to *parent* (called by main.py)."""
     parent.set_defaults(func=lambda a: (parent.print_help(), 0)[1])
     subs = parent.add_subparsers(dest="pets_command")
 
     p_list = subs.add_parser("list", help="Browse the petdex gallery")
-    p_list.add_argument("query", nargs="?", default="", help="Filter by slug/name substring")
-    p_list.add_argument("--installed", action="store_true", help="Only show installed pets")
+    p_list.add_argument(
+        "query", nargs="?", default="", help="Filter by slug/name substring"
+    )
+    p_list.add_argument(
+        "--installed", action="store_true", help="Only show installed pets"
+    )
     p_list.add_argument("--limit", type=int, default=40, help="Max rows (0 = all)")
     p_list.set_defaults(func=_cmd_list)
 
     p_install = subs.add_parser("install", help="Install a pet from the gallery")
     p_install.add_argument("slug", help="Pet slug (e.g. boba)")
-    p_install.add_argument("--force", action="store_true", help="Re-download even if present")
-    p_install.add_argument("--select", action="store_true", help="Make it the active pet")
+    p_install.add_argument(
+        "--force", action="store_true", help="Re-download even if present"
+    )
+    p_install.add_argument(
+        "--select", action="store_true", help="Make it the active pet"
+    )
     p_install.set_defaults(func=_cmd_install)
 
-    p_select = subs.add_parser("select", help="Set the active pet (writes display.pet.*)")
-    p_select.add_argument("slug", nargs="?", default="", help="Pet slug (omit for picker)")
+    p_select = subs.add_parser(
+        "select", help="Set the active pet (writes display.pet.*)"
+    )
+    p_select.add_argument(
+        "slug", nargs="?", default="", help="Pet slug (omit for picker)"
+    )
     p_select.set_defaults(func=_cmd_select)
 
     p_show = subs.add_parser("show", help="Animate the active pet in the terminal")
-    p_show.add_argument("slug", nargs="?", default="", help="Pet slug (default: active)")
-    p_show.add_argument("--state", default="", help="Single state: idle/run/review/failed/wave/jump")
+    p_show.add_argument(
+        "slug", nargs="?", default="", help="Pet slug (default: active)"
+    )
+    p_show.add_argument(
+        "--state", default="", help="Single state: idle/run/review/failed/wave/jump"
+    )
     p_show.add_argument("--cycle", action="store_true", help="Cycle through all states")
-    p_show.add_argument("--once", action="store_true", help="Play once instead of looping")
-    p_show.add_argument("--mode", default=None, help="Override render mode (kitty/iterm/sixel/unicode/auto)")
-    p_show.add_argument("--scale", type=float, default=0, help="Override scale (0 = config)")
+    p_show.add_argument(
+        "--once", action="store_true", help="Play once instead of looping"
+    )
+    p_show.add_argument(
+        "--mode",
+        default=None,
+        help="Override render mode (kitty/iterm/sixel/unicode/auto)",
+    )
+    p_show.add_argument(
+        "--scale", type=float, default=0, help="Override scale (0 = config)"
+    )
     p_show.set_defaults(func=_cmd_show)
 
     subs.add_parser("off", help="Disable the pet display").set_defaults(func=_cmd_off)
 
-    p_scale = subs.add_parser("scale", help="Resize the pet everywhere (display.pet.scale)")
+    p_scale = subs.add_parser(
+        "scale", help="Resize the pet everywhere (display.pet.scale)"
+    )
     p_scale.add_argument("factor", help="Scale factor, e.g. 0.5 (clamped 0.1–3.0)")
     p_scale.set_defaults(func=_cmd_scale)
 
@@ -497,6 +555,6 @@ def register_cli(parent: argparse.ArgumentParser) -> None:
     p_remove.add_argument("slug", help="Pet slug")
     p_remove.set_defaults(func=_cmd_remove)
 
-    subs.add_parser("doctor", help="Check pet setup + terminal graphics support").set_defaults(
-        func=_cmd_doctor
-    )
+    subs.add_parser(
+        "doctor", help="Check pet setup + terminal graphics support"
+    ).set_defaults(func=_cmd_doctor)

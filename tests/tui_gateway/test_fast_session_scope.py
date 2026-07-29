@@ -52,14 +52,16 @@ class TestConfigSetFastSessionScope:
     def test_session_scoped_fast_skips_global_write(self) -> None:
         agent = _agent()
         session = {"session_key": "k1", "agent": agent}
-        with patch.dict(server._sessions, {"s1": session}, clear=False), \
-                patch.object(server, "_write_config_key") as write_key, \
-                patch.object(server, "_persist_live_session_runtime"), \
-                patch.object(server, "_emit"), \
-                patch(
-                    "clawk_cli.models.resolve_fast_mode_overrides",
-                    return_value=FAST_OVERRIDES,
-                ):
+        with (
+            patch.dict(server._sessions, {"s1": session}, clear=False),
+            patch.object(server, "_write_config_key") as write_key,
+            patch.object(server, "_persist_live_session_runtime"),
+            patch.object(server, "_emit"),
+            patch(
+                "clawk_cli.models.resolve_fast_mode_overrides",
+                return_value=FAST_OVERRIDES,
+            ),
+        ):
             resp = _set({"key": "fast", "session_id": "s1", "value": "fast"})
         assert resp["result"]["value"] == "fast"
         assert agent.service_tier == "priority"
@@ -69,10 +71,12 @@ class TestConfigSetFastSessionScope:
     def test_session_scoped_normal_pins_explicit_normal(self) -> None:
         agent = _agent(service_tier="priority")
         session = {"session_key": "k2", "agent": agent}
-        with patch.dict(server._sessions, {"s2": session}, clear=False), \
-                patch.object(server, "_write_config_key") as write_key, \
-                patch.object(server, "_persist_live_session_runtime"), \
-                patch.object(server, "_emit"):
+        with (
+            patch.dict(server._sessions, {"s2": session}, clear=False),
+            patch.object(server, "_write_config_key") as write_key,
+            patch.object(server, "_persist_live_session_runtime"),
+            patch.object(server, "_emit"),
+        ):
             resp = _set({"key": "fast", "session_id": "s2", "value": "normal"})
         assert resp["result"]["value"] == "normal"
         assert agent.service_tier is None
@@ -89,12 +93,14 @@ class TestConfigSetFastSessionScope:
             "agent": None,
             "model_override": {"model": "gpt-6", "provider": "openai"},
         }
-        with patch.dict(server._sessions, {"s3": session}, clear=False), \
-                patch.object(server, "_write_config_key") as write_key, \
-                patch(
-                    "clawk_cli.models.resolve_fast_mode_overrides",
-                    return_value=FAST_OVERRIDES,
-                ):
+        with (
+            patch.dict(server._sessions, {"s3": session}, clear=False),
+            patch.object(server, "_write_config_key") as write_key,
+            patch(
+                "clawk_cli.models.resolve_fast_mode_overrides",
+                return_value=FAST_OVERRIDES,
+            ),
+        ):
             resp = _set({"key": "fast", "session_id": "s3", "value": "fast"})
         assert resp["result"]["value"] == "fast"
         assert session["create_service_tier_override"] == "priority"
@@ -108,12 +114,14 @@ class TestConfigSetFastSessionScope:
             "agent": None,
             "model_override": {"model": "session-model", "provider": "openai"},
         }
-        with patch.dict(server._sessions, {"s4": session}, clear=False), \
-                patch.object(server, "_write_config_key"), \
-                patch(
-                    "clawk_cli.models.resolve_fast_mode_overrides",
-                    return_value=FAST_OVERRIDES,
-                ) as resolve:
+        with (
+            patch.dict(server._sessions, {"s4": session}, clear=False),
+            patch.object(server, "_write_config_key"),
+            patch(
+                "clawk_cli.models.resolve_fast_mode_overrides",
+                return_value=FAST_OVERRIDES,
+            ) as resolve,
+        ):
             _set({"key": "fast", "session_id": "s4", "value": "fast"})
         resolve.assert_called_once_with("session-model")
 
@@ -124,8 +132,10 @@ class TestConfigSetFastSessionScope:
             "agent": None,
             "create_service_tier_override": "priority",
         }
-        with patch.dict(server._sessions, {"s5": session}, clear=False), \
-                patch.object(server, "_write_config_key") as write_key:
+        with (
+            patch.dict(server._sessions, {"s5": session}, clear=False),
+            patch.object(server, "_write_config_key") as write_key,
+        ):
             resp = _set({"key": "fast", "session_id": "s5", "value": ""})
         assert resp["result"]["value"] == "normal"
         assert session["create_service_tier_override"] == ""

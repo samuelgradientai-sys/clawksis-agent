@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 # Lazy imports -- MCP SDK with OAuth support is optional
 # ---------------------------------------------------------------------------
 
-_OAUTH_AVAILABLE=False
+_OAUTH_AVAILABLE = False
 try:
     from mcp.client.auth import OAuthClientProvider
     from mcp.shared.auth import (
@@ -70,7 +70,7 @@ try:
         OAuthToken,
     )
 
-    _OAUTH_AVAILABLE=True
+    _OAUTH_AVAILABLE = True
 except ImportError:
     logger.debug("MCP OAuth types not available -- OAuth MCP auth disabled")
 
@@ -139,6 +139,7 @@ def _get_token_dir(clawk_home: str | Path | None = None) -> Path:
     """
     try:
         from clawk_constants import get_clawk_home
+
         base = Path(clawk_home) if clawk_home is not None else Path(get_clawk_home())
     except ImportError:
         base = Path(os.environ.get("CLAWK_HOME", str(Path.home() / ".clawksis")))
@@ -439,7 +440,9 @@ class ClawksisTokenStorage:
         try:
             return OAuthToken.model_validate(data)
         except (ValueError, TypeError, KeyError) as exc:
-            logger.warning("Corrupt tokens at %s -- ignoring: %s", self._tokens_path(), exc)
+            logger.warning(
+                "Corrupt tokens at %s -- ignoring: %s", self._tokens_path(), exc
+            )
             return None
 
     async def set_tokens(self, tokens: "OAuthToken") -> None:
@@ -471,11 +474,18 @@ class ClawksisTokenStorage:
         try:
             return OAuthClientInformationFull.model_validate(data)
         except (ValueError, TypeError, KeyError) as exc:
-            logger.warning("Corrupt client info at %s -- ignoring: %s", self._client_info_path(), exc)
+            logger.warning(
+                "Corrupt client info at %s -- ignoring: %s",
+                self._client_info_path(),
+                exc,
+            )
             return None
 
     async def set_client_info(self, client_info: "OAuthClientInformationFull") -> None:
-        _write_json(self._client_info_path(), client_info.model_dump(mode="json", exclude_none=True))
+        _write_json(
+            self._client_info_path(),
+            client_info.model_dump(mode="json", exclude_none=True),
+        )
         logger.debug("OAuth client info saved for %s", self._server_name)
 
     # -- oauth server metadata --------------------------------------------
@@ -487,7 +497,9 @@ class ClawksisTokenStorage:
     # forces a full browser re-authorization.
 
     def save_oauth_metadata(self, metadata: "OAuthMetadata") -> None:
-        _write_json(self._meta_path(), metadata.model_dump(exclude_none=True, mode="json"))
+        _write_json(
+            self._meta_path(), metadata.model_dump(exclude_none=True, mode="json")
+        )
         logger.debug("OAuth metadata saved for %s", self._server_name)
 
     def load_oauth_metadata(self) -> "OAuthMetadata | None":
@@ -497,7 +509,9 @@ class ClawksisTokenStorage:
         try:
             return OAuthMetadata.model_validate(data)
         except (ValueError, TypeError, KeyError) as exc:
-            logger.warning("Corrupt OAuth metadata at %s -- ignoring: %s", self._meta_path(), exc)
+            logger.warning(
+                "Corrupt OAuth metadata at %s -- ignoring: %s", self._meta_path(), exc
+            )
             return None
 
     # -- cleanup -----------------------------------------------------------
@@ -522,11 +536,17 @@ class ClawksisTokenStorage:
                 pass
         return snap
 
-    def restore(self, snapshot: dict[str, bytes], *, only_if_absent: bool = False) -> None:
+    def restore(
+        self, snapshot: dict[str, bytes], *, only_if_absent: bool = False
+    ) -> None:
         """Revert to a snapshot without overwriting a concurrent successful write."""
         if only_if_absent and any(
             path.exists()
-            for path in (self._tokens_path(), self._client_info_path(), self._meta_path())
+            for path in (
+                self._tokens_path(),
+                self._client_info_path(),
+                self._meta_path(),
+            )
         ):
             logger.info(
                 "Skipping OAuth rollback for %s because newer state exists",
@@ -582,7 +602,8 @@ class ClawksisTokenStorage:
         logger.warning(
             "MCP OAuth '%s': cached client registration rejected as invalid_client; "
             "removed client.json + meta.json (backup at %s) to force re-registration",
-            self._server_name, backup.name,
+            self._server_name,
+            backup.name,
         )
         return True
 
@@ -618,11 +639,15 @@ def _make_callback_handler() -> tuple[type, dict]:
             result["error"] = error
 
             body = (
-                "<html><body><h2>Authorization Successful</h2>"
-                "<p>You can close this tab and return to Clawksis.</p></body></html>"
-            ) if code else (
-                "<html><body><h2>Authorization Failed</h2>"
-                f"<p>Error: {error or 'unknown'}</p></body></html>"
+                (
+                    "<html><body><h2>Authorization Successful</h2>"
+                    "<p>You can close this tab and return to Clawksis.</p></body></html>"
+                )
+                if code
+                else (
+                    "<html><body><h2>Authorization Failed</h2>"
+                    f"<p>Error: {error or 'unknown'}</p></body></html>"
+                )
             )
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -652,6 +677,7 @@ def _make_redirect_handler(port: int, redirect_uri: str | None = None):
     hint: a proxied callback reaches this machine on its own, so the loopback
     SSH-tunnel guidance would be misleading.
     """
+
     async def _redirect_handler(authorization_url: str) -> None:
         """Show the authorization URL to the user.
 
@@ -728,11 +754,20 @@ def _make_redirect_handler(port: int, redirect_uri: str | None = None):
                 if opened:
                     print("  (Browser opened automatically.)\n", file=sys.stderr)
                 else:
-                    print("  (Could not open browser — please open the URL manually.)\n", file=sys.stderr)
+                    print(
+                        "  (Could not open browser — please open the URL manually.)\n",
+                        file=sys.stderr,
+                    )
             except Exception:
-                print("  (Could not open browser — please open the URL manually.)\n", file=sys.stderr)
+                print(
+                    "  (Could not open browser — please open the URL manually.)\n",
+                    file=sys.stderr,
+                )
         else:
-            print("  (Headless environment detected — open the URL manually.)\n", file=sys.stderr)
+            print(
+                "  (Headless environment detected — open the URL manually.)\n",
+                file=sys.stderr,
+            )
 
     return _redirect_handler
 
@@ -1125,8 +1160,13 @@ def _maybe_preregister_client(
         info_dict["scope"] = cfg["scope"]
 
     client_info = OAuthClientInformationFull.model_validate(info_dict)
-    _write_json(storage._client_info_path(), client_info.model_dump(mode="json", exclude_none=True))
-    logger.debug("Pre-registered client_id=%s for '%s'", client_id, storage._server_name)
+    _write_json(
+        storage._client_info_path(),
+        client_info.model_dump(mode="json", exclude_none=True),
+    )
+    logger.debug(
+        "Pre-registered client_id=%s for '%s'", client_id, storage._server_name
+    )
 
 
 def build_oauth_auth(

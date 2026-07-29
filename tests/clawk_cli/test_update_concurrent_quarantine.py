@@ -76,7 +76,9 @@ def test_detect_concurrent_finds_other_clawk_process(_winp, tmp_path):
     other_pid = os.getpid() + 1
     procs = [
         _make_proc(other_pid, str(shim), "clawk.exe"),
-        _make_proc(os.getpid() + 2, r"C:\\Windows\\System32\\notepad.exe", "notepad.exe"),
+        _make_proc(
+            os.getpid() + 2, r"C:\\Windows\\System32\\notepad.exe", "notepad.exe"
+        ),
     ]
     fake_psutil = types.SimpleNamespace(process_iter=lambda attrs: iter(procs))
     with patch.dict(sys.modules, {"psutil": fake_psutil}):
@@ -379,8 +381,9 @@ def test_quarantine_retries_then_succeeds(_winp, tmp_path, monkeypatch):
 
     # Speed up the test: avoid actual sleeps in the backoff schedule.
     monkeypatch.setattr(cli_main, "_clawk_exe_shims", lambda d: [shim])
-    with patch.object(Path, "rename", flaky_rename), patch(
-        "time.sleep", lambda *_a, **_k: None
+    with (
+        patch.object(Path, "rename", flaky_rename),
+        patch("time.sleep", lambda *_a, **_k: None),
     ):
         pairs = cli_main._quarantine_running_clawk_exe(tmp_path)
 
@@ -405,9 +408,11 @@ def test_quarantine_falls_back_to_reboot_schedule(_winp, tmp_path, capsys, monke
         return True
 
     monkeypatch.setattr(cli_main, "_clawk_exe_shims", lambda d: [shim])
-    with patch.object(Path, "rename", always_fails), patch.object(
-        cli_main, "_schedule_replace_on_reboot", fake_schedule
-    ), patch("time.sleep", lambda *_a, **_k: None):
+    with (
+        patch.object(Path, "rename", always_fails),
+        patch.object(cli_main, "_schedule_replace_on_reboot", fake_schedule),
+        patch("time.sleep", lambda *_a, **_k: None),
+    ):
         pairs = cli_main._quarantine_running_clawk_exe(tmp_path)
 
     captured = capsys.readouterr().out
@@ -434,9 +439,11 @@ def test_quarantine_actionable_warning_when_everything_fails(
         raise OSError(32, "share violation")
 
     monkeypatch.setattr(cli_main, "_clawk_exe_shims", lambda d: [shim])
-    with patch.object(Path, "rename", always_fails), patch.object(
-        cli_main, "_schedule_replace_on_reboot", lambda *_a, **_k: False
-    ), patch("time.sleep", lambda *_a, **_k: None):
+    with (
+        patch.object(Path, "rename", always_fails),
+        patch.object(cli_main, "_schedule_replace_on_reboot", lambda *_a, **_k: False),
+        patch("time.sleep", lambda *_a, **_k: None),
+    ):
         pairs = cli_main._quarantine_running_clawk_exe(tmp_path)
 
     captured = capsys.readouterr().out
@@ -483,9 +490,11 @@ def test_pause_windows_gateways_for_update_stops_profile_and_unmapped_pids(
     monkeypatch.setattr(
         gateway_mod,
         "_capture_gateway_argv",
-        lambda pid: ["pythonw.exe", "-m", "clawk_cli.main", "gateway", "run"]
-        if pid == 202
-        else None,
+        lambda pid: (
+            ["pythonw.exe", "-m", "clawk_cli.main", "gateway", "run"]
+            if pid == 202
+            else None
+        ),
     )
 
     terminated = []
@@ -732,18 +741,16 @@ def test_cmd_update_aborts_on_concurrent_instance(_winp, tmp_path, capsys):
         no_backup=True,
     )
 
-    with patch.object(
-        cli_main, "_venv_scripts_dir", return_value=scripts_dir
-    ), patch.object(
-        cli_main,
-        "_detect_concurrent_clawk_instances",
-        return_value=[(4242, "clawk.exe")],
-    ), patch.object(
-        cli_main, "_run_pre_update_backup"
-    ) as mock_backup, patch.object(
-        cli_main, "_install_hangup_protection", return_value={}
-    ), patch.object(
-        cli_main, "_finalize_update_output"
+    with (
+        patch.object(cli_main, "_venv_scripts_dir", return_value=scripts_dir),
+        patch.object(
+            cli_main,
+            "_detect_concurrent_clawk_instances",
+            return_value=[(4242, "clawk.exe")],
+        ),
+        patch.object(cli_main, "_run_pre_update_backup") as mock_backup,
+        patch.object(cli_main, "_install_hangup_protection", return_value={}),
+        patch.object(cli_main, "_finalize_update_output"),
     ):
         with pytest.raises(SystemExit) as excinfo:
             cli_main.cmd_update(args)
@@ -779,16 +786,12 @@ def test_cmd_update_force_bypasses_concurrent_check(_winp, tmp_path):
     # Short-circuit out of _cmd_update_impl via a sentinel raise immediately
     # AFTER the gate. _run_pre_update_backup is the first call after the gate.
     sentinel = RuntimeError("reached post-gate body")
-    with patch.object(
-        cli_main, "_venv_scripts_dir", return_value=scripts_dir
-    ), patch.object(
-        cli_main, "_detect_concurrent_clawk_instances", detect
-    ), patch.object(
-        cli_main, "_run_pre_update_backup", side_effect=sentinel
-    ), patch.object(
-        cli_main, "_install_hangup_protection", return_value={}
-    ), patch.object(
-        cli_main, "_finalize_update_output"
+    with (
+        patch.object(cli_main, "_venv_scripts_dir", return_value=scripts_dir),
+        patch.object(cli_main, "_detect_concurrent_clawk_instances", detect),
+        patch.object(cli_main, "_run_pre_update_backup", side_effect=sentinel),
+        patch.object(cli_main, "_install_hangup_protection", return_value={}),
+        patch.object(cli_main, "_finalize_update_output"),
     ):
         with pytest.raises(RuntimeError, match="reached post-gate body"):
             cli_main.cmd_update(args)

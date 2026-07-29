@@ -44,12 +44,17 @@ class MiniMaxProfile(ProviderProfile):
         route. ``thinking`` controls the M3 mode; Clawksis' effort levels are not
         a MiniMax depth knob here, so they only select adaptive vs disabled.
         """
-        if not _is_minimax_global_openai_base_url(base_url) or not _is_minimax_m3(model):
+        if not _is_minimax_global_openai_base_url(base_url) or not _is_minimax_m3(
+            model
+        ):
             return {}, {}
 
         extra_body: dict[str, Any] = {"reasoning_split": True}
 
-        if isinstance(reasoning_config, dict) and reasoning_config.get("enabled") is False:
+        if (
+            isinstance(reasoning_config, dict)
+            and reasoning_config.get("enabled") is False
+        ):
             extra_body["thinking"] = {"type": "disabled"}
             return extra_body, {}
 

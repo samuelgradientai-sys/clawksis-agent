@@ -25,6 +25,7 @@ from plugins.memory.honcho.session import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_session(**kwargs) -> HonchoSession:
     return HonchoSession(
         key=kwargs.get("key", "cli:test"),
@@ -49,6 +50,7 @@ def _make_manager(write_frequency="turn") -> HonchoSessionManager:
 # ---------------------------------------------------------------------------
 # write_frequency parsing from config file
 # ---------------------------------------------------------------------------
+
 
 class TestWriteFrequencyParsing:
     def test_string_async(self, tmp_path):
@@ -83,11 +85,13 @@ class TestWriteFrequencyParsing:
 
     def test_host_block_overrides_root(self, tmp_path):
         cfg_file = tmp_path / "config.json"
-        cfg_file.write_text(json.dumps({
-            "apiKey": "k",
-            "writeFrequency": "turn",
-            "hosts": {"clawk": {"writeFrequency": "session"}},
-        }))
+        cfg_file.write_text(
+            json.dumps({
+                "apiKey": "k",
+                "writeFrequency": "turn",
+                "hosts": {"clawk": {"writeFrequency": "session"}},
+            })
+        )
         cfg = HonchoClientConfig.from_global_config(config_path=cfg_file)
         assert cfg.write_frequency == "session"
 
@@ -101,6 +105,7 @@ class TestWriteFrequencyParsing:
 # ---------------------------------------------------------------------------
 # resolve_session_name with session_title
 # ---------------------------------------------------------------------------
+
 
 class TestResolveSessionNameTitle:
     def test_manual_override_beats_title(self):
@@ -142,12 +147,18 @@ class TestResolveSessionNameTitle:
 
     def test_per_session_uses_session_id(self):
         cfg = HonchoClientConfig(session_strategy="per-session")
-        result = cfg.resolve_session_name("/some/dir", session_id="20260309_175514_9797dd")
+        result = cfg.resolve_session_name(
+            "/some/dir", session_id="20260309_175514_9797dd"
+        )
         assert result == "20260309_175514_9797dd"
 
     def test_per_session_with_peer_prefix(self):
-        cfg = HonchoClientConfig(session_strategy="per-session", peer_name="eri", session_peer_prefix=True)
-        result = cfg.resolve_session_name("/some/dir", session_id="20260309_175514_9797dd")
+        cfg = HonchoClientConfig(
+            session_strategy="per-session", peer_name="eri", session_peer_prefix=True
+        )
+        result = cfg.resolve_session_name(
+            "/some/dir", session_id="20260309_175514_9797dd"
+        )
         assert result == "eri-20260309_175514_9797dd"
 
     def test_per_session_no_id_falls_back_to_dirname(self):
@@ -159,26 +170,38 @@ class TestResolveSessionNameTitle:
         # per-session: the run's session_id is authoritative; an (auto-)generated
         # title must NOT remap a live conversation onto a second Honcho session.
         cfg = HonchoClientConfig(session_strategy="per-session")
-        result = cfg.resolve_session_name("/some/dir", session_title="my-title", session_id="20260309_175514_9797dd")
+        result = cfg.resolve_session_name(
+            "/some/dir", session_title="my-title", session_id="20260309_175514_9797dd"
+        )
         assert result == "20260309_175514_9797dd"
 
     def test_per_session_id_beats_manual_map(self):
         # per-session: session_id also wins over a stale cwd map entry (e.g. the
         # desktop launching from a mapped home dir).
-        cfg = HonchoClientConfig(session_strategy="per-session", sessions={"/some/dir": "pinned"})
-        result = cfg.resolve_session_name("/some/dir", session_id="20260309_175514_9797dd")
+        cfg = HonchoClientConfig(
+            session_strategy="per-session", sessions={"/some/dir": "pinned"}
+        )
+        result = cfg.resolve_session_name(
+            "/some/dir", session_id="20260309_175514_9797dd"
+        )
         assert result == "20260309_175514_9797dd"
 
     def test_title_still_applies_for_non_per_session(self):
         # Outside per-session, /title still names the Honcho session.
         cfg = HonchoClientConfig(session_strategy="per-directory")
-        result = cfg.resolve_session_name("/some/dir", session_title="my-title", session_id="20260309_175514_9797dd")
+        result = cfg.resolve_session_name(
+            "/some/dir", session_title="my-title", session_id="20260309_175514_9797dd"
+        )
         assert result == "my-title"
 
     def test_gateway_key_beats_per_session_id(self):
         # Gateways keep per-chat isolation even in per-session.
         cfg = HonchoClientConfig(session_strategy="per-session")
-        result = cfg.resolve_session_name("/some/dir", gateway_session_key="agent:main:telegram:dm:42", session_id="20260309_175514_9797dd")
+        result = cfg.resolve_session_name(
+            "/some/dir",
+            gateway_session_key="agent:main:telegram:dm:42",
+            session_id="20260309_175514_9797dd",
+        )
         assert result == "agent-main-telegram-dm-42"
 
     def test_global_strategy_returns_workspace(self):
@@ -190,6 +213,7 @@ class TestResolveSessionNameTitle:
 # ---------------------------------------------------------------------------
 # save() routing per write_frequency
 # ---------------------------------------------------------------------------
+
 
 class TestSaveRouting:
     def _make_session_with_message(self, mgr=None):
@@ -248,6 +272,7 @@ class TestSaveRouting:
 # flush_all()
 # ---------------------------------------------------------------------------
 
+
 class TestFlushAll:
     def test_flushes_all_cached_sessions(self):
         mgr = _make_manager(write_frequency="session")
@@ -287,6 +312,7 @@ class TestFlushAll:
 # ---------------------------------------------------------------------------
 # async writer thread lifecycle
 # ---------------------------------------------------------------------------
+
 
 class TestAsyncWriterThread:
     def test_thread_started_on_async_mode(self):
@@ -338,6 +364,7 @@ class TestAsyncWriterThread:
 # ---------------------------------------------------------------------------
 # async retry on failure
 # ---------------------------------------------------------------------------
+
 
 class TestAsyncWriterRetry:
     def test_retries_once_on_failure(self):
@@ -455,6 +482,7 @@ class TestMemoryFileMigrationTargets:
 # HonchoClientConfig dataclass defaults for new fields
 # ---------------------------------------------------------------------------
 
+
 class TestNewConfigFieldDefaults:
     def test_write_frequency_default(self):
         cfg = HonchoClientConfig()
@@ -474,4 +502,3 @@ class TestPrefetchCacheAccessors:
 
         assert mgr.pop_context_result("cli:test") == payload
         assert mgr.pop_context_result("cli:test") == {}
-

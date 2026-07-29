@@ -19,7 +19,15 @@ REFERENCE_PATTERN = re.compile(
     rf"(?<![\w/])@(?:(?P<simple>diff|staged)\b|(?P<kind>file|folder|git|url):(?P<value>{_QUOTED_REFERENCE_VALUE}(?::\d+(?:-\d+)?)?|\S+))"
 )
 TRAILING_PUNCTUATION = ",.;!?"
-_SENSITIVE_HOME_DIRS = (".ssh", ".aws", ".gnupg", ".kube", ".docker", ".azure", ".config/gh")
+_SENSITIVE_HOME_DIRS = (
+    ".ssh",
+    ".aws",
+    ".gnupg",
+    ".kube",
+    ".docker",
+    ".azure",
+    ".config/gh",
+)
 _SENSITIVE_CLAWK_DIRS = (Path("skills") / ".hub",)
 _SENSITIVE_HOME_FILES = (
     Path(".ssh") / "authorized_keys",
@@ -125,6 +133,7 @@ def preprocess_context_references(
         loop = None
     if loop and loop.is_running():
         import concurrent.futures
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             return pool.submit(asyncio.run, coro).result()
     return asyncio.run(coro)
@@ -146,7 +155,9 @@ async def preprocess_context_references_async(
     # Default to the current working directory so @ references cannot escape
     # the active workspace unless a caller explicitly widens the root.
     allowed_root_path = (
-        Path(allowed_root).expanduser().resolve() if allowed_root is not None else cwd_path
+        Path(allowed_root).expanduser().resolve()
+        if allowed_root is not None
+        else cwd_path
     )
     warnings: list[str] = []
     blocks: list[str] = []
@@ -200,7 +211,9 @@ async def preprocess_context_references_async(
     stripped = _remove_reference_tokens(message, refs)
     final = stripped
     if warnings:
-        final = f"{final}\n\n--- Context Warnings ---\n" + "\n".join(f"- {warning}" for warning in warnings)
+        final = f"{final}\n\n--- Context Warnings ---\n" + "\n".join(
+            f"- {warning}" for warning in warnings
+        )
     if blocks:
         final = f"{final}\n\n--- Attached Context ---\n\n" + "\n\n".join(blocks)
 
@@ -230,15 +243,22 @@ async def _expand_reference(
         if ref.kind == "diff":
             return _expand_git_reference(ref, cwd, ["diff"], "git diff")
         if ref.kind == "staged":
-            return _expand_git_reference(ref, cwd, ["diff", "--staged"], "git diff --staged")
+            return _expand_git_reference(
+                ref, cwd, ["diff", "--staged"], "git diff --staged"
+            )
         if ref.kind == "git":
             count = max(1, min(int(ref.target or "1"), 10))
-            return _expand_git_reference(ref, cwd, ["log", f"-{count}", "-p"], f"git log -{count} -p")
+            return _expand_git_reference(
+                ref, cwd, ["log", f"-{count}", "-p"], f"git log -{count} -p"
+            )
         if ref.kind == "url":
             content = await _fetch_url_content(ref.target, url_fetcher=url_fetcher)
             if not content:
                 return f"{ref.raw}: no content extracted", None
-            return None, f"🌐 {ref.raw} ({estimate_tokens_rough(content)} tokens)\n{content}"
+            return (
+                None,
+                f"🌐 {ref.raw} ({estimate_tokens_rough(content)} tokens)\n{content}",
+            )
     except Exception as exc:
         return f"{ref.raw}: {exc}", None
 
@@ -276,7 +296,10 @@ def _expand_file_reference(
 
     lang = _code_fence_language(path)
     label = ref.raw
-    return None, f"📄 {label} ({estimate_tokens_rough(text)} tokens)\n```{lang}\n{text}\n```"
+    return (
+        None,
+        f"📄 {label} ({estimate_tokens_rough(text)} tokens)\n```{lang}\n{text}\n```",
+    )
 
 
 def _expand_folder_reference(
@@ -321,7 +344,10 @@ def _expand_git_reference(
     content = result.stdout.strip()
     if not content:
         content = "(no output)"
-    return None, f"🧾 {label} ({estimate_tokens_rough(content)} tokens)\n```diff\n{content}\n```"
+    return (
+        None,
+        f"🧾 {label} ({estimate_tokens_rough(content)} tokens)\n```diff\n{content}\n```",
+    )
 
 
 async def _fetch_url_content(
@@ -363,6 +389,7 @@ def _resolve_path(cwd: Path, target: str, *, allowed_root: Path | None = None) -
 
 def _ensure_reference_path_allowed(path: Path) -> None:
     from clawk_constants import get_clawk_home
+
     home = Path(os.path.expanduser("~")).resolve()
     clawk_home = get_clawk_home().resolve()
 
@@ -379,7 +406,9 @@ def _ensure_reference_path_allowed(path: Path) -> None:
             path.relative_to(blocked_dir)
         except ValueError:
             continue
-        raise ValueError("path is a sensitive credential or internal Clawksis path and cannot be attached")
+        raise ValueError(
+            "path is a sensitive credential or internal Clawksis path and cannot be attached"
+        )
 
     # Anchor to the canonical read deny-list (agent/file_safety.get_read_block_error),
     # the single source of truth used by the file/terminal read path. The narrow
@@ -461,7 +490,7 @@ def _remove_reference_tokens(message: str, refs: list[ContextReference]) -> str:
     pieces: list[str] = []
     cursor = 0
     for ref in refs:
-        pieces.append(message[cursor:ref.start])
+        pieces.append(message[cursor : ref.start])
         cursor = ref.end
     pieces.append(message[cursor:])
     text = "".join(pieces)
@@ -472,8 +501,23 @@ def _remove_reference_tokens(message: str, refs: list[ContextReference]) -> str:
 
 def _is_binary_file(path: Path) -> bool:
     mime, _ = mimetypes.guess_type(path.name)
-    if mime and not mime.startswith("text/") and not any(
-        path.name.endswith(ext) for ext in (".py", ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".js", ".ts")
+    if (
+        mime
+        and not mime.startswith("text/")
+        and not any(
+            path.name.endswith(ext)
+            for ext in (
+                ".py",
+                ".md",
+                ".txt",
+                ".json",
+                ".yaml",
+                ".yml",
+                ".toml",
+                ".js",
+                ".ts",
+            )
+        )
     ):
         return True
     chunk = path.read_bytes()[:4096]
@@ -504,16 +548,24 @@ def _iter_visible_entries(path: Path, cwd: Path, limit: int) -> list[Path]:
         for rel in rg_entries:
             full = cwd / rel
             for parent in full.parents:
-                if parent == cwd or parent in seen_dirs or path not in {parent, *parent.parents}:
+                if (
+                    parent == cwd
+                    or parent in seen_dirs
+                    or path not in {parent, *parent.parents}
+                ):
                     continue
                 seen_dirs.add(parent)
                 output.append(parent)
             output.append(full)
-        return sorted({p for p in output if p.exists()}, key=lambda p: (not p.is_dir(), str(p)))
+        return sorted(
+            {p for p in output if p.exists()}, key=lambda p: (not p.is_dir(), str(p))
+        )
 
     output = []
     for root, dirs, files in os.walk(path):
-        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d != "__pycache__")
+        dirs[:] = sorted(
+            d for d in dirs if not d.startswith(".") and d != "__pycache__"
+        )
         files = sorted(f for f in files if not f.startswith("."))
         root_path = Path(root)
         for d in dirs:

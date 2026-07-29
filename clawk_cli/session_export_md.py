@@ -26,7 +26,9 @@ def _iso_timestamp(value: Any) -> str:
         ts = float(value)
     except (TypeError, ValueError):
         return str(value)
-    return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    return (
+        datetime.fromtimestamp(ts, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    )
 
 
 def _frontmatter_value(value: Any) -> str:
@@ -66,7 +68,11 @@ def _render_content(content: Any) -> str:
 def _render_tool_calls(tool_calls: Any) -> str:
     if not tool_calls:
         return ""
-    return "\n\n## Tool calls\n\n```json\n" + json.dumps(tool_calls, ensure_ascii=False, indent=2) + "\n```"
+    return (
+        "\n\n## Tool calls\n\n```json\n"
+        + json.dumps(tool_calls, ensure_ascii=False, indent=2)
+        + "\n```"
+    )
 
 
 def _session_id(session: dict[str, Any]) -> str:
@@ -108,12 +114,16 @@ def _render_messages(session: dict[str, Any]) -> str:
     return "\n".join(parts).rstrip() + "\n"
 
 
-def _export_body_without_hash(session: dict[str, Any], *, fmt: str, exported_at: float) -> str:
+def _export_body_without_hash(
+    session: dict[str, Any], *, fmt: str, exported_at: float
+) -> str:
     session_id = _session_id(session)
     title = session.get("title") or session_id
     provider = session.get("billing_provider") or session.get("provider")
     started_at = _iso_timestamp(session.get("started_at") or session.get("created_at"))
-    last_active = _iso_timestamp(session.get("last_active") or session.get("updated_at"))
+    last_active = _iso_timestamp(
+        session.get("last_active") or session.get("updated_at")
+    )
     ended_at = _iso_timestamp(session.get("ended_at"))
     exported_iso = _iso_timestamp(exported_at)
     message_count = _message_count(session)
@@ -134,7 +144,9 @@ def _export_body_without_hash(session: dict[str, Any], *, fmt: str, exported_at:
         _frontmatter_line("tool_call_count", session.get("tool_call_count") or 0),
     ]
     if session.get("lineage_session_ids"):
-        frontmatter.append(_frontmatter_line("lineage_session_ids", session.get("lineage_session_ids")))
+        frontmatter.append(
+            _frontmatter_line("lineage_session_ids", session.get("lineage_session_ids"))
+        )
     frontmatter.extend([
         _frontmatter_line("format", fmt),
         _frontmatter_line("exported_at", exported_iso),
@@ -154,7 +166,9 @@ def _export_body_without_hash(session: dict[str, Any], *, fmt: str, exported_at:
     parts.append("## Export verification\n")
     parts.append(f"- Session id: `{session_id}`")
     parts.append(f"- Exported messages: `{message_count}`")
-    parts.append(f"- Source DB message count at export: `{session.get('message_count', message_count)}`")
+    parts.append(
+        f"- Source DB message count at export: `{session.get('message_count', message_count)}`"
+    )
     parts.append(f"- Exported at: `{exported_iso}`")
     parts.append("- SHA256 of exported body: `__SHA256_PLACEHOLDER__`")
     return "\n".join(parts).rstrip() + "\n"
@@ -245,7 +259,11 @@ def redact_session_data(session: dict[str, Any]) -> dict[str, Any]:
 
 
 def write_session_markdown(
-    session: dict[str, Any], output_dir: Path | str, *, fmt: str = "md", force: bool = False
+    session: dict[str, Any],
+    output_dir: Path | str,
+    *,
+    fmt: str = "md",
+    force: bool = False,
 ) -> Path:
     """Write a Markdown/QMD export file and return its path.
 
@@ -260,13 +278,16 @@ def write_session_markdown(
     return path
 
 
-def append_manifest_entry(output_dir: Path | str, session: dict[str, Any], path: Path | str, *, fmt: str) -> Path:
+def append_manifest_entry(
+    output_dir: Path | str, session: dict[str, Any], path: Path | str, *, fmt: str
+) -> Path:
     out_dir = Path(output_dir).expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)
     export_path = Path(path)
     entry = {
         "session_id": _session_id(session),
-        "lineage_session_ids": session.get("lineage_session_ids") or [_session_id(session)],
+        "lineage_session_ids": session.get("lineage_session_ids")
+        or [_session_id(session)],
         "path": str(export_path),
         "format": fmt,
         "message_count": _message_count(session),

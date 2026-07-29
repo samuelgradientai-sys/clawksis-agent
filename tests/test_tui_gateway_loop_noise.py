@@ -67,12 +67,10 @@ def test_install_suppresses_flood_and_forwards_real_errors():
         install_loop_noise_filter(loop)
 
         # Benign teardown flood → swallowed, not forwarded.
-        loop.call_exception_handler(
-            {
-                "exception": ConnectionResetError(10054, "forcibly closed"),
-                "handle": _FakeConnectionLostCallback(),
-            }
-        )
+        loop.call_exception_handler({
+            "exception": ConnectionResetError(10054, "forcibly closed"),
+            "handle": _FakeConnectionLostCallback(),
+        })
         assert forwarded == []
 
         # Genuine loop error → forwarded to the previous handler unchanged.
@@ -102,12 +100,10 @@ def test_install_falls_back_to_default_handler_when_none_set():
         # No previous handler installed; benign flood still swallowed, and a
         # real error must not raise out of the filter.
         install_loop_noise_filter(loop)
-        loop.call_exception_handler(
-            {
-                "exception": ConnectionResetError(10054, "reset"),
-                "handle": _FakeConnectionLostCallback(),
-            }
-        )
+        loop.call_exception_handler({
+            "exception": ConnectionResetError(10054, "reset"),
+            "handle": _FakeConnectionLostCallback(),
+        })
         # A genuine error routes to default_exception_handler — should not raise.
         loop.call_exception_handler({"message": "some loop warning"})
     finally:

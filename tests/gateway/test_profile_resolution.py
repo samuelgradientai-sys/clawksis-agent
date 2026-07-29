@@ -19,8 +19,12 @@ def mock_runner():
     runner = MagicMock(spec=GatewayRunner)
     runner.config = MagicMock(profile_routes=[])
     # Bind the actual methods to the mock
-    runner._profile_name_for_source = GatewayRunner._profile_name_for_source.__get__(runner)
-    runner._resolve_profile_home_for_source = GatewayRunner._resolve_profile_home_for_source.__get__(runner)
+    runner._profile_name_for_source = GatewayRunner._profile_name_for_source.__get__(
+        runner
+    )
+    runner._resolve_profile_home_for_source = (
+        GatewayRunner._resolve_profile_home_for_source.__get__(runner)
+    )
     return runner
 
 
@@ -54,88 +58,98 @@ def telegram_source():
 
 class TestResolutionOrder:
     """Tests that profile resolution follows the correct priority order."""
-    
+
     def test_source_profile_wins_over_routing(self, mock_runner, discord_source):
         """source.profile should be used even if routing would match."""
         discord_source.profile = "from-source"
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
             with patch("clawk_cli.profiles.get_profile_dir") as mock_get_dir:
                 with patch("clawk_cli.profiles.profile_exists", return_value=True):
                     mock_get_dir.return_value = Path("/clawk/profiles/from-source")
-                    result = mock_runner._resolve_profile_home_for_source(discord_source)
-                    
+                    result = mock_runner._resolve_profile_home_for_source(
+                        discord_source
+                    )
+
                     assert result == Path("/clawk/profiles/from-source")
                     mock_get_dir.assert_called_once_with("from-source")
-    
+
     def test_routing_wins_over_active_profile(self, mock_runner, discord_source):
         """When source.profile is empty, routing should win over active profile."""
         discord_source.profile = None
-        
+
         # Mock routing to return a profile
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
             with patch("clawk_cli.profiles.get_profile_dir") as mock_get_dir:
                 with patch("clawk_cli.profiles.profile_exists", return_value=True):
                     mock_get_dir.return_value = Path("/clawk/profiles/routed")
-                    
+
                     # Manually set routing to return a profile
-                    mock_runner._profile_name_for_source = MagicMock(return_value="routed")
-                    
-                    result = mock_runner._resolve_profile_home_for_source(discord_source)
-                    
+                    mock_runner._profile_name_for_source = MagicMock(
+                        return_value="routed"
+                    )
+
+                    result = mock_runner._resolve_profile_home_for_source(
+                        discord_source
+                    )
+
                     assert result == Path("/clawk/profiles/routed")
                     mock_get_dir.assert_called_once_with("routed")
-    
+
     def test_active_profile_fallback(self, mock_runner, discord_source):
         """When source.profile and routing both return None, active profile is used."""
         discord_source.profile = None
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
             with patch("clawk_cli.profiles.get_profile_dir") as mock_get_dir:
                 mock_get_dir.return_value = Path("/clawk/profiles/active")
-                
+
                 # No routing match
                 mock_runner._profile_name_for_source = MagicMock(return_value=None)
-                
+
                 result = mock_runner._resolve_profile_home_for_source(discord_source)
-                
+
                 assert result == Path("/clawk/profiles/active")
                 mock_get_dir.assert_called_once_with("active")
-    
+
     def test_default_fallback_when_no_active(self, mock_runner, discord_source):
         """When even active profile is None, 'default' is used."""
         discord_source.profile = None
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value=None):
             with patch("clawk_cli.profiles.get_profile_dir") as mock_get_dir:
                 mock_get_dir.return_value = Path("/clawk")
-                
+
                 mock_runner._profile_name_for_source = MagicMock(return_value=None)
-                
+
                 result = mock_runner._resolve_profile_home_for_source(discord_source)
-                
+
                 assert result == Path("/clawk")
                 mock_get_dir.assert_called_once_with("default")
 
 
 class TestMissingProfileWarning:
     """Tests for warning when a profile doesn't exist on disk."""
-    
+
     def test_nonexistent_profile_warning(self, mock_runner, discord_source, caplog):
         """When source.profile points to a nonexistent profile, log a WARNING."""
         discord_source.profile = "nonexistent"
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
             with patch("clawk_cli.profiles.get_profile_dir") as mock_get_dir:
                 mock_get_dir.return_value = Path("/clawk/profiles/nonexistent")
                 with patch("clawk_cli.profiles.profile_exists", return_value=False):
-                    with patch("clawk_constants.get_clawk_home", return_value=Path("/clawk")):
+                    with patch(
+                        "clawk_constants.get_clawk_home", return_value=Path("/clawk")
+                    ):
                         with caplog.at_level(logging.WARNING):
-                            result = mock_runner._resolve_profile_home_for_source(discord_source)
-                            
+                            result = mock_runner._resolve_profile_home_for_source(
+                                discord_source
+                            )
+
                             # Should fall back to global CLAWK_HOME
                             assert result == Path("/clawk")
-                            
+
                             # Should have logged a warning
                             assert len(caplog.records) == 1
                             assert caplog.records[0].levelname == "WARNING"
@@ -143,135 +157,174 @@ class TestMissingProfileWarning:
                             assert "does not exist" in caplog.records[0].message
                             assert "discord" in caplog.records[0].message
                             assert "123456" in caplog.records[0].message
-    
-    def test_nonexistent_routing_profile_warning(self, mock_runner, discord_source, caplog):
+
+    def test_nonexistent_routing_profile_warning(
+        self, mock_runner, discord_source, caplog
+    ):
         """When routing returns a nonexistent profile, log a WARNING."""
         discord_source.profile = None
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
             with patch("clawk_cli.profiles.get_profile_dir") as mock_get_dir:
                 mock_get_dir.return_value = Path("/clawk/profiles/routed")
                 with patch("clawk_cli.profiles.profile_exists", return_value=False):
-                    with patch("clawk_constants.get_clawk_home", return_value=Path("/clawk")):
+                    with patch(
+                        "clawk_constants.get_clawk_home", return_value=Path("/clawk")
+                    ):
                         # Routing returns a profile that doesn't exist
-                        mock_runner._profile_name_for_source = MagicMock(return_value="routed")
-                        
+                        mock_runner._profile_name_for_source = MagicMock(
+                            return_value="routed"
+                        )
+
                         with caplog.at_level(logging.WARNING):
-                            result = mock_runner._resolve_profile_home_for_source(discord_source)
-                            
+                            result = mock_runner._resolve_profile_home_for_source(
+                                discord_source
+                            )
+
                             # Should fall back to global CLAWK_HOME
                             assert result == Path("/clawk")
-                            
+
                             # Should have logged a warning
                             assert len(caplog.records) == 1
                             assert "routed" in caplog.records[0].message
-    
+
     def test_empty_source_profile_no_warning(self, mock_runner, discord_source, caplog):
         """When source.profile is empty, silent fallback to active profile (no warning)."""
         discord_source.profile = None
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
             with patch("clawk_cli.profiles.get_profile_dir") as mock_get_dir:
                 mock_get_dir.return_value = Path("/clawk/profiles/active")
                 with patch("clawk_cli.profiles.profile_exists", return_value=True):
                     with caplog.at_level(logging.WARNING):
-                        mock_runner._profile_name_for_source = MagicMock(return_value=None)
-                        
-                        result = mock_runner._resolve_profile_home_for_source(discord_source)
-                        
+                        mock_runner._profile_name_for_source = MagicMock(
+                            return_value=None
+                        )
+
+                        result = mock_runner._resolve_profile_home_for_source(
+                            discord_source
+                        )
+
                         # Should use active profile
                         assert result == Path("/clawk/profiles/active")
-                        
+
                         # No warnings (active profile exists)
                         assert not any(r.levelname == "WARNING" for r in caplog.records)
-    
+
     def test_existing_profile_no_warning(self, mock_runner, discord_source, caplog):
         """When the profile exists, no warning should be logged."""
         discord_source.profile = "existing"
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
             with patch("clawk_cli.profiles.get_profile_dir") as mock_get_dir:
                 mock_get_dir.return_value = Path("/clawk/profiles/existing")
                 with patch("clawk_cli.profiles.profile_exists", return_value=True):
                     with caplog.at_level(logging.WARNING):
-                        result = mock_runner._resolve_profile_home_for_source(discord_source)
-                        
+                        result = mock_runner._resolve_profile_home_for_source(
+                            discord_source
+                        )
+
                         assert result == Path("/clawk/profiles/existing")
-                        
+
                         # No warnings
                         assert not any(r.levelname == "WARNING" for r in caplog.records)
 
 
 class TestExceptionHandling:
     """Tests for exception handling in profile resolution."""
-    
-    def test_get_profile_dir_exception_logs_warning(self, mock_runner, discord_source, caplog):
+
+    def test_get_profile_dir_exception_logs_warning(
+        self, mock_runner, discord_source, caplog
+    ):
         """When get_profile_dir raises an exception, log a WARNING with context."""
         discord_source.profile = "bad-profile"
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
-            with patch("clawk_cli.profiles.get_profile_dir", side_effect=ValueError("Invalid profile name")):
-                with patch("clawk_constants.get_clawk_home", return_value=Path("/clawk")):
+            with patch(
+                "clawk_cli.profiles.get_profile_dir",
+                side_effect=ValueError("Invalid profile name"),
+            ):
+                with patch(
+                    "clawk_constants.get_clawk_home", return_value=Path("/clawk")
+                ):
                     with caplog.at_level(logging.WARNING):
-                        result = mock_runner._resolve_profile_home_for_source(discord_source)
-                        
+                        result = mock_runner._resolve_profile_home_for_source(
+                            discord_source
+                        )
+
                         # Should fall back to global CLAWK_HOME
                         assert result == Path("/clawk")
-                        
+
                         # Should have logged a warning with exception info
                         assert len(caplog.records) == 1
                         assert caplog.records[0].levelname == "WARNING"
                         assert "bad-profile" in caplog.records[0].message
-                        assert "Failed to resolve profile directory" in caplog.records[0].message
-    
+                        assert (
+                            "Failed to resolve profile directory"
+                            in caplog.records[0].message
+                        )
+
     def test_exception_with_no_profile_name(self, mock_runner, discord_source, caplog):
         """Exception when no profile was set should still log a warning."""
         discord_source.profile = None
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value=None):
-            with patch("clawk_cli.profiles.get_profile_dir", side_effect=RuntimeError("Filesystem error")):
-                with patch("clawk_constants.get_clawk_home", return_value=Path("/clawk")):
+            with patch(
+                "clawk_cli.profiles.get_profile_dir",
+                side_effect=RuntimeError("Filesystem error"),
+            ):
+                with patch(
+                    "clawk_constants.get_clawk_home", return_value=Path("/clawk")
+                ):
                     mock_runner._profile_name_for_source = MagicMock(return_value=None)
-                    
+
                     with caplog.at_level(logging.WARNING):
-                        result = mock_runner._resolve_profile_home_for_source(discord_source)
-                        
+                        result = mock_runner._resolve_profile_home_for_source(
+                            discord_source
+                        )
+
                         assert result == Path("/clawk")
-                        
+
                         # Warning should mention "(no profile)"
                         assert "(no profile)" in caplog.records[0].message
 
 
 class TestRoutingConsultation:
     """Tests that _profile_name_for_source is consulted when source.profile is empty."""
-    
-    def test_routing_consulted_when_source_profile_empty(self, mock_runner, discord_source):
+
+    def test_routing_consulted_when_source_profile_empty(
+        self, mock_runner, discord_source
+    ):
         """_profile_name_for_source should be called when source.profile is empty."""
         discord_source.profile = None
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
             with patch("clawk_cli.profiles.get_profile_dir") as mock_get_dir:
                 mock_get_dir.return_value = Path("/clawk/profiles/routed")
-                
+
                 mock_runner._profile_name_for_source = MagicMock(return_value="routed")
-                
+
                 mock_runner._resolve_profile_home_for_source(discord_source)
-                
+
                 # Should have called routing
-                mock_runner._profile_name_for_source.assert_called_once_with(discord_source)
-    
-    def test_routing_not_consulted_when_source_profile_set(self, mock_runner, discord_source):
+                mock_runner._profile_name_for_source.assert_called_once_with(
+                    discord_source
+                )
+
+    def test_routing_not_consulted_when_source_profile_set(
+        self, mock_runner, discord_source
+    ):
         """_profile_name_for_source should NOT be called when source.profile is set."""
         discord_source.profile = "from-source"
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
             with patch("clawk_cli.profiles.get_profile_dir") as mock_get_dir:
                 mock_get_dir.return_value = Path("/clawk/profiles/from-source")
-                
+
                 mock_runner._profile_name_for_source = MagicMock(return_value="routed")
-                
+
                 mock_runner._resolve_profile_home_for_source(discord_source)
-                
+
                 # Should NOT have called routing
                 mock_runner._profile_name_for_source.assert_not_called()
 
@@ -290,8 +343,12 @@ class TestNonDiscordProfileRouting:
         """A configured Telegram route resolves to its profile via the real
         ``_profile_name_for_source`` (bound onto the mock runner)."""
         mock_runner.config.profile_routes = [
-            ProfileRoute(name="tg", platform="telegram", profile="tg-profile",
-                         chat_id="-1001234567890"),
+            ProfileRoute(
+                name="tg",
+                platform="telegram",
+                profile="tg-profile",
+                chat_id="-1001234567890",
+            ),
         ]
         telegram_source.profile = None
 
@@ -301,8 +358,9 @@ class TestNonDiscordProfileRouting:
         """With no matching Telegram route, resolution returns None (caller
         falls back to the default/active profile)."""
         mock_runner.config.profile_routes = [
-            ProfileRoute(name="dc", platform="discord", profile="dc-profile",
-                         chat_id="123456"),
+            ProfileRoute(
+                name="dc", platform="discord", profile="dc-profile", chat_id="123456"
+            ),
         ]
         telegram_source.profile = None
 
@@ -369,10 +427,16 @@ class TestAdapterToSessionKeyIntegration:
     @staticmethod
     def _routes():
         return [
-            ProfileRoute(name="dc", platform="discord", profile="coder",
-                         guild_id="111", chat_id="222"),
-            ProfileRoute(name="tg", platform="telegram", profile="ops",
-                         chat_id="-1001234567890"),
+            ProfileRoute(
+                name="dc",
+                platform="discord",
+                profile="coder",
+                guild_id="111",
+                chat_id="222",
+            ),
+            ProfileRoute(
+                name="tg", platform="telegram", profile="ops", chat_id="-1001234567890"
+            ),
         ]
 
     def test_discord_adapter_stamps_profile_and_scopes_key(self, mock_runner):
@@ -380,7 +444,10 @@ class TestAdapterToSessionKeyIntegration:
         adapter = _stub_adapter(Platform.DISCORD, mock_runner)
 
         source = adapter.build_source(
-            chat_id="222", chat_type="group", guild_id="111", user_id="u1",
+            chat_id="222",
+            chat_type="group",
+            guild_id="111",
+            user_id="u1",
         )
         assert source.profile == "coder"
 
@@ -397,7 +464,9 @@ class TestAdapterToSessionKeyIntegration:
         adapter = _stub_adapter(Platform.TELEGRAM, mock_runner)
 
         source = adapter.build_source(
-            chat_id="-1001234567890", chat_type="group", user_id="u1",
+            chat_id="-1001234567890",
+            chat_type="group",
+            user_id="u1",
         )
         assert source.profile == "ops"
 
@@ -414,7 +483,9 @@ class TestAdapterToSessionKeyIntegration:
         adapter = _stub_adapter(Platform.TELEGRAM, runner=None)
 
         source = adapter.build_source(
-            chat_id="-1001234567890", chat_type="group", user_id="u1",
+            chat_id="-1001234567890",
+            chat_type="group",
+            user_id="u1",
         )
         assert source.profile is None
         key = build_session_key(source, profile=source.profile)
@@ -434,8 +505,13 @@ class TestMultiplexGate:
     def test_routes_ignored_when_multiplex_off(self, mock_runner, discord_source):
         mock_runner.config.multiplex_profiles = False
         mock_runner.config.profile_routes = [
-            ProfileRoute(name="dc", platform="discord", profile="coder",
-                         guild_id="789", chat_id="123456"),
+            ProfileRoute(
+                name="dc",
+                platform="discord",
+                profile="coder",
+                guild_id="789",
+                chat_id="123456",
+            ),
         ]
         discord_source.profile = None
 
@@ -444,8 +520,13 @@ class TestMultiplexGate:
     def test_routes_active_when_multiplex_on(self, mock_runner, discord_source):
         mock_runner.config.multiplex_profiles = True
         mock_runner.config.profile_routes = [
-            ProfileRoute(name="dc", platform="discord", profile="coder",
-                         guild_id="789", chat_id="123456"),
+            ProfileRoute(
+                name="dc",
+                platform="discord",
+                profile="coder",
+                guild_id="789",
+                chat_id="123456",
+            ),
         ]
         discord_source.profile = None
 
@@ -458,13 +539,21 @@ class TestMultiplexGate:
         gateway with no routes at all."""
         mock_runner.config.multiplex_profiles = False
         mock_runner.config.profile_routes = [
-            ProfileRoute(name="dc", platform="discord", profile="coder",
-                         guild_id="111", chat_id="222"),
+            ProfileRoute(
+                name="dc",
+                platform="discord",
+                profile="coder",
+                guild_id="111",
+                chat_id="222",
+            ),
         ]
         adapter = _stub_adapter(Platform.DISCORD, mock_runner)
 
         source = adapter.build_source(
-            chat_id="222", chat_type="group", guild_id="111", user_id="u1",
+            chat_id="222",
+            chat_type="group",
+            guild_id="111",
+            user_id="u1",
         )
         assert source.profile is None
         key = build_session_key(source, profile=source.profile)

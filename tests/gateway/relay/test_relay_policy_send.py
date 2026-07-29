@@ -35,11 +35,17 @@ def _clean_env(monkeypatch):
 # relay_relevance_policy() — the projection
 # --------------------------------------------------------------------------
 
+
 def test_projection_maps_require_mention_and_free_response(monkeypatch):
     monkeypatch.setenv("GATEWAY_RELAY_PLATFORMS", "discord")
     monkeypatch.setattr(
         "gateway.run._load_gateway_config",
-        lambda: {"discord": {"require_mention": True, "free_response_channels": ["c-support", "c-help"]}},
+        lambda: {
+            "discord": {
+                "require_mention": True,
+                "free_response_channels": ["c-support", "c-help"],
+            }
+        },
         raising=False,
     )
     pol = relay.relay_relevance_policy()
@@ -89,7 +95,9 @@ def test_projection_none_when_all_default(monkeypatch):
     # No require_mention, no free-response, no allow-bots ⇒ nothing to declare
     # (the connector's quiet default already matches).
     monkeypatch.setenv("GATEWAY_RELAY_PLATFORMS", "discord")
-    monkeypatch.setattr("gateway.run._load_gateway_config", lambda: {"discord": {}}, raising=False)
+    monkeypatch.setattr(
+        "gateway.run._load_gateway_config", lambda: {"discord": {}}, raising=False
+    )
     assert relay.relay_relevance_policy() is None
 
 
@@ -107,6 +115,7 @@ def test_projection_none_when_platform_unresolved(monkeypatch):
 # send_relay_policy() — the boot-time declaration
 # --------------------------------------------------------------------------
 
+
 def _arm(monkeypatch, *, url="wss://connector.example/relay"):
     monkeypatch.setenv("GATEWAY_RELAY_URL", url)
     monkeypatch.setenv("GATEWAY_RELAY_ID", "gw-x")
@@ -118,7 +127,12 @@ def test_send_posts_projected_policy_with_token(monkeypatch):
     _arm(monkeypatch)
     monkeypatch.setattr(
         "gateway.run._load_gateway_config",
-        lambda: {"discord": {"require_mention": True, "free_response_channels": ["c-support"]}},
+        lambda: {
+            "discord": {
+                "require_mention": True,
+                "free_response_channels": ["c-support"],
+            }
+        },
         raising=False,
     )
     captured = {}
@@ -147,16 +161,26 @@ def test_send_skips_when_no_secret(monkeypatch):
         raising=False,
     )
     called = {"n": 0}
-    monkeypatch.setattr(relay, "_post_policy", lambda **k: called.__setitem__("n", called["n"] + 1) or 200)
+    monkeypatch.setattr(
+        relay,
+        "_post_policy",
+        lambda **k: called.__setitem__("n", called["n"] + 1) or 200,
+    )
     assert relay.send_relay_policy() is False
     assert called["n"] == 0  # never attempted without a secret to auth with
 
 
 def test_send_skips_when_nothing_to_declare(monkeypatch):
     _arm(monkeypatch)
-    monkeypatch.setattr("gateway.run._load_gateway_config", lambda: {"discord": {}}, raising=False)
+    monkeypatch.setattr(
+        "gateway.run._load_gateway_config", lambda: {"discord": {}}, raising=False
+    )
     called = {"n": 0}
-    monkeypatch.setattr(relay, "_post_policy", lambda **k: called.__setitem__("n", called["n"] + 1) or 200)
+    monkeypatch.setattr(
+        relay,
+        "_post_policy",
+        lambda **k: called.__setitem__("n", called["n"] + 1) or 200,
+    )
     assert relay.send_relay_policy() is False
     assert called["n"] == 0  # no redundant write of the default
 

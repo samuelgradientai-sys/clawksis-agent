@@ -133,15 +133,31 @@ class TestGetProxyUrl:
 
 class TestResolveProxyUrl:
     def test_normalizes_socks_alias_from_all_proxy(self, monkeypatch):
-        for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                    "https_proxy", "http_proxy", "all_proxy", "NO_PROXY", "no_proxy"):
+        for key in (
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "ALL_PROXY",
+            "https_proxy",
+            "http_proxy",
+            "all_proxy",
+            "NO_PROXY",
+            "no_proxy",
+        ):
             monkeypatch.delenv(key, raising=False)
         monkeypatch.setenv("ALL_PROXY", "socks://127.0.0.1:1080/")
         assert resolve_proxy_url() == "socks5://127.0.0.1:1080/"
 
     def test_no_proxy_bypasses_matching_host(self, monkeypatch):
-        for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                    "https_proxy", "http_proxy", "all_proxy", "NO_PROXY", "no_proxy"):
+        for key in (
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "ALL_PROXY",
+            "https_proxy",
+            "http_proxy",
+            "all_proxy",
+            "NO_PROXY",
+            "no_proxy",
+        ):
             monkeypatch.delenv(key, raising=False)
         monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
         monkeypatch.setenv("NO_PROXY", "api.telegram.org")
@@ -149,8 +165,16 @@ class TestResolveProxyUrl:
         assert resolve_proxy_url(target_hosts="api.telegram.org") is None
 
     def test_no_proxy_bypasses_cidr_target(self, monkeypatch):
-        for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                    "https_proxy", "http_proxy", "all_proxy", "NO_PROXY", "no_proxy"):
+        for key in (
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "ALL_PROXY",
+            "https_proxy",
+            "http_proxy",
+            "all_proxy",
+            "NO_PROXY",
+            "no_proxy",
+        ):
             monkeypatch.delenv(key, raising=False)
         monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
         monkeypatch.setenv("NO_PROXY", "149.154.160.0/20")
@@ -158,8 +182,16 @@ class TestResolveProxyUrl:
         assert resolve_proxy_url(target_hosts=["149.154.167.220"]) is None
 
     def test_no_proxy_ignored_without_target(self, monkeypatch):
-        for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                    "https_proxy", "http_proxy", "all_proxy", "NO_PROXY", "no_proxy"):
+        for key in (
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "ALL_PROXY",
+            "https_proxy",
+            "http_proxy",
+            "all_proxy",
+            "NO_PROXY",
+            "no_proxy",
+        ):
             monkeypatch.delenv(key, raising=False)
         monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
         monkeypatch.setenv("NO_PROXY", "*")
@@ -335,7 +367,9 @@ class TestRunAgentViaProxy:
         assert "Proxy connection error" in result["final_response"]
 
     @pytest.mark.asyncio
-    async def test_rejects_proxy_sse_without_line_boundary_after_buffer_cap(self, monkeypatch):
+    async def test_rejects_proxy_sse_without_line_boundary_after_buffer_cap(
+        self, monkeypatch
+    ):
         monkeypatch.setenv("GATEWAY_PROXY_URL", "http://host:8642")
         monkeypatch.delenv("GATEWAY_PROXY_KEY", raising=False)
         monkeypatch.setattr("gateway.run._GATEWAY_PROXY_SSE_BUFFER_MAX_CHARS", 16)
@@ -369,7 +403,9 @@ class TestRunAgentViaProxy:
 
         resp = _FakeSSEResponse(
             status=200,
-            sse_chunks=[b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'],
+            sse_chunks=[
+                b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'
+            ],
         )
         session = _FakeSession(resp)
 
@@ -407,7 +443,9 @@ class TestRunAgentViaProxy:
 
         resp = _FakeSSEResponse(
             status=200,
-            sse_chunks=[b'data: {"choices":[{"delta":{"content":"answer"}}]}\n\ndata: [DONE]\n\n'],
+            sse_chunks=[
+                b'data: {"choices":[{"delta":{"content":"answer"}}]}\n\ndata: [DONE]\n\n'
+            ],
         )
         session = _FakeSession(resp)
 
@@ -417,7 +455,10 @@ class TestRunAgentViaProxy:
                     result = await runner._run_agent_via_proxy(
                         message="hi",
                         context_prompt="",
-                        history=[{"role": "user", "content": "prev"}, {"role": "assistant", "content": "ok"}],
+                        history=[
+                            {"role": "user", "content": "prev"},
+                            {"role": "assistant", "content": "ok"},
+                        ],
                         source=source,
                         session_id="sess-123",
                     )
@@ -476,7 +517,9 @@ class TestRunAgentViaProxy:
 
         resp = _FakeSSEResponse(
             status=200,
-            sse_chunks=[b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'],
+            sse_chunks=[
+                b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'
+            ],
         )
         session = _FakeSession(resp)
 
@@ -502,7 +545,9 @@ class TestRunAgentViaProxy:
 
         resp = _FakeSSEResponse(
             status=200,
-            sse_chunks=[b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'],
+            sse_chunks=[
+                b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'
+            ],
         )
         session = _FakeSession(resp)
 
@@ -529,6 +574,7 @@ class TestEnvVarRegistration:
 
     def test_proxy_url_in_optional_env_vars(self):
         from clawk_cli.config import OPTIONAL_ENV_VARS
+
         assert "GATEWAY_PROXY_URL" in OPTIONAL_ENV_VARS
         info = OPTIONAL_ENV_VARS["GATEWAY_PROXY_URL"]
         assert info["category"] == "messaging"
@@ -536,6 +582,7 @@ class TestEnvVarRegistration:
 
     def test_proxy_key_in_optional_env_vars(self):
         from clawk_cli.config import OPTIONAL_ENV_VARS
+
         assert "GATEWAY_PROXY_KEY" in OPTIONAL_ENV_VARS
         info = OPTIONAL_ENV_VARS["GATEWAY_PROXY_KEY"]
         assert info["category"] == "messaging"

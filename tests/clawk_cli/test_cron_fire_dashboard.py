@@ -62,17 +62,20 @@ def test_bad_token_401(monkeypatch):
     fired = []
     monkeypatch.setattr(
         "plugins.cron_providers.chronos.verify.get_fire_verifier",
-        lambda: (lambda **kw: None),  # verification fails
+        lambda: lambda **kw: None,  # verification fails
     )
     monkeypatch.setattr(web_server, "_find_cron_job_profile", lambda jid: "default")
-    monkeypatch.setattr(web_server, "_fire_cron_job_for_profile",
-                        lambda p, j: fired.append((p, j)))
+    monkeypatch.setattr(
+        web_server, "_fire_cron_job_for_profile", lambda p, j: fired.append((p, j))
+    )
 
     client, pa, ph = _client(auth_required=True)
     try:
-        resp = client.post("/api/cron/fire",
-                           headers={"Authorization": "Bearer forged"},
-                           json={"job_id": "abc"})
+        resp = client.post(
+            "/api/cron/fire",
+            headers={"Authorization": "Bearer forged"},
+            json={"job_id": "abc"},
+        )
         assert resp.status_code == 401
         assert fired == []
     finally:
@@ -83,13 +86,13 @@ def test_bad_token_401(monkeypatch):
 def test_missing_job_id_400(monkeypatch):
     monkeypatch.setattr(
         "plugins.cron_providers.chronos.verify.get_fire_verifier",
-        lambda: (lambda **kw: {"purpose": "cron_fire"}),
+        lambda: lambda **kw: {"purpose": "cron_fire"},
     )
     client, pa, ph = _client(auth_required=False)
     try:
-        resp = client.post("/api/cron/fire",
-                           headers={"Authorization": "Bearer good"},
-                           json={})
+        resp = client.post(
+            "/api/cron/fire", headers={"Authorization": "Bearer good"}, json={}
+        )
         assert resp.status_code == 400
     finally:
         _restore(pa, ph)
@@ -101,14 +104,16 @@ def test_unknown_job_200_gone(monkeypatch):
     (NAS shouldn't retry a fire for a cancelled/completed job)."""
     monkeypatch.setattr(
         "plugins.cron_providers.chronos.verify.get_fire_verifier",
-        lambda: (lambda **kw: {"purpose": "cron_fire"}),
+        lambda: lambda **kw: {"purpose": "cron_fire"},
     )
     monkeypatch.setattr(web_server, "_find_cron_job_profile", lambda jid: None)
     client, pa, ph = _client(auth_required=False)
     try:
-        resp = client.post("/api/cron/fire",
-                           headers={"Authorization": "Bearer good"},
-                           json={"job_id": "ghost"})
+        resp = client.post(
+            "/api/cron/fire",
+            headers={"Authorization": "Bearer good"},
+            json={"job_id": "ghost"},
+        )
         assert resp.status_code == 200
         assert resp.json().get("status") == "gone"
     finally:
@@ -122,17 +127,22 @@ def test_valid_token_accepts_and_fires(monkeypatch):
     fired = []
     monkeypatch.setattr(
         "plugins.cron_providers.chronos.verify.get_fire_verifier",
-        lambda: (lambda **kw: {"purpose": "cron_fire", "aud": "agent:x"}),
+        lambda: lambda **kw: {"purpose": "cron_fire", "aud": "agent:x"},
     )
     monkeypatch.setattr(web_server, "_find_cron_job_profile", lambda jid: "default")
-    monkeypatch.setattr(web_server, "_fire_cron_job_for_profile",
-                        lambda p, j: fired.append((p, j)) or True)
+    monkeypatch.setattr(
+        web_server,
+        "_fire_cron_job_for_profile",
+        lambda p, j: fired.append((p, j)) or True,
+    )
 
     client, pa, ph = _client(auth_required=False)
     try:
-        resp = client.post("/api/cron/fire",
-                           headers={"Authorization": "Bearer good"},
-                           json={"job_id": "j1"})
+        resp = client.post(
+            "/api/cron/fire",
+            headers={"Authorization": "Bearer good"},
+            json={"job_id": "j1"},
+        )
         assert resp.status_code == 202
         assert resp.json()["job_id"] == "j1"
     finally:

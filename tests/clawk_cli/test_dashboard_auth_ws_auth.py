@@ -129,8 +129,9 @@ class TestWsTicketEndpoint:
 
     def test_each_call_returns_a_distinct_ticket(self, gated_app):
         _logged_in(gated_app)
-        tickets = {gated_app.post("/api/auth/ws-ticket").json()["ticket"]
-                   for _ in range(5)}
+        tickets = {
+            gated_app.post("/api/auth/ws-ticket").json()["ticket"] for _ in range(5)
+        }
         assert len(tickets) == 5
 
     def test_get_method_is_not_allowed(self, gated_app):
@@ -343,7 +344,9 @@ class TestWsRequestIsAllowedGated:
         ws.headers = {"host": "127.0.0.1:8080"}
         assert web_server._ws_request_is_allowed(ws) is True
 
-    def test_non_loopback_peer_allowed_in_insecure_public_mode(self, insecure_public_app):
+    def test_non_loopback_peer_allowed_in_insecure_public_mode(
+        self, insecure_public_app
+    ):
         """`--host 0.0.0.0 --insecure` is an explicit LAN/public opt-in.
 
         Regression coverage for the dashboard `/chat` breakage where the
@@ -358,7 +361,9 @@ class TestWsRequestIsAllowedGated:
         }
         assert web_server._ws_request_is_allowed(ws) is True
 
-    def test_peer_allowed_on_explicit_non_loopback_bind(self, insecure_explicit_host_app):
+    def test_peer_allowed_on_explicit_non_loopback_bind(
+        self, insecure_explicit_host_app
+    ):
         """`--host 100.64.0.10 --insecure` (Tailscale/LAN IP) is an explicit
         non-loopback opt-in too — not just the 0.0.0.0 wildcard.
 
@@ -494,7 +499,9 @@ class TestWsHostOriginGuardOrigins:
         ws = self._ws(origin="http://evil.test", host="127.0.0.1:8080")
         assert web_server._ws_host_origin_is_allowed(ws) is False
 
-    def test_explicit_non_loopback_file_origin_allowed(self, insecure_explicit_host_app):
+    def test_explicit_non_loopback_file_origin_allowed(
+        self, insecure_explicit_host_app
+    ):
         """Packaged Clawksis Desktop also uses file:// when connecting to a
         Tailscale/LAN dashboard bind.
 
@@ -504,7 +511,9 @@ class TestWsHostOriginGuardOrigins:
         ws = self._ws(origin="file://", host="100.64.0.10:9119")
         assert web_server._ws_host_origin_is_allowed(ws) is True
 
-    def test_explicit_non_loopback_null_origin_allowed(self, insecure_explicit_host_app):
+    def test_explicit_non_loopback_null_origin_allowed(
+        self, insecure_explicit_host_app
+    ):
         ws = self._ws(origin="null", host="100.64.0.10:9119")
         assert web_server._ws_host_origin_is_allowed(ws) is True
 

@@ -108,7 +108,12 @@ class NotionWriter:
     API_BASE = "https://api.notion.com/v1"
     API_VERSION = "2025-09-03"
 
-    def __init__(self, *, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self.api_key = (api_key or os.getenv("NOTION_API_KEY", "")).strip()
         self._transport = transport
 
@@ -121,10 +126,14 @@ class NotionWriter:
         if not self.api_key:
             raise TeamsPipelineSinkError("NOTION_API_KEY is not configured.")
 
-        database_id = str(config.get("database_id") or config.get("databaseId") or "").strip()
+        database_id = str(
+            config.get("database_id") or config.get("databaseId") or ""
+        ).strip()
         page_id = (existing_record or {}).get("page_id")
         if not database_id and not page_id:
-            raise TeamsPipelineSinkError("Notion sink requires database_id or an existing page_id.")
+            raise TeamsPipelineSinkError(
+                "Notion sink requires database_id or an existing page_id."
+            )
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -155,14 +164,23 @@ class NotionWriter:
 
         return {"page_id": record["id"], "url": record.get("url")}
 
-    def _build_properties(self, payload: TeamsMeetingSummaryPayload, config: dict[str, Any]) -> dict[str, Any]:
+    def _build_properties(
+        self, payload: TeamsMeetingSummaryPayload, config: dict[str, Any]
+    ) -> dict[str, Any]:
         title_property = config.get("title_property", "Name")
         summary_property = config.get("summary_property")
         meeting_id_property = config.get("meeting_id_property")
 
         properties: dict[str, Any] = {
             title_property: {
-                "title": [{"text": {"content": payload.title or f"Meeting {payload.meeting_ref.meeting_id}"}}]
+                "title": [
+                    {
+                        "text": {
+                            "content": payload.title
+                            or f"Meeting {payload.meeting_ref.meeting_id}"
+                        }
+                    }
+                ]
             }
         }
         if summary_property:
@@ -175,7 +193,9 @@ class NotionWriter:
             }
         return properties
 
-    def _build_blocks(self, payload: TeamsMeetingSummaryPayload) -> list[dict[str, Any]]:
+    def _build_blocks(
+        self, payload: TeamsMeetingSummaryPayload
+    ) -> list[dict[str, Any]]:
         sections = [
             ("Summary", payload.summary or ""),
             ("Key Decisions", "\n".join(f"- {item}" for item in payload.key_decisions)),
@@ -184,27 +204,28 @@ class NotionWriter:
         ]
         blocks: list[dict[str, Any]] = []
         for heading, body in sections:
-            blocks.append(
-                {
-                    "object": "block",
-                    "type": "heading_2",
-                    "heading_2": {"rich_text": [{"text": {"content": heading}}]},
-                }
-            )
-            blocks.append(
-                {
-                    "object": "block",
-                    "type": "paragraph",
-                    "paragraph": {"rich_text": [{"text": {"content": body or "None"}}]},
-                }
-            )
+            blocks.append({
+                "object": "block",
+                "type": "heading_2",
+                "heading_2": {"rich_text": [{"text": {"content": heading}}]},
+            })
+            blocks.append({
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {"rich_text": [{"text": {"content": body or "None"}}]},
+            })
         return blocks
 
 
 class LinearWriter:
     API_URL = "https://api.linear.app/graphql"
 
-    def __init__(self, *, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self.api_key = (api_key or os.getenv("LINEAR_API_KEY", "")).strip()
         self._transport = transport
 
@@ -241,7 +262,9 @@ class LinearWriter:
                 )
             else:
                 if not team_id:
-                    raise TeamsPipelineSinkError("Linear sink requires team_id when creating a new issue.")
+                    raise TeamsPipelineSinkError(
+                        "Linear sink requires team_id when creating a new issue."
+                    )
                 response = await client.post(
                     self.API_URL,
                     headers=headers,
@@ -250,20 +273,29 @@ class LinearWriter:
                             "mutation($input: IssueCreateInput!) "
                             "{ issueCreate(input: $input) { success issue { id identifier url } } }"
                         ),
-                        "variables": {"input": {"teamId": team_id, "title": title, "description": description}},
+                        "variables": {
+                            "input": {
+                                "teamId": team_id,
+                                "title": title,
+                                "description": description,
+                            }
+                        },
                     },
                 )
             response.raise_for_status()
             payload_json = response.json()
 
         issue = (
-            (((payload_json.get("data") or {}).get("issueUpdate") or {}).get("issue"))
-            or (((payload_json.get("data") or {}).get("issueCreate") or {}).get("issue"))
-        )
+            ((payload_json.get("data") or {}).get("issueUpdate") or {}).get("issue")
+        ) or (((payload_json.get("data") or {}).get("issueCreate") or {}).get("issue"))
         if not isinstance(issue, dict) or not issue.get("id"):
             raise TeamsPipelineSinkError(f"Linear write failed: {payload_json}")
 
-        return {"issue_id": issue["id"], "identifier": issue.get("identifier"), "url": issue.get("url")}
+        return {
+            "issue_id": issue["id"],
+            "identifier": issue.get("identifier"),
+            "url": issue.get("url"),
+        }
 
 
 class TeamsMeetingPipeline:
@@ -283,14 +315,20 @@ class TeamsMeetingPipeline:
     ) -> None:
         self.graph_client = graph_client
         self.store = store
-        self.config = config if isinstance(config, TeamsPipelineConfig) else TeamsPipelineConfig.from_dict(config)
+        self.config = (
+            config
+            if isinstance(config, TeamsPipelineConfig)
+            else TeamsPipelineConfig.from_dict(config)
+        )
         self.transcribe_fn = transcribe_fn
         self.summarize_fn = summarize_fn or self._generate_summary_payload
         self.notion_writer = notion_writer
         self.linear_writer = linear_writer
         self.teams_sender = teams_sender
 
-    def create_job_from_notification(self, notification: dict[str, Any]) -> TeamsMeetingPipelineJob:
+    def create_job_from_notification(
+        self, notification: dict[str, Any]
+    ) -> TeamsMeetingPipelineJob:
         event_id = TeamsPipelineStore.build_notification_receipt_key(notification)
         self.store.record_notification_receipt(event_id, notification)
         existing_job = self._find_job_by_dedupe_key(event_id)
@@ -300,14 +338,18 @@ class TeamsMeetingPipeline:
         meeting_id = (
             resource_data.get("id")
             or notification.get("meetingId")
-            or _extract_meeting_id_from_resource(str(notification.get("resource") or ""))
+            or _extract_meeting_id_from_resource(
+                str(notification.get("resource") or "")
+            )
             or notification.get("resource")
             or event_id
         )
         job = TeamsMeetingPipelineJob(
             job_id=f"teams-job-{uuid.uuid4().hex[:12]}",
             event_id=event_id,
-            source_event_type=str(notification.get("changeType") or "graph.notification"),
+            source_event_type=str(
+                notification.get("changeType") or "graph.notification"
+            ),
             dedupe_key=event_id,
             status="received",
             meeting_ref=TeamsMeetingRef(
@@ -316,20 +358,28 @@ class TeamsMeetingPipeline:
                 metadata={
                     "notification": dict(notification),
                     "join_web_url": resource_data.get("joinWebUrl"),
-                    "call_record_id": resource_data.get("callRecordId") or notification.get("callRecordId"),
+                    "call_record_id": resource_data.get("callRecordId")
+                    or notification.get("callRecordId"),
                 },
             ),
         )
         self.store.upsert_job(job.job_id, job.to_dict())
         return job
 
-    async def run_notification(self, notification: dict[str, Any]) -> TeamsMeetingPipelineJob:
+    async def run_notification(
+        self, notification: dict[str, Any]
+    ) -> TeamsMeetingPipelineJob:
         job = self.create_job_from_notification(notification)
-        if job.status in TERMINAL_PIPELINE_STATES or job.status in ACTIVE_PIPELINE_STATES - {"received"}:
+        if (
+            job.status in TERMINAL_PIPELINE_STATES
+            or job.status in ACTIVE_PIPELINE_STATES - {"received"}
+        ):
             return job
         return await self.run_job(job.job_id)
 
-    async def run_job(self, job_or_id: TeamsMeetingPipelineJob | str) -> TeamsMeetingPipelineJob:
+    async def run_job(
+        self, job_or_id: TeamsMeetingPipelineJob | str
+    ) -> TeamsMeetingPipelineJob:
         job = self._coerce_job(job_or_id)
         meeting_ref = job.meeting_ref
         if meeting_ref is None:
@@ -339,11 +389,16 @@ class TeamsMeetingPipeline:
 
         try:
             job = self._persist_job(job, status="resolving_meeting")
-            notification = meeting_ref.metadata.get("notification") if isinstance(meeting_ref.metadata, dict) else {}
+            notification = (
+                meeting_ref.metadata.get("notification")
+                if isinstance(meeting_ref.metadata, dict)
+                else {}
+            )
             resolved_meeting = await resolve_meeting_reference(
                 self.graph_client,
                 meeting_id=meeting_ref.meeting_id,
-                join_web_url=meeting_ref.join_web_url or meeting_ref.metadata.get("join_web_url"),
+                join_web_url=meeting_ref.join_web_url
+                or meeting_ref.metadata.get("join_web_url"),
                 tenant_id=meeting_ref.tenant_id,
             )
             job.meeting_ref = resolved_meeting
@@ -352,7 +407,10 @@ class TeamsMeetingPipeline:
             transcript_text: str | None = None
             if self.config.transcript_preferred:
                 job = self._persist_job(job, status="fetching_transcript")
-                transcript_artifact, transcript_text = await fetch_preferred_transcript_text(
+                (
+                    transcript_artifact,
+                    transcript_text,
+                ) = await fetch_preferred_transcript_text(
                     self.graph_client, resolved_meeting
                 )
                 if transcript_artifact and transcript_text:
@@ -371,19 +429,29 @@ class TeamsMeetingPipeline:
                         f"for {resolved_meeting.meeting_id}."
                     )
                 job = self._persist_job(job, status="downloading_recording")
-                recordings = await list_recording_artifacts(self.graph_client, resolved_meeting)
+                recordings = await list_recording_artifacts(
+                    self.graph_client, resolved_meeting
+                )
                 if not recordings:
                     raise TeamsPipelineRetryableError(
                         f"Recording unavailable for meeting {resolved_meeting.meeting_id}."
                     )
                 recording = recordings[0]
                 artifacts.append(recording)
-                transcript_text = await self._transcribe_recording(job, resolved_meeting, recording)
-                job = self._persist_job(job, selected_artifact_strategy="recording_stt_fallback")
+                transcript_text = await self._transcribe_recording(
+                    job, resolved_meeting, recording
+                )
+                job = self._persist_job(
+                    job, selected_artifact_strategy="recording_stt_fallback"
+                )
             else:
-                job = self._persist_job(job, selected_artifact_strategy="transcript_first")
+                job = self._persist_job(
+                    job, selected_artifact_strategy="transcript_first"
+                )
 
-            call_record_id = notification.get("callRecordId") or (meeting_ref.metadata or {}).get("call_record_id")
+            call_record_id = notification.get("callRecordId") or (
+                meeting_ref.metadata or {}
+            ).get("call_record_id")
             call_record = await enrich_meeting_with_call_record(
                 self.graph_client,
                 resolved_meeting,
@@ -424,7 +492,9 @@ class TeamsMeetingPipeline:
             )
             return job
 
-    def _coerce_job(self, job_or_id: TeamsMeetingPipelineJob | str) -> TeamsMeetingPipelineJob:
+    def _coerce_job(
+        self, job_or_id: TeamsMeetingPipelineJob | str
+    ) -> TeamsMeetingPipelineJob:
         if isinstance(job_or_id, TeamsMeetingPipelineJob):
             return job_or_id
         payload = self.store.get_job(str(job_or_id))
@@ -432,7 +502,9 @@ class TeamsMeetingPipeline:
             raise TeamsPipelineError(f"Unknown Teams pipeline job: {job_or_id}")
         return TeamsMeetingPipelineJob.from_dict(payload)
 
-    def _find_job_by_dedupe_key(self, dedupe_key: str) -> TeamsMeetingPipelineJob | None:
+    def _find_job_by_dedupe_key(
+        self, dedupe_key: str
+    ) -> TeamsMeetingPipelineJob | None:
         for payload in self.store.list_jobs().values():
             if not isinstance(payload, dict):
                 continue
@@ -441,7 +513,9 @@ class TeamsMeetingPipeline:
             return TeamsMeetingPipelineJob.from_dict(payload)
         return None
 
-    def _persist_job(self, job: TeamsMeetingPipelineJob, **updates: Any) -> TeamsMeetingPipelineJob:
+    def _persist_job(
+        self, job: TeamsMeetingPipelineJob, **updates: Any
+    ) -> TeamsMeetingPipelineJob:
         payload = job.to_dict()
         payload.update(updates)
         stored = self.store.upsert_job(job.job_id, payload)
@@ -455,7 +529,9 @@ class TeamsMeetingPipeline:
     ) -> str:
         temp_root = self.config.tmp_dir or (get_clawk_home() / "tmp" / "teams_pipeline")
         temp_root.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=str(temp_root), prefix="teams-recording-") as tmp_dir:
+        with tempfile.TemporaryDirectory(
+            dir=str(temp_root), prefix="teams-recording-"
+        ) as tmp_dir:
             # display_name comes from Graph API and is ultimately set by
             # the meeting organizer — strip any directory components so a
             # crafted name like "../../etc/cron.d/evil" can't escape tmp_dir.
@@ -476,16 +552,28 @@ class TeamsMeetingPipeline:
             )
             audio_path = await self._prepare_audio_path(recording_path)
             job = self._persist_job(job, status="transcribing_audio")
-            result = await asyncio.to_thread(self.transcribe_fn, str(audio_path), self.config.stt_model)
+            result = await asyncio.to_thread(
+                self.transcribe_fn, str(audio_path), self.config.stt_model
+            )
             if not result.get("success"):
-                raise TeamsPipelineRetryableError(str(result.get("error") or "Unknown STT failure"))
+                raise TeamsPipelineRetryableError(
+                    str(result.get("error") or "Unknown STT failure")
+                )
             transcript = str(result.get("transcript") or "").strip()
             if not transcript:
                 raise TeamsPipelineRetryableError("STT returned an empty transcript.")
             return transcript
 
     async def _prepare_audio_path(self, recording_path: Path) -> Path:
-        if recording_path.suffix.lower() in {".wav", ".mp3", ".m4a", ".ogg", ".flac", ".aac", ".webm"}:
+        if recording_path.suffix.lower() in {
+            ".wav",
+            ".mp3",
+            ".m4a",
+            ".ogg",
+            ".flac",
+            ".aac",
+            ".webm",
+        }:
             return recording_path
         if not self.config.ffmpeg_extract_audio:
             return recording_path
@@ -507,7 +595,9 @@ class TeamsMeetingPipeline:
         _stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
             detail = stderr.decode("utf-8", errors="replace").strip()
-            raise TeamsPipelineRetryableError(f"ffmpeg audio extraction failed: {detail}")
+            raise TeamsPipelineRetryableError(
+                f"ffmpeg audio extraction failed: {detail}"
+            )
         return audio_path
 
     async def _generate_summary_payload(
@@ -537,13 +627,19 @@ class TeamsMeetingPipeline:
             content = extract_content_or_reasoning(response)
             parsed = _parse_summary_json(content)
         except Exception as exc:
-            logger.info("Teams pipeline LLM summary unavailable, using heuristic summary: %s", exc)
+            logger.info(
+                "Teams pipeline LLM summary unavailable, using heuristic summary: %s",
+                exc,
+            )
             parsed = _heuristic_summary(transcript_text)
 
         metrics = _collect_call_metrics(artifacts)
         return TeamsMeetingSummaryPayload(
             meeting_ref=resolved_meeting,
-            title=str(resolved_meeting.metadata.get("subject") or f"Meeting {resolved_meeting.meeting_id}"),
+            title=str(
+                resolved_meeting.metadata.get("subject")
+                or f"Meeting {resolved_meeting.meeting_id}"
+            ),
             start_time=resolved_meeting.metadata.get("startDateTime"),
             end_time=resolved_meeting.metadata.get("endDateTime"),
             participants=_collect_participants(resolved_meeting),
@@ -564,29 +660,51 @@ class TeamsMeetingPipeline:
             ),
         )
 
-    async def _write_sinks(self, job: TeamsMeetingPipelineJob, payload: TeamsMeetingSummaryPayload) -> None:
-        if self.config.notion and self.config.notion.get("enabled") and self.notion_writer:
+    async def _write_sinks(
+        self, job: TeamsMeetingPipelineJob, payload: TeamsMeetingSummaryPayload
+    ) -> None:
+        if (
+            self.config.notion
+            and self.config.notion.get("enabled")
+            and self.notion_writer
+        ):
             job = self._persist_job(job, status="writing_notion")
             sink_key = f"notion:{payload.meeting_ref.meeting_id}"
             existing = self.store.get_sink_record(sink_key)
-            result = await self.notion_writer.write_summary(payload, self.config.notion, existing)
+            result = await self.notion_writer.write_summary(
+                payload, self.config.notion, existing
+            )
             self.store.upsert_sink_record(sink_key, result)
 
-        if self.config.linear and self.config.linear.get("enabled") and self.linear_writer:
+        if (
+            self.config.linear
+            and self.config.linear.get("enabled")
+            and self.linear_writer
+        ):
             job = self._persist_job(job, status="writing_linear")
             sink_key = f"linear:{payload.meeting_ref.meeting_id}"
             existing = self.store.get_sink_record(sink_key)
-            result = await self.linear_writer.write_summary(payload, self.config.linear, existing)
+            result = await self.linear_writer.write_summary(
+                payload, self.config.linear, existing
+            )
             self.store.upsert_sink_record(sink_key, result)
 
-        if self.config.teams_delivery and self.config.teams_delivery.get("enabled") and self.teams_sender:
+        if (
+            self.config.teams_delivery
+            and self.config.teams_delivery.get("enabled")
+            and self.teams_sender
+        ):
             job = self._persist_job(job, status="sending_teams")
             sink_key = f"teams:{payload.meeting_ref.meeting_id}"
             existing = self.store.get_sink_record(sink_key)
             if hasattr(self.teams_sender, "write_summary"):
-                result = await self.teams_sender.write_summary(payload, self.config.teams_delivery, existing)
+                result = await self.teams_sender.write_summary(
+                    payload, self.config.teams_delivery, existing
+                )
             else:
-                result = await self.teams_sender(payload, self.config.teams_delivery, existing)
+                result = await self.teams_sender(
+                    payload, self.config.teams_delivery, existing
+                )
             self.store.upsert_sink_record(sink_key, result)
 
 
@@ -605,7 +723,9 @@ def _collect_participants(meeting_ref: TeamsMeetingRef) -> list[str]:
     if isinstance(participants, list):
         for item in participants:
             if isinstance(item, dict):
-                name = item.get("displayName") or (((item.get("identity") or {}).get("user") or {}).get("displayName"))
+                name = item.get("displayName") or (
+                    ((item.get("identity") or {}).get("user") or {}).get("displayName")
+                )
                 if name:
                     result.append(str(name))
     return result
@@ -629,7 +749,10 @@ def _build_summary_prompt(
     transcript_text: str,
     artifacts: list[MeetingArtifact],
 ) -> str:
-    artifact_lines = [f"- {artifact.artifact_type}:{artifact.artifact_id}:{artifact.display_name or ''}" for artifact in artifacts]
+    artifact_lines = [
+        f"- {artifact.artifact_type}:{artifact.artifact_id}:{artifact.display_name or ''}"
+        for artifact in artifacts
+    ]
     return (
         f"Meeting ID: {meeting_ref.meeting_id}\n"
         f"Title: {meeting_ref.metadata.get('subject') or 'Unknown'}\n"
@@ -650,22 +773,43 @@ def _parse_summary_json(content: str) -> dict[str, Any]:
     payload = json.loads(text)
     return {
         "summary": str(payload.get("summary") or "").strip(),
-        "key_decisions": [str(item).strip() for item in payload.get("key_decisions", []) if str(item).strip()],
-        "action_items": [str(item).strip() for item in payload.get("action_items", []) if str(item).strip()],
-        "risks": [str(item).strip() for item in payload.get("risks", []) if str(item).strip()],
+        "key_decisions": [
+            str(item).strip()
+            for item in payload.get("key_decisions", [])
+            if str(item).strip()
+        ],
+        "action_items": [
+            str(item).strip()
+            for item in payload.get("action_items", [])
+            if str(item).strip()
+        ],
+        "risks": [
+            str(item).strip() for item in payload.get("risks", []) if str(item).strip()
+        ],
         "confidence": str(payload.get("confidence") or "medium").strip(),
         "confidence_notes": str(payload.get("confidence_notes") or "").strip(),
     }
 
 
 def _heuristic_summary(transcript_text: str) -> dict[str, Any]:
-    lines = [line.strip(" -*\t") for line in transcript_text.splitlines() if line.strip()]
-    summary = " ".join(lines[:3])[:1200] or "Transcript unavailable or too sparse for a confident summary."
+    lines = [
+        line.strip(" -*\t") for line in transcript_text.splitlines() if line.strip()
+    ]
+    summary = (
+        " ".join(lines[:3])[:1200]
+        or "Transcript unavailable or too sparse for a confident summary."
+    )
     action_items = [
-        line for line in lines if line.lower().startswith(("action:", "todo:", "next step:", "follow up:"))
+        line
+        for line in lines
+        if line.lower().startswith(("action:", "todo:", "next step:", "follow up:"))
     ][:8]
-    risks = [line for line in lines if "risk" in line.lower() or "blocker" in line.lower()][:6]
-    decisions = [line for line in lines if "decide" in line.lower() or "decision" in line.lower()][:6]
+    risks = [
+        line for line in lines if "risk" in line.lower() or "blocker" in line.lower()
+    ][:6]
+    decisions = [
+        line for line in lines if "decide" in line.lower() or "decision" in line.lower()
+    ][:6]
     confidence = "low" if len(transcript_text.strip()) < 300 else "medium"
     return {
         "summary": summary,

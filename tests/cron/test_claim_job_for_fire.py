@@ -7,6 +7,7 @@ claim for a given fire. Single-machine deployments always win (unaffected).
 These exercise the real store against a temp CLAWK_HOME (no mocks) per the
 E2E-over-mocks discipline for file-touching code.
 """
+
 import pytest
 
 

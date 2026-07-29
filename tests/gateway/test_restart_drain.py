@@ -89,7 +89,9 @@ async def test_draining_rejects_new_session_messages():
     assert result == "⏳ Gateway is restarting and is not accepting new work right now."
 
 
-def test_load_busy_input_mode_prefers_env_then_config_then_default(tmp_path, monkeypatch):
+def test_load_busy_input_mode_prefers_env_then_config_then_default(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     monkeypatch.delenv("CLAWK_GATEWAY_BUSY_INPUT_MODE", raising=False)
 
@@ -116,7 +118,9 @@ def test_load_busy_input_mode_prefers_env_then_config_then_default(tmp_path, mon
     assert gateway_run.GatewayRunner._load_busy_input_mode() == "interrupt"
 
 
-def test_load_busy_text_mode_follows_input_mode_and_honors_legacy(tmp_path, monkeypatch):
+def test_load_busy_text_mode_follows_input_mode_and_honors_legacy(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     monkeypatch.delenv("CLAWK_GATEWAY_BUSY_TEXT_MODE", raising=False)
     monkeypatch.delenv("CLAWK_GATEWAY_BUSY_INPUT_MODE", raising=False)
@@ -250,7 +254,9 @@ async def test_launch_detached_restart_command_uses_setsid(monkeypatch):
     monkeypatch.setattr(gateway_run, "_resolve_clawk_bin", lambda: ["/usr/bin/clawk"])
     monkeypatch.setattr(gateway_run.os, "getpid", lambda: 321)
     monkeypatch.setenv("_CLAWK_GATEWAY", "1")
-    monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/setsid" if cmd == "setsid" else None)
+    monkeypatch.setattr(
+        shutil, "which", lambda cmd: "/usr/bin/setsid" if cmd == "setsid" else None
+    )
 
     def fake_popen(cmd, **kwargs):
         popen_calls.append((cmd, kwargs))
@@ -348,7 +354,9 @@ async def test_windows_detached_restart_scrubs_gateway_marker(monkeypatch, tmp_p
     assert cmd[-3:] == ["clawk", "gateway", "restart"]
     assert kwargs["env"].get("_CLAWK_GATEWAY") is None
     assert kwargs["env"]["VIRTUAL_ENV"] == str(venv_dir)
-    assert str(site_packages) in kwargs["env"]["PYTHONPATH"].split(gateway_run.os.pathsep)
+    assert str(site_packages) in kwargs["env"]["PYTHONPATH"].split(
+        gateway_run.os.pathsep
+    )
     assert kwargs["stdout"] is subprocess.DEVNULL
     assert kwargs["stderr"] is subprocess.DEVNULL
 
@@ -539,7 +547,9 @@ async def test_shutdown_notification_uses_persisted_origin_for_colon_ids():
 
 
 @pytest.mark.asyncio
-async def test_drain_suppress_skips_home_channel_keeps_session_ping(tmp_path, monkeypatch):
+async def test_drain_suppress_skips_home_channel_keeps_session_ping(
+    tmp_path, monkeypatch
+):
     """A suppress_notification drain marker mutes ONLY the home-channel broadcast.
 
     The per-active-session interrupt ping MUST still fire (it carries the
@@ -576,7 +586,9 @@ async def test_drain_suppress_skips_home_channel_keeps_session_ping(tmp_path, mo
 
 
 @pytest.mark.asyncio
-async def test_drain_without_suppress_flag_still_broadcasts_home_channel(tmp_path, monkeypatch):
+async def test_drain_without_suppress_flag_still_broadcasts_home_channel(
+    tmp_path, monkeypatch
+):
     """A drain marker WITHOUT the suppress flag leaves today's behaviour intact.
 
     Both the active-session ping AND the home-channel broadcast fire — proving

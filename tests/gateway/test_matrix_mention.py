@@ -196,7 +196,11 @@ class TestOutboundMentions:
     @staticmethod
     def _sent_content(mock_client):
         call_args = mock_client.send_message_event.call_args
-        return call_args.args[2] if len(call_args.args) > 2 else call_args.kwargs["content"]
+        return (
+            call_args.args[2]
+            if len(call_args.args) > 2
+            else call_args.kwargs["content"]
+        )
 
     @pytest.mark.asyncio
     async def test_send_adds_matrix_mentions_and_formatted_body(self):
@@ -235,7 +239,9 @@ class TestOutboundMentions:
         assert result.success is True
         content = self._sent_content(self.mock_client)
         assert content["m.mentions"] == {"user_ids": ["@alice:example.org"]}
-        assert content["m.new_content"]["m.mentions"] == {"user_ids": ["@alice:example.org"]}
+        assert content["m.new_content"]["m.mentions"] == {
+            "user_ids": ["@alice:example.org"]
+        }
         assert content["m.new_content"]["formatted_body"] == (
             'Updated for <a href="https://matrix.to/#/@alice:example.org">'
             "@alice:example.org</a>"

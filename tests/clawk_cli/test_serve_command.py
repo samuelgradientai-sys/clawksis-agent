@@ -51,7 +51,15 @@ def test_serve_accepts_the_legacy_no_open_flag_as_a_noop():
 
 
 def test_serve_takes_the_same_runtime_flags_as_dashboard():
-    argv = ["--host", "0.0.0.0", "--port", "0", "--insecure", "--skip-build", "--isolated"]
+    argv = [
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "0",
+        "--insecure",
+        "--skip-build",
+        "--isolated",
+    ]
     serve = _parser().parse_args(["serve", *argv])
     dash = _parser().parse_args(["dashboard", *argv])
     for field in ("host", "port", "insecure", "skip_build", "isolated"):
@@ -67,4 +75,6 @@ def test_serve_is_a_headless_backend_but_dashboard_is_not():
     # `headless_backend` is the flag cmd_dashboard reads to skip the web UI
     # build; only `serve` carries it.
     assert getattr(_parser().parse_args(["serve"]), "headless_backend", False) is True
-    assert getattr(_parser().parse_args(["dashboard"]), "headless_backend", False) is False
+    assert (
+        getattr(_parser().parse_args(["dashboard"]), "headless_backend", False) is False
+    )

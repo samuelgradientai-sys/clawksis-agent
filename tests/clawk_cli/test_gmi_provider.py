@@ -56,7 +56,9 @@ class TestGmiAliases:
         assert normalize_provider("gmicloud") == "gmi"
 
     def test_providers_normalize_provider(self):
-        from clawk_cli.providers import normalize_provider as normalize_provider_in_providers
+        from clawk_cli.providers import (
+            normalize_provider as normalize_provider_in_providers,
+        )
 
         assert normalize_provider_in_providers("gmi-cloud") == "gmi"
         assert normalize_provider_in_providers("gmicloud") == "gmi"
@@ -117,7 +119,9 @@ class TestGmiModelCatalog:
                 "source": "GMI_API_KEY",
             },
         )
-        monkeypatch.setattr("clawk_cli.models.fetch_api_models", lambda api_key, base_url: None)
+        monkeypatch.setattr(
+            "clawk_cli.models.fetch_api_models", lambda api_key, base_url: None
+        )
         # Generic profile path uses ProviderProfile.fetch_models (urllib), not
         # fetch_api_models — must stub it or CI can hit the real endpoint.
         monkeypatch.setattr(
@@ -219,7 +223,9 @@ class TestGmiDoctor:
 
         assert "API key or custom endpoint configured" in out
         assert "GMI Cloud" in out
-        assert any(url == "https://api.gmi-serving.com/v1/models" for url, _, _ in calls)
+        assert any(
+            url == "https://api.gmi-serving.com/v1/models" for url, _, _ in calls
+        )
 
 
 class TestGmiModelMetadata:
@@ -241,18 +247,23 @@ class TestGmiModelMetadata:
         assert _infer_provider_from_url("https://api.gmi-serving.com/v1") == "gmi"
 
     def test_known_gmi_endpoint_still_uses_endpoint_metadata(self):
-        with patch(
-            "agent.model_metadata.get_cached_context_length",
-            return_value=None,
-        ), patch(
-            "agent.model_metadata.fetch_endpoint_model_metadata",
-            return_value={"anthropic/claude-opus-4.6": {"context_length": 409600}},
-        ), patch(
-            "agent.models_dev.lookup_models_dev_context",
-            return_value=None,
-        ), patch(
-            "agent.model_metadata.fetch_model_metadata",
-            return_value={},
+        with (
+            patch(
+                "agent.model_metadata.get_cached_context_length",
+                return_value=None,
+            ),
+            patch(
+                "agent.model_metadata.fetch_endpoint_model_metadata",
+                return_value={"anthropic/claude-opus-4.6": {"context_length": 409600}},
+            ),
+            patch(
+                "agent.models_dev.lookup_models_dev_context",
+                return_value=None,
+            ),
+            patch(
+                "agent.model_metadata.fetch_model_metadata",
+                return_value={},
+            ),
         ):
             result = get_model_context_length(
                 "anthropic/claude-opus-4.6",
@@ -275,7 +286,9 @@ class TestGmiAuxiliary:
         assert client is not None
         assert model == "google/gemini-3.1-flash-lite-preview"
         assert mock_openai.call_args.kwargs["api_key"] == "gmi-test-key"
-        assert mock_openai.call_args.kwargs["base_url"] == "https://api.gmi-serving.com/v1"
+        assert (
+            mock_openai.call_args.kwargs["base_url"] == "https://api.gmi-serving.com/v1"
+        )
         # GMI profile declares default_headers with a ClawksisAgent User-Agent
         # for traffic attribution. The generic profile-fallback branch in
         # resolve_provider_client should carry it through to the OpenAI client.
@@ -324,16 +337,25 @@ class TestGmiMainFlow:
     def test_select_provider_and_model_routes_gmi_to_generic_flow(self, monkeypatch):
         recorded: dict[str, str] = {}
 
-        monkeypatch.setattr("clawk_cli.auth.resolve_provider", lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            "clawk_cli.auth.resolve_provider", lambda *args, **kwargs: None
+        )
 
         def fake_prompt_provider_choice(choices, default=0):
-            return next(i for i, label in enumerate(choices) if label.startswith("GMI Cloud"))
+            return next(
+                i for i, label in enumerate(choices) if label.startswith("GMI Cloud")
+            )
 
         def fake_model_flow_api_key_provider(config, provider_id, current_model=""):
             recorded["provider_id"] = provider_id
 
-        monkeypatch.setattr("clawk_cli.main._prompt_provider_choice", fake_prompt_provider_choice)
-        monkeypatch.setattr("clawk_cli.main._model_flow_api_key_provider", fake_model_flow_api_key_provider)
+        monkeypatch.setattr(
+            "clawk_cli.main._prompt_provider_choice", fake_prompt_provider_choice
+        )
+        monkeypatch.setattr(
+            "clawk_cli.main._model_flow_api_key_provider",
+            fake_model_flow_api_key_provider,
+        )
 
         from clawk_cli.main import select_provider_and_model
 
@@ -344,17 +366,22 @@ class TestGmiMainFlow:
     def test_model_flow_api_key_provider_persists_gmi_selection(self, monkeypatch):
         monkeypatch.setenv("GMI_API_KEY", "gmi-test-key")
 
-        with patch(
-            "clawk_cli.models.fetch_api_models",
-            return_value=["zai-org/GLM-5.1-FP8", "openai/gpt-5.4-mini"],
-        ), patch(
-            "clawk_cli.auth._prompt_model_selection",
-            return_value="openai/gpt-5.4-mini",
-        ), patch(
-            "clawk_cli.auth.deactivate_provider",
-        ), patch(
-            "builtins.input",
-            return_value="",
+        with (
+            patch(
+                "clawk_cli.models.fetch_api_models",
+                return_value=["zai-org/GLM-5.1-FP8", "openai/gpt-5.4-mini"],
+            ),
+            patch(
+                "clawk_cli.auth._prompt_model_selection",
+                return_value="openai/gpt-5.4-mini",
+            ),
+            patch(
+                "clawk_cli.auth.deactivate_provider",
+            ),
+            patch(
+                "builtins.input",
+                return_value="",
+            ),
         ):
             from clawk_cli.main import _model_flow_api_key_provider
 

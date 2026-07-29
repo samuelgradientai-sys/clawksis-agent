@@ -68,6 +68,7 @@ class TestIgnoreUserConfigEnvGate:
     def _reload_cli(self, monkeypatch, tmp_path):
         """Point cli._clawk_home at tmp_path and return a fresh load_cli_config."""
         import cli
+
         monkeypatch.setattr(cli, "_clawk_home", tmp_path)
         return cli.load_cli_config
 
@@ -99,7 +100,9 @@ class TestIgnoreUserConfigEnvGate:
         # User-set model.default MUST NOT leak through — either the built-in
         # default ("" or unset) or a project-level fallback, but never the
         # user's value
-        assert cfg["model"].get("default", "") != "test-vendor/ignore-user-config-sentinel"
+        assert (
+            cfg["model"].get("default", "") != "test-vendor/ignore-user-config-sentinel"
+        )
 
     def test_flag_ignored_when_set_to_other_value(self, tmp_path, monkeypatch):
         """Only the literal value "1" activates the bypass, matching the yolo pattern."""
@@ -126,6 +129,7 @@ class TestIgnoreRulesEnvGate:
         # Import ClawksisCLI lazily — cli.py has heavy module-init side effects
         # that we don't want to run at test collection time.
         import cli
+
         importlib.reload(cli)
 
         # Build only enough of ClawksisCLI to reach the ignore_rules assignment.
@@ -142,6 +146,7 @@ class TestIgnoreRulesEnvGate:
     def test_constructor_flag_alone_enables_ignore_rules(self, monkeypatch):
         monkeypatch.delenv("CLAWK_IGNORE_RULES", raising=False)
         import cli
+
         obj = object.__new__(cli.ClawksisCLI)
         ignore_rules = True  # constructor argument
         obj.ignore_rules = ignore_rules or os.environ.get("CLAWK_IGNORE_RULES") == "1"
@@ -150,6 +155,7 @@ class TestIgnoreRulesEnvGate:
     def test_neither_flag_nor_env_leaves_rules_enabled(self, monkeypatch):
         monkeypatch.delenv("CLAWK_IGNORE_RULES", raising=False)
         import cli
+
         obj = object.__new__(cli.ClawksisCLI)
         ignore_rules = False
         obj.ignore_rules = ignore_rules or os.environ.get("CLAWK_IGNORE_RULES") == "1"
@@ -219,6 +225,7 @@ class TestArgparseFlagsRegistered:
         # two flags under test. If someone removes the flag from main.py, this
         # test keeps passing in isolation — but the E2E test below catches it.
         import argparse
+
         parser = argparse.ArgumentParser(prog="clawk")
         subs = parser.add_subparsers(dest="command")
         chat = subs.add_parser("chat")
@@ -245,6 +252,7 @@ class TestArgparseFlagsRegistered:
         # And the cmd_chat env-var wiring must be present
         import inspect
         import clawk_cli.main as hm
+
         src = inspect.getsource(hm)
         assert "CLAWK_IGNORE_USER_CONFIG" in src
         assert "CLAWK_IGNORE_RULES" in src

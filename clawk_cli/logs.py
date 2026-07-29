@@ -52,8 +52,8 @@ _LEVEL_RE = re.compile(r"\s(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s")
 # Matches: "INFO gateway.run:" or "INFO [sess_abc] tools.terminal_tool:"
 _LOGGER_NAME_RE = re.compile(
     r"\s(?:DEBUG|INFO|WARNING|ERROR|CRITICAL)"  # level
-    r"(?:\s+\[.*?\])?"                           # optional session tag
-    r"\s+(\S+):"                                 # logger name
+    r"(?:\s+\[.*?\])?"  # optional session tag
+    r"\s+(\S+):"  # logger name
 )
 
 # Level ordering for >= filtering
@@ -187,18 +187,23 @@ def tail_log(
     if since:
         since_dt = _parse_since(since)
         if since_dt is None:
-            print(f"Invalid --since value: {since!r}. Use format like '1h', '30m', '2d'.")
+            print(
+                f"Invalid --since value: {since!r}. Use format like '1h', '30m', '2d'."
+            )
             sys.exit(1)
 
     min_level = level.upper() if level else None
     if min_level and min_level not in _LEVEL_ORDER:
-        print(f"Invalid --level: {level!r}. Use DEBUG, INFO, WARNING, ERROR, or CRITICAL.")
+        print(
+            f"Invalid --level: {level!r}. Use DEBUG, INFO, WARNING, ERROR, or CRITICAL."
+        )
         sys.exit(1)
 
     # Resolve component to logger name prefixes
     component_prefixes = None
     if component:
         from clawk_logging import COMPONENT_PREFIXES
+
         component_lower = component.lower()
         if component_lower not in COMPONENT_PREFIXES:
             available = ", ".join(sorted(COMPONENT_PREFIXES))
@@ -215,9 +220,15 @@ def tail_log(
 
     # Read and display the tail
     try:
-        lines = _read_tail(log_path, num_lines, has_filters=has_filters,
-                           min_level=min_level, session_filter=session,
-                           since=since_dt, component_prefixes=component_prefixes)
+        lines = _read_tail(
+            log_path,
+            num_lines,
+            has_filters=has_filters,
+            min_level=min_level,
+            session_filter=session,
+            since=since_dt,
+            component_prefixes=component_prefixes,
+        )
     except PermissionError:
         print(f"Permission denied: {log_path}")
         sys.exit(1)
@@ -235,9 +246,13 @@ def tail_log(
     filter_desc = f" [{', '.join(filter_parts)}]" if filter_parts else ""
 
     if follow:
-        print(f"--- {display_clawk_home()}/logs/{filename}{filter_desc} (Ctrl+C to stop) ---")
+        print(
+            f"--- {display_clawk_home()}/logs/{filename}{filter_desc} (Ctrl+C to stop) ---"
+        )
     else:
-        print(f"--- {display_clawk_home()}/logs/{filename}{filter_desc} (last {num_lines}) ---")
+        print(
+            f"--- {display_clawk_home()}/logs/{filename}{filter_desc} (last {num_lines}) ---"
+        )
 
     for line in lines:
         print(line, end="")
@@ -247,8 +262,13 @@ def tail_log(
 
     # Follow mode — poll for new content
     try:
-        _follow_log(log_path, min_level=min_level, session_filter=session,
-                     since=since_dt, component_prefixes=component_prefixes)
+        _follow_log(
+            log_path,
+            min_level=min_level,
+            session_filter=session,
+            since=since_dt,
+            component_prefixes=component_prefixes,
+        )
     except KeyboardInterrupt:
         print("\n--- stopped ---")
 
@@ -272,10 +292,15 @@ def _read_tail(
         # For large files, read last 10K lines and filter down.
         raw_lines = _read_last_n_lines(path, max(num_lines * 20, 2000))
         filtered = [
-            l for l in raw_lines
-            if _matches_filters(l, min_level=min_level,
-                                session_filter=session_filter, since=since,
-                                component_prefixes=component_prefixes)
+            l
+            for l in raw_lines
+            if _matches_filters(
+                l,
+                min_level=min_level,
+                session_filter=session_filter,
+                since=since,
+                component_prefixes=component_prefixes,
+            )
         ]
         return filtered[-num_lines:]
     else:
@@ -353,9 +378,13 @@ def _follow_log(
         while True:
             line = f.readline()
             if line:
-                if _matches_filters(line, min_level=min_level,
-                                    session_filter=session_filter, since=since,
-                                    component_prefixes=component_prefixes):
+                if _matches_filters(
+                    line,
+                    min_level=min_level,
+                    session_filter=session_filter,
+                    since=since,
+                    component_prefixes=component_prefixes,
+                ):
                     print(line, end="")
                     sys.stdout.flush()
             else:

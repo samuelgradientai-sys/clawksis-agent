@@ -63,16 +63,12 @@ def _make_adapter():
 
 
 def _make_event(text="/stop", chat_id="12345"):
-    source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"
-    )
+    source = SessionSource(platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm")
     return MessageEvent(text=text, message_type=MessageType.TEXT, source=source)
 
 
 def _session_key(chat_id="12345"):
-    source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"
-    )
+    source = SessionSource(platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm")
     return build_session_key(source)
 
 
@@ -324,9 +320,20 @@ class TestAllResolvableCommandsBypassGuard:
         from clawk_cli.commands import should_bypass_active_session
 
         for cmd in (
-            "model", "reasoning", "personality", "voice", "insights", "title",
-            "resume", "retry", "undo", "compress", "usage",
-            "reload-mcp", "sethome", "reset",
+            "model",
+            "reasoning",
+            "personality",
+            "voice",
+            "insights",
+            "title",
+            "resume",
+            "retry",
+            "undo",
+            "compress",
+            "usage",
+            "reload-mcp",
+            "sethome",
+            "reset",
         ):
             assert should_bypass_active_session(cmd) is True, (
                 f"/{cmd} must bypass the active-session guard"

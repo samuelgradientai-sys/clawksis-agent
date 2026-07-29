@@ -10,6 +10,7 @@ This test pins that the constructed ``httpx.Client`` mounts an
 ``HTTPProxy`` pool when a proxy env var is set, and that no
 custom socket-options transport is used (default httpx transport).
 """
+
 from unittest.mock import patch
 
 import httpx
@@ -35,8 +36,14 @@ def _extract_http_client(client_kwargs: dict):
 
 
 def test_get_proxy_from_env_prefers_https_then_http_then_all(monkeypatch):
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     assert _get_proxy_from_env() is None
 
@@ -51,8 +58,14 @@ def test_get_proxy_from_env_prefers_https_then_http_then_all(monkeypatch):
 
 
 def test_get_proxy_from_env_ignores_blank_values(monkeypatch):
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("HTTPS_PROXY", "   ")
     monkeypatch.setenv("HTTP_PROXY", "http://real-proxy:8080")
@@ -60,8 +73,14 @@ def test_get_proxy_from_env_ignores_blank_values(monkeypatch):
 
 
 def test_get_proxy_from_env_normalizes_socks_alias(monkeypatch):
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("ALL_PROXY", "socks://127.0.0.1:1080/")
     assert _get_proxy_from_env() == "socks5://127.0.0.1:1080/"
@@ -75,8 +94,14 @@ def test_create_openai_client_routes_via_proxy_when_env_set(mock_openai, monkeyp
     transport suppressed httpx's env-proxy auto-detection, so requests bypassed
     the proxy entirely.
     """
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:7897")
 
@@ -111,8 +136,14 @@ def test_create_openai_client_routes_via_proxy_when_env_set(mock_openai, monkeyp
 def test_create_openai_client_no_proxy_when_env_unset(mock_openai, monkeypatch):
     """Without proxy env vars, no HTTPProxy mount should exist and
     no custom socket-options transport should be installed."""
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
 
     agent = _make_agent()
@@ -138,11 +169,19 @@ def test_create_openai_client_no_proxy_when_env_unset(mock_openai, monkeypatch):
 
 
 @patch("run_agent.OpenAI")
-def test_create_openai_client_uses_plain_httpx_client_for_copilot(mock_openai, monkeypatch):
+def test_create_openai_client_uses_plain_httpx_client_for_copilot(
+    mock_openai, monkeypatch
+):
     """All providers now use a standard httpx.Client (no custom socket-options
     transport) so Copilot Claude chat-completions works without a host bypass."""
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
 
     agent = _make_agent()
@@ -168,9 +207,16 @@ def test_get_proxy_for_base_url_returns_none_when_host_bypassed(monkeypatch):
     typically answers 502 for local hosts. NO_PROXY should opt those
     hosts out via stdlib ``urllib.request.proxy_bypass_environment``.
     """
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy",
-                "NO_PROXY", "no_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:7897")
     monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1,192.168.0.0/16")
@@ -180,22 +226,38 @@ def test_get_proxy_for_base_url_returns_none_when_host_bypassed(monkeypatch):
     assert _get_proxy_for_base_url("http://localhost:1234/v1") is None
 
     # Non-local endpoint — proxy still applies.
-    assert _get_proxy_for_base_url("https://api.openai.com/v1") == "http://127.0.0.1:7897"
+    assert (
+        _get_proxy_for_base_url("https://api.openai.com/v1") == "http://127.0.0.1:7897"
+    )
 
 
 def test_get_proxy_for_base_url_returns_proxy_when_no_proxy_unset(monkeypatch):
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy",
-                "NO_PROXY", "no_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("HTTPS_PROXY", "http://corp:8080")
     assert _get_proxy_for_base_url("http://127.0.0.1:11434/v1") == "http://corp:8080"
 
 
 def test_get_proxy_for_base_url_returns_none_when_proxy_unset(monkeypatch):
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy",
-                "NO_PROXY", "no_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1")
     assert _get_proxy_for_base_url("http://127.0.0.1:11434/v1") is None
@@ -203,12 +265,21 @@ def test_get_proxy_for_base_url_returns_none_when_proxy_unset(monkeypatch):
 
 
 @patch("run_agent.OpenAI")
-def test_create_openai_client_bypasses_proxy_for_no_proxy_host(mock_openai, monkeypatch):
+def test_create_openai_client_bypasses_proxy_for_no_proxy_host(
+    mock_openai, monkeypatch
+):
     """E2E: with HTTPS_PROXY + NO_PROXY=localhost, a local base_url gets a
     keepalive client with NO HTTPProxy mount."""
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy",
-                "NO_PROXY", "no_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:7897")
     monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1")

@@ -22,8 +22,10 @@ JPEG = b"\xff\xd8\xff" + b"\x00" * 64
 def _reload(monkeypatch, clawk_home: Path):
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     import clawk_constants
+
     importlib.reload(clawk_constants)
     import tools.image_source as isrc
+
     importlib.reload(isrc)
     return isrc
 
@@ -34,7 +36,8 @@ class TestDataUrl:
         isrc = _reload(monkeypatch, tmp_path / "clawk")
         b64 = base64.b64encode(PNG).decode()
         res = await isrc.resolve_image_source(
-            f"data:image/png;base64,{b64}", isrc.ResolveContext())
+            f"data:image/png;base64,{b64}", isrc.ResolveContext()
+        )
         assert res.data == PNG
         assert res.mime == "image/png"
         assert res.origin == "data"
@@ -45,7 +48,8 @@ class TestDataUrl:
         b64 = base64.b64encode(b"not an image").decode()
         with pytest.raises(isrc.NotAnImage):
             await isrc.resolve_image_source(
-                f"data:text/plain;base64,{b64}", isrc.ResolveContext())
+                f"data:text/plain;base64,{b64}", isrc.ResolveContext()
+            )
 
 
 class TestLocalBackend:
@@ -88,7 +92,8 @@ class TestLocalBackend:
         monkeypatch.setenv("TERMINAL_ENV", "local")
         with pytest.raises(isrc.UnsupportedScheme):
             await isrc.resolve_image_source(
-                "ftp://example.com/pic.png", isrc.ResolveContext())
+                "ftp://example.com/pic.png", isrc.ResolveContext()
+            )
 
     @pytest.mark.asyncio
     async def test_svg_passes_through_for_rasterization(self, tmp_path, monkeypatch):
@@ -122,7 +127,9 @@ class TestNonLocalBackendConfinement:
         assert res.origin == "file"
 
     @pytest.mark.asyncio
-    async def test_host_secret_outside_cache_routes_to_sandbox_not_host(self, tmp_path, monkeypatch):
+    async def test_host_secret_outside_cache_routes_to_sandbox_not_host(
+        self, tmp_path, monkeypatch
+    ):
         """A non-cache host path (e.g. /etc/passwd) must NOT be host-read — it
         routes to the in-sandbox exec-read, which reads the CONTAINER's file."""
         home = tmp_path / "clawk"
@@ -142,19 +149,27 @@ class TestNonLocalBackendConfinement:
             calls["cmd"] = cmd
             return {"returncode": 0, "output": container_png_b64}
 
-        with patch("tools.image_source._get_active_env",
-                   return_value=SimpleNamespace(execute=fake_execute)):
-            res = await isrc.resolve_image_source(str(secret), isrc.ResolveContext(task_id="t1"))
+        with patch(
+            "tools.image_source._get_active_env",
+            return_value=SimpleNamespace(execute=fake_execute),
+        ):
+            res = await isrc.resolve_image_source(
+                str(secret), isrc.ResolveContext(task_id="t1")
+            )
 
         # Read came from the sandbox exec-read, returning the container image —
         # the host secret bytes never appear.
         assert res.origin == "container"
         assert res.data == PNG
         assert b"HOST-PRIVATE-KEY" not in res.data
-        assert "head -c" in calls["cmd"] and "< " in calls["cmd"]  # bounded, redirect-safe form
+        assert (
+            "head -c" in calls["cmd"] and "< " in calls["cmd"]
+        )  # bounded, redirect-safe form
 
     @pytest.mark.asyncio
-    async def test_non_cache_path_fails_closed_without_sandbox(self, tmp_path, monkeypatch):
+    async def test_non_cache_path_fails_closed_without_sandbox(
+        self, tmp_path, monkeypatch
+    ):
         """No active sandbox env -> refuse rather than fall back to a host read."""
         home = tmp_path / "clawk"
         isrc = _reload(monkeypatch, home)
@@ -164,10 +179,14 @@ class TestNonLocalBackendConfinement:
 
         with patch("tools.image_source._get_active_env", return_value=None):
             with pytest.raises(isrc.SourceNotFound):
-                await isrc.resolve_image_source(str(secret), isrc.ResolveContext(task_id="t1"))
+                await isrc.resolve_image_source(
+                    str(secret), isrc.ResolveContext(task_id="t1")
+                )
 
     @pytest.mark.asyncio
-    async def test_symlink_in_cache_pointing_outside_is_not_host_read(self, tmp_path, monkeypatch):
+    async def test_symlink_in_cache_pointing_outside_is_not_host_read(
+        self, tmp_path, monkeypatch
+    ):
         """A symlink planted inside a cache dir that points at a host secret must
         not be host-read (resolve() escapes the cache) — it routes to sandbox."""
         home = tmp_path / "clawk"
@@ -187,7 +206,9 @@ class TestNonLocalBackendConfinement:
         # Fails closed (no sandbox) rather than host-reading the symlink target.
         with patch("tools.image_source._get_active_env", return_value=None):
             with pytest.raises(isrc.SourceNotFound):
-                await isrc.resolve_image_source(str(link), isrc.ResolveContext(task_id="t1"))
+                await isrc.resolve_image_source(
+                    str(link), isrc.ResolveContext(task_id="t1")
+                )
 
 
 class TestExecReadSafety:
@@ -204,12 +225,18 @@ class TestExecReadSafety:
             captured["cmd"] = cmd
             return {"returncode": 0, "output": base64.b64encode(PNG).decode()}
 
-        with patch("tools.image_source._get_active_env",
-                   return_value=SimpleNamespace(execute=fake_execute)):
+        with patch(
+            "tools.image_source._get_active_env",
+            return_value=SimpleNamespace(execute=fake_execute),
+        ):
             await isrc.resolve_image_source(
-                "/workspace/-i-etc-shadow.png", isrc.ResolveContext(task_id="t1"))
+                "/workspace/-i-etc-shadow.png", isrc.ResolveContext(task_id="t1")
+            )
         assert f"head -c {isrc._MAX_INGEST_BYTES + 1} < " in captured["cmd"]
-        assert "'-i-etc-shadow.png'" in captured["cmd"] or "-i-etc-shadow.png" in captured["cmd"]
+        assert (
+            "'-i-etc-shadow.png'" in captured["cmd"]
+            or "-i-etc-shadow.png" in captured["cmd"]
+        )
 
     @pytest.mark.asyncio
     async def test_exec_read_over_cap_rejected(self, tmp_path, monkeypatch):
@@ -218,16 +245,21 @@ class TestExecReadSafety:
         isrc = _reload(monkeypatch, home)
         monkeypatch.setenv("TERMINAL_ENV", "docker")
         # head -c returns cap+1 bytes for an oversized file.
-        over = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * (isrc._MAX_INGEST_BYTES - 7)).decode()
+        over = base64.b64encode(
+            b"\x89PNG\r\n\x1a\n" + b"\x00" * (isrc._MAX_INGEST_BYTES - 7)
+        ).decode()
 
         def fake_execute(cmd, **kw):
             return {"returncode": 0, "output": over}
 
-        with patch("tools.image_source._get_active_env",
-                   return_value=SimpleNamespace(execute=fake_execute)):
+        with patch(
+            "tools.image_source._get_active_env",
+            return_value=SimpleNamespace(execute=fake_execute),
+        ):
             with pytest.raises(isrc.SourceTooLarge):
                 await isrc.resolve_image_source(
-                    "/workspace/huge.png", isrc.ResolveContext(task_id="t1"))
+                    "/workspace/huge.png", isrc.ResolveContext(task_id="t1")
+                )
 
     @pytest.mark.asyncio
     async def test_exec_read_nonzero_returncode_raises(self, tmp_path, monkeypatch):
@@ -238,11 +270,14 @@ class TestExecReadSafety:
         def fake_execute(cmd, **kw):
             return {"returncode": 1, "output": ""}
 
-        with patch("tools.image_source._get_active_env",
-                   return_value=SimpleNamespace(execute=fake_execute)):
+        with patch(
+            "tools.image_source._get_active_env",
+            return_value=SimpleNamespace(execute=fake_execute),
+        ):
             with pytest.raises(isrc.SourceNotFound):
                 await isrc.resolve_image_source(
-                    "/workspace/nope.png", isrc.ResolveContext(task_id="t1"))
+                    "/workspace/nope.png", isrc.ResolveContext(task_id="t1")
+                )
 
 
 class TestSvgNormalization:
@@ -253,10 +288,13 @@ class TestSvgNormalization:
     @pytest.mark.asyncio
     async def test_svg_rasterized_when_converter_available(self, tmp_path, monkeypatch):
         from tools import vision_tools as vt
+
         isrc = _reload(monkeypatch, tmp_path / "clawk")
         monkeypatch.setenv("TERMINAL_ENV", "local")
         svg = tmp_path / "art.svg"
-        svg.write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>')
+        svg.write_bytes(
+            b'<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>'
+        )
 
         def fake_rasterize(svg_path, out_path):
             out_path.write_bytes(PNG)
@@ -273,6 +311,7 @@ class TestSvgNormalization:
 
     def test_svg_actionable_error_when_no_converter(self, tmp_path, monkeypatch):
         from tools import vision_tools as vt
+
         _reload(monkeypatch, tmp_path / "clawk")
         svg = tmp_path / "art.svg"
         svg.write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg"/>')

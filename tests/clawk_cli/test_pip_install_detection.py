@@ -3,9 +3,12 @@ from unittest.mock import patch
 
 def test_pip_install_detected_when_no_git_dir(tmp_path):
     """When PROJECT_ROOT has no .git, detect as pip install."""
-    with patch("clawk_cli.config.get_managed_system", return_value=None), \
-         patch("clawk_cli.config.get_clawk_home", return_value=tmp_path):
+    with (
+        patch("clawk_cli.config.get_managed_system", return_value=None),
+        patch("clawk_cli.config.get_clawk_home", return_value=tmp_path),
+    ):
         from clawk_cli.config import detect_install_method
+
         method = detect_install_method(project_root=tmp_path)
         assert method == "pip"
 
@@ -13,9 +16,12 @@ def test_pip_install_detected_when_no_git_dir(tmp_path):
 def test_git_install_detected_when_git_dir_exists(tmp_path):
     """When PROJECT_ROOT has .git, detect as git install."""
     (tmp_path / ".git").mkdir()
-    with patch("clawk_cli.config.get_managed_system", return_value=None), \
-         patch("clawk_cli.config.get_clawk_home", return_value=tmp_path):
+    with (
+        patch("clawk_cli.config.get_managed_system", return_value=None),
+        patch("clawk_cli.config.get_clawk_home", return_value=tmp_path),
+    ):
         from clawk_cli.config import detect_install_method
+
         method = detect_install_method(project_root=tmp_path)
         assert method == "git"
 
@@ -23,9 +29,12 @@ def test_git_install_detected_when_git_dir_exists(tmp_path):
 def test_managed_install_takes_precedence(tmp_path):
     """When CLAWK_MANAGED is set, that takes precedence over git detection."""
     (tmp_path / ".git").mkdir()
-    with patch("clawk_cli.config.get_managed_system", return_value="NixOS"), \
-         patch("clawk_cli.config.get_clawk_home", return_value=tmp_path):
+    with (
+        patch("clawk_cli.config.get_managed_system", return_value="NixOS"),
+        patch("clawk_cli.config.get_clawk_home", return_value=tmp_path),
+    ):
         from clawk_cli.config import detect_install_method
+
         method = detect_install_method(project_root=tmp_path)
         assert method == "nixos"
 
@@ -33,6 +42,7 @@ def test_managed_install_takes_precedence(tmp_path):
 def test_recommended_update_command_pip():
     """Pip installs recommend pip install --upgrade."""
     from clawk_cli.config import recommended_update_command_for_method
+
     cmd = recommended_update_command_for_method("pip")
     assert "pip install" in cmd or "uv pip install" in cmd
     assert "--upgrade" in cmd
@@ -42,9 +52,12 @@ def test_recommended_update_command_pip():
 def test_stamp_file_takes_precedence(tmp_path):
     (tmp_path / ".git").mkdir()
     (tmp_path / ".install_method").write_text("docker\n")
-    with patch("clawk_cli.config.get_managed_system", return_value=None), \
-         patch("clawk_cli.config.get_clawk_home", return_value=tmp_path):
+    with (
+        patch("clawk_cli.config.get_managed_system", return_value=None),
+        patch("clawk_cli.config.get_clawk_home", return_value=tmp_path),
+    ):
         from clawk_cli.config import detect_install_method
+
         assert detect_install_method(project_root=tmp_path) == "docker"
 
 
@@ -61,9 +74,12 @@ def test_code_scoped_stamp_wins_over_home_stamp(tmp_path):
     home.mkdir()
     (code / ".install_method").write_text("git\n")
     (home / ".install_method").write_text("docker\n")  # container contamination
-    with patch("clawk_cli.config.get_managed_system", return_value=None), \
-         patch("clawk_cli.config.get_clawk_home", return_value=home):
+    with (
+        patch("clawk_cli.config.get_managed_system", return_value=None),
+        patch("clawk_cli.config.get_clawk_home", return_value=home),
+    ):
         from clawk_cli.config import detect_install_method
+
         assert detect_install_method(project_root=code) == "git"
 
 
@@ -81,10 +97,13 @@ def test_home_docker_stamp_ignored_when_not_containerized(tmp_path):
     home.mkdir()
     (code / ".git").mkdir()
     (home / ".install_method").write_text("docker\n")
-    with patch("clawk_cli.config.get_managed_system", return_value=None), \
-         patch("clawk_cli.config.get_clawk_home", return_value=home), \
-         patch("clawk_cli.config._running_in_container", return_value=False):
+    with (
+        patch("clawk_cli.config.get_managed_system", return_value=None),
+        patch("clawk_cli.config.get_clawk_home", return_value=home),
+        patch("clawk_cli.config._running_in_container", return_value=False),
+    ):
         from clawk_cli.config import detect_install_method
+
         assert detect_install_method(project_root=code) == "git"
 
 
@@ -100,10 +119,13 @@ def test_home_docker_stamp_honored_inside_container(tmp_path):
     code.mkdir()
     home.mkdir()
     (home / ".install_method").write_text("docker\n")
-    with patch("clawk_cli.config.get_managed_system", return_value=None), \
-         patch("clawk_cli.config.get_clawk_home", return_value=home), \
-         patch("clawk_cli.config._running_in_container", return_value=True):
+    with (
+        patch("clawk_cli.config.get_managed_system", return_value=None),
+        patch("clawk_cli.config.get_clawk_home", return_value=home),
+        patch("clawk_cli.config._running_in_container", return_value=True),
+    ):
         from clawk_cli.config import detect_install_method
+
         assert detect_install_method(project_root=code) == "docker"
 
 
@@ -119,10 +141,13 @@ def test_home_non_docker_stamp_still_honored_for_backcompat(tmp_path):
     code.mkdir()
     home.mkdir()
     (home / ".install_method").write_text("git\n")
-    with patch("clawk_cli.config.get_managed_system", return_value=None), \
-         patch("clawk_cli.config.get_clawk_home", return_value=home), \
-         patch("clawk_cli.config._running_in_container", return_value=False):
+    with (
+        patch("clawk_cli.config.get_managed_system", return_value=None),
+        patch("clawk_cli.config.get_clawk_home", return_value=home),
+        patch("clawk_cli.config._running_in_container", return_value=False),
+    ):
         from clawk_cli.config import detect_install_method
+
         assert detect_install_method(project_root=code) == "git"
 
 
@@ -134,6 +159,7 @@ def test_stamp_install_method_writes_code_scoped(tmp_path):
     home.mkdir()
     with patch("clawk_cli.config.get_clawk_home", return_value=home):
         from clawk_cli.config import stamp_install_method
+
         stamp_install_method("pip", project_root=code)
     assert (code / ".install_method").read_text().strip() == "pip"
     assert not (home / ".install_method").exists()
@@ -151,24 +177,31 @@ def test_container_without_stamp_is_not_docker(tmp_path):
     must resolve to ``git``.
     """
     (tmp_path / ".git").mkdir()
-    with patch("clawk_cli.config.get_managed_system", return_value=None), \
-         patch("clawk_cli.config.get_clawk_home", return_value=tmp_path), \
-         patch("clawk_constants.is_container", return_value=True):
+    with (
+        patch("clawk_cli.config.get_managed_system", return_value=None),
+        patch("clawk_cli.config.get_clawk_home", return_value=tmp_path),
+        patch("clawk_constants.is_container", return_value=True),
+    ):
         from clawk_cli.config import detect_install_method
+
         assert detect_install_method(project_root=tmp_path) == "git"
 
 
 def test_container_pip_install_without_stamp_is_pip(tmp_path):
     """Container + no .git + no stamp -> pip, not docker (issue #34397)."""
-    with patch("clawk_cli.config.get_managed_system", return_value=None), \
-         patch("clawk_cli.config.get_clawk_home", return_value=tmp_path), \
-         patch("clawk_constants.is_container", return_value=True):
+    with (
+        patch("clawk_cli.config.get_managed_system", return_value=None),
+        patch("clawk_cli.config.get_clawk_home", return_value=tmp_path),
+        patch("clawk_constants.is_container", return_value=True),
+    ):
         from clawk_cli.config import detect_install_method
+
         assert detect_install_method(project_root=tmp_path) == "pip"
 
 
 def test_recommended_update_command_docker():
     from clawk_cli.config import recommended_update_command_for_method
+
     assert "docker pull" in recommended_update_command_for_method("docker")
 
 
@@ -182,13 +215,17 @@ def test_banner_warns_on_pip_install(tmp_path):
     hh.mkdir()
     (hh / ".install_method").write_text("pip\n")
 
-    with patch("clawk_cli.config.get_clawk_home", return_value=hh), \
-         patch("clawk_constants.get_clawk_home", return_value=hh):
+    with (
+        patch("clawk_cli.config.get_clawk_home", return_value=hh),
+        patch("clawk_constants.get_clawk_home", return_value=hh),
+    ):
         buf = io.StringIO()
         # Wide console so the warning isn't wrapped across lines in the panel.
         console = Console(file=buf, width=400, force_terminal=False, color_system=None)
         banner.build_welcome_banner(
-            console, model="m", cwd="/tmp",
+            console,
+            model="m",
+            cwd="/tmp",
             tools=[{"function": {"name": "terminal"}}],
             enabled_toolsets=["terminal"],
         )
@@ -208,12 +245,16 @@ def test_banner_warns_on_homebrew_install(tmp_path):
     hh.mkdir()
     (hh / ".install_method").write_text("homebrew\n")
 
-    with patch("clawk_cli.config.get_clawk_home", return_value=hh), \
-         patch("clawk_constants.get_clawk_home", return_value=hh):
+    with (
+        patch("clawk_cli.config.get_clawk_home", return_value=hh),
+        patch("clawk_constants.get_clawk_home", return_value=hh),
+    ):
         buf = io.StringIO()
         console = Console(file=buf, width=400, force_terminal=False, color_system=None)
         banner.build_welcome_banner(
-            console, model="m", cwd="/tmp",
+            console,
+            model="m",
+            cwd="/tmp",
             tools=[{"function": {"name": "terminal"}}],
             enabled_toolsets=["terminal"],
         )
@@ -234,12 +275,16 @@ def test_banner_no_pip_warning_on_git_install(tmp_path):
     hh.mkdir()
     (hh / ".install_method").write_text("git\n")
 
-    with patch("clawk_cli.config.get_clawk_home", return_value=hh), \
-         patch("clawk_constants.get_clawk_home", return_value=hh):
+    with (
+        patch("clawk_cli.config.get_clawk_home", return_value=hh),
+        patch("clawk_constants.get_clawk_home", return_value=hh),
+    ):
         buf = io.StringIO()
         console = Console(file=buf, width=400, force_terminal=False, color_system=None)
         banner.build_welcome_banner(
-            console, model="m", cwd="/tmp",
+            console,
+            model="m",
+            cwd="/tmp",
             tools=[{"function": {"name": "terminal"}}],
             enabled_toolsets=["terminal"],
         )

@@ -30,6 +30,7 @@ _PNG_HEX = (
 
 def _b64_png() -> str:
     import base64
+
     return base64.b64encode(bytes.fromhex(_PNG_HEX)).decode()
 
 
@@ -80,7 +81,9 @@ class TestAvailability:
 
     def test_available_with_codex_token(self, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
         assert codex_plugin.OpenAICodexImageGenProvider().is_available() is True
 
     def test_openai_api_key_alone_is_not_enough(self, monkeypatch):
@@ -102,14 +105,20 @@ class TestGenerate:
         assert result["error_type"] == "auth_required"
 
     def test_returns_invalid_argument_for_empty_prompt(self, provider, monkeypatch):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
         result = provider.generate("   ")
         assert result["success"] is False
         assert result["error_type"] == "invalid_argument"
 
     def test_generate_uses_codex_stream_path(self, provider, monkeypatch, tmp_path):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
-        monkeypatch.setattr(codex_plugin, "_collect_image_b64", lambda *a, **kw: _b64_png())
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
+        monkeypatch.setattr(
+            codex_plugin, "_collect_image_b64", lambda *a, **kw: _b64_png()
+        )
 
         result = provider.generate("a cat", aspect_ratio="landscape")
 
@@ -126,17 +135,21 @@ class TestGenerate:
         assert saved.name.startswith("openai_codex_")
 
     def test_codex_stream_request_shape(self, provider, monkeypatch):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
 
         captured = {}
 
         def _collect(token, *, prompt, size, quality, input_images=None):
-            captured.update(codex_plugin._build_responses_payload(
-                prompt=prompt,
-                size=size,
-                quality=quality,
-                input_images=input_images,
-            ))
+            captured.update(
+                codex_plugin._build_responses_payload(
+                    prompt=prompt,
+                    size=size,
+                    quality=quality,
+                    input_images=input_images,
+                )
+            )
             return _b64_png()
 
         monkeypatch.setattr(codex_plugin, "_collect_image_b64", _collect)
@@ -167,20 +180,26 @@ class TestGenerate:
         assert caps["modalities"] == ["text", "image"]
         assert caps["max_reference_images"] == 16
 
-    def test_codex_stream_request_includes_source_images(self, provider, monkeypatch, tmp_path):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+    def test_codex_stream_request_includes_source_images(
+        self, provider, monkeypatch, tmp_path
+    ):
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
         image_path = tmp_path / "source.png"
         image_path.write_bytes(bytes.fromhex(_PNG_HEX))
 
         captured = {}
 
         def _collect(token, *, prompt, size, quality, input_images=None):
-            captured.update(codex_plugin._build_responses_payload(
-                prompt=prompt,
-                size=size,
-                quality=quality,
-                input_images=input_images,
-            ))
+            captured.update(
+                codex_plugin._build_responses_payload(
+                    prompt=prompt,
+                    size=size,
+                    quality=quality,
+                    input_images=input_images,
+                )
+            )
             return _b64_png()
 
         monkeypatch.setattr(codex_plugin, "_collect_image_b64", _collect)
@@ -203,10 +222,15 @@ class TestGenerate:
         }
         assert content[1]["type"] == "input_image"
         assert content[1]["image_url"].startswith("data:image/png;base64,")
-        assert content[2] == {"type": "input_image", "image_url": "https://example.com/ref.png"}
+        assert content[2] == {
+            "type": "input_image",
+            "image_url": "https://example.com/ref.png",
+        }
 
     def test_generate_clamps_reference_images_to_cap(self, provider, monkeypatch):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
         captured = {}
 
         def _collect(token, *, prompt, size, quality, input_images=None):
@@ -222,10 +246,15 @@ class TestGenerate:
         assert result["modality"] == "image"
         assert result["input_image_count"] == 16
         assert len(captured["input_images"]) == 16
-        assert captured["input_images"][-1]["image_url"] == "https://example.com/ref-15.png"
+        assert (
+            captured["input_images"][-1]["image_url"]
+            == "https://example.com/ref-15.png"
+        )
 
     def test_rejects_non_image_local_source(self, provider, monkeypatch, tmp_path):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
         text_path = tmp_path / "not-image.txt"
         text_path.write_text("hello")
 
@@ -239,7 +268,9 @@ class TestGenerate:
         # The shared magic-byte sniffer recognizes SVG, but gpt-image-2's
         # input_image accepts raster only — SVG must fail locally with a clear
         # error, not get embedded and rejected server-side with an opaque 400.
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
         svg_path = tmp_path / "vector.svg"
         svg_path.write_text('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
 
@@ -267,28 +298,34 @@ class TestGenerate:
                 ])
 
         events = list(codex_plugin._iter_sse_json(_Response()))
-        assert events == [{
-            "type": "response.output_item.done",
-            "item": {"type": "image_generation_call", "result": "abc"},
-        }]
+        assert events == [
+            {
+                "type": "response.output_item.done",
+                "item": {"type": "image_generation_call", "result": "abc"},
+            }
+        ]
 
     def test_final_response_sweep_recovers_image(self):
         """Completed response output is found by recursive payload scanning."""
         payload = {
             "type": "response.completed",
             "response": {
-                "output": [{
-                    "type": "image_generation_call",
-                    "status": "completed",
-                    "id": "ig_final",
-                    "result": _b64_png(),
-                }],
+                "output": [
+                    {
+                        "type": "image_generation_call",
+                        "status": "completed",
+                        "id": "ig_final",
+                        "result": _b64_png(),
+                    }
+                ],
             },
         }
         assert codex_plugin._extract_image_b64(payload) == _b64_png()
 
     def test_empty_response_returns_error(self, provider, monkeypatch):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
         monkeypatch.setattr(codex_plugin, "_collect_image_b64", lambda *a, **kw: None)
 
         result = provider.generate("a cat")
@@ -296,7 +333,9 @@ class TestGenerate:
         assert result["error_type"] == "empty_response"
 
     def test_stream_exception_returns_api_error(self, provider, monkeypatch):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
 
         def _boom(*args, **kwargs):
             raise RuntimeError("cloudflare 403")
@@ -308,8 +347,12 @@ class TestGenerate:
         assert result["error_type"] == "api_error"
         assert "cloudflare 403" in result["error"]
 
-    def test_unsupported_image_tool_returns_capability_error(self, provider, monkeypatch):
-        monkeypatch.setattr(codex_plugin, "_read_codex_access_token", lambda: "codex-token")
+    def test_unsupported_image_tool_returns_capability_error(
+        self, provider, monkeypatch
+    ):
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_access_token", lambda: "codex-token"
+        )
 
         def _unsupported(*args, **kwargs):
             raise codex_plugin.CodexImageGenerationUnsupportedError(
@@ -347,7 +390,10 @@ class TestCapabilityErrorDetection:
         ],
     )
     def test_does_not_misclassify_other_failures(self, status_code, body):
-        assert codex_plugin._is_image_generation_unsupported_error(status_code, body) is False
+        assert (
+            codex_plugin._is_image_generation_unsupported_error(status_code, body)
+            is False
+        )
 
     def test_does_not_match_error_message_with_extra_text(self):
         body = json.dumps({
@@ -361,7 +407,9 @@ class TestCapabilityErrorDetection:
 
         assert codex_plugin._is_image_generation_unsupported_error(400, body) is False
 
-    def test_collect_classifies_exact_http_error_after_large_metadata(self, monkeypatch):
+    def test_collect_classifies_exact_http_error_after_large_metadata(
+        self, monkeypatch
+    ):
         import httpx
 
         body = json.dumps({

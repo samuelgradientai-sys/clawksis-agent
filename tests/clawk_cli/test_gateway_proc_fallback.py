@@ -23,6 +23,7 @@ _OTHER_CMD = "python -m some_other_thing"
 def _fake_proc_dir(entries: dict):
     """Return side_effects that simulate /proc: isdir → True, listdir → pids,
     open(cmdline) → null-delimited command bytes."""
+
     def _isdir(path):
         return str(path) == "/proc"
 
@@ -57,7 +58,7 @@ class TestProcFallback:
     def test_detects_gateway_pid_via_proc(self):
         my_pid = os.getpid()
         entries = {
-            my_pid: "python -m clawk_cli.main",   # own process — excluded
+            my_pid: "python -m clawk_cli.main",  # own process — excluded
             12345: _GATEWAY_CMD,
             99999: _OTHER_CMD,
         }

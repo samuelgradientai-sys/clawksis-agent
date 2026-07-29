@@ -70,12 +70,11 @@ class DeadTargetRegistry:
                 raw = json.loads(self._path.read_text())
                 if isinstance(raw, dict):
                     # Only keep well-shaped entries.
-                    self._dead = {
-                        k: v for k, v in raw.items() if isinstance(v, dict)
-                    }
+                    self._dead = {k: v for k, v in raw.items() if isinstance(v, dict)}
         except (OSError, ValueError) as exc:
-            logger.debug("dead_targets: could not load %s (%s) — starting empty",
-                         self._path, exc)
+            logger.debug(
+                "dead_targets: could not load %s (%s) — starting empty", self._path, exc
+            )
             self._dead = {}
 
     def _flush_locked(self) -> None:
@@ -101,8 +100,9 @@ class DeadTargetRegistry:
         with self._lock:
             return _normalize(platform, chat_id) in self._dead
 
-    def mark_dead(self, platform: str, chat_id: Optional[str],
-                  reason: str = "") -> bool:
+    def mark_dead(
+        self, platform: str, chat_id: Optional[str], reason: str = ""
+    ) -> bool:
         """Record a target as confirmed-dead.  Returns True if newly added."""
         if not chat_id:
             return False
@@ -120,7 +120,8 @@ class DeadTargetRegistry:
             logger.info(
                 "dead_targets: marked %s as unreachable (%s) — future deliveries "
                 "to this target will be skipped until a send succeeds",
-                key, reason or "no reason given",
+                key,
+                reason or "no reason given",
             )
         return not existed
 

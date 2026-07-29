@@ -15,31 +15,30 @@ LEAD_IN = render.LEAD_IN
 def _payload(skills: int = 8, memories: int = 3, *, base_ts: int = 1_700_000_000):
     nodes = []
     for i in range(skills):
-        nodes.append(
-            {
-                "id": f"skill{i}",
-                "label": f"skill{i}",
-                "kind": "skill",
-                "timestamp": base_ts + i * 86400 * 20,
-                "category": "devops" if i % 2 else "research",
-                "useCount": i,
-            }
-        )
+        nodes.append({
+            "id": f"skill{i}",
+            "label": f"skill{i}",
+            "kind": "skill",
+            "timestamp": base_ts + i * 86400 * 20,
+            "category": "devops" if i % 2 else "research",
+            "useCount": i,
+        })
     for j in range(memories):
-        nodes.append(
-            {
-                "id": f"memory:memory:{j}",
-                "label": f"mem {j}",
-                "kind": "memory",
-                "timestamp": base_ts + (skills + j) * 86400 * 20,
-                "category": "memory",
-            }
-        )
+        nodes.append({
+            "id": f"memory:memory:{j}",
+            "label": f"mem {j}",
+            "kind": "memory",
+            "timestamp": base_ts + (skills + j) * 86400 * 20,
+            "category": "memory",
+        })
     edges = [{"source": "skill0", "target": "skill1"}] if skills > 1 else []
     return {
         "nodes": nodes,
         "edges": edges,
-        "clusters": [{"category": "devops", "count": skills}, {"category": "memory", "count": memories}],
+        "clusters": [
+            {"category": "devops", "count": skills},
+            {"category": "memory", "count": memories},
+        ],
         "stats": {
             "learned_skills": skills,
             "memory_nodes": memories,
@@ -96,7 +95,9 @@ def test_grid_runs_are_text_style_alpha():
 
 
 def test_bars_render_skills_and_memories():
-    frame = render.render_graph(_payload(skills=10, memories=4), cols=72, rows=18, reveal=1.0)
+    frame = render.render_graph(
+        _payload(skills=10, memories=4), cols=72, rows=18, reveal=1.0
+    )
     flat = _flatten(frame["grid"])
     # Skills draw as comet trails (━), memories anchor on diamonds (◆).
     assert "━" in flat
@@ -111,13 +112,18 @@ def test_run_alpha_follows_age_for_lit_stars():
     # than the oldest (age gradient carried in the run alpha).
     payload = _payload(skills=12, memories=0)
     frame = render.render_graph(payload, cols=80, rows=20, reveal=1.0)
-    alphas = [run[2] for row in frame["grid"] for run in row if run[1] == render.STYLE_SKILL]
+    alphas = [
+        run[2] for row in frame["grid"] for run in row if run[1] == render.STYLE_SKILL
+    ]
     assert max(alphas) > min(alphas)
 
 
 def test_reveal_monotonically_builds_up():
     payload = _payload(skills=12, memories=5)
-    counts = [render.render_graph(payload, cols=60, rows=20, reveal=r)["visible"] for r in (0.0, 0.25, 0.5, 0.75, 1.0)]
+    counts = [
+        render.render_graph(payload, cols=60, rows=20, reveal=r)["visible"]
+        for r in (0.0, 0.25, 0.5, 0.75, 1.0)
+    ]
     assert counts == sorted(counts)
     assert counts[-1] == len(payload["nodes"])
 
@@ -166,7 +172,10 @@ def test_frames_play_through_grows_visibility():
 def test_frames_count_is_clamped():
     payload = _payload(skills=3, memories=1)
     assert len(render.render_frames(payload, cols=40, rows=12, frames=1)["frames"]) == 2
-    assert len(render.render_frames(payload, cols=40, rows=12, frames=9999)["frames"]) == 240
+    assert (
+        len(render.render_frames(payload, cols=40, rows=12, frames=9999)["frames"])
+        == 240
+    )
 
 
 def test_format_date_handles_missing():

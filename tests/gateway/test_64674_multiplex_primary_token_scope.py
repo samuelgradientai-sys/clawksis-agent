@@ -12,6 +12,7 @@ this suite locks the complementary primary-path fixes:
    multiplex instead of connecting-and-failing forever.
 3. The reconnect watcher drops empty-token queued configs.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -38,8 +39,12 @@ class TestLoadGatewayConfigForRunner:
 
         home = tmp_path / "home"
         home.mkdir()
-        (home / ".env").write_text("TELEGRAM_BOT_TOKEN=from-default-env\n", encoding="utf-8")
-        (home / "config.yaml").write_text("gateway:\n  multiplex_profiles: false\n", encoding="utf-8")
+        (home / ".env").write_text(
+            "TELEGRAM_BOT_TOKEN=from-default-env\n", encoding="utf-8"
+        )
+        (home / "config.yaml").write_text(
+            "gateway:\n  multiplex_profiles: false\n", encoding="utf-8"
+        )
         monkeypatch.setenv("CLAWK_HOME", str(home))
         monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
 
@@ -83,19 +88,28 @@ class TestPlatformHasBotCredential:
     def test_telegram_empty_token_false(self):
         from gateway.run import _platform_has_bot_credential
 
-        assert _platform_has_bot_credential(
-            Platform.TELEGRAM, PlatformConfig(enabled=True, token="")
-        ) is False
-        assert _platform_has_bot_credential(
-            Platform.TELEGRAM, PlatformConfig(enabled=True, token=None)
-        ) is False
+        assert (
+            _platform_has_bot_credential(
+                Platform.TELEGRAM, PlatformConfig(enabled=True, token="")
+            )
+            is False
+        )
+        assert (
+            _platform_has_bot_credential(
+                Platform.TELEGRAM, PlatformConfig(enabled=True, token=None)
+            )
+            is False
+        )
 
     def test_telegram_with_token_true(self):
         from gateway.run import _platform_has_bot_credential
 
-        assert _platform_has_bot_credential(
-            Platform.TELEGRAM, PlatformConfig(enabled=True, token="123:abc")
-        ) is True
+        assert (
+            _platform_has_bot_credential(
+                Platform.TELEGRAM, PlatformConfig(enabled=True, token="123:abc")
+            )
+            is True
+        )
 
     def test_non_token_platform_always_true(self):
         from gateway.run import _platform_has_bot_credential
@@ -112,9 +126,12 @@ class TestPlatformHasBotCredential:
                 Platform.WEIXIN,
             }:
                 continue
-            assert _platform_has_bot_credential(
-                plat, PlatformConfig(enabled=True, token=None)
-            ) is True
+            assert (
+                _platform_has_bot_credential(
+                    plat, PlatformConfig(enabled=True, token=None)
+                )
+                is True
+            )
             break
 
 
@@ -125,7 +142,8 @@ class TestPrimaryStartupSkipsEmptyTokenUnderMultiplex:
 
         cfg = GatewayConfig(multiplex_profiles=True)
         cfg.platforms[Platform.TELEGRAM] = PlatformConfig(
-            enabled=True, token=""  # empty — lives on secondary only
+            enabled=True,
+            token="",  # empty — lives on secondary only
         )
 
         runner = GatewayRunner.__new__(GatewayRunner)
@@ -149,9 +167,11 @@ class TestPrimaryStartupSkipsEmptyTokenUnderMultiplex:
         runner._abort_startup_if_shutdown_requested = MagicMock(return_value=False)  # type: ignore
         runner._update_platform_runtime_status = MagicMock()  # type: ignore
         runner._start_secondary_profile_adapters = MagicMock(return_value=0)  # type: ignore
+
         # Make the secondary call awaitable
         async def _sec():
             return 0
+
         runner._start_secondary_profile_adapters = _sec  # type: ignore
 
         # We only want the primary platform loop; extract and run a thin
@@ -179,9 +199,7 @@ class TestPrimaryStartupSkipsEmptyTokenUnderMultiplex:
         from gateway.run import _platform_has_bot_credential
 
         cfg = GatewayConfig(multiplex_profiles=True)
-        cfg.platforms[Platform.TELEGRAM] = PlatformConfig(
-            enabled=True, token="123:abc"
-        )
+        cfg.platforms[Platform.TELEGRAM] = PlatformConfig(enabled=True, token="123:abc")
         started = []
         for platform, platform_config in cfg.platforms.items():
             if not platform_config.enabled:

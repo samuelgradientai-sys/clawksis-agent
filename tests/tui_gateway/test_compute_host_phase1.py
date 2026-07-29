@@ -51,19 +51,25 @@ def test_compute_host_frame_protocol_round_trip():
     out = io.StringIO()
     host = ComputeHost(stdout=out, max_workers=2, heartbeat_secs=0)
     try:
-        host.handle_frame({"type": "session.seed", "sid": "alpha", "request_id": "seed", "history": []})
-        host.handle_frame(
-            {
-                "type": "turn.start",
-                "sid": "alpha",
-                "request_id": "turn-1",
-                "prompt": "hello",
-                "delta_count": 3,
-                "delay_s": 0,
-            }
-        )
+        host.handle_frame({
+            "type": "session.seed",
+            "sid": "alpha",
+            "request_id": "seed",
+            "history": [],
+        })
+        host.handle_frame({
+            "type": "turn.start",
+            "sid": "alpha",
+            "request_id": "turn-1",
+            "prompt": "hello",
+            "delta_count": 3,
+            "delay_s": 0,
+        })
 
-        end = _wait_for_frame(out, lambda f: f.get("type") == "turn.end" and f.get("request_id") == "turn-1")
+        end = _wait_for_frame(
+            out,
+            lambda f: f.get("type") == "turn.end" and f.get("request_id") == "turn-1",
+        )
         assert end["history_version"] == 1
         frames = _json_lines(out)
         assert [f["type"] for f in frames if f.get("request_id") == "turn-1"] == [
@@ -81,24 +87,40 @@ def test_compute_host_interrupt_control_is_not_queued_behind_turn():
     out = io.StringIO()
     host = ComputeHost(stdout=out, max_workers=1, heartbeat_secs=0)
     try:
-        host.handle_frame({"type": "session.seed", "sid": "alpha", "request_id": "seed", "history": []})
-        host.handle_frame(
-            {
-                "type": "turn.start",
-                "sid": "alpha",
-                "request_id": "turn-slow",
-                "prompt": "hello",
-                "delta_count": 200,
-                "delay_s": 0.01,
-            }
+        host.handle_frame({
+            "type": "session.seed",
+            "sid": "alpha",
+            "request_id": "seed",
+            "history": [],
+        })
+        host.handle_frame({
+            "type": "turn.start",
+            "sid": "alpha",
+            "request_id": "turn-slow",
+            "prompt": "hello",
+            "delta_count": 200,
+            "delay_s": 0.01,
+        })
+        _wait_for_frame(
+            out,
+            lambda f: f.get("type") == "delta" and f.get("request_id") == "turn-slow",
         )
-        _wait_for_frame(out, lambda f: f.get("type") == "delta" and f.get("request_id") == "turn-slow")
 
         host.handle_frame({"type": "interrupt", "sid": "alpha", "request_id": "stop-1"})
-        ack = _wait_for_frame(out, lambda f: f.get("type") == "interrupt.ack" and f.get("request_id") == "stop-1")
+        ack = _wait_for_frame(
+            out,
+            lambda f: (
+                f.get("type") == "interrupt.ack" and f.get("request_id") == "stop-1"
+            ),
+        )
         assert ack["applied"] is True
 
-        end = _wait_for_frame(out, lambda f: f.get("type") == "turn.end" and f.get("request_id") == "turn-slow")
+        end = _wait_for_frame(
+            out,
+            lambda f: (
+                f.get("type") == "turn.end" and f.get("request_id") == "turn-slow"
+            ),
+        )
         assert end["interrupted"] is True
         typed = [f["type"] for f in _json_lines(out)]
         assert typed.index("interrupt.ack") < typed.index("turn.end")
@@ -226,18 +248,18 @@ def test_compute_host_compress_control_runs_identity_guard_in_host(monkeypatch):
     )
 
     try:
-        host.handle_frame(
-            {
-                "type": "control",
-                "sid": "sid",
-                "request_id": "compress-1",
-                "route_name": "slash.compress",
-                "command": "/compress focus",
-            }
-        )
+        host.handle_frame({
+            "type": "control",
+            "sid": "sid",
+            "request_id": "compress-1",
+            "route_name": "slash.compress",
+            "command": "/compress focus",
+        })
         ack = _wait_for_frame(
             out,
-            lambda f: f.get("type") == "control.ack" and f.get("request_id") == "compress-1",
+            lambda f: (
+                f.get("type") == "control.ack" and f.get("request_id") == "compress-1"
+            ),
         )
     finally:
         server._sessions.pop("sid", None)
@@ -265,18 +287,26 @@ def test_append_log_record_single_write_lines(tmp_path):
 
     lines = path.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 32
-    assert sorted(line.split("-", 2)[1] for line in lines) == [f"{i:03d}" for i in range(32)]
+    assert sorted(line.split("-", 2)[1] for line in lines) == [
+        f"{i:03d}" for i in range(32)
+    ]
     assert all(line.endswith("x" * 2000) for line in lines)
 
 
 def test_supervisor_startup_reconcile_pid_reuse_guard(tmp_path, monkeypatch):
     registry = tmp_path / "dashboard-compute-host.json"
-    registry.write_text(json.dumps({"host_pid": os.getpid(), "boot_id": "stale"}), encoding="utf-8")
+    registry.write_text(
+        json.dumps({"host_pid": os.getpid(), "boot_id": "stale"}), encoding="utf-8"
+    )
 
     killed: list[int] = []
-    supervisor = HostSupervisor(registry_path=registry, argv=[sys.executable, "-c", ""], autostart=False)
+    supervisor = HostSupervisor(
+        registry_path=registry, argv=[sys.executable, "-c", ""], autostart=False
+    )
     monkeypatch.setattr(supervisor, "_pid_matches_compute_host", lambda _pid: False)
-    monkeypatch.setattr(supervisor, "_terminate_pid", lambda pid, **_kw: killed.append(pid))
+    monkeypatch.setattr(
+        supervisor, "_terminate_pid", lambda pid, **_kw: killed.append(pid)
+    )
 
     result = supervisor.reconcile_startup_orphan()
 
@@ -318,7 +348,12 @@ for raw in sys.stdin:
     try:
         supervisor.start()
         supervisor.submit_turn(
-            {"type": "turn.start", "sid": "sid-1", "request_id": "turn-1", "text": "hello"},
+            {
+                "type": "turn.start",
+                "sid": "sid-1",
+                "request_id": "turn-1",
+                "text": "hello",
+            },
             on_complete=completions.append,
         )
         deadline = time.monotonic() + 5

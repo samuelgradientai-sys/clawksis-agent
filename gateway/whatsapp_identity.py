@@ -59,11 +59,7 @@ def normalize_whatsapp_identifier(value: str) -> str:
     worrying about which variant the bridge happens to deliver.
     """
     return (
-        str(value or "")
-        .strip()
-        .replace("+", "", 1)
-        .split(":", 1)[0]
-        .split("@", 1)[0]
+        str(value or "").strip().replace("+", "", 1).split(":", 1)[0].split("@", 1)[0]
     )
 
 
@@ -162,7 +158,9 @@ def expand_whatsapp_aliases(identifier: str) -> Set[str]:
                     json.loads(mapping_path.read_text(encoding="utf-8"))
                 )
             except (OSError, json.JSONDecodeError) as exc:
-                logger.debug("whatsapp_identity: failed to read %s: %s", mapping_path, exc)
+                logger.debug(
+                    "whatsapp_identity: failed to read %s: %s", mapping_path, exc
+                )
                 continue
             if mapped and mapped not in resolved:
                 queue.append(mapped)

@@ -102,7 +102,7 @@ class MyBackendImageGenProvider(ImageGenProvider):
         # Metadata for the `clawk tools` picker — keys to prompt for at setup.
         return {
             "name": "My Backend",
-            "badge": "paid",        # optional; shown as a short tag in the picker
+            "badge": "paid",  # optional; shown as a short tag in the picker
             "tag": "One-line description shown under the name",
             "env_vars": [
                 {
@@ -156,6 +156,7 @@ class MyBackendImageGenProvider(ImageGenProvider):
 
         try:
             import my_backend_sdk
+
             client = my_backend_sdk.Client(api_key=os.environ["MY_BACKEND_API_KEY"])
             if modality == "image":
                 result = client.edit(

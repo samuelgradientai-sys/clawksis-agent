@@ -187,9 +187,13 @@ def test_install_sh_repository_stage_clean_apply_drops_stash(
     )
 
     assert result.returncode == 0, result.stderr
-    assert "Local changes were restored on top of the updated codebase." in result.stdout
+    assert (
+        "Local changes were restored on top of the updated codebase." in result.stdout
+    )
     # Stash must be dropped on a clean apply — not preserved.
-    assert _git(managed, "stash", "list").stdout.strip() == "", "stash must be dropped on clean apply"
+    assert _git(managed, "stash", "list").stdout.strip() == "", (
+        "stash must be dropped on clean apply"
+    )
     # Local changes must be present in the working tree.
     assert (managed / "local-only.txt").read_text(encoding="utf-8") == "local edit\n"
     assert (managed / "tracked.txt").read_text(encoding="utf-8") == "upstream edit\n"

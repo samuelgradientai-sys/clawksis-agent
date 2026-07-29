@@ -33,7 +33,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-from clawk_cli.sqlite_util import add_column_if_missing as _add_column_if_missing, write_txn
+from clawk_cli.sqlite_util import (
+    add_column_if_missing as _add_column_if_missing,
+    write_txn,
+)
 from clawk_constants import get_clawk_home
 
 # ---------------------------------------------------------------------------
@@ -310,9 +313,10 @@ def _unique_slug(conn: sqlite3.Connection, candidate: str) -> str:
     base = candidate
     n = 1
     slug = base
-    while conn.execute(
-        "SELECT 1 FROM projects WHERE slug = ?", (slug,)
-    ).fetchone() is not None:
+    while (
+        conn.execute("SELECT 1 FROM projects WHERE slug = ?", (slug,)).fetchone()
+        is not None
+    ):
         n += 1
         suffix = f"-{n}"
         slug = (base[: 64 - len(suffix)]).rstrip("-_") + suffix
@@ -397,13 +401,9 @@ def list_projects(
     return [_attach_folders(conn, _project_from_row(r)) for r in rows]
 
 
-def get_project(
-    conn: sqlite3.Connection, id_or_slug: str
-) -> Optional[Project]:
+def get_project(conn: sqlite3.Connection, id_or_slug: str) -> Optional[Project]:
     """Look up a project by id first, then by slug."""
-    row = conn.execute(
-        "SELECT * FROM projects WHERE id = ?", (id_or_slug,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM projects WHERE id = ?", (id_or_slug,)).fetchone()
     if row is None:
         row = conn.execute(
             "SELECT * FROM projects WHERE slug = ?", (str(id_or_slug).lower(),)
@@ -496,8 +496,7 @@ def add_folder(
         else:
             # First folder of an empty project becomes primary implicitly.
             existing_primary = conn.execute(
-                "SELECT 1 FROM project_folders "
-                "WHERE project_id = ? AND is_primary = 1",
+                "SELECT 1 FROM project_folders WHERE project_id = ? AND is_primary = 1",
                 (project_id,),
             ).fetchone()
             if existing_primary is None:
@@ -510,8 +509,7 @@ def remove_folder(conn: sqlite3.Connection, project_id: str, path: str) -> bool:
     norm = _normalize_path(path)
     with write_txn(conn):
         was_primary = conn.execute(
-            "SELECT is_primary FROM project_folders "
-            "WHERE project_id = ? AND path = ?",
+            "SELECT is_primary FROM project_folders WHERE project_id = ? AND path = ?",
             (project_id, norm),
         ).fetchone()
         cur = conn.execute(
@@ -535,17 +533,14 @@ def remove_folder(conn: sqlite3.Connection, project_id: str, path: str) -> bool:
     return cur.rowcount > 0
 
 
-def _set_primary_locked(
-    conn: sqlite3.Connection, project_id: str, path: str
-) -> None:
+def _set_primary_locked(conn: sqlite3.Connection, project_id: str, path: str) -> None:
     """Set the primary folder (caller already holds a write txn)."""
     conn.execute(
         "UPDATE project_folders SET is_primary = 0 WHERE project_id = ?",
         (project_id,),
     )
     conn.execute(
-        "UPDATE project_folders SET is_primary = 1 "
-        "WHERE project_id = ? AND path = ?",
+        "UPDATE project_folders SET is_primary = 1 WHERE project_id = ? AND path = ?",
         (project_id, path),
     )
     conn.execute(
@@ -697,8 +692,11 @@ def project_for_path(
     best_len = -1
     for row in conn.execute(sql).fetchall():
         folder = row["folder"]
-        if target == folder or target.startswith(folder.rstrip("/\\") + os.sep) or \
-                target.startswith(folder.rstrip("/\\") + "/"):
+        if (
+            target == folder
+            or target.startswith(folder.rstrip("/\\") + os.sep)
+            or target.startswith(folder.rstrip("/\\") + "/")
+        ):
             if len(folder) > best_len:
                 best_len = len(folder)
                 best_pid = row["pid"]

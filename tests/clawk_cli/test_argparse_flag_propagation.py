@@ -28,8 +28,13 @@ def _build_parser():
     parser = argparse.ArgumentParser(prog="clawk")
     parser.add_argument("--resume", "-r", metavar="SESSION", default=None)
     parser.add_argument(
-        "--continue", "-c", dest="continue_last", nargs="?",
-        const=True, default=None, metavar="SESSION_NAME",
+        "--continue",
+        "-c",
+        dest="continue_last",
+        nargs="?",
+        const=True,
+        default=None,
+        metavar="SESSION_NAME",
     )
     parser.add_argument("--worktree", "-w", action="store_true", default=False)
     parser.add_argument("--skills", "-s", action="append", default=None)
@@ -39,19 +44,23 @@ def _build_parser():
     subparsers = parser.add_subparsers(dest="command")
     chat = subparsers.add_parser("chat")
     # These MUST use argparse.SUPPRESS to avoid overwriting parent values
-    chat.add_argument("--yolo", action="store_true",
-                      default=argparse.SUPPRESS)
-    chat.add_argument("--worktree", "-w", action="store_true",
-                      default=argparse.SUPPRESS)
-    chat.add_argument("--skills", "-s", action="append",
-                      default=argparse.SUPPRESS)
-    chat.add_argument("--pass-session-id", action="store_true",
-                      default=argparse.SUPPRESS)
-    chat.add_argument("--resume", "-r", metavar="SESSION_ID",
-                      default=argparse.SUPPRESS)
+    chat.add_argument("--yolo", action="store_true", default=argparse.SUPPRESS)
     chat.add_argument(
-        "--continue", "-c", dest="continue_last", nargs="?",
-        const=True, default=argparse.SUPPRESS, metavar="SESSION_NAME",
+        "--worktree", "-w", action="store_true", default=argparse.SUPPRESS
+    )
+    chat.add_argument("--skills", "-s", action="append", default=argparse.SUPPRESS)
+    chat.add_argument(
+        "--pass-session-id", action="store_true", default=argparse.SUPPRESS
+    )
+    chat.add_argument("--resume", "-r", metavar="SESSION_ID", default=argparse.SUPPRESS)
+    chat.add_argument(
+        "--continue",
+        "-c",
+        dest="continue_last",
+        nargs="?",
+        const=True,
+        default=argparse.SUPPRESS,
+        metavar="SESSION_NAME",
     )
     return parser
 
@@ -203,6 +212,7 @@ print(json.dumps(results))
         with `unrecognized arguments`."""
         import json
         import subprocess
+
         result = subprocess.run(
             [sys.executable, "-c", self._DRIVER, json.dumps(self.ARGVS)],
             capture_output=True,
@@ -238,16 +248,20 @@ class TestChatSubparserInheritedValueFlags:
     @pytest.fixture
     def real_parser(self):
         from clawk_cli._parser import build_top_level_parser
+
         parser, _subparsers, _chat = build_top_level_parser()
         return parser
 
-    @pytest.mark.parametrize("flag,attr,value", [
-        ("-t", "toolsets", "web"),
-        ("--toolsets", "toolsets", "web,terminal"),
-        ("-m", "model", "anthropic/claude-sonnet-4"),
-        ("--model", "model", "openai/gpt-4"),
-        ("--provider", "provider", "openrouter"),
-    ])
+    @pytest.mark.parametrize(
+        "flag,attr,value",
+        [
+            ("-t", "toolsets", "web"),
+            ("--toolsets", "toolsets", "web,terminal"),
+            ("-m", "model", "anthropic/claude-sonnet-4"),
+            ("--model", "model", "openai/gpt-4"),
+            ("--provider", "provider", "openrouter"),
+        ],
+    )
     def test_flag_before_chat_is_preserved(self, real_parser, flag, attr, value):
         args, _ = real_parser.parse_known_args([flag, value, "chat"])
         assert getattr(args, attr, None) == value, (
@@ -255,13 +269,16 @@ class TestChatSubparserInheritedValueFlags:
             f"{getattr(args, attr, None)!r}, expected {value!r}"
         )
 
-    @pytest.mark.parametrize("flag,attr,value", [
-        ("-t", "toolsets", "web"),
-        ("--toolsets", "toolsets", "web,terminal"),
-        ("-m", "model", "anthropic/claude-sonnet-4"),
-        ("--model", "model", "openai/gpt-4"),
-        ("--provider", "provider", "openrouter"),
-    ])
+    @pytest.mark.parametrize(
+        "flag,attr,value",
+        [
+            ("-t", "toolsets", "web"),
+            ("--toolsets", "toolsets", "web,terminal"),
+            ("-m", "model", "anthropic/claude-sonnet-4"),
+            ("--model", "model", "openai/gpt-4"),
+            ("--provider", "provider", "openrouter"),
+        ],
+    )
     def test_flag_after_chat_still_works(self, real_parser, flag, attr, value):
         args, _ = real_parser.parse_known_args(["chat", flag, value])
         assert getattr(args, attr, None) == value
@@ -279,22 +296,31 @@ class TestChatSubparserInheritedValueFlags:
         """Issue #28780 reporter's case generalized: passing every inherited
         value flag before `chat` must preserve all of them simultaneously."""
         args, _ = real_parser.parse_known_args([
-            "-t", "web",
-            "-m", "anthropic/claude-sonnet-4",
-            "--provider", "openrouter",
+            "-t",
+            "web",
+            "-m",
+            "anthropic/claude-sonnet-4",
+            "--provider",
+            "openrouter",
             "chat",
         ])
         assert args.toolsets == "web"
         assert args.model == "anthropic/claude-sonnet-4"
         assert args.provider == "openrouter"
 
-    @pytest.mark.parametrize("flag,attr", [
-        ("--tui", "tui"),
-        ("--cli", "cli"),
-        ("--dev", "tui_dev"),
-    ])
+    @pytest.mark.parametrize(
+        "flag,attr",
+        [
+            ("--tui", "tui"),
+            ("--cli", "cli"),
+            ("--dev", "tui_dev"),
+        ],
+    )
     def test_store_true_flag_before_chat_is_preserved(
-        self, real_parser, flag, attr,
+        self,
+        real_parser,
+        flag,
+        attr,
     ):
         """`--tui` / `--cli` / `--dev` are store_true flags inherited by chat; the same
         SUPPRESS contract applies. Without it, the subparser's `default=False`
@@ -314,11 +340,11 @@ class TestChatSubparserInheritedValueFlags:
         default during dispatch. This is the structural class behind #28780.
         """
         from clawk_cli._parser import build_top_level_parser
+
         parser, _subparsers, chat_parser = build_top_level_parser()
 
         top_level_dests = {
-            a.dest for a in parser._actions
-            if a.option_strings and a.dest != "help"
+            a.dest for a in parser._actions if a.option_strings and a.dest != "help"
         }
 
         offenders = []
@@ -334,6 +360,7 @@ class TestChatSubparserInheritedValueFlags:
             "Chat subparser redeclares these top-level flags without "
             "default=argparse.SUPPRESS; they will silently clobber the "
             "top-level value when used as `clawk <flag> <value> chat`:\n  "
-            + "\n  ".join(f"{opts} dest={dest} default={d!r}"
-                          for opts, dest, d in offenders)
+            + "\n  ".join(
+                f"{opts} dest={dest} default={d!r}" for opts, dest, d in offenders
+            )
         )

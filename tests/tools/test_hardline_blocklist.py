@@ -269,9 +269,11 @@ _DATA_ARG_NOT_A_COMMAND = [
 
 @pytest.mark.parametrize("command", _DATA_ARG_NOT_A_COMMAND)
 def test_root_wipe_string_as_data_arg_is_not_hardline(command):
-    """"rm -rf /" as a quoted argument to another command is data, not a wipe."""
+    """ "rm -rf /" as a quoted argument to another command is data, not a wipe."""
     is_hl, desc = detect_hardline_command(command)
-    assert not is_hl, f"false positive: quoted data arg hit hardline floor: {command!r} ({desc})"
+    assert not is_hl, (
+        f"false positive: quoted data arg hit hardline floor: {command!r} ({desc})"
+    )
 
 
 # Real root wipes at every command position — bare, chained after a separator,
@@ -318,10 +320,10 @@ def test_root_wipe_at_command_position_is_hardline(command):
 # (command_with_continuation, description_substring) — each is the
 # line-continuation form of a command already in _HARDLINE_BLOCK.
 _HARDLINE_LINE_CONTINUATION = [
-    ("rm -rf \\\n/", "root"),            # split before the path
-    ("rm -r\\\nf /", "root"),            # split inside the flag bundle
-    ("rm -rf \\\n~", "home"),            # home-directory wipe
-    ("rm -rf \\\r\n/", "root"),          # CRLF line ending
+    ("rm -rf \\\n/", "root"),  # split before the path
+    ("rm -r\\\nf /", "root"),  # split inside the flag bundle
+    ("rm -rf \\\n~", "home"),  # home-directory wipe
+    ("rm -rf \\\r\n/", "root"),  # CRLF line ending
     ("mkfs.ext4 \\\n/dev/sda1", "mkfs"),  # filesystem format
 ]
 
@@ -338,6 +340,7 @@ def test_hardline_blocks_line_continuation(command, desc_substr):
 # -------------------------------------------------------------------------
 # Integration with the approval flow
 # -------------------------------------------------------------------------
+
 
 @pytest.fixture
 def clean_session(monkeypatch):
@@ -374,14 +377,25 @@ def test_yolo_env_var_cannot_bypass_hardline(clean_session, monkeypatch):
     """CLAWK_YOLO_MODE=1 must not bypass the hardline floor."""
     monkeypatch.setenv("CLAWK_YOLO_MODE", "1")
 
-    for cmd in ['rm -rf /', 'rm -rf "/"', 'rm -rf "$HOME"', "rm -rf ${HOME}",
-                "shutdown -h now", "mkfs.ext4 /dev/sda", "reboot"]:
+    for cmd in [
+        "rm -rf /",
+        'rm -rf "/"',
+        'rm -rf "$HOME"',
+        "rm -rf ${HOME}",
+        "shutdown -h now",
+        "mkfs.ext4 /dev/sda",
+        "reboot",
+    ]:
         r1 = check_dangerous_command(cmd, "local")
-        assert r1["approved"] is False, f"yolo leaked hardline on {cmd!r} (check_dangerous_command)"
+        assert r1["approved"] is False, (
+            f"yolo leaked hardline on {cmd!r} (check_dangerous_command)"
+        )
         assert r1.get("hardline") is True
 
         r2 = check_all_command_guards(cmd, "local")
-        assert r2["approved"] is False, f"yolo leaked hardline on {cmd!r} (check_all_command_guards)"
+        assert r2["approved"] is False, (
+            f"yolo leaked hardline on {cmd!r} (check_all_command_guards)"
+        )
         assert r2.get("hardline") is True
 
 
@@ -410,9 +424,17 @@ def test_root_collapse_pattern_leaves_real_paths_alone(clean_session):
     /home/user/x, /.ssh, ./build) is recoverable-or-legitimate and must NOT
     be pulled onto the hardline floor by the "collapse to /" broadening.
     """
-    for cmd in ["rm -rf /tmp", "rm -rf /home/user/x", "rm -rf /.ssh",
-                "rm -rf /.config", "rm -rf ./build", "rm -rf /opt/foo",
-                "rm -rf /...", "rm -rf /....", "rm -rf /.foo"]:
+    for cmd in [
+        "rm -rf /tmp",
+        "rm -rf /home/user/x",
+        "rm -rf /.ssh",
+        "rm -rf /.config",
+        "rm -rf ./build",
+        "rm -rf /opt/foo",
+        "rm -rf /...",
+        "rm -rf /....",
+        "rm -rf /.foo",
+    ]:
         is_hl, _ = detect_hardline_command(cmd)
         assert not is_hl, f"{cmd!r} must not be hardline-blocked (over-match)"
 
@@ -425,17 +447,33 @@ def test_subshell_brace_group_cannot_bypass_hardline(clean_session, monkeypatch)
     """
     monkeypatch.setenv("CLAWK_YOLO_MODE", "1")
 
-    for cmd in ["(reboot)", "( reboot )", "(shutdown -h now)", "(poweroff)",
-                "(systemctl reboot)", "(init 0)", "(sudo reboot)",
-                "{ reboot; }", "{ shutdown -h now; }", "{ poweroff; }",
-                "(rm -rf /)", "{ rm -rf /; }", "(rm -rf ~)",
-                "true && (reboot)", "echo hi; { reboot; }"]:
+    for cmd in [
+        "(reboot)",
+        "( reboot )",
+        "(shutdown -h now)",
+        "(poweroff)",
+        "(systemctl reboot)",
+        "(init 0)",
+        "(sudo reboot)",
+        "{ reboot; }",
+        "{ shutdown -h now; }",
+        "{ poweroff; }",
+        "(rm -rf /)",
+        "{ rm -rf /; }",
+        "(rm -rf ~)",
+        "true && (reboot)",
+        "echo hi; { reboot; }",
+    ]:
         r1 = check_dangerous_command(cmd, "local")
-        assert r1["approved"] is False, f"yolo leaked hardline on {cmd!r} (check_dangerous_command)"
+        assert r1["approved"] is False, (
+            f"yolo leaked hardline on {cmd!r} (check_dangerous_command)"
+        )
         assert r1.get("hardline") is True
 
         r2 = check_all_command_guards(cmd, "local")
-        assert r2["approved"] is False, f"yolo leaked hardline on {cmd!r} (check_all_command_guards)"
+        assert r2["approved"] is False, (
+            f"yolo leaked hardline on {cmd!r} (check_all_command_guards)"
+        )
         assert r2.get("hardline") is True
 
 
@@ -449,10 +487,14 @@ def test_quoted_paren_brace_prose_not_blocked_under_yolo(clean_session, monkeypa
     """
     monkeypatch.setenv("CLAWK_YOLO_MODE", "1")
 
-    for cmd in ['gh pr create --title "block (reboot) spellings"',
-                'git commit -m "(rm -rf /) note"',
-                'echo "(reboot)"', 'echo "{ reboot; }"',
-                "echo '(poweroff)'", 'find . -name "*(reboot)*"']:
+    for cmd in [
+        'gh pr create --title "block (reboot) spellings"',
+        'git commit -m "(rm -rf /) note"',
+        'echo "(reboot)"',
+        'echo "{ reboot; }"',
+        "echo '(poweroff)'",
+        'find . -name "*(reboot)*"',
+    ]:
         assert detect_hardline_command(cmd)[0] is False, (
             f"quoted prose false-positived on the hardline floor: {cmd!r}"
         )
@@ -486,10 +528,13 @@ def test_session_yolo_cannot_bypass_hardline(clean_session):
     assert result.get("hardline") is True
 
 
-def test_approvals_mode_off_cannot_bypass_hardline(clean_session, monkeypatch, tmp_path):
+def test_approvals_mode_off_cannot_bypass_hardline(
+    clean_session, monkeypatch, tmp_path
+):
     """config approvals.mode=off (yolo-equivalent) must not bypass hardline."""
     # _get_approval_mode() reads from clawk config; simplest path: monkeypatch the helper.
     import tools.approval as approval_mod
+
     monkeypatch.setattr(approval_mod, "_get_approval_mode", lambda: "off")
 
     result = check_all_command_guards("rm -rf /", "local")
@@ -501,6 +546,7 @@ def test_cron_approve_mode_cannot_bypass_hardline(clean_session, monkeypatch):
     """Cron sessions with cron_mode=approve must not bypass hardline."""
     monkeypatch.setenv("CLAWK_CRON_SESSION", "1")
     import tools.approval as approval_mod
+
     monkeypatch.setattr(approval_mod, "_get_cron_approval_mode", lambda: "approve")
 
     result = check_all_command_guards("rm -rf /", "local")
@@ -538,7 +584,12 @@ def test_recoverable_dangerous_commands_still_pass_yolo(clean_session, monkeypat
     monkeypatch.setenv("CLAWK_YOLO_MODE", "1")
 
     # These are dangerous but NOT hardline — yolo should still pass them.
-    for cmd in ["rm -rf /tmp/x", "chmod -R 777 .", "git reset --hard", "git push --force"]:
+    for cmd in [
+        "rm -rf /tmp/x",
+        "chmod -R 777 .",
+        "git reset --hard",
+        "git push --force",
+    ]:
         # Sanity: still flagged as dangerous
         is_dangerous, _, _ = detect_dangerous_command(cmd)
         assert is_dangerous, f"precondition: {cmd!r} should be in DANGEROUS_PATTERNS"
@@ -555,6 +606,7 @@ def test_recoverable_dangerous_commands_still_pass_yolo(clean_session, monkeypat
 # be able to stop/restart/update its own Clawksis gateway, not even under
 # yolo or approvals.mode=off.
 # -------------------------------------------------------------------------
+
 
 def test_gateway_self_restart_is_hardline_even_under_yolo(clean_session, monkeypatch):
     """The exact 2026-07-07 incident command must be hardline, not merely
@@ -686,7 +738,10 @@ def test_sudo_stdin_guard_blocks_via_check_all_command_guards(clean_session):
         # Should NOT be marked as hardline (it's sudo-specific)
         assert result.get("hardline") is not True
         assert "BLOCKED" in result["message"]
-        assert "sudo -S" in result["message"].lower() or "sudo password" in result["message"].lower()
+        assert (
+            "sudo -S" in result["message"].lower()
+            or "sudo password" in result["message"].lower()
+        )
 
 
 def test_sudo_stdin_guard_not_blocked_by_yolo(clean_session, monkeypatch):
@@ -703,4 +758,6 @@ def test_sudo_stdin_guard_container_bypass(clean_session):
     for env in ("docker", "singularity", "modal", "daytona"):
         for cmd in _SUDO_STDIN_BLOCK:
             result = check_all_command_guards(cmd, env)
-            assert result["approved"] is True, f"container {env} should bypass sudo guard on {cmd!r}"
+            assert result["approved"] is True, (
+                f"container {env} should bypass sudo guard on {cmd!r}"
+            )

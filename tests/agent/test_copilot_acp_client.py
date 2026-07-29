@@ -57,7 +57,9 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
         self.assertEqual(choice.message.content, "I'll inspect that.")
 
     def test_stream_true_returns_iterable_text_chunks(self) -> None:
-        with patch.object(self.client, "_run_prompt", return_value=("Hello from ACP", "")):
+        with patch.object(
+            self.client, "_run_prompt", return_value=("Hello from ACP", "")
+        ):
             stream = self.client._create_chat_completion(
                 model="copilot-acp",
                 messages=[{"role": "user", "content": "hello"}],
@@ -105,7 +107,9 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
     def test_timeout_object_is_coerced_for_streaming_requests(self) -> None:
         captured: dict[str, float] = {}
 
-        def fake_run_prompt(prompt_text: str, *, timeout_seconds: float) -> tuple[str, str]:
+        def fake_run_prompt(
+            prompt_text: str, *, timeout_seconds: float
+        ) -> tuple[str, str]:
             captured["timeout"] = timeout_seconds
             return "ok", ""
 
@@ -152,7 +156,7 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
             cwd="/tmp",
         )
 
-        outcome = (((response.get("result") or {}).get("outcome") or {}).get("outcome"))
+        outcome = ((response.get("result") or {}).get("outcome") or {}).get("outcome")
         self.assertEqual(outcome, "cancelled")
 
     def test_read_text_file_blocks_internal_clawk_hub_files(self) -> None:
@@ -199,7 +203,7 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
                     cwd=str(root),
                 )
 
-        content = ((response.get("result") or {}).get("content") or "")
+        content = (response.get("result") or {}).get("content") or ""
         self.assertNotIn("abc123def456", content)
         self.assertIn("OPENAI_API_KEY=", content)
 
@@ -237,7 +241,9 @@ class CopilotACPClientSafetyTests(unittest.TestCase):
             safe_root.mkdir()
             outside = root / "outside.txt"
 
-            with patch.dict(os.environ, {"CLAWK_WRITE_SAFE_ROOT": str(safe_root)}, clear=False):
+            with patch.dict(
+                os.environ, {"CLAWK_WRITE_SAFE_ROOT": str(safe_root)}, clear=False
+            ):
                 response = self._dispatch(
                     {
                         "jsonrpc": "2.0",
@@ -281,10 +287,13 @@ def _fake_popen_capture(captured):
         captured["cmd"] = cmd
         captured["kwargs"] = kwargs
         raise FileNotFoundError("copilot not found")
+
     return _fake
 
 
-def test_run_prompt_preserves_real_home_when_profile_home_available(monkeypatch, tmp_path):
+def test_run_prompt_preserves_real_home_when_profile_home_available(
+    monkeypatch, tmp_path
+):
     clawk_home = tmp_path / "clawk"
     (clawk_home / "home").mkdir(parents=True)
     real_home = tmp_path / "real-home"
@@ -296,7 +305,10 @@ def test_run_prompt_preserves_real_home_when_profile_home_available(monkeypatch,
     captured = {}
     client = _make_home_client(tmp_path)
 
-    with _patch("agent.copilot_acp_client.subprocess.Popen", side_effect=_fake_popen_capture(captured)):
+    with _patch(
+        "agent.copilot_acp_client.subprocess.Popen",
+        side_effect=_fake_popen_capture(captured),
+    ):
         with pytest.raises(RuntimeError, match="Could not start Copilot ACP command"):
             client._run_prompt("hello", timeout_seconds=1)
 
@@ -311,7 +323,10 @@ def test_run_prompt_passes_home_when_parent_env_is_clean(monkeypatch, tmp_path):
     captured = {}
     client = _make_home_client(tmp_path)
 
-    with _patch("agent.copilot_acp_client.subprocess.Popen", side_effect=_fake_popen_capture(captured)):
+    with _patch(
+        "agent.copilot_acp_client.subprocess.Popen",
+        side_effect=_fake_popen_capture(captured),
+    ):
         with pytest.raises(RuntimeError, match="Could not start Copilot ACP command"):
             client._run_prompt("hello", timeout_seconds=1)
 

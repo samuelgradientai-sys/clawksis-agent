@@ -34,6 +34,7 @@ REGISTRATION_SOURCE = os.environ.get("DINGTALK_REGISTRATION_SOURCE", "openClaw")
 
 # ── API helpers ────────────────────────────────────────────────────────────
 
+
 class RegistrationError(Exception):
     """Raised when a DingTalk registration API call fails."""
 
@@ -57,6 +58,7 @@ def _api_post(path: str, payload: dict) -> dict:
 
 # ── Core flow ──────────────────────────────────────────────────────────────
 
+
 def begin_registration() -> dict:
     """Start a device-flow registration.
 
@@ -72,7 +74,9 @@ def begin_registration() -> dict:
     # Step 2: begin → device_code, verification_uri_complete
     begin_data = _api_post("/app/registration/begin", {"nonce": nonce})
     device_code = str(begin_data.get("device_code", "")).strip()
-    verification_uri_complete = str(begin_data.get("verification_uri_complete", "")).strip()
+    verification_uri_complete = str(
+        begin_data.get("verification_uri_complete", "")
+    ).strip()
     if not device_code:
         raise RegistrationError("begin response missing device_code")
     if not verification_uri_complete:
@@ -138,7 +142,9 @@ def wait_for_registration_success(
             cid = result["client_id"]
             csecret = result["client_secret"]
             if not cid or not csecret:
-                raise RegistrationError("authorization succeeded but credentials are missing")
+                raise RegistrationError(
+                    "authorization succeeded but credentials are missing"
+                )
             return cid, csecret
         # FAIL / EXPIRED / UNKNOWN
         if retry_start == 0:
@@ -153,10 +159,12 @@ def wait_for_registration_success(
 
 # ── QR code rendering ─────────────────────────────────────────────────────
 
+
 def _ensure_qrcode_installed() -> bool:
     """Try to import qrcode; if missing, auto-install it via pip/uv."""
     try:
         import qrcode  # noqa: F401
+
         return True
     except ImportError:
         pass
@@ -169,6 +177,7 @@ def _ensure_qrcode_installed() -> bool:
         result = _pip_install(["-q", "qrcode"], timeout=120)
         if result.returncode == 0:
             import qrcode  # noqa: F401,F811
+
             return True
     except (subprocess.SubprocessError, ImportError, OSError):
         pass
@@ -199,9 +208,9 @@ def render_qr_to_terminal(url: str) -> bool:
     rows = len(matrix)
     lines: list[str] = []
 
-    TOP_HALF = "\u2580"      # ▀
-    BOTTOM_HALF = "\u2584"   # ▄
-    FULL_BLOCK = "\u2588"    # █
+    TOP_HALF = "\u2580"  # ▀
+    BOTTOM_HALF = "\u2584"  # ▄
+    FULL_BLOCK = "\u2588"  # █
     EMPTY = " "
 
     for r in range(0, rows, 2):
@@ -224,6 +233,7 @@ def render_qr_to_terminal(url: str) -> bool:
 
 
 # ── High-level entry point for the setup wizard ───────────────────────────
+
 
 def dingtalk_qr_auth() -> Optional[Tuple[str, str]]:
     """Run the interactive QR-code device-flow authorization.
@@ -255,7 +265,9 @@ def dingtalk_qr_auth() -> Optional[Tuple[str, str]]:
     print()
 
     if not render_qr_to_terminal(url):
-        print_warning("  QR code render failed, please open the link below to authorize:")
+        print_warning(
+            "  QR code render failed, please open the link below to authorize:"
+        )
 
     print()
     print_info(f"  Or open this link manually: {url}")
@@ -286,6 +298,8 @@ def dingtalk_qr_auth() -> Optional[Tuple[str, str]]:
     print()
     print_success("  QR scan authorization successful!")
     print_success(f"  Client ID:     {client_id}")
-    print_success(f"  Client Secret: {client_secret[:8]}{'*' * (len(client_secret) - 8)}")
+    print_success(
+        f"  Client Secret: {client_secret[:8]}{'*' * (len(client_secret) - 8)}"
+    )
 
     return client_id, client_secret

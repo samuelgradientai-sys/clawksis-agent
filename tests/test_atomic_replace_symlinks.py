@@ -10,6 +10,7 @@ target through ``os.path.realpath`` when it is a symlink, so the real file is
 overwritten in-place while the symlink survives.  All atomic-write sites in
 the codebase were migrated to the helper; these tests pin that invariant.
 """
+
 from __future__ import annotations
 
 import errno
@@ -140,6 +141,7 @@ def test_atomic_json_write_preserves_symlink_permissions(tmp_path: Path) -> None
     atomic_json_write(link, {"x": 1})
 
     import stat as _stat
+
     mode = _stat.S_IMODE(real.stat().st_mode)
     assert mode == 0o644, f"permissions drifted after symlinked write: {oct(mode)}"
 
@@ -214,7 +216,10 @@ def test_atomic_roundtrip_yaml_update_restores_owner(
     atomic_roundtrip_yaml_update(target, "model.provider", "nvidia")
 
     assert chown_calls == [(target, 345, 678)]
-    assert yaml.safe_load(target.read_text(encoding="utf-8"))["model"]["provider"] == "nvidia"
+    assert (
+        yaml.safe_load(target.read_text(encoding="utf-8"))["model"]["provider"]
+        == "nvidia"
+    )
 
 
 # ─── Broken-symlink edge case ─────────────────────────────────────────────

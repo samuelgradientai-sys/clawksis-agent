@@ -120,9 +120,7 @@ def _seed_openrouter_token(monkeypatch, dotenv_value, environ_value):
     else:
         monkeypatch.setenv("OPENROUTER_API_KEY", environ_value)
     # Never treat the synthetic source as suppressed.
-    monkeypatch.setattr(
-        "clawk_cli.auth.is_source_suppressed", lambda _p, _s: False
-    )
+    monkeypatch.setattr("clawk_cli.auth.is_source_suppressed", lambda _p, _s: False)
 
     entries: list = []
     changed, sources = credential_pool._seed_from_env("openrouter", entries)

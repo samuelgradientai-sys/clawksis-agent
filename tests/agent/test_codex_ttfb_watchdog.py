@@ -68,13 +68,17 @@ def test_ttfb_kills_when_no_stream_event(tmp_path, monkeypatch):
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
+    monkeypatch.setattr(
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client",
+        agent,
+        "_close_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -83,7 +87,11 @@ def test_ttfb_kills_when_no_stream_event(tmp_path, monkeypatch):
     def fake_hang(api_kwargs, client=None, on_first_delta=None):
         # Never set _codex_stream_last_event_ts: simulate zero events arriving.
         deadline = time.time() + 30
-        while time.time() < deadline and not stop["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         raise RuntimeError("connection closed")
 
@@ -116,13 +124,17 @@ def test_ttfb_default_tolerates_slow_first_event(tmp_path, monkeypatch):
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
+    monkeypatch.setattr(
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client",
+        agent,
+        "_close_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -154,15 +166,19 @@ def test_ttfb_includes_silent_hang_hint_for_gpt_5_5(tmp_path, monkeypatch):
     closes: list = []
     statuses: list[str] = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
+    monkeypatch.setattr(
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
     monkeypatch.setattr(agent, "_buffer_status", lambda msg: statuses.append(msg))
     monkeypatch.setattr(agent, "_emit_status", lambda msg: statuses.append(msg))
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client",
+        agent,
+        "_close_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -170,7 +186,11 @@ def test_ttfb_includes_silent_hang_hint_for_gpt_5_5(tmp_path, monkeypatch):
 
     def fake_hang(api_kwargs, client=None, on_first_delta=None):
         deadline = time.time() + 30
-        while time.time() < deadline and not stop["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         raise RuntimeError("connection closed")
 
@@ -201,13 +221,17 @@ def test_ttfb_high_env_is_capped_for_openai_codex(tmp_path, monkeypatch):
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
+    monkeypatch.setattr(
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client",
+        agent,
+        "_close_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -215,7 +239,11 @@ def test_ttfb_high_env_is_capped_for_openai_codex(tmp_path, monkeypatch):
 
     def fake_hang(api_kwargs, client=None, on_first_delta=None):
         deadline = time.time() + 30
-        while time.time() < deadline and not stop["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         raise RuntimeError("connection closed")
 
@@ -243,13 +271,17 @@ def test_ttfb_does_not_kill_when_events_flow(tmp_path, monkeypatch):
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
+    monkeypatch.setattr(
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client",
+        agent,
+        "_close_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -283,7 +315,9 @@ def test_event_idle_kills_after_first_event_then_silence(tmp_path, monkeypatch):
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
+    monkeypatch.setattr(
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
     monkeypatch.setattr(
         agent,
         "_abort_request_openai_client",
@@ -300,7 +334,11 @@ def test_event_idle_kills_after_first_event_then_silence(tmp_path, monkeypatch):
     def fake_stream(api_kwargs, client=None, on_first_delta=None):
         agent._codex_stream_last_event_ts = time.time()
         deadline = time.time() + 30
-        while time.time() < deadline and not stop["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         raise RuntimeError("connection closed")
 
@@ -527,13 +565,17 @@ def test_ttfb_disabled_via_env_zero(tmp_path, monkeypatch):
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
+    monkeypatch.setattr(
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client",
+        agent,
+        "_close_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -562,12 +604,18 @@ def test_large_codex_request_waits_instead_of_ttfb_reconnect(tmp_path, monkeypat
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client", lambda c, reason=None: closes.append(reason)
+        agent, "_create_request_openai_client", lambda **k: dummy_client
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client", lambda c, reason=None: closes.append(reason)
+        agent,
+        "_abort_request_openai_client",
+        lambda c, reason=None: closes.append(reason),
+    )
+    monkeypatch.setattr(
+        agent,
+        "_close_request_openai_client",
+        lambda c, reason=None: closes.append(reason),
     )
 
     sentinel = SimpleNamespace(ok=True)
@@ -586,7 +634,9 @@ def test_large_codex_request_waits_instead_of_ttfb_reconnect(tmp_path, monkeypat
     assert "codex_ttfb_kill" not in closes
 
 
-def test_large_codex_request_can_still_ttfb_reconnect_when_capped(tmp_path, monkeypatch):
+def test_large_codex_request_can_still_ttfb_reconnect_when_capped(
+    tmp_path, monkeypatch
+):
     """Large Codex requests should keep a finite TTFB watchdog instead of
     disabling it entirely. A low max cap should still force an early reconnect."""
     from agent import chat_completion_helpers as h
@@ -597,19 +647,29 @@ def test_large_codex_request_can_still_ttfb_reconnect_when_capped(tmp_path, monk
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client", lambda c, reason=None: closes.append(reason)
+        agent, "_create_request_openai_client", lambda **k: dummy_client
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client", lambda c, reason=None: closes.append(reason)
+        agent,
+        "_abort_request_openai_client",
+        lambda c, reason=None: closes.append(reason),
+    )
+    monkeypatch.setattr(
+        agent,
+        "_close_request_openai_client",
+        lambda c, reason=None: closes.append(reason),
     )
 
     stop = {"flag": False}
 
     def fake_hang(api_kwargs, client=None, on_first_delta=None):
         deadline = time.time() + 30
-        while time.time() < deadline and not stop["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         raise RuntimeError("connection closed")
 
@@ -636,19 +696,29 @@ def test_large_codex_request_strict_ttfb_env_still_reconnects(tmp_path, monkeypa
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client", lambda c, reason=None: closes.append(reason)
+        agent, "_create_request_openai_client", lambda **k: dummy_client
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client", lambda c, reason=None: closes.append(reason)
+        agent,
+        "_abort_request_openai_client",
+        lambda c, reason=None: closes.append(reason),
+    )
+    monkeypatch.setattr(
+        agent,
+        "_close_request_openai_client",
+        lambda c, reason=None: closes.append(reason),
     )
 
     stop = {"flag": False}
 
     def fake_hang(api_kwargs, client=None, on_first_delta=None):
         deadline = time.time() + 30
-        while time.time() < deadline and not stop["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         raise RuntimeError("connection closed")
 
@@ -682,13 +752,17 @@ def test_large_codex_request_hard_ceiling_reclaims_silent_stall(tmp_path, monkey
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
+    monkeypatch.setattr(
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client",
+        agent,
+        "_close_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -697,7 +771,11 @@ def test_large_codex_request_hard_ceiling_reclaims_silent_stall(tmp_path, monkey
     def fake_hang(api_kwargs, client=None, on_first_delta=None):
         # No event marker AND no event ever: the exact issue-64507 stall.
         deadline = time.time() + 120
-        while time.time() < deadline and not stop["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         raise RuntimeError("connection closed")
 
@@ -718,7 +796,9 @@ def test_large_codex_request_hard_ceiling_reclaims_silent_stall(tmp_path, monkey
         stop["flag"] = True
 
 
-def test_large_codex_request_hard_ceiling_disabled_restores_legacy(tmp_path, monkeypatch):
+def test_large_codex_request_hard_ceiling_disabled_restores_legacy(
+    tmp_path, monkeypatch
+):
     """Setting CLAWK_CODEX_HARD_TIMEOUT_SECONDS=0 disables the ceiling entirely,
     restoring the pre-#64507 behavior (request waits out the raised stale floor
     instead of being capped). Keeps the knob for operators who must.
@@ -730,13 +810,17 @@ def test_large_codex_request_hard_ceiling_disabled_restores_legacy(tmp_path, mon
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
+    monkeypatch.setattr(
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client",
+        agent,
+        "_close_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -756,7 +840,9 @@ def test_large_codex_request_hard_ceiling_disabled_restores_legacy(tmp_path, mon
     assert "stale_call_kill" not in closes
 
 
-def test_large_codex_request_hard_ceiling_caps_raised_stale_floor(tmp_path, monkeypatch):
+def test_large_codex_request_hard_ceiling_caps_raised_stale_floor(
+    tmp_path, monkeypatch
+):
     """The hard ceiling must cap the raised stale floor (openai-codex can push
     the stale timeout to 1200s at >100k tokens). A large silent stall must die
     at the ceiling, proving the min() wins over the floor.
@@ -772,13 +858,17 @@ def test_large_codex_request_hard_ceiling_caps_raised_stale_floor(tmp_path, monk
 
     closes: list = []
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
+    monkeypatch.setattr(
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
     monkeypatch.setattr(
-        agent, "_close_request_openai_client",
+        agent,
+        "_close_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -786,7 +876,11 @@ def test_large_codex_request_hard_ceiling_caps_raised_stale_floor(tmp_path, monk
 
     def fake_hang(api_kwargs, client=None, on_first_delta=None):
         deadline = time.time() + 200
-        while time.time() < deadline and not stop["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         raise RuntimeError("connection closed")
 

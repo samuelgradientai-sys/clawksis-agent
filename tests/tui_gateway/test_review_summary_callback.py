@@ -54,7 +54,9 @@ def test_init_session_attaches_background_review_callback(server, monkeypatch):
     monkeypatch.setattr(server, "_SlashWorker", lambda *a, **kw: object())
     monkeypatch.setattr(server, "_wire_callbacks", lambda sid: None)
     monkeypatch.setattr(server, "_notify_session_boundary", lambda *a, **kw: None)
-    monkeypatch.setattr(server, "_session_info", lambda agent, session=None: {"model": "m"})
+    monkeypatch.setattr(
+        server, "_session_info", lambda agent, session=None: {"model": "m"}
+    )
     monkeypatch.setattr(server, "_load_show_reasoning", lambda: False)
     monkeypatch.setattr(server, "_load_tool_progress_mode", lambda: "all")
 
@@ -62,9 +64,7 @@ def test_init_session_attaches_background_review_callback(server, monkeypatch):
     monkeypatch.setattr(
         server,
         "_emit",
-        lambda event, sid, payload=None: captured_emits.append(
-            (event, sid, payload)
-        ),
+        lambda event, sid, payload=None: captured_emits.append((event, sid, payload)),
     )
 
     class FakeAgent:
@@ -106,7 +106,9 @@ def test_review_summary_callback_survives_agent_without_attribute(server, monkey
     monkeypatch.setattr(server, "_SlashWorker", lambda *a, **kw: object())
     monkeypatch.setattr(server, "_wire_callbacks", lambda sid: None)
     monkeypatch.setattr(server, "_notify_session_boundary", lambda *a, **kw: None)
-    monkeypatch.setattr(server, "_session_info", lambda agent, session=None: {"model": "m"})
+    monkeypatch.setattr(
+        server, "_session_info", lambda agent, session=None: {"model": "m"}
+    )
     monkeypatch.setattr(server, "_load_show_reasoning", lambda: False)
     monkeypatch.setattr(server, "_load_tool_progress_mode", lambda: "all")
     monkeypatch.setattr(server, "_emit", lambda *a, **kw: None)
@@ -129,7 +131,9 @@ def test_init_session_sets_memory_notifications_from_config(server, monkeypatch)
     monkeypatch.setattr(server, "_SlashWorker", lambda *a, **kw: object())
     monkeypatch.setattr(server, "_wire_callbacks", lambda sid: None)
     monkeypatch.setattr(server, "_notify_session_boundary", lambda *a, **kw: None)
-    monkeypatch.setattr(server, "_session_info", lambda agent, session=None: {"model": "m"})
+    monkeypatch.setattr(
+        server, "_session_info", lambda agent, session=None: {"model": "m"}
+    )
     monkeypatch.setattr(server, "_load_show_reasoning", lambda: False)
     monkeypatch.setattr(server, "_load_tool_progress_mode", lambda: "all")
     monkeypatch.setattr(server, "_emit", lambda *a, **kw: None)
@@ -149,12 +153,12 @@ def test_init_session_sets_memory_notifications_from_config(server, monkeypatch)
 @pytest.mark.parametrize(
     "raw,expected",
     [
-        (None, "on"),       # unset → default on
+        (None, "on"),  # unset → default on
         ("on", "on"),
         ("off", "off"),
         ("verbose", "verbose"),
         ("VERBOSE", "verbose"),  # case-normalized
-        (True, "on"),       # bool back-compat
+        (True, "on"),  # bool back-compat
         (False, "off"),
     ],
 )
@@ -164,4 +168,3 @@ def test_load_memory_notifications_normalization(server, monkeypatch, raw, expec
     display = {} if raw is None else {"memory_notifications": raw}
     monkeypatch.setattr(server, "_load_cfg", lambda: {"display": display})
     assert server._load_memory_notifications() == expected
-

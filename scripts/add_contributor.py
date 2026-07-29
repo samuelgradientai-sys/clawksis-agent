@@ -56,7 +56,10 @@ def add_contributor(email: str, login: str, comment: str = "") -> int:
     login = login.strip().lstrip("@")
 
     if not _EMAIL_RE.match(email):
-        print(f"error: {email!r} does not look like a commit-author email", file=sys.stderr)
+        print(
+            f"error: {email!r} does not look like a commit-author email",
+            file=sys.stderr,
+        )
         return 2
     if not _LOGIN_RE.match(login):
         print(f"error: {login!r} is not a valid GitHub login", file=sys.stderr)

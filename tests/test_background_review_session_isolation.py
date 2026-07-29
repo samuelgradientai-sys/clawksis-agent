@@ -20,28 +20,51 @@ from clawk_state import (
 
 class TestIsBackgroundReviewHarnessMessage:
     def test_matches_skill_review_prompt(self):
-        msg = {"role": "user", "content": "Review the conversation above and update the skill library now."}
+        msg = {
+            "role": "user",
+            "content": "Review the conversation above and update the skill library now.",
+        }
         assert _is_background_review_harness_message(msg) is True
 
     def test_matches_memory_review_prompt(self):
-        msg = {"role": "system", "content": "Review the conversation above and consider saving to memory."}
+        msg = {
+            "role": "system",
+            "content": "Review the conversation above and consider saving to memory.",
+        }
         assert _is_background_review_harness_message(msg) is True
 
     def test_matches_after_leading_whitespace(self):
-        msg = {"role": "user", "content": "\n\n   Review the conversation above and update the skill library."}
+        msg = {
+            "role": "user",
+            "content": "\n\n   Review the conversation above and update the skill library.",
+        }
         assert _is_background_review_harness_message(msg) is True
 
     def test_ignores_normal_user_message(self):
-        msg = {"role": "user", "content": "Please review my PR and update the changelog."}
+        msg = {
+            "role": "user",
+            "content": "Please review my PR and update the changelog.",
+        }
         assert _is_background_review_harness_message(msg) is False
 
     def test_ignores_assistant_role(self):
         # An assistant message that quotes the harness text is not itself a harness prompt.
-        msg = {"role": "assistant", "content": "Review the conversation above and update the skill library"}
+        msg = {
+            "role": "assistant",
+            "content": "Review the conversation above and update the skill library",
+        }
         assert _is_background_review_harness_message(msg) is False
 
     def test_ignores_non_string_content(self):
-        msg = {"role": "user", "content": [{"type": "text", "text": "Review the conversation above and update the skill library"}]}
+        msg = {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Review the conversation above and update the skill library",
+                }
+            ],
+        }
         assert _is_background_review_harness_message(msg) is False
 
     def test_ignores_non_dict(self):
@@ -53,19 +76,29 @@ class TestStripBackgroundReviewHarness:
         messages = [
             {"role": "user", "content": "What's the weather?"},
             {"role": "assistant", "content": "It's sunny."},
-            {"role": "user", "content": "Review the conversation above and update the skill library."},
+            {
+                "role": "user",
+                "content": "Review the conversation above and update the skill library.",
+            },
             {"role": "assistant", "content": "Nothing to save."},
             {"role": "user", "content": "Thanks, now book a flight."},
         ]
         out = _strip_background_review_harness(messages)
         contents = [m["content"] for m in out]
-        assert contents == ["What's the weather?", "It's sunny.", "Thanks, now book a flight."]
+        assert contents == [
+            "What's the weather?",
+            "It's sunny.",
+            "Thanks, now book a flight.",
+        ]
 
     def test_strips_harness_without_following_assistant(self):
         # Harness message is the last turn — nothing to skip after it.
         messages = [
             {"role": "user", "content": "Hi"},
-            {"role": "user", "content": "Review the conversation above and consider saving to memory."},
+            {
+                "role": "user",
+                "content": "Review the conversation above and consider saving to memory.",
+            },
         ]
         out = _strip_background_review_harness(messages)
         assert out == [{"role": "user", "content": "Hi"}]
@@ -74,11 +107,16 @@ class TestStripBackgroundReviewHarness:
         # If the message after the harness is a USER turn (not the curator reply),
         # it must be preserved — only the immediately-following ASSISTANT reply is dropped.
         messages = [
-            {"role": "user", "content": "Review the conversation above and update the skill library."},
+            {
+                "role": "user",
+                "content": "Review the conversation above and update the skill library.",
+            },
             {"role": "user", "content": "Actually, ignore that and help me debug."},
         ]
         out = _strip_background_review_harness(messages)
-        assert out == [{"role": "user", "content": "Actually, ignore that and help me debug."}]
+        assert out == [
+            {"role": "user", "content": "Actually, ignore that and help me debug."}
+        ]
 
     def test_clean_history_passes_through_unchanged(self):
         messages = [
@@ -93,11 +131,17 @@ class TestStripBackgroundReviewHarness:
 
     def test_multiple_harness_pairs(self):
         messages = [
-            {"role": "user", "content": "Review the conversation above and update the skill library."},
+            {
+                "role": "user",
+                "content": "Review the conversation above and update the skill library.",
+            },
             {"role": "assistant", "content": "Nothing to save."},
             {"role": "user", "content": "real question"},
             {"role": "assistant", "content": "real answer"},
-            {"role": "user", "content": "Review the conversation above and consider saving to memory."},
+            {
+                "role": "user",
+                "content": "Review the conversation above and consider saving to memory.",
+            },
             {"role": "assistant", "content": "Saved one entry."},
         ]
         out = _strip_background_review_harness(messages)
@@ -122,23 +166,33 @@ class TestGetMessagesAsConversationStripsHarness:
                 db.append_message("s1", role="assistant", content="It's sunny.")
                 # Stray background-review pollution written by an older build.
                 db.append_message(
-                    "s1", role="user",
+                    "s1",
+                    role="user",
                     content="Review the conversation above and update the skill library with anything useful.",
                 )
-                db.append_message("s1", role="assistant", content="I'll act as the curator now.")
-                db.append_message("s1", role="user", content="Thanks, now book a flight.")
+                db.append_message(
+                    "s1", role="assistant", content="I'll act as the curator now."
+                )
+                db.append_message(
+                    "s1", role="user", content="Thanks, now book a flight."
+                )
 
                 conv = db.get_messages_as_conversation("s1")
                 contents = [m["content"] for m in conv]
 
                 # Harness user turn AND its curator-mode assistant reply are gone.
                 assert not any(
-                    isinstance(c, str) and c.lstrip().startswith("Review the conversation above")
+                    isinstance(c, str)
+                    and c.lstrip().startswith("Review the conversation above")
                     for c in contents
                 )
                 assert "I'll act as the curator now." not in contents
                 # Genuine turns survive in order.
-                assert contents == ["What's the weather?", "It's sunny.", "Thanks, now book a flight."]
+                assert contents == [
+                    "What's the weather?",
+                    "It's sunny.",
+                    "Thanks, now book a flight.",
+                ]
             finally:
                 db.close()
 
@@ -159,6 +213,7 @@ class TestPersistDisabledHardStop:
             try:
                 with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
                     from run_agent import AIAgent
+
                     agent = AIAgent(
                         api_key="test-key",
                         base_url="https://openrouter.ai/api/v1",
@@ -173,8 +228,13 @@ class TestPersistDisabledHardStop:
                 agent._persist_disabled = True
 
                 agent._flush_messages_to_session_db(
-                    [{"role": "user", "content": "Review the conversation above and update the skill library."},
-                     {"role": "assistant", "content": "curator reply"}],
+                    [
+                        {
+                            "role": "user",
+                            "content": "Review the conversation above and update the skill library.",
+                        },
+                        {"role": "assistant", "content": "curator reply"},
+                    ],
                     [],
                 )
 

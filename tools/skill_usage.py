@@ -178,6 +178,7 @@ def activity_count(record: Dict[str, Any]) -> int:
 # Provenance — which skills are agent-created (and thus eligible for curation)
 # ---------------------------------------------------------------------------
 
+
 def _read_bundled_manifest_names() -> Set[str]:
     """Return the set of skill names that were seeded from the bundled repo.
 
@@ -290,7 +291,9 @@ def _write_suppressed_names(names: Set[str]) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         data = "\n".join(sorted(names)) + ("\n" if names else "")
-        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".curator_suppressed_", suffix=".tmp")
+        fd, tmp = tempfile.mkstemp(
+            dir=str(path.parent), prefix=".curator_suppressed_", suffix=".tmp"
+        )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(data)
@@ -481,6 +484,7 @@ def _is_curator_managed_record(record: Any) -> bool:
 # Sidecar I/O
 # ---------------------------------------------------------------------------
 
+
 def _empty_record() -> Dict[str, Any]:
     return {
         "created_by": None,
@@ -573,10 +577,17 @@ def seed_record_if_missing(skill_name: str) -> None:
             data[skill_name] = _empty_record()
             save_usage(data)
     except Exception as e:
-        logger.debug("skill_usage.seed_record_if_missing(%s) failed: %s", skill_name, e, exc_info=True)
+        logger.debug(
+            "skill_usage.seed_record_if_missing(%s) failed: %s",
+            skill_name,
+            e,
+            exc_info=True,
+        )
 
 
-def _mutate(skill_name: str, mutator, *, require_curation_eligible: bool = False) -> None:
+def _mutate(
+    skill_name: str, mutator, *, require_curation_eligible: bool = False
+) -> None:
     """Load, apply *mutator(record)* in place, save. Best-effort.
 
     By default this records telemetry for ANY skill — bundled, hub-installed,
@@ -608,15 +619,18 @@ def _mutate(skill_name: str, mutator, *, require_curation_eligible: bool = False
 # Public counter-bump helpers — telemetry for ALL skills (observability only)
 # ---------------------------------------------------------------------------
 
+
 def bump_view(skill_name: str) -> None:
     """Bump view_count and last_viewed_at. Called from skill_view().
 
     Tracks every skill regardless of provenance — built-ins and hub skills
     included. Usage telemetry is observability, not a curation signal.
     """
+
     def _apply(rec: Dict[str, Any]) -> None:
         rec["view_count"] = int(rec.get("view_count") or 0) + 1
         rec["last_viewed_at"] = _now_iso()
+
     _mutate(skill_name, _apply)
 
 
@@ -626,9 +640,11 @@ def bump_use(skill_name: str) -> None:
 
     Tracks every skill regardless of provenance.
     """
+
     def _apply(rec: Dict[str, Any]) -> None:
         rec["use_count"] = int(rec.get("use_count") or 0) + 1
         rec["last_used_at"] = _now_iso()
+
     _mutate(skill_name, _apply)
 
 
@@ -637,9 +653,11 @@ def bump_patch(skill_name: str) -> None:
 
     Tracks every skill regardless of provenance.
     """
+
     def _apply(rec: Dict[str, Any]) -> None:
         rec["patch_count"] = int(rec.get("patch_count") or 0) + 1
         rec["last_patched_at"] = _now_iso()
+
     _mutate(skill_name, _apply)
 
 
@@ -649,8 +667,10 @@ def mark_agent_created(skill_name: str) -> None:
     Viewing or invoking a manually authored skill may still create telemetry,
     but only this explicit marker makes it eligible for automatic curation.
     """
+
     def _apply(rec: Dict[str, Any]) -> None:
         rec["created_by"] = "agent"
+
     _mutate(skill_name, _apply, require_curation_eligible=True)
 
 
@@ -660,18 +680,21 @@ def set_state(skill_name: str, state: str) -> None:
     if state not in _VALID_STATES:
         logger.debug("set_state: invalid state %r for %s", state, skill_name)
         return
+
     def _apply(rec: Dict[str, Any]) -> None:
         rec["state"] = state
         if state == STATE_ARCHIVED:
             rec["archived_at"] = _now_iso()
         elif state == STATE_ACTIVE:
             rec["archived_at"] = None
+
     _mutate(skill_name, _apply, require_curation_eligible=True)
 
 
 def set_pinned(skill_name: str, pinned: bool) -> None:
     def _apply(rec: Dict[str, Any]) -> None:
         rec["pinned"] = bool(pinned)
+
     _mutate(skill_name, _apply, require_curation_eligible=True)
 
 
@@ -692,6 +715,7 @@ def forget(skill_name: str) -> None:
 # ---------------------------------------------------------------------------
 # Archive / restore
 # ---------------------------------------------------------------------------
+
 
 def archive_skill(skill_name: str) -> Tuple[bool, str]:
     """Move a curator-eligible skill directory to ~/.clawksis/skills/.archive/.
@@ -734,13 +758,17 @@ def archive_skill(skill_name: str) -> Tuple[bool, str]:
     # are simple. If a collision exists, append a timestamp.
     dest = archive_root / skill_dir.name
     if dest.exists():
-        dest = archive_root / f"{skill_dir.name}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+        dest = (
+            archive_root
+            / f"{skill_dir.name}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+        )
 
     try:
         skill_dir.rename(dest)
     except OSError as e:
         # Cross-device — fall back to shutil.move
         import shutil
+
         try:
             shutil.move(str(skill_dir), str(dest))
         except Exception as e2:
@@ -785,7 +813,9 @@ def restore_skill(skill_name: str) -> Tuple[bool, str]:
     # Try exact name match first, then the timestamped-duplicate fallback.
     # Recursive walk handles nested archive layouts (e.g. .archive/<category>/<skill>/)
     # left behind by older archive paths or external imports.
-    candidates = [p for p in archive_root.rglob("*") if p.is_dir() and p.name == skill_name]
+    candidates = [
+        p for p in archive_root.rglob("*") if p.is_dir() and p.name == skill_name
+    ]
     if not candidates:
         # A name collision makes archive_skill() disambiguate by appending its
         # UTC timestamp ("<skill>-YYYYMMDDHHMMSS", a 14-digit suffix), so only
@@ -797,11 +827,12 @@ def restore_skill(skill_name: str) -> Tuple[bool, str]:
         prefix = f"{skill_name}-"
         candidates = sorted(
             [
-                p for p in archive_root.rglob("*")
+                p
+                for p in archive_root.rglob("*")
                 if p.is_dir()
                 and p.name.startswith(prefix)
                 and len(p.name) - len(prefix) == 14
-                and p.name[len(prefix):].isdigit()
+                and p.name[len(prefix) :].isdigit()
             ],
             reverse=True,
         )
@@ -817,6 +848,7 @@ def restore_skill(skill_name: str) -> Tuple[bool, str]:
         src.rename(dest)
     except OSError:
         import shutil
+
         try:
             shutil.move(str(src), str(dest))
         except Exception as e:
@@ -866,6 +898,7 @@ def _find_external_skill_dir(skill_name: str) -> Optional[Path]:
 # ---------------------------------------------------------------------------
 # Reporting — for the curator CLI / slash command
 # ---------------------------------------------------------------------------
+
 
 def agent_created_report() -> List[Dict[str, Any]]:
     """Return a list of {name, state, pinned, last_activity_at, ...}

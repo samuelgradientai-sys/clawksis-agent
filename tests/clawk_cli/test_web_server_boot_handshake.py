@@ -37,24 +37,30 @@ SLOW_SECONDS = 3  # represents the Defender worst-case (scaled down for CI speed
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_slow_warm(seconds: float):
     """Return a _warm_gateway_module replacement that sleeps in the caller thread."""
+
     def _slow():
         time.sleep(seconds)
+
     return _slow
 
 
 def _make_slow_drain(seconds: float):
     """Return a _resolve_restart_drain_timeout replacement that sleeps in thread."""
+
     def _slow():
         time.sleep(seconds)
         return 180.0
+
     return _slow
 
 
 # ---------------------------------------------------------------------------
 # Test 1 — _lifespan fire-and-forget does not block the event loop
 # ---------------------------------------------------------------------------
+
 
 def test_lifespan_warmup_is_nonblocking():
     """
@@ -65,7 +71,9 @@ def test_lifespan_warmup_is_nonblocking():
     """
     from fastapi.testclient import TestClient
 
-    with patch.object(web_server_mod, "_warm_gateway_module", _make_slow_warm(SLOW_SECONDS)):
+    with patch.object(
+        web_server_mod, "_warm_gateway_module", _make_slow_warm(SLOW_SECONDS)
+    ):
         t0 = time.perf_counter()
         with TestClient(web_server_mod.app, raise_server_exceptions=False) as _client:
             startup_ms = (time.perf_counter() - t0) * 1000
@@ -83,6 +91,7 @@ def test_lifespan_warmup_is_nonblocking():
 # ---------------------------------------------------------------------------
 # Test 2 — get_status run_in_executor keeps event loop free for other requests
 # ---------------------------------------------------------------------------
+
 
 def test_get_status_does_not_block_event_loop():
     """
@@ -104,6 +113,7 @@ def test_get_status_does_not_block_event_loop():
         ) as client:
             # Fire both requests concurrently
             async with asyncio.TaskGroup() as tg:
+
                 async def _status():
                     t = time.perf_counter()
                     r = await client.get("/api/status", timeout=SLOW_SECONDS + 5)
@@ -148,6 +158,7 @@ def test_get_status_does_not_block_event_loop():
 # ---------------------------------------------------------------------------
 # Test 3 — no orphan accumulation: concurrent probes all receive 200
 # ---------------------------------------------------------------------------
+
 
 def test_concurrent_status_probes_all_respond():
     """

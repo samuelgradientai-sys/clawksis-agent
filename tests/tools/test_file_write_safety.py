@@ -135,7 +135,9 @@ class TestMultipleSafeWriteRoots:
         os.makedirs(root_a, exist_ok=True)
         os.makedirs(root_b, exist_ok=True)
 
-        monkeypatch.setenv("CLAWK_WRITE_SAFE_ROOT", f"{root_a}{os.pathsep}{os.pathsep}{root_b}")
+        monkeypatch.setenv(
+            "CLAWK_WRITE_SAFE_ROOT", f"{root_a}{os.pathsep}{os.pathsep}{root_b}"
+        )
         # Both roots should still be active
         assert _is_write_denied(str(root_a / "file.txt")) is False
         assert _is_write_denied(str(root_b / "file.txt")) is False
@@ -145,7 +147,9 @@ class TestMultipleSafeWriteRoots:
         monkeypatch.setenv("CLAWK_WRITE_SAFE_ROOT", os.pathsep * 3)
         assert _is_write_denied(str(target)) is False
 
-    def test_static_deny_still_wins_with_multiple_roots(self, tmp_path: Path, monkeypatch):
+    def test_static_deny_still_wins_with_multiple_roots(
+        self, tmp_path: Path, monkeypatch
+    ):
         """Static deny list takes priority even when multiple safe roots include home."""
         root = tmp_path / "workspace"
         os.makedirs(root, exist_ok=True)
@@ -214,6 +218,7 @@ class TestSafeRootDenialMessageIntegration:
     def ops(self, tmp_path: Path):
         from tools.environments.local import LocalEnvironment
         from tools.file_operations import ShellFileOperations
+
         env = LocalEnvironment(cwd=str(tmp_path))
         return ShellFileOperations(env, cwd=str(tmp_path))
 
@@ -274,26 +279,32 @@ class TestCheckSensitivePathMacOSBypass:
 
     def test_etc_hosts_blocked(self):
         from tools.file_tools import _check_sensitive_path
+
         assert _check_sensitive_path("/etc/hosts") is not None
 
     def test_private_etc_hosts_blocked(self):
         from tools.file_tools import _check_sensitive_path
+
         assert _check_sensitive_path("/private/etc/hosts") is not None
 
     def test_private_etc_ssh_config_blocked(self):
         from tools.file_tools import _check_sensitive_path
+
         assert _check_sensitive_path("/private/etc/ssh/sshd_config") is not None
 
     def test_private_var_blocked(self):
         from tools.file_tools import _check_sensitive_path
+
         assert _check_sensitive_path("/private/var/db/something") is not None
 
     def test_boot_still_blocked(self):
         from tools.file_tools import _check_sensitive_path
+
         assert _check_sensitive_path("/boot/grub/grub.cfg") is not None
 
     def test_safe_path_allowed(self):
         from tools.file_tools import _check_sensitive_path
+
         assert _check_sensitive_path("/tmp/safe_file.txt") is None
 
 
@@ -310,6 +321,7 @@ class TestAtomicWrite:
     def ops(self, tmp_path: Path):
         from tools.environments.local import LocalEnvironment
         from tools.file_operations import ShellFileOperations
+
         env = LocalEnvironment(cwd=str(tmp_path))
         return ShellFileOperations(env, cwd=str(tmp_path))
 
@@ -388,11 +400,13 @@ class TestBomHandling:
     def ops(self, tmp_path: Path):
         from tools.environments.local import LocalEnvironment
         from tools.file_operations import ShellFileOperations
+
         env = LocalEnvironment(cwd=str(tmp_path))
         return ShellFileOperations(env, cwd=str(tmp_path))
 
     def test_helpers(self):
         from tools.file_operations import _strip_bom, _has_bom
+
         assert _strip_bom("\ufeffhello") == ("hello", True)
         assert _strip_bom("hello") == ("hello", False)
         assert _strip_bom("") == ("", False)

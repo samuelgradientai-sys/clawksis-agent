@@ -27,6 +27,7 @@ from tools.approval import detect_dangerous_command, detect_hardline_command
 # Class 1 -- command-name obfuscation (issue #36846)
 # ---------------------------------------------------------------------------
 
+
 class TestCommandNameObfuscation:
     @pytest.mark.parametrize(
         "cmd",
@@ -85,6 +86,7 @@ class TestCommandNameObfuscation:
 # Class 2 -- remote content via command substitution (issue #26964)
 # ---------------------------------------------------------------------------
 
+
 class TestRemoteContentViaSubstitution:
     @pytest.mark.parametrize(
         "cmd",
@@ -105,6 +107,7 @@ class TestRemoteContentViaSubstitution:
 # ---------------------------------------------------------------------------
 # Class 3 -- decode-and-execute pipes (part of issue #30100)
 # ---------------------------------------------------------------------------
+
 
 class TestDecodeAndExecutePipes:
     @pytest.mark.parametrize(
@@ -127,6 +130,7 @@ class TestDecodeAndExecutePipes:
 # Benign commands must stay unflagged across all three additions.
 # ---------------------------------------------------------------------------
 
+
 class TestBenignNotFlagged:
     @pytest.mark.parametrize(
         "cmd",
@@ -141,4 +145,6 @@ class TestBenignNotFlagged:
     )
     def test_benign_not_flagged(self, cmd):
         assert detect_dangerous_command(cmd)[0] is False, f"false positive: {cmd!r}"
-        assert detect_hardline_command(cmd)[0] is False, f"false positive (hardline): {cmd!r}"
+        assert detect_hardline_command(cmd)[0] is False, (
+            f"false positive (hardline): {cmd!r}"
+        )

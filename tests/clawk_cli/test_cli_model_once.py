@@ -39,17 +39,25 @@ def test_cli_model_once_records_restore_and_does_not_persist(monkeypatch):
 
     stub = _StubCLI()
     stub.agent = _FakeAgent()
-    stub._snapshot_model_runtime = cli_mod.ClawksisCLI._snapshot_model_runtime.__get__(stub)
+    stub._snapshot_model_runtime = cli_mod.ClawksisCLI._snapshot_model_runtime.__get__(
+        stub
+    )
     printed = []
 
     monkeypatch.setattr(cli_mod, "_cprint", lambda s, *a, **k: printed.append(str(s)))
-    monkeypatch.setattr(cli_mod, "save_config_value", lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not persist")))
+    monkeypatch.setattr(
+        cli_mod,
+        "save_config_value",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not persist")),
+    )
     monkeypatch.setattr(
         "clawk_cli.inventory.load_picker_context",
         lambda: SimpleNamespace(
             user_providers=None,
             custom_providers=None,
-            with_overrides=lambda **_: SimpleNamespace(user_providers=None, custom_providers=None),
+            with_overrides=lambda **_: SimpleNamespace(
+                user_providers=None, custom_providers=None
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -64,7 +72,9 @@ def test_cli_model_once_records_restore_and_does_not_persist(monkeypatch):
             provider_label="Anthropic",
         ),
     )
-    monkeypatch.setattr("clawk_cli.model_switch.resolve_display_context_length", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "clawk_cli.model_switch.resolve_display_context_length", lambda *a, **k: None
+    )
 
     cli_mod.ClawksisCLI._handle_model_switch(
         stub,

@@ -66,7 +66,9 @@ def _module_registers_tools(module_path: Path) -> bool:
 
 def discover_builtin_tools(tools_dir: Optional[Path] = None) -> List[str]:
     """Import built-in self-registering tool modules and return their module names."""
-    tools_path = Path(tools_dir) if tools_dir is not None else Path(__file__).resolve().parent
+    tools_path = (
+        Path(tools_dir) if tools_dir is not None else Path(__file__).resolve().parent
+    )
     module_names = [
         f"tools.{path.stem}"
         for path in sorted(tools_path.glob("*.py"))
@@ -88,14 +90,33 @@ class ToolEntry:
     """Metadata for a single registered tool."""
 
     __slots__ = (
-        "name", "toolset", "schema", "handler", "check_fn",
-        "requires_env", "is_async", "description", "emoji",
-        "max_result_size_chars", "dynamic_schema_overrides",
+        "name",
+        "toolset",
+        "schema",
+        "handler",
+        "check_fn",
+        "requires_env",
+        "is_async",
+        "description",
+        "emoji",
+        "max_result_size_chars",
+        "dynamic_schema_overrides",
     )
 
-    def __init__(self, name, toolset, schema, handler, check_fn,
-                 requires_env, is_async, description, emoji,
-                 max_result_size_chars=None, dynamic_schema_overrides=None):
+    def __init__(
+        self,
+        name,
+        toolset,
+        schema,
+        handler,
+        check_fn,
+        requires_env,
+        is_async,
+        description,
+        emoji,
+        max_result_size_chars=None,
+        dynamic_schema_overrides=None,
+    ):
         self.name = name
         self.toolset = toolset
         self.schema = schema
@@ -283,8 +304,7 @@ class ToolRegistry:
     def get_tool_names_for_toolset(self, toolset: str) -> List[str]:
         """Return sorted tool names registered under a given toolset."""
         return sorted(
-            entry.name for entry in self._snapshot_entries()
-            if entry.toolset == toolset
+            entry.name for entry in self._snapshot_entries() if entry.toolset == toolset
         )
 
     def register_toolset_alias(self, alias: str, toolset: str) -> None:
@@ -294,7 +314,9 @@ class ToolRegistry:
             if existing and existing != toolset:
                 logger.warning(
                     "Toolset alias collision: '%s' (%s) overwritten by %s",
-                    alias, existing, toolset,
+                    alias,
+                    existing,
+                    toolset,
                 )
             self._toolset_aliases[alias] = toolset
             self._generation += 1
@@ -313,7 +335,9 @@ class ToolRegistry:
     # Registration
     # ------------------------------------------------------------------
 
-    def register_plugin_override_policy(self, module_namespace: str, allowed: bool) -> None:
+    def register_plugin_override_policy(
+        self, module_namespace: str, allowed: bool
+    ) -> None:
         """Bind a plugin module namespace to its operator opt-in for built-in
         override. Called once per plugin at load time. Durable: never cleared,
         so later (even threaded/delayed) register() calls from that module are
@@ -390,25 +414,30 @@ class ToolRegistry:
             if existing and existing.toolset != toolset:
                 # Allow MCP-to-MCP overwrites (legitimate: server refresh,
                 # or two MCP servers with overlapping tool names).
-                both_mcp = (
-                    existing.toolset.startswith("mcp-")
-                    and toolset.startswith("mcp-")
+                both_mcp = existing.toolset.startswith("mcp-") and toolset.startswith(
+                    "mcp-"
                 )
                 if both_mcp:
                     logger.debug(
                         "Tool '%s': MCP toolset '%s' overwriting MCP toolset '%s'",
-                        name, toolset, existing.toolset,
+                        name,
+                        toolset,
+                        existing.toolset,
                     )
                 elif override:
                     _owner = self._plugin_owner_of(handler)
-                    if _owner is not None and not self._plugin_override_policy.get(_owner, False):
+                    if _owner is not None and not self._plugin_override_policy.get(
+                        _owner, False
+                    ):
                         logger.error(
                             "Tool registration REJECTED: plugin %r attempted to "
                             "override built-in tool %r (existing toolset %r) without "
                             "operator opt-in. Set "
                             "plugins.entries.<plugin_id>.allow_tool_override: true "
                             "in config.yaml to allow it.",
-                            _owner, name, existing.toolset,
+                            _owner,
+                            name,
+                            existing.toolset,
                         )
                         raise PermissionError(
                             f"Plugin module {_owner!r} cannot override built-in "
@@ -420,7 +449,9 @@ class ToolRegistry:
                     logger.info(
                         "Tool '%s': toolset '%s' overriding existing toolset '%s' "
                         "(override=True opt-in)",
-                        name, toolset, existing.toolset,
+                        name,
+                        toolset,
+                        existing.toolset,
                     )
                 else:
                     # Reject shadowing — prevent plugins/MCP from overwriting
@@ -430,7 +461,9 @@ class ToolRegistry:
                         "shadow existing tool from toolset '%s'. Pass "
                         "override=True to register() if the replacement is "
                         "intentional, or deregister the existing tool first.",
-                        name, toolset, existing.toolset,
+                        name,
+                        toolset,
+                        existing.toolset,
                     )
                     return
             self._tools[name] = ToolEntry(
@@ -500,7 +533,10 @@ class ToolRegistry:
                         "operator opt-in. Set "
                         "plugins.entries.%s.allow_tool_override: true in "
                         "config.yaml to allow it.",
-                        caller_mod, name, entry.toolset, caller_mod,
+                        caller_mod,
+                        name,
+                        entry.toolset,
+                        caller_mod,
                     )
                     raise PermissionError(
                         f"Plugin module {caller_mod!r} cannot deregister tool "
@@ -571,7 +607,8 @@ class ToolRegistry:
                     logger.warning(
                         "dynamic_schema_overrides for tool %s raised %s; "
                         "using static schema",
-                        name, exc,
+                        name,
+                        exc,
                     )
             result.append({"type": "function", "function": schema_with_name})
         return result
@@ -604,12 +641,15 @@ class ToolRegistry:
             name,
             result_type,
         )
-        return json.dumps({
-            "error": f"Tool handler returned unsupported result type: {result_type}",
-            "error_type": "tool_result_contract",
-            "tool": name,
-            "result_type": result_type,
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "error": f"Tool handler returned unsupported result type: {result_type}",
+                "error_type": "tool_result_contract",
+                "tool": name,
+                "result_type": result_type,
+            },
+            ensure_ascii=False,
+        )
 
     def dispatch(self, name: str, args: dict, **kwargs) -> str | dict:
         """Execute a tool handler by name.
@@ -626,6 +666,7 @@ class ToolRegistry:
         try:
             if entry.is_async:
                 from model_tools import _run_async
+
                 result = _run_async(entry.handler(args, **kwargs))
             else:
                 result = entry.handler(args, **kwargs)
@@ -638,16 +679,21 @@ class ToolRegistry:
             raw = f"Tool execution failed: {type(e).__name__}: {e}"
             try:
                 from model_tools import _sanitize_tool_error
+
                 sanitized = _sanitize_tool_error(raw)
             except Exception:
-                sanitized = raw  # defensive: never let the sanitizer block error propagation
+                sanitized = (
+                    raw  # defensive: never let the sanitizer block error propagation
+                )
             return json.dumps({"error": sanitized})
 
     # ------------------------------------------------------------------
     # Query helpers  (replace redundant dicts in model_tools.py)
     # ------------------------------------------------------------------
 
-    def get_max_result_size(self, name: str, default: int | float | None = None) -> int | float:
+    def get_max_result_size(
+        self, name: str, default: int | float | None = None
+    ) -> int | float:
         """Return per-tool max result size, or *default* (or global default)."""
         entry = self.get_entry(name)
         if entry and entry.max_result_size_chars is not None:
@@ -655,6 +701,7 @@ class ToolRegistry:
         if default is not None:
             return default
         from tools.budget_config import DEFAULT_RESULT_SIZE_CHARS
+
         return DEFAULT_RESULT_SIZE_CHARS
 
     def get_all_tool_names(self) -> List[str]:
@@ -678,7 +725,7 @@ class ToolRegistry:
     def get_emoji(self, name: str, default: str = "⚡") -> str:
         """Return the emoji for a tool, or *default* if unset."""
         entry = self.get_entry(name)
-        return (entry.emoji if entry and entry.emoji else default)
+        return entry.emoji if entry and entry.emoji else default
 
     def get_tool_to_toolset_map(self) -> Dict[str, str]:
         """Return ``{tool_name: toolset_name}`` for every registered tool."""

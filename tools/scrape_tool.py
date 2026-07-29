@@ -52,6 +52,7 @@ except ImportError:
         except (ValueError, TypeError):
             return None
 
+
 logger = logging.getLogger(__name__)
 
 _MODE_TO_SUBCMD = {

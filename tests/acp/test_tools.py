@@ -1,6 +1,5 @@
 """Tests for acp_adapter.tools — tool kind mapping and ACP content building."""
 
-
 from acp_adapter.edit_approval import EditProposal
 from acp_adapter.tools import (
     TOOL_KIND_MAP,
@@ -25,7 +24,14 @@ from acp.schema import (
 # ---------------------------------------------------------------------------
 
 
-COMMON_CLAWK_TOOLS = ["read_file", "search_files", "terminal", "patch", "write_file", "process"]
+COMMON_CLAWK_TOOLS = [
+    "read_file",
+    "search_files",
+    "terminal",
+    "patch",
+    "write_file",
+    "process",
+]
 
 
 class TestToolKindMap:
@@ -117,33 +123,48 @@ class TestBuildToolTitle:
         assert "python asyncio" in title
 
     def test_web_extract_title_unwraps_search_result_object(self):
-        title = build_tool_title("web_extract", {
-            "urls": [
-                {"url": "https://example.com/a", "title": "A"},
-                {"href": "https://example.org/b"},
-            ]
-        })
+        title = build_tool_title(
+            "web_extract",
+            {
+                "urls": [
+                    {"url": "https://example.com/a", "title": "A"},
+                    {"href": "https://example.org/b"},
+                ]
+            },
+        )
         assert title == "extract: https://example.com/a (+1)"
 
     def test_web_extract_title_handles_malformed_object(self):
-        assert build_tool_title("web_extract", {"urls": [{"title": "missing"}]}) == "extract: ?"
+        assert (
+            build_tool_title("web_extract", {"urls": [{"title": "missing"}]})
+            == "extract: ?"
+        )
 
     def test_skill_view_title_includes_skill_name(self):
         title = build_tool_title("skill_view", {"name": "github-pitfalls"})
         assert title == "skill view (github-pitfalls)"
 
     def test_skill_view_title_includes_linked_file(self):
-        title = build_tool_title("skill_view", {"name": "github-pitfalls", "file_path": "references/api.md"})
+        title = build_tool_title(
+            "skill_view", {"name": "github-pitfalls", "file_path": "references/api.md"}
+        )
         assert title == "skill view (github-pitfalls/references/api.md)"
 
     def test_execute_code_title_includes_first_code_line(self):
-        title = build_tool_title("execute_code", {"code": "\nfrom clawk_tools import terminal\nprint('done')"})
+        title = build_tool_title(
+            "execute_code",
+            {"code": "\nfrom clawk_tools import terminal\nprint('done')"},
+        )
         assert title == "python: from clawk_tools import terminal"
 
     def test_skill_manage_title_includes_action_and_target(self):
         title = build_tool_title(
             "skill_manage",
-            {"action": "patch", "name": "clawksis-agent-operations", "file_path": "references/acp.md"},
+            {
+                "action": "patch",
+                "name": "clawksis-agent-operations",
+                "file_path": "references/acp.md",
+            },
         )
         assert title == "skill patch: clawksis-agent-operations/references/acp.md"
 
@@ -277,7 +298,11 @@ class TestBuildToolStart:
         assert result.raw_input is None
 
     def test_build_tool_start_for_todo_is_human_readable(self):
-        args = {"todos": [{"id": "one", "content": "Fix ACP rendering", "status": "in_progress"}]}
+        args = {
+            "todos": [
+                {"id": "one", "content": "Fix ACP rendering", "status": "in_progress"}
+            ]
+        }
         result = build_tool_start("tc-todo", "todo", args)
         assert result.title == "todo (1 item)"
         assert "Fix ACP rendering" in result.content[0].content.text
@@ -310,9 +335,14 @@ class TestBuildToolStart:
             },
         )
         assert result.kind == "edit"
-        assert result.title == "skill patch: clawksis-agent-operations/references/acp.md"
+        assert (
+            result.title == "skill patch: clawksis-agent-operations/references/acp.md"
+        )
         assert isinstance(result.content[0], FileEditToolCallContent)
-        assert result.content[0].path == "skills/clawksis-agent-operations/references/acp.md"
+        assert (
+            result.content[0].path
+            == "skills/clawksis-agent-operations/references/acp.md"
+        )
         assert result.content[0].old_text == "old advice"
         assert result.content[0].new_text == "new advice"
         assert result.raw_input is None
@@ -333,7 +363,9 @@ class TestBuildToolStart:
 class TestBuildToolComplete:
     def test_build_tool_complete_for_terminal(self):
         """Completed terminal call should include output text."""
-        result = build_tool_complete("tc-2", "terminal", "total 42\ndrwxr-xr-x 2 root root 4096 ...")
+        result = build_tool_complete(
+            "tc-2", "terminal", "total 42\ndrwxr-xr-x 2 root root 4096 ..."
+        )
         assert isinstance(result, ToolCallProgress)
         assert result.status == "completed"
         assert len(result.content) >= 1
@@ -354,7 +386,9 @@ class TestBuildToolComplete:
         assert "**Progress:** 1 completed, 1 in progress, 0 pending" in text
         assert result.raw_output is None
 
-    def test_build_tool_complete_for_skill_view_summarizes_content_without_raw_json(self):
+    def test_build_tool_complete_for_skill_view_summarizes_content_without_raw_json(
+        self,
+    ):
         result = build_tool_complete(
             "tc-skill",
             "skill_view",
@@ -370,7 +404,9 @@ class TestBuildToolComplete:
         assert result.raw_output is None
 
     def test_build_tool_complete_for_execute_code_formats_output(self):
-        result = build_tool_complete("tc-code", "execute_code", '{"output":"hello\\n","exit_code":0}')
+        result = build_tool_complete(
+            "tc-code", "execute_code", '{"output":"hello\\n","exit_code":0}'
+        )
         text = result.content[0].content.text
         assert "Exit code: 0" in text
         assert "hello" in text
@@ -398,23 +434,33 @@ class TestBuildToolComplete:
         assert result.raw_output is None
 
     def test_build_tool_complete_marks_success_false_as_failed(self):
-        result = build_tool_complete("tc-fail", "skill_manage", '{"success": false, "error": "boom"}')
+        result = build_tool_complete(
+            "tc-fail", "skill_manage", '{"success": false, "error": "boom"}'
+        )
         assert result.status == "failed"
 
     def test_build_tool_complete_marks_ok_false_as_failed(self):
-        result = build_tool_complete("tc-fail", "some_tool", '{"ok": false, "error": "boom"}')
+        result = build_tool_complete(
+            "tc-fail", "some_tool", '{"ok": false, "error": "boom"}'
+        )
         assert result.status == "failed"
 
     def test_build_tool_complete_marks_exit_code_nonzero_as_failed(self):
-        result = build_tool_complete("tc-fail", "terminal", '{"output": "bad", "exit_code": 2}')
+        result = build_tool_complete(
+            "tc-fail", "terminal", '{"output": "bad", "exit_code": 2}'
+        )
         assert result.status == "failed"
 
     def test_build_tool_complete_marks_returncode_nonzero_as_failed(self):
-        result = build_tool_complete("tc-fail", "execute_code", '{"output": "bad", "returncode": 2}')
+        result = build_tool_complete(
+            "tc-fail", "execute_code", '{"output": "bad", "returncode": 2}'
+        )
         assert result.status == "failed"
 
     def test_build_tool_complete_keeps_plain_error_text_completed(self):
-        result = build_tool_complete("tc-ok", "terminal", "tests failed: 1 assertion error")
+        result = build_tool_complete(
+            "tc-ok", "terminal", "tests failed: 1 assertion error"
+        )
         assert result.status == "completed"
 
     def test_build_tool_complete_marks_raised_exception_prefix_as_failed(self):
@@ -443,11 +489,15 @@ class TestBuildToolComplete:
         assert result.status == "completed"
 
     def test_build_tool_complete_marks_structured_polished_tool_error_as_failed(self):
-        result = build_tool_complete("tc-fail", "read_file", '{"error": "File not found"}')
+        result = build_tool_complete(
+            "tc-fail", "read_file", '{"error": "File not found"}'
+        )
         assert result.status == "failed"
 
     def test_build_tool_complete_keeps_json_error_without_failure_flag_completed(self):
-        result = build_tool_complete("tc-ok", "some_tool", '{"error": "timeout while reading optional source"}')
+        result = build_tool_complete(
+            "tc-ok", "some_tool", '{"error": "timeout while reading optional source"}'
+        )
         assert result.status == "completed"
 
     def test_build_tool_complete_for_skill_manage_summarizes_without_raw_json(self):
@@ -466,7 +516,7 @@ class TestBuildToolComplete:
         assert "`patch`" in text
         assert "`clawksis-agent-operations`" in text
         assert "references/clawk-acp-zed-rendering.md" in text
-        assert "{\"success\"" not in text
+        assert '{"success"' not in text
         assert result.raw_output is None
 
     def test_build_tool_complete_for_read_file_formats_content(self):
@@ -474,7 +524,7 @@ class TestBuildToolComplete:
             "tc-read",
             "read_file",
             '{"content":"1|hello\\n2|world","total_lines":2}',
-            function_args={"path":"README.md","offset":1,"limit":20},
+            function_args={"path": "README.md", "offset": 1, "limit": 20},
         )
         text = result.content[0].content.text
         assert "Read README.md" in text
@@ -500,7 +550,7 @@ class TestBuildToolComplete:
             "tc-process",
             "process",
             '{"processes":[{"session_id":"p1","status":"running","pid":123,"command":"npm run dev"}]}',
-            function_args={"action":"list"},
+            function_args={"action": "list"},
         )
         text = result.content[0].content.text
         assert "Processes: 1" in text
@@ -538,7 +588,11 @@ class TestBuildToolComplete:
             "tc-memory",
             "memory",
             '{"success":true,"target":"user","entries":["private long memory"],"usage":"1% — 19/2000 chars","entry_count":1,"message":"Entry added."}',
-            function_args={"action":"add","target":"user","content":"User likes concise ACP rendering."},
+            function_args={
+                "action": "add",
+                "target": "user",
+                "content": "User likes concise ACP rendering.",
+            },
         )
         text = result.content[0].content.text
         assert "Memory add saved" in text
@@ -567,7 +621,9 @@ class TestBuildToolComplete:
         assert "timeout" in text
         assert result.raw_output is None
 
-    def test_build_tool_complete_generically_formats_unknown_json_dict_without_raw_output(self):
+    def test_build_tool_complete_generically_formats_unknown_json_dict_without_raw_output(
+        self,
+    ):
         result = build_tool_complete(
             "tc-recall-search",
             "memory_archive_search",
@@ -577,10 +633,12 @@ class TestBuildToolComplete:
         assert "memory_archive_search result" in text
         assert "lower-trust archive evidence" in text
         assert "Recall should render as a readable summary" in text
-        assert "{\"results\"" not in text
+        assert '{"results"' not in text
         assert result.raw_output is None
 
-    def test_build_tool_complete_generically_formats_unknown_json_list_without_raw_output(self):
+    def test_build_tool_complete_generically_formats_unknown_json_list_without_raw_output(
+        self,
+    ):
         result = build_tool_complete(
             "tc-plugin-list",
             "some_plugin_tool",
@@ -591,7 +649,9 @@ class TestBuildToolComplete:
         assert "alpha" in text
         assert result.raw_output is None
 
-    def test_build_tool_complete_generically_formats_nested_json_without_inline_blob(self):
+    def test_build_tool_complete_generically_formats_nested_json_without_inline_blob(
+        self,
+    ):
         result = build_tool_complete(
             "tc-recall-stats",
             "memory_archive_stats",
@@ -605,8 +665,8 @@ class TestBuildToolComplete:
         assert "sqlite-fts5-archive" in text
         assert "**audit:**" in text
         assert "**ok:** True" in text
-        assert "{\"active\"" not in text
-        assert "[\"sqlite" not in text
+        assert '{"active"' not in text
+        assert '["sqlite' not in text
         assert result.raw_output is None
 
     def test_build_tool_complete_for_search_files_files_only_formats_file_list(self):
@@ -620,7 +680,7 @@ class TestBuildToolComplete:
         assert "Found 36 files; showing 2." in text
         assert "/home/nour/.clawk/config.yaml" in text
         assert "use offset to page" in text
-        assert "{\"total_count\"" not in text
+        assert '{"total_count"' not in text
         assert result.raw_output is None
 
     def test_build_tool_complete_truncates_large_output(self):
@@ -651,9 +711,13 @@ class TestBuildToolComplete:
         assert isinstance(result, ToolCallProgress)
         assert isinstance(result.content[0], ContentToolCallContent)
 
-    def test_build_tool_complete_for_write_file_summarizes_without_repeating_diff(self, tmp_path):
+    def test_build_tool_complete_for_write_file_summarizes_without_repeating_diff(
+        self, tmp_path
+    ):
         target = tmp_path / "diff-test.txt"
-        snapshot = type("Snapshot", (), {"paths": [target], "before": {str(target): None}})()
+        snapshot = type(
+            "Snapshot", (), {"paths": [target], "before": {str(target): None}}
+        )()
         target.write_text("hello from clawk\n", encoding="utf-8")
 
         result = build_tool_complete(

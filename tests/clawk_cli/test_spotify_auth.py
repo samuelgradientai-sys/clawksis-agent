@@ -68,7 +68,9 @@ def test_resolve_spotify_runtime_credentials_refreshes_without_changing_active_p
     assert auth_mod.get_active_provider() == "nous"
 
 
-def test_auth_spotify_status_command_reports_logged_in(capsys, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_auth_spotify_status_command_reports_logged_in(
+    capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(
         auth_mod,
         "get_auth_status",
@@ -144,7 +146,9 @@ def test_spotify_interactive_setup_persists_client_id(
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr("builtins.input", lambda prompt="": "wizard-client-123")
     # Prevent actually opening the browser during tests.
-    monkeypatch.setattr(auth_mod, "webbrowser", SimpleNamespace(open=lambda *_a, **_k: False))
+    monkeypatch.setattr(
+        auth_mod, "webbrowser", SimpleNamespace(open=lambda *_a, **_k: False)
+    )
     monkeypatch.setattr(auth_mod, "_is_remote_session", lambda: True)
 
     result = auth_mod._spotify_interactive_setup(
@@ -171,7 +175,9 @@ def test_spotify_interactive_setup_empty_aborts(
     """Empty input aborts cleanly instead of persisting an empty client_id."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr("builtins.input", lambda prompt="": "")
-    monkeypatch.setattr(auth_mod, "webbrowser", SimpleNamespace(open=lambda *_a, **_k: False))
+    monkeypatch.setattr(
+        auth_mod, "webbrowser", SimpleNamespace(open=lambda *_a, **_k: False)
+    )
     monkeypatch.setattr(auth_mod, "_is_remote_session", lambda: True)
 
     with pytest.raises(SystemExit):

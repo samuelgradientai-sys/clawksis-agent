@@ -80,8 +80,8 @@ Once `NTFY_HOME_CHANNEL` is set, cron jobs can deliver to ntfy:
 cronjob(
     action="create",
     schedule="every 1h",
-    deliver="ntfy",          # uses NTFY_HOME_CHANNEL
-    prompt="Check for alerts and summarise."
+    deliver="ntfy",  # uses NTFY_HOME_CHANNEL
+    prompt="Check for alerts and summarise.",
 )
 ```
 

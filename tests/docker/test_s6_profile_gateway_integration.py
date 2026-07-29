@@ -17,6 +17,7 @@ docstring. ``/run/service`` is chowned clawk-writable by the
 ``02-reconcile-profiles`` cont-init.d script, so register/unregister
 operations work correctly under UID 10000.
 """
+
 from __future__ import annotations
 
 from tests.docker.conftest import docker_exec, start_container
@@ -43,7 +44,8 @@ print("UNREGISTERED")
 
 
 def test_s6_register_creates_service_dir_in_live_container(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """S6ServiceManager.register_profile_gateway must create
     ``/run/service/gateway-<profile>/`` and trigger s6-svscan rescan
@@ -62,27 +64,35 @@ def test_s6_register_creates_service_dir_in_live_container(
     r = docker_exec(container_name, "test", "-f", "/run/service/gateway-phase3test/run")
     assert r.returncode == 0, "run script not created"
 
-    r = docker_exec(container_name, "test", "-f",
-              "/run/service/gateway-phase3test/log/run")
+    r = docker_exec(
+        container_name, "test", "-f", "/run/service/gateway-phase3test/log/run"
+    )
     assert r.returncode == 0, "log/run script not created"
 
     # s6-svscan picked it up — s6-svstat works against the dir.
     # `docker exec` doesn't put /command/ on PATH (only the supervision
     # tree does), so call s6-svstat by absolute path.
-    r = docker_exec(container_name, "/command/s6-svstat",
-              "/run/service/gateway-phase3test")
+    r = docker_exec(
+        container_name, "/command/s6-svstat", "/run/service/gateway-phase3test"
+    )
     assert r.returncode == 0, f"s6-svstat failed: {r.stderr or r.stdout}"
 
     # list_profile_gateways picks it up.
-    r = docker_exec(container_name, "python3", "-c", (
-        "from clawk_cli.service_manager import S6ServiceManager;"
-        "print(S6ServiceManager().list_profile_gateways())"
-    ))
+    r = docker_exec(
+        container_name,
+        "python3",
+        "-c",
+        (
+            "from clawk_cli.service_manager import S6ServiceManager;"
+            "print(S6ServiceManager().list_profile_gateways())"
+        ),
+    )
     assert "phase3test" in r.stdout, f"list output: {r.stdout!r}"
 
 
 def test_s6_unregister_removes_service_dir_in_live_container(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """unregister_profile_gateway must stop the service, remove the
     directory, and trigger s6-svscan rescan so the supervise process
@@ -104,10 +114,15 @@ def test_s6_unregister_removes_service_dir_in_live_container(
     assert r.returncode != 0, "service directory still exists after unregister"
 
     # list_profile_gateways no longer includes it.
-    r = docker_exec(container_name, "python3", "-c", (
-        "from clawk_cli.service_manager import S6ServiceManager;"
-        "print(S6ServiceManager().list_profile_gateways())"
-    ))
+    r = docker_exec(
+        container_name,
+        "python3",
+        "-c",
+        (
+            "from clawk_cli.service_manager import S6ServiceManager;"
+            "print(S6ServiceManager().list_profile_gateways())"
+        ),
+    )
     assert "phase3test" not in r.stdout
 
 
@@ -148,7 +163,8 @@ rm -rf "$DIR" 2>/dev/null || true
 
 
 def test_s6_dotfile_staging_dir_is_ignored_by_svscan_rescan(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """Regression for the arm64 register-seed race.
 
@@ -179,8 +195,14 @@ def test_s6_dotfile_staging_dir_is_ignored_by_svscan_rescan(
     # (root-owned supervise/). This is the pre-fix staging-name behaviour and
     # confirms the probe actually exercises s6-svscan pickup.
     r = docker_exec(
-        container_name, "sh", "-c", _SVSCAN_PICKUP_PROBE, "probe",
-        "gateway-raceprobe.tmp", user="root", timeout=30,
+        container_name,
+        "sh",
+        "-c",
+        _SVSCAN_PICKUP_PROBE,
+        "probe",
+        "gateway-raceprobe.tmp",
+        user="root",
+        timeout=30,
     )
     assert "SUPERVISED" in r.stdout and "NOT-SUPERVISED" not in r.stdout, (
         "control failed: a non-dotted staging dir should be picked up by "
@@ -191,8 +213,14 @@ def test_s6_dotfile_staging_dir_is_ignored_by_svscan_rescan(
     # use) must be IGNORED by the same rescan — no supervisor, no root-owned
     # supervise/, so the in-flight seed can never EACCES.
     r = docker_exec(
-        container_name, "sh", "-c", _SVSCAN_PICKUP_PROBE, "probe",
-        ".gateway-raceprobe.tmp", user="root", timeout=30,
+        container_name,
+        "sh",
+        "-c",
+        _SVSCAN_PICKUP_PROBE,
+        "probe",
+        ".gateway-raceprobe.tmp",
+        user="root",
+        timeout=30,
     )
     assert "NOT-SUPERVISED" in r.stdout, (
         "dot-prefixed staging dir was supervised by s6-svscan — the race "

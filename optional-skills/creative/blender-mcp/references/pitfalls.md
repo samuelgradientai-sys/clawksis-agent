@@ -36,6 +36,7 @@ json, bmesh, mathutils, etc., import them inside the code:
 
 ```python
 import bmesh
+
 bm = bmesh.new()
 ...
 ```
@@ -49,7 +50,8 @@ eval result is not captured in Blender 5.x. To get values out:
 
 ```python
 import json
-open('/tmp/result.json', 'w').write(json.dumps([o.name for o in bpy.data.objects]))
+
+open("/tmp/result.json", "w").write(json.dumps([o.name for o in bpy.data.objects]))
 ```
 
 ### 6. Errors come back as error strings — always check
@@ -64,7 +66,7 @@ executing through the bridge. Prefer direct data manipulation:
 
 ```python
 # Prefer data API over ops
-bpy.data.objects.remove(bpy.data.objects['Cube'], do_unlink=True)
+bpy.data.objects.remove(bpy.data.objects["Cube"], do_unlink=True)
 ```
 
 ## Objects & Scene
@@ -110,8 +112,12 @@ which was Blender 4.x). Discover available engines at runtime:
 
 ```python
 import json
-open('/tmp/engines.json', 'w').write(json.dumps(
-    list(bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items.keys())))
+
+open("/tmp/engines.json", "w").write(
+    json.dumps(
+        list(bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items.keys())
+    )
+)
 ```
 
 Known engine names: `BLENDER_EEVEE`, `BLENDER_WORKBENCH`, `CYCLES`

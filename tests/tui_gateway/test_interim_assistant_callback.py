@@ -19,21 +19,30 @@ def test_load_interim_assistant_messages_defaults_true():
 def test_load_interim_assistant_messages_explicit_true():
     from tui_gateway.server import _load_interim_assistant_messages
 
-    with patch("tui_gateway.server._load_cfg", return_value={"display": {"interim_assistant_messages": True}}):
+    with patch(
+        "tui_gateway.server._load_cfg",
+        return_value={"display": {"interim_assistant_messages": True}},
+    ):
         assert _load_interim_assistant_messages() is True
 
 
 def test_load_interim_assistant_messages_explicit_false():
     from tui_gateway.server import _load_interim_assistant_messages
 
-    with patch("tui_gateway.server._load_cfg", return_value={"display": {"interim_assistant_messages": False}}):
+    with patch(
+        "tui_gateway.server._load_cfg",
+        return_value={"display": {"interim_assistant_messages": False}},
+    ):
         assert _load_interim_assistant_messages() is False
 
 
 def test_load_interim_assistant_messages_string_off():
     from tui_gateway.server import _load_interim_assistant_messages
 
-    with patch("tui_gateway.server._load_cfg", return_value={"display": {"interim_assistant_messages": "off"}}):
+    with patch(
+        "tui_gateway.server._load_cfg",
+        return_value={"display": {"interim_assistant_messages": "off"}},
+    ):
         assert _load_interim_assistant_messages() is False
 
 
@@ -51,8 +60,10 @@ def test_agent_cbs_includes_interim_callback_when_enabled():
     def fake_emit(event_type, sid, payload=None):
         emitted.append((event_type, sid, payload))
 
-    with patch("tui_gateway.server._load_cfg", return_value={}), \
-         patch("tui_gateway.server._emit", side_effect=fake_emit):
+    with (
+        patch("tui_gateway.server._load_cfg", return_value={}),
+        patch("tui_gateway.server._emit", side_effect=fake_emit),
+    ):
         cbs = _agent_cbs("test-session")
 
         assert "interim_assistant_callback" in cbs
@@ -79,7 +90,10 @@ def test_agent_cbs_omits_interim_callback_when_disabled():
     """
     from tui_gateway.server import _agent_cbs
 
-    with patch("tui_gateway.server._load_cfg", return_value={"display": {"interim_assistant_messages": False}}):
+    with patch(
+        "tui_gateway.server._load_cfg",
+        return_value={"display": {"interim_assistant_messages": False}},
+    ):
         cbs = _agent_cbs("test-session")
 
     assert "interim_assistant_callback" not in cbs
@@ -94,8 +108,10 @@ def test_agent_cbs_interim_callback_passes_already_streamed_false():
     def fake_emit(event_type, sid, payload=None):
         emitted.append((event_type, sid, payload))
 
-    with patch("tui_gateway.server._load_cfg", return_value={}), \
-         patch("tui_gateway.server._emit", side_effect=fake_emit):
+    with (
+        patch("tui_gateway.server._load_cfg", return_value={}),
+        patch("tui_gateway.server._emit", side_effect=fake_emit),
+    ):
         cbs = _agent_cbs("test-session")
 
         cb = cbs["interim_assistant_callback"]

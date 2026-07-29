@@ -127,31 +127,55 @@ def _load_supermemory_config(clawk_home: str) -> dict:
     config["auto_recall"] = _as_bool(config.get("auto_recall"), True)
     config["auto_capture"] = _as_bool(config.get("auto_capture"), True)
     try:
-        config["max_recall_results"] = max(1, min(20, int(config.get("max_recall_results", _DEFAULT_MAX_RECALL_RESULTS))))
+        config["max_recall_results"] = max(
+            1,
+            min(20, int(config.get("max_recall_results", _DEFAULT_MAX_RECALL_RESULTS))),
+        )
     except Exception:
         config["max_recall_results"] = _DEFAULT_MAX_RECALL_RESULTS
     try:
-        config["profile_frequency"] = max(1, min(500, int(config.get("profile_frequency", _DEFAULT_PROFILE_FREQUENCY))))
+        config["profile_frequency"] = max(
+            1,
+            min(500, int(config.get("profile_frequency", _DEFAULT_PROFILE_FREQUENCY))),
+        )
     except Exception:
         config["profile_frequency"] = _DEFAULT_PROFILE_FREQUENCY
-    config["capture_mode"] = "everything" if config.get("capture_mode") == "everything" else "all"
-    raw_search_mode = str(config.get("search_mode", _DEFAULT_SEARCH_MODE)).strip().lower()
-    config["search_mode"] = raw_search_mode if raw_search_mode in _VALID_SEARCH_MODES else _DEFAULT_SEARCH_MODE
-    config["entity_context"] = _clamp_entity_context(str(config.get("entity_context", _DEFAULT_ENTITY_CONTEXT)))
+    config["capture_mode"] = (
+        "everything" if config.get("capture_mode") == "everything" else "all"
+    )
+    raw_search_mode = (
+        str(config.get("search_mode", _DEFAULT_SEARCH_MODE)).strip().lower()
+    )
+    config["search_mode"] = (
+        raw_search_mode
+        if raw_search_mode in _VALID_SEARCH_MODES
+        else _DEFAULT_SEARCH_MODE
+    )
+    config["entity_context"] = _clamp_entity_context(
+        str(config.get("entity_context", _DEFAULT_ENTITY_CONTEXT))
+    )
     try:
-        config["api_timeout"] = max(0.5, min(15.0, float(config.get("api_timeout", _DEFAULT_API_TIMEOUT))))
+        config["api_timeout"] = max(
+            0.5, min(15.0, float(config.get("api_timeout", _DEFAULT_API_TIMEOUT)))
+        )
     except Exception:
         config["api_timeout"] = _DEFAULT_API_TIMEOUT
     config["base_url"] = str(config.get("base_url", "") or "").strip()
 
     # Multi-container support
-    config["enable_custom_container_tags"] = _as_bool(config.get("enable_custom_container_tags"), False)
+    config["enable_custom_container_tags"] = _as_bool(
+        config.get("enable_custom_container_tags"), False
+    )
     raw_containers = config.get("custom_containers", [])
     if isinstance(raw_containers, list):
-        config["custom_containers"] = [_sanitize_tag(str(t)) for t in raw_containers if t]
+        config["custom_containers"] = [
+            _sanitize_tag(str(t)) for t in raw_containers if t
+        ]
     else:
         config["custom_containers"] = []
-    config["custom_container_instructions"] = str(config.get("custom_container_instructions", "")).strip()
+    config["custom_container_instructions"] = str(
+        config.get("custom_container_instructions", "")
+    ).strip()
 
     return config
 
@@ -168,6 +192,7 @@ def _save_supermemory_config(values: dict, clawk_home: str) -> None:
             existing = {}
     existing.update(values)
     from utils import atomic_json_write
+
     atomic_json_write(config_path, existing, mode=0o600, sort_keys=True)
 
 
@@ -202,7 +227,9 @@ def _format_relative_time(iso_timestamp: str) -> str:
         return ""
 
 
-def _deduplicate_recall(static_facts: list, dynamic_facts: list, search_results: list) -> tuple[list, list, list]:
+def _deduplicate_recall(
+    static_facts: list, dynamic_facts: list, search_results: list
+) -> tuple[list, list, list]:
     seen = set()
     out_static, out_dynamic, out_search = [], [], []
     for fact in static_facts or []:
@@ -221,8 +248,12 @@ def _deduplicate_recall(static_facts: list, dynamic_facts: list, search_results:
     return out_static, out_dynamic, out_search
 
 
-def _format_prefetch_context(static_facts: list, dynamic_facts: list, search_results: list, max_results: int) -> str:
-    statics, dynamics, search = _deduplicate_recall(static_facts, dynamic_facts, search_results)
+def _format_prefetch_context(
+    static_facts: list, dynamic_facts: list, search_results: list, max_results: int
+) -> str:
+    statics, dynamics, search = _deduplicate_recall(
+        static_facts, dynamic_facts, search_results
+    )
     statics = statics[:max_results]
     dynamics = dynamics[:max_results]
     search = search[:max_results]
@@ -231,9 +262,14 @@ def _format_prefetch_context(static_facts: list, dynamic_facts: list, search_res
 
     sections = []
     if statics:
-        sections.append("## User Profile (Persistent)\n" + "\n".join(f"- {item}" for item in statics))
+        sections.append(
+            "## User Profile (Persistent)\n"
+            + "\n".join(f"- {item}" for item in statics)
+        )
     if dynamics:
-        sections.append("## Recent Context\n" + "\n".join(f"- {item}" for item in dynamics))
+        sections.append(
+            "## Recent Context\n" + "\n".join(f"- {item}" for item in dynamics)
+        )
     if search:
         lines = []
         for item in search:
@@ -277,8 +313,14 @@ def _is_trivial_message(text: str) -> bool:
 
 
 class _SupermemoryClient:
-    def __init__(self, api_key: str, timeout: float, container_tag: str,
-                 search_mode: str = "hybrid", base_url: str = ""):
+    def __init__(
+        self,
+        api_key: str,
+        timeout: float,
+        container_tag: str,
+        search_mode: str = "hybrid",
+        base_url: str = "",
+    ):
         # Lazy-install the supermemory SDK on demand. ensure() honors
         # security.allow_lazy_installs (default true) and, on a sealed Docker
         # venv, redirects the install to the durable target. On failure we
@@ -286,6 +328,7 @@ class _SupermemoryClient:
         # ImportError message.
         try:
             from tools.lazy_deps import ensure as _lazy_ensure
+
             _lazy_ensure("memory.supermemory", prompt=False)
         except ImportError:
             pass
@@ -295,7 +338,9 @@ class _SupermemoryClient:
 
         self._api_key = api_key
         self._container_tag = container_tag
-        self._search_mode = search_mode if search_mode in _VALID_SEARCH_MODES else _DEFAULT_SEARCH_MODE
+        self._search_mode = (
+            search_mode if search_mode in _VALID_SEARCH_MODES else _DEFAULT_SEARCH_MODE
+        )
         self._timeout = timeout
         self._base_url = _resolve_base_url(base_url)
         self._client = Supermemory(
@@ -316,9 +361,15 @@ class _SupermemoryClient:
             merged["type"] = str(legacy_source)
         return merged
 
-    def add_memory(self, content: str, metadata: Optional[dict] = None, *,
-                   entity_context: str = "", container_tag: Optional[str] = None,
-                   custom_id: Optional[str] = None) -> dict:
+    def add_memory(
+        self,
+        content: str,
+        metadata: Optional[dict] = None,
+        *,
+        entity_context: str = "",
+        container_tag: Optional[str] = None,
+        custom_id: Optional[str] = None,
+    ) -> dict:
         tag = container_tag or self._container_tag
         kwargs: dict[str, Any] = {
             "content": content.strip(),
@@ -333,9 +384,14 @@ class _SupermemoryClient:
         result = self._client.documents.add(**kwargs)
         return {"id": getattr(result, "id", "")}
 
-    def search_memories(self, query: str, *, limit: int = 5,
-                        container_tag: Optional[str] = None,
-                        search_mode: Optional[str] = None) -> list[dict]:
+    def search_memories(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        container_tag: Optional[str] = None,
+        search_mode: Optional[str] = None,
+    ) -> list[dict]:
         tag = container_tag or self._container_tag
         mode = search_mode or self._search_mode
         kwargs: dict[str, Any] = {"q": query, "container_tag": tag, "limit": limit}
@@ -343,25 +399,29 @@ class _SupermemoryClient:
             kwargs["search_mode"] = mode
         response = self._client.search.memories(**kwargs)
         results = []
-        for item in (getattr(response, "results", None) or []):
+        for item in getattr(response, "results", None) or []:
             results.append({
                 "id": getattr(item, "id", ""),
                 "memory": getattr(item, "memory", "") or "",
                 "similarity": getattr(item, "similarity", None),
-                "updated_at": getattr(item, "updated_at", None) or getattr(item, "updatedAt", None),
+                "updated_at": getattr(item, "updated_at", None)
+                or getattr(item, "updatedAt", None),
                 "metadata": getattr(item, "metadata", None),
             })
         return results
 
-    def get_profile(self, query: Optional[str] = None, *,
-                    container_tag: Optional[str] = None) -> dict:
+    def get_profile(
+        self, query: Optional[str] = None, *, container_tag: Optional[str] = None
+    ) -> dict:
         tag = container_tag or self._container_tag
         kwargs: dict[str, Any] = {"container_tag": tag}
         if query:
             kwargs["q"] = query
         response = self._client.profile(**kwargs)
         profile_data = getattr(response, "profile", None)
-        search_data = getattr(response, "search_results", None) or getattr(response, "searchResults", None)
+        search_data = getattr(response, "search_results", None) or getattr(
+            response, "searchResults", None
+        )
         static = getattr(profile_data, "static", []) or [] if profile_data else []
         dynamic = getattr(profile_data, "dynamic", []) or [] if profile_data else []
         raw_results = getattr(search_data, "results", None) or search_data or []
@@ -373,16 +433,21 @@ class _SupermemoryClient:
                 else:
                     search_results.append({
                         "memory": getattr(item, "memory", ""),
-                        "updated_at": getattr(item, "updated_at", None) or getattr(item, "updatedAt", None),
+                        "updated_at": getattr(item, "updated_at", None)
+                        or getattr(item, "updatedAt", None),
                         "similarity": getattr(item, "similarity", None),
                     })
         return {"static": static, "dynamic": dynamic, "search_results": search_results}
 
-    def forget_memory(self, memory_id: str, *, container_tag: Optional[str] = None) -> None:
+    def forget_memory(
+        self, memory_id: str, *, container_tag: Optional[str] = None
+    ) -> None:
         tag = container_tag or self._container_tag
         self._client.memories.forget(container_tag=tag, id=memory_id)
 
-    def forget_by_query(self, query: str, *, container_tag: Optional[str] = None) -> dict:
+    def forget_by_query(
+        self, query: str, *, container_tag: Optional[str] = None
+    ) -> dict:
         results = self.search_memories(query, limit=5, container_tag=container_tag)
         if not results:
             return {"success": False, "message": "No matching memory found to forget."}
@@ -394,7 +459,9 @@ class _SupermemoryClient:
         preview = (target.get("memory") or "")[:100]
         return {"success": True, "message": f'Forgot: "{preview}"', "id": memory_id}
 
-    def ingest_conversation(self, session_id: str, messages: list[dict], metadata: dict | None = None) -> None:
+    def ingest_conversation(
+        self, session_id: str, messages: list[dict], metadata: dict | None = None
+    ) -> None:
         payload: dict = {
             "conversationId": session_id,
             "messages": messages,
@@ -417,20 +484,26 @@ class _SupermemoryClient:
             return
 
 
-def _resolve_container_tag_for_setup(clawk_home: str, *, identity: str = "default") -> str:
+def _resolve_container_tag_for_setup(
+    clawk_home: str, *, identity: str = "default"
+) -> str:
     config = _load_supermemory_config(clawk_home)
     env_tag = os.environ.get("SUPERMEMORY_CONTAINER_TAG", "").strip()
     raw_tag = env_tag or config["container_tag"]
     return _sanitize_tag(raw_tag.replace("{identity}", identity))
 
 
-def _probe_supermemory_connection(api_key: str, clawk_home: str, *, identity: str = "default") -> dict:
+def _probe_supermemory_connection(
+    api_key: str, clawk_home: str, *, identity: str = "default"
+) -> dict:
     config = _load_supermemory_config(clawk_home)
     base_url = _resolve_base_url(config["base_url"])
     status = {
         "ok": False,
         "error": "",
-        "container_tag": _resolve_container_tag_for_setup(clawk_home, identity=identity),
+        "container_tag": _resolve_container_tag_for_setup(
+            clawk_home, identity=identity
+        ),
         "profile_facts": 0,
         "auto_recall": bool(config["auto_recall"]),
         "auto_capture": bool(config["auto_capture"]),
@@ -453,7 +526,8 @@ def _probe_supermemory_connection(api_key: str, clawk_home: str, *, identity: st
         )
         profile = client.get_profile()
         facts = [
-            fact for fact in (profile.get("static") or []) + (profile.get("dynamic") or [])
+            fact
+            for fact in (profile.get("static") or []) + (profile.get("dynamic") or [])
             if fact and str(fact).strip()
         ]
         status["profile_facts"] = len(facts)
@@ -484,8 +558,14 @@ STORE_SCHEMA = {
     "parameters": {
         "type": "object",
         "properties": {
-            "content": {"type": "string", "description": "The memory content to store."},
-            "metadata": {"type": "object", "description": "Optional metadata attached to the memory."},
+            "content": {
+                "type": "string",
+                "description": "The memory content to store.",
+            },
+            "metadata": {
+                "type": "object",
+                "description": "Optional metadata attached to the memory.",
+            },
         },
         "required": ["content"],
     },
@@ -498,7 +578,10 @@ SEARCH_SCHEMA = {
         "type": "object",
         "properties": {
             "query": {"type": "string", "description": "What to search for."},
-            "limit": {"type": "integer", "description": "Maximum results to return, 1 to 20."},
+            "limit": {
+                "type": "integer",
+                "description": "Maximum results to return, 1 to 20.",
+            },
         },
         "required": ["query"],
     },
@@ -511,7 +594,10 @@ FORGET_SCHEMA = {
         "type": "object",
         "properties": {
             "id": {"type": "string", "description": "Exact memory id to delete."},
-            "query": {"type": "string", "description": "Query used to find the memory to forget."},
+            "query": {
+                "type": "string",
+                "description": "Query used to find the memory to forget.",
+            },
         },
     },
 }
@@ -522,7 +608,10 @@ PROFILE_SCHEMA = {
     "parameters": {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Optional query to focus the profile response."},
+            "query": {
+                "type": "string",
+                "description": "Optional query to focus the profile response.",
+            },
         },
     },
 }
@@ -579,7 +668,14 @@ class SupermemoryMemoryProvider(MemoryProvider):
         # All other options are documented for $CLAWK_HOME/supermemory.json
         # or the SUPERMEMORY_CONTAINER_TAG env var.
         return [
-            {"key": "api_key", "description": "Supermemory API key", "secret": True, "required": True, "env_var": "SUPERMEMORY_API_KEY", "url": _API_KEY_URL},
+            {
+                "key": "api_key",
+                "description": "Supermemory API key",
+                "secret": True,
+                "required": True,
+                "env_var": "SUPERMEMORY_API_KEY",
+                "url": _API_KEY_URL,
+            },
         ]
 
     def save_config(self, values, clawk_home):
@@ -587,7 +683,9 @@ class SupermemoryMemoryProvider(MemoryProvider):
         if "container_tag" in sanitized:
             sanitized["container_tag"] = _sanitize_tag(str(sanitized["container_tag"]))
         if "entity_context" in sanitized:
-            sanitized["entity_context"] = _clamp_entity_context(str(sanitized["entity_context"]))
+            sanitized["entity_context"] = _clamp_entity_context(
+                str(sanitized["entity_context"])
+            )
         _save_supermemory_config(sanitized, clawk_home)
 
     def get_status_config(self, provider_config: dict) -> dict:
@@ -612,7 +710,9 @@ class SupermemoryMemoryProvider(MemoryProvider):
         existing = os.environ.get("SUPERMEMORY_API_KEY", "")
         if existing:
             masked = f"...{existing[-4:]}" if len(existing) > 4 else "set"
-            val = _prompt(f"Supermemory API key (current: {masked}, blank to keep)", secret=True)
+            val = _prompt(
+                f"Supermemory API key (current: {masked}, blank to keep)", secret=True
+            )
         else:
             val = _prompt("Supermemory API key", secret=True)
         if val:
@@ -643,6 +743,7 @@ class SupermemoryMemoryProvider(MemoryProvider):
 
     def initialize(self, session_id: str, **kwargs) -> None:
         from clawk_constants import get_clawk_home
+
         self._clawk_home = kwargs.get("clawk_home") or str(get_clawk_home())
         self._session_id = session_id
         self._turn_count = 0
@@ -669,7 +770,9 @@ class SupermemoryMemoryProvider(MemoryProvider):
         self._base_url = _resolve_base_url(self._config["base_url"])
         self._enable_custom_containers = self._config["enable_custom_container_tags"]
         self._custom_containers = self._config["custom_containers"]
-        self._custom_container_instructions = self._config["custom_container_instructions"]
+        self._custom_container_instructions = self._config[
+            "custom_container_instructions"
+        ]
         self._allowed_containers = [self._container_tag] + list(self._custom_containers)
 
         self._session_turns = []
@@ -705,18 +808,29 @@ class SupermemoryMemoryProvider(MemoryProvider):
         ]
         if self._enable_custom_containers and self._custom_containers:
             tags_str = ", ".join(self._allowed_containers)
-            lines.append(f"\nMulti-container mode enabled. Available containers: {tags_str}.")
-            lines.append("Pass an optional container_tag to supermemory_search, supermemory_store, supermemory_forget, and supermemory_profile to target a specific container.")
+            lines.append(
+                f"\nMulti-container mode enabled. Available containers: {tags_str}."
+            )
+            lines.append(
+                "Pass an optional container_tag to supermemory_search, supermemory_store, supermemory_forget, and supermemory_profile to target a specific container."
+            )
             if self._custom_container_instructions:
                 lines.append(f"\n{self._custom_container_instructions}")
         return "\n".join(lines)
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
-        if not self._active or not self._auto_recall or not self._client or not query.strip():
+        if (
+            not self._active
+            or not self._auto_recall
+            or not self._client
+            or not query.strip()
+        ):
             return ""
         try:
             profile = self._client.get_profile(query=query[:200])
-            include_profile = self._turn_count <= 1 or (self._turn_count % self._profile_frequency == 0)
+            include_profile = self._turn_count <= 1 or (
+                self._turn_count % self._profile_frequency == 0
+            )
             context = _format_prefetch_context(
                 static_facts=profile["static"] if include_profile else [],
                 dynamic_facts=profile["dynamic"] if include_profile else [],
@@ -728,8 +842,15 @@ class SupermemoryMemoryProvider(MemoryProvider):
             logger.debug("Supermemory prefetch failed", exc_info=True)
             return ""
 
-    def sync_turn(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
-        if not self._active or not self._auto_capture or not self._write_enabled or not self._client:
+    def sync_turn(
+        self, user_content: str, assistant_content: str, *, session_id: str = ""
+    ) -> None:
+        if (
+            not self._active
+            or not self._auto_capture
+            or not self._write_enabled
+            or not self._client
+        ):
             return
 
         clean_user = _clean_text_for_capture(user_content)
@@ -741,7 +862,12 @@ class SupermemoryMemoryProvider(MemoryProvider):
         self._session_turns.append({"user": clean_user, "assistant": clean_assistant})
 
     def on_session_end(self, messages: List[Dict[str, Any]]) -> None:
-        if not self._active or not self._write_enabled or not self._client or not self._session_id:
+        if (
+            not self._active
+            or not self._write_enabled
+            or not self._client
+            or not self._session_id
+        ):
             return
         cleaned = []
         for message in messages or []:
@@ -837,13 +963,25 @@ class SupermemoryMemoryProvider(MemoryProvider):
         if self._write_thread and self._write_thread.is_alive():
             self._write_thread.join(timeout=2.0)
         self._write_thread = None
-        self._write_thread = threading.Thread(target=_run, daemon=False, name="supermemory-memory-write")
+        self._write_thread = threading.Thread(
+            target=_run, daemon=False, name="supermemory-memory-write"
+        )
         self._write_thread.start()
 
     def shutdown(self) -> None:
         # Emergency fallback (crashes only). Buffer is cleared on normal on_session_end().
-        if self._active and self._write_enabled and self._client and self._session_turns and self._session_id:
-            logger.warning("Supermemory: Saving session via shutdown (session=%s, turns=%d)", self._session_id, len(self._session_turns))
+        if (
+            self._active
+            and self._write_enabled
+            and self._client
+            and self._session_turns
+            and self._session_id
+        ):
+            logger.warning(
+                "Supermemory: Saving session via shutdown (session=%s, turns=%d)",
+                self._session_id,
+                len(self._session_turns),
+            )
 
             messages: list[dict] = []
             for turn in self._session_turns:
@@ -911,7 +1049,12 @@ class SupermemoryMemoryProvider(MemoryProvider):
             return expanded
 
         if not self._enable_custom_containers:
-            return with_kebab_aliases([STORE_SCHEMA, SEARCH_SCHEMA, FORGET_SCHEMA, PROFILE_SCHEMA])
+            return with_kebab_aliases([
+                STORE_SCHEMA,
+                SEARCH_SCHEMA,
+                FORGET_SCHEMA,
+                PROFILE_SCHEMA,
+            ])
 
         # When multi-container is enabled, add optional container_tag to relevant tools
         container_param = {
@@ -939,9 +1082,18 @@ class SupermemoryMemoryProvider(MemoryProvider):
         metadata.setdefault("type", _detect_category(content))
         metadata.pop("source", None)
         try:
-            result = self._client.add_memory(content, metadata=metadata, entity_context=self._entity_context, container_tag=tag)
+            result = self._client.add_memory(
+                content,
+                metadata=metadata,
+                entity_context=self._entity_context,
+                container_tag=tag,
+            )
             preview = content[:80] + ("..." if len(content) > 80 else "")
-            resp: dict[str, Any] = {"saved": True, "id": result.get("id", ""), "preview": preview}
+            resp: dict[str, Any] = {
+                "saved": True,
+                "id": result.get("id", ""),
+                "preview": preview,
+            }
             if tag:
                 resp["container_tag"] = tag
             return json.dumps(resp)
@@ -961,10 +1113,15 @@ class SupermemoryMemoryProvider(MemoryProvider):
         except Exception:
             limit = 5
         try:
-            results = self._client.search_memories(query, limit=limit, container_tag=tag)
+            results = self._client.search_memories(
+                query, limit=limit, container_tag=tag
+            )
             formatted = []
             for item in results:
-                entry: dict[str, Any] = {"id": item.get("id", ""), "content": item.get("memory", "")}
+                entry: dict[str, Any] = {
+                    "id": item.get("id", ""),
+                    "content": item.get("memory", ""),
+                }
                 if item.get("similarity") is not None:
                     try:
                         entry["similarity"] = round(float(item["similarity"]) * 100)
@@ -1005,9 +1162,15 @@ class SupermemoryMemoryProvider(MemoryProvider):
             profile = self._client.get_profile(query=query, container_tag=tag)
             sections = []
             if profile["static"]:
-                sections.append("## User Profile (Persistent)\n" + "\n".join(f"- {item}" for item in profile["static"]))
+                sections.append(
+                    "## User Profile (Persistent)\n"
+                    + "\n".join(f"- {item}" for item in profile["static"])
+                )
             if profile["dynamic"]:
-                sections.append("## Recent Context\n" + "\n".join(f"- {item}" for item in profile["dynamic"]))
+                sections.append(
+                    "## Recent Context\n"
+                    + "\n".join(f"- {item}" for item in profile["dynamic"])
+                )
             resp: dict[str, Any] = {
                 "profile": "\n\n".join(sections),
                 "static_count": len(profile["static"]),

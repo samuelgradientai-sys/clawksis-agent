@@ -46,7 +46,9 @@ def test_batch_overflow_trimmed_and_spilled_losslessly(monkeypatch):
         # Distinct head + tail markers so we can prove the tail survives.
         big = "HEAD_MARKER\n" + ("X" * 50_000) + "\nTAIL_MARKER"
         # Parent nearly full (120k/131k) → tiny headroom → aggressive trim.
-        parent = _FakeParent(context_length=131_000, used_tokens=120_000, max_tokens=8_000)
+        parent = _FakeParent(
+            context_length=131_000, used_tokens=120_000, max_tokens=8_000
+        )
         results = [
             {"task_index": i, "summary": big, "status": "completed"} for i in range(5)
         ]
@@ -71,9 +73,7 @@ def test_batch_overflow_trimmed_and_spilled_losslessly(monkeypatch):
 
 def test_dynamic_budget_shrinks_as_batch_grows():
     def cap_for(n):
-        return dt._parent_summary_char_budget(
-            _FakeParent(131_000, 30_000, 8_000), n
-        )
+        return dt._parent_summary_char_budget(_FakeParent(131_000, 30_000, 8_000), n)
 
     c1, c5, c20 = cap_for(1), cap_for(5), cap_for(20)
     assert c1 is not None and c5 is not None and c20 is not None
@@ -83,9 +83,7 @@ def test_dynamic_budget_shrinks_as_batch_grows():
 
 def test_floor_enforced_when_parent_over_budget():
     # Parent already over its context budget → each summary gets only the floor.
-    budget = dt._parent_summary_char_budget(
-        _FakeParent(131_000, 200_000, 8_000), 3
-    )
+    budget = dt._parent_summary_char_budget(_FakeParent(131_000, 200_000, 8_000), 3)
     assert budget == dt._MIN_SUMMARY_CHARS
 
 

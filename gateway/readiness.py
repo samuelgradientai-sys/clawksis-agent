@@ -78,7 +78,9 @@ def _probe_gateway(runtime_status: dict[str, Any]) -> dict[str, Any]:
             in {"connected", "running", "ok"}
         )
     status = "ok" if state in {"running", "draining"} else "degraded"
-    return _check(status, state=state, connected_platforms=connected, platforms=configured)
+    return _check(
+        status, state=state, connected_platforms=connected, platforms=configured
+    )
 
 
 def collect_runtime_readiness(
@@ -110,7 +112,11 @@ def collect_runtime_readiness(
             active_delegations=max(0, int(active_delegations)),
         ),
     }
-    overall = "ok" if all(item.get("status") == "ok" for item in checks.values()) else "degraded"
+    overall = (
+        "ok"
+        if all(item.get("status") == "ok" for item in checks.values())
+        else "degraded"
+    )
     return {"status": overall, "checks": checks}
 
 

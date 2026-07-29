@@ -15,6 +15,7 @@ Then paste the printed JSON into the Slack app config (Features → App
 Manifest → Edit) and click Save. Slack diffs the manifest and prompts
 for reinstall when scopes/commands change.
 """
+
 from __future__ import annotations
 
 import json
@@ -51,9 +52,7 @@ def _build_full_manifest(
         messaging_experience = "assistant" if include_assistant else "none"
     messaging_experience = str(messaging_experience).strip().lower()
     if messaging_experience not in {"assistant", "agent", "none"}:
-        raise ValueError(
-            "messaging_experience must be one of: assistant, agent, none"
-        )
+        raise ValueError("messaging_experience must be one of: assistant, agent, none")
 
     partial = slack_app_manifest()
     slashes = partial["features"]["slash_commands"]
@@ -102,12 +101,10 @@ def _build_full_manifest(
             "assistant_description": "Chat with Clawksis in threads and DMs.",
         }
         bot_scopes.append("assistant:write")
-        bot_events.extend(
-            [
-                "assistant_thread_context_changed",
-                "assistant_thread_started",
-            ]
-        )
+        bot_events.extend([
+            "assistant_thread_context_changed",
+            "assistant_thread_started",
+        ])
     elif messaging_experience == "agent":
         features["agent_view"] = {
             "agent_description": "Chat with Clawksis in Slack Messages.",

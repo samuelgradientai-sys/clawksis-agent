@@ -26,6 +26,7 @@ from unittest.mock import MagicMock
 # Mock slack-bolt if not installed (same pattern as test_slack_user_token_warning.py)
 # ---------------------------------------------------------------------------
 
+
 def _ensure_slack_mock():
     if "slack_bolt" in sys.modules and hasattr(sys.modules["slack_bolt"], "__file__"):
         return
@@ -42,8 +43,10 @@ def _ensure_slack_mock():
         ("slack_bolt.async_app", slack_bolt.async_app),
         ("slack_bolt.adapter", slack_bolt.adapter),
         ("slack_bolt.adapter.socket_mode", slack_bolt.adapter.socket_mode),
-        ("slack_bolt.adapter.socket_mode.async_handler",
-         slack_bolt.adapter.socket_mode.async_handler),
+        (
+            "slack_bolt.adapter.socket_mode.async_handler",
+            slack_bolt.adapter.socket_mode.async_handler,
+        ),
         ("slack_sdk", slack_sdk),
         ("slack_sdk.web", slack_sdk.web),
         ("slack_sdk.web.async_client", slack_sdk.web.async_client),
@@ -54,6 +57,7 @@ def _ensure_slack_mock():
 _ensure_slack_mock()
 
 import plugins.platforms.slack.adapter as _slack_mod  # noqa: E402
+
 _slack_mod.SLACK_AVAILABLE = True
 
 from plugins.platforms.slack.adapter import SlackAdapter  # noqa: E402
@@ -71,6 +75,7 @@ def _make_adapter(extra):
 
 # --- capability flag -------------------------------------------------------
 
+
 def test_slack_declares_inchannel_capability():
     """Slack has both halves the in_channel surface needs, so the class-level
     capability flag the cron scheduler reads generically must be True."""
@@ -78,6 +83,7 @@ def test_slack_declares_inchannel_capability():
 
 
 # --- surface resolver ------------------------------------------------------
+
 
 def test_surface_defaults_to_thread():
     adapter = _make_adapter({})
@@ -107,37 +113,45 @@ def test_surface_unrecognised_value_coerces_to_thread():
 
 # --- pairing warning (D5: warn, not hard-require) --------------------------
 
+
 def test_warns_when_in_channel_without_flat_reply(caplog):
     """in_channel set, reply_in_thread left at its True default → warn."""
     adapter = _make_adapter({"cron_continuable_surface": "in_channel"})
     with caplog.at_level(logging.WARNING):
         adapter._warn_if_inchannel_without_flat_reply("Acme")
-    matched = [r for r in caplog.records
-               if "cron_continuable_surface=in_channel" in r.message
-               and "reply_in_thread=false" in r.message]
+    matched = [
+        r
+        for r in caplog.records
+        if "cron_continuable_surface=in_channel" in r.message
+        and "reply_in_thread=false" in r.message
+    ]
     assert matched
 
 
 def test_warns_when_in_channel_with_reply_in_thread_true(caplog):
     """Explicit reply_in_thread: true alongside in_channel → still warn."""
-    adapter = _make_adapter(
-        {"cron_continuable_surface": "in_channel", "reply_in_thread": True}
-    )
+    adapter = _make_adapter({
+        "cron_continuable_surface": "in_channel",
+        "reply_in_thread": True,
+    })
     with caplog.at_level(logging.WARNING):
         adapter._warn_if_inchannel_without_flat_reply("Acme")
-    assert any("cron_continuable_surface=in_channel" in r.message
-               for r in caplog.records)
+    assert any(
+        "cron_continuable_surface=in_channel" in r.message for r in caplog.records
+    )
 
 
 def test_no_warning_when_properly_paired(caplog):
     """in_channel + reply_in_thread: false is the correct pairing → silent."""
-    adapter = _make_adapter(
-        {"cron_continuable_surface": "in_channel", "reply_in_thread": False}
-    )
+    adapter = _make_adapter({
+        "cron_continuable_surface": "in_channel",
+        "reply_in_thread": False,
+    })
     with caplog.at_level(logging.WARNING):
         adapter._warn_if_inchannel_without_flat_reply("Acme")
-    assert not any("cron_continuable_surface=in_channel" in r.message
-                   for r in caplog.records)
+    assert not any(
+        "cron_continuable_surface=in_channel" in r.message for r in caplog.records
+    )
 
 
 def test_no_warning_when_surface_is_thread(caplog):
@@ -145,5 +159,6 @@ def test_no_warning_when_surface_is_thread(caplog):
     adapter = _make_adapter({"reply_in_thread": True})
     with caplog.at_level(logging.WARNING):
         adapter._warn_if_inchannel_without_flat_reply("Acme")
-    assert not any("cron_continuable_surface=in_channel" in r.message
-                   for r in caplog.records)
+    assert not any(
+        "cron_continuable_surface=in_channel" in r.message for r in caplog.records
+    )

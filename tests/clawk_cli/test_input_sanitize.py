@@ -12,7 +12,9 @@ class TestStripLeakedBracketedPasteWrappers:
         assert strip_leaked_bracketed_paste_wrappers("hello world") == "hello world"
 
     def test_strips_canonical_escape_wrappers(self):
-        assert strip_leaked_bracketed_paste_wrappers("\x1b[200~hello\x1b[201~") == "hello"
+        assert (
+            strip_leaked_bracketed_paste_wrappers("\x1b[200~hello\x1b[201~") == "hello"
+        )
 
     def test_strips_visible_caret_escape_wrappers(self):
         assert strip_leaked_bracketed_paste_wrappers("^[[200~hello^[[201~") == "hello"

@@ -23,14 +23,19 @@ from tools.environments.local import (
 
 def _make_fake_popen(captured: dict):
     """Return a fake Popen constructor that records the env kwarg."""
+
     def fake_popen(cmd, **kwargs):
         captured["env"] = kwargs.get("env", {})
         proc = MagicMock()
         proc.poll.return_value = 0
         proc.returncode = 0
-        proc.stdout = MagicMock(__iter__=lambda s: iter([]), __next__=lambda s: (_ for _ in ()).throw(StopIteration))
+        proc.stdout = MagicMock(
+            __iter__=lambda s: iter([]),
+            __next__=lambda s: (_ for _ in ()).throw(StopIteration),
+        )
         proc.stdin = MagicMock()
         return proc
+
     return fake_popen
 
 
@@ -49,10 +54,12 @@ def _run_with_env(extra_os_env=None, self_env=None):
 
     env = LocalEnvironment(cwd="/tmp", timeout=10, env=self_env)
 
-    with patch("tools.environments.local._find_bash", return_value="/bin/bash"), \
-         patch("subprocess.Popen", side_effect=_make_fake_popen(captured)), \
-         patch("tools.terminal_tool._interrupt_event", fake_interrupt), \
-         patch.dict(os.environ, test_environ, clear=True):
+    with (
+        patch("tools.environments.local._find_bash", return_value="/bin/bash"),
+        patch("subprocess.Popen", side_effect=_make_fake_popen(captured)),
+        patch("tools.terminal_tool._interrupt_event", fake_interrupt),
+        patch.dict(os.environ, test_environ, clear=True),
+    ):
         env.execute("echo hello")
 
     return captured.get("env", {})
@@ -105,9 +112,11 @@ class TestProviderEnvBlocklist:
         models`` run inside a Clawksis terminal enumerated the entire Bedrock
         catalog off the leaked bearer token.
         """
-        result_env = _run_with_env(extra_os_env={
-            "AWS_BEARER_TOKEN_BEDROCK": "bedrock-bearer-secret",
-        })
+        result_env = _run_with_env(
+            extra_os_env={
+                "AWS_BEARER_TOKEN_BEDROCK": "bedrock-bearer-secret",
+            }
+        )
 
         assert "AWS_BEARER_TOKEN_BEDROCK" not in result_env, (
             "AWS_BEARER_TOKEN_BEDROCK leaked into subprocess env (see #32314)"
@@ -128,10 +137,12 @@ class TestProviderEnvBlocklist:
         the on-disk location of a GCP service-account key to every spawned
         subprocess (terminal, codex/copilot app-server, browser workers).
         """
-        result_env = _run_with_env(extra_os_env={
-            "VERTEX_CREDENTIALS_PATH": "/home/user/.config/gcloud/sa-key.json",
-            "GOOGLE_APPLICATION_CREDENTIALS": "/home/user/.config/gcloud/adc.json",
-        })
+        result_env = _run_with_env(
+            extra_os_env={
+                "VERTEX_CREDENTIALS_PATH": "/home/user/.config/gcloud/sa-key.json",
+                "GOOGLE_APPLICATION_CREDENTIALS": "/home/user/.config/gcloud/adc.json",
+            }
+        )
 
         assert "VERTEX_CREDENTIALS_PATH" not in result_env
         assert "GOOGLE_APPLICATION_CREDENTIALS" not in result_env
@@ -227,10 +238,12 @@ class TestProviderEnvBlocklist:
 
     def test_self_env_blocked_vars_also_stripped(self):
         """Blocked vars in self.env are stripped; non-blocked vars pass through."""
-        result_env = _run_with_env(self_env={
-            "OPENAI_BASE_URL": "http://custom:9999/v1",
-            "MY_CUSTOM_VAR": "keep-this",
-        })
+        result_env = _run_with_env(
+            self_env={
+                "OPENAI_BASE_URL": "http://custom:9999/v1",
+                "MY_CUSTOM_VAR": "keep-this",
+            }
+        )
 
         assert "OPENAI_BASE_URL" not in result_env
         assert "MY_CUSTOM_VAR" in result_env
@@ -242,9 +255,11 @@ class TestForceEnvOptIn:
 
     def test_force_prefix_passes_blocked_var(self):
         """_CLAWK_FORCE_OPENAI_API_KEY in self.env should inject OPENAI_API_KEY."""
-        result_env = _run_with_env(self_env={
-            f"{_CLAWK_PROVIDER_ENV_FORCE_PREFIX}OPENAI_API_KEY": "sk-explicit",
-        })
+        result_env = _run_with_env(
+            self_env={
+                f"{_CLAWK_PROVIDER_ENV_FORCE_PREFIX}OPENAI_API_KEY": "sk-explicit",
+            }
+        )
 
         assert "OPENAI_API_KEY" in result_env
         assert result_env["OPENAI_API_KEY"] == "sk-explicit"
@@ -255,7 +270,9 @@ class TestForceEnvOptIn:
         """Force-prefix in self.env wins even when os.environ has the blocked var."""
         result_env = _run_with_env(
             extra_os_env={"OPENAI_BASE_URL": "http://leaked/v1"},
-            self_env={f"{_CLAWK_PROVIDER_ENV_FORCE_PREFIX}OPENAI_BASE_URL": "http://intended/v1"},
+            self_env={
+                f"{_CLAWK_PROVIDER_ENV_FORCE_PREFIX}OPENAI_BASE_URL": "http://intended/v1"
+            },
         )
 
         assert result_env["OPENAI_BASE_URL"] == "http://intended/v1"
@@ -275,19 +292,24 @@ class TestActiveVenvMarkerStripping:
     """
 
     def test_virtualenv_marker_stripped_end_to_end(self):
-        result_env = _run_with_env(extra_os_env={
-            "VIRTUAL_ENV": "/home/user/.clawk/clawksis-agent/venv",
-        })
+        result_env = _run_with_env(
+            extra_os_env={
+                "VIRTUAL_ENV": "/home/user/.clawk/clawksis-agent/venv",
+            }
+        )
         assert "VIRTUAL_ENV" not in result_env
 
     def test_conda_prefix_marker_stripped_end_to_end(self):
-        result_env = _run_with_env(extra_os_env={
-            "CONDA_PREFIX": "/opt/conda/envs/clawk",
-        })
+        result_env = _run_with_env(
+            extra_os_env={
+                "CONDA_PREFIX": "/opt/conda/envs/clawk",
+            }
+        )
         assert "CONDA_PREFIX" not in result_env
 
     def test_make_run_env_strips_markers(self):
         from tools.environments.local import _make_run_env
+
         poison = {"VIRTUAL_ENV": "/venv", "CONDA_PREFIX": "/conda", "PATH": "/usr/bin"}
         with patch.dict(os.environ, poison, clear=True):
             result = _make_run_env({})
@@ -296,6 +318,7 @@ class TestActiveVenvMarkerStripping:
 
     def test_sanitize_subprocess_env_strips_markers(self):
         from tools.environments.local import _sanitize_subprocess_env
+
         base = {"VIRTUAL_ENV": "/venv", "CONDA_PREFIX": "/conda", "HOME": "/home/user"}
         # Even an explicitly-passed extra marker is stripped.
         result = _sanitize_subprocess_env(base, {"VIRTUAL_ENV": "/also/venv"})
@@ -305,6 +328,7 @@ class TestActiveVenvMarkerStripping:
 
     def test_markers_constant_contents(self):
         from tools.environments.local import _ACTIVE_VENV_MARKER_VARS
+
         assert "VIRTUAL_ENV" in _ACTIVE_VENV_MARKER_VARS
         assert "CONDA_PREFIX" in _ACTIVE_VENV_MARKER_VARS
 
@@ -473,6 +497,7 @@ class TestSanePathIncludesHomebrew:
         TestClawksisBinDirOnPath) so a real ``clawk`` on the test runner's PATH
         doesn't shift the asserted PATH layout."""
         from tools.environments import local as local_mod
+
         saved = local_mod._CLAWK_BIN_DIR
         local_mod._CLAWK_BIN_DIR = None  # resolved -> no dir to inject
         yield
@@ -480,15 +505,18 @@ class TestSanePathIncludesHomebrew:
 
     def test_sane_path_includes_homebrew_bin(self):
         from tools.environments.local import _SANE_PATH
+
         assert "/opt/homebrew/bin" in _SANE_PATH
 
     def test_sane_path_includes_homebrew_sbin(self):
         from tools.environments.local import _SANE_PATH
+
         assert "/opt/homebrew/sbin" in _SANE_PATH
 
     def test_make_run_env_appends_homebrew_on_minimal_path(self):
         """When PATH is minimal, _make_run_env appends missing sane entries."""
         from tools.environments.local import _SANE_PATH, _make_run_env
+
         minimal_env = {"PATH": "/some/custom/bin"}
         with patch.dict(os.environ, minimal_env, clear=True):
             result = _make_run_env({})
@@ -500,6 +528,7 @@ class TestSanePathIncludesHomebrew:
     def test_make_run_env_fills_missing_homebrew_when_usr_bin_present(self):
         """macOS launchd PATH can include /usr/bin while missing Homebrew."""
         from tools.environments.local import _make_run_env
+
         launchd_env = {"PATH": "/usr/local/bin:/usr/bin:/bin"}
         with patch.dict(os.environ, launchd_env, clear=True):
             result = _make_run_env({})
@@ -509,6 +538,7 @@ class TestSanePathIncludesHomebrew:
 
     def test_make_run_env_does_not_duplicate_existing_sane_entries(self):
         from tools.environments.local import _make_run_env
+
         existing_env = {"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"}
         with patch.dict(os.environ, existing_env, clear=True):
             result = _make_run_env({})
@@ -520,6 +550,7 @@ class TestSanePathIncludesHomebrew:
     def test_make_run_env_real_launchd_path_gains_homebrew(self):
         """The literal macOS launchd PATH is the production trigger for #35613."""
         from tools.environments.local import _make_run_env
+
         launchd_env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin"}
         with patch.dict(os.environ, launchd_env, clear=True):
             result = _make_run_env({})
@@ -532,6 +563,7 @@ class TestSanePathIncludesHomebrew:
     def test_make_run_env_collapses_duplicate_caller_entries(self):
         """Duplicates already present in the caller PATH are de-duplicated."""
         from tools.environments.local import _make_run_env
+
         dup_env = {"PATH": "/usr/bin:/usr/bin:/custom/bin:/custom/bin:/bin"}
         with patch.dict(os.environ, dup_env, clear=True):
             result = _make_run_env({})
@@ -544,6 +576,7 @@ class TestSanePathIncludesHomebrew:
     def test_make_run_env_strips_empty_path_entries(self):
         """Leading/trailing/double colons (== CWD on POSIX) are dropped."""
         from tools.environments.local import _make_run_env
+
         empty_env = {"PATH": "/usr/bin::/bin:"}
         with patch.dict(os.environ, empty_env, clear=True):
             result = _make_run_env({})
@@ -555,6 +588,7 @@ class TestSanePathIncludesHomebrew:
     def test_make_run_env_leaves_windows_path_unchanged(self, monkeypatch):
         from tools.environments import local as local_mod
         from tools.environments.local import _make_run_env
+
         windows_env = {"PATH": r"C:\Windows\System32;C:\Program Files\Git\bin"}
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
         with patch.dict(os.environ, windows_env, clear=True):
@@ -564,6 +598,7 @@ class TestSanePathIncludesHomebrew:
     def test_make_run_env_preserves_windows_mixed_case_path_key(self, monkeypatch):
         from tools.environments import local as local_mod
         from tools.environments.local import _make_run_env
+
         windows_env = {"Path": r"C:\Windows\System32;C:\Program Files\Git\bin"}
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
         with patch.object(local_mod.os, "environ", windows_env):
@@ -583,18 +618,26 @@ class TestClawksisBinDirOnPath:
 
     def _reset_cache(self):
         from tools.environments import local as local_mod
+
         local_mod._CLAWK_BIN_DIR = local_mod._SENTINEL
 
     def test_resolves_via_which(self, monkeypatch):
         from tools.environments import local as local_mod
+
         self._reset_cache()
-        monkeypatch.setattr(local_mod.shutil, "which",
-                            lambda name: "/opt/clawksis/bin/clawk" if name == "clawk" else None)
-        monkeypatch.setattr(local_mod.os.path, "isdir", lambda p: p == "/opt/clawksis/bin")
+        monkeypatch.setattr(
+            local_mod.shutil,
+            "which",
+            lambda name: "/opt/clawksis/bin/clawk" if name == "clawk" else None,
+        )
+        monkeypatch.setattr(
+            local_mod.os.path, "isdir", lambda p: p == "/opt/clawksis/bin"
+        )
         assert local_mod._resolve_clawk_bin_dir() == "/opt/clawksis/bin"
 
     def test_resolves_via_sys_executable_dir(self, monkeypatch, tmp_path):
         from tools.environments import local as local_mod
+
         self._reset_cache()
         venv_bin = tmp_path / "venv" / "bin"
         venv_bin.mkdir(parents=True)
@@ -607,6 +650,7 @@ class TestClawksisBinDirOnPath:
 
     def test_returns_none_when_unresolvable(self, monkeypatch):
         from tools.environments import local as local_mod
+
         self._reset_cache()
         monkeypatch.setattr(local_mod.shutil, "which", lambda name: None)
         monkeypatch.setattr(local_mod.sys, "argv", ["python"])
@@ -615,6 +659,7 @@ class TestClawksisBinDirOnPath:
 
     def test_prepend_adds_missing_dir_at_front(self, monkeypatch):
         from tools.environments import local as local_mod
+
         self._reset_cache()
         local_mod._CLAWK_BIN_DIR = "/opt/clawksis/bin"
         out = local_mod._prepend_clawk_bin_dir("/usr/bin:/bin")
@@ -623,6 +668,7 @@ class TestClawksisBinDirOnPath:
 
     def test_prepend_is_idempotent(self, monkeypatch):
         from tools.environments import local as local_mod
+
         self._reset_cache()
         local_mod._CLAWK_BIN_DIR = "/opt/clawksis/bin"
         once = local_mod._prepend_clawk_bin_dir("/usr/bin:/bin")
@@ -632,6 +678,7 @@ class TestClawksisBinDirOnPath:
 
     def test_prepend_noop_when_unresolved(self, monkeypatch):
         from tools.environments import local as local_mod
+
         self._reset_cache()
         local_mod._CLAWK_BIN_DIR = None
         assert local_mod._prepend_clawk_bin_dir("/usr/bin:/bin") == "/usr/bin:/bin"
@@ -640,6 +687,7 @@ class TestClawksisBinDirOnPath:
         """A gateway env missing the clawk dir gets it back in the subshell PATH."""
         from tools.environments import local as local_mod
         from tools.environments.local import _make_run_env
+
         self._reset_cache()
         local_mod._CLAWK_BIN_DIR = "/opt/clawksis/bin"
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", False)
@@ -671,6 +719,7 @@ class TestClawksisInternalDynamicSecrets:
 
     def test_predicate_matches_auxiliary_api_key(self):
         from tools.environments.local import _is_clawk_internal_secret
+
         assert _is_clawk_internal_secret("AUXILIARY_VISION_API_KEY")
         assert _is_clawk_internal_secret("AUXILIARY_WEB_EXTRACT_API_KEY")
         assert _is_clawk_internal_secret("AUXILIARY_APPROVAL_API_KEY")
@@ -679,11 +728,13 @@ class TestClawksisInternalDynamicSecrets:
 
     def test_predicate_matches_auxiliary_base_url(self):
         from tools.environments.local import _is_clawk_internal_secret
+
         assert _is_clawk_internal_secret("AUXILIARY_VISION_BASE_URL")
         assert _is_clawk_internal_secret("AUXILIARY_COMPRESSION_BASE_URL")
 
     def test_predicate_matches_gateway_relay_auth(self):
         from tools.environments.local import _is_clawk_internal_secret
+
         assert _is_clawk_internal_secret("GATEWAY_RELAY_SECRET")
         assert _is_clawk_internal_secret("GATEWAY_RELAY_DELIVERY_KEY")
         assert _is_clawk_internal_secret("GATEWAY_RELAY_SESSION_TOKEN")
@@ -692,6 +743,7 @@ class TestClawksisInternalDynamicSecrets:
         """AUXILIARY_*_PROVIDER / _MODEL and GATEWAY_RELAY_* routing hints are
         NOT secrets and must remain visible so tooling that reads them works."""
         from tools.environments.local import _is_clawk_internal_secret
+
         assert not _is_clawk_internal_secret("AUXILIARY_VISION_PROVIDER")
         assert not _is_clawk_internal_secret("AUXILIARY_VISION_MODEL")
         assert not _is_clawk_internal_secret("GATEWAY_RELAY_URL")
@@ -704,13 +756,15 @@ class TestClawksisInternalDynamicSecrets:
     def test_auxiliary_secrets_stripped_from_subprocess(self):
         """AUXILIARY_*_API_KEY / _BASE_URL injected into os.environ must not
         reach the terminal subprocess, while _PROVIDER / _MODEL survive."""
-        result_env = _run_with_env(extra_os_env={
-            "AUXILIARY_VISION_API_KEY": "sk-vision-secret",
-            "AUXILIARY_VISION_BASE_URL": "http://internal:1234/v1",
-            "AUXILIARY_WEB_EXTRACT_API_KEY": "sk-webx-secret",
-            "AUXILIARY_VISION_PROVIDER": "openai",
-            "AUXILIARY_VISION_MODEL": "gpt-4o",
-        })
+        result_env = _run_with_env(
+            extra_os_env={
+                "AUXILIARY_VISION_API_KEY": "sk-vision-secret",
+                "AUXILIARY_VISION_BASE_URL": "http://internal:1234/v1",
+                "AUXILIARY_WEB_EXTRACT_API_KEY": "sk-webx-secret",
+                "AUXILIARY_VISION_PROVIDER": "openai",
+                "AUXILIARY_VISION_MODEL": "gpt-4o",
+            }
+        )
         assert "AUXILIARY_VISION_API_KEY" not in result_env
         assert "AUXILIARY_VISION_BASE_URL" not in result_env
         assert "AUXILIARY_WEB_EXTRACT_API_KEY" not in result_env
@@ -719,11 +773,13 @@ class TestClawksisInternalDynamicSecrets:
         assert result_env.get("AUXILIARY_VISION_MODEL") == "gpt-4o"
 
     def test_gateway_relay_secret_stripped_from_subprocess(self):
-        result_env = _run_with_env(extra_os_env={
-            "GATEWAY_RELAY_SECRET": "relay-signing-secret",
-            "GATEWAY_RELAY_DELIVERY_KEY": "relay-delivery-key",
-            "GATEWAY_RELAY_URL": "https://relay.example.com",
-        })
+        result_env = _run_with_env(
+            extra_os_env={
+                "GATEWAY_RELAY_SECRET": "relay-signing-secret",
+                "GATEWAY_RELAY_DELIVERY_KEY": "relay-delivery-key",
+                "GATEWAY_RELAY_URL": "https://relay.example.com",
+            }
+        )
         assert "GATEWAY_RELAY_SECRET" not in result_env
         assert "GATEWAY_RELAY_DELIVERY_KEY" not in result_env
         # Non-secret routing hint stays visible.
@@ -736,20 +792,27 @@ class TestClawksisInternalDynamicSecrets:
             "tools.env_passthrough.is_env_passthrough",
             side_effect=lambda name: name == "AUXILIARY_VISION_API_KEY",
         ):
-            result_env = _run_with_env(extra_os_env={
-                "AUXILIARY_VISION_API_KEY": "sk-vision-secret",
-            })
+            result_env = _run_with_env(
+                extra_os_env={
+                    "AUXILIARY_VISION_API_KEY": "sk-vision-secret",
+                }
+            )
         assert "AUXILIARY_VISION_API_KEY" not in result_env
 
     def test_make_run_env_strips_internal_secrets(self):
         """The foreground _make_run_env path strips the same dynamic secrets."""
         from tools.environments.local import _make_run_env
-        with patch.dict(os.environ, {
-            "PATH": "/usr/bin:/bin",
-            "AUXILIARY_VISION_API_KEY": "sk-secret",
-            "GATEWAY_RELAY_SECRET": "relay-secret",
-            "AUXILIARY_VISION_PROVIDER": "openai",
-        }, clear=True):
+
+        with patch.dict(
+            os.environ,
+            {
+                "PATH": "/usr/bin:/bin",
+                "AUXILIARY_VISION_API_KEY": "sk-secret",
+                "GATEWAY_RELAY_SECRET": "relay-secret",
+                "AUXILIARY_VISION_PROVIDER": "openai",
+            },
+            clear=True,
+        ):
             run_env = _make_run_env({})
         assert "AUXILIARY_VISION_API_KEY" not in run_env
         assert "GATEWAY_RELAY_SECRET" not in run_env

@@ -58,7 +58,9 @@ def _make_codex_agent(monkeypatch, tmp_path: Path, *, show_notice: bool):
     """Construct a real Codex gpt-5.5 agent under an isolated config."""
     from clawk_cli import config as config_mod
 
-    monkeypatch.setattr(config_mod, "load_config", lambda: _config(show_notice=show_notice))
+    monkeypatch.setattr(
+        config_mod, "load_config", lambda: _config(show_notice=show_notice)
+    )
     db = SessionDB(db_path=tmp_path / "state.db")
     stdout = io.StringIO()
 
@@ -135,9 +137,11 @@ def test_state_keyed_on_model_and_displayed_percentages() -> None:
     # prefixed with the bare model slug.
     assert _codex_gpt55_autoraise_notice_state(AUTORAISE) == "gpt-5.5:50:85"
     assert (
-        _codex_gpt55_autoraise_notice_state(
-            {"model": "openai/gpt-5.4", "from": 0.75, "to": 0.85}
-        )
+        _codex_gpt55_autoraise_notice_state({
+            "model": "openai/gpt-5.4",
+            "from": 0.75,
+            "to": 0.85,
+        })
         == "gpt-5.4:75:85"
     )
 

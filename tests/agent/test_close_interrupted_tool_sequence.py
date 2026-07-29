@@ -21,7 +21,9 @@ def _tool_tail():
         {
             "role": "assistant",
             "content": "",
-            "tool_calls": [{"id": "c1", "function": {"name": "patch", "arguments": "{}"}}],
+            "tool_calls": [
+                {"id": "c1", "function": {"name": "patch", "arguments": "{}"}}
+            ],
         },
         {"role": "tool", "tool_call_id": "c1", "content": "ok edited"},
     ]
@@ -44,9 +46,13 @@ def test_tool_tail_is_closed_with_placeholder():
 
 def test_tool_tail_keeps_interrupt_text_when_present():
     messages = _tool_tail()
-    close_interrupted_tool_sequence(messages, "Operation interrupted during retry (attempt 2/3).")
+    close_interrupted_tool_sequence(
+        messages, "Operation interrupted during retry (attempt 2/3)."
+    )
     assert messages[-1]["role"] == "assistant"
-    assert messages[-1]["content"] == "Operation interrupted during retry (attempt 2/3)."
+    assert (
+        messages[-1]["content"] == "Operation interrupted during retry (attempt 2/3)."
+    )
 
 
 def test_blank_interrupt_text_falls_back_to_placeholder():

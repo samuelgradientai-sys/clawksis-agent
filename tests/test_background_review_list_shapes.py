@@ -75,20 +75,18 @@ def _make_skill_tool_message(change, operations=None):
                     "type": "function",
                     "function": {
                         "name": "skill_manage",
-                        "arguments": json.dumps(
-                            {
-                                "action": "patch",
-                                "name": "my-skill",
-                                "operations": operations
-                                or [
-                                    {
-                                        "action": "replace",
-                                        "content": "x",
-                                        "old_text": "y",
-                                    }
-                                ],
-                            }
-                        ),
+                        "arguments": json.dumps({
+                            "action": "patch",
+                            "name": "my-skill",
+                            "operations": operations
+                            or [
+                                {
+                                    "action": "replace",
+                                    "content": "x",
+                                    "old_text": "y",
+                                }
+                            ],
+                        }),
                     },
                 }
             ],
@@ -97,13 +95,11 @@ def _make_skill_tool_message(change, operations=None):
         {
             "role": "tool",
             "tool_call_id": "call_1",
-            "content": json.dumps(
-                {
-                    "success": True,
-                    "message": "Skill 'my-skill' patched.",
-                    "_change": change,  # ← the offender, normally a dict
-                }
-            ),
+            "content": json.dumps({
+                "success": True,
+                "message": "Skill 'my-skill' patched.",
+                "_change": change,  # ← the offender, normally a dict
+            }),
         },
     ]
 
@@ -127,13 +123,11 @@ def _make_memory_tool_message(operations_field):
         {
             "role": "tool",
             "tool_call_id": "call_2",
-            "content": json.dumps(
-                {
-                    "success": True,
-                    "message": "Entry added.",
-                    "operations": operations_field,
-                }
-            ),
+            "content": json.dumps({
+                "success": True,
+                "message": "Entry added.",
+                "operations": operations_field,
+            }),
         },
     ]
 
@@ -148,6 +142,7 @@ class TestRunner:
             fn()
         except Exception as e:  # noqa: BLE001 — runner summary uses it
             import traceback
+
             self.failed.append((name, e, traceback.format_exc()))
         else:
             self.passed.append(name)
@@ -336,10 +331,9 @@ def test_e_call_does_not_unwind_module_callables():
     # The fix added: ``try: actions = summarize_background_review_actions(...)``
     # followed by ``except Exception as e: ... actions = []``.
     assert "actions = summarize_background_review_actions(" in src
-    assert (
-        "summarize_background_review_actions returned partial results"
-        in src
-    ), "expected partial-results guard message present"
+    assert "summarize_background_review_actions returned partial results" in src, (
+        "expected partial-results guard message present"
+    )
     # And the prior-tonon-dict guard for the call_details lookup.
     assert "if not isinstance(detail, dict):" in src
     assert "if isinstance(ops_raw, list)" in src
@@ -355,11 +349,25 @@ def main():
     runner = TestRunner()
     runner.run("a_change_as_list_does_not_crash", test_a_change_as_list_does_not_crash)
     runner.run("a_change_as_int_does_not_crash", test_a_change_as_int_does_not_crash)
-    runner.run("b_operations_as_string_treated_as_empty", test_b_operations_as_string_treated_as_empty)
-    runner.run("b_operations_as_none_treated_as_empty", test_b_operations_as_none_treated_as_empty)
-    runner.run("c_operations_contains_non_dict_entries", test_c_operations_contains_non_dict_entries)
-    runner.run("d_detail_non_dict_replaced_with_empty", test_d_detail_non_dict_replaced_with_empty)
-    runner.run("e_call_defends_via_try_except", test_e_call_does_not_unwind_module_callables)
+    runner.run(
+        "b_operations_as_string_treated_as_empty",
+        test_b_operations_as_string_treated_as_empty,
+    )
+    runner.run(
+        "b_operations_as_none_treated_as_empty",
+        test_b_operations_as_none_treated_as_empty,
+    )
+    runner.run(
+        "c_operations_contains_non_dict_entries",
+        test_c_operations_contains_non_dict_entries,
+    )
+    runner.run(
+        "d_detail_non_dict_replaced_with_empty",
+        test_d_detail_non_dict_replaced_with_empty,
+    )
+    runner.run(
+        "e_call_defends_via_try_except", test_e_call_does_not_unwind_module_callables
+    )
     return runner.summary()
 
 

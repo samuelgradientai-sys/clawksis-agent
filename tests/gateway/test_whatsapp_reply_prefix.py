@@ -28,6 +28,7 @@ class TestConfigYamlBridging:
 
         with patch("gateway.config.get_clawk_home", return_value=tmp_path):
             from gateway.config import load_gateway_config
+
             # Need to also patch WHATSAPP_ENABLED so the platform exists
             with patch.dict("os.environ", {"WHATSAPP_ENABLED": "true"}, clear=False):
                 config = load_gateway_config()
@@ -43,6 +44,7 @@ class TestConfigYamlBridging:
 
         with patch("gateway.config.get_clawk_home", return_value=tmp_path):
             from gateway.config import load_gateway_config
+
             with patch.dict("os.environ", {"WHATSAPP_ENABLED": "true"}, clear=False):
                 config = load_gateway_config()
 
@@ -57,6 +59,7 @@ class TestConfigYamlBridging:
 
         with patch("gateway.config.get_clawk_home", return_value=tmp_path):
             from gateway.config import load_gateway_config
+
             with patch.dict("os.environ", {"WHATSAPP_ENABLED": "true"}, clear=False):
                 config = load_gateway_config()
 
@@ -71,6 +74,7 @@ class TestConfigYamlBridging:
 
         with patch("gateway.config.get_clawk_home", return_value=tmp_path):
             from gateway.config import load_gateway_config
+
             with patch.dict("os.environ", {"WHATSAPP_ENABLED": "true"}, clear=False):
                 config = load_gateway_config()
 
@@ -88,18 +92,21 @@ class TestAdapterInit:
 
     def test_reply_prefix_from_extra(self):
         from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
+
         config = PlatformConfig(enabled=True, extra={"reply_prefix": "Bot\\n"})
         adapter = WhatsAppAdapter(config)
         assert adapter._reply_prefix == "Bot\\n"
 
     def test_reply_prefix_default_none(self):
         from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
+
         config = PlatformConfig(enabled=True)
         adapter = WhatsAppAdapter(config)
         assert adapter._reply_prefix is None
 
     def test_reply_prefix_empty_string(self):
         from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
+
         config = PlatformConfig(enabled=True, extra={"reply_prefix": ""})
         adapter = WhatsAppAdapter(config)
         assert adapter._reply_prefix == ""
@@ -116,4 +123,5 @@ class TestConfigVersionCoverage:
     def test_default_config_version_covers_env_var_versions(self):
         """_config_version must be >= the highest ENV_VARS_BY_VERSION key."""
         from clawk_cli.config import DEFAULT_CONFIG, ENV_VARS_BY_VERSION
+
         assert DEFAULT_CONFIG["_config_version"] >= max(ENV_VARS_BY_VERSION)

@@ -7,7 +7,12 @@ from types import SimpleNamespace
 import pytest
 
 from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import BasePlatformAdapter, MessageEvent, MessageType, SendResult
+from gateway.platforms.base import (
+    BasePlatformAdapter,
+    MessageEvent,
+    MessageType,
+    SendResult,
+)
 from gateway.session import SessionSource
 
 
@@ -29,14 +34,12 @@ class CaptureAdapter(BasePlatformAdapter):
         return None
 
     async def send(self, chat_id, content, reply_to=None, metadata=None) -> SendResult:
-        self.sent.append(
-            {
-                "chat_id": chat_id,
-                "content": content,
-                "reply_to": reply_to,
-                "metadata": metadata,
-            }
-        )
+        self.sent.append({
+            "chat_id": chat_id,
+            "content": content,
+            "reply_to": reply_to,
+            "metadata": metadata,
+        })
         return SendResult(success=True, message_id="sent-1")
 
     async def send_typing(self, chat_id, metadata=None) -> None:
@@ -91,7 +94,9 @@ def _make_runner(adapter):
 
 
 @pytest.mark.asyncio
-async def test_queued_followup_uses_pending_event_session_key_for_native_images(monkeypatch, tmp_path):
+async def test_queued_followup_uses_pending_event_session_key_for_native_images(
+    monkeypatch, tmp_path
+):
     CaptureQueuedNativeImageAgent.calls = []
 
     fake_dotenv = types.ModuleType("dotenv")
@@ -104,7 +109,9 @@ async def test_queued_followup_uses_pending_event_session_key_for_native_images(
 
     gateway_run = importlib.import_module("gateway.run")
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
 
     adapter = CaptureAdapter()
     runner = _make_runner(adapter)

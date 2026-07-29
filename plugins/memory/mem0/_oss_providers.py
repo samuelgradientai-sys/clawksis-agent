@@ -51,7 +51,12 @@ VECTOR_PROVIDERS: dict[str, dict[str, Any]] = {
     },
     "pgvector": {
         "label": "PGVector",
-        "default_config": {"host": "localhost", "port": 5432, "user": os.getenv("USER", "postgres"), "dbname": "postgres"},
+        "default_config": {
+            "host": "localhost",
+            "port": 5432,
+            "user": os.getenv("USER", "postgres"),
+            "dbname": "postgres",
+        },
         "pip_dep": "psycopg2-binary",
     },
 }
@@ -68,8 +73,11 @@ def validate_oss_config(oss_config: dict) -> list[str]:
     """Validate an OSS config dict. Returns list of error strings (empty = valid)."""
     errors: list[str] = []
 
-    for section, registry in [("llm", LLM_PROVIDERS), ("embedder", EMBEDDER_PROVIDERS),
-                               ("vector_store", VECTOR_PROVIDERS)]:
+    for section, registry in [
+        ("llm", LLM_PROVIDERS),
+        ("embedder", EMBEDDER_PROVIDERS),
+        ("vector_store", VECTOR_PROVIDERS),
+    ]:
         block = oss_config.get(section)
         if not block or not isinstance(block, dict):
             errors.append(f"Missing required section: {section}")

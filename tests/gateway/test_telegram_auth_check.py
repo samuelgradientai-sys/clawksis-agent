@@ -3,6 +3,7 @@
 Verifies that unauthorized users are blocked before any text batching,
 event building, or response generation occurs.
 """
+
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -13,7 +14,13 @@ from gateway.config import Platform, PlatformConfig
 from gateway.platforms.base import MessageType
 
 
-def _make_adapter(allow_from=None, allowed_chats=None, group_allowed_chats=None, callback_auth=None, **extra_overrides):
+def _make_adapter(
+    allow_from=None,
+    allowed_chats=None,
+    group_allowed_chats=None,
+    callback_auth=None,
+    **extra_overrides,
+):
     try:
         from plugins.platforms.telegram.adapter import TelegramAdapter
     except ModuleNotFoundError:  # PR branch before Telegram plugin extraction
@@ -57,7 +64,9 @@ def _make_message(text="hello", *, from_user_id=111, chat_id=-100, chat_type="gr
         message_thread_id=None,
         is_topic_message=False,
         chat=SimpleNamespace(id=chat_id, type=chat_type, title="Test", is_forum=False),
-        from_user=SimpleNamespace(id=from_user_id, full_name="Test User", first_name="Test"),
+        from_user=SimpleNamespace(
+            id=from_user_id, full_name="Test User", first_name="Test"
+        ),
         reply_to_message=None,
         date=None,
         location=None,
@@ -94,7 +103,9 @@ async def test_unauthorized_user_blocked_before_event_building():
 
     await adapter._handle_text_message(update, SimpleNamespace())
 
-    assert build_called is False, "build_message_event should not be called for unauthorized user"
+    assert build_called is False, (
+        "build_message_event should not be called for unauthorized user"
+    )
 
 
 @pytest.mark.asyncio
@@ -120,7 +131,9 @@ async def test_authorized_user_processed_normally():
 
     await adapter._handle_text_message(update, SimpleNamespace())
 
-    assert build_called is True, "build_message_event should be called for authorized user"
+    assert build_called is True, (
+        "build_message_event should be called for authorized user"
+    )
 
 
 @pytest.mark.asyncio
@@ -270,7 +283,11 @@ def test_runner_auth_gets_group_user_allowlist_context(monkeypatch):
     class Runner:
         def _is_user_authorized(self, source):
             seen_sources.append(source)
-            return source.chat_type == "group" and source.chat_id == "-100" and source.user_id == "111"
+            return (
+                source.chat_type == "group"
+                and source.chat_id == "-100"
+                and source.user_id == "111"
+            )
 
         async def handle(self, event):
             return None
@@ -338,7 +355,9 @@ async def test_media_from_removed_user_blocked_before_event_building(monkeypatch
         file_name="payload.txt",
         mime_type="text/plain",
         file_size=42,
-        get_file=AsyncMock(side_effect=AssertionError("unauthorized document was downloaded")),
+        get_file=AsyncMock(
+            side_effect=AssertionError("unauthorized document was downloaded")
+        ),
     )
     msg = _make_message(text=None, from_user_id=111, chat_id=111, chat_type="private")
     msg.caption = "please process this caption"
@@ -364,9 +383,13 @@ async def test_unmentioned_group_text_from_removed_user_not_observed():
         observe_unmentioned_group_messages=True,
     )
     observed = []
-    adapter._observe_unmentioned_group_message = lambda *args, **kwargs: observed.append((args, kwargs))
+    adapter._observe_unmentioned_group_message = lambda *args, **kwargs: (
+        observed.append((args, kwargs))
+    )
 
-    msg = _make_message(text="side chatter", from_user_id=111, chat_id=-100, chat_type="group")
+    msg = _make_message(
+        text="side chatter", from_user_id=111, chat_id=-100, chat_type="group"
+    )
     update = SimpleNamespace(update_id=1, message=msg, effective_message=None)
 
     await adapter._handle_text_message(update, SimpleNamespace())
@@ -385,7 +408,9 @@ async def test_unmentioned_group_location_from_removed_user_not_observed():
         observe_unmentioned_group_messages=True,
     )
     observed = []
-    adapter._observe_unmentioned_group_message = lambda *args, **kwargs: observed.append((args, kwargs))
+    adapter._observe_unmentioned_group_message = lambda *args, **kwargs: (
+        observed.append((args, kwargs))
+    )
 
     msg = _make_message(text=None, from_user_id=111, chat_id=-100, chat_type="group")
     msg.location = SimpleNamespace(latitude=53.3498, longitude=-6.2603)

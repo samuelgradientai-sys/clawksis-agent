@@ -491,7 +491,9 @@ class ByteRoverMemoryProvider(MemoryProvider):
         """Extract insights before context compression discards turns."""
 
         if not self._auto_extract:
-            logger.debug("ByteRover pre-compression flush skipped (auto_extract disabled)")
+            logger.debug(
+                "ByteRover pre-compression flush skipped (auto_extract disabled)"
+            )
 
             return ""
 

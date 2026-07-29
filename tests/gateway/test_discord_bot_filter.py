@@ -25,6 +25,7 @@ def _make_message(*, author=None, content="hello", mentions=None, is_dm=False):
     msg.mentions = mentions or []
     if is_dm:
         import discord
+
         msg.channel = MagicMock(spec=discord.DMChannel)
         msg.channel.id = 111
     else:
@@ -84,13 +85,12 @@ class TestDiscordBotFilter(unittest.TestCase):
             elif allow == "mentions":
                 if not self._self_is_explicitly_mentioned(message, client_user):
                     return False
-            if (
-                bots_require_inline_mention
-                and not self._self_is_raw_mentioned(message, client_user)
+            if bots_require_inline_mention and not self._self_is_raw_mentioned(
+                message, client_user
             ):
                 return False
             # "all" falls through
-        
+
         return True  # message accepted
 
     def test_own_messages_always_ignored(self):
@@ -193,7 +193,9 @@ class TestDiscordBotFilter(unittest.TestCase):
         """The opt-in guard only applies to bot-authored messages."""
         human = _make_author(bot=False)
         our_user = _make_author(is_self=True)
-        msg = _make_message(author=human, content="human reply-ping", mentions=[our_user])
+        msg = _make_message(
+            author=human, content="human reply-ping", mentions=[our_user]
+        )
 
         self.assertTrue(
             self._run_filter(

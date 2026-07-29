@@ -226,9 +226,7 @@ def install_deps():
 
     print("  pip install 'clawksis-agent[google]'")
 
-    print(
-        f"Or manually: {sys.executable} -m pip install {' '.join(REQUIRED_PACKAGES)}"
-    )
+    print(f"Or manually: {sys.executable} -m pip install {' '.join(REQUIRED_PACKAGES)}")
 
     return False
 

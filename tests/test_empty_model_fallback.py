@@ -8,6 +8,7 @@ class TestGetDefaultModelForProvider:
 
     def test_known_provider_returns_first_model(self):
         from clawk_cli.models import get_default_model_for_provider
+
         result = get_default_model_for_provider("openai-codex")
         # Should return first model from _PROVIDER_MODELS["openai-codex"]
         assert result
@@ -21,17 +22,20 @@ class TestGetDefaultModelForProvider:
             PREFERRED_SILENT_DEFAULT_MODEL,
             get_default_model_for_provider,
         )
+
         result = get_default_model_for_provider("openrouter")
         assert result == PREFERRED_SILENT_DEFAULT_MODEL
         assert "claude" not in result.lower()
 
     def test_unknown_provider_returns_empty(self):
         from clawk_cli.models import get_default_model_for_provider
+
         assert get_default_model_for_provider("nonexistent-provider") == ""
 
     def test_custom_provider_returns_empty(self):
         """Custom provider has no model catalog — should return empty."""
         from clawk_cli.models import get_default_model_for_provider
+
         # Custom providers don't have entries in _PROVIDER_MODELS
         assert get_default_model_for_provider("some-random-custom") == ""
 
@@ -82,8 +86,7 @@ class TestGetDefaultModelForProvider:
             )
             # nous catalog carries qwen3.7-plus, so the full resolver follows.
             assert (
-                models_mod.get_default_model_for_provider("nous")
-                == "qwen/qwen3.7-plus"
+                models_mod.get_default_model_for_provider("nous") == "qwen/qwen3.7-plus"
             )
 
     def test_no_catalog_cache_falls_back_to_constant(self):
@@ -170,13 +173,18 @@ class TestGatewayEmptyModelFallback:
 
         # Mock _resolve_gateway_model to return empty string
         # Mock _resolve_runtime_agent_kwargs to return openai-codex provider
-        with patch("gateway.run._resolve_gateway_model", return_value=""), \
-             patch("gateway.run._resolve_runtime_agent_kwargs", return_value={
-                 "provider": "openai-codex",
-                 "api_key": "test-key",
-                 "base_url": "https://chatgpt.com/backend-api/codex",
-                 "api_mode": "codex_responses",
-             }):
+        with (
+            patch("gateway.run._resolve_gateway_model", return_value=""),
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs",
+                return_value={
+                    "provider": "openai-codex",
+                    "api_key": "test-key",
+                    "base_url": "https://chatgpt.com/backend-api/codex",
+                    "api_mode": "codex_responses",
+                },
+            ),
+        ):
             model, kwargs = runner._resolve_session_agent_runtime()
 
         # Model should have been filled in from provider catalog
@@ -191,13 +199,18 @@ class TestGatewayEmptyModelFallback:
         runner = object.__new__(GatewayRunner)
         runner._session_model_overrides = {}
 
-        with patch("gateway.run._resolve_gateway_model", return_value="gpt-5.4"), \
-             patch("gateway.run._resolve_runtime_agent_kwargs", return_value={
-                 "provider": "openai-codex",
-                 "api_key": "test-key",
-                 "base_url": "https://chatgpt.com/backend-api/codex",
-                 "api_mode": "codex_responses",
-             }):
+        with (
+            patch("gateway.run._resolve_gateway_model", return_value="gpt-5.4"),
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs",
+                return_value={
+                    "provider": "openai-codex",
+                    "api_key": "test-key",
+                    "base_url": "https://chatgpt.com/backend-api/codex",
+                    "api_mode": "codex_responses",
+                },
+            ),
+        ):
             model, kwargs = runner._resolve_session_agent_runtime()
 
         assert model == "gpt-5.4", "Explicit model should not be overridden"
@@ -209,13 +222,18 @@ class TestGatewayEmptyModelFallback:
         runner = object.__new__(GatewayRunner)
         runner._session_model_overrides = {}
 
-        with patch("gateway.run._resolve_gateway_model", return_value=""), \
-             patch("gateway.run._resolve_runtime_agent_kwargs", return_value={
-                 "provider": "",
-                 "api_key": "test-key",
-                 "base_url": "https://example.com",
-                 "api_mode": "chat_completions",
-             }):
+        with (
+            patch("gateway.run._resolve_gateway_model", return_value=""),
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs",
+                return_value={
+                    "provider": "",
+                    "api_key": "test-key",
+                    "base_url": "https://example.com",
+                    "api_mode": "chat_completions",
+                },
+            ),
+        ):
             model, kwargs = runner._resolve_session_agent_runtime()
 
         # Can't fill in a default without knowing the provider
@@ -227,20 +245,25 @@ class TestResolveGatewayModel:
 
     def test_returns_default_key(self):
         from gateway.run import _resolve_gateway_model
+
         assert _resolve_gateway_model({"model": {"default": "gpt-5.4"}}) == "gpt-5.4"
 
     def test_returns_model_key_fallback(self):
         from gateway.run import _resolve_gateway_model
+
         assert _resolve_gateway_model({"model": {"model": "gpt-5.4"}}) == "gpt-5.4"
 
     def test_returns_empty_when_missing(self):
         from gateway.run import _resolve_gateway_model
+
         assert _resolve_gateway_model({"model": {}}) == ""
 
     def test_returns_empty_when_no_model_section(self):
         from gateway.run import _resolve_gateway_model
+
         assert _resolve_gateway_model({}) == ""
 
     def test_string_model_config(self):
         from gateway.run import _resolve_gateway_model
+
         assert _resolve_gateway_model({"model": "my-model"}) == "my-model"

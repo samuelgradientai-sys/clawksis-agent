@@ -55,6 +55,7 @@ from typing import Any, Dict, List, Optional
 
 try:
     import httpx
+
     HTTPX_AVAILABLE = True
 except ImportError:
     HTTPX_AVAILABLE = False
@@ -103,6 +104,7 @@ def _build_auth_header(token: str) -> Dict[str, str]:
         return {}
     if ":" in token:
         import base64
+
         encoded = base64.b64encode(token.encode()).decode()
         return {"Authorization": f"Basic {encoded}"}
     return {"Authorization": f"Bearer {token}"}
@@ -117,7 +119,9 @@ def _truncate_body(message: str, *, context: str) -> bytes:
     if len(message) > MAX_MESSAGE_LENGTH:
         logger.warning(
             "%s: truncating message from %d to %d chars (ntfy limit)",
-            context, len(message), MAX_MESSAGE_LENGTH,
+            context,
+            len(message),
+            MAX_MESSAGE_LENGTH,
         )
     return message[:MAX_MESSAGE_LENGTH].encode("utf-8")
 
@@ -164,8 +168,7 @@ class NtfyAdapter(BasePlatformAdapter):
 
         extra = config.extra or {}
         self._server: str = (
-            extra.get("server")
-            or os.getenv("NTFY_SERVER_URL", DEFAULT_SERVER)
+            extra.get("server") or os.getenv("NTFY_SERVER_URL", DEFAULT_SERVER)
         ).rstrip("/")
         self._topic: str = extra.get("topic") or os.getenv("NTFY_TOPIC", "")
         self._publish_topic: str = (
@@ -186,7 +189,9 @@ class NtfyAdapter(BasePlatformAdapter):
     async def connect(self, *, is_reconnect: bool = False) -> bool:
         """Connect to ntfy by starting the streaming subscription task."""
         if not HTTPX_AVAILABLE:
-            logger.warning("[%s] httpx not installed. Run: pip install httpx", self.name)
+            logger.warning(
+                "[%s] httpx not installed. Run: pip install httpx", self.name
+            )
             return False
         if not self._topic:
             logger.warning("[%s] NTFY_TOPIC not configured", self.name)
@@ -196,7 +201,12 @@ class NtfyAdapter(BasePlatformAdapter):
             self._http_client = httpx.AsyncClient(timeout=None)
             self._stream_task = asyncio.create_task(self._run_stream())
             self._mark_connected()
-            logger.info("[%s] Connected — subscribing to %s/%s", self.name, self._server, self._topic)
+            logger.info(
+                "[%s] Connected — subscribing to %s/%s",
+                self.name,
+                self._server,
+                self._topic,
+            )
             return True
         except Exception as e:
             logger.error("[%s] Failed to connect: %s", self.name, e)
@@ -244,7 +254,9 @@ class NtfyAdapter(BasePlatformAdapter):
             url,
             headers=headers,
             params=params,
-            timeout=httpx.Timeout(connect=15.0, read=STREAM_TIMEOUT_SECONDS, write=15.0, pool=15.0),
+            timeout=httpx.Timeout(
+                connect=15.0, read=STREAM_TIMEOUT_SECONDS, write=15.0, pool=15.0
+            ),
         ) as response:
             if response.status_code == 401:
                 logger.error(
@@ -260,7 +272,8 @@ class NtfyAdapter(BasePlatformAdapter):
             if response.status_code == 404:
                 logger.error(
                     "[%s] Topic not found (404): %s — stopping reconnect loop.",
-                    self.name, self._topic,
+                    self.name,
+                    self._topic,
                 )
                 self._set_fatal_error(
                     "ntfy_topic_not_found",
@@ -345,7 +358,8 @@ class NtfyAdapter(BasePlatformAdapter):
         try:
             timestamp = (
                 datetime.fromtimestamp(int(unix_ts), tz=timezone.utc)
-                if unix_ts else datetime.now(tz=timezone.utc)
+                if unix_ts
+                else datetime.now(tz=timezone.utc)
             )
         except (ValueError, OSError, TypeError):
             timestamp = datetime.now(tz=timezone.utc)
@@ -369,7 +383,9 @@ class NtfyAdapter(BasePlatformAdapter):
         now = time.time()
         if len(self._seen_messages) > DEDUP_MAX_SIZE:
             cutoff = now - DEDUP_WINDOW_SECONDS
-            self._seen_messages = {k: v for k, v in self._seen_messages.items() if v > cutoff}
+            self._seen_messages = {
+                k: v for k, v in self._seen_messages.items() if v > cutoff
+            }
 
         if msg_id in self._seen_messages:
             return True
@@ -405,13 +421,18 @@ class NtfyAdapter(BasePlatformAdapter):
         if len(content) > self.MAX_MESSAGE_LENGTH:
             logger.warning(
                 "[%s] Message truncated from %d to %d chars (ntfy limit)",
-                self.name, len(content), self.MAX_MESSAGE_LENGTH,
+                self.name,
+                len(content),
+                self.MAX_MESSAGE_LENGTH,
             )
-        body = content[:self.MAX_MESSAGE_LENGTH]
+        body = content[: self.MAX_MESSAGE_LENGTH]
 
         try:
             resp = await self._http_client.post(
-                url, content=body.encode("utf-8"), headers=headers, timeout=15.0,
+                url,
+                content=body.encode("utf-8"),
+                headers=headers,
+                timeout=15.0,
             )
             if resp.status_code < 300:
                 try:
@@ -421,8 +442,15 @@ class NtfyAdapter(BasePlatformAdapter):
                     returned_id = uuid.uuid4().hex[:12]
                 return SendResult(success=True, message_id=returned_id)
             body_text = resp.text
-            logger.warning("[%s] Send failed HTTP %d: %s", self.name, resp.status_code, body_text[:200])
-            return SendResult(success=False, error=f"HTTP {resp.status_code}: {body_text[:200]}")
+            logger.warning(
+                "[%s] Send failed HTTP %d: %s",
+                self.name,
+                resp.status_code,
+                body_text[:200],
+            )
+            return SendResult(
+                success=False, error=f"HTTP {resp.status_code}: {body_text[:200]}"
+            )
         except httpx.TimeoutException:
             return SendResult(success=False, error="Timeout publishing to ntfy")
         except Exception as e:
@@ -513,8 +541,7 @@ async def _standalone_send(
 
     extra = getattr(pconfig, "extra", {}) or {}
     server = (
-        extra.get("server")
-        or os.getenv("NTFY_SERVER_URL", DEFAULT_SERVER)
+        extra.get("server") or os.getenv("NTFY_SERVER_URL", DEFAULT_SERVER)
     ).rstrip("/")
     publish_topic = (
         chat_id
@@ -528,9 +555,17 @@ async def _standalone_send(
 
     token = extra.get("token") or os.getenv("NTFY_TOKEN", "")
     markdown_env = os.getenv("NTFY_MARKDOWN", "").strip().lower()
-    markdown_enabled = bool(extra.get("markdown")) or markdown_env in ("1", "true", "yes")
+    markdown_enabled = bool(extra.get("markdown")) or markdown_env in (
+        "1",
+        "true",
+        "yes",
+    )
 
-    headers = {"Content-Type": "text/plain; charset=utf-8", "X-Tags": _ECHO_TAG, **_build_auth_header(token)}
+    headers = {
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-Tags": _ECHO_TAG,
+        **_build_auth_header(token),
+    }
     if markdown_enabled:
         headers["X-Markdown"] = "true"
 
@@ -547,7 +582,12 @@ async def _standalone_send(
             msg_id = data.get("id") or uuid.uuid4().hex[:12]
         except Exception:
             msg_id = uuid.uuid4().hex[:12]
-        return {"success": True, "platform": "ntfy", "chat_id": publish_topic, "message_id": msg_id}
+        return {
+            "success": True,
+            "platform": "ntfy",
+            "chat_id": publish_topic,
+            "message_id": msg_id,
+        }
     except Exception as e:
         return {"error": f"ntfy standalone send failed: {e}"}
 

@@ -87,7 +87,7 @@ def _normalize_rewrite(text: str) -> str:
         candidate = re.sub(r"^```(?:text)?\s*", "", candidate, flags=re.IGNORECASE)
         candidate = re.sub(r"\s*```$", "", candidate)
     candidate = _OUTPUT_PREFIX_RE.sub("", candidate.strip())
-    candidate = candidate.strip().strip('"\'`').strip()
+    candidate = candidate.strip().strip("\"'`").strip()
     candidate = re.sub(r"[\x00-\x1f\x7f]+", " ", candidate)
     candidate = re.sub(r"\s+", " ", candidate).strip()
 

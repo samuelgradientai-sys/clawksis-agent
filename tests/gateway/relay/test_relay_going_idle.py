@@ -17,7 +17,9 @@ import pytest_asyncio
 
 from gateway.relay.ws_transport import WebSocketRelayTransport, WEBSOCKETS_AVAILABLE
 
-pytestmark = pytest.mark.skipif(not WEBSOCKETS_AVAILABLE, reason="websockets not installed")
+pytestmark = pytest.mark.skipif(
+    not WEBSOCKETS_AVAILABLE, reason="websockets not installed"
+)
 
 if WEBSOCKETS_AVAILABLE:
     import websockets
@@ -76,7 +78,9 @@ class _IdleAwareServer:
     async def _on_frame(self, ws, frame):
         ftype = frame.get("type")
         if ftype == "hello":
-            await ws.send(json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n")
+            await ws.send(
+                json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n"
+            )
             for f in self._to_push:
                 await ws.send(json.dumps(f) + "\n")
         elif ftype == "going_idle":
@@ -113,7 +117,9 @@ async def test_go_idle_returns_false_on_timeout(server):
     # A server that never acks going_idle -> go_idle returns False (caller closes anyway).
     async def no_ack(ws, frame):
         if frame.get("type") == "hello":
-            await ws.send(json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n")
+            await ws.send(
+                json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n"
+            )
         # deliberately ignore going_idle
 
     server._on_frame = no_ack  # type: ignore[assignment]
@@ -183,16 +189,23 @@ async def test_reconnect_redials_after_unexpected_close():
                     continue
                 frame = json.loads(line)
                 if frame.get("type") == "hello":
-                    await ws.send(json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n")
+                    await ws.send(
+                        json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR})
+                        + "\n"
+                    )
                     if drops["n"] == 0:
                         drops["n"] += 1
-                        await ws.close()  # force an unexpected close on the first connection
+                        await (
+                            ws.close()
+                        )  # force an unexpected close on the first connection
                         return
 
     srv._server = await websockets.serve(handle, "127.0.0.1", 0)
     sock = next(iter(srv._server.sockets))
     srv.url = f"ws://127.0.0.1:{sock.getsockname()[1]}"
-    t = WebSocketRelayTransport(srv.url, "discord", "appShared", reconnect=True, reconnect_backoff_s=0.05)
+    t = WebSocketRelayTransport(
+        srv.url, "discord", "appShared", reconnect=True, reconnect_backoff_s=0.05
+    )
     try:
         await t.connect()
         await t.handshake()
@@ -207,7 +220,9 @@ async def test_reconnect_redials_after_unexpected_close():
 
 @pytest.mark.asyncio
 async def test_no_reconnect_after_deliberate_disconnect(server):
-    t = WebSocketRelayTransport(server.url, "discord", "appShared", reconnect=True, reconnect_backoff_s=0.05)
+    t = WebSocketRelayTransport(
+        server.url, "discord", "appShared", reconnect=True, reconnect_backoff_s=0.05
+    )
     await t.connect()
     await t.handshake()
     before = server.connections

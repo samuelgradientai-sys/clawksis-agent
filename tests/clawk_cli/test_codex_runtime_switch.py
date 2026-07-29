@@ -14,19 +14,22 @@ from clawk_cli import codex_runtime_switch as crs
 
 
 class TestParseArgs:
-    @pytest.mark.parametrize("arg,expected", [
-        ("", None),
-        ("   ", None),
-        ("auto", "auto"),
-        ("codex_app_server", "codex_app_server"),
-        ("on", "codex_app_server"),
-        ("off", "auto"),
-        ("codex", "codex_app_server"),
-        ("default", "auto"),
-        ("clawk", "auto"),
-        ("ENABLE", "codex_app_server"),  # case-insensitive
-        ("DiSaBlE", "auto"),
-    ])
+    @pytest.mark.parametrize(
+        "arg,expected",
+        [
+            ("", None),
+            ("   ", None),
+            ("auto", "auto"),
+            ("codex_app_server", "codex_app_server"),
+            ("on", "codex_app_server"),
+            ("off", "auto"),
+            ("codex", "codex_app_server"),
+            ("default", "auto"),
+            ("clawk", "auto"),
+            ("ENABLE", "codex_app_server"),  # case-insensitive
+            ("DiSaBlE", "auto"),
+        ],
+    )
     def test_valid_args(self, arg, expected):
         value, errors = crs.parse_args(arg)
         assert errors == []
@@ -45,14 +48,15 @@ class TestGetCurrentRuntime:
         assert crs.get_current_runtime({"model": {"openai_runtime": ""}}) == "auto"
 
     def test_unrecognized_falls_back_to_auto(self):
-        assert crs.get_current_runtime(
-            {"model": {"openai_runtime": "garbage"}}
-        ) == "auto"
+        assert (
+            crs.get_current_runtime({"model": {"openai_runtime": "garbage"}}) == "auto"
+        )
 
     def test_explicit_codex(self):
-        assert crs.get_current_runtime(
-            {"model": {"openai_runtime": "codex_app_server"}}
-        ) == "codex_app_server"
+        assert (
+            crs.get_current_runtime({"model": {"openai_runtime": "codex_app_server"}})
+            == "codex_app_server"
+        )
 
     def test_handles_non_dict_config(self):
         assert crs.get_current_runtime(None) == "auto"  # type: ignore[arg-type]
@@ -81,8 +85,7 @@ class TestSetRuntime:
 class TestApply:
     def test_read_only_call_reports_state(self):
         cfg = {"model": {"openai_runtime": "codex_app_server"}}
-        with patch.object(crs, "check_codex_binary_ok",
-                          return_value=(True, "0.130.0")):
+        with patch.object(crs, "check_codex_binary_ok", return_value=(True, "0.130.0")):
             r = crs.apply(cfg, None)
         assert r.success
         assert r.new_value == "codex_app_server"
@@ -116,17 +119,17 @@ class TestApply:
         def persist(c):
             persisted.update(c)
 
-        with patch.object(crs, "check_codex_binary_ok",
-                          return_value=(True, "0.130.0")), \
-             patch("clawk_cli.codex_runtime_plugin_migration.migrate") as mig:
+        with (
+            patch.object(crs, "check_codex_binary_ok", return_value=(True, "0.130.0")),
+            patch("clawk_cli.codex_runtime_plugin_migration.migrate") as mig,
+        ):
             mig.return_value.migrated = ["filesystem", "clawk-tools"]
             mig.return_value.migrated_plugins = []
             mig.return_value.plugin_query_error = None
             mig.return_value.wrote_permissions_default = ":workspace"
             mig.return_value.errors = []
             mig.return_value.target_path = "/fake/.codex/config.toml"
-            r = crs.apply(cfg, "codex_app_server",
-                          persist_callback=persist)
+            r = crs.apply(cfg, "codex_app_server", persist_callback=persist)
         assert r.success
         assert mig.called, "migration must run on reapply, not just first enable"
         # Re-apply should signal "already set" but still announce migration ran
@@ -139,17 +142,16 @@ class TestApply:
         # No config write needed when value is unchanged — the persist
         # callback should NOT have fired (avoids spurious config.yaml mtimes
         # on every re-apply).
-        assert persisted == {}, (
-            "persist_callback fired despite no config-value change"
-        )
+        assert persisted == {}, "persist_callback fired despite no config-value change"
         # Caller still needs a fresh session for the cached agent to pick
         # up any migration-driven changes.
         assert r.requires_new_session is True
 
     def test_enable_blocked_when_codex_missing(self):
         cfg = {}
-        with patch.object(crs, "check_codex_binary_ok",
-                          return_value=(False, "codex not found")):
+        with patch.object(
+            crs, "check_codex_binary_ok", return_value=(False, "codex not found")
+        ):
             r = crs.apply(cfg, "codex_app_server")
         assert r.success is False
         assert "Cannot enable" in r.message
@@ -170,9 +172,10 @@ class TestApply:
         # Path.home() / ".codex" using whatever CLAWK_HOME the running pytest
         # session has set, leaking pytest tempdir paths into the user's
         # codex config.
-        with patch.object(crs, "check_codex_binary_ok",
-                          return_value=(True, "0.130.0")), \
-             patch("clawk_cli.codex_runtime_plugin_migration.migrate"):
+        with (
+            patch.object(crs, "check_codex_binary_ok", return_value=(True, "0.130.0")),
+            patch("clawk_cli.codex_runtime_plugin_migration.migrate"),
+        ):
             r = crs.apply(cfg, "codex_app_server", persist_callback=persist)
         assert r.success
         assert r.new_value == "codex_app_server"
@@ -198,8 +201,7 @@ class TestApply:
         def persist_boom(c):
             raise IOError("disk full")
 
-        with patch.object(crs, "check_codex_binary_ok",
-                          return_value=(True, "0.130.0")):
+        with patch.object(crs, "check_codex_binary_ok", return_value=(True, "0.130.0")):
             r = crs.apply(cfg, "codex_app_server", persist_callback=persist_boom)
         assert r.success is False
         assert "persist failed" in r.message
@@ -214,9 +216,10 @@ class TestApply:
             }
         }
 
-        with patch.object(crs, "check_codex_binary_ok",
-                          return_value=(True, "0.130.0")), \
-             patch("clawk_cli.codex_runtime_plugin_migration.migrate") as mig:
+        with (
+            patch.object(crs, "check_codex_binary_ok", return_value=(True, "0.130.0")),
+            patch("clawk_cli.codex_runtime_plugin_migration.migrate") as mig,
+        ):
             mig.return_value.migrated = ["filesystem", "clawk-tools"]
             mig.return_value.migrated_plugins = []
             mig.return_value.plugin_query_error = None
@@ -249,10 +252,13 @@ class TestApply:
         """If MCP migration raises, the runtime change still proceeds —
         users can manually re-run migration later."""
         cfg = {"mcp_servers": {"x": {"command": "y"}}}
-        with patch.object(crs, "check_codex_binary_ok",
-                          return_value=(True, "0.130.0")), \
-             patch("clawk_cli.codex_runtime_plugin_migration.migrate",
-                   side_effect=RuntimeError("disk full")):
+        with (
+            patch.object(crs, "check_codex_binary_ok", return_value=(True, "0.130.0")),
+            patch(
+                "clawk_cli.codex_runtime_plugin_migration.migrate",
+                side_effect=RuntimeError("disk full"),
+            ),
+        ):
             r = crs.apply(cfg, "codex_app_server")
         assert r.success  # change still applied
         assert r.new_value == "codex_app_server"
@@ -268,9 +274,12 @@ class TestApply:
         Regression guard against a refactor that drops the cache.
         """
         cfg = {}
-        with patch.object(crs, "check_codex_binary_ok",
-                          return_value=(True, "0.130.0")) as bin_check, \
-             patch("clawk_cli.codex_runtime_plugin_migration.migrate"):
+        with (
+            patch.object(
+                crs, "check_codex_binary_ok", return_value=(True, "0.130.0")
+            ) as bin_check,
+            patch("clawk_cli.codex_runtime_plugin_migration.migrate"),
+        ):
             r = crs.apply(cfg, "codex_app_server")
         assert r.success
         assert bin_check.call_count == 1, (
@@ -282,7 +291,8 @@ class TestApply:
         """Read-only call (new_value=None) calls the binary check exactly
         once and reuses the result for the message."""
         cfg = {"model": {"openai_runtime": "codex_app_server"}}
-        with patch.object(crs, "check_codex_binary_ok",
-                          return_value=(True, "0.130.0")) as bin_check:
+        with patch.object(
+            crs, "check_codex_binary_ok", return_value=(True, "0.130.0")
+        ) as bin_check:
             crs.apply(cfg, None)
         assert bin_check.call_count == 1

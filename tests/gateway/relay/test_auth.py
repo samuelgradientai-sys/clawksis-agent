@@ -89,7 +89,10 @@ def test_token_expired_rejected():
 
 def test_token_rotation_verify_list():
     # A token signed with the (old) secondary still verifies during rotation.
-    old, new = _SECRET, "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100"
+    old, new = (
+        _SECRET,
+        "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
+    )
     tok_old = make_token("p", old, 0)
     assert verify_token(tok_old, [new, old]) == "p"  # primary=new, secondary=old
     assert verify_token(tok_old, [new]) is None
@@ -164,4 +167,9 @@ def test_python_sign_matches_connector_delivery_sig():
 
 
 def test_python_verifies_connector_delivery_signature():
-    assert verify_delivery_signature(_CONN_BODY, str(_CONN_TS), _CONN_SIG, [_SECRET], now=_CONN_TS) is True
+    assert (
+        verify_delivery_signature(
+            _CONN_BODY, str(_CONN_TS), _CONN_SIG, [_SECRET], now=_CONN_TS
+        )
+        is True
+    )

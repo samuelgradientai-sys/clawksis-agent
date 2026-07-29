@@ -9,7 +9,6 @@ from gateway.platforms.helpers import (
 
 
 class TestTablePrimitives:
-
     def test_separator_re_matches_basic(self):
         assert TABLE_SEPARATOR_RE.match("|---|---|")
 
@@ -33,7 +32,6 @@ class TestTablePrimitives:
 
 
 class TestConvertTableToBullets:
-
     def test_basic_table(self):
         text = (
             "| Player | Score |\n"
@@ -49,11 +47,7 @@ class TestConvertTableToBullets:
         assert "• Player: Alice" not in out
 
     def test_three_column_table(self):
-        text = (
-            "| Name | Age | City |\n"
-            "|:-----|----:|:----:|\n"
-            "| Ada  |  30 | NYC  |"
-        )
+        text = "| Name | Age | City |\n|:-----|----:|:----:|\n| Ada  |  30 | NYC  |"
         out = convert_table_to_bullets(text)
         assert "**Ada**" in out
         assert "• Name: Ada" not in out
@@ -82,15 +76,7 @@ class TestConvertTableToBullets:
         assert "• head2: b" in out
 
     def test_two_consecutive_tables(self):
-        text = (
-            "| A | B |\n"
-            "|---|---|\n"
-            "| 1 | 2 |\n"
-            "\n"
-            "| X | Y |\n"
-            "|---|---|\n"
-            "| 9 | 8 |"
-        )
+        text = "| A | B |\n|---|---|\n| 1 | 2 |\n\n| X | Y |\n|---|---|\n| 9 | 8 |"
         out = convert_table_to_bullets(text)
         assert out.count("**1**") == 1
         assert out.count("**9**") == 1
@@ -126,12 +112,7 @@ class TestConvertTableToBullets:
         assert convert_table_to_bullets(text) == text
 
     def test_row_groups_separated_by_blank_line(self):
-        text = (
-            "| A | B |\n"
-            "|---|---|\n"
-            "| x | 1 |\n"
-            "| y | 2 |"
-        )
+        text = "| A | B |\n|---|---|\n| x | 1 |\n| y | 2 |"
         out = convert_table_to_bullets(text)
         assert "• B: 1\n\n**y**" in out
         assert "\n\n• " not in out

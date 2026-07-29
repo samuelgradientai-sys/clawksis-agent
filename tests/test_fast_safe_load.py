@@ -30,7 +30,9 @@ def test_equivalent_to_safe_load_for_strings():
 
 def test_equivalent_to_safe_load_for_file_objects():
     for doc in _DOCS:
-        assert fast_safe_load(io.StringIO(doc)) == yaml.safe_load(io.StringIO(doc)), repr(doc)
+        assert fast_safe_load(io.StringIO(doc)) == yaml.safe_load(io.StringIO(doc)), (
+            repr(doc)
+        )
 
 
 def test_empty_document_returns_none():

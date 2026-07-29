@@ -118,17 +118,24 @@ def test_refresh_does_not_touch_root_when_profile_has_own_state(profile_and_root
         },
     )
 
-    auth._save_xai_oauth_tokens(
-        {"access_token": "profile-new", "refresh_token": "profile-new-refresh"}
-    )
+    auth._save_xai_oauth_tokens({
+        "access_token": "profile-new",
+        "refresh_token": "profile-new-refresh",
+    })
 
     profile = _read_store(profile_path)
-    assert profile["providers"]["xai-oauth"]["tokens"]["refresh_token"] == "profile-new-refresh"
+    assert (
+        profile["providers"]["xai-oauth"]["tokens"]["refresh_token"]
+        == "profile-new-refresh"
+    )
 
     # Root is a separate grant chain — must be left exactly as-is.
     root = _read_store(root_path)
     assert root["providers"]["xai-oauth"]["tokens"]["access_token"] == "root-untouched"
-    assert root["providers"]["xai-oauth"]["tokens"]["refresh_token"] == "root-untouched-refresh"
+    assert (
+        root["providers"]["xai-oauth"]["tokens"]["refresh_token"]
+        == "root-untouched-refresh"
+    )
 
 
 def test_write_through_is_noop_in_classic_mode(tmp_path, monkeypatch):
@@ -140,14 +147,14 @@ def test_write_through_is_noop_in_classic_mode(tmp_path, monkeypatch):
     _write_store(profile_path, {"version": 1, "providers": {}})
 
     # Should not raise and should persist to the single store.
-    auth._save_xai_oauth_tokens(
-        {"access_token": "a", "refresh_token": "r"}
-    )
+    auth._save_xai_oauth_tokens({"access_token": "a", "refresh_token": "r"})
     store = _read_store(profile_path)
     assert store["providers"]["xai-oauth"]["tokens"]["refresh_token"] == "r"
 
 
-def test_write_through_failure_does_not_break_profile_save(profile_and_root, monkeypatch):
+def test_write_through_failure_does_not_break_profile_save(
+    profile_and_root, monkeypatch
+):
     """A failed root write-through must not break the profile's own save."""
     profile_path, root_path = profile_and_root
     _write_store(profile_path, {"version": 1, "providers": {}})

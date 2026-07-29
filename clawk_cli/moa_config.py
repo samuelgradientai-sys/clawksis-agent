@@ -170,7 +170,9 @@ def validate_moa_payload(raw: Any) -> list[str]:
             else:
                 complete_refs += 1
         if not complete_refs:
-            problems.append(f"preset '{label}': needs at least one complete reference model")
+            problems.append(
+                f"preset '{label}': needs at least one complete reference model"
+            )
 
         agg_issue = _slot_problem(preset.get("aggregator"))
         if agg_issue:
@@ -215,8 +217,12 @@ def _normalize_preset(raw: Any) -> dict[str, Any]:
         "enabled": bool(raw.get("enabled", True)),
         "reference_models": refs,
         "aggregator": aggregator,
-        "reference_temperature": _coerce_float_or_none(raw.get("reference_temperature")),
-        "aggregator_temperature": _coerce_float_or_none(raw.get("aggregator_temperature")),
+        "reference_temperature": _coerce_float_or_none(
+            raw.get("reference_temperature")
+        ),
+        "aggregator_temperature": _coerce_float_or_none(
+            raw.get("aggregator_temperature")
+        ),
         "max_tokens": _coerce_int(raw.get("max_tokens"), 4096),
         # Optional cap on how much each reference ADVISOR may generate per turn.
         # None (default) = uncapped: advisors write full-length advice, matching
@@ -292,7 +298,9 @@ def list_moa_presets(config: Any) -> list[str]:
 
 def resolve_moa_preset(config: Any, name: str | None = None) -> dict[str, Any]:
     cfg = normalize_moa_config(config)
-    preset_name = str(name or cfg.get("default_preset") or DEFAULT_MOA_PRESET_NAME).strip()
+    preset_name = str(
+        name or cfg.get("default_preset") or DEFAULT_MOA_PRESET_NAME
+    ).strip()
     preset = cfg["presets"].get(preset_name)
     if preset is None:
         from agent.errors import MoAPresetNotFoundError
@@ -353,16 +361,20 @@ def decode_moa_turn(message: Any) -> tuple[str, dict[str, Any] | None]:
     """Decode a hidden /moa one-shot marker."""
     if not isinstance(message, str) or not message.startswith(MOA_MARKER_PREFIX):
         return message, None
-    encoded = message[len(MOA_MARKER_PREFIX):].strip()
+    encoded = message[len(MOA_MARKER_PREFIX) :].strip()
     try:
-        payload = json.loads(base64.urlsafe_b64decode(encoded.encode("ascii")).decode("utf-8"))
+        payload = json.loads(
+            base64.urlsafe_b64decode(encoded.encode("ascii")).decode("utf-8")
+        )
     except Exception:
         return message, None
     prompt = str(payload.get("prompt") or "")
     return prompt, _normalize_preset(payload.get("config") or {})
 
 
-def build_moa_turn_prompt(user_prompt: str, config: Any = None, preset: str | None = None) -> str:
+def build_moa_turn_prompt(
+    user_prompt: str, config: Any = None, preset: str | None = None
+) -> str:
     """Build the hidden one-shot payload used by TUI/gateway routing."""
     return encode_moa_turn(user_prompt, config, preset=preset)
 

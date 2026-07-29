@@ -105,7 +105,9 @@ class TestFailClosedSyntaxGate:
         the gate must not refuse them just because safe_load() would raise
         ComposerError on more than one document."""
         target = tmp_path / "manifests.yaml"
-        content = "apiVersion: v1\nkind: Namespace\n---\napiVersion: v1\nkind: ConfigMap\n"
+        content = (
+            "apiVersion: v1\nkind: Namespace\n---\napiVersion: v1\nkind: ConfigMap\n"
+        )
         res = ops.write_file(str(target), content)
         assert res.error is None, res.error
         assert target.read_text() == content

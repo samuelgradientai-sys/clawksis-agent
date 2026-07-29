@@ -37,9 +37,11 @@ def _make_api_adapter(*, inflight: int = 0, queued_ids=()):
     )
 
     def active_agent_work_count() -> int:
-        return int(getattr(adapter, "_pending_agent_requests", 0)) + int(
-            adapter._inflight_agent_runs
-        ) + sum(not task.done() for task in adapter._active_run_tasks.values())
+        return (
+            int(getattr(adapter, "_pending_agent_requests", 0))
+            + int(adapter._inflight_agent_runs)
+            + sum(not task.done() for task in adapter._active_run_tasks.values())
+        )
 
     adapter.active_agent_work_count = active_agent_work_count
     return adapter
@@ -111,7 +113,9 @@ class TestAPIServerAdapterWorkCount:
         app = _make_admission_app(adapter)
 
         async with TestClient(TestServer(app)) as client:
-            with patch.object(adapter, "_run_agent", new=AsyncMock(return_value=({}, {}))):
+            with patch.object(
+                adapter, "_run_agent", new=AsyncMock(return_value=({}, {}))
+            ):
                 response = await client.post(
                     "/api/sessions/s/chat",
                     json={"message": "hello"},
@@ -180,10 +184,13 @@ class TestDrainWaitsForApiWork:
         mock_agent.session_completion_tokens = 0
         mock_agent.session_total_tokens = 0
 
-        with patch(
-            "gateway.platforms.api_server.asyncio.create_task",
-            side_effect=delayed_create_task,
-        ), patch.object(api, "_create_agent", return_value=mock_agent):
+        with (
+            patch(
+                "gateway.platforms.api_server.asyncio.create_task",
+                side_effect=delayed_create_task,
+            ),
+            patch.object(api, "_create_agent", return_value=mock_agent),
+        ):
             async with TestClient(TestServer(app)) as client:
                 response = await client.post("/v1/runs", json={"input": "hello"})
                 assert response.status == 202
@@ -294,18 +301,22 @@ class TestDrainAdmission:
             await allow_body_read.wait()
             return {"message": "hello"}, None
 
-        with patch.object(
-            adapter,
-            "_get_existing_session_or_404",
-            return_value=({}, None),
-        ), patch.object(
-            adapter,
-            "_read_json_body",
-            side_effect=delayed_read_json,
-        ), patch.object(
-            adapter,
-            "_run_agent",
-            new=AsyncMock(return_value=({"final_response": "done"}, {})),
+        with (
+            patch.object(
+                adapter,
+                "_get_existing_session_or_404",
+                return_value=({}, None),
+            ),
+            patch.object(
+                adapter,
+                "_read_json_body",
+                side_effect=delayed_read_json,
+            ),
+            patch.object(
+                adapter,
+                "_run_agent",
+                new=AsyncMock(return_value=({"final_response": "done"}, {})),
+            ),
         ):
             async with TestClient(TestServer(app)) as client:
                 request_task = asyncio.create_task(

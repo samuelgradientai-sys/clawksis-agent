@@ -36,38 +36,45 @@ def test_storage_defaults_to_permanent_public_urls(tmp_path, monkeypatch):
 
 def test_storage_can_be_disabled(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-        "video_gen": {
-            "xai": {
-                "storage": {
-                    "enabled": False,
+    (tmp_path / "config.yaml").write_text(
+        yaml.safe_dump({
+            "video_gen": {
+                "xai": {
+                    "storage": {
+                        "enabled": False,
+                    },
                 },
             },
-        },
-    }))
+        })
+    )
     _invalidate_config_cache()
 
     from tools.xai_http import build_xai_storage_options, xai_storage_notice_text
 
-    assert build_xai_storage_options(
-        "video_gen",
-        filename_prefix="clawk-xai-video",
-        extension="mp4",
-    ) is None
+    assert (
+        build_xai_storage_options(
+            "video_gen",
+            filename_prefix="clawk-xai-video",
+            extension="mp4",
+        )
+        is None
+    )
     assert xai_storage_notice_text("video_gen") == ""
 
 
 def test_storage_can_be_permanent(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-        "image_gen": {
-            "xai": {
-                "storage": {
-                    "expires_after": "permanent",
+    (tmp_path / "config.yaml").write_text(
+        yaml.safe_dump({
+            "image_gen": {
+                "xai": {
+                    "storage": {
+                        "expires_after": "permanent",
+                    },
                 },
             },
-        },
-    }))
+        })
+    )
     _invalidate_config_cache()
 
     from tools.xai_http import build_xai_storage_options
@@ -84,15 +91,17 @@ def test_storage_can_be_permanent(tmp_path, monkeypatch):
 
 def test_storage_can_use_finite_retention(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-        "image_gen": {
-            "xai": {
-                "storage": {
-                    "expires_after": 172800,
+    (tmp_path / "config.yaml").write_text(
+        yaml.safe_dump({
+            "image_gen": {
+                "xai": {
+                    "storage": {
+                        "expires_after": 172800,
+                    },
                 },
             },
-        },
-    }))
+        })
+    )
     _invalidate_config_cache()
 
     from tools.xai_http import build_xai_storage_options
@@ -109,15 +118,17 @@ def test_storage_can_use_finite_retention(tmp_path, monkeypatch):
 
 def test_invalid_storage_retention_falls_back_to_bounded_ttl(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-        "video_gen": {
-            "xai": {
-                "storage": {
-                    "expires_after": "definitely-not-a-duration",
+    (tmp_path / "config.yaml").write_text(
+        yaml.safe_dump({
+            "video_gen": {
+                "xai": {
+                    "storage": {
+                        "expires_after": "definitely-not-a-duration",
+                    },
                 },
             },
-        },
-    }))
+        })
+    )
     _invalidate_config_cache()
 
     from tools.xai_http import build_xai_storage_options

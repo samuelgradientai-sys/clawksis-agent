@@ -27,6 +27,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _reset():
     from tools.computer_use.tool import reset_backend_for_tests
+
     reset_backend_for_tests()
     yield
     reset_backend_for_tests()
@@ -35,6 +36,7 @@ def _reset():
 # ---------------------------------------------------------------------------
 # Phase A — structured verdict normalization (_action_result_from)
 # ---------------------------------------------------------------------------
+
 
 class _FakeSession:
     """Minimal cua-driver session stub returning a canned tool result."""
@@ -54,18 +56,20 @@ class _FakeSession:
 
 def _make_backend(session: _FakeSession):
     from tools.computer_use.cua_backend import CuaDriverBackend
+
     be = CuaDriverBackend.__new__(CuaDriverBackend)
-    be._session = session               # type: ignore[attr-defined]
-    be._session_id = "test-run"          # type: ignore[attr-defined]
-    be._snapshot_tokens = {}             # type: ignore[attr-defined]
-    be._active_pid = 4242                # type: ignore[attr-defined]
-    be._active_window_id = 7             # type: ignore[attr-defined]
+    be._session = session  # type: ignore[attr-defined]
+    be._session_id = "test-run"  # type: ignore[attr-defined]
+    be._snapshot_tokens = {}  # type: ignore[attr-defined]
+    be._active_pid = 4242  # type: ignore[attr-defined]
+    be._active_window_id = 7  # type: ignore[attr-defined]
     return be
 
 
 def test_confirmed_verdict_is_preserved():
     out = {
-        "isError": False, "data": {"message": "ok"},
+        "isError": False,
+        "data": {"message": "ok"},
         "structuredContent": {"verified": True, "effect": "confirmed", "path": "ax"},
     }
     be = _make_backend(_FakeSession(out))
@@ -79,7 +83,8 @@ def test_confirmed_verdict_is_preserved():
 
 def test_suspected_noop_carries_escalation():
     out = {
-        "isError": False, "data": {},
+        "isError": False,
+        "data": {},
         "structuredContent": {
             "effect": "suspected_noop",
             "escalation": {"recommended": "foreground", "reason": "occluded renderer"},
@@ -89,7 +94,10 @@ def test_suspected_noop_carries_escalation():
     be = _make_backend(_FakeSession(out))
     res = be.click(element=3)
     assert res.effect == "suspected_noop"
-    assert res.escalation == {"recommended": "foreground", "reason": "occluded renderer"}
+    assert res.escalation == {
+        "recommended": "foreground",
+        "reason": "occluded renderer",
+    }
     assert res.code == "background_unavailable"
     # transport ok, but semantically not confirmed
     assert res.verified is None
@@ -97,21 +105,30 @@ def test_suspected_noop_carries_escalation():
 
 def test_unverifiable_distinct_from_success_and_failure():
     out = {
-        "isError": False, "data": {},
-        "structuredContent": {"effect": "unverifiable", "verified": False, "path": "x11_pixel"},
+        "isError": False,
+        "data": {},
+        "structuredContent": {
+            "effect": "unverifiable",
+            "verified": False,
+            "path": "x11_pixel",
+        },
     }
     be = _make_backend(_FakeSession(out))
     res = be.click(x=10, y=20)
-    assert res.ok is True            # transport succeeded
-    assert res.verified is False     # ... but not confirmed
+    assert res.ok is True  # transport succeeded
+    assert res.verified is False  # ... but not confirmed
     assert res.effect == "unverifiable"
 
 
 def test_degraded_capture_signal_preserved():
     out = {
-        "isError": False, "data": {},
-        "structuredContent": {"effect": "suspected_noop", "degraded": True,
-                              "escalation": {"recommended": "px", "reason": "empty tree"}},
+        "isError": False,
+        "data": {},
+        "structuredContent": {
+            "effect": "suspected_noop",
+            "degraded": True,
+            "escalation": {"recommended": "px", "reason": "empty tree"},
+        },
     }
     be = _make_backend(_FakeSession(out))
     res = be.scroll(direction="down", element=1)
@@ -139,9 +156,15 @@ def test_text_response_surfaces_fields_additively():
     from tools.computer_use.tool import _text_response
 
     # Full verdict → all fields present.
-    r = ActionResult(ok=True, action="click", effect="suspected_noop",
-                     escalation={"recommended": "foreground"}, code="background_unavailable",
-                     path="ax", verified=False)
+    r = ActionResult(
+        ok=True,
+        action="click",
+        effect="suspected_noop",
+        escalation={"recommended": "foreground"},
+        code="background_unavailable",
+        path="ax",
+        verified=False,
+    )
     payload = json.loads(_text_response(r))
     assert payload["effect"] == "suspected_noop"
     assert payload["escalation"] == {"recommended": "foreground"}
@@ -152,13 +175,22 @@ def test_text_response_surfaces_fields_additively():
     r2 = ActionResult(ok=True, action="click")
     payload2 = json.loads(_text_response(r2))
     assert payload2 == {"ok": True, "action": "click"}
-    for k in ("effect", "escalation", "code", "verified", "path", "degraded", "delivery_mode"):
+    for k in (
+        "effect",
+        "escalation",
+        "code",
+        "verified",
+        "path",
+        "degraded",
+        "delivery_mode",
+    ):
         assert k not in payload2
 
 
 # ---------------------------------------------------------------------------
 # Phase B — delivery_mode threading + capability gating
 # ---------------------------------------------------------------------------
+
 
 def test_background_is_default_no_flag_sent():
     out = {"isError": False, "data": {}, "structuredContent": {"effect": "confirmed"}}
@@ -169,7 +201,11 @@ def test_background_is_default_no_flag_sent():
 
 
 def test_foreground_sent_when_capability_present():
-    out = {"isError": False, "data": {}, "structuredContent": {"effect": "unverifiable"}}
+    out = {
+        "isError": False,
+        "data": {},
+        "structuredContent": {"effect": "unverifiable"},
+    }
     sess = _FakeSession(out, capabilities={"input.delivery_mode"})
     be = _make_backend(sess)
     res = be.click(element=1, delivery_mode="foreground", bring_to_front=True)
@@ -203,11 +239,15 @@ def test_bad_delivery_mode_rejected():
 def test_dispatcher_threads_delivery_mode_to_backend():
     """End-to-end through the tool dispatcher with the noop backend."""
     from tools.computer_use import tool as cu
+
     with patch.dict(os.environ, {"CLAWK_COMPUTER_USE_BACKEND": "noop"}, clear=False):
         cu.reset_backend_for_tests()
         be = cu._get_backend()
-        cu.handle_computer_use({"action": "click", "element": 5,
-                                "delivery_mode": "foreground"})
+        cu.handle_computer_use({
+            "action": "click",
+            "element": 5,
+            "delivery_mode": "foreground",
+        })
         # noop records kwargs; find the click call
         clicks = [kw for (name, kw) in be.calls if name == "click"]  # type: ignore[attr-defined]
         assert clicks and clicks[-1].get("delivery_mode") == "foreground"
@@ -216,6 +256,7 @@ def test_dispatcher_threads_delivery_mode_to_backend():
 # ---------------------------------------------------------------------------
 # Phase C — foreground approval scoping (action + delivery_mode + session)
 # ---------------------------------------------------------------------------
+
 
 def test_background_approval_does_not_authorize_foreground():
     from tools.computer_use import tool as cu
@@ -235,7 +276,10 @@ def test_background_approval_does_not_authorize_foreground():
         assert len(seen) == 1
         # Foreground click on the SAME action must prompt again — the
         # background approval does not cover it.
-        assert cu._request_approval("click", {"delivery_mode": "foreground"}, "sess-A") is None
+        assert (
+            cu._request_approval("click", {"delivery_mode": "foreground"}, "sess-A")
+            is None
+        )
         assert len(seen) == 2
         assert seen[-1] == ("click", "foreground")
     finally:
@@ -285,6 +329,7 @@ def test_always_approve_covers_foreground():
 
 def test_foreground_summary_warns_about_focus_change():
     from tools.computer_use.tool import _summarize_action
+
     s = _summarize_action("click", {"element": 3, "delivery_mode": "foreground"})
     assert "FOREGROUND" in s
     bg = _summarize_action("click", {"element": 3})
@@ -294,6 +339,7 @@ def test_foreground_summary_warns_about_focus_change():
 # ---------------------------------------------------------------------------
 # #55048 Bug 1 — a dead session must reset _started so the next call recovers
 # ---------------------------------------------------------------------------
+
 
 def test_lifecycle_finally_resets_started_for_reentry():
     """After the lifecycle coro exits (MCP drop / crash), _started must be
@@ -319,7 +365,7 @@ def test_call_tool_restarts_a_dead_session(monkeypatch):
     from tools.computer_use.cua_backend import _CuaDriverSession
 
     sess = _CuaDriverSession.__new__(_CuaDriverSession)
-    sess._started = False           # dead session
+    sess._started = False  # dead session
     started = {"count": 0}
 
     def fake_start():
@@ -338,12 +384,14 @@ def test_call_tool_restarts_a_dead_session(monkeypatch):
             except Exception:
                 pass
             return {"isError": False, "data": {}, "structuredContent": {}}
+
     sess._bridge = _Bridge()
     sess._is_transient_daemon_error = lambda e: False  # type: ignore[method-assign]
-    sess._is_closed_session_error = lambda e: False    # type: ignore[method-assign]
+    sess._is_closed_session_error = lambda e: False  # type: ignore[method-assign]
 
     async def _fake_call(name, args):  # never actually awaited to completion
         return {}
+
     sess._call_tool_async = _fake_call  # type: ignore[method-assign]
 
     sess.call_tool("click", {"pid": 1})

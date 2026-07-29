@@ -21,6 +21,7 @@ def clean_env(monkeypatch):
 # Edge TTS speed
 # ---------------------------------------------------------------------------
 
+
 class TestEdgeTtsSpeed:
     def _run(self, tts_config, tmp_path):
         mock_comm = MagicMock()
@@ -30,7 +31,10 @@ class TestEdgeTtsSpeed:
 
         with patch("tools.tts_tool._import_edge_tts", return_value=mock_edge):
             from tools.tts_tool import _generate_edge_tts
-            asyncio.run(_generate_edge_tts("Hello", str(tmp_path / "out.mp3"), tts_config))
+
+            asyncio.run(
+                _generate_edge_tts("Hello", str(tmp_path / "out.mp3"), tts_config)
+            )
         return mock_edge.Communicate
 
     def test_default_no_rate_kwarg(self, tmp_path):
@@ -68,6 +72,7 @@ class TestEdgeTtsSpeed:
 # OpenAI TTS speed
 # ---------------------------------------------------------------------------
 
+
 class TestOpenaiTtsSpeed:
     def _run(self, tts_config, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -76,10 +81,15 @@ class TestOpenaiTtsSpeed:
         mock_client.audio.speech.create.return_value = mock_response
         mock_cls = MagicMock(return_value=mock_client)
 
-        with patch("tools.tts_tool._import_openai_client", return_value=mock_cls), \
-             patch("tools.tts_tool._resolve_openai_audio_client_config",
-                   return_value=("test-key", None, False)):
+        with (
+            patch("tools.tts_tool._import_openai_client", return_value=mock_cls),
+            patch(
+                "tools.tts_tool._resolve_openai_audio_client_config",
+                return_value=("test-key", None, False),
+            ),
+        ):
             from tools.tts_tool import _generate_openai_tts
+
             _generate_openai_tts("Hello", str(tmp_path / "out.mp3"), tts_config)
         return mock_client.audio.speech.create
 
@@ -97,7 +107,9 @@ class TestOpenaiTtsSpeed:
 
     def test_provider_speed_overrides_global(self, tmp_path, monkeypatch):
         """tts.openai.speed takes precedence over tts.speed."""
-        create = self._run({"speed": 1.5, "openai": {"speed": 2.0}}, tmp_path, monkeypatch)
+        create = self._run(
+            {"speed": 1.5, "openai": {"speed": 2.0}}, tmp_path, monkeypatch
+        )
         kwargs = create.call_args[1]
         assert kwargs["speed"] == 2.0
 
@@ -141,7 +153,10 @@ class TestMinimaxTtsT2aV2:
         resp = response if response is not None else _hex_response()
         with patch("requests.post", return_value=resp) as mock_post:
             from tools.tts_tool import _generate_minimax_tts
-            output = _generate_minimax_tts("Hello", str(tmp_path / "out.mp3"), tts_config)
+
+            output = _generate_minimax_tts(
+                "Hello", str(tmp_path / "out.mp3"), tts_config
+            )
         return mock_post, output
 
     def test_nested_payload(self, tmp_path, monkeypatch):
@@ -172,7 +187,9 @@ class TestMinimaxTtsT2aV2:
 
     def test_group_id_from_config(self, tmp_path, monkeypatch):
         """group_id from config attaches as ?GroupId=<id>."""
-        mock_post, _ = self._run({"minimax": {"group_id": "G123"}}, tmp_path, monkeypatch)
+        mock_post, _ = self._run(
+            {"minimax": {"group_id": "G123"}}, tmp_path, monkeypatch
+        )
         url = mock_post.call_args[0][0]
         assert "GroupId=G123" in url
 
@@ -185,10 +202,12 @@ class TestMinimaxTtsT2aV2:
 
     def test_group_id_already_in_url_left_alone(self, tmp_path, monkeypatch):
         """If user already set GroupId in base_url, don't double-append it."""
-        cfg = {"minimax": {
-            "base_url": "https://api.minimax.io/v1/t2a_v2?GroupId=PRESET",
-            "group_id": "IGNORED",
-        }}
+        cfg = {
+            "minimax": {
+                "base_url": "https://api.minimax.io/v1/t2a_v2?GroupId=PRESET",
+                "group_id": "IGNORED",
+            }
+        }
         mock_post, _ = self._run(cfg, tmp_path, monkeypatch)
         url = mock_post.call_args[0][0]
         assert url.count("GroupId=") == 1
@@ -222,6 +241,7 @@ class TestMinimaxTtsLegacyTextToSpeech:
         mock_response.content = b"\x00\x01\x02\x03"
         with patch("requests.post", return_value=mock_response) as mock_post:
             from tools.tts_tool import _generate_minimax_tts
+
             output = _generate_minimax_tts("Hello", str(tmp_path / "out.mp3"), cfg)
         return mock_post, output
 

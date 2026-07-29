@@ -94,7 +94,10 @@ def memory_provider_tools_enabled(enabled_toolsets: Optional[List[str]]) -> bool
 
         return any("memory" in resolve_toolset(name) for name in enabled_toolsets)
     except Exception:
-        logger.debug("Failed to resolve enabled toolsets for memory-provider tools", exc_info=True)
+        logger.debug(
+            "Failed to resolve enabled toolsets for memory-provider tools",
+            exc_info=True,
+        )
         return False
 
 
@@ -106,13 +109,10 @@ def inject_memory_provider_tools(agent: Any) -> int:
         return 0
 
     existing_tool_names = {
-        tool.get("function", {}).get("name")
-        for tool in tools
-        if isinstance(tool, dict)
+        tool.get("function", {}).get("name") for tool in tools if isinstance(tool, dict)
     }
-    if (
-        "memory" not in existing_tool_names
-        and not memory_provider_tools_enabled(getattr(agent, "enabled_toolsets", None))
+    if "memory" not in existing_tool_names and not memory_provider_tools_enabled(
+        getattr(agent, "enabled_toolsets", None)
     ):
         return 0
 
@@ -150,22 +150,22 @@ def inject_memory_provider_tools(agent: Any) -> int:
 # Context fencing helpers
 # ---------------------------------------------------------------------------
 
-_FENCE_TAG_RE = re.compile(r'</?\s*memory-context\s*>', re.IGNORECASE)
+_FENCE_TAG_RE = re.compile(r"</?\s*memory-context\s*>", re.IGNORECASE)
 _INTERNAL_CONTEXT_RE = re.compile(
-    r'<\s*memory-context\s*>[\s\S]*?</\s*memory-context\s*>',
+    r"<\s*memory-context\s*>[\s\S]*?</\s*memory-context\s*>",
     re.IGNORECASE,
 )
 _INTERNAL_NOTE_RE = re.compile(
-    r'\[System note:\s*The following is recalled memory context,\s*NOT new user input\.\s*Treat as (?:informational background data|authoritative reference data[^\]]*)\.\]\s*',
+    r"\[System note:\s*The following is recalled memory context,\s*NOT new user input\.\s*Treat as (?:informational background data|authoritative reference data[^\]]*)\.\]\s*",
     re.IGNORECASE,
 )
 
 
 def sanitize_context(text: str) -> str:
     """Strip fence tags, injected context blocks, and system notes from provider output."""
-    text = _INTERNAL_CONTEXT_RE.sub('', text)
-    text = _INTERNAL_NOTE_RE.sub('', text)
-    text = _FENCE_TAG_RE.sub('', text)
+    text = _INTERNAL_CONTEXT_RE.sub("", text)
+    text = _INTERNAL_NOTE_RE.sub("", text)
+    text = _FENCE_TAG_RE.sub("", text)
     return text
 
 
@@ -230,16 +230,15 @@ class StreamingContextScrubber:
                     self._buf = buf[-held:] if held else ""
                     return "".join(out)
                 # Found close — skip span content + tag, continue
-                buf = buf[idx + len(self._CLOSE_TAG):]
+                buf = buf[idx + len(self._CLOSE_TAG) :]
                 self._in_span = False
             else:
                 idx = self._find_boundary_open_tag(buf)
                 if idx == -1:
                     # No open tag — hold back a potential partial open tag
-                    held = (
-                        self._max_pending_open_suffix(buf)
-                        or self._max_partial_suffix(buf, self._OPEN_TAG)
-                    )
+                    held = self._max_pending_open_suffix(
+                        buf
+                    ) or self._max_partial_suffix(buf, self._OPEN_TAG)
                     if held:
                         self._append_visible(out, buf[:-held])
                         self._buf = buf[-held:]
@@ -249,7 +248,7 @@ class StreamingContextScrubber:
                 # Emit text before the tag, enter span
                 if idx > 0:
                     self._append_visible(out, buf[:idx])
-                buf = buf[idx + len(self._OPEN_TAG):]
+                buf = buf[idx + len(self._OPEN_TAG) :]
                 self._in_span = True
 
         return "".join(out)
@@ -292,7 +291,9 @@ class StreamingContextScrubber:
             idx = buf_lower.find(self._OPEN_TAG, search_start)
             if idx == -1:
                 return -1
-            if self._is_block_boundary(buf, idx) and self._has_block_opener_suffix(buf, idx):
+            if self._is_block_boundary(buf, idx) and self._has_block_opener_suffix(
+                buf, idx
+            ):
                 return idx
             search_start = idx + 1
 
@@ -318,7 +319,7 @@ class StreamingContextScrubber:
         last_newline = preceding.rfind("\n")
         if last_newline == -1:
             return self._at_block_boundary and preceding.strip() == ""
-        return preceding[last_newline + 1:].strip() == ""
+        return preceding[last_newline + 1 :].strip() == ""
 
     def _append_visible(self, out: list[str], text: str) -> None:
         if not text:
@@ -329,7 +330,7 @@ class StreamingContextScrubber:
     def _update_block_boundary(self, text: str) -> None:
         last_newline = text.rfind("\n")
         if last_newline != -1:
-            self._at_block_boundary = text[last_newline + 1:].strip() == ""
+            self._at_block_boundary = text[last_newline + 1 :].strip() == ""
         else:
             self._at_block_boundary = self._at_block_boundary and text.strip() == ""
 
@@ -410,7 +411,8 @@ class MemoryManager:
                     "already registered. Only one external memory provider is "
                     "allowed at a time. Configure which one via memory.provider "
                     "in config.yaml.",
-                    provider.name, existing,
+                    provider.name,
+                    existing,
                 )
                 return
             self._has_external = True
@@ -439,7 +441,8 @@ class MemoryManager:
                     "Memory provider '%s' tool '%s' shadows a reserved core "
                     "tool name; registration ignored. Core tools always win — "
                     "rename the provider's tool to something unique.",
-                    provider.name, tool_name,
+                    provider.name,
+                    tool_name,
                 )
                 continue
             if tool_name and tool_name not in self._tool_to_provider:
@@ -488,7 +491,8 @@ class MemoryManager:
             except Exception as e:
                 logger.warning(
                     "Memory provider '%s' system_prompt_block() failed: %s",
-                    provider.name, e,
+                    provider.name,
+                    e,
                 )
         return "\n\n".join(blocks)
 
@@ -524,13 +528,16 @@ class MemoryManager:
         parts = []
         for provider in self._providers:
             try:
-                result = self._prefetch_provider(provider, clean_query, session_id=session_id)
+                result = self._prefetch_provider(
+                    provider, clean_query, session_id=session_id
+                )
                 if result and result.strip():
                     parts.append(result)
             except Exception as e:
                 logger.debug(
                     "Memory provider '%s' prefetch failed (non-fatal): %s",
-                    provider.name, e,
+                    provider.name,
+                    e,
                 )
         return "\n\n".join(parts)
 
@@ -545,7 +552,9 @@ class MemoryManager:
 
         def _run() -> None:
             try:
-                result_box["value"] = provider.prefetch(query, session_id=session_id) or ""
+                result_box["value"] = (
+                    provider.prefetch(query, session_id=session_id) or ""
+                )
             except Exception as exc:  # pragma: no cover - re-raised by caller
                 error_box["value"] = exc
 
@@ -606,7 +615,8 @@ class MemoryManager:
                 except Exception as e:
                     logger.debug(
                         "Memory provider '%s' queue_prefetch failed (non-fatal): %s",
-                        provider.name, e,
+                        provider.name,
+                        e,
                     )
 
         self._submit_background(_run, kind="prefetch")
@@ -662,7 +672,9 @@ class MemoryManager:
         def _run() -> None:
             for provider in providers:
                 try:
-                    if messages is not None and self._provider_sync_accepts_messages(provider):
+                    if messages is not None and self._provider_sync_accepts_messages(
+                        provider
+                    ):
                         provider.sync_turn(
                             user_content,
                             assistant_content,
@@ -678,7 +690,8 @@ class MemoryManager:
                 except Exception as e:
                     logger.warning(
                         "Memory provider '%s' sync_turn failed: %s",
-                        provider.name, e,
+                        provider.name,
+                        e,
                     )
 
         self._submit_background(_run)
@@ -690,7 +703,9 @@ class MemoryManager:
         executor = self._get_sync_executor()
         if executor is None:
             if self._shutting_down:
-                logger.warning("Memory manager is shutting down; rejecting late %s task", kind)
+                logger.warning(
+                    "Memory manager is shutting down; rejecting late %s task", kind
+                )
                 return
             # Creation failure outside shutdown: preserve the historical
             # fail-safe behavior and run the operation inline.
@@ -705,14 +720,18 @@ class MemoryManager:
             # completed future invokes callbacks synchronously.
             with self._sync_executor_lock:
                 if self._shutting_down:
-                    logger.warning("Memory manager is shutting down; rejecting late %s task", kind)
+                    logger.warning(
+                        "Memory manager is shutting down; rejecting late %s task", kind
+                    )
                     return
                 future = executor.submit(fn)
                 self._background_futures[future] = kind
             future.add_done_callback(self._forget_background_future)
         except RuntimeError:
             if self._shutting_down:
-                logger.warning("Memory manager shut down during %s submission; task rejected", kind)
+                logger.warning(
+                    "Memory manager shut down during %s submission; task rejected", kind
+                )
                 return
             try:
                 fn()
@@ -737,6 +756,7 @@ class MemoryManager:
                     # Daemon workers (see tools.daemon_pool): a provider wedged
                     # on a network call must never block interpreter exit.
                     from tools.daemon_pool import DaemonThreadPoolExecutor
+
                     self._sync_executor = DaemonThreadPoolExecutor(
                         max_workers=1,
                         thread_name_prefix="mem-sync",
@@ -792,7 +812,8 @@ class MemoryManager:
                         logger.warning(
                             "Memory provider '%s' returned a tool schema with "
                             "no resolvable name; skipping (%r)",
-                            provider.name, raw_schema,
+                            provider.name,
+                            raw_schema,
                         )
                         continue
                     name = schema["name"]
@@ -804,7 +825,8 @@ class MemoryManager:
             except Exception as e:
                 logger.warning(
                     "Memory provider '%s' get_tool_schemas() failed: %s",
-                    provider.name, e,
+                    provider.name,
+                    e,
                 )
         return schemas
 
@@ -816,9 +838,7 @@ class MemoryManager:
         """Check if any provider handles this tool."""
         return tool_name in self._tool_to_provider
 
-    def handle_tool_call(
-        self, tool_name: str, args: Dict[str, Any], **kwargs
-    ) -> str:
+    def handle_tool_call(self, tool_name: str, args: Dict[str, Any], **kwargs) -> str:
         """Route a tool call to the correct provider.
 
         Returns JSON string result. Raises ValueError if no provider
@@ -832,7 +852,9 @@ class MemoryManager:
         except Exception as e:
             logger.error(
                 "Memory provider '%s' handle_tool_call(%s) failed: %s",
-                provider.name, tool_name, e,
+                provider.name,
+                tool_name,
+                e,
             )
             return tool_error(f"Memory tool '{tool_name}' failed: {e}")
 
@@ -849,7 +871,8 @@ class MemoryManager:
             except Exception as e:
                 logger.debug(
                     "Memory provider '%s' on_turn_start failed: %s",
-                    provider.name, e,
+                    provider.name,
+                    e,
                 )
 
     def on_session_end(self, messages: List[Dict[str, Any]]) -> None:
@@ -860,7 +883,8 @@ class MemoryManager:
             except Exception as e:
                 logger.warning(
                     "Memory provider '%s' on_session_end failed: %s",
-                    provider.name, e,
+                    provider.name,
+                    e,
                     exc_info=True,
                 )
 
@@ -899,7 +923,9 @@ class MemoryManager:
         def _run() -> None:
             try:
                 self.on_session_end(snapshot)
-            except Exception as e:  # pragma: no cover - on_session_end guards per-provider
+            except (
+                Exception
+            ) as e:  # pragma: no cover - on_session_end guards per-provider
                 logger.warning("Session-boundary extraction failed: %s", e)
             try:
                 self.on_session_switch(
@@ -908,7 +934,9 @@ class MemoryManager:
                     reset=True,
                     reason=reason,
                 )
-            except Exception as e:  # pragma: no cover - on_session_switch guards per-provider
+            except (
+                Exception
+            ) as e:  # pragma: no cover - on_session_switch guards per-provider
                 logger.warning("Session-boundary switch failed: %s", e)
 
         self._submit_background(_run)
@@ -958,7 +986,8 @@ class MemoryManager:
             except Exception as e:
                 logger.debug(
                     "Memory provider '%s' on_session_switch failed: %s",
-                    provider.name, e,
+                    provider.name,
+                    e,
                 )
 
     def on_pre_compress(self, messages: List[Dict[str, Any]]) -> str:
@@ -976,7 +1005,8 @@ class MemoryManager:
             except Exception as e:
                 logger.debug(
                     "Memory provider '%s' on_pre_compress failed: %s",
-                    provider.name, e,
+                    provider.name,
+                    e,
                 )
         return "\n\n".join(parts)
 
@@ -995,8 +1025,10 @@ class MemoryManager:
             return "keyword"
 
         accepted = [
-            p for p in params
-            if p.kind in {
+            p
+            for p in params
+            if p.kind
+            in {
                 inspect.Parameter.POSITIONAL_ONLY,
                 inspect.Parameter.POSITIONAL_OR_KEYWORD,
                 inspect.Parameter.KEYWORD_ONLY,
@@ -1027,13 +1059,16 @@ class MemoryManager:
                         action, target, content, metadata=dict(metadata or {})
                     )
                 elif metadata_mode == "positional":
-                    provider.on_memory_write(action, target, content, dict(metadata or {}))
+                    provider.on_memory_write(
+                        action, target, content, dict(metadata or {})
+                    )
                 else:
                     provider.on_memory_write(action, target, content)
             except Exception as e:
                 logger.debug(
                     "Memory provider '%s' on_memory_write failed: %s",
-                    provider.name, e,
+                    provider.name,
+                    e,
                 )
 
     # Actions the bridge mirrors to external providers. The built-in memory
@@ -1091,11 +1126,13 @@ class MemoryManager:
         if isinstance(operations, list) and operations:
             raw_operations = operations
         else:
-            raw_operations = [{
-                "action": tool_args.get("action"),
-                "content": tool_args.get("content"),
-                "old_text": tool_args.get("old_text"),
-            }]
+            raw_operations = [
+                {
+                    "action": tool_args.get("action"),
+                    "content": tool_args.get("content"),
+                    "old_text": tool_args.get("old_text"),
+                }
+            ]
 
         for op in raw_operations:
             if not isinstance(op, dict):
@@ -1117,8 +1154,9 @@ class MemoryManager:
             except Exception as e:
                 logger.debug("notify_memory_tool_write failed for op %s: %s", action, e)
 
-    def on_delegation(self, task: str, result: str, *,
-                      child_session_id: str = "", **kwargs) -> None:
+    def on_delegation(
+        self, task: str, result: str, *, child_session_id: str = "", **kwargs
+    ) -> None:
         """Notify all providers that a subagent completed."""
         for provider in self._providers:
             try:
@@ -1128,7 +1166,8 @@ class MemoryManager:
             except Exception as e:
                 logger.debug(
                     "Memory provider '%s' on_delegation failed: %s",
-                    provider.name, e,
+                    provider.name,
+                    e,
                 )
 
     def shutdown_all(self) -> None:
@@ -1147,7 +1186,8 @@ class MemoryManager:
             except Exception as e:
                 logger.warning(
                     "Memory provider '%s' shutdown failed: %s",
-                    provider.name, e,
+                    provider.name,
+                    e,
                 )
 
     @property
@@ -1220,6 +1260,7 @@ class MemoryManager:
         """
         if "clawk_home" not in kwargs:
             from clawk_constants import get_clawk_home
+
             kwargs["clawk_home"] = str(get_clawk_home())
         for provider in self._providers:
             try:
@@ -1227,5 +1268,6 @@ class MemoryManager:
             except Exception as e:
                 logger.warning(
                     "Memory provider '%s' initialize failed: %s",
-                    provider.name, e,
+                    provider.name,
+                    e,
                 )

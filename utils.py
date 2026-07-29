@@ -109,7 +109,9 @@ def atomic_replace(tmp_path: Union[str, Path], target: Union[str, Path]) -> str:
     need to re-apply permissions can target it instead of the symlink.
     """
     target_str = str(target)
-    real_path = os.path.realpath(target_str) if os.path.islink(target_str) else target_str
+    real_path = (
+        os.path.realpath(target_str) if os.path.islink(target_str) else target_str
+    )
     tmp_str = str(tmp_path)
     try:
         os.replace(tmp_str, real_path)
@@ -438,8 +440,12 @@ def env_bool(key: str, default: bool = False) -> bool:
 
 
 _PROXY_ENV_KEYS = (
-    "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-    "https_proxy", "http_proxy", "all_proxy",
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "ALL_PROXY",
+    "https_proxy",
+    "http_proxy",
+    "all_proxy",
 )
 
 
@@ -454,7 +460,7 @@ def normalize_proxy_url(proxy_url: str | None) -> str | None:
     if not candidate:
         return None
     if candidate.lower().startswith("socks://"):
-        return f"socks5://{candidate[len('socks://'):]}"
+        return f"socks5://{candidate[len('socks://') :]}"
     return candidate
 
 

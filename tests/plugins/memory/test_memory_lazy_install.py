@@ -91,7 +91,8 @@ class TestSupermemoryEnsureCalled:
 
         calls = []
         monkeypatch.setattr(
-            ld, "ensure",
+            ld,
+            "ensure",
             lambda feature, **kw: calls.append((feature, kw)),
         )
 
@@ -121,7 +122,8 @@ class TestMem0EnsureCalled:
 
         calls = []
         monkeypatch.setattr(
-            ld, "ensure",
+            ld,
+            "ensure",
             lambda feature, **kw: calls.append((feature, kw)),
         )
 

@@ -18,6 +18,7 @@ from clawk_cli.web_server import (
 # _profile_platform_ports
 # ---------------------------------------------------------------------------
 
+
 class TestProfilePlatformPorts:
     def test_no_runtime_platforms_returns_empty(self, tmp_path):
         assert _profile_platform_ports(tmp_path, None) == {}
@@ -85,6 +86,7 @@ class TestProfilePlatformPorts:
 # _collect_profile_gateway_topology
 # ---------------------------------------------------------------------------
 
+
 def _patch_topology(monkeypatch, homes, running, runtimes):
     """Patch the topology collector's collaborators.
 
@@ -96,7 +98,8 @@ def _patch_topology(monkeypatch, homes, running, runtimes):
 
     monkeypatch.setattr(profiles_mod, "profiles_to_serve", lambda multiplex: homes)
     monkeypatch.setattr(
-        profiles_mod, "_check_gateway_running",
+        profiles_mod,
+        "_check_gateway_running",
         lambda home: next(n for n, h in homes if h == home) in running,
     )
     by_path = {home / "gateway_state.json": runtimes.get(name) for name, home in homes}
@@ -117,7 +120,9 @@ class TestCollectProfileGatewayTopology:
     def test_single_gateway(self, tmp_path, monkeypatch):
         homes = [("default", tmp_path / "d"), ("coder", tmp_path / "c")]
         _patch_topology(
-            monkeypatch, homes, running={"default"},
+            monkeypatch,
+            homes,
+            running={"default"},
             runtimes={"default": {"platforms": {}}},
         )
         topo = _collect_profile_gateway_topology()
@@ -127,11 +132,15 @@ class TestCollectProfileGatewayTopology:
     def test_multiplex_gateway(self, tmp_path, monkeypatch):
         homes = [("default", tmp_path / "d"), ("coder", tmp_path / "c")]
         _patch_topology(
-            monkeypatch, homes, running={"default"},
-            runtimes={"default": {
-                "platforms": {},
-                "served_profiles": ["default", "coder"],
-            }},
+            monkeypatch,
+            homes,
+            running={"default"},
+            runtimes={
+                "default": {
+                    "platforms": {},
+                    "served_profiles": ["default", "coder"],
+                }
+            },
         )
         topo = _collect_profile_gateway_topology()
         assert topo["gateway_mode"] == "multiplex"
@@ -147,7 +156,9 @@ class TestCollectProfileGatewayTopology:
         )
         homes = [("default", d_home), ("coder", c_home)]
         _patch_topology(
-            monkeypatch, homes, running={"default", "coder"},
+            monkeypatch,
+            homes,
+            running={"default", "coder"},
             runtimes={
                 "default": {"platforms": {"webhook": {"state": "connected"}}},
                 "coder": {"platforms": {"webhook": {"state": "connected"}}},
@@ -173,6 +184,7 @@ class TestCollectProfileGatewayTopology:
 # /api/status wiring
 # ---------------------------------------------------------------------------
 
+
 class TestStatusEndpointTopology:
     @pytest.fixture(autouse=True)
     def _setup_client(self, monkeypatch, _isolate_clawk_home):
@@ -193,7 +205,8 @@ class TestStatusEndpointTopology:
 
     def test_status_includes_full_topology_on_loopback(self, monkeypatch):
         monkeypatch.setattr(
-            web_server, "_collect_profile_gateway_topology",
+            web_server,
+            "_collect_profile_gateway_topology",
             lambda: {
                 "profiles": ["default", "coder"],
                 "gateway_mode": "single",
@@ -213,7 +226,8 @@ class TestStatusEndpointTopology:
         # Clawksis Cloud Portal reads /api/status over the network (a gated bind)
         # to render the profile list, so they must survive the auth gate.
         monkeypatch.setattr(
-            web_server, "_collect_profile_gateway_topology",
+            web_server,
+            "_collect_profile_gateway_topology",
             lambda: {
                 "profiles": ["default", "coder"],
                 "gateway_mode": "multiplex",

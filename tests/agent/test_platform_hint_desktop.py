@@ -115,6 +115,7 @@ class TestDesktopHintBlockRemoved:
         monkeypatch.setenv("CLAWK_DESKTOP", "1")
         monkeypatch.delenv("CLAWK_DESKTOP_TERMINAL", raising=False)
         from agent.prompt_builder import _clear_backend_probe_cache
+
         _clear_backend_probe_cache()
         hints = build_environment_hints()
         assert "Runtime surface:" not in hints
@@ -126,6 +127,7 @@ class TestDesktopHintBlockRemoved:
         monkeypatch.setenv("CLAWK_DESKTOP", "1")
         monkeypatch.setenv("CLAWK_DESKTOP_TERMINAL", "1")
         from agent.prompt_builder import _clear_backend_probe_cache
+
         _clear_backend_probe_cache()
         hints = build_environment_hints()
         assert "embedded terminal pane" not in hints

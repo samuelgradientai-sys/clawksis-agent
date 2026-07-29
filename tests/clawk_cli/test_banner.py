@@ -79,7 +79,10 @@ def test_build_welcome_banner_title_is_hyperlinked_to_release():
     import tools.mcp_tool as _mcp
 
     _banner._latest_release_cache = None
-    tag_url = ("v2026.4.23", "https://github.com/samuelgradientai-sys/clawksis-agent/releases/tag/v2026.4.23")
+    tag_url = (
+        "v2026.4.23",
+        "https://github.com/samuelgradientai-sys/clawksis-agent/releases/tag/v2026.4.23",
+    )
 
     buf = io.StringIO()
     with (
@@ -89,9 +92,13 @@ def test_build_welcome_banner_title_is_hyperlinked_to_release():
         _patch.object(_mcp, "get_mcp_status", return_value=[]),
         _patch.object(_banner, "get_latest_release_tag", return_value=tag_url),
     ):
-        console = Console(file=buf, force_terminal=True, color_system="truecolor", width=160)
+        console = Console(
+            file=buf, force_terminal=True, color_system="truecolor", width=160
+        )
         _banner.build_welcome_banner(
-            console=console, model="x", cwd="/tmp",
+            console=console,
+            model="x",
+            cwd="/tmp",
             session_id="abc123",
             tools=[{"function": {"name": "read_file"}}],
             get_toolset_for_tool=lambda n: "file",
@@ -122,9 +129,13 @@ def test_build_welcome_banner_title_falls_back_when_no_tag():
         _patch.object(_mcp, "get_mcp_status", return_value=[]),
         _patch.object(_banner, "get_latest_release_tag", return_value=None),
     ):
-        console = Console(file=buf, force_terminal=True, color_system="truecolor", width=160)
+        console = Console(
+            file=buf, force_terminal=True, color_system="truecolor", width=160
+        )
         _banner.build_welcome_banner(
-            console=console, model="x", cwd="/tmp",
+            console=console,
+            model="x",
+            cwd="/tmp",
             session_id="abc123",
             tools=[{"function": {"name": "read_file"}}],
             get_toolset_for_tool=lambda n: "file",
@@ -138,23 +149,39 @@ def test_build_welcome_banner_title_falls_back_when_no_tag():
 def test_build_welcome_banner_disabled_mcp_shows_disabled_not_failed():
     """A disabled MCP server renders '— disabled' (dim), not '— failed' (red)."""
     with (
-        patch.object(model_tools, "check_tool_availability", return_value=(["web"], [])),
+        patch.object(
+            model_tools, "check_tool_availability", return_value=(["web"], [])
+        ),
         patch.object(banner, "get_available_skills", return_value={}),
         patch.object(banner, "get_update_result", return_value=None),
         patch.object(
             tools.mcp_tool,
             "get_mcp_status",
             return_value=[
-                {"name": "linear", "transport": "http", "tools": 0,
-                 "connected": False, "disabled": True},
-                {"name": "broken", "transport": "stdio", "tools": 0,
-                 "connected": False, "disabled": False},
+                {
+                    "name": "linear",
+                    "transport": "http",
+                    "tools": 0,
+                    "connected": False,
+                    "disabled": True,
+                },
+                {
+                    "name": "broken",
+                    "transport": "stdio",
+                    "tools": 0,
+                    "connected": False,
+                    "disabled": False,
+                },
             ],
         ),
     ):
-        console = Console(record=True, force_terminal=False, color_system=None, width=160)
+        console = Console(
+            record=True, force_terminal=False, color_system=None, width=160
+        )
         banner.build_welcome_banner(
-            console=console, model="anthropic/test-model", cwd="/tmp/project",
+            console=console,
+            model="anthropic/test-model",
+            cwd="/tmp/project",
             tools=[{"function": {"name": "read_file"}}],
             get_toolset_for_tool=lambda n: "file",
         )
@@ -171,7 +198,9 @@ def test_build_welcome_banner_disabled_mcp_shows_disabled_not_failed():
 def test_build_welcome_banner_configured_mcp_is_not_failed():
     """A configured MCP server with no connection attempt yet is not a failure."""
     with (
-        patch.object(model_tools, "check_tool_availability", return_value=(["web"], [])),
+        patch.object(
+            model_tools, "check_tool_availability", return_value=(["web"], [])
+        ),
         patch.object(banner, "get_available_skills", return_value={}),
         patch.object(banner, "get_update_result", return_value=None),
         patch.object(
@@ -189,9 +218,13 @@ def test_build_welcome_banner_configured_mcp_is_not_failed():
             ],
         ),
     ):
-        console = Console(record=True, force_terminal=False, color_system=None, width=160)
+        console = Console(
+            record=True, force_terminal=False, color_system=None, width=160
+        )
         banner.build_welcome_banner(
-            console=console, model="anthropic/test-model", cwd="/tmp/project",
+            console=console,
+            model="anthropic/test-model",
+            cwd="/tmp/project",
             tools=[{"function": {"name": "read_file"}}],
             get_toolset_for_tool=lambda n: "file",
         )
@@ -227,7 +260,9 @@ def test_banner_hides_toolsets_not_enabled_for_platform():
         patch.object(banner, "get_update_result", return_value=None),
         patch.object(tools.mcp_tool, "get_mcp_status", return_value=[]),
     ):
-        console = Console(record=True, force_terminal=False, color_system=None, width=160)
+        console = Console(
+            record=True, force_terminal=False, color_system=None, width=160
+        )
         banner.build_welcome_banner(
             console=console,
             model="anthropic/test-model",
@@ -249,15 +284,25 @@ def test_banner_skills_section_reflects_disabled_skills_toolset():
 
     # skills toolset DISABLED -> catalog hidden, "disabled" message shown
     with (
-        patch.object(model_tools, "check_tool_availability", return_value=(["file", "terminal"], [])),
+        patch.object(
+            model_tools,
+            "check_tool_availability",
+            return_value=(["file", "terminal"], []),
+        ),
         patch.object(banner, "get_available_skills", return_value=fake_skills),
         patch.object(banner, "get_update_result", return_value=None),
         patch.object(tools.mcp_tool, "get_mcp_status", return_value=[]),
     ):
-        console = Console(record=True, force_terminal=False, color_system=None, width=160)
+        console = Console(
+            record=True, force_terminal=False, color_system=None, width=160
+        )
         banner.build_welcome_banner(
-            console=console, model="m", cwd="/tmp", tools=[{"function": {"name": "read_file"}}],
-            enabled_toolsets=["file", "terminal"], get_toolset_for_tool=lambda n: "file",
+            console=console,
+            model="m",
+            cwd="/tmp",
+            tools=[{"function": {"name": "read_file"}}],
+            enabled_toolsets=["file", "terminal"],
+            get_toolset_for_tool=lambda n: "file",
         )
     out_disabled = console.export_text()
     assert "Skills toolset disabled" in out_disabled
@@ -265,22 +310,34 @@ def test_banner_skills_section_reflects_disabled_skills_toolset():
 
     # skills toolset ENABLED -> catalog listed as before
     with (
-        patch.object(model_tools, "check_tool_availability", return_value=(["file", "terminal", "skills"], [])),
+        patch.object(
+            model_tools,
+            "check_tool_availability",
+            return_value=(["file", "terminal", "skills"], []),
+        ),
         patch.object(banner, "get_available_skills", return_value=fake_skills),
         patch.object(banner, "get_update_result", return_value=None),
         patch.object(tools.mcp_tool, "get_mcp_status", return_value=[]),
     ):
-        console = Console(record=True, force_terminal=False, color_system=None, width=160)
+        console = Console(
+            record=True, force_terminal=False, color_system=None, width=160
+        )
         banner.build_welcome_banner(
-            console=console, model="m", cwd="/tmp", tools=[{"function": {"name": "read_file"}}],
-            enabled_toolsets=["file", "terminal", "skills"], get_toolset_for_tool=lambda n: "file",
+            console=console,
+            model="m",
+            cwd="/tmp",
+            tools=[{"function": {"name": "read_file"}}],
+            enabled_toolsets=["file", "terminal", "skills"],
+            get_toolset_for_tool=lambda n: "file",
         )
     out_enabled = console.export_text()
     assert "Skills toolset disabled" not in out_enabled
     assert "ascii-art" in out_enabled
 
 
-def test_build_welcome_banner_moa_provider_shows_preset_and_aggregator(tmp_path, monkeypatch):
+def test_build_welcome_banner_moa_provider_shows_preset_and_aggregator(
+    tmp_path, monkeypatch
+):
     """With provider='moa', the banner renders the preset + aggregator, not a bare slug."""
     import yaml
 
@@ -288,23 +345,27 @@ def test_build_welcome_banner_moa_provider_shows_preset_and_aggregator(tmp_path,
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     (home / "config.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "moa": {
-                    "default_preset": "opus-gpt",
-                    "presets": {
-                        "opus-gpt": {
-                            "enabled": True,
-                            "reference_models": [
-                                {"provider": "openrouter", "model": "openai/gpt-5.5"},
-                                {"provider": "openrouter", "model": "anthropic/claude-opus-4.8"},
-                            ],
-                            "aggregator": {"provider": "openrouter", "model": "anthropic/claude-opus-4.8"},
-                        }
-                    },
-                }
+        yaml.safe_dump({
+            "moa": {
+                "default_preset": "opus-gpt",
+                "presets": {
+                    "opus-gpt": {
+                        "enabled": True,
+                        "reference_models": [
+                            {"provider": "openrouter", "model": "openai/gpt-5.5"},
+                            {
+                                "provider": "openrouter",
+                                "model": "anthropic/claude-opus-4.8",
+                            },
+                        ],
+                        "aggregator": {
+                            "provider": "openrouter",
+                            "model": "anthropic/claude-opus-4.8",
+                        },
+                    }
+                },
             }
-        )
+        })
     )
 
     with (
@@ -313,7 +374,9 @@ def test_build_welcome_banner_moa_provider_shows_preset_and_aggregator(tmp_path,
         patch.object(banner, "get_update_result", return_value=None),
         patch.object(tools.mcp_tool, "get_mcp_status", return_value=[]),
     ):
-        console = Console(record=True, force_terminal=False, color_system=None, width=160)
+        console = Console(
+            record=True, force_terminal=False, color_system=None, width=160
+        )
         banner.build_welcome_banner(
             console=console,
             model="opus-gpt",
@@ -339,7 +402,9 @@ def test_build_welcome_banner_non_moa_unchanged(tmp_path, monkeypatch):
         patch.object(banner, "get_update_result", return_value=None),
         patch.object(tools.mcp_tool, "get_mcp_status", return_value=[]),
     ):
-        console = Console(record=True, force_terminal=False, color_system=None, width=160)
+        console = Console(
+            record=True, force_terminal=False, color_system=None, width=160
+        )
         banner.build_welcome_banner(
             console=console,
             model="anthropic/claude-opus-4.8",

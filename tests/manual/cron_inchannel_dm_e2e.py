@@ -61,10 +61,10 @@ async def _inbound_dm_reply_key(dm_threads_as_sessions: bool):
 
     event = {
         "channel": DM_CHAT,
-        "channel_type": "im",          # 1:1 DM
+        "channel_type": "im",  # 1:1 DM
         "user": USER,
         "text": "how many items in that brief?",
-        "ts": "1782999999.000100",      # a NEW top-level DM message (no thread_ts)
+        "ts": "1782999999.000100",  # a NEW top-level DM message (no thread_ts)
     }
     with patch.object(a, "_resolve_user_name", new=AsyncMock(return_value="tester")):
         await a._handle_slack_message(event)
@@ -77,14 +77,19 @@ async def _inbound_dm_reply_key(dm_threads_as_sessions: bool):
 def _seed_key() -> str:
     """The session key the cron in_channel DM seed creates (is_dm=True, flat)."""
     seed_source = SessionSource(
-        platform=Platform.SLACK, chat_id=DM_CHAT, chat_type="dm",
-        user_id=USER, thread_id=None,
+        platform=Platform.SLACK,
+        chat_id=DM_CHAT,
+        chat_type="dm",
+        user_id=USER,
+        thread_id=None,
     )
     return build_session_key(seed_source)
 
 
 def main():
-    print(f"adapter module: {SlackAdapter.__module__} ({sched.__file__.rsplit('/',2)[0]})")
+    print(
+        f"adapter module: {SlackAdapter.__module__} ({sched.__file__.rsplit('/', 2)[0]})"
+    )
     seed_key = _seed_key()
     print(f"\ncron in_channel DM seed key: {seed_key}")
 

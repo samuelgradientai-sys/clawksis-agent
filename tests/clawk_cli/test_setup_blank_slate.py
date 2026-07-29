@@ -28,8 +28,17 @@ class TestBlankSlateMinimalToolsets:
         assert "file" not in disabled
         assert "terminal" not in disabled
         # A representative spread of capabilities must be suppressed.
-        for ts in ("web", "browser", "code_execution", "vision", "memory",
-                   "delegation", "cronjob", "skills", "image_gen"):
+        for ts in (
+            "web",
+            "browser",
+            "code_execution",
+            "vision",
+            "memory",
+            "delegation",
+            "cronjob",
+            "skills",
+            "image_gen",
+        ):
             assert ts in disabled
         # The recovered non-configurable toolset that used to leak is suppressed.
         assert "kanban" in disabled
@@ -52,6 +61,7 @@ class TestBlankSlateMinimalToolsets:
         from the blank-slate agent (#57315, #58281).
         """
         from toolsets import resolve_toolset
+
         cfg = {}
         _blank_slate_minimal_toolsets(cfg)
         kept_tools = set()
@@ -66,6 +76,7 @@ class TestBlankSlateMinimalToolsets:
 
     def test_resolver_yields_exactly_file_and_terminal(self):
         from clawk_cli.tools_config import _get_platform_tools
+
         cfg = {}
         _blank_slate_minimal_toolsets(cfg)
         _blank_slate_minimize_config(cfg)
@@ -76,6 +87,7 @@ class TestBlankSlateMinimalToolsets:
         # End-to-end: the exact schema set the agent would send to the model.
         import model_tools
         from clawk_cli.tools_config import _get_platform_tools
+
         cfg = {}
         _blank_slate_minimal_toolsets(cfg)
         _blank_slate_minimize_config(cfg)
@@ -83,11 +95,17 @@ class TestBlankSlateMinimalToolsets:
         defs = model_tools.get_tool_definitions(
             enabled_toolsets=enabled, disabled_toolsets=None, quiet_mode=True
         )
-        names = sorted(
-            {(d.get("function") or {}).get("name") or d.get("name") for d in defs}
-        )
-        assert names == ["patch", "process", "read_file", "search_files",
-                         "terminal", "write_file"]
+        names = sorted({
+            (d.get("function") or {}).get("name") or d.get("name") for d in defs
+        })
+        assert names == [
+            "patch",
+            "process",
+            "read_file",
+            "search_files",
+            "terminal",
+            "write_file",
+        ]
 
     def test_tool_schema_survives_disabled_toolsets_from_config(self):
         """Regression: disabled_toolsets must not erase the minimal Blank Slate
@@ -97,6 +115,7 @@ class TestBlankSlateMinimalToolsets:
         """
         import model_tools
         from clawk_cli.tools_config import _get_platform_tools
+
         cfg = {}
         _blank_slate_minimal_toolsets(cfg)
         _blank_slate_minimize_config(cfg)
@@ -107,11 +126,17 @@ class TestBlankSlateMinimalToolsets:
             disabled_toolsets=disabled,
             quiet_mode=True,
         )
-        names = sorted(
-            {(d.get("function") or {}).get("name") or d.get("name") for d in defs}
-        )
-        assert names == ["patch", "process", "read_file", "search_files",
-                         "terminal", "write_file"]
+        names = sorted({
+            (d.get("function") or {}).get("name") or d.get("name") for d in defs
+        })
+        assert names == [
+            "patch",
+            "process",
+            "read_file",
+            "search_files",
+            "terminal",
+            "write_file",
+        ]
 
 
 class TestBlankSlateMinimizeConfig:
@@ -138,6 +163,7 @@ class TestBlankSlateFork:
 
     def _patch_common(self, monkeypatch):
         import clawk_cli.setup as s
+
         # Neutralize side-effecting setup steps and I/O.
         monkeypatch.setattr(s, "setup_model_provider", lambda cfg, **k: None)
         monkeypatch.setattr(s, "setup_terminal_backend", lambda cfg, **k: None)
@@ -150,15 +176,21 @@ class TestBlankSlateFork:
 
     def test_finish_now_skips_walkthrough(self, monkeypatch, tmp_path):
         import clawk_cli.setup as s
+
         self._patch_common(monkeypatch)
         # Fork prompt returns 0 = finish now.
         monkeypatch.setattr(s, "prompt_choice", lambda *a, **k: 0)
         walked = {"called": False}
-        monkeypatch.setattr(s, "_blank_slate_walkthrough",
-                            lambda cfg, home: walked.__setitem__("called", True))
+        monkeypatch.setattr(
+            s,
+            "_blank_slate_walkthrough",
+            lambda cfg, home: walked.__setitem__("called", True),
+        )
         opted_out = {"value": None}
-        monkeypatch.setattr("tools.skills_sync.set_bundled_skills_opt_out",
-                            lambda enabled: opted_out.__setitem__("value", enabled))
+        monkeypatch.setattr(
+            "tools.skills_sync.set_bundled_skills_opt_out",
+            lambda enabled: opted_out.__setitem__("value", enabled),
+        )
 
         cfg = {}
         s._run_blank_slate_setup(cfg, tmp_path, is_existing=False)
@@ -171,12 +203,16 @@ class TestBlankSlateFork:
 
     def test_walkthrough_path_invokes_walkthrough(self, monkeypatch, tmp_path):
         import clawk_cli.setup as s
+
         self._patch_common(monkeypatch)
         # Fork prompt returns 1 = walk through.
         monkeypatch.setattr(s, "prompt_choice", lambda *a, **k: 1)
         walked = {"called": False}
-        monkeypatch.setattr(s, "_blank_slate_walkthrough",
-                            lambda cfg, home: walked.__setitem__("called", True))
+        monkeypatch.setattr(
+            s,
+            "_blank_slate_walkthrough",
+            lambda cfg, home: walked.__setitem__("called", True),
+        )
 
         cfg = {}
         s._run_blank_slate_setup(cfg, tmp_path, is_existing=False)

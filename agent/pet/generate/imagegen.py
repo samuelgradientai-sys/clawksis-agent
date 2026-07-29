@@ -70,7 +70,9 @@ def _discover() -> None:
         logger.debug("image-gen plugin discovery failed: %s", exc)
 
 
-def resolve_provider(*, require_references: bool = True, prefer: str | None = None) -> SpriteProvider:
+def resolve_provider(
+    *, require_references: bool = True, prefer: str | None = None
+) -> SpriteProvider:
     """Pick the image provider to use for sprite work.
 
     Preference: an explicit *prefer* choice (the desktop pet-gen picker) when it's
@@ -88,14 +90,18 @@ def resolve_provider(*, require_references: bool = True, prefer: str | None = No
     if forced:
         chosen = get_provider(forced)
         if chosen is not None and chosen.is_available():
-            return SpriteProvider(name=forced, provider=chosen, supports_references=True)
+            return SpriteProvider(
+                name=forced, provider=chosen, supports_references=True
+            )
 
     # An explicit user pick wins when it's reference-capable and has credentials;
     # otherwise we ignore it and fall through to the normal resolution.
     if prefer:
         chosen = get_provider(prefer)
         if prefer in _REF_CAPABLE and chosen is not None and chosen.is_available():
-            return SpriteProvider(name=prefer, provider=chosen, supports_references=True)
+            return SpriteProvider(
+                name=prefer, provider=chosen, supports_references=True
+            )
 
     # Configured / active provider first.
     active = None
@@ -112,11 +118,15 @@ def resolve_provider(*, require_references: bool = True, prefer: str | None = No
     for name in _REF_CAPABLE:
         provider = get_provider(name)
         if provider is not None and provider.is_available():
-            return SpriteProvider(name=name, provider=provider, supports_references=True)
+            return SpriteProvider(
+                name=name, provider=provider, supports_references=True
+            )
 
     if not require_references and active is not None and active.is_available():
         return SpriteProvider(
-            name=getattr(active, "name", "unknown"), provider=active, supports_references=False
+            name=getattr(active, "name", "unknown"),
+            provider=active,
+            supports_references=False,
         )
 
     raise GenerationError(
@@ -148,13 +158,11 @@ def list_sprite_providers() -> list[dict]:
         provider = get_provider(name)
         if provider is None or not provider.is_available():
             continue
-        out.append(
-            {
-                "name": name,
-                "label": _PROVIDER_LABELS.get(name, name),
-                "default": name == default_name,
-            }
-        )
+        out.append({
+            "name": name,
+            "label": _PROVIDER_LABELS.get(name, name),
+            "default": name == default_name,
+        })
     return out
 
 
@@ -176,7 +184,9 @@ def _rejected_background(error: str) -> bool:
     key pass makes the result transparent regardless.
     """
     lowered = (error or "").lower()
-    return "background" in lowered and ("not supported" in lowered or "transparent" in lowered)
+    return "background" in lowered and (
+        "not supported" in lowered or "transparent" in lowered
+    )
 
 
 def generate(
@@ -222,7 +232,9 @@ def generate(
             logger.debug("provider.generate crashed: %s", exc)
             return None, str(exc)
         if not isinstance(result, dict) or not result.get("success"):
-            return None, (result or {}).get("error", "unknown error") if isinstance(result, dict) else "no result"
+            return None, (result or {}).get("error", "unknown error") if isinstance(
+                result, dict
+            ) else "no result"
         image_ref = result.get("image")
         if not image_ref:
             return None, "provider returned no image"

@@ -5,6 +5,7 @@ and then returning the aggregator's raw streaming iterator (from call_llm), so
 the acting model's output can stream to the user. stream=False is the original
 complete-response path and must stay byte-identical.
 """
+
 from types import SimpleNamespace
 
 import pytest
@@ -60,6 +61,7 @@ def _facade(monkeypatch, tmp_path, on_call=None):
 # --------------------------------------------------------------------------
 # Facade-level: create() stream branch
 # --------------------------------------------------------------------------
+
 
 def test_create_streams_aggregator_when_requested(monkeypatch, tmp_path):
     """stream=True: references still run, aggregator is called with stream=True
@@ -134,7 +136,9 @@ def test_create_does_not_forward_timeout_when_not_streaming(monkeypatch, tmp_pat
     """A stray timeout on a non-streaming call is NOT forwarded — the non-stream
     path must remain unchanged regardless of incidental kwargs."""
     facade, calls = _facade(monkeypatch, tmp_path)
-    facade.create(messages=[{"role": "user", "content": "q"}], tools=[], timeout=object())
+    facade.create(
+        messages=[{"role": "user", "content": "q"}], tools=[], timeout=object()
+    )
     agg = next(c for c in calls if c["task"] == "moa_aggregator")
     assert "timeout" not in agg
     assert "stream" not in agg
@@ -143,6 +147,7 @@ def test_create_does_not_forward_timeout_when_not_streaming(monkeypatch, tmp_pat
 # --------------------------------------------------------------------------
 # call_llm-level: stream branch returns the raw SDK stream
 # --------------------------------------------------------------------------
+
 
 def test_call_llm_stream_returns_raw_stream_and_skips_validation(monkeypatch):
     """call_llm(stream=True) returns the client's raw stream object directly,
@@ -163,8 +168,15 @@ def test_call_llm_stream_returns_raw_stream_and_skips_validation(monkeypatch):
     )
 
     monkeypatch.setattr(
-        ac, "_resolve_task_provider_model",
-        lambda *a, **k: ("custom", "m", "http://localhost:8001/v1", "key", "chat_completions"),
+        ac,
+        "_resolve_task_provider_model",
+        lambda *a, **k: (
+            "custom",
+            "m",
+            "http://localhost:8001/v1",
+            "key",
+            "chat_completions",
+        ),
     )
     monkeypatch.setattr(ac, "_get_cached_client", lambda *a, **k: (fake_client, "m"))
 
@@ -200,8 +212,15 @@ def test_call_llm_non_stream_still_validates(monkeypatch):
         base_url="http://localhost:8001/v1",
     )
     monkeypatch.setattr(
-        ac, "_resolve_task_provider_model",
-        lambda *a, **k: ("custom", "m", "http://localhost:8001/v1", "key", "chat_completions"),
+        ac,
+        "_resolve_task_provider_model",
+        lambda *a, **k: (
+            "custom",
+            "m",
+            "http://localhost:8001/v1",
+            "key",
+            "chat_completions",
+        ),
     )
     monkeypatch.setattr(ac, "_get_cached_client", lambda *a, **k: (fake_client, "m"))
 

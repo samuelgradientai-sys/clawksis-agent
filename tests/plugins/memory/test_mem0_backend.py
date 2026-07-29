@@ -38,7 +38,6 @@ class FakePlatformClient:
 
 
 class TestPlatformBackend:
-
     def _make(self):
         client = FakePlatformClient()
         backend = PlatformBackend.__new__(PlatformBackend)
@@ -137,7 +136,6 @@ class FakeOSSMemory:
 
 
 class TestOSSBackend:
-
     def _make(self):
         memory = FakeOSSMemory()
         backend = OSSBackend.__new__(OSSBackend)
@@ -217,7 +215,10 @@ class TestOSSBackend:
             },
             "embedder": {
                 "provider": "ollama",
-                "config": {"model": "nomic-embed-text", "api_base": "http://ollama:11434"},
+                "config": {
+                    "model": "nomic-embed-text",
+                    "api_base": "http://ollama:11434",
+                },
             },
             "vector_store": {"provider": "qdrant", "config": {}},
         }
@@ -226,7 +227,9 @@ class TestOSSBackend:
         OSSBackend(raw)
 
         assert captured["llm"]["config"]["openai_base_url"] == "https://llm.example/v1"
-        assert captured["embedder"]["config"]["ollama_base_url"] == "http://ollama:11434"
+        assert (
+            captured["embedder"]["config"]["ollama_base_url"] == "http://ollama:11434"
+        )
         assert "api_base" not in captured["llm"]["config"]
         assert "api_base" not in captured["embedder"]["config"]
         assert raw == before
@@ -246,12 +249,17 @@ class _StubServer:
         self.requests.append(request)
         path, method = request.url.path, request.method
         if path == "/search" and method == "POST":
-            return httpx.Response(200, json={"results": [{"id": "m1", "memory": "tea", "score": 0.9}]})
+            return httpx.Response(
+                200, json={"results": [{"id": "m1", "memory": "tea", "score": 0.9}]}
+            )
         if path == "/memories" and method == "GET":
             top_k = int(request.url.params.get("top_k", len(self._rows)))
             return httpx.Response(200, json={"results": self._rows[:top_k]})
         if path == "/memories" and method == "POST":
-            return httpx.Response(200, json={"results": [{"id": "new", "memory": "stored", "event": "ADD"}]})
+            return httpx.Response(
+                200,
+                json={"results": [{"id": "new", "memory": "stored", "event": "ADD"}]},
+            )
         if path.startswith("/memories/") and method in ("PUT", "DELETE"):
             if path.endswith("/missing"):  # server 404s unknown ids
                 return httpx.Response(404, json={"detail": "Memory not found"})
@@ -295,6 +303,7 @@ class TestSelfHostedBackend:
         req = s.requests[-1]
         assert (req.method, req.url.path) == ("POST", "/search")
         import json
+
         body = json.loads(req.content)
         assert body == {"query": "drink", "top_k": 5, "filters": {"user_id": "u1"}}
         assert results == [{"id": "m1", "memory": "tea", "score": 0.9}]
@@ -311,13 +320,25 @@ class TestSelfHostedBackend:
     def test_add_posts_messages_and_identity(self):
         s = _StubServer()
         msgs = [{"role": "user", "content": "likes tea"}]
-        result = _backend(s).add(msgs, user_id="u1", agent_id="clawk", infer=False, metadata={"channel": "cli"})
+        result = _backend(s).add(
+            msgs,
+            user_id="u1",
+            agent_id="clawk",
+            infer=False,
+            metadata={"channel": "cli"},
+        )
         req = s.requests[-1]
         assert (req.method, req.url.path) == ("POST", "/memories")
         import json
+
         body = json.loads(req.content)
-        assert body == {"messages": msgs, "user_id": "u1", "agent_id": "clawk",
-                        "infer": False, "metadata": {"channel": "cli"}}
+        assert body == {
+            "messages": msgs,
+            "user_id": "u1",
+            "agent_id": "clawk",
+            "infer": False,
+            "metadata": {"channel": "cli"},
+        }
         assert result["results"][0]["id"] == "new"
 
     def test_update_puts_text_to_memory_id(self):
@@ -326,6 +347,7 @@ class TestSelfHostedBackend:
         req = s.requests[-1]
         assert (req.method, req.url.path) == ("PUT", "/memories/abc")
         import json
+
         assert json.loads(req.content) == {"text": "new text"}
         assert result == {"result": "Memory updated.", "memory_id": "abc"}
 
@@ -341,4 +363,6 @@ class TestSelfHostedBackend:
     def test_http_error_raises(self):
         s = _StubServer()
         with pytest.raises(httpx.HTTPStatusError):
-            _backend(s).delete("missing")  # 404 -> raise_for_status; 'not found' won't trip breaker
+            _backend(s).delete(
+                "missing"
+            )  # 404 -> raise_for_status; 'not found' won't trip breaker

@@ -26,8 +26,12 @@ def _make_runner():
     return runner
 
 
-def _patch_resolution(monkeypatch, *, model_from_config: str, provider: str = "openrouter"):
-    monkeypatch.setattr(gateway_run, "_resolve_gateway_model", lambda cfg=None: model_from_config)
+def _patch_resolution(
+    monkeypatch, *, model_from_config: str, provider: str = "openrouter"
+):
+    monkeypatch.setattr(
+        gateway_run, "_resolve_gateway_model", lambda cfg=None: model_from_config
+    )
     monkeypatch.setattr(
         gateway_run,
         "_resolve_runtime_agent_kwargs",
@@ -47,7 +51,9 @@ def test_new_clears_last_resolved_model(monkeypatch):
 
     # Turn 1: resolve model — caches it.
     _patch_resolution(monkeypatch, model_from_config="deepseek-chat")
-    runner._resolve_session_agent_runtime(session_key=sk, user_config={"model": {"default": "x"}})
+    runner._resolve_session_agent_runtime(
+        session_key=sk, user_config={"model": {"default": "x"}}
+    )
     assert runner._last_resolved_model.get(sk) == "deepseek-chat"
 
     # Simulate what /new does (mirror slash_commands.py _handle_reset_command).
@@ -66,7 +72,9 @@ def test_new_does_not_clobber_global_fallback(monkeypatch):
     sk = "agent:main:qqbot:dm:123"
 
     _patch_resolution(monkeypatch, model_from_config="deepseek-chat")
-    runner._resolve_session_agent_runtime(session_key=sk, user_config={"model": {"default": "x"}})
+    runner._resolve_session_agent_runtime(
+        session_key=sk, user_config={"model": {"default": "x"}}
+    )
     assert runner._last_resolved_model.get("*") == "deepseek-chat"
 
     # Simulate /new
@@ -87,7 +95,9 @@ def test_new_with_config_change_no_stale_fallback(monkeypatch):
 
     # Turn 1: old model cached.
     _patch_resolution(monkeypatch, model_from_config="deepseek-chat")
-    runner._resolve_session_agent_runtime(session_key=sk, user_config={"model": {"default": "x"}})
+    runner._resolve_session_agent_runtime(
+        session_key=sk, user_config={"model": {"default": "x"}}
+    )
     assert runner._last_resolved_model[sk] == "deepseek-chat"
 
     # Simulate /new clearing the cache.

@@ -7,15 +7,22 @@ Build the real image and verify the actual runtime behavior:
   3. dashboard does not auto-add ``--insecure`` from a non-loopback bind host
   4. stage2 hook repairs profiles/ and cron/ ownership on every boot
 """
+
 from __future__ import annotations
 
 import subprocess
 
-from tests.docker.conftest import docker_exec, docker_exec_sh, start_container, restart_container
+from tests.docker.conftest import (
+    docker_exec,
+    docker_exec_sh,
+    start_container,
+    restart_container,
+)
 
 
 def test_main_wrapper_preserves_docker_workdir(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """The main-wrapper MUST save and restore the original working directory
     so the container starts in the Docker ``-w`` directory, not /opt/data.
@@ -25,9 +32,10 @@ def test_main_wrapper_preserves_docker_workdir(
     restored the cwd after its internal ``cd /opt/data``.
     """
     r = subprocess.run(
-        ["docker", "run", "--rm", "-w", "/tmp",
-         built_image, "sh", "-c", "pwd"],
-        capture_output=True, text=True, timeout=60,
+        ["docker", "run", "--rm", "-w", "/tmp", built_image, "sh", "-c", "pwd"],
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
     assert r.returncode == 0, f"container failed: {r.stderr[-1000:]}"
     # The stage2 hook emits boot logs (config migration, skills sync)
@@ -41,7 +49,8 @@ def test_main_wrapper_preserves_docker_workdir(
 
 
 def test_dashboard_service_resets_home(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """The dashboard run script must export HOME=/opt/data before dropping
     privileges, so HOME-anchored state (discord lockfile, XDG dirs) doesn't
@@ -57,7 +66,12 @@ def test_dashboard_service_resets_home(
     we bind to 127.0.0.1 where the auth gate doesn't engage, and check
     the process env.
     """
-    start_container(built_image, container_name, "CLAWK_DASHBOARD=1", "CLAWK_DASHBOARD_HOST=127.0.0.1")
+    start_container(
+        built_image,
+        container_name,
+        "CLAWK_DASHBOARD=1",
+        "CLAWK_DASHBOARD_HOST=127.0.0.1",
+    )
 
     # Check if the dashboard process is running and inspect its HOME.
     r = docker_exec_sh(
@@ -68,11 +82,11 @@ def test_dashboard_service_resets_home(
         'pid=$(pgrep -f "clawk dashboard" | head -1); '
         'if [ -n "$pid" ]; then '
         '  tr "\\0" "\\n" < /proc/$pid/environ | grep "^HOME="; '
-        'else '
+        "else "
         '  grep -q "export HOME=/opt/data" '
-        '    /opt/clawksis/docker/s6-rc.d/dashboard/run && '
+        "    /opt/clawksis/docker/s6-rc.d/dashboard/run && "
         '  echo "HOME=/opt/data"; '
-        'fi',
+        "fi",
         timeout=15,
     )
     assert "HOME=/opt/data" in r.stdout, (
@@ -82,7 +96,8 @@ def test_dashboard_service_resets_home(
 
 
 def test_dashboard_does_not_auto_insecure_from_host(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """The dashboard MUST NOT auto-add ``--insecure`` based on
     CLAWK_DASHBOARD_HOST. The auth gate is the authority now.
@@ -96,7 +111,9 @@ def test_dashboard_does_not_auto_insecure_from_host(
     gate correctly blocks an unauthenticated non-loopback bind), that's
     also acceptable — the point is no auto-insecure.
     """
-    start_container(built_image, container_name, "CLAWK_DASHBOARD=1", "CLAWK_DASHBOARD_HOST=0.0.0.0")
+    start_container(
+        built_image, container_name, "CLAWK_DASHBOARD=1", "CLAWK_DASHBOARD_HOST=0.0.0.0"
+    )
 
     # Check the dashboard process command line for --insecure.
     r = docker_exec_sh(
@@ -104,7 +121,7 @@ def test_dashboard_does_not_auto_insecure_from_host(
         'pid=$(pgrep -f "clawk dashboard" | head -1); '
         'if [ -n "$pid" ]; then '
         '  tr "\\0" " " < /proc/$pid/cmdline; '
-        'fi',
+        "fi",
         timeout=10,
     )
     cmdline = r.stdout.strip()
@@ -117,7 +134,8 @@ def test_dashboard_does_not_auto_insecure_from_host(
 
 
 def test_stage2_repairs_profiles_and_cron_ownership(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """profiles/ and cron/ must both be reclaimed after root-context writes.
 
@@ -130,23 +148,33 @@ def test_stage2_repairs_profiles_and_cron_ownership(
     # Create root-owned files in profiles/ and cron/ to simulate
     # docker exec (root) writes.
     docker_exec(
-        container_name, "mkdir", "-p", "/opt/data/profiles/testprof",
-        user="root", timeout=5,
+        container_name,
+        "mkdir",
+        "-p",
+        "/opt/data/profiles/testprof",
+        user="root",
+        timeout=5,
     )
     docker_exec(
-        container_name, "touch", "/opt/data/profiles/testprof/marker",
-        user="root", timeout=5,
+        container_name,
+        "touch",
+        "/opt/data/profiles/testprof/marker",
+        user="root",
+        timeout=5,
     )
     docker_exec(
-        container_name, "touch", "/opt/data/cron/root_owned.json",
-        user="root", timeout=5,
+        container_name,
+        "touch",
+        "/opt/data/cron/root_owned.json",
+        user="root",
+        timeout=5,
     )
 
     # Verify they're root-owned before restart.
     r = docker_exec_sh(
         container_name,
         'stat -c "%U" /opt/data/profiles/testprof/marker '
-        '/opt/data/cron/root_owned.json',
+        "/opt/data/cron/root_owned.json",
         timeout=5,
     )
     assert "root" in r.stdout, (
@@ -160,7 +188,7 @@ def test_stage2_repairs_profiles_and_cron_ownership(
     r = docker_exec_sh(
         container_name,
         'stat -c "%U" /opt/data/profiles/testprof/marker '
-        '/opt/data/cron/root_owned.json',
+        "/opt/data/cron/root_owned.json",
         timeout=5,
     )
     assert "clawk" in r.stdout, (

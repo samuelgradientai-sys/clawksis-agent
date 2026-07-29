@@ -1,4 +1,5 @@
 """Tests for ``clawk migrate xai`` — apply path with ruamel round-trip."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,6 +16,7 @@ from clawk_cli.xai_retirement import (
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def trap_config(tmp_path: Path) -> Path:
@@ -48,9 +50,7 @@ def trap_config(tmp_path: Path) -> Path:
 def clean_config(tmp_path: Path) -> Path:
     p = tmp_path / "config.yaml"
     p.write_text(
-        "principal:\n"
-        "  provider: xai\n"
-        "  model: grok-4.3\n",
+        "principal:\n  provider: xai\n  model: grok-4.3\n",
         encoding="utf-8",
     )
     return p
@@ -59,6 +59,7 @@ def clean_config(tmp_path: Path) -> Path:
 def _parse(path: Path) -> dict:
     """Load with ruamel for assertion convenience."""
     from ruamel.yaml import YAML
+
     yaml = YAML(typ="rt")
     with path.open("r", encoding="utf-8") as fh:
         return yaml.load(fh)
@@ -67,6 +68,7 @@ def _parse(path: Path) -> dict:
 # ---------------------------------------------------------------------------
 # Dry-run / no-op
 # ---------------------------------------------------------------------------
+
 
 class TestNoOpPaths:
     def test_clean_config_returns_unchanged_result(self, clean_config: Path):
@@ -86,18 +88,22 @@ class TestNoOpPaths:
 
     def test_missing_file_raises(self, tmp_path: Path):
         with pytest.raises(FileNotFoundError):
-            apply_migration(tmp_path / "absent.yaml", issues=[
-                RetirementIssue(
-                    config_path="principal.model",
-                    current_model="grok-3",
-                    replacement="grok-4.3",
-                )
-            ])
+            apply_migration(
+                tmp_path / "absent.yaml",
+                issues=[
+                    RetirementIssue(
+                        config_path="principal.model",
+                        current_model="grok-3",
+                        replacement="grok-4.3",
+                    )
+                ],
+            )
 
 
 # ---------------------------------------------------------------------------
 # Apply: surgical replacement
 # ---------------------------------------------------------------------------
+
 
 class TestApplyReplacement:
     def test_replaces_principal_model(self, trap_config: Path):
@@ -130,7 +136,9 @@ class TestApplyReplacement:
         issues = find_retired_xai_refs(_parse(trap_config))
         apply_migration(trap_config, issues)
         cfg = _parse(trap_config)
-        assert cfg["plugins"]["image_gen"]["xai"]["model"] == "grok-imagine-image-quality"
+        assert (
+            cfg["plugins"]["image_gen"]["xai"]["model"] == "grok-imagine-image-quality"
+        )
 
     def test_does_not_touch_unrelated_slots(self, trap_config: Path):
         issues = find_retired_xai_refs(_parse(trap_config))
@@ -146,6 +154,7 @@ class TestApplyReplacement:
 # ---------------------------------------------------------------------------
 # Round-trip preservation (the hard part)
 # ---------------------------------------------------------------------------
+
 
 class TestRoundTripPreservation:
     def test_preserves_top_of_file_comment(self, trap_config: Path):
@@ -177,6 +186,7 @@ class TestRoundTripPreservation:
 # ---------------------------------------------------------------------------
 # Backup behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestBackup:
     def test_backup_is_written_by_default(self, trap_config: Path):
@@ -211,6 +221,7 @@ class TestBackup:
 # Idempotence
 # ---------------------------------------------------------------------------
 
+
 class TestIdempotence:
     def test_apply_twice_is_safe(self, trap_config: Path):
         # First pass: replace
@@ -226,6 +237,7 @@ class TestIdempotence:
 # ---------------------------------------------------------------------------
 # Fail-closed on unreadable existing config
 # ---------------------------------------------------------------------------
+
 
 class TestUnreadableExistingConfig:
     def test_apply_refuses_to_overwrite_unreadable_config(self, trap_config: Path):

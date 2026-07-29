@@ -41,9 +41,9 @@ PARTIAL_POSITIVE = [
     "NO",
     "NO_",
     "NO_REP",
-    "NO_REPLY",      # exact marker, not yet terminated by stream-end
+    "NO_REPLY",  # exact marker, not yet terminated by stream-end
     "NO REPLY",
-    "no reply",      # canonicalized (case/space-insensitive)
+    "no reply",  # canonicalized (case/space-insensitive)
     "  no_reply  ",  # surrounding whitespace stripped
     "[",
     "[SIL",
@@ -56,13 +56,13 @@ PARTIAL_POSITIVE = [
 PARTIAL_NEGATIVE = [
     "",
     "   ",
-    "No reply needed — here is the plan",   # diverged past the marker
-    "NO_REPLYING",                           # superset, not a prefix
+    "No reply needed — here is the plan",  # diverged past the marker
+    "NO_REPLYING",  # superset, not a prefix
     "Nope",
     "Hello there",
-    "The NO_REPLY token means silence",      # marker mentioned mid-prose
-    "x" * 65,                                # over the 64-char cap
-    "silence is golden",                     # 'SILENCE...' is not a marker prefix
+    "The NO_REPLY token means silence",  # marker mentioned mid-prose
+    "x" * 65,  # over the 64-char cap
+    "silence is golden",  # 'SILENCE...' is not a marker prefix
 ]
 
 
@@ -93,17 +93,24 @@ def test_partial_predicate_agrees_with_exact_on_full_markers():
 # GatewayStreamConsumer — end-to-end suppression through run()
 # --------------------------------------------------------------------------
 
+
 def _make_adapter(*, supports_delete: bool = True) -> MagicMock:
     """Minimal MagicMock adapter wired for send/edit/delete."""
     adapter = MagicMock()
     adapter.REQUIRES_EDIT_FINALIZE = False
     adapter.MAX_MESSAGE_LENGTH = 4096
-    adapter.send = AsyncMock(return_value=SimpleNamespace(
-        success=True, message_id="preview_1",
-    ))
-    adapter.edit_message = AsyncMock(return_value=SimpleNamespace(
-        success=True, message_id="preview_1",
-    ))
+    adapter.send = AsyncMock(
+        return_value=SimpleNamespace(
+            success=True,
+            message_id="preview_1",
+        )
+    )
+    adapter.edit_message = AsyncMock(
+        return_value=SimpleNamespace(
+            success=True,
+            message_id="preview_1",
+        )
+    )
     if supports_delete:
         adapter.delete_message = AsyncMock(return_value=True)
     else:
@@ -127,7 +134,8 @@ class TestStreamedSilenceSuppression:
         """A stream whose entire content is NO_REPLY sends nothing visible."""
         adapter = _make_adapter()
         consumer = GatewayStreamConsumer(
-            adapter, "chat_1",
+            adapter,
+            "chat_1",
             StreamConsumerConfig(edit_interval=0.01, buffer_threshold=1),
         )
         consumer.on_delta("NO_REPLY")
@@ -149,7 +157,8 @@ class TestStreamedSilenceSuppression:
         """A marker flushed mid-stream as a preview is deleted on completion."""
         adapter = _make_adapter()
         consumer = GatewayStreamConsumer(
-            adapter, "chat_1",
+            adapter,
+            "chat_1",
             StreamConsumerConfig(edit_interval=0.01, buffer_threshold=1),
         )
         # Force a mid-stream preview: pretend "NO_REPLY" was already put on
@@ -172,7 +181,8 @@ class TestStreamedSilenceSuppression:
         """Adapter lacking delete_message still suppresses (leaves no new send)."""
         adapter = _make_adapter(supports_delete=False)
         consumer = GatewayStreamConsumer(
-            adapter, "chat_1",
+            adapter,
+            "chat_1",
             StreamConsumerConfig(edit_interval=0.01, buffer_threshold=1),
         )
         consumer.on_delta("NO_REPLY")
@@ -188,7 +198,8 @@ class TestStreamedSilenceSuppression:
         """The [SILENT] marker is suppressed just like NO_REPLY."""
         adapter = _make_adapter()
         consumer = GatewayStreamConsumer(
-            adapter, "chat_1",
+            adapter,
+            "chat_1",
             StreamConsumerConfig(edit_interval=0.01, buffer_threshold=1),
         )
         consumer.on_delta("[SILENT]")
@@ -204,7 +215,8 @@ class TestStreamedSilenceSuppression:
         """Substantive prose that merely mentions NO_REPLY is NOT suppressed."""
         adapter = _make_adapter()
         consumer = GatewayStreamConsumer(
-            adapter, "chat_1",
+            adapter,
+            "chat_1",
             StreamConsumerConfig(edit_interval=0.01, buffer_threshold=5),
         )
         body = "The NO_REPLY token tells the gateway to stay silent."
@@ -226,7 +238,8 @@ class TestStreamedSilenceSuppression:
         """
         adapter = _make_adapter()
         consumer = GatewayStreamConsumer(
-            adapter, "chat_1",
+            adapter,
+            "chat_1",
             StreamConsumerConfig(edit_interval=0.01, buffer_threshold=1),
         )
         consumer.on_delta("NO REPLY")

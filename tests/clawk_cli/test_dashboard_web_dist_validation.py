@@ -18,6 +18,7 @@ import pytest
 @pytest.fixture()
 def main_mod():
     import clawk_cli.main as main
+
     return main
 
 
@@ -36,9 +37,7 @@ def _args(**over):
 
 
 def _wire_common(main_mod, monkeypatch):
-    monkeypatch.setattr(
-        "clawk_cli.profiles.get_active_profile_name", lambda: "default"
-    )
+    monkeypatch.setattr("clawk_cli.profiles.get_active_profile_name", lambda: "default")
     monkeypatch.setattr(main_mod, "_sync_bundled_skills_quietly", lambda: None)
     monkeypatch.setitem(sys.modules, "fastapi", types.SimpleNamespace())
     monkeypatch.setitem(sys.modules, "uvicorn", types.SimpleNamespace())
@@ -133,4 +132,5 @@ def test_env_dist_tilde_expanded_for_web_server(main_mod, monkeypatch, tmp_path)
     main_mod.cmd_dashboard(_args())
 
     import os
+
     assert os.environ["CLAWK_WEB_DIST"] == str(dist)

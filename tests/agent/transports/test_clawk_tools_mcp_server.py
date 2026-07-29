@@ -127,13 +127,10 @@ class TestSignatureFromSchema:
         assert sig.return_annotation == str
 
 
-
-
-
-
 class TestModuleSurface:
     def test_module_imports_clean(self):
         from agent.transports import clawk_tools_mcp_server as m
+
         assert callable(m.main)
         assert callable(m._build_server)
         assert isinstance(m.EXPOSED_TOOLS, tuple)
@@ -145,9 +142,15 @@ class TestModuleSurface:
         Specifically: no terminal/shell, no read_file/write_file, no
         patch — those are codex's built-in tools."""
         from agent.transports.clawk_tools_mcp_server import EXPOSED_TOOLS
+
         forbidden = {
-            "terminal", "shell", "read_file", "write_file", "patch",
-            "search_files", "process",
+            "terminal",
+            "shell",
+            "read_file",
+            "write_file",
+            "patch",
+            "search_files",
+            "process",
         }
         leaked = forbidden & set(EXPOSED_TOOLS)
         assert not leaked, (
@@ -159,6 +162,7 @@ class TestModuleSurface:
         """The Clawksis-specific tools should be present so users on the
         codex runtime keep access to them."""
         from agent.transports.clawk_tools_mcp_server import EXPOSED_TOOLS
+
         for required in (
             "web_search",
             "web_extract",
@@ -174,6 +178,7 @@ class TestModuleSurface:
         running AIAgent context to dispatch, so a stateless MCP callback
         can't drive them. They must NOT be in EXPOSED_TOOLS."""
         from agent.transports.clawk_tools_mcp_server import EXPOSED_TOOLS
+
         for agent_loop_tool in ("delegate_task", "memory", "session_search", "todo"):
             assert agent_loop_tool not in EXPOSED_TOOLS, (
                 f"{agent_loop_tool!r} requires the agent loop context "
@@ -187,6 +192,7 @@ class TestModuleSurface:
         the MCP callback to report back to the kernel. Without these
         tools available, the worker would hang at completion time."""
         from agent.transports.clawk_tools_mcp_server import EXPOSED_TOOLS
+
         # Worker handoff tools — every dispatched worker uses at least
         # one of {complete, block, comment} to close out its task.
         for worker_tool in (
@@ -205,6 +211,7 @@ class TestModuleSurface:
         board, and unblock/link tasks. Exposed so an orchestrator on
         codex_app_server can do its job."""
         from agent.transports.clawk_tools_mcp_server import EXPOSED_TOOLS
+
         for orch_tool in (
             "kanban_create",
             "kanban_show",

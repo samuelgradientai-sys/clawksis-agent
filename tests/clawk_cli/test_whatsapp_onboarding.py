@@ -132,9 +132,15 @@ def test_apply_whatsapp_onboarding_saves_pairing_policy(monkeypatch):
     removed = []
     enabled = []
 
-    monkeypatch.setattr(ws, "save_env_value", lambda key, value: saved.setdefault(key, value))
+    monkeypatch.setattr(
+        ws, "save_env_value", lambda key, value: saved.setdefault(key, value)
+    )
     monkeypatch.setattr(ws, "remove_env_value", lambda key: removed.append(key))
-    monkeypatch.setattr(ws, "_write_platform_enabled", lambda platform, value: enabled.append((platform, value)))
+    monkeypatch.setattr(
+        ws,
+        "_write_platform_enabled",
+        lambda platform, value: enabled.append((platform, value)),
+    )
     monkeypatch.setattr(
         ws,
         "_restart_gateway_after_whatsapp_onboarding",
@@ -175,7 +181,9 @@ def test_apply_whatsapp_onboarding_self_chat_defaults_to_linked_account(monkeypa
     saved = {}
     removed = []
 
-    monkeypatch.setattr(ws, "save_env_value", lambda key, value: saved.setdefault(key, value))
+    monkeypatch.setattr(
+        ws, "save_env_value", lambda key, value: saved.setdefault(key, value)
+    )
     monkeypatch.setattr(ws, "remove_env_value", lambda key: removed.append(key))
     monkeypatch.setattr(ws, "_write_platform_enabled", lambda platform, value: None)
     monkeypatch.setattr(
@@ -212,7 +220,9 @@ def test_apply_whatsapp_onboarding_self_chat_defaults_to_linked_account(monkeypa
     assert "pairing" not in ws._whatsapp_onboarding_sessions
 
 
-def test_start_whatsapp_onboarding_existing_creds_returns_linked_account(monkeypatch, tmp_path):
+def test_start_whatsapp_onboarding_existing_creds_returns_linked_account(
+    monkeypatch, tmp_path
+):
     from clawk_cli import web_server as ws
 
     session_dir = tmp_path / "session"
@@ -250,7 +260,10 @@ def test_start_whatsapp_onboarding_existing_creds_returns_linked_account(monkeyp
     assert result["account_phone"] == "15551234567"
     assert old_record.status == "cancelled"
     assert old_proc.terminated is True
-    assert ws._whatsapp_onboarding_sessions["existing-creds"].account_phone == "15551234567"
+    assert (
+        ws._whatsapp_onboarding_sessions["existing-creds"].account_phone
+        == "15551234567"
+    )
     ws._whatsapp_onboarding_sessions.clear()
 
 
@@ -301,10 +314,16 @@ def test_spawn_whatsapp_pairing_process_uses_json_mode(monkeypatch, tmp_path):
     session_dir = tmp_path / "session"
     captured = {}
 
-    monkeypatch.setattr(whatsapp_common, "resolve_whatsapp_bridge_dir", lambda: bridge_dir)
-    monkeypatch.setattr(clawk_constants, "find_node_executable", lambda command: "/usr/bin/node")
+    monkeypatch.setattr(
+        whatsapp_common, "resolve_whatsapp_bridge_dir", lambda: bridge_dir
+    )
+    monkeypatch.setattr(
+        clawk_constants, "find_node_executable", lambda command: "/usr/bin/node"
+    )
     monkeypatch.setattr(clawk_constants, "with_clawk_node_path", lambda env=None: {})
-    monkeypatch.setattr(ws, "_ensure_whatsapp_bridge_dependencies", lambda bridge_dir: None)
+    monkeypatch.setattr(
+        ws, "_ensure_whatsapp_bridge_dependencies", lambda bridge_dir: None
+    )
 
     def fake_popen(args, **kwargs):
         captured["args"] = args

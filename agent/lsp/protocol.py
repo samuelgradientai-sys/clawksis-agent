@@ -13,6 +13,7 @@ TypeScript implementation.  We keep it deliberately small — just the
 framer + envelope helpers — so :class:`agent.lsp.client.LSPClient` can
 focus on protocol semantics.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -90,9 +91,7 @@ async def read_message(reader: asyncio.StreamReader) -> Optional[dict]:
         # well-behaved server fits in well under 200 bytes.
         header_bytes += len(line)
         if header_bytes > 8192:
-            raise LSPProtocolError(
-                "LSP header block exceeded 8 KiB without terminator"
-            )
+            raise LSPProtocolError("LSP header block exceeded 8 KiB without terminator")
         line = line[:-2]  # strip CRLF
         if not line:
             break  # blank line ends header block

@@ -29,7 +29,11 @@ import pytest
 
 import gateway.session_context as sc
 from gateway.session_context import _VAR_MAP, clear_session_vars, set_session_vars
-from tools.environments.local import _make_run_env, _sanitize_subprocess_env, clawk_subprocess_env
+from tools.environments.local import (
+    _make_run_env,
+    _sanitize_subprocess_env,
+    clawk_subprocess_env,
+)
 
 # The full set of session vars the bridge owns.
 SESSION_VARS = list(_VAR_MAP.keys())
@@ -65,6 +69,7 @@ def _engage():
 # --------------------------------------------------------------------------- #
 # Foreground path (_make_run_env)
 # --------------------------------------------------------------------------- #
+
 
 def test_engaged_unset_contextvar_strips_foreign_session_key(monkeypatch):
     """Engaged host + UNSET ContextVar must NOT inherit a foreign global.
@@ -201,6 +206,7 @@ def test_explicit_empty_thread_id_overrides_stale_value(monkeypatch):
 # Background / PTY path (_sanitize_subprocess_env via process_registry)
 # --------------------------------------------------------------------------- #
 
+
 def test_sanitize_subprocess_env_strips_foreign_session_key_when_engaged(monkeypatch):
     """The background/PTY spawn path gets the same cross-session strip.
 
@@ -257,6 +263,7 @@ def test_sanitize_subprocess_env_unengaged_preserves_fallback(monkeypatch):
 # --------------------------------------------------------------------------- #
 # Non-terminal spawn surface (clawk_subprocess_env) — sibling path
 # --------------------------------------------------------------------------- #
+
 
 def test_clawk_subprocess_env_strips_foreign_session_key_when_engaged(monkeypatch):
     """clawk_subprocess_env (browser/ACP/CLI/TUI-host spawns) must not leak a

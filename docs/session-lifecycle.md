@@ -266,12 +266,14 @@ or each get their own private session.
 ### Decision Logic (`is_shared_multi_user_session`)
 
 ```python
-def is_shared_multi_user_session(source, *, group_sessions_per_user, thread_sessions_per_user):
+def is_shared_multi_user_session(
+    source, *, group_sessions_per_user, thread_sessions_per_user
+):
     if source.chat_type == "dm":
         return False  # DMs are always private
     if source.thread_id:
         return not thread_sessions_per_user  # Threads: shared unless per-user
-    return not group_sessions_per_user       # Groups: isolated unless shared
+    return not group_sessions_per_user  # Groups: isolated unless shared
 ```
 
 ### Summary
@@ -309,13 +311,15 @@ Reset policies control when a session automatically loses context (gets a new `s
 ```python
 # Idle check
 idle_deadline = entry.updated_at + timedelta(minutes=policy.idle_minutes)
-if now > idle_deadline: return "idle"
+if now > idle_deadline:
+    return "idle"
 
 # Daily check
 today_reset = now.replace(hour=policy.at_hour, minute=0, second=0, microsecond=0)
 if now.hour < policy.at_hour:
     today_reset -= timedelta(days=1)  # Reset hasn't happened yet today
-if entry.updated_at < today_reset: return "daily"
+if entry.updated_at < today_reset:
+    return "daily"
 ```
 
 ### Per-Platform/Per-Type Policies

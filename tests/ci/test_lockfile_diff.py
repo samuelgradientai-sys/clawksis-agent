@@ -21,22 +21,18 @@ _spec.loader.exec_module(_mod)
 
 
 def _lock(packages: dict[str, dict]) -> str:
-    return json.dumps(
-        {
-            "name": "clawk",
-            "lockfileVersion": 3,
-            "packages": {"": {"name": "clawk"}, **packages},
-        }
-    )
+    return json.dumps({
+        "name": "clawk",
+        "lockfileVersion": 3,
+        "packages": {"": {"name": "clawk"}, **packages},
+    })
 
 
-BASE = _lock(
-    {
-        "node_modules/react": {"version": "18.2.0", "integrity": "sha512-aaa"},
-        "node_modules/left-pad": {"version": "1.3.0", "integrity": "sha512-bbb"},
-        "node_modules/foo/node_modules/react": {"version": "17.0.2"},
-    }
-)
+BASE = _lock({
+    "node_modules/react": {"version": "18.2.0", "integrity": "sha512-aaa"},
+    "node_modules/left-pad": {"version": "1.3.0", "integrity": "sha512-bbb"},
+    "node_modules/foo/node_modules/react": {"version": "17.0.2"},
+})
 
 
 def test_parse_skips_root_and_versionless():
@@ -48,27 +44,23 @@ def test_parse_skips_root_and_versionless():
 def test_reorder_and_hash_churn_is_empty_diff():
     # Same packages, reordered, different integrity hashes — the exact noise
     # that makes textual lockfile diffs unreadable.
-    reordered = _lock(
-        {
-            "node_modules/foo/node_modules/react": {"version": "17.0.2"},
-            "node_modules/left-pad": {"version": "1.3.0", "integrity": "sha512-XYZ"},
-            "node_modules/react": {"version": "18.2.0", "integrity": "sha512-ZZZ"},
-        }
-    )
+    reordered = _lock({
+        "node_modules/foo/node_modules/react": {"version": "17.0.2"},
+        "node_modules/left-pad": {"version": "1.3.0", "integrity": "sha512-XYZ"},
+        "node_modules/react": {"version": "18.2.0", "integrity": "sha512-ZZZ"},
+    })
     d = _mod.diff_locks(_mod.parse_lockfile(BASE), _mod.parse_lockfile(reordered))
     assert d == {"added": [], "removed": [], "updated": []}
     assert _mod.render_markdown({"package-lock.json": d}) == ""
 
 
 def test_add_remove_update_all_detected():
-    head = _lock(
-        {
-            "node_modules/react": {"version": "18.3.1"},  # updated
-            "node_modules/is-even": {"version": "1.0.0"},  # added
-            "node_modules/foo/node_modules/react": {"version": "17.0.2"},  # unchanged
-            # left-pad removed
-        }
-    )
+    head = _lock({
+        "node_modules/react": {"version": "18.3.1"},  # updated
+        "node_modules/is-even": {"version": "1.0.0"},  # added
+        "node_modules/foo/node_modules/react": {"version": "17.0.2"},  # unchanged
+        # left-pad removed
+    })
     d = _mod.diff_locks(_mod.parse_lockfile(BASE), _mod.parse_lockfile(head))
     assert d["added"] == [("node_modules/is-even", "1.0.0")]
     assert d["removed"] == [("node_modules/left-pad", "1.3.0")]
@@ -78,13 +70,11 @@ def test_add_remove_update_all_detected():
 def test_nested_dedup_is_distinct_entry():
     # The same package at two nesting levels must be tracked separately —
     # bumping only the nested copy must not look like a top-level change.
-    head = _lock(
-        {
-            "node_modules/react": {"version": "18.2.0"},
-            "node_modules/left-pad": {"version": "1.3.0"},
-            "node_modules/foo/node_modules/react": {"version": "17.0.3"},
-        }
-    )
+    head = _lock({
+        "node_modules/react": {"version": "18.2.0"},
+        "node_modules/left-pad": {"version": "1.3.0"},
+        "node_modules/foo/node_modules/react": {"version": "17.0.3"},
+    })
     d = _mod.diff_locks(_mod.parse_lockfile(BASE), _mod.parse_lockfile(head))
     assert d["updated"] == [("node_modules/foo/node_modules/react", "17.0.2", "17.0.3")]
 
@@ -106,6 +96,9 @@ def test_render_markdown_contains_marker_and_versions():
 def test_render_markdown_omits_unchanged_lockfiles():
     changed = _mod.diff_locks({}, {"node_modules/x": "1.0.0"})
     unchanged = _mod.diff_locks({}, {})
-    md = _mod.render_markdown({"a/package-lock.json": changed, "b/package-lock.json": unchanged})
+    md = _mod.render_markdown({
+        "a/package-lock.json": changed,
+        "b/package-lock.json": unchanged,
+    })
     assert "a/package-lock.json" in md
     assert "b/package-lock.json" not in md

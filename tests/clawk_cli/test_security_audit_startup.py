@@ -36,7 +36,8 @@ def test_root_check_silent_for_non_root(monkeypatch):
 
 def test_ssh_password_auth_enabled_explicit_yes(monkeypatch):
     monkeypatch.setattr(
-        audit, "_iter_sshd_config_lines",
+        audit,
+        "_iter_sshd_config_lines",
         lambda: ["PasswordAuthentication yes", "PermitRootLogin no"],
     )
     msg = audit._ssh_password_auth_enabled()
@@ -45,7 +46,8 @@ def test_ssh_password_auth_enabled_explicit_yes(monkeypatch):
 
 def test_ssh_password_auth_disabled(monkeypatch):
     monkeypatch.setattr(
-        audit, "_iter_sshd_config_lines",
+        audit,
+        "_iter_sshd_config_lines",
         lambda: ["PasswordAuthentication no"],
     )
     assert audit._ssh_password_auth_enabled() is None
@@ -54,7 +56,8 @@ def test_ssh_password_auth_disabled(monkeypatch):
 def test_ssh_password_auth_default_is_yes(monkeypatch):
     """No explicit directive → sshd default is 'yes' → warn (with qualifier)."""
     monkeypatch.setattr(
-        audit, "_iter_sshd_config_lines",
+        audit,
+        "_iter_sshd_config_lines",
         lambda: ["PermitRootLogin prohibit-password"],
     )
     msg = audit._ssh_password_auth_enabled()
@@ -69,7 +72,8 @@ def test_ssh_check_silent_when_no_config(monkeypatch):
 
 def test_ssh_last_directive_wins(monkeypatch):
     monkeypatch.setattr(
-        audit, "_iter_sshd_config_lines",
+        audit,
+        "_iter_sshd_config_lines",
         lambda: ["PasswordAuthentication yes", "PasswordAuthentication no"],
     )
     assert audit._ssh_password_auth_enabled() is None
@@ -101,18 +105,33 @@ def test_not_in_container_silent(monkeypatch, tmp_path):
 
 def test_api_server_network_no_key_flags(monkeypatch):
     monkeypatch.delenv("API_SERVER_KEY", raising=False)
-    cfg = {"platforms": {"api_server": {"enabled": True, "extra": {"host": "0.0.0.0", "key": ""}}}}
+    cfg = {
+        "platforms": {
+            "api_server": {"enabled": True, "extra": {"host": "0.0.0.0", "key": ""}}
+        }
+    }
     findings = audit._network_listener_without_auth(cfg)
     assert any("NO API_SERVER_KEY" in f for f in findings)
 
 
 def test_api_server_loopback_silent(monkeypatch):
-    cfg = {"platforms": {"api_server": {"enabled": True, "extra": {"host": "127.0.0.1", "key": ""}}}}
+    cfg = {
+        "platforms": {
+            "api_server": {"enabled": True, "extra": {"host": "127.0.0.1", "key": ""}}
+        }
+    }
     assert audit._network_listener_without_auth(cfg) == []
 
 
 def test_api_server_with_key_silent(monkeypatch):
-    cfg = {"platforms": {"api_server": {"enabled": True, "extra": {"host": "0.0.0.0", "key": "a-strong-key-1234567890"}}}}
+    cfg = {
+        "platforms": {
+            "api_server": {
+                "enabled": True,
+                "extra": {"host": "0.0.0.0", "key": "a-strong-key-1234567890"},
+            }
+        }
+    }
     assert audit._network_listener_without_auth(cfg) == []
 
 
@@ -121,7 +140,9 @@ def test_api_server_with_key_silent(monkeypatch):
 
 def test_run_security_audit_aggregates(monkeypatch, tmp_path):
     monkeypatch.setattr(audit, "_is_root", lambda: True)
-    monkeypatch.setattr(audit, "_iter_sshd_config_lines", lambda: ["PasswordAuthentication yes"])
+    monkeypatch.setattr(
+        audit, "_iter_sshd_config_lines", lambda: ["PasswordAuthentication yes"]
+    )
     monkeypatch.setattr(audit, "_in_container", lambda: False)
     findings = audit.run_security_audit(clawk_home=tmp_path, config={})
     assert len(findings) == 2  # root + ssh
@@ -129,12 +150,16 @@ def test_run_security_audit_aggregates(monkeypatch, tmp_path):
 
 def test_run_security_audit_clean_posture(monkeypatch, tmp_path):
     monkeypatch.setattr(audit, "_is_root", lambda: False)
-    monkeypatch.setattr(audit, "_iter_sshd_config_lines", lambda: ["PasswordAuthentication no"])
+    monkeypatch.setattr(
+        audit, "_iter_sshd_config_lines", lambda: ["PasswordAuthentication no"]
+    )
     monkeypatch.setattr(audit, "_in_container", lambda: False)
     assert audit.run_security_audit(clawk_home=tmp_path, config={}) == []
 
 
-def test_log_startup_security_warnings_emits_and_is_idempotent(monkeypatch, tmp_path, caplog):
+def test_log_startup_security_warnings_emits_and_is_idempotent(
+    monkeypatch, tmp_path, caplog
+):
     import logging
 
     monkeypatch.setattr(audit, "_is_root", lambda: True)
@@ -149,7 +174,9 @@ def test_log_startup_security_warnings_emits_and_is_idempotent(monkeypatch, tmp_
     # Second call is a no-op (idempotent within a process) unless forced.
     second = audit.log_startup_security_warnings(clawk_home=tmp_path, config={})
     assert second == []
-    forced = audit.log_startup_security_warnings(clawk_home=tmp_path, config={}, force=True)
+    forced = audit.log_startup_security_warnings(
+        clawk_home=tmp_path, config={}, force=True
+    )
     assert len(forced) == 1
 
 

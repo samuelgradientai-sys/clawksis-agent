@@ -45,7 +45,9 @@ _gateway_lock_handle = None
 _WINDOWS_LOCK_OFFSET = 1024 * 1024
 _GATEWAY_RUNNING_PID_CACHE_TTL_SECONDS = 1.0
 _gateway_running_pid_cache_lock = threading.Lock()
-_gateway_running_pid_cache: dict[tuple[str, bool, bool], tuple[float, tuple[Any, ...], Optional[int]]] = {}
+_gateway_running_pid_cache: dict[
+    tuple[str, bool, bool], tuple[float, tuple[Any, ...], Optional[int]]
+] = {}
 
 logger = logging.getLogger(__name__)
 
@@ -108,21 +110,15 @@ def record_start_and_check_storm(
         to_write = existing[-keep:]
 
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(
-            "\n".join(repr(ts) for ts in to_write) + "\n", encoding="utf-8"
-        )
+        tmp.write_text("\n".join(repr(ts) for ts in to_write) + "\n", encoding="utf-8")
         os.replace(tmp, path)
 
         if len(recent) > max_starts:
-            backoff = min(
-                backoff_cap_s, 5.0 * (2 ** min(len(recent) - max_starts, 6))
-            )
+            backoff = min(backoff_cap_s, 5.0 * (2 ** min(len(recent) - max_starts, 6)))
             return StormInfo(count=len(recent), window_s=window_s, backoff_s=backoff)
         return None
     except Exception as _e:
-        logger.debug(
-            "respawn-storm breaker bookkeeping failed (non-fatal): %s", _e
-        )
+        logger.debug("respawn-storm breaker bookkeeping failed (non-fatal): %s", _e)
         return None
 
 
@@ -245,6 +241,7 @@ def _get_process_start_time(pid: int) -> Optional[int]:
     # of the same process compare equal without float-precision fragility.
     try:
         import psutil  # type: ignore
+
         return int(round(psutil.Process(pid).create_time() * 100))
     except Exception:
         return None
@@ -287,6 +284,7 @@ def _read_process_cmdline(pid: int) -> Optional[str]:
     # Windows fallback: psutil (already used by _pid_exists)
     try:
         import psutil  # type: ignore
+
         proc = psutil.Process(pid)
         cmdline_parts = proc.cmdline()
         if cmdline_parts:
@@ -567,7 +565,9 @@ def _read_pid_record(pid_path: Optional[Path] = None) -> Optional[dict]:
     return None
 
 
-def _read_gateway_lock_record(lock_path: Optional[Path] = None) -> Optional[dict[str, Any]]:
+def _read_gateway_lock_record(
+    lock_path: Optional[Path] = None,
+) -> Optional[dict[str, Any]]:
     return _read_pid_record(lock_path or _get_gateway_lock_path())
 
 
@@ -707,6 +707,7 @@ def _pid_exists(pid: int) -> bool:
     if _IS_WINDOWS:
         try:
             import ctypes
+
             kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
             # Pin return types — default ctypes restype is c_int (signed),
             # which mangles WAIT_* DWORD return codes into negative numbers.
@@ -726,8 +727,8 @@ def _pid_exists(pid: int) -> bool:
                 if err == ERROR_INVALID_PARAMETER:
                     return False  # PID definitely gone
                 if err == ERROR_ACCESS_DENIED:
-                    return True   # Exists but owned by another user/session
-                return False      # Conservative default for unknown errors
+                    return True  # Exists but owned by another user/session
+                return False  # Conservative default for unknown errors
             try:
                 wait_result = kernel32.WaitForSingleObject(handle, 0)
                 # WAIT_TIMEOUT = still running; anything else (WAIT_OBJECT_0
@@ -764,7 +765,9 @@ def _pid_exists(pid: int) -> bool:
         except (IndexError, PermissionError, OSError):
             pass
         try:
-            os.kill(int(pid), 0)  # windows-footgun: ok — POSIX-only branch (the whole point of _pid_exists)
+            os.kill(
+                int(pid), 0
+            )  # windows-footgun: ok — POSIX-only branch (the whole point of _pid_exists)
             return True
         except ProcessLookupError:
             return False
@@ -773,7 +776,6 @@ def _pid_exists(pid: int) -> bool:
             return True
         except OSError:
             return False
-
 
 
 def _release_file_lock(handle) -> None:
@@ -828,7 +830,10 @@ def is_gateway_runtime_lock_active(lock_path: Optional[Path] = None) -> bool:
     """Return True when some process currently owns the gateway runtime lock."""
     global _gateway_lock_handle
     resolved_lock_path = lock_path or _get_gateway_lock_path()
-    if _gateway_lock_handle is not None and resolved_lock_path == _get_gateway_lock_path():
+    if (
+        _gateway_lock_handle is not None
+        and resolved_lock_path == _get_gateway_lock_path()
+    ):
         return True
 
     if not resolved_lock_path.exists():
@@ -1062,7 +1067,9 @@ def remove_pid_file() -> None:
         pass
 
 
-def acquire_scoped_lock(scope: str, identity: str, metadata: Optional[dict[str, Any]] = None) -> tuple[bool, Optional[dict[str, Any]]]:
+def acquire_scoped_lock(
+    scope: str, identity: str, metadata: Optional[dict[str, Any]] = None
+) -> tuple[bool, Optional[dict[str, Any]]]:
     """Acquire a machine-local lock keyed by scope + identity.
 
     Used to prevent multiple local gateways from using the same external identity
@@ -1094,7 +1101,9 @@ def acquire_scoped_lock(scope: str, identity: str, metadata: Optional[dict[str, 
         except (KeyError, TypeError, ValueError):
             existing_pid = None
 
-        if existing_pid == os.getpid() and existing.get("start_time") == record.get("start_time"):
+        if existing_pid == os.getpid() and existing.get("start_time") == record.get(
+            "start_time"
+        ):
             _write_json_file(lock_path, record)
             return True, existing
 
@@ -1124,7 +1133,9 @@ def acquire_scoped_lock(scope: str, identity: str, metadata: Optional[dict[str, 
                     and not _looks_like_gateway_process(existing_pid)
                 ):
                     live_cmdline = _read_process_cmdline(existing_pid)
-                    if live_cmdline is not None or not _record_looks_like_gateway(existing):
+                    if live_cmdline is not None or not _record_looks_like_gateway(
+                        existing
+                    ):
                         stale = True
                 # Secondary defence against boot-time PID+start_time collisions:
                 # systemd spawns core services deterministically, so an unrelated
@@ -1148,7 +1159,9 @@ def acquire_scoped_lock(scope: str, identity: str, metadata: Optional[dict[str, 
                     try:
                         _proc_status = Path(f"/proc/{existing_pid}/status")
                         if _proc_status.exists():
-                            for _line in _proc_status.read_text(encoding="utf-8").splitlines():
+                            for _line in _proc_status.read_text(
+                                encoding="utf-8"
+                            ).splitlines():
                                 if _line.startswith("State:"):
                                     _state = _line.split()[1]
                                     if _state in {"T", "t"}:  # stopped or tracing stop
@@ -1559,7 +1572,11 @@ def get_running_pid(
 
         recorded_start = record.get("start_time")
         current_start = _get_process_start_time(pid)
-        if recorded_start is not None and current_start is not None and current_start != recorded_start:
+        if (
+            recorded_start is not None
+            and current_start is not None
+            and current_start != recorded_start
+        ):
             continue
 
         if _record_matches_live_gateway_pid(record, pid):

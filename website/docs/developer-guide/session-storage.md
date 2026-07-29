@@ -187,7 +187,7 @@ _CHECKPOINT_EVERY_N_WRITES = 50
 ```python
 from clawk_state import SessionDB
 
-db = SessionDB()                           # Default: ~/.clawksis/state.db
+db = SessionDB()  # Default: ~/.clawksis/state.db
 db = SessionDB(db_path=Path("/tmp/test.db"))  # Custom path
 ```
 

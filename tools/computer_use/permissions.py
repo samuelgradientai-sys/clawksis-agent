@@ -145,7 +145,9 @@ def computer_use_status(driver_cmd: Optional[str] = None) -> Dict[str, Any]:
         return out
 
     try:
-        out["version"] = (_run(binary, "--version", timeout=5).stdout or "").strip() or None
+        out["version"] = (
+            _run(binary, "--version", timeout=5).stdout or ""
+        ).strip() or None
     except Exception:
         pass
 
@@ -156,7 +158,9 @@ def computer_use_status(driver_cmd: Optional[str] = None) -> Dict[str, Any]:
     if plat == "darwin":
         _mac_permissions(binary, out)
         if out["error"] is None:
-            out["ready"] = out["accessibility"] is True and out["screen_recording"] is True
+            out["ready"] = (
+                out["accessibility"] is True and out["screen_recording"] is True
+            )
     elif doctor is not None:
         # No TCC model off macOS — readiness is driver health.
         out["ready"] = doctor["ok"]

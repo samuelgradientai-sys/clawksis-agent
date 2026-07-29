@@ -44,10 +44,13 @@ from tools import approval as approval_mod
 def test_approval_event_choices_follow_backend_capabilities(
     smart_denied, allow_permanent, expected
 ):
-    assert _approval_event_choices(
-        smart_denied=smart_denied,
-        allow_permanent=allow_permanent,
-    ) == expected
+    assert (
+        _approval_event_choices(
+            smart_denied=smart_denied,
+            allow_permanent=allow_permanent,
+        )
+        == expected
+    )
 
 
 def _make_adapter(api_key: str = "") -> APIServerAdapter:
@@ -62,7 +65,9 @@ def _make_adapter(api_key: str = "") -> APIServerAdapter:
 
 def _create_runs_app(adapter: APIServerAdapter) -> web.Application:
     """Create an aiohttp app with /v1/runs routes registered."""
-    mws = [mw for mw in (cors_middleware, security_headers_middleware) if mw is not None]
+    mws = [
+        mw for mw in (cors_middleware, security_headers_middleware) if mw is not None
+    ]
     app = web.Application(middlewares=mws)
     app["api_server_adapter"] = adapter
     app.router.add_post("/v1/runs", adapter._handle_runs)
@@ -273,7 +278,10 @@ class TestRunStatus:
                     await asyncio.sleep(0.05)
 
                 mock_agent.run_conversation.assert_called_once()
-                assert mock_agent.run_conversation.call_args.kwargs["task_id"] == "space-session"
+                assert (
+                    mock_agent.run_conversation.call_args.kwargs["task_id"]
+                    == "space-session"
+                )
                 assert status["session_id"] == "space-session"
 
     @pytest.mark.asyncio
@@ -325,8 +333,6 @@ class TestRunEvents:
                 assert "run.completed" in body
                 assert "Hello!" in body
 
-
-
     @pytest.mark.asyncio
     async def test_approval_response_without_pending_returns_409(self, adapter):
         app = _create_runs_app(adapter)
@@ -363,7 +369,9 @@ class TestRunEvents:
         adapter._run_approval_sessions[run_id] = "session-123"
 
         async with TestClient(TestServer(app)) as cli:
-            with patch("tools.approval.resolve_gateway_approval", return_value=1) as mock_resolve:
+            with patch(
+                "tools.approval.resolve_gateway_approval", return_value=1
+            ) as mock_resolve:
                 approval_resp = await cli.post(
                     f"/v1/runs/{run_id}/approval",
                     json={"choice": "once", "all": "false"},
@@ -383,7 +391,9 @@ class TestRunEvents:
         async with TestClient(TestServer(app)) as cli:
             with patch.object(auth_adapter, "_create_agent") as mock_create:
                 victim_agent, victim_ready, victim_interrupted = _make_slow_agent()
-                attacker_agent, attacker_ready, attacker_interrupted = _make_slow_agent()
+                attacker_agent, attacker_ready, attacker_interrupted = (
+                    _make_slow_agent()
+                )
                 mock_create.side_effect = [victim_agent, attacker_agent]
 
                 victim_resp = await cli.post(
@@ -405,7 +415,10 @@ class TestRunEvents:
                 attacker_ready.wait(timeout=3.0)
                 assert auth_adapter._run_approval_sessions[victim_run] == victim_run
                 assert auth_adapter._run_approval_sessions[attacker_run] == attacker_run
-                assert auth_adapter._run_approval_sessions[victim_run] != auth_adapter._run_approval_sessions[attacker_run]
+                assert (
+                    auth_adapter._run_approval_sessions[victim_run]
+                    != auth_adapter._run_approval_sessions[attacker_run]
+                )
 
                 victim_entry = approval_mod._ApprovalEntry({
                     "command": "bash -c victim-danger",
@@ -446,7 +459,6 @@ class TestRunEvents:
                 victim_interrupted.set()
                 attacker_interrupted.set()
 
-
     @pytest.mark.asyncio
     async def test_events_not_found_returns_404(self, adapter):
         app = _create_runs_app(adapter)
@@ -481,7 +493,9 @@ class TestRunLifecycleSweep:
         assert run_id in adapter._run_streams_created
 
     @pytest.mark.asyncio
-    async def test_expired_live_run_drops_transport_but_keeps_control_state(self, adapter):
+    async def test_expired_live_run_drops_transport_but_keeps_control_state(
+        self, adapter
+    ):
         """Stream TTL bounds buffering without detaching a live run."""
         app = _create_runs_app(adapter)
         adapter._max_concurrent_runs = 1
@@ -619,8 +633,13 @@ class TestStopRun:
 
             return original_create_task(_delayed())
 
-        with patch("gateway.platforms.api_server.asyncio.create_task", side_effect=_delayed_create_task), \
-             patch.object(adapter, "_create_agent") as mock_create:
+        with (
+            patch(
+                "gateway.platforms.api_server.asyncio.create_task",
+                side_effect=_delayed_create_task,
+            ),
+            patch.object(adapter, "_create_agent") as mock_create,
+        ):
             async with TestClient(TestServer(app)) as cli:
                 resp = await cli.post("/v1/runs", json={"input": "hello"})
                 run_id = (await resp.json())["run_id"]

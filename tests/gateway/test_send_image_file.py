@@ -102,9 +102,7 @@ class TestTelegramSendImageFile:
         mock_msg.message_id = 42
         adapter._bot.send_photo = AsyncMock(return_value=mock_msg)
 
-        result = _run(
-            adapter.send_image_file(chat_id="12345", image_path=str(img))
-        )
+        result = _run(adapter.send_image_file(chat_id="12345", image_path=str(img)))
         assert result.success
         assert result.message_id == "42"
         adapter._bot.send_photo.assert_awaited_once()
@@ -116,7 +114,9 @@ class TestTelegramSendImageFile:
     def test_returns_error_when_file_missing(self, adapter):
         """send_image_file should return error for nonexistent file."""
         result = _run(
-            adapter.send_image_file(chat_id="12345", image_path="/nonexistent/image.png")
+            adapter.send_image_file(
+                chat_id="12345", image_path="/nonexistent/image.png"
+            )
         )
         assert not result.success
         assert "not found" in result.error
@@ -141,7 +141,9 @@ class TestTelegramSendImageFile:
 
         long_caption = "A" * 2000
         _run(
-            adapter.send_image_file(chat_id="12345", image_path=str(img), caption=long_caption)
+            adapter.send_image_file(
+                chat_id="12345", image_path=str(img), caption=long_caption
+            )
         )
 
         call_kwargs = adapter._bot.send_photo.call_args.kwargs
@@ -212,9 +214,7 @@ class TestDiscordSendImageFile:
         mock_channel.send = AsyncMock(return_value=mock_msg)
         adapter._client.get_channel = MagicMock(return_value=mock_channel)
 
-        result = _run(
-            adapter.send_image_file(chat_id="67890", image_path=str(img))
-        )
+        result = _run(adapter.send_image_file(chat_id="67890", image_path=str(img)))
         assert result.success
         assert result.message_id == "99"
         mock_channel.send.assert_awaited_once()
@@ -307,7 +307,12 @@ def _ensure_slack_mock():
         return
 
     slack_mod = MagicMock()
-    for name in ("slack_bolt", "slack_bolt.async_app", "slack_sdk", "slack_sdk.web.async_client"):
+    for name in (
+        "slack_bolt",
+        "slack_bolt.async_app",
+        "slack_sdk",
+        "slack_sdk.web.async_client",
+    ):
         sys.modules.setdefault(name, slack_mod)
 
 
@@ -332,9 +337,7 @@ class TestSlackSendImageFile:
         mock_result = MagicMock()
         adapter._app.client.files_upload_v2 = AsyncMock(return_value=mock_result)
 
-        result = _run(
-            adapter.send_image_file(chat_id="C12345", image_path=str(img))
-        )
+        result = _run(adapter.send_image_file(chat_id="C12345", image_path=str(img)))
         assert result.success
         adapter._app.client.files_upload_v2.assert_awaited_once()
 
@@ -368,7 +371,10 @@ class TestScreenshotCleanup:
     def test_cleanup_removes_old_screenshots(self, tmp_path):
         """_cleanup_old_screenshots should remove files older than max_age_hours."""
         import time
-        from tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
+        from tools.browser_tool import (
+            _cleanup_old_screenshots,
+            _last_screenshot_cleanup_by_dir,
+        )
 
         _last_screenshot_cleanup_by_dir.clear()
 
@@ -389,7 +395,10 @@ class TestScreenshotCleanup:
 
     def test_cleanup_is_throttled_per_directory(self, tmp_path):
         import time
-        from tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
+        from tools.browser_tool import (
+            _cleanup_old_screenshots,
+            _last_screenshot_cleanup_by_dir,
+        )
 
         _last_screenshot_cleanup_by_dir.clear()
 
@@ -410,7 +419,10 @@ class TestScreenshotCleanup:
     def test_cleanup_ignores_non_screenshot_files(self, tmp_path):
         """Only files matching browser_screenshot_*.png should be cleaned."""
         import time
-        from tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
+        from tools.browser_tool import (
+            _cleanup_old_screenshots,
+            _last_screenshot_cleanup_by_dir,
+        )
 
         _last_screenshot_cleanup_by_dir.clear()
 
@@ -425,13 +437,23 @@ class TestScreenshotCleanup:
 
     def test_cleanup_handles_empty_dir(self, tmp_path):
         """Cleanup should not fail on empty directory."""
-        from tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
+        from tools.browser_tool import (
+            _cleanup_old_screenshots,
+            _last_screenshot_cleanup_by_dir,
+        )
+
         _last_screenshot_cleanup_by_dir.clear()
         _cleanup_old_screenshots(tmp_path, max_age_hours=24)  # Should not raise
 
     def test_cleanup_handles_nonexistent_dir(self):
         """Cleanup should not fail if directory doesn't exist."""
         from pathlib import Path
-        from tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
+        from tools.browser_tool import (
+            _cleanup_old_screenshots,
+            _last_screenshot_cleanup_by_dir,
+        )
+
         _last_screenshot_cleanup_by_dir.clear()
-        _cleanup_old_screenshots(Path("/nonexistent/dir"), max_age_hours=24)  # Should not raise
+        _cleanup_old_screenshots(
+            Path("/nonexistent/dir"), max_age_hours=24
+        )  # Should not raise

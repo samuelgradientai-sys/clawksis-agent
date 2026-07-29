@@ -29,7 +29,9 @@ def test_top_level_stt_echo_transcripts_takes_precedence():
     assert cfg.stt_echo_transcripts is False
 
 
-def test_load_gateway_config_honors_top_level_stt_echo_transcripts(monkeypatch, tmp_path):
+def test_load_gateway_config_honors_top_level_stt_echo_transcripts(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     (tmp_path / "config.yaml").write_text(
         "stt:\n  echo_transcripts: true\nstt_echo_transcripts: false\n",
@@ -59,12 +61,10 @@ def test_all_gateway_transcript_echo_sends_are_gated():
     lines = source.read_text().splitlines()
 
     echo_send_lines = [
-        index
-        for index, line in enumerate(lines)
-        if "f'🎙️" in line or 'f"🎙️' in line
+        index for index, line in enumerate(lines) if "f'🎙️" in line or 'f"🎙️' in line
     ]
 
     assert echo_send_lines
     for index in echo_send_lines:
-        context = "\n".join(lines[max(0, index - 12): index + 1])
+        context = "\n".join(lines[max(0, index - 12) : index + 1])
         assert "_should_echo_stt_transcripts()" in context

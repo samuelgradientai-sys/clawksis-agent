@@ -76,8 +76,9 @@ def test_venv_health_reports_missing_imports(tmp_path):
         stdout="fastapi: No module named 'annotated_doc'\n",
         stderr="",
     )
-    with patch.object(cli_main, "PROJECT_ROOT", tmp_path), patch.object(
-        cli_main.subprocess, "run", return_value=fake
+    with (
+        patch.object(cli_main, "PROJECT_ROOT", tmp_path),
+        patch.object(cli_main.subprocess, "run", return_value=fake),
     ):
         healthy, detail = cli_main._venv_core_imports_healthy()
 
@@ -88,8 +89,9 @@ def test_venv_health_reports_missing_imports(tmp_path):
 def test_venv_health_healthy_when_probe_clean(tmp_path):
     _fake_venv_python(tmp_path)
     fake = SimpleNamespace(returncode=0, stdout="", stderr="")
-    with patch.object(cli_main, "PROJECT_ROOT", tmp_path), patch.object(
-        cli_main.subprocess, "run", return_value=fake
+    with (
+        patch.object(cli_main, "PROJECT_ROOT", tmp_path),
+        patch.object(cli_main.subprocess, "run", return_value=fake),
     ):
         healthy, detail = cli_main._venv_core_imports_healthy()
     assert healthy is True
@@ -98,9 +100,12 @@ def test_venv_health_healthy_when_probe_clean(tmp_path):
 def test_venv_health_broken_interpreter_is_unhealthy(tmp_path):
     """Nonzero exit with no module list = interpreter itself is broken."""
     _fake_venv_python(tmp_path)
-    fake = SimpleNamespace(returncode=1, stdout="", stderr="Fatal Python error: init failed\n")
-    with patch.object(cli_main, "PROJECT_ROOT", tmp_path), patch.object(
-        cli_main.subprocess, "run", return_value=fake
+    fake = SimpleNamespace(
+        returncode=1, stdout="", stderr="Fatal Python error: init failed\n"
+    )
+    with (
+        patch.object(cli_main, "PROJECT_ROOT", tmp_path),
+        patch.object(cli_main.subprocess, "run", return_value=fake),
     ):
         healthy, detail = cli_main._venv_core_imports_healthy()
     assert healthy is False
@@ -110,10 +115,13 @@ def test_venv_health_broken_interpreter_is_unhealthy(tmp_path):
 def test_venv_health_probe_failure_reports_healthy(tmp_path):
     """A probe that can't run must NOT force needless reinstalls."""
     _fake_venv_python(tmp_path)
-    with patch.object(cli_main, "PROJECT_ROOT", tmp_path), patch.object(
-        cli_main.subprocess,
-        "run",
-        side_effect=subprocess.TimeoutExpired(cmd="python", timeout=60),
+    with (
+        patch.object(cli_main, "PROJECT_ROOT", tmp_path),
+        patch.object(
+            cli_main.subprocess,
+            "run",
+            side_effect=subprocess.TimeoutExpired(cmd="python", timeout=60),
+        ),
     ):
         healthy, _detail = cli_main._venv_core_imports_healthy()
     assert healthy is True
@@ -124,7 +132,9 @@ def test_venv_health_probe_failure_reports_healthy(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _proc(pid: int, exe: str, name: str, cmdline: list[str] | None = None, cwd: str = ""):
+def _proc(
+    pid: int, exe: str, name: str, cmdline: list[str] | None = None, cwd: str = ""
+):
     proc = MagicMock()
     proc.info = {
         "pid": pid,
@@ -149,16 +159,20 @@ def test_detect_venv_python_finds_backend(_winp, tmp_path):
     me = MagicMock()
     me.parents.return_value = []
     fake_psutil = types.SimpleNamespace(
-        process_iter=lambda attrs: iter(
-            [
-                _proc(101, venv_py, "python.exe", ["python.exe", "-m", "clawk_cli.main", "serve"]),
-                _proc(102, other_py, "python.exe", ["python.exe", "somescript.py"]),
-            ]
-        ),
+        process_iter=lambda attrs: iter([
+            _proc(
+                101,
+                venv_py,
+                "python.exe",
+                ["python.exe", "-m", "clawk_cli.main", "serve"],
+            ),
+            _proc(102, other_py, "python.exe", ["python.exe", "somescript.py"]),
+        ]),
         Process=lambda *a, **k: me,
     )
-    with patch.object(cli_main, "PROJECT_ROOT", tmp_path), patch.dict(
-        sys.modules, {"psutil": fake_psutil}
+    with (
+        patch.object(cli_main, "PROJECT_ROOT", tmp_path),
+        patch.dict(sys.modules, {"psutil": fake_psutil}),
     ):
         matches = cli_main._detect_venv_python_processes()
 
@@ -176,24 +190,24 @@ def test_detect_venv_python_excludes_self_and_ancestors(_winp, tmp_path):
     me = MagicMock()
     me.parents.return_value = [parent]
     fake_psutil = types.SimpleNamespace(
-        process_iter=lambda attrs: iter(
-            [
-                _proc(_os.getpid(), venv_py, "python.exe"),
-                _proc(555, venv_py, "clawk.exe"),
-            ]
-        ),
+        process_iter=lambda attrs: iter([
+            _proc(_os.getpid(), venv_py, "python.exe"),
+            _proc(555, venv_py, "clawk.exe"),
+        ]),
         Process=lambda *a, **k: me,
     )
-    with patch.object(cli_main, "PROJECT_ROOT", tmp_path), patch.dict(
-        sys.modules, {"psutil": fake_psutil}
+    with (
+        patch.object(cli_main, "PROJECT_ROOT", tmp_path),
+        patch.dict(sys.modules, {"psutil": fake_psutil}),
     ):
         assert cli_main._detect_venv_python_processes() == []
 
 
 @patch.object(cli_main, "_is_windows", return_value=True)
 def test_detect_venv_python_no_psutil_is_empty(_winp, tmp_path):
-    with patch.object(cli_main, "PROJECT_ROOT", tmp_path), patch.dict(
-        sys.modules, {"psutil": None}
+    with (
+        patch.object(cli_main, "PROJECT_ROOT", tmp_path),
+        patch.dict(sys.modules, {"psutil": None}),
     ):
         assert cli_main._detect_venv_python_processes() == []
 
@@ -222,26 +236,27 @@ def test_detect_venv_python_catches_outside_venv_trampoline(_winp, tmp_path):
     me = MagicMock()
     me.parents.return_value = []
     fake_psutil = types.SimpleNamespace(
-        process_iter=lambda attrs: iter(
-            [
-                # cmdline references the venv path directly
-                _proc(201, base_py, "python.exe", [base_py, venv_path, "-m", "x"]),
-                # `-m clawk_cli.main serve` with the install root as cwd
-                _proc(
-                    202,
-                    base_py,
-                    "python.exe",
-                    [base_py, "-m", "clawk_cli.main", "serve"],
-                    cwd=str(tmp_path),
-                ),
-                # unrelated base-interpreter python → NOT a holder
-                _proc(203, base_py, "python.exe", [base_py, "somescript.py"], cwd="C:\\other"),
-            ]
-        ),
+        process_iter=lambda attrs: iter([
+            # cmdline references the venv path directly
+            _proc(201, base_py, "python.exe", [base_py, venv_path, "-m", "x"]),
+            # `-m clawk_cli.main serve` with the install root as cwd
+            _proc(
+                202,
+                base_py,
+                "python.exe",
+                [base_py, "-m", "clawk_cli.main", "serve"],
+                cwd=str(tmp_path),
+            ),
+            # unrelated base-interpreter python → NOT a holder
+            _proc(
+                203, base_py, "python.exe", [base_py, "somescript.py"], cwd="C:\\other"
+            ),
+        ]),
         Process=lambda *a, **k: me,
     )
-    with patch.object(cli_main, "PROJECT_ROOT", tmp_path), patch.dict(
-        sys.modules, {"psutil": fake_psutil}
+    with (
+        patch.object(cli_main, "PROJECT_ROOT", tmp_path),
+        patch.dict(sys.modules, {"psutil": fake_psutil}),
     ):
         matches = cli_main._detect_venv_python_processes()
 
@@ -256,21 +271,20 @@ def test_detect_venv_clawk_cli_cmdline_outside_install_not_matched(_winp, tmp_pa
     me = MagicMock()
     me.parents.return_value = []
     fake_psutil = types.SimpleNamespace(
-        process_iter=lambda attrs: iter(
-            [
-                _proc(
-                    301,
-                    base_py,
-                    "python.exe",
-                    [base_py, "-m", "clawk_cli.main", "serve"],
-                    cwd="C:\\other-install",
-                ),
-            ]
-        ),
+        process_iter=lambda attrs: iter([
+            _proc(
+                301,
+                base_py,
+                "python.exe",
+                [base_py, "-m", "clawk_cli.main", "serve"],
+                cwd="C:\\other-install",
+            ),
+        ]),
         Process=lambda *a, **k: me,
     )
-    with patch.object(cli_main, "PROJECT_ROOT", tmp_path), patch.dict(
-        sys.modules, {"psutil": fake_psutil}
+    with (
+        patch.object(cli_main, "PROJECT_ROOT", tmp_path),
+        patch.dict(sys.modules, {"psutil": fake_psutil}),
     ):
         assert cli_main._detect_venv_python_processes() == []
 
@@ -310,18 +324,18 @@ def _run_update_until_guard(args):
         def __truediv__(self, _other):
             raise _PastGuard
 
-    with patch.object(cli_main, "_is_windows", return_value=True), patch.object(
-        cli_main, "_venv_scripts_dir", return_value=None
-    ), patch.object(cli_main, "_run_pre_update_backup"), patch.object(
-        cli_main, "_pause_windows_gateways_for_update", return_value=None
-    ), patch.object(
-        cli_main, "_resume_windows_gateways_after_update"
-    ), patch.object(
-        cli_main,
-        "_detect_venv_python_processes",
-        return_value=[(101, "python.exe", "python.exe -m clawk_cli.main serve")],
-    ), patch.object(
-        cli_main, "PROJECT_ROOT", _RootSentinel()
+    with (
+        patch.object(cli_main, "_is_windows", return_value=True),
+        patch.object(cli_main, "_venv_scripts_dir", return_value=None),
+        patch.object(cli_main, "_run_pre_update_backup"),
+        patch.object(cli_main, "_pause_windows_gateways_for_update", return_value=None),
+        patch.object(cli_main, "_resume_windows_gateways_after_update"),
+        patch.object(
+            cli_main,
+            "_detect_venv_python_processes",
+            return_value=[(101, "python.exe", "python.exe -m clawk_cli.main serve")],
+        ),
+        patch.object(cli_main, "PROJECT_ROOT", _RootSentinel()),
     ):
         try:
             cli_main._cmd_update_impl(args, gateway_mode=False)
@@ -335,8 +349,8 @@ def _run_update_until_guard(args):
 @pytest.mark.parametrize(
     "force,force_venv,expected",
     [
-        (False, False, "exit_2"),   # guard fires
-        (True, False, "exit_2"),    # plain --force does NOT bypass the venv guard
+        (False, False, "exit_2"),  # guard fires
+        (True, False, "exit_2"),  # plain --force does NOT bypass the venv guard
         (False, True, "past_guard"),  # --force-venv is the explicit escape hatch
         (True, True, "past_guard"),
     ],

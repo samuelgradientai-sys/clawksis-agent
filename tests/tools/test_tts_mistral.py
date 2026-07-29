@@ -20,7 +20,9 @@ def mock_mistral_module():
     mock_mistral_cls = MagicMock(return_value=mock_client)
     fake_module = MagicMock()
     fake_module.Mistral = mock_mistral_cls
-    with patch.dict("sys.modules", {"mistralai": fake_module, "mistralai.client": fake_module}):
+    with patch.dict(
+        "sys.modules", {"mistralai": fake_module, "mistralai.client": fake_module}
+    ):
         yield mock_client
 
 
@@ -175,22 +177,32 @@ class TestTtsDispatcherMistral:
         )
 
         output_path = str(tmp_path / "out.mp3")
-        with patch("tools.tts_tool._load_tts_config", return_value={"provider": "mistral"}):
+        with patch(
+            "tools.tts_tool._load_tts_config", return_value={"provider": "mistral"}
+        ):
             result = json.loads(text_to_speech_tool("Hello", output_path=output_path))
 
         assert result["success"] is True
         assert result["provider"] == "mistral"
         mock_mistral_module.audio.speech.complete.assert_called_once()
 
-    def test_dispatcher_returns_error_when_sdk_not_installed(self, tmp_path, monkeypatch):
+    def test_dispatcher_returns_error_when_sdk_not_installed(
+        self, tmp_path, monkeypatch
+    ):
         import json
 
         from tools.tts_tool import text_to_speech_tool
 
         monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
-        with patch(
-            "tools.tts_tool._import_mistral_client", side_effect=ImportError("no module")
-        ), patch("tools.tts_tool._load_tts_config", return_value={"provider": "mistral"}):
+        with (
+            patch(
+                "tools.tts_tool._import_mistral_client",
+                side_effect=ImportError("no module"),
+            ),
+            patch(
+                "tools.tts_tool._load_tts_config", return_value={"provider": "mistral"}
+            ),
+        ):
             result = json.loads(
                 text_to_speech_tool("Hello", output_path=str(tmp_path / "out.mp3"))
             )
@@ -204,23 +216,28 @@ class TestCheckTtsRequirementsMistral:
         from tools.tts_tool import check_tts_requirements
 
         monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
-        with patch(
-            "tools.tts_tool._load_tts_config",
-            return_value={"provider": "mistral"},
-        ), patch("tools.tts_tool._import_edge_tts", side_effect=ImportError), \
-             patch("tools.tts_tool._import_elevenlabs", side_effect=ImportError), \
-             patch("tools.tts_tool._import_openai_client", side_effect=ImportError), \
-             patch("tools.tts_tool._check_neutts_available", return_value=False):
+        with (
+            patch(
+                "tools.tts_tool._load_tts_config",
+                return_value={"provider": "mistral"},
+            ),
+            patch("tools.tts_tool._import_edge_tts", side_effect=ImportError),
+            patch("tools.tts_tool._import_elevenlabs", side_effect=ImportError),
+            patch("tools.tts_tool._import_openai_client", side_effect=ImportError),
+            patch("tools.tts_tool._check_neutts_available", return_value=False),
+        ):
             assert check_tts_requirements() is True
 
     def test_mistral_key_missing_returns_false(self, mock_mistral_module):
         from tools.tts_tool import check_tts_requirements
 
-        with patch("tools.tts_tool._import_edge_tts", side_effect=ImportError), \
-             patch("tools.tts_tool._import_elevenlabs", side_effect=ImportError), \
-             patch("tools.tts_tool._import_openai_client", side_effect=ImportError), \
-             patch("tools.tts_tool._check_neutts_available", return_value=False), \
-             patch("tools.tts_tool._check_kittentts_available", return_value=False), \
-             patch("tools.tts_tool._check_piper_available", return_value=False), \
-             patch("tools.tts_tool._has_any_command_tts_provider", return_value=False):
+        with (
+            patch("tools.tts_tool._import_edge_tts", side_effect=ImportError),
+            patch("tools.tts_tool._import_elevenlabs", side_effect=ImportError),
+            patch("tools.tts_tool._import_openai_client", side_effect=ImportError),
+            patch("tools.tts_tool._check_neutts_available", return_value=False),
+            patch("tools.tts_tool._check_kittentts_available", return_value=False),
+            patch("tools.tts_tool._check_piper_available", return_value=False),
+            patch("tools.tts_tool._has_any_command_tts_provider", return_value=False),
+        ):
             assert check_tts_requirements() is False

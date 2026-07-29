@@ -6,6 +6,7 @@ declare an ``extra_headers`` dict that must land on the OpenAI client's
 credential swaps / rebuilds. Values may carry credentials — the plumbing must
 never log them.
 """
+
 from unittest.mock import MagicMock, patch
 
 from run_agent import AIAgent

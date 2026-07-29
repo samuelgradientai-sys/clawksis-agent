@@ -15,22 +15,40 @@ from types import SimpleNamespace
 def _fake_rows():
     return [
         {
-            "name": "agent-skill", "provenance": "agent", "state": "active",
-            "use_count": 2, "view_count": 1, "patch_count": 0,
-            "activity_count": 3, "last_activity_at": "2026-05-01T10:00:00+00:00",
-            "created_at": "2026-01-01T00:00:00+00:00", "_persisted": True,
+            "name": "agent-skill",
+            "provenance": "agent",
+            "state": "active",
+            "use_count": 2,
+            "view_count": 1,
+            "patch_count": 0,
+            "activity_count": 3,
+            "last_activity_at": "2026-05-01T10:00:00+00:00",
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "_persisted": True,
         },
         {
-            "name": "bundled-skill", "provenance": "bundled", "state": "active",
-            "use_count": 9, "view_count": 4, "patch_count": 0,
-            "activity_count": 13, "last_activity_at": "2026-05-10T10:00:00+00:00",
-            "created_at": "2026-01-01T00:00:00+00:00", "_persisted": True,
+            "name": "bundled-skill",
+            "provenance": "bundled",
+            "state": "active",
+            "use_count": 9,
+            "view_count": 4,
+            "patch_count": 0,
+            "activity_count": 13,
+            "last_activity_at": "2026-05-10T10:00:00+00:00",
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "_persisted": True,
         },
         {
-            "name": "hub-skill", "provenance": "hub", "state": "active",
-            "use_count": 0, "view_count": 0, "patch_count": 0,
-            "activity_count": 0, "last_activity_at": None,
-            "created_at": "2026-01-01T00:00:00+00:00", "_persisted": False,
+            "name": "hub-skill",
+            "provenance": "hub",
+            "state": "active",
+            "use_count": 0,
+            "view_count": 0,
+            "patch_count": 0,
+            "activity_count": 0,
+            "last_activity_at": None,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "_persisted": False,
         },
     ]
 
@@ -105,7 +123,14 @@ def test_usage_command_is_registered():
 
     parser = argparse.ArgumentParser(prog="clawk curator")
     curator_cli.register_cli(parser)
-    args = parser.parse_args(["usage", "--sort", "recent", "--provenance", "hub", "--json"])
+    args = parser.parse_args([
+        "usage",
+        "--sort",
+        "recent",
+        "--provenance",
+        "hub",
+        "--json",
+    ])
     assert args.func is curator_cli._cmd_usage
     assert args.sort == "recent"
     assert args.provenance == "hub"

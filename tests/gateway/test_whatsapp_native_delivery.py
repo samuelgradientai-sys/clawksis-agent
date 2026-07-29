@@ -11,8 +11,13 @@ class TestWhatsAppNativeFormatting:
     def test_single_asterisk_markdown_italic_uses_whatsapp_underscore(self):
         adapter = _make_adapter()
 
-        assert adapter.format_message("this is *italic* text") == "this is _italic_ text"
-        assert adapter.format_message("- * list bullet stays literal") == "- * list bullet stays literal"
+        assert (
+            adapter.format_message("this is *italic* text") == "this is _italic_ text"
+        )
+        assert (
+            adapter.format_message("- * list bullet stays literal")
+            == "- * list bullet stays literal"
+        )
 
     def test_invisible_unicode_prefixes_are_sanitized(self):
         adapter = _make_adapter()
@@ -80,7 +85,9 @@ async def test_send_tracks_text_chunk_message_ids_in_snake_case_raw_response():
     first.json = AsyncMock(return_value={"success": True, "messageId": "msg-1"})
     second = MagicMock(status=200)
     second.json = AsyncMock(return_value={"success": True, "messageId": "msg-2"})
-    adapter._http_session.post = MagicMock(side_effect=[_AsyncCM(first), _AsyncCM(second)])
+    adapter._http_session.post = MagicMock(
+        side_effect=[_AsyncCM(first), _AsyncCM(second)]
+    )
 
     result = await adapter.send("15551234567", "x" * (adapter.MAX_MESSAGE_LENGTH + 100))
 
@@ -96,23 +103,25 @@ async def test_whatsapp_reply_context_is_structured_not_prerendered():
     adapter = WhatsAppAdapter(
         PlatformConfig(
             enabled=True,
-            extra={"session_name": "test", "dm_policy": "allowlist", "allow_from": ["*"]},
+            extra={
+                "session_name": "test",
+                "dm_policy": "allowlist",
+                "allow_from": ["*"],
+            },
         )
     )
 
-    event = await adapter._build_message_event(
-        {
-            "body": "what do you see here?",
-            "chatId": "15551234567@s.whatsapp.net",
-            "chatName": "Example Chat",
-            "senderId": "15551234567@s.whatsapp.net",
-            "senderName": "Example User",
-            "isGroup": False,
-            "hasQuotedMessage": True,
-            "quotedText": "the gateway should not inject reply context twice",
-            "quotedMessageId": "quoted-123",
-        }
-    )
+    event = await adapter._build_message_event({
+        "body": "what do you see here?",
+        "chatId": "15551234567@s.whatsapp.net",
+        "chatName": "Example Chat",
+        "senderId": "15551234567@s.whatsapp.net",
+        "senderName": "Example User",
+        "isGroup": False,
+        "hasQuotedMessage": True,
+        "quotedText": "the gateway should not inject reply context twice",
+        "quotedMessageId": "quoted-123",
+    })
 
     assert event is not None
     assert event.text == "what do you see here?"

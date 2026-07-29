@@ -40,7 +40,8 @@ def test_cron_fire_profile_lookup_off_loop(monkeypatch, loop_probe):
     monkeypatch.setattr(web_server, "_find_cron_job_profile", fake_find)
 
     import plugins.cron_providers.chronos.verify as chv
-    monkeypatch.setattr(chv, "get_fire_verifier", lambda: (lambda **kw: {"sub": "t"}))
+
+    monkeypatch.setattr(chv, "get_fire_verifier", lambda: lambda **kw: {"sub": "t"})
 
     client = TestClient(web_server.app)
     resp = client.post(
@@ -66,6 +67,7 @@ def test_blueprint_instantiate_create_job_off_loop(monkeypatch, loop_probe):
     monkeypatch.setattr(web_server, "_has_valid_session_token", lambda req: True)
 
     import cron.blueprint_catalog as bc
+
     monkeypatch.setattr(bc, "get_blueprint", lambda key: object())
     monkeypatch.setattr(
         bc,

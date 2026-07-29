@@ -13,7 +13,9 @@ def test_parse_model_flags_detailed_supports_once():
 
 
 def test_parse_model_flags_legacy_wrapper_strips_once():
-    model_input, provider, is_global, force_refresh, is_session = parse_model_flags("sonnet --once")
+    model_input, provider, is_global, force_refresh, is_session = parse_model_flags(
+        "sonnet --once"
+    )
 
     assert model_input == "sonnet"
     assert provider == ""

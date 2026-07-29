@@ -20,6 +20,7 @@ so the timeout is bumped to 180s.
 
 Run:  pytest -m integration tests/integration/test_vision_docker_resolve.py
 """
+
 import base64
 import shutil
 import subprocess
@@ -32,9 +33,12 @@ def _docker_available() -> bool:
     if shutil.which("docker") is None:
         return False
     try:
-        return subprocess.run(
-            ["docker", "info"], capture_output=True, timeout=5
-        ).returncode == 0
+        return (
+            subprocess.run(
+                ["docker", "info"], capture_output=True, timeout=5
+            ).returncode
+            == 0
+        )
     except (subprocess.TimeoutExpired, OSError):
         return False
 
@@ -106,7 +110,8 @@ async def test_resolves_tmpfs_workspace_file(docker_backend):
 
     _write_png_in_container(docker_backend, "/workspace/shot.png")
     res = await resolve_image_source(
-        "/workspace/shot.png", ResolveContext(task_id=docker_backend._task_id))
+        "/workspace/shot.png", ResolveContext(task_id=docker_backend._task_id)
+    )
     assert res.origin == "container"
     assert res.mime == "image/png"
     assert res.data == _TINY_PNG
@@ -119,7 +124,8 @@ async def test_resolves_root_owned_mode600_file(docker_backend):
 
     _write_png_in_container(docker_backend, "/workspace/secret.png", mode="600")
     res = await resolve_image_source(
-        "/workspace/secret.png", ResolveContext(task_id=docker_backend._task_id))
+        "/workspace/secret.png", ResolveContext(task_id=docker_backend._task_id)
+    )
     assert res.origin == "container"
     assert res.mime == "image/png"
     assert res.data == _TINY_PNG
@@ -152,6 +158,7 @@ async def test_host_secret_path_reads_container_not_host(docker_backend, tmp_pat
     # never returns the HOST bytes.
     with pytest.raises(ImageResolutionError) as excinfo:
         await resolve_image_source(
-            str(host_secret), ResolveContext(task_id=docker_backend._task_id))
+            str(host_secret), ResolveContext(task_id=docker_backend._task_id)
+        )
     # Belt and suspenders: the host secret must not appear anywhere in the error.
     assert b"HOST-PRIVATE-KEY".decode() not in str(excinfo.value)

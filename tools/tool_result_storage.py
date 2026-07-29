@@ -79,14 +79,16 @@ def _safe_result_filename(tool_use_id: str) -> str:
     return f"{safe_stem}.txt"
 
 
-def generate_preview(content: str, max_chars: int = DEFAULT_PREVIEW_SIZE_CHARS) -> tuple[str, bool]:
+def generate_preview(
+    content: str, max_chars: int = DEFAULT_PREVIEW_SIZE_CHARS
+) -> tuple[str, bool]:
     """Truncate at last newline within max_chars. Returns (preview, has_more)."""
     if len(content) <= max_chars:
         return content, False
     truncated = content[:max_chars]
     last_nl = truncated.rfind("\n")
     if last_nl > max_chars // 2:
-        truncated = truncated[:last_nl + 1]
+        truncated = truncated[: last_nl + 1]
     return truncated, True
 
 
@@ -130,7 +132,9 @@ def _build_persisted_message(
         size_str = f"{size_kb:.1f} KB"
 
     msg = f"{PERSISTED_OUTPUT_TAG}\n"
-    msg += f"This tool result was too large ({original_size:,} characters, {size_str}).\n"
+    msg += (
+        f"This tool result was too large ({original_size:,} characters, {size_str}).\n"
+    )
     msg += f"Full output saved to: {file_path}\n"
     msg += "Use the read_file tool with offset and limit to access specific sections of this output.\n\n"
     msg += f"Preview (first {len(preview)} chars):\n"
@@ -166,7 +170,9 @@ def maybe_persist_tool_result(
     Returns:
         Original content if small, or <persisted-output> replacement.
     """
-    effective_threshold = threshold if threshold is not None else config.resolve_threshold(tool_name)
+    effective_threshold = (
+        threshold if threshold is not None else config.resolve_threshold(tool_name)
+    )
 
     if effective_threshold == float("inf"):
         return content
@@ -183,15 +189,21 @@ def maybe_persist_tool_result(
             if _write_to_sandbox(content, remote_path, env):
                 logger.info(
                     "Persisted large tool result: %s (%s, %d chars -> %s)",
-                    tool_name, tool_use_id, len(content), remote_path,
+                    tool_name,
+                    tool_use_id,
+                    len(content),
+                    remote_path,
                 )
-                return _build_persisted_message(preview, has_more, len(content), remote_path)
+                return _build_persisted_message(
+                    preview, has_more, len(content), remote_path
+                )
         except Exception as exc:
             logger.warning("Sandbox write failed for %s: %s", tool_use_id, exc)
 
     logger.info(
         "Inline-truncating large tool result: %s (%d chars, no sandbox write)",
-        tool_name, len(content),
+        tool_name,
+        len(content),
     )
     return (
         f"{preview}\n\n"
@@ -248,7 +260,8 @@ def enforce_turn_budget(
             tool_messages[idx]["content"] = replacement
             logger.info(
                 "Budget enforcement: persisted tool result %s (%d chars)",
-                tool_use_id, size,
+                tool_use_id,
+                size,
             )
 
     return tool_messages

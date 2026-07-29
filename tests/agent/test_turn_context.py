@@ -120,7 +120,9 @@ def _make_agent_with_cooldown(db_path, session_id, *, cooldown_until=None):
     if cooldown_until is not None:
         db.record_compression_failure_cooldown(session_id, cooldown_until, "timeout")
 
-    with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+    with patch(
+        "agent.context_compressor.get_model_context_length", return_value=100000
+    ):
         compressor = ContextCompressor(
             model="test/model",
             threshold_percent=0.85,
@@ -282,15 +284,17 @@ def test_runtime_main_sync_happens_after_restore():
     ):
         _build(agent)
 
-    assert calls == [(
-        ("anthropic", "primary-model"),
-        {
-            "base_url": "https://api.anthropic.com",
-            "api_key": "primary-key",
-            "api_mode": "anthropic_messages",
-            "auth_mode": "",
-        },
-    )]
+    assert calls == [
+        (
+            ("anthropic", "primary-model"),
+            {
+                "base_url": "https://api.anthropic.com",
+                "api_key": "primary-key",
+                "api_mode": "anthropic_messages",
+                "auth_mode": "",
+            },
+        )
+    ]
 
 
 def test_memory_nudge_fires_at_interval():
@@ -345,11 +349,17 @@ def test_between_turns_refresh_adds_late_tool_when_servers_registered():
     """R1: a tool that registered since build lands in this turn's snapshot."""
     agent = _FakeAgent()
 
-    new_def = {"type": "function", "function": {"name": "mcp_x_tool", "description": "", "parameters": {}}}
+    new_def = {
+        "type": "function",
+        "function": {"name": "mcp_x_tool", "description": "", "parameters": {}},
+    }
 
     import model_tools
-    with patch("tools.mcp_tool.has_registered_mcp_tools", return_value=True), \
-         patch.object(model_tools, "get_tool_definitions", return_value=[new_def]):
+
+    with (
+        patch("tools.mcp_tool.has_registered_mcp_tools", return_value=True),
+        patch.object(model_tools, "get_tool_definitions", return_value=[new_def]),
+    ):
         _build(agent)
 
     assert "mcp_x_tool" in agent.valid_tool_names
@@ -361,8 +371,10 @@ def test_between_turns_refresh_skipped_when_no_servers():
     agent = _FakeAgent()
     import model_tools
 
-    with patch("tools.mcp_tool.has_registered_mcp_tools", return_value=False), \
-         patch.object(model_tools, "get_tool_definitions") as gtd:
+    with (
+        patch("tools.mcp_tool.has_registered_mcp_tools", return_value=False),
+        patch.object(model_tools, "get_tool_definitions") as gtd,
+    ):
         _build(agent)
 
     gtd.assert_not_called()
@@ -376,8 +388,10 @@ def test_between_turns_refresh_skipped_when_skip_flag_set():
     agent._skip_mcp_refresh = True
     import model_tools
 
-    with patch("tools.mcp_tool.has_registered_mcp_tools", return_value=True), \
-         patch.object(model_tools, "get_tool_definitions") as gtd:
+    with (
+        patch("tools.mcp_tool.has_registered_mcp_tools", return_value=True),
+        patch.object(model_tools, "get_tool_definitions") as gtd,
+    ):
         _build(agent)
 
     gtd.assert_not_called()
@@ -387,16 +401,30 @@ def test_between_turns_refresh_no_churn_when_unchanged():
     """R2: an unchanged tool set leaves the snapshot object identity intact
     (no needless swap → nothing for the next request prefix to diff against)."""
     agent = _FakeAgent()
-    same = [{"type": "function", "function": {"name": "a", "description": "", "parameters": {}}}]
+    same = [
+        {
+            "type": "function",
+            "function": {"name": "a", "description": "", "parameters": {}},
+        }
+    ]
     agent.tools = same
     agent.valid_tool_names = {"a"}
 
     import model_tools
-    with patch("tools.mcp_tool.has_registered_mcp_tools", return_value=True), \
-         patch.object(
-             model_tools, "get_tool_definitions",
-             return_value=[{"type": "function", "function": {"name": "a", "description": "", "parameters": {}}}],
-         ):
+
+    with (
+        patch("tools.mcp_tool.has_registered_mcp_tools", return_value=True),
+        patch.object(
+            model_tools,
+            "get_tool_definitions",
+            return_value=[
+                {
+                    "type": "function",
+                    "function": {"name": "a", "description": "", "parameters": {}},
+                }
+            ],
+        ),
+    ):
         _build(agent)
 
     assert agent.tools is same  # not replaced → no churn
@@ -409,8 +437,10 @@ def test_preflight_skips_when_persisted_cooldown_survives_restart(tmp_path):
         cooldown_until=4_000_000_000.0,
     )
 
-    with patch("agent.turn_context._should_run_preflight_estimate", return_value=True), \
-         patch("agent.turn_context.estimate_request_tokens_rough", return_value=999_999):
+    with (
+        patch("agent.turn_context._should_run_preflight_estimate", return_value=True),
+        patch("agent.turn_context.estimate_request_tokens_rough", return_value=999_999),
+    ):
         ctx = _build(agent)
 
     assert isinstance(ctx, TurnContext)
@@ -427,8 +457,10 @@ def test_preflight_still_runs_for_other_session_with_same_db(tmp_path):
     )
     agent = _make_agent_with_cooldown(db_path, "sess-2")
 
-    with patch("agent.turn_context._should_run_preflight_estimate", return_value=True), \
-         patch("agent.turn_context.estimate_request_tokens_rough", return_value=999_999):
+    with (
+        patch("agent.turn_context._should_run_preflight_estimate", return_value=True),
+        patch("agent.turn_context.estimate_request_tokens_rough", return_value=999_999),
+    ):
         ctx = _build(agent)
 
     assert isinstance(ctx, TurnContext)
@@ -443,11 +475,12 @@ def test_expired_cooldown_allows_preflight(tmp_path):
         cooldown_until=1.0,
     )
 
-    with patch("agent.turn_context._should_run_preflight_estimate", return_value=True), \
-         patch("agent.turn_context.estimate_request_tokens_rough", return_value=999_999):
+    with (
+        patch("agent.turn_context._should_run_preflight_estimate", return_value=True),
+        patch("agent.turn_context.estimate_request_tokens_rough", return_value=999_999),
+    ):
         ctx = _build(agent)
 
     assert isinstance(ctx, TurnContext)
     agent._emit_status.assert_called_once()
     agent._compress_context.assert_called()
-

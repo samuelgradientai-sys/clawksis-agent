@@ -14,6 +14,7 @@ hits for OpenAI Codex Responses API users — OpenAI's docs require the
 
 These tests pin the expanded whitelist so it doesn't regress.
 """
+
 from __future__ import annotations
 
 
@@ -295,7 +296,12 @@ class TestGatewayHistoryBuildForwardsSidecar:
         from gateway.run import _build_gateway_agent_history
 
         history = [
-            {"role": "user", "content": "hi", "api_content": "hi\n\nCTX", "timestamp": 123.0},
+            {
+                "role": "user",
+                "content": "hi",
+                "api_content": "hi\n\nCTX",
+                "timestamp": 123.0,
+            },
             {"role": "assistant", "content": "hello"},
         ]
         agent_history, _obs = _build_gateway_agent_history(history)

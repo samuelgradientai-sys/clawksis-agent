@@ -99,6 +99,12 @@ def test_quarantine_clears_token_material():
     """Regression guard: the quarantine still clears dead token keys."""
     state = _make_state()
     _quarantine_nous_oauth_state(state, _error(), reason="unit_test_quarantine")
-    for key in ("access_token", "refresh_token", "agent_key", "agent_key_id", "expires_at"):
+    for key in (
+        "access_token",
+        "refresh_token",
+        "agent_key",
+        "agent_key_id",
+        "expires_at",
+    ):
         assert key not in state, f"{key} should have been cleared by quarantine"
     assert state["last_auth_error"]["code"] == "invalid_grant"

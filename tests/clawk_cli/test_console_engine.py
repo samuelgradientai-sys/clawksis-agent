@@ -318,7 +318,9 @@ def test_console_help_table_keeps_long_summaries_compact():
     help_text = ClawksisConsoleEngine().help_text()
 
     slack_line = next(
-        line for line in help_text.splitlines() if line.strip().startswith("slack manifest")
+        line
+        for line in help_text.splitlines()
+        if line.strip().startswith("slack manifest")
     )
 
     assert len(slack_line) <= 112

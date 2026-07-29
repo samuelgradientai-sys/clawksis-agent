@@ -151,7 +151,8 @@ def _access_error_hint(
         return None
     low = (err_msg or "").lower()
     gated = status in (402, 403, 404) or any(
-        s in low for s in ("no endpoints", "no allowed", "not a valid model", "data policy")
+        s in low
+        for s in ("no endpoints", "no allowed", "not a valid model", "data policy")
     )
     if not gated:
         return None
@@ -269,7 +270,11 @@ class OpenRouterCompatImageProvider(ImageGenProvider):
         if env_override:
             return [env_override]
         cfg = _load_image_gen_config()
-        scoped = cfg.get(self._config_key) if isinstance(cfg.get(self._config_key), dict) else {}
+        scoped = (
+            cfg.get(self._config_key)
+            if isinstance(cfg.get(self._config_key), dict)
+            else {}
+        )
         if isinstance(scoped, dict):
             value = scoped.get("model")
             if isinstance(value, str) and value.strip():
@@ -361,11 +366,21 @@ class OpenRouterCompatImageProvider(ImageGenProvider):
                 resp = exc.response
                 status = resp.status_code if resp is not None else 0
                 try:
-                    err_msg = resp.json().get("error", {}).get("message", resp.text[:300])
+                    err_msg = (
+                        resp.json().get("error", {}).get("message", resp.text[:300])
+                    )
                 except Exception:  # noqa: BLE001
                     err_msg = resp.text[:300] if resp is not None else str(exc)
-                logger.error("%s image gen failed (%d) on %s: %s", self._name, status, model_id, err_msg)
-                hint = _access_error_hint(self._display, model_id, self._model_env_var, status, err_msg)
+                logger.error(
+                    "%s image gen failed (%d) on %s: %s",
+                    self._name,
+                    status,
+                    model_id,
+                    err_msg,
+                )
+                hint = _access_error_hint(
+                    self._display, model_id, self._model_env_var, status, err_msg
+                )
                 if hint and not is_last:
                     logger.info(
                         "%s model %s unavailable; retrying with fallback %s",
@@ -375,7 +390,8 @@ class OpenRouterCompatImageProvider(ImageGenProvider):
                     )
                     continue
                 last_error = error_response(
-                    error=hint or f"{self._display} image generation failed ({status}): {err_msg}",
+                    error=hint
+                    or f"{self._display} image generation failed ({status}): {err_msg}",
                     error_type="model_access" if hint else "api_error",
                     provider=self._name,
                     model=model_id,

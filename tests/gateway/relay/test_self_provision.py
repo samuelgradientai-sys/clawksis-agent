@@ -67,6 +67,7 @@ def _arm(monkeypatch, *, url="wss://connector.example/relay", token="nas-token")
 
 # ─────────────────────────── config readers ───────────────────────────
 
+
 def test_relay_endpoint_from_env(monkeypatch):
     monkeypatch.setenv("GATEWAY_RELAY_ENDPOINT", "https://gw.example.com/inbound/")
     assert relay.relay_endpoint() == "https://gw.example.com/inbound"
@@ -104,12 +105,21 @@ def test_relay_instance_id_from_config(monkeypatch):
 
 
 def test_provision_url_maps_ws_to_http():
-    assert relay._provision_url("wss://c.example/relay") == "https://c.example/relay/provision"
-    assert relay._provision_url("ws://c.example/relay") == "http://c.example/relay/provision"
-    assert relay._provision_url("https://c.example") == "https://c.example/relay/provision"
+    assert (
+        relay._provision_url("wss://c.example/relay")
+        == "https://c.example/relay/provision"
+    )
+    assert (
+        relay._provision_url("ws://c.example/relay")
+        == "http://c.example/relay/provision"
+    )
+    assert (
+        relay._provision_url("https://c.example") == "https://c.example/relay/provision"
+    )
 
 
 # ─────────────────────────── trigger logic ───────────────────────────
+
 
 def test_provisions_on_nas_host_that_is_NOT_is_managed(monkeypatch):
     """Regression: a NAS-hosted Fly agent sets neither CLAWK_MANAGED nor a
@@ -129,7 +139,11 @@ def test_provisions_on_nas_host_that_is_NOT_is_managed(monkeypatch):
 def test_skips_when_relay_not_configured(monkeypatch):
     _arm(monkeypatch, url=None)
     called = {"n": 0}
-    monkeypatch.setattr(relay, "_post_provision", lambda **k: called.__setitem__("n", called["n"] + 1) or {})
+    monkeypatch.setattr(
+        relay,
+        "_post_provision",
+        lambda **k: called.__setitem__("n", called["n"] + 1) or {},
+    )
     assert relay.self_provision_relay() is False
     assert called["n"] == 0
 
@@ -140,7 +154,11 @@ def test_skips_when_secret_already_pinned(monkeypatch):
     monkeypatch.setenv("GATEWAY_RELAY_ID", "gw-pinned")
     monkeypatch.setenv("GATEWAY_RELAY_SECRET", "deadbeef")
     called = {"n": 0}
-    monkeypatch.setattr(relay, "_post_provision", lambda **k: called.__setitem__("n", called["n"] + 1) or {})
+    monkeypatch.setattr(
+        relay,
+        "_post_provision",
+        lambda **k: called.__setitem__("n", called["n"] + 1) or {},
+    )
     assert relay.self_provision_relay() is False
     assert called["n"] == 0
     # The pinned secret is untouched.
@@ -148,6 +166,7 @@ def test_skips_when_secret_already_pinned(monkeypatch):
 
 
 # ─────────────────────────── happy path ───────────────────────────
+
 
 def test_provisions_and_sets_env_in_process(monkeypatch):
     _arm(monkeypatch)
@@ -182,6 +201,7 @@ def test_outbound_only_when_no_endpoint(monkeypatch):
 
 
 # ─────────────────── instance-id forwarding (Phase 6 Unit α) ───────────────────
+
 
 def test_forwards_instance_id_to_provision(monkeypatch):
     """A managed agent stamped with GATEWAY_RELAY_INSTANCE_ID forwards it to the
@@ -222,7 +242,12 @@ def test_post_provision_body_includes_instanceId_only_when_set(monkeypatch):
             return False
 
         def read(self):
-            return json.dumps({"secret": "a" * 64, "deliveryKey": "b" * 64, "tenant": "t", "gatewayId": "gw-1"}).encode()
+            return json.dumps({
+                "secret": "a" * 64,
+                "deliveryKey": "b" * 64,
+                "tenant": "t",
+                "gatewayId": "gw-1",
+            }).encode()
 
     def _fake_urlopen(req, timeout=None):  # noqa: ANN001
         sent["body"] = json.loads(req.data.decode())
@@ -257,6 +282,7 @@ def test_post_provision_body_includes_instanceId_only_when_set(monkeypatch):
 
 
 # ─────────────────── wake-url forwarding (Phase 5 Unit C) ───────────────────
+
 
 def test_relay_wake_url_from_env(monkeypatch):
     monkeypatch.setenv("GATEWAY_RELAY_WAKE_URL", "  https://wake.example/poke  ")
@@ -315,7 +341,12 @@ def test_post_provision_body_includes_wakeUrl_only_when_set(monkeypatch):
             return False
 
         def read(self):
-            return json.dumps({"secret": "a" * 64, "deliveryKey": "b" * 64, "tenant": "t", "gatewayId": "gw-1"}).encode()
+            return json.dumps({
+                "secret": "a" * 64,
+                "deliveryKey": "b" * 64,
+                "tenant": "t",
+                "gatewayId": "gw-1",
+            }).encode()
 
     def _fake_urlopen(req, timeout=None):  # noqa: ANN001
         sent["body"] = json.loads(req.data.decode())
@@ -350,6 +381,7 @@ def test_post_provision_body_includes_wakeUrl_only_when_set(monkeypatch):
 
 
 # ─────────────────────────── fail-soft ───────────────────────────
+
 
 def test_no_nas_token_is_non_fatal(monkeypatch):
     """A self-hosted box with a relay URL but no resolvable NAS identity skips

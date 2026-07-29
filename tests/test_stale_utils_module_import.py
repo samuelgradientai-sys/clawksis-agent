@@ -59,10 +59,16 @@ class TestStaleUtilsModuleImport:
         # Simulate the pre-06-20 cached module (monkeypatch auto-restores after).
         monkeypatch.delattr(utils, "env_float")
 
-        with pytest.raises(ImportError, match=r"cannot import name 'env_float' from 'utils'"):
-            _import_fresh_consumer("stale_switch_path_consumer", "from utils import env_float\n")
+        with pytest.raises(
+            ImportError, match=r"cannot import name 'env_float' from 'utils'"
+        ):
+            _import_fresh_consumer(
+                "stale_switch_path_consumer", "from utils import env_float\n"
+            )
 
-    def test_client_is_incidental_discord_import_line_fails_identically(self, monkeypatch):
+    def test_client_is_incidental_discord_import_line_fails_identically(
+        self, monkeypatch
+    ):
         """Same failure via the Discord adapter's exact import line -- the client
         does not determine the bug, the stale process does."""
         import utils
@@ -70,7 +76,9 @@ class TestStaleUtilsModuleImport:
         monkeypatch.delattr(utils, "env_float")
 
         # plugins/platforms/discord/adapter.py:106
-        with pytest.raises(ImportError, match=r"cannot import name 'env_float' from 'utils'"):
+        with pytest.raises(
+            ImportError, match=r"cannot import name 'env_float' from 'utils'"
+        ):
             _import_fresh_consumer(
                 "stale_discord_consumer",
                 "from utils import atomic_json_write, env_float\n",

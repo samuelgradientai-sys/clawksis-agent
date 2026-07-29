@@ -66,10 +66,12 @@ def _register_synthetic_package(name: str, search_locations: List[str]) -> None:
 # Directory helpers
 # ---------------------------------------------------------------------------
 
+
 def _get_user_plugins_dir() -> Optional[Path]:
     """Return ``$CLAWK_HOME/plugins/`` or None if unavailable."""
     try:
         from clawk_constants import get_clawk_home
+
         d = get_clawk_home() / "plugins"
         return d if d.is_dir() else None
     except Exception:
@@ -148,6 +150,7 @@ def find_provider_dir(name: str) -> Optional[Path]:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def discover_cron_schedulers() -> List[Tuple[str, str, bool]]:
     """Scan bundled and user-installed directories for available providers.
 
@@ -165,6 +168,7 @@ def discover_cron_schedulers() -> List[Tuple[str, str, bool]]:
         if yaml_file.exists():
             try:
                 import yaml
+
                 with open(yaml_file, encoding="utf-8-sig") as f:
                     meta = yaml.safe_load(f) or {}
                 desc = meta.get("description", "")
@@ -222,8 +226,13 @@ def _load_provider_from_dir(provider_dir: Path) -> Optional["CronScheduler"]:  #
     name = provider_dir.name
     # Use a separate namespace for user-installed plugins so they don't
     # collide with bundled providers in sys.modules.
-    _is_bundled = _CRON_PLUGINS_DIR in provider_dir.parents or provider_dir.parent == _CRON_PLUGINS_DIR
-    module_name = f"plugins.cron_providers.{name}" if _is_bundled else f"{_USER_NAMESPACE}.{name}"
+    _is_bundled = (
+        _CRON_PLUGINS_DIR in provider_dir.parents
+        or provider_dir.parent == _CRON_PLUGINS_DIR
+    )
+    module_name = (
+        f"plugins.cron_providers.{name}" if _is_bundled else f"{_USER_NAMESPACE}.{name}"
+    )
     init_file = provider_dir / "__init__.py"
 
     if not init_file.exists():
@@ -244,8 +253,9 @@ def _load_provider_from_dir(provider_dir: Path) -> Optional["CronScheduler"]:  #
                 parent_init = parent_path / "__init__.py"
                 if parent_init.exists():
                     spec = importlib.util.spec_from_file_location(
-                        parent, str(parent_init),
-                        submodule_search_locations=[str(parent_path)]
+                        parent,
+                        str(parent_init),
+                        submodule_search_locations=[str(parent_path)],
                     )
                     if spec:
                         parent_mod = importlib.util.module_from_spec(spec)
@@ -262,8 +272,7 @@ def _load_provider_from_dir(provider_dir: Path) -> Optional["CronScheduler"]:  #
 
         # Now load the provider module
         spec = importlib.util.spec_from_file_location(
-            module_name, str(init_file),
-            submodule_search_locations=[str(provider_dir)]
+            module_name, str(init_file), submodule_search_locations=[str(provider_dir)]
         )
         if not spec:
             return None
@@ -290,7 +299,9 @@ def _load_provider_from_dir(provider_dir: Path) -> Optional["CronScheduler"]:  #
                         sub_spec.loader.exec_module(sub_mod)
                         loaded_submodules.append((sub_name, sub_mod))
                     except Exception as e:
-                        logger.debug("Failed to load submodule %s: %s", full_sub_name, e)
+                        logger.debug(
+                            "Failed to load submodule %s: %s", full_sub_name, e
+                        )
 
         try:
             spec.loader.exec_module(mod)
@@ -321,10 +332,14 @@ def _load_provider_from_dir(provider_dir: Path) -> Optional["CronScheduler"]:  #
 
     # Fallback: find a CronScheduler subclass and instantiate it
     from cron.scheduler_provider import CronScheduler
+
     for attr_name in dir(mod):
         attr = getattr(mod, attr_name, None)
-        if (isinstance(attr, type) and issubclass(attr, CronScheduler)
-                and attr is not CronScheduler):
+        if (
+            isinstance(attr, type)
+            and issubclass(attr, CronScheduler)
+            and attr is not CronScheduler
+        ):
             try:
                 return attr()
             except Exception:

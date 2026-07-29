@@ -26,6 +26,7 @@ def test_returns_none_when_httpx_unavailable(monkeypatch):
     """If httpx can't be imported, the helper returns None so callers
     fall back to httpx's built-in Limits default without raising."""
     import gateway.platforms._http_client_limits as mod
+
     monkeypatch.setattr(mod, "httpx", None)
     assert mod.platform_httpx_limits() is None
 
@@ -33,6 +34,7 @@ def test_returns_none_when_httpx_unavailable(monkeypatch):
 def test_default_limits_tighten_keepalive_below_httpx_default():
     import httpx
     from gateway.platforms._http_client_limits import platform_httpx_limits
+
     limits = platform_httpx_limits()
     assert isinstance(limits, httpx.Limits)
     # httpx default keepalive_expiry is 5.0 — ours must be shorter so
@@ -48,6 +50,7 @@ def test_default_limits_tighten_keepalive_below_httpx_default():
 def test_env_override_keepalive_expiry(monkeypatch):
     monkeypatch.setenv("CLAWK_GATEWAY_HTTPX_KEEPALIVE_EXPIRY", "7.5")
     from gateway.platforms._http_client_limits import platform_httpx_limits
+
     limits = platform_httpx_limits()
     assert limits.keepalive_expiry == 7.5
 
@@ -55,6 +58,7 @@ def test_env_override_keepalive_expiry(monkeypatch):
 def test_env_override_max_keepalive(monkeypatch):
     monkeypatch.setenv("CLAWK_GATEWAY_HTTPX_MAX_KEEPALIVE", "25")
     from gateway.platforms._http_client_limits import platform_httpx_limits
+
     limits = platform_httpx_limits()
     assert limits.max_keepalive_connections == 25
 
@@ -64,6 +68,7 @@ def test_env_override_rejects_garbage(monkeypatch):
     monkeypatch.setenv("CLAWK_GATEWAY_HTTPX_KEEPALIVE_EXPIRY", "not-a-number")
     monkeypatch.setenv("CLAWK_GATEWAY_HTTPX_MAX_KEEPALIVE", "-3")
     from gateway.platforms._http_client_limits import platform_httpx_limits
+
     limits = platform_httpx_limits()
     # Non-positive / non-numeric → fell back to defaults (not the override values)
     assert limits.keepalive_expiry is not None and limits.keepalive_expiry > 0

@@ -15,6 +15,7 @@ These tests assert convert_messages_to_converse never emits a blank text block
 (including inside toolResult content) and never uses a whitespace-only
 placeholder (a lone space would be rejected by the same validation).
 """
+
 import pytest
 
 from agent.bedrock_adapter import (
@@ -58,11 +59,15 @@ def test_no_blank_blocks_reach_bedrock():
         {"role": "system", "content": "You are helpful."},
         {"role": "system", "content": [{"type": "text", "text": "   "}]},
         {"role": "user", "content": "search for foo"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "tc1",
-                         "function": {"name": "search", "arguments": "{}"}}]},
-        {"role": "tool", "tool_call_id": "tc1", "content": ""},        # empty tool output
-        {"role": "assistant", "content": "   \n\n  "},                 # whitespace-only (compaction)
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "tc1", "function": {"name": "search", "arguments": "{}"}}
+            ],
+        },
+        {"role": "tool", "tool_call_id": "tc1", "content": ""},  # empty tool output
+        {"role": "assistant", "content": "   \n\n  "},  # whitespace-only (compaction)
         {"role": "user", "content": [{"type": "text", "text": ""}]},
         {"role": "assistant", "content": None},
     ]
@@ -75,13 +80,15 @@ def test_empty_tool_result_gets_placeholder():
     """A tool that returns no output must not produce a blank toolResult block."""
     messages = [
         {"role": "user", "content": "run it"},
-        {"role": "assistant", "content": "",
-         "tool_calls": [{"id": "t1", "function": {"name": "sh", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{"id": "t1", "function": {"name": "sh", "arguments": "{}"}}],
+        },
         {"role": "tool", "tool_call_id": "t1", "content": "   "},
     ]
     _system, msgs = convert_messages_to_converse(messages)
-    tool_msg = next(m for m in msgs
-                    if any("toolResult" in b for b in m["content"]))
+    tool_msg = next(m for m in msgs if any("toolResult" in b for b in m["content"]))
     block = next(b for b in tool_msg["content"] if "toolResult" in b)
     text = block["toolResult"]["content"][0]["text"]
     assert text.strip()
@@ -89,10 +96,13 @@ def test_empty_tool_result_gets_placeholder():
 
 def test_real_content_is_preserved_alongside_blank_siblings():
     messages = [
-        {"role": "user", "content": [
-            {"type": "text", "text": "  "},
-            {"type": "text", "text": "real question"},
-        ]},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "  "},
+                {"type": "text", "text": "real question"},
+            ],
+        },
     ]
     _system, msgs = convert_messages_to_converse(messages)
     texts = list(_iter_text_blocks(msgs))
@@ -102,10 +112,13 @@ def test_real_content_is_preserved_alongside_blank_siblings():
 
 def test_blank_system_blocks_dropped_not_blanked():
     messages = [
-        {"role": "system", "content": [
-            {"type": "text", "text": "keep me"},
-            {"type": "text", "text": "   "},
-        ]},
+        {
+            "role": "system",
+            "content": [
+                {"type": "text", "text": "keep me"},
+                {"type": "text", "text": "   "},
+            ],
+        },
         {"role": "user", "content": "hi"},
     ]
     system, _msgs = convert_messages_to_converse(messages)

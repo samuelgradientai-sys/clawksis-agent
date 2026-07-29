@@ -66,6 +66,7 @@ def session_context_engaged() -> bool:
     """
     return _session_context_engaged
 
+
 # ---------------------------------------------------------------------------
 # Per-task session variables
 # ---------------------------------------------------------------------------
@@ -112,13 +113,21 @@ _SESSION_PROFILE: ContextVar = ContextVar("CLAWK_SESSION_PROFILE", default=_UNSE
 # and any contextvar-unaware path keep working. Stateless adapters opt OUT by
 # setting ``supports_async_delivery = False`` on the adapter class; the gateway
 # propagates that into this contextvar at session-bind time.
-_SESSION_ASYNC_DELIVERY: ContextVar = ContextVar("CLAWK_SESSION_ASYNC_DELIVERY", default=_UNSET)
+_SESSION_ASYNC_DELIVERY: ContextVar = ContextVar(
+    "CLAWK_SESSION_ASYNC_DELIVERY", default=_UNSET
+)
 
 # Cron auto-delivery vars — set per-job in run_job() so concurrent jobs
 # don't clobber each other's delivery targets.
-_CRON_AUTO_DELIVER_PLATFORM: ContextVar = ContextVar("CLAWK_CRON_AUTO_DELIVER_PLATFORM", default=_UNSET)
-_CRON_AUTO_DELIVER_CHAT_ID: ContextVar = ContextVar("CLAWK_CRON_AUTO_DELIVER_CHAT_ID", default=_UNSET)
-_CRON_AUTO_DELIVER_THREAD_ID: ContextVar = ContextVar("CLAWK_CRON_AUTO_DELIVER_THREAD_ID", default=_UNSET)
+_CRON_AUTO_DELIVER_PLATFORM: ContextVar = ContextVar(
+    "CLAWK_CRON_AUTO_DELIVER_PLATFORM", default=_UNSET
+)
+_CRON_AUTO_DELIVER_CHAT_ID: ContextVar = ContextVar(
+    "CLAWK_CRON_AUTO_DELIVER_CHAT_ID", default=_UNSET
+)
+_CRON_AUTO_DELIVER_THREAD_ID: ContextVar = ContextVar(
+    "CLAWK_CRON_AUTO_DELIVER_THREAD_ID", default=_UNSET
+)
 
 _VAR_MAP = {
     "CLAWK_SESSION_PLATFORM": _SESSION_PLATFORM,

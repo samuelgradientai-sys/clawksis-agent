@@ -118,7 +118,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         prog="clawk-acp",
         description="Run Clawksis as an ACP stdio server.",
     )
-    parser.add_argument("--version", action="store_true", help="Print Clawksis version and exit")
+    parser.add_argument(
+        "--version", action="store_true", help="Print Clawksis version and exit"
+    )
     parser.add_argument(
         "--check",
         action="store_true",
@@ -133,7 +135,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--setup-browser",
         action="store_true",
         help="Install agent-browser + Playwright Chromium into ~/.clawksis/node/ "
-             "for browser tool support. Idempotent.",
+        "for browser tool support. Idempotent.",
     )
     parser.add_argument(
         "--yes",
@@ -141,7 +143,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         dest="assume_yes",
         help="Accept all prompts (currently used by --setup-browser to skip the "
-             "~400 MB Chromium download confirmation).",
+        "~400 MB Chromium download confirmation).",
     )
     return parser.parse_args(argv)
 
@@ -176,10 +178,14 @@ def _run_setup() -> None:
     if not sys.stdin.isatty():
         return
     try:
-        reply = input(
-            "\nInstall browser tools? Downloads agent-browser (npm) and "
-            "optionally Playwright Chromium (~400 MB). [y/N] "
-        ).strip().lower()
+        reply = (
+            input(
+                "\nInstall browser tools? Downloads agent-browser (npm) and "
+                "optionally Playwright Chromium (~400 MB). [y/N] "
+            )
+            .strip()
+            .lower()
+        )
     except (EOFError, KeyboardInterrupt):
         return
     if reply in {"y", "yes"}:
@@ -199,8 +205,10 @@ def _run_setup_browser(assume_yes: bool = False) -> int:
     try:
         node_ok = ensure_dependency("node", interactive=not assume_yes)
         if not node_ok:
-            print("Node.js installation failed — cannot proceed with browser tools.",
-                  file=sys.stderr)
+            print(
+                "Node.js installation failed — cannot proceed with browser tools.",
+                file=sys.stderr,
+            )
             return 1
 
         browser_ok = ensure_dependency("browser", interactive=not assume_yes)
@@ -253,6 +261,7 @@ def main(argv: list[str] | None = None) -> None:
     # scope to avoid freezing the gateway's loop on lazy import (#16856).
     try:
         from tools.mcp_tool import discover_mcp_tools
+
         discover_mcp_tools()
     except Exception:
         logger.debug("MCP tool discovery failed at ACP startup", exc_info=True)

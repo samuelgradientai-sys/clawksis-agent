@@ -22,6 +22,7 @@ import plugins.video_gen.deepinfra as deepinfra_plugin
 def _isolation(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     import clawk_cli.models as _models_mod
+
     monkeypatch.setattr(_models_mod, "_deepinfra_catalog_cache", {})
     monkeypatch.setenv("DEEPINFRA_API_KEY", "test-key")
     yield
@@ -55,8 +56,9 @@ def test_list_models_filters_by_video_gen_tag(monkeypatch):
     assert all("display" in r for r in rows)
 
 
-def _fake_openai_with_capture(captured: dict, *, status="succeeded",
-                               data=None, download=b"\x00\x00mp4bytes"):
+def _fake_openai_with_capture(
+    captured: dict, *, status="succeeded", data=None, download=b"\x00\x00mp4bytes"
+):
     """Build a fake ``openai`` module whose videos resource records the call.
 
     Defaults mirror the real DeepInfra job shape: status ``"succeeded"`` and a
@@ -111,10 +113,14 @@ def test_generate_text_to_video_downloads_url_and_saves_locally():
     """t2v happy path: SDK called with DeepInfra base_url + key; status
     'succeeded' + data[].url → bytes downloaded and saved to a local file."""
     captured: dict = {}
-    with patch.dict("sys.modules", {"openai": _fake_openai_with_capture(captured)}), \
-            _mock_url_download(captured):
+    with (
+        patch.dict("sys.modules", {"openai": _fake_openai_with_capture(captured)}),
+        _mock_url_download(captured),
+    ):
         result = deepinfra_plugin.DeepInfraVideoGenProvider().generate(
-            prompt="a red cube rotating", model="vendor/test-vid", duration=5,
+            prompt="a red cube rotating",
+            model="vendor/test-vid",
+            duration=5,
         )
     assert result["success"] is True
     assert result["modality"] == "text"
@@ -131,10 +137,13 @@ def test_generate_text_to_video_downloads_url_and_saves_locally():
 def test_generate_returns_url_when_local_save_fails():
     """If downloading the delivery URL fails, fall back to returning the URL."""
     captured: dict = {}
-    with patch.dict("sys.modules", {"openai": _fake_openai_with_capture(captured)}), \
-            _mock_url_download(captured, raise_exc=OSError("network down")):
+    with (
+        patch.dict("sys.modules", {"openai": _fake_openai_with_capture(captured)}),
+        _mock_url_download(captured, raise_exc=OSError("network down")),
+    ):
         result = deepinfra_plugin.DeepInfraVideoGenProvider().generate(
-            prompt="x", model="vendor/test-vid",
+            prompt="x",
+            model="vendor/test-vid",
         )
     assert result["success"] is True
     assert result["video"] == "https://cdn.example/out.mp4"
@@ -146,7 +155,8 @@ def test_generate_falls_back_to_download_when_no_url():
     fake = _fake_openai_with_capture(captured, status="completed", data=[])
     with patch.dict("sys.modules", {"openai": fake}):
         result = deepinfra_plugin.DeepInfraVideoGenProvider().generate(
-            prompt="x", model="vendor/test-vid",
+            prompt="x",
+            model="vendor/test-vid",
         )
     assert result["success"] is True
     assert captured["downloaded_id"] == "vid_123"
@@ -156,11 +166,15 @@ def test_generate_falls_back_to_download_when_no_url():
 def test_generate_image_to_video_routes_via_extra_body():
     """Presence of image_url routes to i2v and rides in extra_body."""
     captured: dict = {}
-    with patch.dict("sys.modules", {"openai": _fake_openai_with_capture(captured)}), \
-            _mock_url_download(captured):
+    with (
+        patch.dict("sys.modules", {"openai": _fake_openai_with_capture(captured)}),
+        _mock_url_download(captured),
+    ):
         result = deepinfra_plugin.DeepInfraVideoGenProvider().generate(
-            prompt="animate this", model="vendor/test-vid",
-            image_url="https://example.com/cat.jpg", negative_prompt="blurry",
+            prompt="animate this",
+            model="vendor/test-vid",
+            image_url="https://example.com/cat.jpg",
+            negative_prompt="blurry",
         )
     assert result["success"] is True
     assert result["modality"] == "image"
@@ -172,7 +186,8 @@ def test_generate_image_to_video_routes_via_extra_body():
 def test_generate_errors_when_key_missing(monkeypatch):
     monkeypatch.delenv("DEEPINFRA_API_KEY", raising=False)
     result = deepinfra_plugin.DeepInfraVideoGenProvider().generate(
-        prompt="x", model="vendor/test-vid",
+        prompt="x",
+        model="vendor/test-vid",
     )
     assert result["success"] is False
     assert result["error_type"] == "missing_credentials"
@@ -209,7 +224,8 @@ def test_generate_errors_when_job_not_completed():
     fake.OpenAI = _client
     with patch.dict("sys.modules", {"openai": fake}):
         result = deepinfra_plugin.DeepInfraVideoGenProvider().generate(
-            prompt="x", model="vendor/test-vid",
+            prompt="x",
+            model="vendor/test-vid",
         )
     assert result["success"] is False
     assert result["error_type"] == "job_failed"

@@ -180,6 +180,7 @@ def describe_profile(
     try:
         if canon == "default":
             from clawk_constants import get_clawk_home  # type: ignore
+
             profile_dir = Path(get_clawk_home())
         else:
             profile_dir = profiles_mod.get_profile_dir(canon)
@@ -188,7 +189,11 @@ def describe_profile(
 
     # Honor curated descriptions unless --overwrite.
     existing = profiles_mod.read_profile_meta(profile_dir)
-    if existing.get("description") and not existing.get("description_auto") and not overwrite:
+    if (
+        existing.get("description")
+        and not existing.get("description_auto")
+        and not overwrite
+    ):
         return DescribeOutcome(
             canon,
             False,
@@ -198,10 +203,15 @@ def describe_profile(
 
     skill_names = _collect_skills(profile_dir)
     skill_list = "\n".join(f"  - {n}" for n in skill_names) or "  (no skills installed)"
-    skill_count = sum(
-        1 for _ in (profile_dir / "skills").rglob("SKILL.md")
-        if not is_excluded_skill_path(_)
-    ) if (profile_dir / "skills").is_dir() else 0
+    skill_count = (
+        sum(
+            1
+            for _ in (profile_dir / "skills").rglob("SKILL.md")
+            if not is_excluded_skill_path(_)
+        )
+        if (profile_dir / "skills").is_dir()
+        else 0
+    )
 
     # Read model + provider from the profile's config.
     try:

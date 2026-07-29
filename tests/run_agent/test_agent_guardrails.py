@@ -34,6 +34,7 @@ def _pin_max_concurrent_children(monkeypatch):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_tc(name: str, arguments: str = "{}") -> types.SimpleNamespace:
     """Create a minimal tool_call SimpleNamespace mirroring the OpenAI SDK object."""
     tc = types.SimpleNamespace()
@@ -54,8 +55,8 @@ def assistant_dict_call(call_id: str, name: str = "terminal") -> dict:
 # Phase 1 — _sanitize_api_messages
 # ---------------------------------------------------------------------------
 
-class TestSanitizeApiMessages:
 
+class TestSanitizeApiMessages:
     def test_orphaned_result_removed(self):
         msgs = [
             {"role": "assistant", "tool_calls": [assistant_dict_call("c1")]},
@@ -89,10 +90,13 @@ class TestSanitizeApiMessages:
 
     def test_mixed_orphaned_result_and_orphaned_call(self):
         msgs = [
-            {"role": "assistant", "tool_calls": [
-                assistant_dict_call("c4"),
-                assistant_dict_call("c5"),
-            ]},
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    assistant_dict_call("c4"),
+                    assistant_dict_call("c5"),
+                ],
+            },
             tool_result("c4"),
             tool_result("c_DANGLING"),
         ]
@@ -114,9 +118,9 @@ class TestSanitizeApiMessages:
         assert out == msgs
 
     def test_sdk_object_tool_calls(self):
-        tc_obj = types.SimpleNamespace(id="c6", function=types.SimpleNamespace(
-            name="terminal", arguments="{}"
-        ))
+        tc_obj = types.SimpleNamespace(
+            id="c6", function=types.SimpleNamespace(name="terminal", arguments="{}")
+        )
         msgs = [
             {"role": "assistant", "tool_calls": [tc_obj]},
         ]
@@ -127,7 +131,10 @@ class TestSanitizeApiMessages:
     def test_tool_result_with_leading_whitespace_preserved(self):
         """Tool result IDs with leading/trailing whitespace should match assistant call IDs."""
         msgs = [
-            {"role": "assistant", "tool_calls": [assistant_dict_call("functions.cronjob:24")]},
+            {
+                "role": "assistant",
+                "tool_calls": [assistant_dict_call("functions.cronjob:24")],
+            },
             tool_result(" functions.cronjob:24"),  # leading whitespace
         ]
         out = AIAgent._sanitize_api_messages(msgs)
@@ -153,8 +160,8 @@ class TestSanitizeApiMessages:
 # Phase 2a — _cap_delegate_task_calls
 # ---------------------------------------------------------------------------
 
-class TestCapDelegateTaskCalls:
 
+class TestCapDelegateTaskCalls:
     def test_excess_delegates_truncated(self):
         tcs = [make_tc("delegate_task") for _ in range(MAX_CONCURRENT_CHILDREN + 2)]
         out = AIAgent._cap_delegate_task_calls(tcs)
@@ -162,10 +169,10 @@ class TestCapDelegateTaskCalls:
         assert delegate_count == MAX_CONCURRENT_CHILDREN
 
     def test_non_delegate_calls_preserved(self):
-        tcs = (
-            [make_tc("delegate_task") for _ in range(MAX_CONCURRENT_CHILDREN + 1)]
-            + [make_tc("terminal"), make_tc("web_search")]
-        )
+        tcs = [make_tc("delegate_task") for _ in range(MAX_CONCURRENT_CHILDREN + 1)] + [
+            make_tc("terminal"),
+            make_tc("web_search"),
+        ]
         out = AIAgent._cap_delegate_task_calls(tcs)
         names = [tc.function.name for tc in out]
         assert "terminal" in names
@@ -196,13 +203,17 @@ class TestCapDelegateTaskCalls:
         assert len(tcs) == original_len
 
     def test_interleaved_order_preserved(self):
-        delegates = [make_tc("delegate_task", f'{{"task":"{i}"}}')
-                     for i in range(MAX_CONCURRENT_CHILDREN + 1)]
+        delegates = [
+            make_tc("delegate_task", f'{{"task":"{i}"}}')
+            for i in range(MAX_CONCURRENT_CHILDREN + 1)
+        ]
         t1 = make_tc("terminal", '{"cmd":"ls"}')
         w1 = make_tc("web_search", '{"q":"x"}')
         tcs = [delegates[0], t1, delegates[1], w1] + delegates[2:]
         out = AIAgent._cap_delegate_task_calls(tcs)
-        expected = [delegates[0], t1, delegates[1], w1] + delegates[2:MAX_CONCURRENT_CHILDREN]
+        expected = [delegates[0], t1, delegates[1], w1] + delegates[
+            2:MAX_CONCURRENT_CHILDREN
+        ]
         assert len(out) == len(expected)
         for i, (actual, exp) in enumerate(zip(out, expected)):
             assert actual is exp, f"mismatch at index {i}"
@@ -212,8 +223,8 @@ class TestCapDelegateTaskCalls:
 # Phase 2b — _deduplicate_tool_calls
 # ---------------------------------------------------------------------------
 
-class TestDeduplicateToolCalls:
 
+class TestDeduplicateToolCalls:
     def test_duplicate_pair_deduplicated(self):
         tcs = [
             make_tc("web_search", '{"query":"foo"}'),
@@ -281,8 +292,8 @@ class TestDeduplicateToolCalls:
 # _get_tool_call_id_static
 # ---------------------------------------------------------------------------
 
-class TestGetToolCallIdStatic:
 
+class TestGetToolCallIdStatic:
     def test_dict_with_valid_id(self):
         assert AIAgent._get_tool_call_id_static({"id": "call_123"}) == "call_123"
 
@@ -309,23 +320,32 @@ class TestGetToolCallIdStatic:
 # _get_tool_call_name_static
 # ---------------------------------------------------------------------------
 
-class TestGetToolCallNameStatic:
 
+class TestGetToolCallNameStatic:
     def test_dict_with_valid_name(self):
-        assert AIAgent._get_tool_call_name_static(
-            {"id": "call_1", "function": {"name": "terminal", "arguments": "{}"}}
-        ) == "terminal"
+        assert (
+            AIAgent._get_tool_call_name_static({
+                "id": "call_1",
+                "function": {"name": "terminal", "arguments": "{}"},
+            })
+            == "terminal"
+        )
 
     def test_dict_with_missing_function(self):
         assert AIAgent._get_tool_call_name_static({"id": "call_1"}) == ""
 
     def test_dict_with_none_function(self):
-        assert AIAgent._get_tool_call_name_static({"id": "call_1", "function": None}) == ""
+        assert (
+            AIAgent._get_tool_call_name_static({"id": "call_1", "function": None}) == ""
+        )
 
     def test_dict_with_none_name(self):
-        assert AIAgent._get_tool_call_name_static(
-            {"function": {"name": None, "arguments": "{}"}}
-        ) == ""
+        assert (
+            AIAgent._get_tool_call_name_static({
+                "function": {"name": None, "arguments": "{}"}
+            })
+            == ""
+        )
 
     def test_object_with_valid_name(self):
         tc = make_tc("read_file")

@@ -11,6 +11,7 @@ a corresponding `MENTION` entity is NOT a mention — this correctly ignores
 text, because Telegram's parser does not emit mention entities for any of
 those contexts.
 """
+
 from types import SimpleNamespace
 
 from gateway.config import Platform, PlatformConfig
@@ -83,7 +84,9 @@ class TestRealMentionsAreDetected:
     def test_text_mention_entity_targets_bot(self):
         """TEXT_MENTION is Telegram's entity type for @FirstName -> user without a public handle."""
         adapter = _make_adapter()
-        msg = _message(text="hey you", entities=[_text_mention_entity(4, 3, user_id=999)])
+        msg = _message(
+            text="hey you", entities=[_text_mention_entity(4, 3, user_id=999)]
+        )
         assert adapter._message_mentions_bot(msg) is True
 
 
@@ -148,24 +151,32 @@ class TestEntityEdgeCases:
     def test_mention_entity_for_different_username(self):
         adapter = _make_adapter()
         text = "@someone_else hi"
-        msg = _message(text=text, entities=[_mention_entity(text, mention="@someone_else")])
+        msg = _message(
+            text=text, entities=[_mention_entity(text, mention="@someone_else")]
+        )
         assert adapter._message_mentions_bot(msg) is False
 
     def test_text_mention_entity_for_different_user(self):
         adapter = _make_adapter()
-        msg = _message(text="hi there", entities=[_text_mention_entity(0, 2, user_id=12345)])
+        msg = _message(
+            text="hi there", entities=[_text_mention_entity(0, 2, user_id=12345)]
+        )
         assert adapter._message_mentions_bot(msg) is False
 
     def test_malformed_entity_with_negative_offset(self):
         adapter = _make_adapter()
-        msg = _message(text="@clawk_bot hi",
-                       entities=[SimpleNamespace(type="mention", offset=-1, length=11)])
+        msg = _message(
+            text="@clawk_bot hi",
+            entities=[SimpleNamespace(type="mention", offset=-1, length=11)],
+        )
         assert adapter._message_mentions_bot(msg) is False
 
     def test_malformed_entity_with_zero_length(self):
         adapter = _make_adapter()
-        msg = _message(text="@clawk_bot hi",
-                       entities=[SimpleNamespace(type="mention", offset=0, length=0)])
+        msg = _message(
+            text="@clawk_bot hi",
+            entities=[SimpleNamespace(type="mention", offset=0, length=0)],
+        )
         assert adapter._message_mentions_bot(msg) is False
 
 
@@ -175,11 +186,15 @@ class TestCaseInsensitivity:
     def test_uppercase_mention(self):
         adapter = _make_adapter()
         text = "hi @CLAWK_BOT"
-        msg = _message(text=text, entities=[_mention_entity(text, mention="@CLAWK_BOT")])
+        msg = _message(
+            text=text, entities=[_mention_entity(text, mention="@CLAWK_BOT")]
+        )
         assert adapter._message_mentions_bot(msg) is True
 
     def test_mixed_case_mention(self):
         adapter = _make_adapter()
         text = "hi @Clawksis_Bot"
-        msg = _message(text=text, entities=[_mention_entity(text, mention="@Clawksis_Bot")])
+        msg = _message(
+            text=text, entities=[_mention_entity(text, mention="@Clawksis_Bot")]
+        )
         assert adapter._message_mentions_bot(msg) is True

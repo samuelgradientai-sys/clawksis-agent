@@ -34,6 +34,7 @@ from gateway.session_context import (
 # Capability helper
 # ---------------------------------------------------------------------------
 
+
 class TestAsyncDeliverySupported:
     def test_default_unbound_is_supported(self):
         """CLI / cron / unaware paths never bind the var -> supported."""
@@ -90,6 +91,7 @@ class TestAsyncDeliverySupported:
 # ---------------------------------------------------------------------------
 # Stateless runners — issues #53027 / #63142
 # ---------------------------------------------------------------------------
+
 
 class TestDeclareStatelessChannel:
     """``clawk -z`` and cron cannot receive a completion after their turn ends.
@@ -156,18 +158,29 @@ class TestStatelessChannelForcesSyncDelegation:
 
         def _child(task_index, goal, child=None, parent_agent=None, **kw):
             return {
-                "task_index": 0, "status": "completed", "summary": f"done: {goal}",
-                "api_calls": 1, "duration_seconds": 0.1, "model": "m",
+                "task_index": 0,
+                "status": "completed",
+                "summary": f"done: {goal}",
+                "api_calls": 1,
+                "duration_seconds": 0.1,
+                "model": "m",
                 "exit_reason": "completed",
             }
 
         creds = {
-            "model": "m", "provider": None, "base_url": None, "api_key": None,
-            "api_mode": None, "command": None, "args": None,
+            "model": "m",
+            "provider": None,
+            "base_url": None,
+            "api_key": None,
+            "api_mode": None,
+            "command": None,
+            "args": None,
         }
         monkeypatch.setattr(dt, "_build_child_agent", lambda **kw: fake_child)
         monkeypatch.setattr(dt, "_run_single_child", _child)
-        monkeypatch.setattr(dt, "_resolve_delegation_credentials", lambda *a, **k: creds)
+        monkeypatch.setattr(
+            dt, "_resolve_delegation_credentials", lambda *a, **k: creds
+        )
         monkeypatch.setattr(
             "tools.async_delegation.dispatch_async_delegation_batch", _fake_dispatch
         )
@@ -193,6 +206,7 @@ class TestStatelessChannelForcesSyncDelegation:
 # ---------------------------------------------------------------------------
 # Adapter capability flag
 # ---------------------------------------------------------------------------
+
 
 class TestAdapterCapabilityFlag:
     def test_base_default_true(self):
@@ -249,6 +263,7 @@ class TestAdapterCapabilityFlag:
 # ---------------------------------------------------------------------------
 # terminal_tool: refuses to register a watcher on unsupported sessions
 # ---------------------------------------------------------------------------
+
 
 class TestTerminalNotifyGate:
     @pytest.fixture(autouse=True)

@@ -42,6 +42,7 @@ _VALID_POLICIES = ("allowlist", "pairing")
 @dataclass(frozen=True)
 class CommentDocumentRule:
     """Per-document rule.  ``None`` means 'inherit from lower tier'."""
+
     enabled: Optional[bool] = None
     policy: Optional[str] = None
     allow_from: Optional[frozenset] = None
@@ -50,6 +51,7 @@ class CommentDocumentRule:
 @dataclass(frozen=True)
 class CommentsConfig:
     """Top-level comment access config."""
+
     enabled: bool = True
     policy: str = "pairing"
     allow_from: frozenset = field(default_factory=frozenset)
@@ -59,6 +61,7 @@ class CommentsConfig:
 @dataclass(frozen=True)
 class ResolvedCommentRule:
     """Fully resolved rule after field-by-field fallback."""
+
     enabled: bool
     policy: str
     allow_from: frozenset
@@ -68,6 +71,7 @@ class ResolvedCommentRule:
 # ---------------------------------------------------------------------------
 # Mtime-cached file loading
 # ---------------------------------------------------------------------------
+
 
 class _MtimeCache:
     """Generic mtime-based file cache.  ``stat()`` per access, re-read only on change."""
@@ -95,7 +99,9 @@ class _MtimeCache:
             if not isinstance(data, dict):
                 data = {}
         except (json.JSONDecodeError, OSError):
-            logger.warning("[Feishu-Rules] Failed to read %s, using empty config", self._path)
+            logger.warning(
+                "[Feishu-Rules] Failed to read %s, using empty config", self._path
+            )
             data = {}
 
         self._mtime = mtime
@@ -110,6 +116,7 @@ _pairing_cache = _MtimeCache(PAIRING_FILE)
 # ---------------------------------------------------------------------------
 # Config parsing
 # ---------------------------------------------------------------------------
+
 
 def _parse_frozenset(raw: Any) -> Optional[frozenset]:
     """Parse a list of strings into a frozenset; return None if key absent."""
@@ -161,6 +168,7 @@ def load_config() -> CommentsConfig:
 # ---------------------------------------------------------------------------
 # Rule resolution  (§8.4 field-by-field fallback)
 # ---------------------------------------------------------------------------
+
 
 def has_wiki_keys(cfg: CommentsConfig) -> bool:
     """Check if any document rule key starts with 'wiki:'."""
@@ -220,6 +228,7 @@ def resolve_rule(
 # ---------------------------------------------------------------------------
 # Pairing store
 # ---------------------------------------------------------------------------
+
 
 def _load_pairing_approved() -> set:
     """Return set of approved user open_ids (mtime-cached)."""
@@ -282,6 +291,7 @@ def pairing_list() -> Dict[str, Any]:
 # Access check  (public API for feishu_comment.py)
 # ---------------------------------------------------------------------------
 
+
 def is_user_allowed(rule: ResolvedCommentRule, user_open_id: str) -> bool:
     """Check if user passes the resolved rule's policy gate."""
     if user_open_id in rule.allow_from:
@@ -294,6 +304,7 @@ def is_user_allowed(rule: ResolvedCommentRule, user_open_id: str) -> bool:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def _print_status() -> None:
     cfg = load_config()
@@ -317,7 +328,9 @@ def _print_status() -> None:
                 parts.append(f"policy={rule.policy}")
             if rule.allow_from is not None:
                 parts.append(f"allow_from={sorted(rule.allow_from)}")
-            print(f"  [{key}] {', '.join(parts) if parts else '(empty — inherits all)'}")
+            print(
+                f"  [{key}] {', '.join(parts) if parts else '(empty — inherits all)'}"
+            )
     else:
         print("Document rules: (none)")
     print()
@@ -352,6 +365,7 @@ def _main() -> int:
 
     try:
         from clawk_cli.env_loader import load_clawk_dotenv
+
         load_clawk_dotenv()
     except Exception:
         pass
@@ -426,4 +440,5 @@ def _main() -> int:
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(_main())

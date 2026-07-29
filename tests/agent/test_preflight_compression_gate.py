@@ -31,25 +31,34 @@ def test_few_messages_huge_content_triggers_gate():
     big = "x" * 280_000
     messages = [_msg("hi")] * 7 + [_msg(big)]
     assert len(messages) <= PROTECT_FIRST_N + PROTECT_LAST_N + 1  # would fail old gate
-    assert _should_run_preflight_estimate(
-        messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
-    ) is True
+    assert (
+        _should_run_preflight_estimate(
+            messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
+        )
+        is True
+    )
 
 
 def test_few_messages_small_content_does_not_trigger():
     """Regression guard: tiny sessions should not pay the estimator cost."""
     messages = [_msg("hello world")] * 8
-    assert _should_run_preflight_estimate(
-        messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
-    ) is False
+    assert (
+        _should_run_preflight_estimate(
+            messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
+        )
+        is False
+    )
 
 
 def test_many_small_messages_still_triggers_via_count():
     """The historical path: > protect_first + protect_last + 1 messages."""
     messages = [_msg("ok")] * (PROTECT_FIRST_N + PROTECT_LAST_N + 2)  # 25
-    assert _should_run_preflight_estimate(
-        messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
-    ) is True
+    assert (
+        _should_run_preflight_estimate(
+            messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
+        )
+        is True
+    )
 
 
 def test_content_above_threshold_triggers():
@@ -58,9 +67,12 @@ def test_content_above_threshold_triggers():
     # test doesn't depend on per-message dict-wrapping overhead in the
     # shared estimator's (chars+3)//4 rounding.
     messages = [_msg("x" * ((THRESHOLD_TOKENS + 1000) * 4))]
-    assert _should_run_preflight_estimate(
-        messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
-    ) is True
+    assert (
+        _should_run_preflight_estimate(
+            messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
+        )
+        is True
+    )
 
 
 def test_content_below_threshold_does_not_trigger():
@@ -68,17 +80,23 @@ def test_content_below_threshold_does_not_trigger():
     must not trigger — the estimator stays under and the count gate is not
     tripped."""
     messages = [_msg("x" * ((THRESHOLD_TOKENS - 1000) * 4))]
-    assert _should_run_preflight_estimate(
-        messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
-    ) is False
+    assert (
+        _should_run_preflight_estimate(
+            messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
+        )
+        is False
+    )
 
 
 def test_message_with_none_content_is_treated_as_empty():
     """Assistant turns mid-tool-call carry content=None -- must not crash."""
     messages = [{"role": "assistant", "content": None}] * 5
-    assert _should_run_preflight_estimate(
-        messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
-    ) is False
+    assert (
+        _should_run_preflight_estimate(
+            messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
+        )
+        is False
+    )
 
 
 def test_message_with_list_content_counts_text_parts():
@@ -90,9 +108,12 @@ def test_message_with_list_content_counts_text_parts():
     """
     parts = [{"type": "text", "text": "x" * 300_000}]
     messages = [{"role": "user", "content": parts}]
-    assert _should_run_preflight_estimate(
-        messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
-    ) is True
+    assert (
+        _should_run_preflight_estimate(
+            messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
+        )
+        is True
+    )
 
 
 def test_large_base64_image_does_not_falsely_trip_gate():
@@ -102,8 +123,13 @@ def test_large_base64_image_does_not_falsely_trip_gate():
     the threshold and the gate does not fire on content size alone.
     """
     big_b64 = "A" * 1_000_000  # ~1MB base64 payload
-    parts = [{"type": "image_url", "image_url": {"url": f"data:image/png;base64,{big_b64}"}}]
+    parts = [
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{big_b64}"}}
+    ]
     messages = [{"role": "user", "content": parts}]
-    assert _should_run_preflight_estimate(
-        messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
-    ) is False
+    assert (
+        _should_run_preflight_estimate(
+            messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
+        )
+        is False
+    )

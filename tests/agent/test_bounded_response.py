@@ -57,15 +57,13 @@ def _make_handler():
                 self.wfile.flush()
                 time.sleep(60)
             elif self.path == "/normal":
-                body = json.dumps(
-                    {
-                        "error": {
-                            "code": 429,
-                            "message": "quota exceeded",
-                            "status": "RESOURCE_EXHAUSTED",
-                        }
+                body = json.dumps({
+                    "error": {
+                        "code": 429,
+                        "message": "quota exceeded",
+                        "status": "RESOURCE_EXHAUSTED",
                     }
-                ).encode()
+                }).encode()
                 self.send_response(429)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
@@ -95,9 +93,7 @@ def server_base():
 def client():
     # Generous read timeout so the bounding is provably done by our helper,
     # not by httpx's own timeout.
-    c = httpx.Client(
-        timeout=httpx.Timeout(connect=5.0, read=45.0, write=5.0, pool=5.0)
-    )
+    c = httpx.Client(timeout=httpx.Timeout(connect=5.0, read=45.0, write=5.0, pool=5.0))
     try:
         yield c
     finally:
@@ -107,9 +103,7 @@ def client():
 def test_oversize_body_is_capped(server_base, client):
     start = time.monotonic()
     with client.stream("POST", server_base + "/oversize") as response:
-        text = read_streaming_error_body(
-            response, max_bytes=64 * 1024, timeout_s=10.0
-        )
+        text = read_streaming_error_body(response, max_bytes=64 * 1024, timeout_s=10.0)
     elapsed = time.monotonic() - start
     assert 0 < len(text) <= 64 * 1024
     # Capping must return promptly, not after draining the whole body.
@@ -119,9 +113,7 @@ def test_oversize_body_is_capped(server_base, client):
 def test_stalled_body_hits_hard_deadline(server_base, client):
     start = time.monotonic()
     with client.stream("POST", server_base + "/stall") as response:
-        text = read_streaming_error_body(
-            response, max_bytes=64 * 1024, timeout_s=2.0
-        )
+        text = read_streaming_error_body(response, max_bytes=64 * 1024, timeout_s=2.0)
     elapsed = time.monotonic() - start
     # Partial bytes that arrived before the stall are preserved.
     assert "partial failure detail" in text

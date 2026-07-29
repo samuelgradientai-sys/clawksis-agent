@@ -93,6 +93,7 @@ def _load_catalog_config() -> dict[str, Any]:
     """Load the ``model_catalog`` config block with defaults filled in."""
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config() or {}
     except Exception:
         cfg = {}
@@ -105,13 +106,16 @@ def _load_catalog_config() -> dict[str, Any]:
         "enabled": bool(raw.get("enabled", True)),
         "url": str(raw.get("url") or DEFAULT_CATALOG_URL),
         "ttl_hours": float(raw.get("ttl_hours") or DEFAULT_TTL_HOURS),
-        "providers": raw.get("providers") if isinstance(raw.get("providers"), dict) else {},
+        "providers": raw.get("providers")
+        if isinstance(raw.get("providers"), dict)
+        else {},
     }
 
 
 def _cache_path() -> Path:
     """Return the disk cache path. Import lazily so tests can monkeypatch home."""
     from clawk_constants import get_clawk_home
+
     return get_clawk_home() / "cache" / "model_catalog.json"
 
 
@@ -414,7 +418,9 @@ def seed_cache_from_checkout(project_root: "Path | str") -> bool:
         logger.debug("model catalog seed from checkout skipped (%s): %s", src, exc)
         return False
     if not _validate_manifest(data):
-        logger.debug("model catalog seed from checkout skipped: invalid manifest at %s", src)
+        logger.debug(
+            "model catalog seed from checkout skipped: invalid manifest at %s", src
+        )
         return False
     _write_disk_cache(data)
     reset_cache()  # drop the in-process copy so the next read picks up the seed

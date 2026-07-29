@@ -8,7 +8,8 @@ from gateway.run import GatewayRunner
 
 @pytest.mark.asyncio
 async def test_unrelated_allow_all_does_not_bypass_yuanbao_open_gate(
-    monkeypatch, tmp_path,
+    monkeypatch,
+    tmp_path,
 ):
     """TELEGRAM_ALLOW_ALL_USERS must not satisfy Yuanbao's open-policy opt-in."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))

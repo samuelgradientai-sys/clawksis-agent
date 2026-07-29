@@ -47,7 +47,9 @@ def test_memory_schema_is_well_formed():
     assert params["properties"]["target"]["enum"] == ["memory", "user"]
     # Batch shape is exposed and its items reuse the same actions.
     assert params["properties"]["operations"]["type"] == "array"
-    assert params["properties"]["operations"]["items"]["properties"]["action"]["enum"] == ["add", "replace", "remove"]
+    assert params["properties"]["operations"]["items"]["properties"]["action"][
+        "enum"
+    ] == ["add", "replace", "remove"]
 
 
 def test_memory_schema_is_json_serializable():

@@ -23,14 +23,27 @@ from agent.trace_upload import (
 # Converter
 # ---------------------------------------------------------------------------
 
+
 def _sample_messages():
     return [
         {"role": "system", "content": "you are clawk"},
         {"role": "user", "content": "list files"},
-        {"role": "assistant", "content": "Listing.", "tool_calls": [
-            {"id": "call_1", "function": {"name": "terminal", "arguments": '{"command": "ls"}'}},
-        ]},
-        {"role": "tool", "tool_call_id": "call_1", "tool_name": "terminal", "content": "a.txt\nb.txt"},
+        {
+            "role": "assistant",
+            "content": "Listing.",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "function": {"name": "terminal", "arguments": '{"command": "ls"}'},
+                },
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call_1",
+            "tool_name": "terminal",
+            "content": "a.txt\nb.txt",
+        },
         {"role": "assistant", "content": "Two files."},
     ]
 
@@ -71,7 +84,12 @@ def test_converter_emits_tool_use_and_tool_result():
 
 
 def test_converter_redacts_secrets_by_default():
-    msgs = [{"role": "user", "content": "key OPENAI_API_KEY=sk-abc123def456ghi789jklmno end"}]
+    msgs = [
+        {
+            "role": "user",
+            "content": "key OPENAI_API_KEY=sk-abc123def456ghi789jklmno end",
+        }
+    ]
     jsonl = build_trace_jsonl(msgs, session_id="s1", redact=True)
     assert "sk-abc123def456ghi789jklmno" not in jsonl
 
@@ -94,8 +112,12 @@ def test_upload_blocks_when_redactor_fails(monkeypatch):
         raise RuntimeError("redactor unavailable")
 
     monkeypatch.setattr("agent.redact.redact_sensitive_text", boom)
-    with patch.object(trace_upload, "load_session_messages", return_value=(_sample_messages(), {})), \
-         patch.object(trace_upload, "_do_upload") as upload_mock:
+    with (
+        patch.object(
+            trace_upload, "load_session_messages", return_value=(_sample_messages(), {})
+        ),
+        patch.object(trace_upload, "_do_upload") as upload_mock,
+    ):
         msg = upload_session_trace("s1")
 
     assert "Trace upload blocked" in msg
@@ -110,10 +132,18 @@ def test_converter_keeps_secrets_when_redact_disabled():
 
 
 def test_converter_image_placeholder():
-    msgs = [{"role": "user", "content": [
-        {"type": "text", "text": "look"},
-        {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
-    ]}]
+    msgs = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "look"},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,AAAA"},
+                },
+            ],
+        }
+    ]
     jsonl = build_trace_jsonl(msgs, session_id="s1")
     line = json.loads(jsonl.strip())
     assert any("image omitted" in b.get("text", "") for b in line["message"]["content"])
@@ -125,9 +155,18 @@ def test_converter_empty_messages_returns_empty():
 
 
 def test_converter_handles_dict_tool_arguments():
-    msgs = [{"role": "assistant", "content": "", "tool_calls": [
-        {"id": "c", "function": {"name": "f", "arguments": {"already": "dict"}}},
-    ]}]
+    msgs = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "c",
+                    "function": {"name": "f", "arguments": {"already": "dict"}},
+                },
+            ],
+        }
+    ]
     jsonl = build_trace_jsonl(msgs, session_id="s1")
     line = json.loads(jsonl.strip())
     tu = [b for b in line["message"]["content"] if b.get("type") == "tool_use"][0]
@@ -137,6 +176,7 @@ def test_converter_handles_dict_tool_arguments():
 # ---------------------------------------------------------------------------
 # Token resolution
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_token_prefers_hf_token(monkeypatch):
     monkeypatch.setenv("HF_TOKEN", "hf_primary")
@@ -153,7 +193,12 @@ def test_resolve_token_falls_back(monkeypatch):
 
 
 def test_resolve_token_none(monkeypatch):
-    for v in ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACE_TOKEN"):
+    for v in (
+        "HF_TOKEN",
+        "HUGGINGFACE_HUB_TOKEN",
+        "HUGGING_FACE_HUB_TOKEN",
+        "HUGGINGFACE_TOKEN",
+    ):
         monkeypatch.delenv(v, raising=False)
     assert _resolve_hf_token() is None
 
@@ -162,12 +207,18 @@ def test_resolve_token_none(monkeypatch):
 # Top-level upload entry point
 # ---------------------------------------------------------------------------
 
+
 def test_upload_no_session_id():
     assert "No active session" in upload_session_trace("")
 
 
 def test_upload_no_token(monkeypatch):
-    for v in ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACE_TOKEN"):
+    for v in (
+        "HF_TOKEN",
+        "HUGGINGFACE_HUB_TOKEN",
+        "HUGGING_FACE_HUB_TOKEN",
+        "HUGGINGFACE_TOKEN",
+    ):
         monkeypatch.delenv(v, raising=False)
     msg = upload_session_trace("some_session")
     assert "no Hugging Face token" in msg
@@ -189,9 +240,14 @@ def test_upload_happy_path_mocked(monkeypatch):
     fake_api = MagicMock()
     fake_api.whoami.return_value = {"name": "alice"}
 
-    with patch.object(trace_upload, "load_session_messages",
-                      return_value=(messages, {"model": "claude-x"})), \
-         patch("huggingface_hub.HfApi", return_value=fake_api):
+    with (
+        patch.object(
+            trace_upload,
+            "load_session_messages",
+            return_value=(messages, {"model": "claude-x"}),
+        ),
+        patch("huggingface_hub.HfApi", return_value=fake_api),
+    ):
         msg = upload_session_trace("20260531_abc", cwd="/tmp")
 
     # Returned a viewer URL
@@ -223,9 +279,12 @@ def test_upload_public_flag(monkeypatch):
     monkeypatch.setenv("HF_TOKEN", "hf_test")
     fake_api = MagicMock()
     fake_api.whoami.return_value = {"name": "bob"}
-    with patch.object(trace_upload, "load_session_messages",
-                      return_value=(_sample_messages(), {})), \
-         patch("huggingface_hub.HfApi", return_value=fake_api):
+    with (
+        patch.object(
+            trace_upload, "load_session_messages", return_value=(_sample_messages(), {})
+        ),
+        patch("huggingface_hub.HfApi", return_value=fake_api),
+    ):
         upload_session_trace("s1", private=False)
     _, kwargs = fake_api.create_repo.call_args
     assert kwargs["private"] is False
@@ -236,9 +295,12 @@ def test_upload_whoami_failure(monkeypatch):
     monkeypatch.setenv("HF_TOKEN", "hf_bad")
     fake_api = MagicMock()
     fake_api.whoami.side_effect = Exception("401 unauthorized")
-    with patch.object(trace_upload, "load_session_messages",
-                      return_value=(_sample_messages(), {})), \
-         patch("huggingface_hub.HfApi", return_value=fake_api):
+    with (
+        patch.object(
+            trace_upload, "load_session_messages", return_value=(_sample_messages(), {})
+        ),
+        patch("huggingface_hub.HfApi", return_value=fake_api),
+    ):
         msg = upload_session_trace("s1")
     assert "token was rejected" in msg
 
@@ -249,6 +311,7 @@ def test_do_upload_missing_huggingface_hub(monkeypatch):
     # instead of attempting a real pip install in CI.
     monkeypatch.setenv("CLAWK_DISABLE_LAZY_INSTALLS", "1")
     import builtins
+
     real_import = builtins.__import__
 
     def fake_import(name, *args, **kwargs):

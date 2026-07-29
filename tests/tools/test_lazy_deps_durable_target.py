@@ -55,17 +55,13 @@ class TestGatingWithTarget:
         monkeypatch.delenv(ld._LAZY_TARGET_ENV, raising=False)
         # config unreadable → fails open on the config check, but the sealed
         # env var with no target still blocks.
-        monkeypatch.setattr(
-            "clawk_cli.config.load_config", lambda: {}, raising=False
-        )
+        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {}, raising=False)
         assert ld._allow_lazy_installs() is False
 
     def test_disable_env_allows_with_target(self, monkeypatch, tmp_path):
         monkeypatch.setenv("CLAWK_DISABLE_LAZY_INSTALLS", "1")
         monkeypatch.setenv(ld._LAZY_TARGET_ENV, str(tmp_path))
-        monkeypatch.setattr(
-            "clawk_cli.config.load_config", lambda: {}, raising=False
-        )
+        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {}, raising=False)
         assert ld._allow_lazy_installs() is True
 
     def test_config_killswitch_wins_even_with_target(self, monkeypatch, tmp_path):
@@ -83,9 +79,7 @@ class TestGatingWithTarget:
         # No sealed env, no target → default allow (unchanged behaviour).
         monkeypatch.delenv("CLAWK_DISABLE_LAZY_INSTALLS", raising=False)
         monkeypatch.delenv(ld._LAZY_TARGET_ENV, raising=False)
-        monkeypatch.setattr(
-            "clawk_cli.config.load_config", lambda: {}, raising=False
-        )
+        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {}, raising=False)
         assert ld._allow_lazy_installs() is True
 
 
@@ -125,7 +119,9 @@ class TestAbiStamp:
         assert err is None
         # Stale package wiped; stamp refreshed to current ABI.
         assert not (target / "stalepkg").exists()
-        assert (target / ld._TARGET_STAMP_NAME).read_text().strip() == ld._python_abi_tag()
+        assert (
+            target / ld._TARGET_STAMP_NAME
+        ).read_text().strip() == ld._python_abi_tag()
 
     def test_readonly_target_reports_error(self, tmp_path):
         # A path under a non-writable parent should surface a clean error,
@@ -254,9 +250,12 @@ class TestRealInstallCoreWins:
         assert result.success, f"install failed: {result.stderr}"
         # Landed in the durable target, not the core venv.
         installed = list(target.glob("isodate*"))
-        assert installed, f"isodate not found under target {target}: {list(target.iterdir())}"
+        assert installed, (
+            f"isodate not found under target {target}: {list(target.iterdir())}"
+        )
         # Importable now that the target is on sys.path.
         import importlib
+
         importlib.invalidate_caches()
         mod = importlib.import_module("isodate")
         assert mod.__file__ is not None
@@ -275,6 +274,7 @@ class TestCoreNeverShadowed:
         # 'packaging' is always present in the venv (transitive of the build
         # toolchain). Resolve the core copy's location first.
         import importlib.util
+
         core_spec = importlib.util.find_spec("packaging")
         assert core_spec is not None and core_spec.origin
         core_path = Path(core_spec.origin).parent
@@ -296,6 +296,7 @@ class TestCoreNeverShadowed:
         try:
             ld._activate_target_on_syspath(target)
             import importlib
+
             importlib.invalidate_caches()
             spec_after = importlib.util.find_spec("packaging")
             assert spec_after is not None and spec_after.origin

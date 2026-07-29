@@ -53,7 +53,10 @@ async def test_ensure_forum_commands_registers_once():
     msg = _forum_message(chat_id=-123, is_forum=True)
 
     with patch("clawk_cli.commands.telegram_menu_commands") as mock_menu:
-        mock_menu.return_value = ([("new", "Start new session"), ("help", "Show help")], 0)
+        mock_menu.return_value = (
+            [("new", "Start new session"), ("help", "Show help")],
+            0,
+        )
         with patch("telegram.BotCommand") as MockBotCommand:
             instances = []
 
@@ -72,6 +75,7 @@ async def test_ensure_forum_commands_registers_once():
                     s = MagicMock()
                     s.chat_id = chat_id
                     return s
+
                 MockScope.side_effect = _make_scope
                 await adapter._ensure_forum_commands(msg)
 

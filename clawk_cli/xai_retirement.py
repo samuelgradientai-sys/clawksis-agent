@@ -6,6 +6,7 @@ Pure logic: walks a Clawksis config dict, returns issues for any reference
 to a retired xAI model. No I/O, no CLI dependencies — testable in isolation
 and reusable from both `clawk doctor` and a future `clawk migrate xai`.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,14 +22,38 @@ RETIREMENT_DATE = "May 15, 2026"
 # have a one-to-one replacement: ``grok-4.3`` reasons by default, so emulating
 # ``*-non-reasoning`` behavior on it requires ``reasoning_effort="none"``.
 _RETIRED_MODELS: Dict[str, Dict[str, Optional[str]]] = {
-    "grok-4-0709":                  {"replacement": "grok-4.3", "reasoning_effort": None,  "note": None},
-    "grok-4-fast-reasoning":        {"replacement": "grok-4.3", "reasoning_effort": None,  "note": None},
-    "grok-4-fast-non-reasoning":    {"replacement": "grok-4.3", "reasoning_effort": "none", "note": None},
-    "grok-4-1-fast-reasoning":      {"replacement": "grok-4.3", "reasoning_effort": None,  "note": None},
-    "grok-4-1-fast-non-reasoning":  {"replacement": "grok-4.3", "reasoning_effort": "none", "note": None},
-    "grok-code-fast-1":             {"replacement": "grok-4.3", "reasoning_effort": None,  "note": None},
-    "grok-3":                       {"replacement": "grok-4.3", "reasoning_effort": None,  "note": None},
-    "grok-imagine-image-pro":       {"replacement": "grok-imagine-image-quality", "reasoning_effort": None, "note": None},
+    "grok-4-0709": {"replacement": "grok-4.3", "reasoning_effort": None, "note": None},
+    "grok-4-fast-reasoning": {
+        "replacement": "grok-4.3",
+        "reasoning_effort": None,
+        "note": None,
+    },
+    "grok-4-fast-non-reasoning": {
+        "replacement": "grok-4.3",
+        "reasoning_effort": "none",
+        "note": None,
+    },
+    "grok-4-1-fast-reasoning": {
+        "replacement": "grok-4.3",
+        "reasoning_effort": None,
+        "note": None,
+    },
+    "grok-4-1-fast-non-reasoning": {
+        "replacement": "grok-4.3",
+        "reasoning_effort": "none",
+        "note": None,
+    },
+    "grok-code-fast-1": {
+        "replacement": "grok-4.3",
+        "reasoning_effort": None,
+        "note": None,
+    },
+    "grok-3": {"replacement": "grok-4.3", "reasoning_effort": None, "note": None},
+    "grok-imagine-image-pro": {
+        "replacement": "grok-imagine-image-quality",
+        "reasoning_effort": None,
+        "note": None,
+    },
 }
 
 
@@ -36,9 +61,9 @@ _RETIRED_MODELS: Dict[str, Dict[str, Optional[str]]] = {
 class RetirementIssue:
     """A reference to a retired xAI model found in a Clawksis config."""
 
-    config_path: str            # e.g. "principal.model" or "auxiliary.vision.model"
-    current_model: str          # exact value found in config (preserves casing/prefix)
-    replacement: str            # recommended xAI replacement
+    config_path: str  # e.g. "principal.model" or "auxiliary.vision.model"
+    current_model: str  # exact value found in config (preserves casing/prefix)
+    replacement: str  # recommended xAI replacement
     reasoning_effort: Optional[str] = None  # set if non-reasoning variant migration
     note: Optional[str] = None  # disambiguation note when applicable
 
@@ -48,7 +73,7 @@ def _normalize(model_id: str) -> str:
     m = model_id.strip().lower()
     for prefix in ("x-ai/", "xai/"):
         if m.startswith(prefix):
-            m = m[len(prefix):]
+            m = m[len(prefix) :]
             break
     return m
 
@@ -78,13 +103,15 @@ def find_retired_xai_refs(config: Dict[str, Any]) -> List[RetirementIssue]:
         entry = _RETIRED_MODELS.get(norm)
         if entry is None:
             return
-        issues.append(RetirementIssue(
-            config_path=path,
-            current_model=model,
-            replacement=entry["replacement"],
-            reasoning_effort=entry.get("reasoning_effort"),
-            note=entry.get("note"),
-        ))
+        issues.append(
+            RetirementIssue(
+                config_path=path,
+                current_model=model,
+                replacement=entry["replacement"],
+                reasoning_effort=entry.get("reasoning_effort"),
+                note=entry.get("note"),
+            )
+        )
 
     if not isinstance(config, dict):
         return issues

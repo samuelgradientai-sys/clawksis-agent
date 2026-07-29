@@ -104,8 +104,10 @@ def record_aux_usage(
 
         usage = normalize_usage(raw_usage, provider=provider)
         if not (
-            usage.input_tokens or usage.output_tokens
-            or usage.cache_read_tokens or usage.cache_write_tokens
+            usage.input_tokens
+            or usage.output_tokens
+            or usage.cache_read_tokens
+            or usage.cache_write_tokens
             or usage.reasoning_tokens
         ):
             return

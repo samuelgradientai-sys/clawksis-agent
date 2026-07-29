@@ -1,7 +1,7 @@
 """Regression test for #25676 — nested gateway.streaming config must be loaded."""
+
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-
 
 
 def _load_with_yaml_dict(yaml_dict: dict):
@@ -13,9 +13,11 @@ def _load_with_yaml_dict(yaml_dict: dict):
     def fake_exists(self):
         return str(self).endswith("config.yaml")
 
-    with patch("gateway.config.get_clawk_home", return_value=fake_home), \
-         patch.object(Path, "exists", fake_exists), \
-         patch("builtins.open", create=True) as mock_file:
+    with (
+        patch("gateway.config.get_clawk_home", return_value=fake_home),
+        patch.object(Path, "exists", fake_exists),
+        patch("builtins.open", create=True) as mock_file,
+    ):
         mock_file.return_value.__enter__ = lambda s: s
         mock_file.return_value.__exit__ = MagicMock(return_value=False)
         with patch("yaml.safe_load", return_value=yaml_dict):
@@ -24,13 +26,17 @@ def _load_with_yaml_dict(yaml_dict: dict):
 
 class TestStreamingConfigNested:
     def test_top_level_streaming(self):
-        cfg = _load_with_yaml_dict({"streaming": {"enabled": True, "transport": "draft"}})
+        cfg = _load_with_yaml_dict({
+            "streaming": {"enabled": True, "transport": "draft"}
+        })
         assert cfg.streaming.enabled is True
         assert cfg.streaming.transport == "draft"
 
     def test_nested_gateway_streaming(self):
         """Regression for #25676."""
-        cfg = _load_with_yaml_dict({"gateway": {"streaming": {"enabled": True, "transport": "draft"}}})
+        cfg = _load_with_yaml_dict({
+            "gateway": {"streaming": {"enabled": True, "transport": "draft"}}
+        })
         assert cfg.streaming.enabled is True
         assert cfg.streaming.transport == "draft"
 
@@ -76,9 +82,7 @@ class TestStreamingModeAlias:
         """Real-world block: mode plus unrelated preloader_frames."""
         from gateway.config import StreamingConfig
 
-        sc = StreamingConfig.from_dict(
-            {"mode": "auto", "preloader_frames": ["a", "b"]}
-        )
+        sc = StreamingConfig.from_dict({"mode": "auto", "preloader_frames": ["a", "b"]})
         assert sc.enabled is True
         assert sc.transport == "auto"
 

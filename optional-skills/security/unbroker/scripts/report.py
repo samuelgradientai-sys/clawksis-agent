@@ -1,4 +1,5 @@
 """Status dashboards, Markdown reports, human-task digest, and Google Sheets row export."""
+
 from __future__ import annotations
 
 import brokers as brokers_mod
@@ -39,13 +40,27 @@ def metrics(subject_id: str) -> dict:
     """
     c = status_counts(subject_id)
     removed = c.get("confirmed_removed", 0)
-    in_flight = c.get("submitted", 0) + c.get("verification_pending", 0) + c.get("awaiting_processing", 0)
-    open_found = c.get("found", 0) + c.get("reappeared", 0) + c.get("action_selected", 0) \
+    in_flight = (
+        c.get("submitted", 0)
+        + c.get("verification_pending", 0)
+        + c.get("awaiting_processing", 0)
+    )
+    open_found = (
+        c.get("found", 0)
+        + c.get("reappeared", 0)
+        + c.get("action_selected", 0)
         + c.get("indirect_exposure", 0)
-    acted = removed + in_flight + open_found + c.get("human_task_queued", 0) + c.get("blocked", 0)
+    )
+    acted = (
+        removed
+        + in_flight
+        + open_found
+        + c.get("human_task_queued", 0)
+        + c.get("blocked", 0)
+    )
     return {
         "confirmed_removed": removed,
-        "in_flight_claimed": in_flight,      # submitted but NOT yet verified gone
+        "in_flight_claimed": in_flight,  # submitted but NOT yet verified gone
         "open_needs_action": open_found,
         "blocked": c.get("blocked", 0),
         "human_tasks": c.get("human_task_queued", 0),
@@ -90,13 +105,19 @@ def render_markdown(subject_id: str) -> str:
 
     indirect = [c for c in ledger.values() if c.get("state") == "indirect_exposure"]
     if indirect:
-        lines += ["", "## Indirect exposure (your PII on third-party records)",
-                  "Not removable via the broker's self-service opt-out (the record is about someone "
-                  "else). Lever: a targeted CCPA/GDPR delete-my-PII request naming only your own "
-                  "identifiers."]
+        lines += [
+            "",
+            "## Indirect exposure (your PII on third-party records)",
+            "Not removable via the broker's self-service opt-out (the record is about someone "
+            "else). Lever: a targeted CCPA/GDPR delete-my-PII request naming only your own "
+            "identifiers.",
+        ]
         for c in indirect:
             ev = c.get("evidence") or {}
-            note = ev.get("summary") or "subject's identifiers appear on another person's listing"
+            note = (
+                ev.get("summary")
+                or "subject's identifiers appear on another person's listing"
+            )
             lines.append(f"- **{c.get('broker_id')}** - {note}")
     return "\n".join(lines) + "\n"
 
@@ -109,16 +130,24 @@ def human_tasks_markdown(subject_id: str) -> str:
     single sitting. Includes queued tasks and blocked-site operator-browser checks.
     """
     ledger = ledger_mod.load(subject_id)
-    tasks = [(bid, c) for bid, c in sorted(ledger.items()) if c.get("state") == "human_task_queued"]
-    blocked = [(bid, c) for bid, c in sorted(ledger.items()) if c.get("state") == "blocked"]
+    tasks = [
+        (bid, c)
+        for bid, c in sorted(ledger.items())
+        if c.get("state") == "human_task_queued"
+    ]
+    blocked = [
+        (bid, c) for bid, c in sorted(ledger.items()) if c.get("state") == "blocked"
+    ]
 
     lines = [f"# Human tasks for `{subject_id}`", ""]
     if not tasks and not blocked:
         lines.append("Nothing needs a human right now.")
         return "\n".join(lines) + "\n"
 
-    lines.append(f"{len(tasks)} manual step(s) + {len(blocked)} blocked site(s). "
-                 "Everything else ran (or will run) autonomously.")
+    lines.append(
+        f"{len(tasks)} manual step(s) + {len(blocked)} blocked site(s). "
+        "Everything else ran (or will run) autonomously."
+    )
     if tasks:
         lines += ["", "## Manual steps"]
         for bid, c in tasks:
@@ -131,14 +160,21 @@ def human_tasks_markdown(subject_id: str) -> str:
             for q in (opt.get("quirks") or [])[:2]:
                 lines.append(f"- Note: {q}")
             lines.append("- Withhold: SSN and full ID numbers - always.")
-            lines.append(f"- When done, tell the agent so it records the outcome for `{bid}`.")
+            lines.append(
+                f"- When done, tell the agent so it records the outcome for `{bid}`."
+            )
     if blocked:
-        lines += ["", "## Blocked sites (open in YOUR browser - it gets through where bots don't)"]
+        lines += [
+            "",
+            "## Blocked sites (open in YOUR browser - it gets through where bots don't)",
+        ]
         for bid, c in blocked:
             b = brokers_mod.get(bid) or {}
             url = ((b.get("search") or {}).get("url")) or "(see broker record)"
-            lines.append(f"- **{b.get('name', bid)}** - open {url}, search the subject, and report "
-                         "the verdict (or a screenshot) back to the agent.")
+            lines.append(
+                f"- **{b.get('name', bid)}** - open {url}, search the subject, and report "
+                "the verdict (or a screenshot) back to the agent."
+            )
     return "\n".join(lines) + "\n"
 
 

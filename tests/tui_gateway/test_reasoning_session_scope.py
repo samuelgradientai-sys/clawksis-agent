@@ -63,13 +63,17 @@ class TestConfigSetReasoningSessionScope:
     def test_session_scoped_set_skips_global_write(self) -> None:
         agent = _agent(None)
         session = {"session_key": "k1", "agent": agent}
-        with patch.dict(server._sessions, {"s1": session}, clear=False), \
-                patch.object(server, "_write_config_key") as write_key, \
-                patch.object(server, "_persist_live_session_runtime"), \
-                patch.object(server, "_emit"):
-            resp = self._dispatch(
-                {"key": "reasoning", "session_id": "s1", "value": "none"}
-            )
+        with (
+            patch.dict(server._sessions, {"s1": session}, clear=False),
+            patch.object(server, "_write_config_key") as write_key,
+            patch.object(server, "_persist_live_session_runtime"),
+            patch.object(server, "_emit"),
+        ):
+            resp = self._dispatch({
+                "key": "reasoning",
+                "session_id": "s1",
+                "value": "none",
+            })
         assert resp["result"]["value"] == "none"
         assert agent.reasoning_config == {"enabled": False}
         write_key.assert_not_called()
@@ -78,11 +82,15 @@ class TestConfigSetReasoningSessionScope:
         """A pre-build (agent=None) session must keep the change for the
         deferred agent build instead of dropping it."""
         session = {"session_key": "k2", "agent": None}
-        with patch.dict(server._sessions, {"s2": session}, clear=False), \
-                patch.object(server, "_write_config_key") as write_key:
-            resp = self._dispatch(
-                {"key": "reasoning", "session_id": "s2", "value": "high"}
-            )
+        with (
+            patch.dict(server._sessions, {"s2": session}, clear=False),
+            patch.object(server, "_write_config_key") as write_key,
+        ):
+            resp = self._dispatch({
+                "key": "reasoning",
+                "session_id": "s2",
+                "value": "high",
+            })
         assert resp["result"]["value"] == "high"
         assert session["create_reasoning_override"] == {
             "enabled": True,

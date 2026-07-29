@@ -39,7 +39,9 @@ def test_curses_select_accepts_explicit_cancel_value(monkeypatch):
 
     monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", fake_radiolist)
 
-    result = _curses_select("Pick one", [("first", "")], default=0, cancel_returns=_CANCELLED)
+    result = _curses_select(
+        "Pick one", [("first", "")], default=0, cancel_returns=_CANCELLED
+    )
 
     assert result == _CANCELLED
     assert captured["cancel_returns"] == _CANCELLED
@@ -53,7 +55,9 @@ def test_curses_select_clears_after_picker_returns(monkeypatch):
         return selected
 
     monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", fake_radiolist)
-    monkeypatch.setattr(memory_setup, "_clear_interactive_transition", lambda: events.append("clear"))
+    monkeypatch.setattr(
+        memory_setup, "_clear_interactive_transition", lambda: events.append("clear")
+    )
 
     result = _curses_select("Pick one", [("first", "")], default=0)
 
@@ -65,8 +69,12 @@ def test_cmd_setup_top_level_cancel_writes_nothing(monkeypatch):
     save_config = MagicMock()
     load_config = MagicMock(side_effect=AssertionError("cancel should not load config"))
 
-    monkeypatch.setattr(memory_setup, "_get_available_providers", lambda: [("fake", "local", object())])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: kwargs["cancel_returns"])
+    monkeypatch.setattr(
+        memory_setup, "_get_available_providers", lambda: [("fake", "local", object())]
+    )
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: kwargs["cancel_returns"]
+    )
     monkeypatch.setattr("clawk_cli.config.load_config", load_config)
     monkeypatch.setattr("clawk_cli.config.save_config", save_config)
 
@@ -82,7 +90,9 @@ def test_cmd_setup_builtin_selection_still_saves_builtin(monkeypatch):
     providers = [("fake", "local", object())]
 
     monkeypatch.setattr(memory_setup, "_get_available_providers", lambda: providers)
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: len(providers))
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: len(providers)
+    )
     monkeypatch.setattr("clawk_cli.config.load_config", lambda: config)
     monkeypatch.setattr("clawk_cli.config.save_config", save_config)
 
@@ -99,10 +109,25 @@ def test_cmd_setup_clears_interactive_picker_before_provider_post_setup(monkeypa
         def post_setup(self, clawk_home, config):
             events.append("post_setup")
 
-    monkeypatch.setattr(memory_setup, "_get_available_providers", lambda: [("openviking", "local", PostSetupProvider())])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: events.append("select") or 0)
-    monkeypatch.setattr(memory_setup, "_clear_interactive_transition", lambda: events.append("clear"), raising=False)
-    monkeypatch.setattr(memory_setup, "_install_dependencies", lambda name: events.append("install"))
+    monkeypatch.setattr(
+        memory_setup,
+        "_get_available_providers",
+        lambda: [("openviking", "local", PostSetupProvider())],
+    )
+    monkeypatch.setattr(
+        memory_setup,
+        "_curses_select",
+        lambda *args, **kwargs: events.append("select") or 0,
+    )
+    monkeypatch.setattr(
+        memory_setup,
+        "_clear_interactive_transition",
+        lambda: events.append("clear"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        memory_setup, "_install_dependencies", lambda name: events.append("install")
+    )
     monkeypatch.setattr(memory_setup, "get_clawk_home", lambda: "/tmp/clawk-test")
     monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"memory": {}})
 
@@ -118,9 +143,20 @@ def test_cmd_setup_provider_clears_before_provider_post_setup(monkeypatch):
         def post_setup(self, clawk_home, config):
             events.append("post_setup")
 
-    monkeypatch.setattr(memory_setup, "_get_available_providers", lambda: [("openviking", "local", PostSetupProvider())])
-    monkeypatch.setattr(memory_setup, "_clear_interactive_transition", lambda: events.append("clear"), raising=False)
-    monkeypatch.setattr(memory_setup, "_install_dependencies", lambda name: events.append("install"))
+    monkeypatch.setattr(
+        memory_setup,
+        "_get_available_providers",
+        lambda: [("openviking", "local", PostSetupProvider())],
+    )
+    monkeypatch.setattr(
+        memory_setup,
+        "_clear_interactive_transition",
+        lambda: events.append("clear"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        memory_setup, "_install_dependencies", lambda name: events.append("install")
+    )
     monkeypatch.setattr(memory_setup, "get_clawk_home", lambda: "/tmp/clawk-test")
     monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"memory": {}})
 
@@ -156,7 +192,11 @@ def test_cmd_status_prefers_provider_status_config(monkeypatch, capsys):
         }
     }
     monkeypatch.setattr("clawk_cli.config.load_config", lambda: config)
-    monkeypatch.setattr(memory_setup, "_get_available_providers", lambda: [("openviking", "API key / local", StatusProvider())])
+    monkeypatch.setattr(
+        memory_setup,
+        "_get_available_providers",
+        lambda: [("openviking", "API key / local", StatusProvider())],
+    )
 
     memory_setup.cmd_status(SimpleNamespace())
 
@@ -171,20 +211,26 @@ def test_cmd_setup_generic_choice_cancel_writes_nothing(tmp_path, monkeypatch):
             self.save_config = MagicMock()
 
         def get_config_schema(self):
-            return [{
-                "key": "mode",
-                "description": "Mode",
-                "default": "one",
-                "choices": ["one", "two"],
-            }]
+            return [
+                {
+                    "key": "mode",
+                    "description": "Mode",
+                    "default": "one",
+                    "choices": ["one", "two"],
+                }
+            ]
 
     provider = ChoiceProvider()
     selections = iter([0, _CANCELLED])
     save_config = MagicMock()
     install_dependencies = MagicMock()
 
-    monkeypatch.setattr(memory_setup, "_get_available_providers", lambda: [("fake", "local", provider)])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: next(selections))
+    monkeypatch.setattr(
+        memory_setup, "_get_available_providers", lambda: [("fake", "local", provider)]
+    )
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: next(selections)
+    )
     monkeypatch.setattr(memory_setup, "_install_dependencies", install_dependencies)
     monkeypatch.setattr(memory_setup, "get_clawk_home", lambda: tmp_path)
     monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"memory": {}})

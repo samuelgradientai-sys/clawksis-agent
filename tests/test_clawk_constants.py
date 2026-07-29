@@ -83,7 +83,9 @@ class TestGetDefaultClawksisRoot:
         monkeypatch.setenv("CLAWK_HOME", str(profile))
         assert get_default_clawk_root() == docker_root
 
-    def test_no_clawk_home_returns_localappdata_root_on_windows(self, tmp_path, monkeypatch):
+    def test_no_clawk_home_returns_localappdata_root_on_windows(
+        self, tmp_path, monkeypatch
+    ):
         """Native Windows falls back to %LOCALAPPDATA%\\clawk, not ~/.clawksis."""
         local_appdata = tmp_path / "LocalAppData"
         monkeypatch.delenv("CLAWK_HOME", raising=False)
@@ -93,7 +95,9 @@ class TestGetDefaultClawksisRoot:
 
         assert get_default_clawk_root() == local_appdata / "clawk"
 
-    def test_no_clawk_home_uses_windows_path_when_localappdata_missing(self, tmp_path, monkeypatch):
+    def test_no_clawk_home_uses_windows_path_when_localappdata_missing(
+        self, tmp_path, monkeypatch
+    ):
         """Windows fallback still uses AppData/Local/clawk without LOCALAPPDATA."""
         home = tmp_path / "Home"
         monkeypatch.delenv("CLAWK_HOME", raising=False)
@@ -189,7 +193,9 @@ class TestClawksisManagedNode:
 
         assert find_node_executable_on_path("npm") == str(npm_cmd)
 
-    def test_windows_node_executable_falls_back_to_safe_path_shim(self, tmp_path, monkeypatch):
+    def test_windows_node_executable_falls_back_to_safe_path_shim(
+        self, tmp_path, monkeypatch
+    ):
         home = tmp_path / "clawk"
         home.mkdir()
         bin_dir = tmp_path / "nodejs"
@@ -204,7 +210,9 @@ class TestClawksisManagedNode:
 
         assert find_node_executable("npm") == str(npm_cmd)
 
-    def test_windows_skips_broken_managed_npm_without_path_fallback(self, tmp_path, monkeypatch):
+    def test_windows_skips_broken_managed_npm_without_path_fallback(
+        self, tmp_path, monkeypatch
+    ):
         home = tmp_path / "clawk"
         managed_npm = home / "node" / "npm.cmd"
         managed_npm.parent.mkdir(parents=True)
@@ -228,7 +236,9 @@ class TestClawksisManagedNode:
         assert find_node_executable("npm") is None
         assert find_node_executable("npm") != str(path_npm)
 
-    def test_with_clawk_node_path_prepends_existing_managed_dirs(self, tmp_path, monkeypatch):
+    def test_with_clawk_node_path_prepends_existing_managed_dirs(
+        self, tmp_path, monkeypatch
+    ):
         home = tmp_path / "clawk"
         node_dir = home / "node"
         bin_dir = node_dir / "bin"
@@ -244,7 +254,9 @@ class TestClawksisManagedNode:
         assert parts[-1] == "system-node"
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX shell stubs; Windows uses .cmd shims")
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX shell stubs; Windows uses .cmd shims"
+)
 class TestNodeToolRunnable:
     """node_tool_runnable() rejects broken Clawksis-managed npm/node wrappers."""
 
@@ -296,12 +308,16 @@ class TestNodeToolRunnable:
         assert resolved == str(broken_npm)
         assert resolved != str(system_bin / "npm")
 
-    def test_broken_managed_npm_heals_instead_of_path_fallback(self, tmp_path, monkeypatch):
+    def test_broken_managed_npm_heals_instead_of_path_fallback(
+        self, tmp_path, monkeypatch
+    ):
         profile_home = tmp_path / "profiles" / "assistant"
         managed_bin = profile_home / "node" / "bin"
         managed_bin.mkdir(parents=True)
         broken_npm = self._stub(managed_bin, "npm", "#!/bin/sh\nexit 1\n")
-        healed_npm = self._stub(managed_bin, "npm", "#!/bin/sh\necho '22.0.0'\nexit 0\n")
+        healed_npm = self._stub(
+            managed_bin, "npm", "#!/bin/sh\necho '22.0.0'\nexit 0\n"
+        )
 
         system_bin = tmp_path / "system-bin"
         system_bin.mkdir()
@@ -322,7 +338,9 @@ class TestNodeToolRunnable:
         assert find_node_executable("npm") == str(healed_npm)
         assert find_node_executable("npm") != str(good_npm)
 
-    def test_broken_managed_npm_returns_none_when_heal_fails(self, tmp_path, monkeypatch):
+    def test_broken_managed_npm_returns_none_when_heal_fails(
+        self, tmp_path, monkeypatch
+    ):
         profile_home = tmp_path / "profiles" / "assistant"
         managed_bin = profile_home / "node" / "bin"
         managed_bin.mkdir(parents=True)
@@ -343,7 +361,9 @@ class TestNodeToolRunnable:
         profile_home = tmp_path / "profiles" / "assistant"
         managed_bin = profile_home / "node" / "bin"
         managed_bin.mkdir(parents=True)
-        managed_npm = self._stub(managed_bin, "npm", "#!/bin/sh\necho '22.0.0'\nexit 0\n")
+        managed_npm = self._stub(
+            managed_bin, "npm", "#!/bin/sh\necho '22.0.0'\nexit 0\n"
+        )
 
         system_bin = tmp_path / "system-bin"
         system_bin.mkdir()
@@ -377,17 +397,26 @@ class TestIsContainer:
     def test_detects_cgroup_docker(self, monkeypatch, tmp_path):
         """/proc/1/cgroup containing 'docker' triggers detection."""
         import builtins
+
         self._reset_cache(monkeypatch)
         monkeypatch.setattr(os.path, "exists", lambda p: False)
         cgroup_file = tmp_path / "cgroup"
         cgroup_file.write_text("12:memory:/docker/abc123\n")
         _real_open = builtins.open
-        monkeypatch.setattr("builtins.open", lambda p, *a, **kw: _real_open(str(cgroup_file), *a, **kw) if p == "/proc/1/cgroup" else _real_open(p, *a, **kw))
+        monkeypatch.setattr(
+            "builtins.open",
+            lambda p, *a, **kw: (
+                _real_open(str(cgroup_file), *a, **kw)
+                if p == "/proc/1/cgroup"
+                else _real_open(p, *a, **kw)
+            ),
+        )
         assert is_container() is True
 
     def test_negative_case(self, monkeypatch, tmp_path):
         """Returns False on a regular Linux host."""
         import builtins
+
         self._reset_cache(monkeypatch)
         monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
         monkeypatch.setattr(os.path, "exists", lambda p: False)
@@ -417,18 +446,27 @@ class TestIsContainer:
     def test_detects_cgroup_kubepods(self, monkeypatch, tmp_path):
         """/proc/1/cgroup containing 'kubepods' triggers detection."""
         import builtins
+
         self._reset_cache(monkeypatch)
         monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
         monkeypatch.setattr(os.path, "exists", lambda p: False)
         cgroup_file = tmp_path / "cgroup"
         cgroup_file.write_text("12:memory:/kubepods/besteffort/podabc\n")
         _real_open = builtins.open
-        monkeypatch.setattr("builtins.open", lambda p, *a, **kw: _real_open(str(cgroup_file), *a, **kw) if p == "/proc/1/cgroup" else _real_open(p, *a, **kw))
+        monkeypatch.setattr(
+            "builtins.open",
+            lambda p, *a, **kw: (
+                _real_open(str(cgroup_file), *a, **kw)
+                if p == "/proc/1/cgroup"
+                else _real_open(p, *a, **kw)
+            ),
+        )
         assert is_container() is True
 
     def test_detects_cgroup_v2_via_mountinfo(self, monkeypatch, tmp_path):
         """cgroup v2 (0::/ only) falls back to containerd marker in mountinfo."""
         import builtins
+
         self._reset_cache(monkeypatch)
         monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
         monkeypatch.setattr(os.path, "exists", lambda p: False)
@@ -471,7 +509,9 @@ class TestParseReasoningEffort:
         """The literal "none" disables reasoning explicitly."""
         assert parse_reasoning_effort("none") == {"enabled": False}
 
-    @pytest.mark.parametrize("value", [False, "false", "FALSE", "disabled", " Disabled "])
+    @pytest.mark.parametrize(
+        "value", [False, "false", "FALSE", "disabled", " Disabled "]
+    )
     def test_false_aliases_disable_reasoning(self, value):
         """YAML `reasoning_effort: false`/`off`/`no` reaches loaders as a
         boolean; users also hand-write "false"/"disabled". All must mean
@@ -540,6 +580,7 @@ class TestResolvePerModelReasoningEffort:
     def test_exact_match(self):
         """Exact model string match returns the parsed override."""
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"claude-opus-4.5": "xhigh"}
         result = resolve_per_model_reasoning_effort("claude-opus-4.5", overrides)
         assert result == {"enabled": True, "effort": "xhigh"}
@@ -547,12 +588,14 @@ class TestResolvePerModelReasoningEffort:
     def test_none_when_no_matching_key(self):
         """Model not in overrides returns None (caller falls back to global)."""
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"claude-opus-4.5": "xhigh"}
         assert resolve_per_model_reasoning_effort("gpt-5", overrides) is None
 
     def test_none_value_returns_disabled(self):
         """Override set to 'none' returns {'enabled': False}."""
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"claude-opus-4.5": "none"}
         result = resolve_per_model_reasoning_effort("claude-opus-4.5", overrides)
         assert result == {"enabled": False}
@@ -560,18 +603,21 @@ class TestResolvePerModelReasoningEffort:
     def test_invalid_value_returns_none(self):
         """Override with invalid effort falls back to None (global)."""
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"claude-opus-4.5": "banana"}
         assert resolve_per_model_reasoning_effort("claude-opus-4.5", overrides) is None
 
     def test_none_or_empty_overrides_returns_none(self):
         """None or empty overrides dict returns None."""
         from clawk_constants import resolve_per_model_reasoning_effort
+
         assert resolve_per_model_reasoning_effort("claude-opus-4.5", None) is None
         assert resolve_per_model_reasoning_effort("claude-opus-4.5", {}) is None
 
     def test_empty_model_returns_none(self):
         """Empty model string returns None."""
         from clawk_constants import resolve_per_model_reasoning_effort
+
         assert resolve_per_model_reasoning_effort("", {"gpt-5": "low"}) is None
 
     # --- Spelling tolerance layer ---
@@ -583,6 +629,7 @@ class TestResolvePerModelReasoningEffort:
         for the anthropic provider. The user's override key should still match.
         """
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"claude-opus-4.5": "xhigh"}
         result = resolve_per_model_reasoning_effort("claude-opus-4-5", overrides)
         assert result == {"enabled": True, "effort": "xhigh"}
@@ -590,6 +637,7 @@ class TestResolvePerModelReasoningEffort:
     def test_dashes_to_dots_variant(self):
         """User wrote key with dashes; input comes in with dots."""
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"claude-opus-4-5": "high"}
         result = resolve_per_model_reasoning_effort("claude-opus.4.5", overrides)
         assert result == {"enabled": True, "effort": "high"}
@@ -601,6 +649,7 @@ class TestResolvePerModelReasoningEffort:
         but override key: anthropic/claude-opus-4.5.
         """
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"anthropic/claude-opus-4.5": "high"}
         result = resolve_per_model_reasoning_effort("claude-opus-4.5", overrides)
         assert result == {"enabled": True, "effort": "high"}
@@ -612,8 +661,11 @@ class TestResolvePerModelReasoningEffort:
         but override key: claude-opus-4.5 (no prefix).
         """
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"claude-opus-4.5": "high"}
-        result = resolve_per_model_reasoning_effort("anthropic/claude-opus-4.5", overrides)
+        result = resolve_per_model_reasoning_effort(
+            "anthropic/claude-opus-4.5", overrides
+        )
         assert result == {"enabled": True, "effort": "high"}
 
     def test_aggregator_prefix_stripping(self):
@@ -624,8 +676,11 @@ class TestResolvePerModelReasoningEffort:
         layer to find the user's two-segment key.
         """
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"anthropic/claude-opus-4.5": "xhigh"}
-        result = resolve_per_model_reasoning_effort("openrouter/anthropic/claude-opus-4.5", overrides)
+        result = resolve_per_model_reasoning_effort(
+            "openrouter/anthropic/claude-opus-4.5", overrides
+        )
         assert result == {"enabled": True, "effort": "xhigh"}
 
     def test_exact_match_wins_over_variant(self):
@@ -635,6 +690,7 @@ class TestResolvePerModelReasoningEffort:
         variant) are keys, the exact input matches the exact key first.
         """
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"claude-opus-4.5": "high", "claude-opus-4-5": "xhigh"}
         result = resolve_per_model_reasoning_effort("claude-opus-4.5", overrides)
         assert result == {"enabled": True, "effort": "high"}
@@ -642,6 +698,7 @@ class TestResolvePerModelReasoningEffort:
     def test_none_when_no_variant_matches(self):
         """All variants exhausted without a match returns None."""
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"gpt-5": "low"}
         assert resolve_per_model_reasoning_effort("claude-opus-4.5", overrides) is None
 
@@ -654,6 +711,7 @@ class TestResolvePerModelReasoningEffort:
         making the canonical form unreachable from all-dotted input.
         """
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"claude-opus-4.5": "xhigh"}
         result = resolve_per_model_reasoning_effort("claude-opus.4.5", overrides)
         assert result is not None
@@ -662,6 +720,7 @@ class TestResolvePerModelReasoningEffort:
     def test_different_models_do_not_match(self):
         """No false positives: gemini-2.0-flash must not match gemini-flash."""
         from clawk_constants import resolve_per_model_reasoning_effort
+
         overrides = {"gemini-flash": "low"}
         assert resolve_per_model_reasoning_effort("gemini-2.0-flash", overrides) is None
 
@@ -686,19 +745,25 @@ class TestResolveReasoningConfig:
 
     def test_per_model_override_wins(self):
         from clawk_constants import resolve_reasoning_config
+
         cfg = self._cfg(overrides={"claude-opus-4.5": "xhigh"})
         result = resolve_reasoning_config(cfg, "claude-opus-4.5")
         assert result == {"enabled": True, "effort": "xhigh"}
 
     def test_global_fallback_when_no_override(self):
         from clawk_constants import resolve_reasoning_config
+
         cfg = self._cfg(effort="low", overrides={"claude-opus-4.5": "xhigh"})
-        assert resolve_reasoning_config(cfg, "gpt-5") == {"enabled": True, "effort": "low"}
+        assert resolve_reasoning_config(cfg, "gpt-5") == {
+            "enabled": True,
+            "effort": "low",
+        }
 
     def test_explicit_model_wins_over_config_default(self):
         """The session's effective model (e.g. after a session-only /model
         switch) must be used for override lookup — NOT model.default."""
         from clawk_constants import resolve_reasoning_config
+
         cfg = self._cfg(
             effort="medium",
             overrides={"gpt-5": "low", "claude-opus-4.5": "xhigh"},
@@ -710,66 +775,87 @@ class TestResolveReasoningConfig:
 
     def test_empty_model_derives_from_config_default(self):
         from clawk_constants import resolve_reasoning_config
+
         cfg = self._cfg(overrides={"gpt-5": "high"}, default_model="gpt-5")
         assert resolve_reasoning_config(cfg) == {"enabled": True, "effort": "high"}
 
     def test_empty_model_derives_from_model_alias_key(self):
         """model: {model: ...} alias shape (older configs) also resolves."""
         from clawk_constants import resolve_reasoning_config
+
         cfg = {
             "model": {"model": "gpt-5"},
-            "agent": {"reasoning_effort": "medium", "reasoning_overrides": {"gpt-5": "high"}},
+            "agent": {
+                "reasoning_effort": "medium",
+                "reasoning_overrides": {"gpt-5": "high"},
+            },
         }
         assert resolve_reasoning_config(cfg) == {"enabled": True, "effort": "high"}
 
     def test_string_model_section(self):
         """Top-level ``model: <string>`` config shape (cron raw-YAML path)."""
         from clawk_constants import resolve_reasoning_config
+
         cfg = {
             "model": "claude-opus-4.5",
-            "agent": {"reasoning_effort": "low", "reasoning_overrides": {"claude-opus-4.5": "xhigh"}},
+            "agent": {
+                "reasoning_effort": "low",
+                "reasoning_overrides": {"claude-opus-4.5": "xhigh"},
+            },
         }
         assert resolve_reasoning_config(cfg) == {"enabled": True, "effort": "xhigh"}
 
     def test_yaml_false_global_uncoerced(self):
         """YAML boolean False must mean disabled — never coerced to ''."""
         from clawk_constants import resolve_reasoning_config
+
         cfg = self._cfg(effort=False)
         assert resolve_reasoning_config(cfg, "gpt-5") == {"enabled": False}
 
     def test_yaml_false_not_shadowed_by_other_models_override(self):
         from clawk_constants import resolve_reasoning_config
+
         cfg = self._cfg(effort=False, overrides={"claude-opus-4.5": "xhigh"})
         assert resolve_reasoning_config(cfg, "gpt-5") == {"enabled": False}
 
     def test_override_none_disables_for_model(self):
         """Per-model override value 'none' disables thinking for that model."""
         from clawk_constants import resolve_reasoning_config
+
         cfg = self._cfg(effort="high", overrides={"gemini-flash": "none"})
         assert resolve_reasoning_config(cfg, "gemini-flash") == {"enabled": False}
 
     def test_unknown_global_returns_none(self):
         from clawk_constants import resolve_reasoning_config
+
         cfg = self._cfg(effort="bogus-level")
         assert resolve_reasoning_config(cfg, "gpt-5") is None
 
     def test_empty_config_returns_none(self):
         from clawk_constants import resolve_reasoning_config
+
         assert resolve_reasoning_config({}) is None
         assert resolve_reasoning_config(None) is None
 
     def test_malformed_sections_tolerated(self):
         """Non-dict agent/model sections must not raise."""
         from clawk_constants import resolve_reasoning_config
+
         assert resolve_reasoning_config({"agent": "oops", "model": 42}) is None
         assert resolve_reasoning_config({"agent": None, "model": None}) is None
-        assert resolve_reasoning_config({"agent": {"reasoning_overrides": "bad"}}) is None
+        assert (
+            resolve_reasoning_config({"agent": {"reasoning_overrides": "bad"}}) is None
+        )
 
     def test_invalid_override_value_falls_back_to_global(self):
         """A junk override value for the matching model falls through to global."""
         from clawk_constants import resolve_reasoning_config
+
         cfg = self._cfg(effort="medium", overrides={"gpt-5": "turbo-max"})
-        assert resolve_reasoning_config(cfg, "gpt-5") == {"enabled": True, "effort": "medium"}
+        assert resolve_reasoning_config(cfg, "gpt-5") == {
+            "enabled": True,
+            "effort": "medium",
+        }
 
 
 class TestReasoningOverridesDefaultConfig:
@@ -778,10 +864,13 @@ class TestReasoningOverridesDefaultConfig:
     def test_default_config_has_reasoning_overrides_key(self):
         """DEFAULT_CONFIG['agent'] contains 'reasoning_overrides' as an empty dict."""
         from clawk_cli.config import DEFAULT_CONFIG
+
         assert "reasoning_overrides" in DEFAULT_CONFIG["agent"]
         assert DEFAULT_CONFIG["agent"]["reasoning_overrides"] == {}
 
-    def test_load_config_preserves_user_reasoning_overrides(self, tmp_path, monkeypatch):
+    def test_load_config_preserves_user_reasoning_overrides(
+        self, tmp_path, monkeypatch
+    ):
         """User-added reasoning_overrides are preserved through load_config()."""
         import yaml
         from clawk_cli.config import load_config, get_config_path
@@ -811,6 +900,7 @@ class TestReasoningOverridesDefaultConfig:
     def test_spelling_tolerant_lookup_works_with_user_config(self):
         """resolve_per_model_reasoning_effort works with user-added overrides."""
         from clawk_constants import resolve_per_model_reasoning_effort
+
         # User config with one override, query uses different spelling
         overrides = {
             "anthropic/claude-opus-4.5": "xhigh",  # user wrote with dots
@@ -871,10 +961,12 @@ class TestSecureParentDir:
 
         # Mock Path.resolve to return a short path regardless of OS quirks
         original_resolve = Path.resolve
+
         def mock_resolve(self):
             if str(self) == "/x/y":
                 return Path("/x")
             return original_resolve(self)
+
         monkeypatch.setattr(Path, "resolve", mock_resolve)
 
         secure_parent_dir(Path("/x/y"))
@@ -916,7 +1008,9 @@ class TestSecureParentDir:
         assert called_with[0] == (str(real_dir), 0o700)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX shell stubs; Windows uses .cmd shims")
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX shell stubs; Windows uses .cmd shims"
+)
 class TestAgentBrowserRunnable:
     """agent_browser_runnable() validates the resolved CLI actually runs.
 
@@ -943,7 +1037,11 @@ class TestAgentBrowserRunnable:
         assert agent_browser_runnable(str(link)) is False
 
     def test_runnable_binary_accepted(self, tmp_path):
-        good = self._stub(tmp_path, "agent-browser", "#!/bin/sh\necho 'agent-browser 0.27.1'\nexit 0\n")
+        good = self._stub(
+            tmp_path,
+            "agent-browser",
+            "#!/bin/sh\necho 'agent-browser 0.27.1'\nexit 0\n",
+        )
         assert agent_browser_runnable(str(good)) is True
 
     def test_nonzero_exit_rejected(self, tmp_path):
@@ -951,7 +1049,9 @@ class TestAgentBrowserRunnable:
         assert agent_browser_runnable(str(bad)) is False
 
     def test_not_executable_rejected(self, tmp_path):
-        noexec = self._stub(tmp_path, "agent-browser", "#!/bin/sh\necho hi\n", mode=0o644)
+        noexec = self._stub(
+            tmp_path, "agent-browser", "#!/bin/sh\necho hi\n", mode=0o644
+        )
         assert agent_browser_runnable(str(noexec)) is False
 
     def test_npx_fallback_form_accepted(self):
@@ -977,7 +1077,6 @@ class TestAgentBrowserRunnable:
         assert agent_browser_runnable(str(good)) is True
         assert captured[0][0] == [str(good), "--version"]
         assert captured[0][1]["creationflags"] == 0x08000000
-
 
     def test_node_tool_probe_uses_windows_hide_flags(self, tmp_path, monkeypatch):
         good = self._stub(tmp_path, "node", "#!/bin/sh\necho v22\n")
@@ -1097,9 +1196,7 @@ class TestGetClawksisDir:
             return real_iterdir(self)
 
         monkeypatch.setattr(Path, "iterdir", boom)
-        result = get_clawk_dir(
-            "platforms/whatsapp/session", "whatsapp/session"
-        )
+        result = get_clawk_dir("platforms/whatsapp/session", "whatsapp/session")
         assert result == legacy
 
     def test_unstatable_legacy_dir_kept(self, tmp_path, monkeypatch):
@@ -1176,8 +1273,12 @@ class TestWslPathTranslation:
     """Cross-boundary path translation for a Windows-host UI + WSL backend."""
 
     def test_windows_drive_to_wsl_mount(self):
-        assert clawk_constants.windows_path_to_wsl(r"C:\Users\alex") == "/mnt/c/Users/alex"
-        assert clawk_constants.windows_path_to_wsl("C:/Users/alex") == "/mnt/c/Users/alex"
+        assert (
+            clawk_constants.windows_path_to_wsl(r"C:\Users\alex") == "/mnt/c/Users/alex"
+        )
+        assert (
+            clawk_constants.windows_path_to_wsl("C:/Users/alex") == "/mnt/c/Users/alex"
+        )
         assert clawk_constants.windows_path_to_wsl("D:\\") == "/mnt/d/"
 
     def test_windows_drive_ignores_non_drive_paths(self):
@@ -1185,11 +1286,22 @@ class TestWslPathTranslation:
         assert clawk_constants.windows_path_to_wsl("relative\\dir") is None
 
     def test_wsl_unc_to_posix_both_spellings(self):
-        assert clawk_constants.wsl_unc_path_to_posix(r"\\wsl.localhost\Ubuntu\home\alex") == "/home/alex"
-        assert clawk_constants.wsl_unc_path_to_posix(r"\\wsl$\Ubuntu\home\alex") == "/home/alex"
+        assert (
+            clawk_constants.wsl_unc_path_to_posix(r"\\wsl.localhost\Ubuntu\home\alex")
+            == "/home/alex"
+        )
+        assert (
+            clawk_constants.wsl_unc_path_to_posix(r"\\wsl$\Ubuntu\home\alex")
+            == "/home/alex"
+        )
         # Forward-slash spelling and distro root.
-        assert clawk_constants.wsl_unc_path_to_posix("//wsl.localhost/Debian/srv/app") == "/srv/app"
-        assert clawk_constants.wsl_unc_path_to_posix("\\\\wsl.localhost\\Ubuntu\\") == "/"
+        assert (
+            clawk_constants.wsl_unc_path_to_posix("//wsl.localhost/Debian/srv/app")
+            == "/srv/app"
+        )
+        assert (
+            clawk_constants.wsl_unc_path_to_posix("\\\\wsl.localhost\\Ubuntu\\") == "/"
+        )
 
     def test_wsl_unc_ignores_non_unc_paths(self):
         assert clawk_constants.wsl_unc_path_to_posix(r"C:\Users\alex") is None
@@ -1197,11 +1309,24 @@ class TestWslPathTranslation:
 
     def test_translate_is_noop_off_wsl(self, monkeypatch):
         monkeypatch.setattr(clawk_constants, "is_wsl", lambda: False)
-        assert clawk_constants.translate_cwd_for_wsl_backend(r"C:\Users\alex") == r"C:\Users\alex"
+        assert (
+            clawk_constants.translate_cwd_for_wsl_backend(r"C:\Users\alex")
+            == r"C:\Users\alex"
+        )
 
     def test_translate_maps_windows_and_unc_on_wsl(self, monkeypatch):
         monkeypatch.setattr(clawk_constants, "is_wsl", lambda: True)
-        assert clawk_constants.translate_cwd_for_wsl_backend(r"C:\Users\alex") == "/mnt/c/Users/alex"
-        assert clawk_constants.translate_cwd_for_wsl_backend(r"\\wsl.localhost\Ubuntu\home\alex") == "/home/alex"
+        assert (
+            clawk_constants.translate_cwd_for_wsl_backend(r"C:\Users\alex")
+            == "/mnt/c/Users/alex"
+        )
+        assert (
+            clawk_constants.translate_cwd_for_wsl_backend(
+                r"\\wsl.localhost\Ubuntu\home\alex"
+            )
+            == "/home/alex"
+        )
         # Already-POSIX paths pass through untouched.
-        assert clawk_constants.translate_cwd_for_wsl_backend("/home/alex") == "/home/alex"
+        assert (
+            clawk_constants.translate_cwd_for_wsl_backend("/home/alex") == "/home/alex"
+        )

@@ -5,6 +5,7 @@ summary/result/metadata, and kanban_block reason are masked before the
 values reach the DB.  Uses the same worker_env fixture pattern as
 test_kanban_tools.py.
 """
+
 from __future__ import annotations
 
 import json
@@ -16,6 +17,7 @@ import pytest
 # Shared fixture — mirrors test_kanban_tools.py
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def worker_env(monkeypatch, tmp_path):
     """Isolated CLAWK_HOME with a running task; returns the task id."""
@@ -25,9 +27,11 @@ def worker_env(monkeypatch, tmp_path):
     monkeypatch.setenv("CLAWK_PROFILE", "test-worker")
     monkeypatch.delenv("CLAWK_SESSION_ID", raising=False)
     from pathlib import Path as _Path
+
     monkeypatch.setattr(_Path, "home", lambda: tmp_path)
 
     from clawk_cli import kanban_db as kb
+
     kb._INITIALIZED_PATHS.clear()
     kb.init_db()
     conn = kb.connect()
@@ -44,10 +48,12 @@ def worker_env(monkeypatch, tmp_path):
 # Positive tests — secrets are masked
 # ---------------------------------------------------------------------------
 
+
 def test_kanban_comment_body_scrubbed_github_pat(worker_env):
     """ghp_ PAT in comment body must be masked before DB write."""
     from tools import kanban_tools as kt
     from clawk_cli import kanban_db as kb
+
     secret = "ghp_" + "A" * 40
     kt._handle_comment({"task_id": worker_env, "body": f"token: {secret}"})
     conn = kb.connect()
@@ -65,6 +71,7 @@ def test_kanban_comment_body_scrubbed_openai_key(worker_env):
     """sk- key in comment body must be masked before DB write."""
     from tools import kanban_tools as kt
     from clawk_cli import kanban_db as kb
+
     secret = "sk-" + "A" * 48
     kt._handle_comment({"task_id": worker_env, "body": f"key={secret}"})
     conn = kb.connect()
@@ -80,6 +87,7 @@ def test_kanban_complete_summary_scrubbed(worker_env):
     """sk-ant- key in summary must be masked before DB write."""
     from tools import kanban_tools as kt
     from clawk_cli import kanban_db as kb
+
     secret = "sk-ant-" + "A" * 40
     kt._handle_complete({"summary": f"done, key={secret}"})
     conn = kb.connect()
@@ -96,6 +104,7 @@ def test_kanban_complete_metadata_scrubbed(worker_env):
     """Token in metadata dict must be masked in JSON stored in DB."""
     from tools import kanban_tools as kt
     from clawk_cli import kanban_db as kb
+
     secret = "ghp_" + "B" * 40
     metadata = {"token": secret, "count": 5}
     kt._handle_complete({"summary": "done", "metadata": metadata})
@@ -114,6 +123,7 @@ def test_kanban_block_reason_scrubbed_jwt(worker_env):
     """JWT in block reason must be masked before DB write."""
     from tools import kanban_tools as kt
     from clawk_cli import kanban_db as kb
+
     # Minimal valid-ish JWT (header.payload.sig)
     jwt = (
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
@@ -136,10 +146,12 @@ def test_kanban_block_reason_scrubbed_jwt(worker_env):
 # Negative test — plain text passes through unchanged
 # ---------------------------------------------------------------------------
 
+
 def test_kanban_comment_no_secret_passthrough(worker_env):
     """Plain text without credential patterns must pass through unchanged."""
     from tools import kanban_tools as kt
     from clawk_cli import kanban_db as kb
+
     plain = "hello from the pipeline — no secrets here"
     kt._handle_comment({"task_id": worker_env, "body": plain})
     conn = kb.connect()
@@ -155,11 +167,13 @@ def test_kanban_comment_no_secret_passthrough(worker_env):
 # Negative test — force=True bypasses CLAWK_REDACT_SECRETS=false
 # ---------------------------------------------------------------------------
 
+
 def test_scrub_respects_force_flag_regardless_of_config(worker_env, monkeypatch):
     """force=True must fire even when CLAWK_REDACT_SECRETS=false is set."""
     monkeypatch.setenv("CLAWK_REDACT_SECRETS", "false")
     from tools import kanban_tools as kt
     from clawk_cli import kanban_db as kb
+
     secret = "ghp_" + "C" * 40
     kt._handle_comment({"task_id": worker_env, "body": f"token: {secret}"})
     conn = kb.connect()
@@ -175,10 +189,12 @@ def test_scrub_respects_force_flag_regardless_of_config(worker_env, monkeypatch)
 # Negative test — legacy result field is also scrubbed
 # ---------------------------------------------------------------------------
 
+
 def test_kanban_complete_result_field_scrubbed(worker_env):
     """Legacy result field must be scrubbed just like summary."""
     from tools import kanban_tools as kt
     from clawk_cli import kanban_db as kb
+
     secret = "sk-" + "D" * 48
     kt._handle_complete({"result": f"finished with key={secret}"})
     conn = kb.connect()

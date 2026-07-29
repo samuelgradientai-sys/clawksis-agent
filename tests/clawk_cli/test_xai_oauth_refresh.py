@@ -9,14 +9,13 @@ from clawk_cli import auth
 
 def _jwt_with_exp(exp: int) -> str:
     header = (
-        base64.urlsafe_b64encode(json.dumps({"alg": "none"}).encode())
+        base64
+        .urlsafe_b64encode(json.dumps({"alg": "none"}).encode())
         .decode()
         .rstrip("=")
     )
     payload = (
-        base64.urlsafe_b64encode(json.dumps({"exp": exp}).encode())
-        .decode()
-        .rstrip("=")
+        base64.urlsafe_b64encode(json.dumps({"exp": exp}).encode()).decode().rstrip("=")
     )
     return f"{header}.{payload}.sig"
 
@@ -54,4 +53,7 @@ def test_xai_proactive_refresh_skew_short_lived_token() -> None:
 def test_xai_proactive_refresh_skew_long_lived_token() -> None:
     token = _jwt_with_exp(int(time.time()) + 5 * 60 * 60)
 
-    assert auth._xai_proactive_refresh_skew_seconds(token) == auth.XAI_ACCESS_TOKEN_REFRESH_SKEW_SECONDS
+    assert (
+        auth._xai_proactive_refresh_skew_seconds(token)
+        == auth.XAI_ACCESS_TOKEN_REFRESH_SKEW_SECONDS
+    )

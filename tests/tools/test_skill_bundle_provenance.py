@@ -12,7 +12,13 @@ import pytest
 from rich.console import Console
 
 from tools.skills_guard import SCANNER_VERSION, scan_skill_cached
-from tools.skills_hub import GitHubAuth, GitHubSource, HubLockFile, SkillBundle, UrlSource
+from tools.skills_hub import (
+    GitHubAuth,
+    GitHubSource,
+    HubLockFile,
+    SkillBundle,
+    UrlSource,
+)
 
 
 SKILL_MD = """---
@@ -54,7 +60,16 @@ def served_repo(tmp_path):
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "add", "."], cwd=repo, check=True)
     subprocess.run(
-        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "fixture"],
+        [
+            "git",
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
         cwd=repo,
         check=True,
     )
@@ -71,7 +86,9 @@ def served_repo(tmp_path):
         thread.join()
 
 
-def test_url_source_fetches_only_referenced_allowed_support_directories(served_repo, monkeypatch):
+def test_url_source_fetches_only_referenced_allowed_support_directories(
+    served_repo, monkeypatch
+):
     _repo, url = served_repo
     monkeypatch.setattr("tools.skills_hub.is_safe_url", lambda _url: True)
     monkeypatch.setattr("tools.skills_hub.check_website_access", lambda _url: None)
@@ -94,7 +111,9 @@ def test_url_source_fetches_only_referenced_allowed_support_directories(served_r
 
 def test_url_source_rejects_traversal_reference(monkeypatch):
     source = UrlSource()
-    skill = "---\nname: bad\ndescription: bad\n---\n[bad](references/../../secret.txt)\n"
+    skill = (
+        "---\nname: bad\ndescription: bad\n---\n[bad](references/../../secret.txt)\n"
+    )
     monkeypatch.setattr(source, "_fetch_text", lambda _url: skill)
 
     assert source.fetch("https://example.com/bad/SKILL.md") is None
@@ -102,7 +121,11 @@ def test_url_source_rejects_traversal_reference(monkeypatch):
 
 def test_github_source_rejects_symlink_in_referenced_directory(monkeypatch):
     source = GitHubSource(GitHubAuth())
-    monkeypatch.setattr(source, "_fetch_file_content", lambda _repo, path: SKILL_MD if path.endswith("SKILL.md") else "x")
+    monkeypatch.setattr(
+        source,
+        "_fetch_file_content",
+        lambda _repo, path: SKILL_MD if path.endswith("SKILL.md") else "x",
+    )
     source._tree_cache["owner/repo"] = (
         "main",
         [
@@ -114,7 +137,9 @@ def test_github_source_rejects_symlink_in_referenced_directory(monkeypatch):
     assert source.fetch("owner/repo/skill") is None
 
 
-def test_github_source_fetches_only_exact_references_and_records_tree_revision(monkeypatch):
+def test_github_source_fetches_only_exact_references_and_records_tree_revision(
+    monkeypatch,
+):
     source = GitHubSource(GitHubAuth())
     skill = "---\nname: demo\ndescription: demo\n---\n[guide](references/guide.md)\n"
     fetched = []
@@ -134,7 +159,11 @@ def test_github_source_fetches_only_exact_references_and_records_tree_revision(m
         [
             {"path": "skill/SKILL.md", "type": "blob", "mode": "100644"},
             {"path": "skill/references/guide.md", "type": "blob", "mode": "100644"},
-            {"path": "skill/references/unreferenced.md", "type": "blob", "mode": "100644"},
+            {
+                "path": "skill/references/unreferenced.md",
+                "type": "blob",
+                "mode": "100644",
+            },
         ],
     )
     source._tree_revisions = {"owner/repo": "deadbeef"}
@@ -144,25 +173,41 @@ def test_github_source_fetches_only_exact_references_and_records_tree_revision(m
     assert bundle is not None
     assert fetched == ["skill/references/guide.md"]
     assert bundle.files["references/guide.md"] == b"guide"
-    assert bundle.metadata["source_url"] == "https://github.com/owner/repo/tree/deadbeef/skill"
+    assert (
+        bundle.metadata["source_url"]
+        == "https://github.com/owner/repo/tree/deadbeef/skill"
+    )
     assert bundle.metadata["source_revision"] == "deadbeef"
 
 
 def test_scan_cache_records_full_provenance_and_hash_change_forces_rescan(tmp_path):
     skill = tmp_path / "skill"
     skill.mkdir()
-    (skill / "SKILL.md").write_text("---\nname: skill\ndescription: test\n---\n# safe\n")
+    (skill / "SKILL.md").write_text(
+        "---\nname: skill\ndescription: test\n---\n# safe\n"
+    )
     cache = tmp_path / "scan-cache"
 
     first, first_provenance = scan_skill_cached(
-        skill, source="owner/repo/skill", source_url="https://github.com/owner/repo", cache_dir=cache
+        skill,
+        source="owner/repo/skill",
+        source_url="https://github.com/owner/repo",
+        cache_dir=cache,
     )
     second, second_provenance = scan_skill_cached(
-        skill, source="owner/repo/skill", source_url="https://github.com/owner/repo", cache_dir=cache
+        skill,
+        source="owner/repo/skill",
+        source_url="https://github.com/owner/repo",
+        cache_dir=cache,
     )
-    (skill / "SKILL.md").write_text("---\nname: skill\ndescription: changed\n---\n# safe\n")
+    (skill / "SKILL.md").write_text(
+        "---\nname: skill\ndescription: changed\n---\n# safe\n"
+    )
     third, third_provenance = scan_skill_cached(
-        skill, source="owner/repo/skill", source_url="https://github.com/owner/repo", cache_dir=cache
+        skill,
+        source="owner/repo/skill",
+        source_url="https://github.com/owner/repo",
+        cache_dir=cache,
     )
 
     assert first.verdict == second.verdict == third.verdict == "safe"
@@ -186,10 +231,16 @@ def test_scan_cache_never_reuses_provenance_across_sources(tmp_path):
     cache = tmp_path / "scan-cache"
 
     _first, first = scan_skill_cached(
-        skill, source="community", source_url="https://one.example/SKILL.md", cache_dir=cache
+        skill,
+        source="community",
+        source_url="https://one.example/SKILL.md",
+        cache_dir=cache,
     )
     _second, second = scan_skill_cached(
-        skill, source="community", source_url="https://two.example/SKILL.md", cache_dir=cache
+        skill,
+        source="community",
+        source_url="https://two.example/SKILL.md",
+        cache_dir=cache,
     )
 
     assert first["fresh"] is True
@@ -209,9 +260,15 @@ def test_lock_file_persists_scan_provenance(tmp_path):
         "fresh": True,
     }
     lock.record_install(
-        name="demo", source="url", identifier="https://example.com/SKILL.md",
-        trust_level="community", scan_verdict="safe", skill_hash="sha256:legacy",
-        install_path="demo", files=["SKILL.md"], scan_provenance=provenance,
+        name="demo",
+        source="url",
+        identifier="https://example.com/SKILL.md",
+        trust_level="community",
+        scan_verdict="safe",
+        skill_hash="sha256:legacy",
+        install_path="demo",
+        files=["SKILL.md"],
+        scan_provenance=provenance,
     )
 
     assert lock.get_installed("demo")["scan_provenance"] == provenance
@@ -237,8 +294,12 @@ def test_real_temp_repo_and_home_install_e2e(served_repo, monkeypatch, tmp_path)
     assert (installed / "scripts" / "run.py").is_file()
     assert (installed / "examples" / "endpoint-inventory.md").is_file()
     assert not (installed / "examples" / "not-installed.md").exists()
-    assert (installed / "assets" / "logo.png").read_bytes() == b"\x89PNG\r\n\x1a\n\x00\xff"
-    entry = json.loads((home / "skills" / ".hub" / "lock.json").read_text())["installed"]["demo-bundle"]
+    assert (
+        installed / "assets" / "logo.png"
+    ).read_bytes() == b"\x89PNG\r\n\x1a\n\x00\xff"
+    entry = json.loads((home / "skills" / ".hub" / "lock.json").read_text())[
+        "installed"
+    ]["demo-bundle"]
     assert entry["scan_provenance"]["source_url"] == url
     assert entry["scan_provenance"]["fresh"] is True
     assert "Scan provenance: fresh" in sink.getvalue()
@@ -250,7 +311,9 @@ def test_bundled_optional_source_still_includes_support_files(tmp_path, monkeypa
     root = tmp_path / "optional-skills"
     skill = root / "category" / "official-demo"
     (skill / "references").mkdir(parents=True)
-    (skill / "SKILL.md").write_text("---\nname: official-demo\ndescription: demo\n---\n")
+    (skill / "SKILL.md").write_text(
+        "---\nname: official-demo\ndescription: demo\n---\n"
+    )
     (skill / "references" / "all.md").write_text("all")
     source = OptionalSkillSource()
     source._optional_dir = root

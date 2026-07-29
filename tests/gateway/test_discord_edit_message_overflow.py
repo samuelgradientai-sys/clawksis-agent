@@ -330,7 +330,9 @@ class TestFinalOverflowSplits:
         # First continuation succeeds; second fails both with and without ref.
         def side(n, content, ref):
             if n == 1:
-                return SimpleNamespace(id=9001, to_reference=MagicMock(return_value=object()))
+                return SimpleNamespace(
+                    id=9001, to_reference=MagicMock(return_value=object())
+                )
             raise RuntimeError("continuation send failed")
 
         channel, sends = _wire_channel(adapter, original_msg=msg, send_side_effect=side)
@@ -341,7 +343,10 @@ class TestFinalOverflowSplits:
         # already saw) but flags partial_overflow so the consumer retries tail.
         assert result.success is True
         assert result.raw_response["partial_overflow"] is True
-        assert result.raw_response["delivered_chunks"] < result.raw_response["total_chunks"]
+        assert (
+            result.raw_response["delivered_chunks"]
+            < result.raw_response["total_chunks"]
+        )
         assert result.message_id == "9001"
 
 
@@ -386,10 +391,12 @@ class TestReactiveOverflowDetection:
         adapter = _make_adapter()
         msg = SimpleNamespace(
             id=42,
-            edit=AsyncMock(side_effect=RuntimeError(
-                "400 Bad Request (error code: 50035): In message_reference: "
-                "Cannot reply to a system message"
-            )),
+            edit=AsyncMock(
+                side_effect=RuntimeError(
+                    "400 Bad Request (error code: 50035): In message_reference: "
+                    "Cannot reply to a system message"
+                )
+            ),
         )
         channel, sends = _wire_channel(adapter, original_msg=msg)
 
@@ -407,9 +414,7 @@ class TestReactiveOverflowDetection:
 
 class TestLengthOverflowDetector:
     def test_matches_length_50035(self):
-        err = RuntimeError(
-            "error code: 50035 ... Must be 2000 or fewer in length."
-        )
+        err = RuntimeError("error code: 50035 ... Must be 2000 or fewer in length.")
         assert DiscordAdapter._is_length_overflow_error(err) is True
 
     def test_ignores_non_length_50035(self):
@@ -417,4 +422,6 @@ class TestLengthOverflowDetector:
         assert DiscordAdapter._is_length_overflow_error(err) is False
 
     def test_ignores_other_errors(self):
-        assert DiscordAdapter._is_length_overflow_error(RuntimeError("timeout")) is False
+        assert (
+            DiscordAdapter._is_length_overflow_error(RuntimeError("timeout")) is False
+        )

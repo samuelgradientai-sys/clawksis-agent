@@ -50,7 +50,9 @@ class TestFalEditPayload:
         from tools.image_generation_tool import _build_fal_edit_payload
 
         payload = _build_fal_edit_payload(
-            "fal-ai/nano-banana-pro", "make it night", ["https://x/y.png"],
+            "fal-ai/nano-banana-pro",
+            "make it night",
+            ["https://x/y.png"],
             "landscape",
         )
         assert payload["prompt"] == "make it night"
@@ -64,7 +66,10 @@ class TestFalEditPayload:
         # gpt-image-2 edit does NOT advertise image_size (auto-inferred), so
         # it must be stripped even though the text-to-image path sets it.
         payload = _build_fal_edit_payload(
-            "fal-ai/gpt-image-2", "swap bg", ["https://x/y.png"], "square",
+            "fal-ai/gpt-image-2",
+            "swap bg",
+            ["https://x/y.png"],
+            "square",
         )
         assert "image_size" not in payload
         assert payload["image_urls"] == ["https://x/y.png"]
@@ -95,7 +100,10 @@ class TestMandatoryKeysSurviveWhitelist:
         }
         monkeypatch.setitem(t.FAL_MODELS, "test/edit-model", fake)
         payload = t._build_fal_edit_payload(
-            "test/edit-model", "make it blue", ["https://x/y.png"], "square",
+            "test/edit-model",
+            "make it blue",
+            ["https://x/y.png"],
+            "square",
         )
         assert payload["prompt"] == "make it blue"
         assert payload["image_urls"] == ["https://x/y.png"]
@@ -109,7 +117,9 @@ class TestMandatoryKeysSurviveWhitelist:
             "supports": {"seed"},  # intentionally omits prompt
         }
         monkeypatch.setitem(t.FAL_MODELS, "test/text-model", fake)
-        payload = t._build_fal_payload("test/text-model", "a cat", aspect_ratio="square")
+        payload = t._build_fal_payload(
+            "test/text-model", "a cat", aspect_ratio="square"
+        )
         assert payload["prompt"] == "a cat"
 
 
@@ -117,7 +127,9 @@ class TestFalRouting:
     def _patch_submit(self, monkeypatch, image_tool, capture: dict):
         class _Handler:
             def get(self_inner):
-                return {"images": [{"url": "https://out/img.png", "width": 1, "height": 1}]}
+                return {
+                    "images": [{"url": "https://out/img.png", "width": 1, "height": 1}]
+                }
 
         def fake_submit(endpoint, arguments):
             capture["endpoint"] = endpoint
@@ -171,11 +183,18 @@ class TestFalRouting:
         raw = image_tool.image_generate_tool(
             prompt="blend",
             image_url="https://in/a.png",
-            reference_image_urls=["https://in/b.png", "https://in/c.png", "https://in/d.png"],
+            reference_image_urls=[
+                "https://in/b.png",
+                "https://in/c.png",
+                "https://in/d.png",
+            ],
         )
         out = json.loads(raw)
         assert out["success"] is True
-        assert capture["arguments"]["image_urls"] == ["https://in/a.png", "https://in/b.png"]
+        assert capture["arguments"]["image_urls"] == [
+            "https://in/a.png",
+            "https://in/b.png",
+        ]
 
     def test_text_only_model_rejects_image_url(self, cfg_home, monkeypatch):
         import tools.image_generation_tool as image_tool
@@ -185,7 +204,8 @@ class TestFalRouting:
         self._patch_submit(monkeypatch, image_tool, capture)
 
         raw = image_tool.image_generate_tool(
-            prompt="edit this", image_url="https://in/src.png",
+            prompt="edit this",
+            image_url="https://in/src.png",
         )
         out = json.loads(raw)
         assert out["success"] is False
@@ -202,12 +222,14 @@ class TestFalRouting:
         self._patch_submit(monkeypatch, image_tool, capture)
         upscale_called = {"hit": False}
         monkeypatch.setattr(
-            image_tool, "_upscale_image",
+            image_tool,
+            "_upscale_image",
             lambda *a, **k: upscale_called.__setitem__("hit", True) or None,
         )
 
         raw = image_tool.image_generate_tool(
-            prompt="tweak", image_url="https://in/src.png",
+            prompt="tweak",
+            image_url="https://in/src.png",
         )
         out = json.loads(raw)
         assert out["success"] is True
@@ -231,8 +253,15 @@ class _EditCapableProvider(ImageGenProvider):
     def capabilities(self) -> Dict[str, Any]:
         return {"modalities": ["text", "image"], "max_reference_images": 4}
 
-    def generate(self, prompt, aspect_ratio="landscape", *, image_url=None,
-                 reference_image_urls=None, **kwargs):
+    def generate(
+        self,
+        prompt,
+        aspect_ratio="landscape",
+        *,
+        image_url=None,
+        reference_image_urls=None,
+        **kwargs,
+    ):
         self.received = {
             "prompt": prompt,
             "aspect_ratio": aspect_ratio,
@@ -240,9 +269,13 @@ class _EditCapableProvider(ImageGenProvider):
             "reference_image_urls": reference_image_urls,
         }
         return {
-            "success": True, "image": "/tmp/out.png", "model": "editcap-1",
-            "prompt": prompt, "aspect_ratio": aspect_ratio,
-            "modality": "image" if image_url else "text", "provider": "editcap",
+            "success": True,
+            "image": "/tmp/out.png",
+            "model": "editcap-1",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "modality": "image" if image_url else "text",
+            "provider": "editcap",
         }
 
 
@@ -265,12 +298,19 @@ class TestPluginDispatchImageToImage:
 
         provider = _EditCapableProvider()
         reg.register_provider(provider)
-        monkeypatch.setattr(image_tool, "_read_configured_image_provider", lambda: "editcap")
-        monkeypatch.setattr(plugins_module, "_ensure_plugins_discovered", lambda *a, **k: None)
-        monkeypatch.setattr(reg, "get_provider", lambda n: provider if n == "editcap" else None)
+        monkeypatch.setattr(
+            image_tool, "_read_configured_image_provider", lambda: "editcap"
+        )
+        monkeypatch.setattr(
+            plugins_module, "_ensure_plugins_discovered", lambda *a, **k: None
+        )
+        monkeypatch.setattr(
+            reg, "get_provider", lambda n: provider if n == "editcap" else None
+        )
 
         raw = image_tool._dispatch_to_plugin_provider(
-            "make night", "square",
+            "make night",
+            "square",
             image_url="https://in/src.png",
             reference_image_urls=["https://in/ref.png"],
         )
@@ -287,29 +327,48 @@ class TestPluginDispatchImageToImage:
 
         provider = _EditCapableProvider()
         reg.register_provider(provider)
-        monkeypatch.setattr(image_tool, "_read_configured_image_provider", lambda: "editcap")
-        monkeypatch.setattr(plugins_module, "_ensure_plugins_discovered", lambda *a, **k: None)
-        monkeypatch.setattr(reg, "get_provider", lambda n: provider if n == "editcap" else None)
+        monkeypatch.setattr(
+            image_tool, "_read_configured_image_provider", lambda: "editcap"
+        )
+        monkeypatch.setattr(
+            plugins_module, "_ensure_plugins_discovered", lambda *a, **k: None
+        )
+        monkeypatch.setattr(
+            reg, "get_provider", lambda n: provider if n == "editcap" else None
+        )
 
         raw = image_tool._dispatch_to_plugin_provider("a dog", "landscape")
         out = json.loads(raw)
         assert out["success"] is True
         assert provider.received["image_url"] is None
-        assert "reference_image_urls" not in provider.received or provider.received["reference_image_urls"] is None
+        assert (
+            "reference_image_urls" not in provider.received
+            or provider.received["reference_image_urls"] is None
+        )
 
-    def test_legacy_provider_edit_request_surfaces_clear_error(self, cfg_home, monkeypatch):
+    def test_legacy_provider_edit_request_surfaces_clear_error(
+        self, cfg_home, monkeypatch
+    ):
         import tools.image_generation_tool as image_tool
         from clawk_cli import plugins as plugins_module
         from agent import image_gen_registry as reg
 
         provider = _LegacyProvider()
         reg.register_provider(provider)
-        monkeypatch.setattr(image_tool, "_read_configured_image_provider", lambda: "legacy")
-        monkeypatch.setattr(plugins_module, "_ensure_plugins_discovered", lambda *a, **k: None)
-        monkeypatch.setattr(reg, "get_provider", lambda n: provider if n == "legacy" else None)
+        monkeypatch.setattr(
+            image_tool, "_read_configured_image_provider", lambda: "legacy"
+        )
+        monkeypatch.setattr(
+            plugins_module, "_ensure_plugins_discovered", lambda *a, **k: None
+        )
+        monkeypatch.setattr(
+            reg, "get_provider", lambda n: provider if n == "legacy" else None
+        )
 
         raw = image_tool._dispatch_to_plugin_provider(
-            "edit it", "square", image_url="https://in/src.png",
+            "edit it",
+            "square",
+            image_url="https://in/src.png",
         )
         out = json.loads(raw)
         assert out["success"] is False
@@ -335,15 +394,25 @@ class _PluginBothProvider(ImageGenProvider):
     def capabilities(self) -> Dict[str, Any]:
         return {"modalities": ["text", "image"], "max_reference_images": 5}
 
-    def generate(self, prompt, aspect_ratio="landscape", *, image_url=None,
-                 reference_image_urls=None, **kwargs):
+    def generate(
+        self,
+        prompt,
+        aspect_ratio="landscape",
+        *,
+        image_url=None,
+        reference_image_urls=None,
+        **kwargs,
+    ):
         return {"success": True}
 
 
 class TestDynamicSchema:
     def _no_discovery(self, monkeypatch):
         import clawk_cli.plugins as plugins_module
-        monkeypatch.setattr(plugins_module, "_ensure_plugins_discovered", lambda *a, **k: None)
+
+        monkeypatch.setattr(
+            plugins_module, "_ensure_plugins_discovered", lambda *a, **k: None
+        )
 
     def test_fal_edit_model_advertises_both(self, cfg_home, monkeypatch):
         from tools.image_generation_tool import _build_dynamic_image_schema

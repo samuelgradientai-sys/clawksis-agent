@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 # 1. CLI _resolve_turn_agent_config includes credential_pool
 # ---------------------------------------------------------------------------
 
+
 class TestCliTurnRoutePool:
     def test_resolve_turn_includes_pool(self):
         """CLI's _resolve_turn_agent_config must pass credential_pool in runtime."""
@@ -33,6 +34,7 @@ class TestCliTurnRoutePool:
         )
 
         from cli import ClawksisCLI
+
         bound = ClawksisCLI._resolve_turn_agent_config.__get__(shell)
         route = bound("test message")
 
@@ -42,6 +44,7 @@ class TestCliTurnRoutePool:
 # ---------------------------------------------------------------------------
 # 2. Gateway _resolve_turn_agent_config includes credential_pool
 # ---------------------------------------------------------------------------
+
 
 class TestGatewayTurnRoutePool:
     def test_resolve_turn_includes_pool(self):
@@ -69,6 +72,7 @@ class TestGatewayTurnRoutePool:
 # ---------------------------------------------------------------------------
 # 3 & 4. Eager fallback deferred/fires based on credential pool
 # ---------------------------------------------------------------------------
+
 
 class TestEagerFallbackWithPool:
     """Test the eager fallback guard in run_agent.py's error handling loop."""
@@ -138,6 +142,7 @@ class TestEagerFallbackWithPool:
 # 5. Full 429 rotation cycle via _recover_with_credential_pool
 # ---------------------------------------------------------------------------
 
+
 class TestPoolRotationCycle:
     """Verify the retry-same → rotate → exhaust flow in _recover_with_credential_pool."""
 
@@ -194,7 +199,9 @@ class TestPoolRotationCycle:
         )
         assert recovered is True
         assert has_retried is False  # reset after rotation
-        pool.mark_exhausted_and_rotate.assert_called_once_with(status_code=429, error_context=None)
+        pool.mark_exhausted_and_rotate.assert_called_once_with(
+            status_code=429, error_context=None
+        )
         agent._swap_credential.assert_called_once_with(entries[1])
 
     def test_pool_exhaustion_returns_false(self):

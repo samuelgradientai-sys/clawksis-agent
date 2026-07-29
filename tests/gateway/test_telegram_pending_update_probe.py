@@ -12,6 +12,7 @@ entirely (``running=False``) with no reconnect in flight — the long-poll task
 is gone, so the gateway silently stops receiving messages while the process
 stays alive (#55769) — and feeds it into the same recovery ladder.
 """
+
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 

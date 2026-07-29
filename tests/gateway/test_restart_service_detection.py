@@ -14,6 +14,7 @@ truthy string), so the probe must treat ``"0"`` as not-under-launchd:
 routing an unsupervised interactive gateway to the service path would
 make it exit non-zero with nothing to revive it.
 """
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -57,7 +58,9 @@ async def test_restart_under_launchd_uses_service_path(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_restart_in_interactive_macos_shell_uses_detached_path(tmp_path, monkeypatch):
+async def test_restart_in_interactive_macos_shell_uses_detached_path(
+    tmp_path, monkeypatch
+):
     """XPC_SERVICE_NAME=0 (inherited by interactive macOS shells) is NOT a service."""
     runner = _make_runner_with_mock_restart(tmp_path, monkeypatch)
     monkeypatch.setenv("XPC_SERVICE_NAME", "0")

@@ -15,8 +15,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 
-
 # ── Helpers ──────────────────────────────────────────────────────────
+
 
 def _make_pool(provider, n_entries=1):
     """Create a mock credential pool with N entries."""
@@ -35,9 +35,12 @@ def _make_pool(provider, n_entries=1):
     return pool
 
 
-def _make_agent(provider="openai-codex", model="gpt-5.5",
-                base_url="https://chatgpt.com/backend-api/codex",
-                api_mode="codex_responses"):
+def _make_agent(
+    provider="openai-codex",
+    model="gpt-5.5",
+    base_url="https://chatgpt.com/backend-api/codex",
+    api_mode="codex_responses",
+):
     """Create a minimal AIAgent-like object with just the fields we need."""
     agent = MagicMock()
     agent.provider = provider
@@ -76,6 +79,7 @@ def _make_agent(provider="openai-codex", model="gpt-5.5",
 
 # ── Test: _try_activate_fallback clears mismatched pool ──────────────
 
+
 class TestFallbackCredentialIsolation:
     """Test that _try_activate_fallback isolates the credential pool."""
 
@@ -84,7 +88,9 @@ class TestFallbackCredentialIsolation:
         # We test the isolation logic directly here as a minimal guard; the
         # integration-style test below calls the real fallback activator.
 
-        agent = _make_agent(provider="openai-codex", base_url="https://chatgpt.com/backend-api/codex")
+        agent = _make_agent(
+            provider="openai-codex", base_url="https://chatgpt.com/backend-api/codex"
+        )
         agent._fallback_activated = True
         agent._credential_pool = _make_pool("openai-codex")
 
@@ -105,7 +111,9 @@ class TestFallbackCredentialIsolation:
 
     def test_fallback_keeps_matching_pool(self):
         """When fallback provider matches pool provider, pool is preserved."""
-        agent = _make_agent(provider="openrouter", base_url="https://openrouter.ai/api/v1")
+        agent = _make_agent(
+            provider="openrouter", base_url="https://openrouter.ai/api/v1"
+        )
         agent._credential_pool = _make_pool("openrouter")
 
         fb_provider = "openrouter"
@@ -148,13 +156,16 @@ class TestFallbackCredentialIsolation:
         )
         fallback_pool = _make_pool("openai-codex")
 
-        with patch(
-            "agent.auxiliary_client.resolve_provider_client",
-            return_value=(fallback_client, "gpt-5.5"),
-        ) as resolve_provider_client, patch(
-            "agent.credential_pool.load_pool",
-            return_value=fallback_pool,
-        ) as load_pool:
+        with (
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(fallback_client, "gpt-5.5"),
+            ) as resolve_provider_client,
+            patch(
+                "agent.credential_pool.load_pool",
+                return_value=fallback_pool,
+            ) as load_pool,
+        ):
             assert try_activate_fallback(agent) is True
 
         resolve_provider_client.assert_called_once()
@@ -170,6 +181,7 @@ class TestFallbackCredentialIsolation:
 
 # ── Test: _recover_with_credential_pool rejects mismatched pool ──────
 
+
 class TestRecoveryProviderGuard:
     """Test that _recover_with_credential_pool skips mismatched pools."""
 
@@ -184,8 +196,9 @@ class TestRecoveryProviderGuard:
         pool_provider = getattr(agent._credential_pool, "provider", "") or ""
 
         # The guard logic:
-        should_skip = (current_provider and pool_provider and
-                       current_provider != pool_provider)
+        should_skip = (
+            current_provider and pool_provider and current_provider != pool_provider
+        )
 
         assert should_skip is True, (
             f"Provider mismatch: agent={current_provider}, pool={pool_provider} — should skip"
@@ -199,12 +212,11 @@ class TestRecoveryProviderGuard:
         current_provider = (getattr(agent, "provider", "") or "").strip().lower()
         pool_provider = getattr(agent._credential_pool, "provider", "") or ""
 
-        should_skip = (current_provider and pool_provider and
-                       current_provider != pool_provider)
-
-        assert should_skip is False, (
-            "Same provider — should allow recovery"
+        should_skip = (
+            current_provider and pool_provider and current_provider != pool_provider
         )
+
+        assert should_skip is False, "Same provider — should allow recovery"
 
     def test_recovery_429_from_zai_does_not_exhaust_codex_pool(self):
         """Regression test for GH #33088: zai 429 should NOT exhaust
@@ -225,6 +237,7 @@ class TestRecoveryProviderGuard:
 
 # ── Test: base_url not overwritten after fallback ────────────────────
 
+
 class TestBaseUrlLeak:
     """Regression tests for GH #33163: base_url leaks from primary."""
 
@@ -232,8 +245,7 @@ class TestBaseUrlLeak:
         """After fallback activation clears the pool, _client_kwargs should
         still have the fallback base_url, not the primary's."""
         agent = _make_agent(
-            provider="openai-codex",
-            base_url="https://chatgpt.com/backend-api/codex"
+            provider="openai-codex", base_url="https://chatgpt.com/backend-api/codex"
         )
 
         # Simulate what _try_activate_fallback does:
@@ -255,7 +267,9 @@ class TestBaseUrlLeak:
     def test_swap_credential_does_not_restore_primary_url(self):
         """_swap_credential should not be called when pool is None,
         preventing it from overwriting base_url back to primary's."""
-        agent = _make_agent(provider="openrouter", base_url="https://openrouter.ai/api/v1/")
+        agent = _make_agent(
+            provider="openrouter", base_url="https://openrouter.ai/api/v1/"
+        )
         agent._credential_pool = None  # Cleared by fallback isolation
 
         # If pool is None, _recover_with_credential_pool returns early

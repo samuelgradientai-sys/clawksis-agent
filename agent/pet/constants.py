@@ -46,6 +46,7 @@ def clamp_scale(scale: float) -> float:
     """Clamp *scale* to ``[MIN_SCALE, MAX_SCALE]`` (the single validation point)."""
     return max(MIN_SCALE, min(MAX_SCALE, scale))
 
+
 # Terminal cells one native frame spans at ``scale == 1.0``.  A cell is ~8px
 # wide, a frame is ``FRAME_W`` (192) px → 24 cells.  This mirrors the kitty
 # graphics placement (``scaled_px // 8``) so at full scale every renderer agrees.
@@ -72,7 +73,11 @@ def cols_for_scale(scale: float) -> int:
 
 def resolve_cols(scale: float, unicode_cols: int = 0) -> int:
     """Resolve terminal width: explicit *unicode_cols* override, else from *scale*."""
-    return int(unicode_cols) if unicode_cols and int(unicode_cols) > 0 else cols_for_scale(scale)
+    return (
+        int(unicode_cols)
+        if unicode_cols and int(unicode_cols) > 0
+        else cols_for_scale(scale)
+    )
 
 
 class PetState(str, Enum):

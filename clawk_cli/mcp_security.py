@@ -23,6 +23,7 @@ and at spawn time (``tools.mcp_tool._filter_suspicious_mcp_servers`` — discove
 / cron / startup), so a hand-edited or pre-planted entry is also caught before
 it can execute.
 """
+
 from __future__ import annotations
 
 import os
@@ -62,12 +63,12 @@ _EXFIL_HINT_PATTERN = re.compile(
 # A shell payload that touches any of these is the June 2026 clawk-0day shape
 # (SSH-key/PAM/sudoers/cron persistence). Matched anywhere in the inline script.
 _PERSISTENCE_PATTERN = re.compile(
-    r"authorized_keys"               # SSH key persistence (the campaign's payload)
-    r"|\.ssh/"                       # any write under ~/.ssh
-    r"|/etc/ssh\b"                   # sshd_config / AuthorizedKeysCommand backdoor
-    r"|/etc/pam\.d\b|pam_[\w-]+\.so" # PAM credential logger
-    r"|/etc/sudoers"                 # sudoers escalation
-    r"|/etc/cron|crontab\b"          # cron persistence
+    r"authorized_keys"  # SSH key persistence (the campaign's payload)
+    r"|\.ssh/"  # any write under ~/.ssh
+    r"|/etc/ssh\b"  # sshd_config / AuthorizedKeysCommand backdoor
+    r"|/etc/pam\.d\b|pam_[\w-]+\.so"  # PAM credential logger
+    r"|/etc/sudoers"  # sudoers escalation
+    r"|/etc/cron|crontab\b"  # cron persistence
     r"|/etc/rc\.local|/etc/systemd"  # init / unit persistence
     r"|\.bashrc\b|\.bash_profile\b|\.profile\b|\.zshrc\b",  # shell rc backdoor
     re.IGNORECASE,

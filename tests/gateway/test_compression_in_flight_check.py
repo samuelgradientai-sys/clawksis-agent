@@ -1,4 +1,5 @@
 """#5 regression: _session_has_compression_in_flight must offload both blocking sources to thread pool."""
+
 import inspect
 import threading
 from unittest.mock import MagicMock
@@ -8,6 +9,7 @@ import pytest
 
 def _make_runner(holder_value=None, record_thread=False, thread_sink=None):
     from gateway.run import GatewayRunner
+
     runner = GatewayRunner.__new__(GatewayRunner)
 
     store = MagicMock()
@@ -19,9 +21,11 @@ def _make_runner(holder_value=None, record_thread=False, thread_sink=None):
 
     raw_db = MagicMock()
     if record_thread and thread_sink is not None:
+
         def _holder(sid):
             thread_sink["thread"] = threading.get_ident()
             return holder_value
+
         raw_db.get_compression_lock_holder = _holder
     else:
         raw_db.get_compression_lock_holder = MagicMock(return_value=holder_value)
@@ -34,6 +38,7 @@ def _make_runner(holder_value=None, record_thread=False, thread_sink=None):
 
 def test_method_is_coroutine():
     from gateway.run import GatewayRunner
+
     assert inspect.iscoroutinefunction(
         GatewayRunner._session_has_compression_in_flight
     ), "#5: method must be async, blocking calls offloaded"
@@ -54,6 +59,7 @@ async def test_returns_false_when_no_lock():
 @pytest.mark.asyncio
 async def test_returns_false_when_no_session_store():
     from gateway.run import GatewayRunner
+
     runner = GatewayRunner.__new__(GatewayRunner)
     runner.session_store = None
     runner._session_db = MagicMock()

@@ -41,7 +41,9 @@ class SecretSourceConformance:
 
     @pytest.fixture
     def source(self) -> SecretSource:  # pragma: no cover — must override
-        raise NotImplementedError("conformance subclasses must provide a source fixture")
+        raise NotImplementedError(
+            "conformance subclasses must provide a source fixture"
+        )
 
     @pytest.fixture
     def minimal_cfg(self) -> dict:
@@ -68,15 +70,21 @@ class SecretSourceConformance:
 
     def test_fetch_never_raises_on_malformed_config(self, source, tmp_path):
         """Every degenerate config shape must produce a FetchResult, not a raise."""
-        for cfg in ({}, {"enabled": True}, {"enabled": True, "env": "not-a-dict"},
-                    {"enabled": True, "cache_ttl_seconds": "bogus"}, None):
+        for cfg in (
+            {},
+            {"enabled": True},
+            {"enabled": True, "env": "not-a-dict"},
+            {"enabled": True, "cache_ttl_seconds": "bogus"},
+            None,
+        ):
             result = source.fetch(cfg if isinstance(cfg, dict) else {}, tmp_path)
             assert isinstance(result, FetchResult), (
                 f"fetch() returned {type(result).__name__} for cfg={cfg!r}"
             )
 
-    def test_fetch_unconfigured_reports_error_not_secrets(self, source, tmp_path,
-                                                          minimal_cfg, monkeypatch):
+    def test_fetch_unconfigured_reports_error_not_secrets(
+        self, source, tmp_path, minimal_cfg, monkeypatch
+    ):
         """enabled=true with nothing else set must fail cleanly with a kind."""
         result = source.fetch(minimal_cfg, tmp_path)
         assert isinstance(result, FetchResult)
@@ -103,8 +111,9 @@ class SecretSourceConformance:
 
     # -- orchestrator compatibility ------------------------------------------
 
-    def test_registers_and_applies_via_orchestrator(self, source, tmp_path,
-                                                    monkeypatch):
+    def test_registers_and_applies_via_orchestrator(
+        self, source, tmp_path, monkeypatch
+    ):
         """The source must survive a full apply_all() pass without breaking it."""
         _reset_registry_for_tests()
         # Prevent the bundled sources from interfering.
@@ -114,9 +123,7 @@ class SecretSourceConformance:
         try:
             assert register_source(source), "register_source() rejected the source"
             env: dict = {}
-            report = apply_all(
-                {source.name: {"enabled": True}}, tmp_path, environ=env
-            )
+            report = apply_all({source.name: {"enabled": True}}, tmp_path, environ=env)
             names = [sr.name for sr in report.sources]
             assert source.name in names
         finally:

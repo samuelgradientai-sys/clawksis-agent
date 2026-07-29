@@ -74,19 +74,20 @@ def test_main_checkout_groups_by_recorded_branch_with_stable_lane_ids():
     assert project["isAuto"] is True
     assert _lane_ids(project) == ["/repo::branch::main", "/repo::branch::feature"]
     # Trunk sorts ahead of the feature branch; both live in the main checkout.
-    assert [g["label"] for repo in project["repos"] for g in repo["groups"]] == ["main", "feature"]
+    assert [g["label"] for repo in project["repos"] for g in repo["groups"]] == [
+        "main",
+        "feature",
+    ]
     assert all(g["isMain"] for repo in project["repos"] for g in repo["groups"])
 
 
 def test_linked_worktrees_fold_under_their_common_repo_root():
     # The linked worktree's own toplevel is /elsewhere/wt, but its COMMON root is
     # /repo, so it must group under /repo (not as a separate project).
-    resolve = _resolver(
-        {
-            "/repo": ("/repo", "/repo"),
-            "/elsewhere/wt": ("/repo", "/elsewhere/wt"),
-        }
-    )
+    resolve = _resolver({
+        "/repo": ("/repo", "/repo"),
+        "/elsewhere/wt": ("/repo", "/elsewhere/wt"),
+    })
     sessions = [
         _session("/repo", branch="main"),
         _session("/elsewhere/wt", branch="feature"),
@@ -100,19 +101,19 @@ def test_linked_worktrees_fold_under_their_common_repo_root():
     lane_ids = _lane_ids(project)
     assert "/repo::branch::main" in lane_ids
     # Linked worktree lane is keyed by the worktree path and is not main.
-    linked = next(g for repo in project["repos"] for g in repo["groups"] if not g["isMain"])
+    linked = next(
+        g for repo in project["repos"] for g in repo["groups"] if not g["isMain"]
+    )
     assert linked["id"] == "/elsewhere/wt"
     assert linked["path"] == "/elsewhere/wt"
 
 
 def test_kanban_task_worktrees_collapse_into_one_bucket():
-    resolve = _resolver(
-        {
-            "/repo": ("/repo", "/repo"),
-            "/repo/.worktrees/t_aaaaaaaa": ("/repo", "/repo/.worktrees/t_aaaaaaaa"),
-            "/repo/.worktrees/t_bbbbbbbb": ("/repo", "/repo/.worktrees/t_bbbbbbbb"),
-        }
-    )
+    resolve = _resolver({
+        "/repo": ("/repo", "/repo"),
+        "/repo/.worktrees/t_aaaaaaaa": ("/repo", "/repo/.worktrees/t_aaaaaaaa"),
+        "/repo/.worktrees/t_bbbbbbbb": ("/repo", "/repo/.worktrees/t_bbbbbbbb"),
+    })
     sessions = [
         _session("/repo", branch="main"),
         _session("/repo/.worktrees/t_aaaaaaaa"),
@@ -121,7 +122,9 @@ def test_kanban_task_worktrees_collapse_into_one_bucket():
 
     tree = pt.build_tree([], sessions, [], resolve, hydrate=True)
     project = tree["projects"][0]
-    kanban = [g for repo in project["repos"] for g in repo["groups"] if g.get("isKanban")]
+    kanban = [
+        g for repo in project["repos"] for g in repo["groups"] if g.get("isKanban")
+    ]
 
     assert len(kanban) == 1
     assert kanban[0]["id"] == "/repo::kanban"
@@ -134,12 +137,10 @@ def test_kanban_task_worktrees_collapse_into_one_bucket():
 def test_user_worktree_under_dotworktrees_is_its_own_lane_not_kanban():
     # A user "New worktree" lives at <repo>/.worktrees/<slug> (no t_ id), so it
     # must NOT collapse into the kanban bucket — it gets its own linked lane.
-    resolve = _resolver(
-        {
-            "/repo": ("/repo", "/repo"),
-            "/repo/.worktrees/test-gui-stuff": ("/repo", "/repo/.worktrees/test-gui-stuff"),
-        }
-    )
+    resolve = _resolver({
+        "/repo": ("/repo", "/repo"),
+        "/repo/.worktrees/test-gui-stuff": ("/repo", "/repo/.worktrees/test-gui-stuff"),
+    })
     sessions = [
         _session("/repo", branch="main"),
         _session("/repo/.worktrees/test-gui-stuff", branch="clawk/test-gui-stuff"),
@@ -162,7 +163,9 @@ def test_unrecorded_and_recorded_main_share_one_lane():
 
     tree = pt.build_tree([], sessions, [], resolve, hydrate=True)
     project = tree["projects"][0]
-    main_lanes = [g for repo in project["repos"] for g in repo["groups"] if g["label"] == "main"]
+    main_lanes = [
+        g for repo in project["repos"] for g in repo["groups"] if g["label"] == "main"
+    ]
 
     assert len(main_lanes) == 1
     assert main_lanes[0]["id"] == "/repo::branch::main"
@@ -230,7 +233,9 @@ def test_windows_path_identity_preserves_explicit_project_priority():
     explicit = _project("p_notes", "Notes", ["C:/Work/Notes"])
     session = _session("c:\\work\\notes\\")
 
-    tree = pt.build_tree([explicit], [session], [], resolve=lambda _cwd: None, hydrate=True)
+    tree = pt.build_tree(
+        [explicit], [session], [], resolve=lambda _cwd: None, hydrate=True
+    )
 
     assert [p["id"] for p in tree["projects"]] == ["p_notes"]
     assert tree["projects"][0]["sessionCount"] == 1
@@ -255,7 +260,9 @@ def test_wsl_localhost_path_cannot_bypass_explicit_project():
     explicit = _project("p_proj", "Proj", [r"\wsl.localhost\Ubuntu\home\alice\proj"])
     session = _session("//wsl.localhost/Ubuntu/home/alice/PROJ/")
 
-    tree = pt.build_tree([explicit], [session], [], resolve=lambda _cwd: None, hydrate=True)
+    tree = pt.build_tree(
+        [explicit], [session], [], resolve=lambda _cwd: None, hydrate=True
+    )
 
     assert [p["id"] for p in tree["projects"]] == ["p_proj"]
     assert tree["projects"][0]["sessionCount"] == 1
@@ -266,7 +273,9 @@ def test_posix_path_identity_remains_case_sensitive():
     explicit = _project("p_notes", "Notes", ["/Work/Notes"])
     session = _session("/work/notes")
 
-    tree = pt.build_tree([explicit], [session], [], resolve=lambda _cwd: None, hydrate=True)
+    tree = pt.build_tree(
+        [explicit], [session], [], resolve=lambda _cwd: None, hydrate=True
+    )
 
     assert [(p["id"], p["sessionCount"]) for p in tree["projects"]] == [
         ("p_notes", 0),
@@ -276,12 +285,10 @@ def test_posix_path_identity_remains_case_sensitive():
 
 def test_explicit_project_claims_sessions_and_beats_auto():
     project = _project("p_app", "App", ["/www/app"])
-    resolve = _resolver(
-        {
-            "/www/app": ("/www/app", "/www/app"),
-            "/www/other": ("/www/other", "/www/other"),
-        }
-    )
+    resolve = _resolver({
+        "/www/app": ("/www/app", "/www/app"),
+        "/www/other": ("/www/other", "/www/other"),
+    })
     sessions = [
         _session("/www/app", branch="main"),
         _session("/www/other", branch="main"),
@@ -298,12 +305,10 @@ def test_explicit_project_claims_sessions_and_beats_auto():
 
 def test_scoped_session_ids_is_union_of_placed_sessions():
     project = _project("p_app", "App", ["/www/app"])
-    resolve = _resolver(
-        {
-            "/www/app": ("/www/app", "/www/app"),
-            "/www/repo": ("/www/repo", "/www/repo"),
-        }
-    )
+    resolve = _resolver({
+        "/www/app": ("/www/app", "/www/app"),
+        "/www/repo": ("/www/repo", "/www/repo"),
+    })
     owned = _session("/www/app", branch="main")
     auto = _session("/www/repo", branch="main")
     homeless = _session(None)  # no cwd -> belongs to no project
@@ -329,7 +334,9 @@ def test_overview_drops_session_rows_but_keeps_counts_and_previews():
 
 
 def test_discovered_repo_with_no_sessions_becomes_zero_session_project():
-    discovered = [{"root": "/www/fresh", "label": "fresh", "sessions": 0, "last_active": 5}]
+    discovered = [
+        {"root": "/www/fresh", "label": "fresh", "sessions": 0, "last_active": 5}
+    ]
 
     tree = pt.build_tree([], [], discovered, resolve=None, hydrate=False)
 
@@ -381,12 +388,10 @@ def test_nested_project_folders_pick_the_deepest_match():
     # project folder, not just any ancestor.
     outer = _project("p_outer", "Outer", ["/work"])
     inner = _project("p_inner", "Inner", ["/work/app"])
-    resolve = _resolver(
-        {
-            "/work/app": ("/work/app", "/work/app"),
-            "/work/other": ("/work/other", "/work/other"),
-        }
-    )
+    resolve = _resolver({
+        "/work/app": ("/work/app", "/work/app"),
+        "/work/other": ("/work/other", "/work/other"),
+    })
 
     tree = pt.build_tree(
         [outer, inner],
@@ -405,17 +410,17 @@ def test_junk_root_never_becomes_an_auto_project():
     # A session whose git root is CLAWK_HOME (config/state) must not spawn a
     # phantom project; it falls through to flat Recents (unscoped). A real repo
     # alongside it still groups normally.
-    resolve = _resolver(
-        {
-            "/home/me/.clawk": ("/home/me/.clawk", "/home/me/.clawk"),
-            "/www/app": ("/www/app", "/www/app"),
-        }
-    )
+    resolve = _resolver({
+        "/home/me/.clawk": ("/home/me/.clawk", "/home/me/.clawk"),
+        "/www/app": ("/www/app", "/www/app"),
+    })
     junk = _session("/home/me/.clawk", branch="main")
     real = _session("/www/app", branch="main")
     is_junk = lambda root: root == "/home/me/.clawk"
 
-    tree = pt.build_tree([], [junk, real], [], resolve, hydrate=True, is_junk_root=is_junk)
+    tree = pt.build_tree(
+        [], [junk, real], [], resolve, hydrate=True, is_junk_root=is_junk
+    )
 
     ids = {p["id"] for p in tree["projects"]}
     assert ids == {"/www/app"}
@@ -424,9 +429,13 @@ def test_junk_root_never_becomes_an_auto_project():
 
 
 def test_junk_root_is_dropped_from_the_discovered_tier():
-    discovered = [{"root": "/home/me/.clawk", "label": ".clawk", "sessions": 0, "last_active": 9}]
+    discovered = [
+        {"root": "/home/me/.clawk", "label": ".clawk", "sessions": 0, "last_active": 9}
+    ]
 
-    tree = pt.build_tree([], [], discovered, resolve=None, is_junk_root=lambda r: r == "/home/me/.clawk")
+    tree = pt.build_tree(
+        [], [], discovered, resolve=None, is_junk_root=lambda r: r == "/home/me/.clawk"
+    )
 
     assert tree["projects"] == []
 
@@ -467,12 +476,10 @@ def test_broad_default_non_git_cwd_stays_unscoped():
 
 
 def test_colliding_repo_basenames_disambiguate_labels():
-    resolve = _resolver(
-        {
-            "/x/proj": ("/x/proj", "/x/proj"),
-            "/y/proj": ("/y/proj", "/y/proj"),
-        }
-    )
+    resolve = _resolver({
+        "/x/proj": ("/x/proj", "/x/proj"),
+        "/y/proj": ("/y/proj", "/y/proj"),
+    })
     sessions = [_session("/x/proj", branch="main"), _session("/y/proj", branch="main")]
 
     tree = pt.build_tree([], sessions, [], resolve, hydrate=True)

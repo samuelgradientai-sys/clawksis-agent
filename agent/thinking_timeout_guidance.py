@@ -102,7 +102,9 @@ def is_thinking_timeout(classified: object, model: str, error_msg: str) -> bool:
 
 
 def build_thinking_timeout_guidance(
-    provider: str, model: str, model_label: Optional[str] = None,
+    provider: str,
+    model: str,
+    model_label: Optional[str] = None,
 ) -> str:
     """Return the user-facing guidance string appended to ``_final_response``.
 

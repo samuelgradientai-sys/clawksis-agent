@@ -149,7 +149,9 @@ class TestRaftWakeHttp:
         assert body["runtimeSession"] == "default"
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("schema", [RAFT_CHANNEL_SCHEMA, FUTURE_RAFT_CHANNEL_SCHEMA])
+    @pytest.mark.parametrize(
+        "schema", [RAFT_CHANNEL_SCHEMA, FUTURE_RAFT_CHANNEL_SCHEMA]
+    )
     async def test_accepts_content_free_wake_as_internal_event(self, schema):
         adapter = _make_adapter()
         adapter.set_message_handler(AsyncMock())
@@ -228,7 +230,10 @@ class TestRaftActivityHttp:
 
             unknown = await client.post(
                 "/activity",
-                json={**_activity_event("evt-1"), "transcript_path": "/tmp/session.jsonl"},
+                json={
+                    **_activity_event("evt-1"),
+                    "transcript_path": "/tmp/session.jsonl",
+                },
                 headers={BRIDGE_TOKEN_HEADER: "bridge-secret"},
             )
             assert unknown.status == 400
@@ -361,8 +366,15 @@ class TestRaftActivityHttp:
             _on_session_start(platform="raft", session_id="session-1", turn_id="turn-1")
 
             assert is_env_passthrough("RAFT_PROFILE")
-            assert _scrub_child_env({"RAFT_PROFILE": "dev"}, is_windows=False)["RAFT_PROFILE"] == "dev"
-            with patch.dict(os.environ, {"PATH": "/usr/bin", "RAFT_PROFILE": "dev"}, clear=True):
+            assert (
+                _scrub_child_env({"RAFT_PROFILE": "dev"}, is_windows=False)[
+                    "RAFT_PROFILE"
+                ]
+                == "dev"
+            )
+            with patch.dict(
+                os.environ, {"PATH": "/usr/bin", "RAFT_PROFILE": "dev"}, clear=True
+            ):
                 assert _make_run_env({})["RAFT_PROFILE"] == "dev"
         finally:
             clear_env_passthrough()
@@ -487,8 +499,13 @@ class TestRaftConfig:
         assert _env_enablement() is None
 
     def test_is_connected_checks_bridge_token_or_enabled(self):
-        assert _is_connected(PlatformConfig(enabled=True, extra={"bridge_token": "tok"})) is True
-        assert _is_connected(PlatformConfig(enabled=True, extra={"enabled": True})) is True
+        assert (
+            _is_connected(PlatformConfig(enabled=True, extra={"bridge_token": "tok"}))
+            is True
+        )
+        assert (
+            _is_connected(PlatformConfig(enabled=True, extra={"enabled": True})) is True
+        )
         assert _is_connected(PlatformConfig(enabled=True, extra={})) is False
 
     def test_interactive_setup_saves_raft_profile(self, monkeypatch, tmp_path, capsys):
@@ -498,7 +515,9 @@ class TestRaftConfig:
 
         interactive_setup()
 
-        assert (tmp_path / ".env").read_text(encoding="utf-8") == "RAFT_PROFILE=dev-profile\n"
+        assert (tmp_path / ".env").read_text(
+            encoding="utf-8"
+        ) == "RAFT_PROFILE=dev-profile\n"
         assert os.environ["RAFT_PROFILE"] == "dev-profile"
         out = capsys.readouterr().out
         assert "Raft configuration saved" in out

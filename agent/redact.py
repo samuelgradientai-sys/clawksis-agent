@@ -32,8 +32,8 @@ _SENSITIVE_QUERY_PARAMS = frozenset({
     "session",
     "secret",
     "key",
-    "code",           # OAuth authorization codes
-    "signature",      # pre-signed URL signatures
+    "code",  # OAuth authorization codes
+    "signature",  # pre-signed URL signatures
     "x-amz-signature",
 })
 
@@ -66,51 +66,56 @@ _SENSITIVE_BODY_KEYS = frozenset({
 # cli.py) or `CLAWK_REDACT_SECRETS=false` in ~/.clawksis/.env. An opt-out
 # warning is logged at gateway and CLI startup so operators see the
 # downgrade — see `_log_redaction_status()` in gateway/run.py and cli.py.
-_REDACT_ENABLED = os.getenv("CLAWK_REDACT_SECRETS", "true").lower() in {"1", "true", "yes", "on"}
+_REDACT_ENABLED = os.getenv("CLAWK_REDACT_SECRETS", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 # Known API key prefixes -- match the prefix + contiguous token chars
 _PREFIX_PATTERNS = [
-    r"sk-[A-Za-z0-9_-]{10,}",           # OpenAI / OpenRouter / Anthropic (sk-ant-*)
-    r"ghp_[A-Za-z0-9]{10,}",            # GitHub PAT (classic)
-    r"github_pat_[A-Za-z0-9_]{10,}",    # GitHub PAT (fine-grained)
-    r"gho_[A-Za-z0-9]{10,}",            # GitHub OAuth access token
-    r"ghu_[A-Za-z0-9]{10,}",            # GitHub user-to-server token
-    r"ghs_[A-Za-z0-9]{10,}",            # GitHub server-to-server token
-    r"ghr_[A-Za-z0-9]{10,}",            # GitHub refresh token
-    r"xapp-\d+-[A-Za-z0-9-]{10,}",      # Slack app-Level token
-    r"xox[baprs]-[A-Za-z0-9-]{10,}",    # Slack bot/app/user tokens
-    r"AIza[A-Za-z0-9_-]{30,}",          # Google API keys
-    r"pplx-[A-Za-z0-9]{10,}",           # Perplexity
-    r"fal_[A-Za-z0-9_-]{10,}",          # Fal.ai
-    r"fc-[A-Za-z0-9]{10,}",             # Firecrawl
-    r"bb_live_[A-Za-z0-9_-]{10,}",      # BrowserBase
-    r"gAAAA[A-Za-z0-9_=-]{20,}",        # Codex encrypted tokens
-    r"AKIA[A-Z0-9]{16}",                # AWS Access Key ID
-    r"sk_live_[A-Za-z0-9]{10,}",        # Stripe secret key (live)
-    r"sk_test_[A-Za-z0-9]{10,}",        # Stripe secret key (test)
-    r"rk_live_[A-Za-z0-9]{10,}",        # Stripe restricted key
-    r"SG\.[A-Za-z0-9_-]{10,}",          # SendGrid API key
-    r"hf_[A-Za-z0-9]{10,}",             # HuggingFace token
-    r"r8_[A-Za-z0-9]{10,}",             # Replicate API token
-    r"npm_[A-Za-z0-9]{10,}",            # npm access token
-    r"pypi-[A-Za-z0-9_-]{10,}",         # PyPI API token
-    r"dop_v1_[A-Za-z0-9]{10,}",         # DigitalOcean PAT
-    r"doo_v1_[A-Za-z0-9]{10,}",         # DigitalOcean OAuth
-    r"am_[A-Za-z0-9_-]{10,}",           # AgentMail API key
-    r"sk_[A-Za-z0-9_]{10,}",            # ElevenLabs TTS key (sk_ underscore, not sk- dash)
-    r"tvly-[A-Za-z0-9]{10,}",           # Tavily search API key
-    r"exa_[A-Za-z0-9]{10,}",            # Exa search API key
-    r"gsk_[A-Za-z0-9]{10,}",            # Groq Cloud API key
-    r"syt_[A-Za-z0-9]{10,}",            # Matrix access token
-    r"retaindb_[A-Za-z0-9]{10,}",       # RetainDB API key
-    r"hsk-[A-Za-z0-9]{10,}",            # Hindsight API key
-    r"mem0_[A-Za-z0-9]{10,}",           # Mem0 Platform API key
-    r"brv_[A-Za-z0-9]{10,}",            # ByteRover API key
-    r"xai-[A-Za-z0-9]{30,}",            # xAI (Grok) API key
-    r"ntn_[A-Za-z0-9]{10,}",            # Notion internal integration token
-    r"fw-[A-Za-z0-9]{30,}",             # Fireworks AI API key
-    r"fw_[A-Za-z0-9]{30,}",             # Fireworks AI API key
-    r"fpk_[A-Za-z0-9]{30,}",            # Fireworks AI project key
+    r"sk-[A-Za-z0-9_-]{10,}",  # OpenAI / OpenRouter / Anthropic (sk-ant-*)
+    r"ghp_[A-Za-z0-9]{10,}",  # GitHub PAT (classic)
+    r"github_pat_[A-Za-z0-9_]{10,}",  # GitHub PAT (fine-grained)
+    r"gho_[A-Za-z0-9]{10,}",  # GitHub OAuth access token
+    r"ghu_[A-Za-z0-9]{10,}",  # GitHub user-to-server token
+    r"ghs_[A-Za-z0-9]{10,}",  # GitHub server-to-server token
+    r"ghr_[A-Za-z0-9]{10,}",  # GitHub refresh token
+    r"xapp-\d+-[A-Za-z0-9-]{10,}",  # Slack app-Level token
+    r"xox[baprs]-[A-Za-z0-9-]{10,}",  # Slack bot/app/user tokens
+    r"AIza[A-Za-z0-9_-]{30,}",  # Google API keys
+    r"pplx-[A-Za-z0-9]{10,}",  # Perplexity
+    r"fal_[A-Za-z0-9_-]{10,}",  # Fal.ai
+    r"fc-[A-Za-z0-9]{10,}",  # Firecrawl
+    r"bb_live_[A-Za-z0-9_-]{10,}",  # BrowserBase
+    r"gAAAA[A-Za-z0-9_=-]{20,}",  # Codex encrypted tokens
+    r"AKIA[A-Z0-9]{16}",  # AWS Access Key ID
+    r"sk_live_[A-Za-z0-9]{10,}",  # Stripe secret key (live)
+    r"sk_test_[A-Za-z0-9]{10,}",  # Stripe secret key (test)
+    r"rk_live_[A-Za-z0-9]{10,}",  # Stripe restricted key
+    r"SG\.[A-Za-z0-9_-]{10,}",  # SendGrid API key
+    r"hf_[A-Za-z0-9]{10,}",  # HuggingFace token
+    r"r8_[A-Za-z0-9]{10,}",  # Replicate API token
+    r"npm_[A-Za-z0-9]{10,}",  # npm access token
+    r"pypi-[A-Za-z0-9_-]{10,}",  # PyPI API token
+    r"dop_v1_[A-Za-z0-9]{10,}",  # DigitalOcean PAT
+    r"doo_v1_[A-Za-z0-9]{10,}",  # DigitalOcean OAuth
+    r"am_[A-Za-z0-9_-]{10,}",  # AgentMail API key
+    r"sk_[A-Za-z0-9_]{10,}",  # ElevenLabs TTS key (sk_ underscore, not sk- dash)
+    r"tvly-[A-Za-z0-9]{10,}",  # Tavily search API key
+    r"exa_[A-Za-z0-9]{10,}",  # Exa search API key
+    r"gsk_[A-Za-z0-9]{10,}",  # Groq Cloud API key
+    r"syt_[A-Za-z0-9]{10,}",  # Matrix access token
+    r"retaindb_[A-Za-z0-9]{10,}",  # RetainDB API key
+    r"hsk-[A-Za-z0-9]{10,}",  # Hindsight API key
+    r"mem0_[A-Za-z0-9]{10,}",  # Mem0 Platform API key
+    r"brv_[A-Za-z0-9]{10,}",  # ByteRover API key
+    r"xai-[A-Za-z0-9]{30,}",  # xAI (Grok) API key
+    r"ntn_[A-Za-z0-9]{10,}",  # Notion internal integration token
+    r"fw-[A-Za-z0-9]{30,}",  # Fireworks AI API key
+    r"fw_[A-Za-z0-9]{30,}",  # Fireworks AI API key
+    r"fpk_[A-Za-z0-9]{30,}",  # Fireworks AI project key
 ]
 
 # ENV assignment patterns: KEY=value where KEY contains a secret-like name.
@@ -145,9 +150,7 @@ _CFG_VALUE = r"(['\"]?)([^\s&]+?)\2(?=[\s&]|$)"
 # ``os.environ.get(...)``, ``process.env.X``, ``$ENV{X}``) reference variable
 # *names*, not secret values. When one appears as the VALUE of a KEY=... match
 # it's a code snippet, not a leaked secret — skip redaction (issue #2852).
-_ENV_LOOKUP_VALUE_RE = re.compile(
-    r"^(?:os\.(?:getenv|environ)|process\.env|\$ENV\{)"
-)
+_ENV_LOOKUP_VALUE_RE = re.compile(r"^(?:os\.(?:getenv|environ)|process\.env|\$ENV\{)")
 # Namespaced (dotted) key: the secret word may sit anywhere in a dotted path.
 _CFG_DOTTED_RE = re.compile(
     rf"((?:[A-Za-z0-9_\-]+\.)+[A-Za-z0-9_.\-]*{_SECRET_CFG_NAMES}[A-Za-z0-9_.\-]*"
@@ -203,9 +206,7 @@ _AUTH_HEADER_RE = re.compile(
 # Anthropic and many providers authenticate with ``x-api-key``; values without
 # a known vendor prefix (custom/local backends) would otherwise leak when a
 # request or curl command is logged or echoed into tool output / transcripts.
-_SECRET_HEADER_NAMES = (
-    r"(?:x-api-key|x-goog-api-key|api-key|apikey|x-api-token|x-auth-token|x-access-token)"
-)
+_SECRET_HEADER_NAMES = r"(?:x-api-key|x-goog-api-key|api-key|apikey|x-api-token|x-auth-token|x-access-token)"
 _SECRET_HEADER_RE = re.compile(
     rf"({_SECRET_HEADER_NAMES}\s*:\s*)(\S+)",
     re.IGNORECASE,
@@ -252,16 +253,16 @@ _DB_CONNSTR_RE = re.compile(
 #     path or query (e.g. ``?q=user@example.com``) is never treated as userinfo.
 _URL_BARE_TOKEN_RE = re.compile(
     r"((?:https?|wss?|git|ssh|ftp|ftps|sftp)://)"  # scheme
-    r"([^\s:@/]{8,})"                               # bare token (no colon/slash/@), 8+ chars
-    r"(@[^\s]+)",                                   # @host...
+    r"([^\s:@/]{8,})"  # bare token (no colon/slash/@), 8+ chars
+    r"(@[^\s]+)",  # @host...
     re.IGNORECASE,
 )
 
 # JWT tokens: header.payload[.signature] — always start with "eyJ" (base64 for "{")
 # Matches 1-part (header only), 2-part (header.payload), and full 3-part JWTs.
 _JWT_RE = re.compile(
-    r"eyJ[A-Za-z0-9_-]{10,}"           # Header (always starts with eyJ)
-    r"(?:\.[A-Za-z0-9_=-]{4,}){0,2}"   # Optional payload and/or signature
+    r"eyJ[A-Za-z0-9_-]{10,}"  # Header (always starts with eyJ)
+    r"(?:\.[A-Za-z0-9_=-]{4,}){0,2}"  # Optional payload and/or signature
 )
 
 # E.164 phone numbers: +<country><number>, 7-15 digits
@@ -272,11 +273,11 @@ _SIGNAL_PHONE_RE = re.compile(r"(\+[1-9]\d{6,14})(?![A-Za-z0-9])")
 # Used to scan text for URLs whose query params may contain secrets.
 # Ported from nearai/ironclaw#2529.
 _URL_WITH_QUERY_RE = re.compile(
-    r"(https?|wss?|ftp)://"          # scheme
-    r"([^\s/?#]+)"                    # authority (may include userinfo)
-    r"([^\s?#]*)"                     # path
-    r"\?([^\s#]+)"                    # query (required)
-    r"(#\S*)?",                       # optional fragment
+    r"(https?|wss?|ftp)://"  # scheme
+    r"([^\s/?#]+)"  # authority (may include userinfo)
+    r"([^\s?#]*)"  # path
+    r"\?([^\s#]+)"  # query (required)
+    r"(#\S*)?",  # optional fragment
 )
 
 # URLs containing userinfo — `scheme://user:password@host` for ANY scheme
@@ -291,16 +292,12 @@ _URL_USERINFO_RE = re.compile(
 # redaction preserves the original query/fragment layout byte-for-byte, while
 # the key is decoded separately for classification. Values stop at query or
 # fragment pair separators; both ``&`` and ``;`` are valid in deployed URLs.
-_STRICT_URL_PARAM_RE = re.compile(
-    r"([?#&;])([A-Za-z0-9_.~+%\-]+)=([^#&;\s\"'<>]*)"
-)
+_STRICT_URL_PARAM_RE = re.compile(r"([?#&;])([A-Za-z0-9_.~+%\-]+)=([^#&;\s\"'<>]*)")
 
 # Match userinfo in both absolute (``scheme://user:pass@host``) and
 # network-path (``//user:pass@host``) references. The authority boundary stops
 # at path/query/fragment delimiters so an ``@`` elsewhere in a URL is ignored.
-_STRICT_URL_USERINFO_RE = re.compile(
-    r"((?:[A-Za-z][A-Za-z0-9+.-]*:)?//)([^/\s?#@]+)@"
-)
+_STRICT_URL_USERINFO_RE = re.compile(r"((?:[A-Za-z][A-Za-z0-9+.-]*:)?//)([^/\s?#@]+)@")
 
 # HTTP access logs often use a relative request target rather than a full URL:
 # `"POST /webhook?password=... HTTP/1.1"`. The full-URL redactor above only
@@ -406,6 +403,7 @@ def _redact_url_query_params(text: str) -> str:
     Catches opaque tokens that don't match vendor prefix regexes, e.g.
     `https://example.com/cb?code=ABC123&state=xyz` → `...?code=***&state=xyz`.
     """
+
     def _sub(m: re.Match) -> str:
         scheme = m.group(1)
         authority = m.group(2)
@@ -413,6 +411,7 @@ def _redact_url_query_params(text: str) -> str:
         query = _redact_query_string(m.group(4))
         fragment = m.group(5) or ""
         return f"{scheme}://{authority}{path}?{query}{fragment}"
+
     return _URL_WITH_QUERY_RE.sub(_sub, text)
 
 
@@ -447,6 +446,7 @@ def _redact_strict_url_credentials(text: str) -> str:
     separators, public parameters, hosts, and paths while masking sensitive
     values and URL userinfo.
     """
+
     def _redact_param(match: re.Match) -> str:
         if _canonical_url_param_name(match.group(2)) not in _SENSITIVE_QUERY_PARAMS:
             return match.group(0)
@@ -490,10 +490,12 @@ def redact_cdp_url(value: object) -> str:
 
 def _redact_http_request_target_query_params(text: str) -> str:
     """Redact sensitive query params in HTTP access-log request targets."""
+
     def _sub(m: re.Match) -> str:
         prefix = m.group(1)
         query = _redact_query_string(m.group(2))
         return f"{prefix}?{query}"
+
     return _HTTP_REQUEST_TARGET_QUERY_RE.sub(_sub, text)
 
 
@@ -607,6 +609,7 @@ def redact_sensitive_text(
     # ENV assignments: OPENAI_API_KEY=***  (skip for code files — false positives)
     if not code_file:
         if "=" in text:
+
             def _redact_env(m):
                 name, quote, value = m.group(1), m.group(2), m.group(3)
                 # Programmatic env lookups reference variable *names*, not
@@ -615,6 +618,7 @@ def redact_sensitive_text(
                 if _ENV_LOOKUP_VALUE_RE.match(value):
                     return m.group(0)
                 return f"{name}={quote}{_mask_token(value)}{quote}"
+
             text = _ENV_ASSIGN_RE.sub(_redact_env, text)
             # Lowercase/dotted config keys (issue #16413). Skip URLs entirely —
             # web-URL query params are intentionally passed through (see note
@@ -626,6 +630,7 @@ def redact_sensitive_text(
 
         # JSON fields: "apiKey": "***"  (skip for code files — false positives)
         if ":" in text and '"' in text:
+
             def _redact_json(m):
                 key, value = m.group(1), m.group(2)
                 # Same programmatic-env-lookup exception as _redact_env above
@@ -634,12 +639,14 @@ def redact_sensitive_text(
                 if _ENV_LOOKUP_VALUE_RE.match(value):
                     return m.group(0)
                 return f'{key}: "{_mask_token(value)}"'
+
             text = _JSON_FIELD_RE.sub(_redact_json, text)
 
         # Unquoted YAML / colon config: password: ***  (after JSON so quoted
         # values are handled there; the lookahead in _YAML_ASSIGN_RE skips
         # quotes). Skip URLs — web-URL query params pass through by design.
         if ":" in text and "://" not in text:
+
             def _redact_yaml(m):
                 key, sep, value = m.group(1), m.group(2), m.group(3)
                 # Same programmatic-env-lookup exception as _redact_env above
@@ -648,6 +655,7 @@ def redact_sensitive_text(
                 if _ENV_LOOKUP_VALUE_RE.match(value):
                     return m.group(0)
                 return f"{key}{sep}{_mask_token(value)}"
+
             text = _YAML_ASSIGN_RE.sub(_redact_yaml, text)
 
     # Authorization headers — _AUTH_HEADER_RE matches any scheme after
@@ -669,10 +677,12 @@ def redact_sensitive_text(
 
     # Telegram bot tokens — pattern requires ":<token>" with digits prefix
     if ":" in text:
+
         def _redact_telegram(m):
             prefix = m.group(1) or ""
             digits = m.group(2)
             return f"{prefix}{digits}:***"
+
         text = _TELEGRAM_RE.sub(_redact_telegram, text)
 
     # Private key blocks
@@ -687,11 +697,13 @@ def redact_sensitive_text(
     # group(2) is exactly the brace expression. See issue #33801.
     if "://" in text:
         if code_file:
+
             def _redact_db(m):
                 pw = m.group(2)
                 if pw.startswith("{") and pw.endswith("}"):
                     return m.group(0)
                 return f"{m.group(1)}***{m.group(3)}"
+
             text = _DB_CONNSTR_RE.sub(_redact_db, text)
         else:
             text = _DB_CONNSTR_RE.sub(lambda m: f"{m.group(1)}***{m.group(3)}", text)
@@ -733,11 +745,13 @@ def redact_sensitive_text(
 
     # E.164 phone numbers (Signal, WhatsApp)
     if "+" in text:
+
         def _redact_phone(m):
             phone = m.group(1)
             if len(phone) <= 8:
                 return phone[:2] + "****" + phone[-2:]
             return phone[:4] + "****" + phone[-4:]
+
         text = _SIGNAL_PHONE_RE.sub(_redact_phone, text)
 
     return text
@@ -814,6 +828,7 @@ def redact_terminal_output(
 # future PR that adds a new prefix to the regex list can't silently break
 # the screen.
 
+
 def _extract_literal_prefix(pattern: str) -> str:
     """Return the leading literal characters of a regex pattern.
 
@@ -829,9 +844,7 @@ def _extract_literal_prefix(pattern: str) -> str:
     return pattern
 
 
-_PREFIX_SUBSTRINGS = tuple(
-    _extract_literal_prefix(p) for p in _PREFIX_PATTERNS
-)
+_PREFIX_SUBSTRINGS = tuple(_extract_literal_prefix(p) for p in _PREFIX_PATTERNS)
 
 
 def _has_known_prefix_substring(text: str) -> bool:
@@ -864,7 +877,7 @@ def _has_http_method_substring(text: str) -> bool:
 class RedactingFormatter(logging.Formatter):
     """Log formatter that redacts secrets from all log messages."""
 
-    def __init__(self, fmt=None, datefmt=None, style='%', **kwargs):
+    def __init__(self, fmt=None, datefmt=None, style="%", **kwargs):
         super().__init__(fmt, datefmt, style, **kwargs)
 
     def format(self, record: logging.LogRecord) -> str:

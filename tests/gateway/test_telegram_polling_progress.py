@@ -21,7 +21,9 @@ class _ControlledRequest:
         """Match PTB's response authority used by the progress observer."""
         return json.loads(payload.decode("utf-8", "replace"))
 
-    def __init__(self, *args, result=None, error=None, entered=None, release=None, **kwargs):
+    def __init__(
+        self, *args, result=None, error=None, entered=None, release=None, **kwargs
+    ):
         self.result = result
         self.error = error
         self.entered = entered
@@ -134,7 +136,9 @@ async def _request_for_generation(generation, request, *args):
 
 
 @pytest.mark.asyncio
-async def test_polling_disconnect_webhook_reconnect_heals_webhook_send_path(monkeypatch):
+async def test_polling_disconnect_webhook_reconnect_heals_webhook_send_path(
+    monkeypatch,
+):
     adapter = _make_adapter()
     polling_app = _lifecycle_app()
     webhook_app = _lifecycle_app()
@@ -317,7 +321,9 @@ async def test_general_request_success_cannot_record_polling_progress(monkeypatc
     assert builder.polling_request is _ControlledRequest.instances[1]
 
     builder.general_request.result = (200, b'{"ok":true}')
-    result = await builder.general_request.do_request("https://api.telegram.org/sendMessage")
+    result = await builder.general_request.do_request(
+        "https://api.telegram.org/sendMessage"
+    )
 
     assert result == (200, b'{"ok":true}')
     assert not progress.is_set()
@@ -473,9 +479,7 @@ async def test_matching_get_updates_progress_heals_and_stops_verifier(monkeypatc
     request = adapter._instrument_polling_request(
         _ControlledRequest(result=(200, b'{"ok":true,"result":[]}'))
     )
-    await _request_for_generation(
-        adapter._polling_generation, request, "getUpdates"
-    )
+    await _request_for_generation(adapter._polling_generation, request, "getUpdates")
     await asyncio.wait_for(verifier, timeout=1)
 
     assert adapter._send_path_degraded is False
@@ -484,7 +488,9 @@ async def test_matching_get_updates_progress_heals_and_stops_verifier(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_general_path_success_without_get_updates_progress_recovers_once(monkeypatch):
+async def test_general_path_success_without_get_updates_progress_recovers_once(
+    monkeypatch,
+):
     adapter = _make_adapter()
     adapter._app = _mock_polling_app()
     recovery = MagicMock()
@@ -591,7 +597,9 @@ async def test_repeated_starts_replace_verifier_and_stale_verifier_cannot_heal()
     assert adapter._polling_generation == generation_1 + 1
     assert verifier_1.cancelled()
     assert verifier_2 is not verifier_1 and not verifier_2.done()
-    assert [task for task in adapter._background_tasks if not task.done()] == [verifier_2]
+    assert [task for task in adapter._background_tasks if not task.done()] == [
+        verifier_2
+    ]
 
     progress_1.set()
     await asyncio.sleep(0)
@@ -734,9 +742,7 @@ async def test_disconnect_cancels_recovery_before_it_can_rearm_progress(monkeypa
 
     monkeypatch.setattr(tg_adapter.asyncio, "sleep", immediate_backoff)
     monkeypatch.setattr(adapter, "_drain_polling_connections", blocked_drain)
-    monkeypatch.setattr(
-        adapter._app.updater, "start_polling", blocked_start_polling
-    )
+    monkeypatch.setattr(adapter._app.updater, "start_polling", blocked_start_polling)
     monkeypatch.setattr(adapter, "_set_status_indicator", blocked_status_indicator)
 
     recovery = asyncio.create_task(

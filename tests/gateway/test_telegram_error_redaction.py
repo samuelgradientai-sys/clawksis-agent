@@ -85,7 +85,9 @@ async def test_disconnect_failure_redacts_token_in_log(monkeypatch, caplog):
 
 
 @pytest.mark.asyncio
-async def test_send_document_failure_redacts_token_in_log(monkeypatch, caplog, tmp_path):
+async def test_send_document_failure_redacts_token_in_log(
+    monkeypatch, caplog, tmp_path
+):
     """A send_document() transport exception embedding the bot token URL
     must not reach the warning log unredacted."""
     adapter = _make_connected_adapter()

@@ -52,7 +52,11 @@ def _flatten_ids(segments):
 
 class TestPlanToolBatchSegments:
     def test_all_safe_batch_is_single_parallel_segment(self):
-        calls = [_tc("web_search"), _tc("read_file", '{"path":"a.py"}'), _tc("web_extract")]
+        calls = [
+            _tc("web_search"),
+            _tc("read_file", '{"path":"a.py"}'),
+            _tc("web_extract"),
+        ]
         segments = _plan_tool_batch_segments(calls)
         assert _kinds(segments) == ["parallel"]
         assert _flatten_ids(segments) == [c.id for c in calls]
@@ -184,14 +188,16 @@ class TestShouldParallelizeBackwardCompat:
         assert _should_parallelize_tool_batch([_tc("web_search"), _tc("web_extract")])
 
     def test_mixed_batch_is_not_wholly_parallel(self):
-        assert not _should_parallelize_tool_batch(
-            [_tc("web_search"), _tc("terminal", '{"command":"ls"}')]
-        )
+        assert not _should_parallelize_tool_batch([
+            _tc("web_search"),
+            _tc("terminal", '{"command":"ls"}'),
+        ])
 
     def test_clarify_anywhere_blocks_whole_batch_parallelism(self):
-        assert not _should_parallelize_tool_batch(
-            [_tc("web_search"), _tc("clarify", '{"question":"?"}')]
-        )
+        assert not _should_parallelize_tool_batch([
+            _tc("web_search"),
+            _tc("clarify", '{"question":"?"}'),
+        ])
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +307,7 @@ class TestSegmentedDispatchIntegration:
         # Barrier ordering: t1 executed after {s1,s2} and before {s3,s4}.
         t1_pos = executed.index("t1")
         assert {"s1", "s2"} == set(executed[:t1_pos])
-        assert {"s3", "s4"} == set(executed[t1_pos + 1:])
+        assert {"s3", "s4"} == set(executed[t1_pos + 1 :])
 
     def test_homogeneous_safe_batch_still_uses_plain_concurrent_path(self, agent):
         calls = [_tc("web_search", '{"query":"a"}'), _tc("web_search", '{"query":"b"}')]
@@ -333,7 +339,9 @@ class TestSegmentedDispatchIntegration:
         conc.assert_not_called()
 
     def test_single_call_uses_sequential_path(self, agent):
-        msg = SimpleNamespace(content="", tool_calls=[_tc("web_search", '{"query":"a"}')])
+        msg = SimpleNamespace(
+            content="", tool_calls=[_tc("web_search", '{"query":"a"}')]
+        )
 
         with (
             patch.object(agent, "_execute_tool_calls_concurrent") as conc,
@@ -448,8 +456,7 @@ class TestPathCanonicalization:
         alias_path = _canonical_path(str(alias_dir / "config.json"))
 
         assert _paths_overlap(real_path, alias_path), (
-            "Symlink alias and real path must overlap — "
-            "they must not be parallelized"
+            "Symlink alias and real path must overlap — they must not be parallelized"
         )
 
     def test_execution_cwd_used_over_process_cwd(self, tmp_path, monkeypatch):

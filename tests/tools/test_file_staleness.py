@@ -30,6 +30,7 @@ from tools.file_tools import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class _FakeReadResult:
     def __init__(self, content="line1\nline2\n", total_lines=2, file_size=100):
         self.content = content
@@ -63,7 +64,9 @@ class _FakePatchResult:
 def _make_fake_ops(read_content="hello\n", file_size=6):
     fake = MagicMock()
     fake.read_file = lambda path, offset=1, limit=500: _FakeReadResult(
-        content=read_content, total_lines=1, file_size=file_size,
+        content=read_content,
+        total_lines=1,
+        file_size=file_size,
     )
     fake.write_file = lambda path, content: _FakeWriteResult()
     fake.patch_replace = lambda path, old, new, replace_all=False: _FakePatchResult()
@@ -74,8 +77,8 @@ def _make_fake_ops(read_content="hello\n", file_size=6):
 # Core staleness check
 # ---------------------------------------------------------------------------
 
-class TestStalenessCheck(unittest.TestCase):
 
+class TestStalenessCheck(unittest.TestCase):
     def setUp(self):
         _read_tracker.clear()
         file_state.get_registry().clear()
@@ -150,7 +153,9 @@ class TestStalenessCheck(unittest.TestCase):
         self.assertNotIn("_warning", result)
 
     @patch("tools.file_tools._get_file_ops")
-    def test_relative_path_uses_recorded_session_cwd_for_staleness_tracking(self, mock_ops):
+    def test_relative_path_uses_recorded_session_cwd_for_staleness_tracking(
+        self, mock_ops
+    ):
         """Relative-path stale tracking must follow the session's recorded cwd."""
         start_dir = os.path.join(self._tmpdir, "start")
         live_dir = os.path.join(self._tmpdir, "worktree")
@@ -194,8 +199,8 @@ class TestStalenessCheck(unittest.TestCase):
 # Staleness in patch
 # ---------------------------------------------------------------------------
 
-class TestPatchStaleness(unittest.TestCase):
 
+class TestPatchStaleness(unittest.TestCase):
     def setUp(self):
         _read_tracker.clear()
         file_state.get_registry().clear()
@@ -223,11 +228,15 @@ class TestPatchStaleness(unittest.TestCase):
         with open(self._tmpfile, "w") as f:
             f.write("externally modified\n")
 
-        result = json.loads(patch_tool(
-            mode="replace", path=self._tmpfile,
-            old_string="original", new_string="patched",
-            task_id="p1",
-        ))
+        result = json.loads(
+            patch_tool(
+                mode="replace",
+                path=self._tmpfile,
+                old_string="original",
+                new_string="patched",
+                task_id="p1",
+            )
+        )
         self.assertIn("_warning", result)
         self.assertIn("modified since you last read", result["_warning"])
 
@@ -237,11 +246,15 @@ class TestPatchStaleness(unittest.TestCase):
         mock_ops.return_value = _make_fake_ops("original line\n", 15)
         read_file_tool(self._tmpfile, task_id="p2")
 
-        result = json.loads(patch_tool(
-            mode="replace", path=self._tmpfile,
-            old_string="original", new_string="patched",
-            task_id="p2",
-        ))
+        result = json.loads(
+            patch_tool(
+                mode="replace",
+                path=self._tmpfile,
+                old_string="original",
+                new_string="patched",
+                task_id="p2",
+            )
+        )
         self.assertNotIn("_warning", result)
 
 
@@ -249,8 +262,8 @@ class TestPatchStaleness(unittest.TestCase):
 # Unit test for the helper
 # ---------------------------------------------------------------------------
 
-class TestCheckFileStalenessHelper(unittest.TestCase):
 
+class TestCheckFileStalenessHelper(unittest.TestCase):
     def setUp(self):
         _read_tracker.clear()
         file_state.get_registry().clear()
@@ -265,20 +278,26 @@ class TestCheckFileStalenessHelper(unittest.TestCase):
     def test_returns_none_for_unread_file(self):
         # Populate tracker with a different file
         from tools.file_tools import _read_tracker, _read_tracker_lock
+
         with _read_tracker_lock:
             _read_tracker["t1"] = {
-                "last_key": None, "consecutive": 0,
-                "read_history": set(), "dedup": {},
+                "last_key": None,
+                "consecutive": 0,
+                "read_history": set(),
+                "dedup": {},
                 "read_timestamps": {"/tmp/other.py": 12345.0},
             }
         self.assertIsNone(_check_file_staleness("/tmp/x.py", "t1"))
 
     def test_returns_none_when_stat_fails(self):
         from tools.file_tools import _read_tracker, _read_tracker_lock
+
         with _read_tracker_lock:
             _read_tracker["t1"] = {
-                "last_key": None, "consecutive": 0,
-                "read_history": set(), "dedup": {},
+                "last_key": None,
+                "consecutive": 0,
+                "read_history": set(),
+                "dedup": {},
                 "read_timestamps": {"/nonexistent/path": 99999.0},
             }
         # File doesn't exist → stat fails → returns None (let write handle it)

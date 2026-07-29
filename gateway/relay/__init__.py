@@ -138,7 +138,7 @@ def relay_connection_auth() -> tuple[Optional[str], Optional[str]]:
         try:
             from gateway.run import _load_gateway_config  # late import to avoid cycle
 
-            cfg = (_load_gateway_config().get("gateway") or {})
+            cfg = _load_gateway_config().get("gateway") or {}
             gateway_id = gateway_id or str(cfg.get("relay_id", "") or "").strip()
             secret = secret or str(cfg.get("relay_secret", "") or "").strip()
         except Exception:  # noqa: BLE001 - config absence/parse must never crash registration
@@ -165,7 +165,7 @@ def relay_endpoint() -> Optional[str]:
         try:
             from gateway.run import _load_gateway_config  # late import to avoid cycle
 
-            cfg = (_load_gateway_config().get("gateway") or {})
+            cfg = _load_gateway_config().get("gateway") or {}
             url = str(cfg.get("relay_endpoint", "") or "").strip()
         except Exception:  # noqa: BLE001 - config absence/parse must never crash boot
             url = ""
@@ -188,7 +188,7 @@ def relay_route_keys() -> list[str]:
         try:
             from gateway.run import _load_gateway_config  # late import to avoid cycle
 
-            cfg = (_load_gateway_config().get("gateway") or {})
+            cfg = _load_gateway_config().get("gateway") or {}
             val = cfg.get("relay_route_keys", "")
             if isinstance(val, (list, tuple)):
                 return [str(k).strip() for k in val if str(k).strip()]
@@ -218,7 +218,7 @@ def relay_instance_id() -> Optional[str]:
         try:
             from gateway.run import _load_gateway_config  # late import to avoid cycle
 
-            cfg = (_load_gateway_config().get("gateway") or {})
+            cfg = _load_gateway_config().get("gateway") or {}
             value = str(cfg.get("relay_instance_id", "") or "").strip()
         except Exception:  # noqa: BLE001 - config absence/parse must never crash boot
             value = ""
@@ -249,7 +249,7 @@ def relay_wake_url() -> Optional[str]:
         try:
             from gateway.run import _load_gateway_config  # late import to avoid cycle
 
-            cfg = (_load_gateway_config().get("gateway") or {})
+            cfg = _load_gateway_config().get("gateway") or {}
             value = str(cfg.get("relay_wake_url", "") or "").strip()
         except Exception:  # noqa: BLE001 - config absence/parse must never crash boot
             value = ""
@@ -260,9 +260,9 @@ def _provision_url(relay_dial_url: str) -> str:
     """Map the ``ws(s)://…/relay`` dial URL to the ``http(s)://…/relay/provision`` POST URL."""
     raw = relay_dial_url.rstrip("/")
     if raw.startswith("ws://"):
-        raw = "http://" + raw[len("ws://"):]
+        raw = "http://" + raw[len("ws://") :]
     elif raw.startswith("wss://"):
-        raw = "https://" + raw[len("wss://"):]
+        raw = "https://" + raw[len("wss://") :]
     if raw.endswith("/relay"):
         raw = raw[: -len("/relay")]
     return f"{raw}/relay/provision"
@@ -276,9 +276,9 @@ def _policy_url(relay_dial_url: str) -> str:
     """
     raw = relay_dial_url.rstrip("/")
     if raw.startswith("ws://"):
-        raw = "http://" + raw[len("ws://"):]
+        raw = "http://" + raw[len("ws://") :]
     elif raw.startswith("wss://"):
-        raw = "https://" + raw[len("wss://"):]
+        raw = "https://" + raw[len("wss://") :]
     if raw.endswith("/relay"):
         raw = raw[: -len("/relay")]
     return f"{raw}/relay/policy"
@@ -348,7 +348,9 @@ def relay_relevance_policy(platform: Optional[str] = None) -> Optional[dict]:
 
     # allow_other_bots ← {PLATFORM}_ALLOW_BOTS in {"mentions","all"} (same gate as
     # the gateway's own authz_mixin DISCORD_ALLOW_BOTS bypass).
-    allow_bots_env = os.environ.get(f"{platform.upper()}_ALLOW_BOTS", "").lower().strip()
+    allow_bots_env = (
+        os.environ.get(f"{platform.upper()}_ALLOW_BOTS", "").lower().strip()
+    )
     allow_other_bots = allow_bots_env in {"mentions", "all"}
 
     require_address = bool(require_mention) if require_mention is not None else False
@@ -463,10 +465,12 @@ def _resolve_relay_identity_token() -> str:
         try:
             from gateway.run import _load_gateway_config  # late import to avoid cycle
 
-            idp = ((_load_gateway_config().get("gateway") or {}).get("idp") or {})
+            idp = (_load_gateway_config().get("gateway") or {}).get("idp") or {}
             token_url = str(idp.get("token_url", "") or "").strip()
             client_id = client_id or str(idp.get("client_id", "") or "").strip()
-            client_secret = client_secret or str(idp.get("client_secret", "") or "").strip()
+            client_secret = (
+                client_secret or str(idp.get("client_secret", "") or "").strip()
+            )
             scope = scope or str(idp.get("scope", "") or "").strip()
         except Exception:  # noqa: BLE001 - config absence must not crash
             token_url = token_url or ""
@@ -567,7 +571,9 @@ def self_provision_relay() -> bool:
     except Exception as exc:  # noqa: BLE001 - boot must survive a token failure
         # No resolvable identity (e.g. a self-hosted box that hasn't enrolled and
         # configured no IdP) -> nothing to provision with; skip quietly and boot.
-        logger.warning("relay self-provision skipped: could not resolve identity token (%s)", exc)
+        logger.warning(
+            "relay self-provision skipped: could not resolve identity token (%s)", exc
+        )
         return False
 
     identities = relay_platform_identities()
@@ -578,7 +584,9 @@ def self_provision_relay() -> bool:
         host = socket.gethostname().strip()
     except Exception:  # noqa: BLE001
         host = ""
-    gateway_id = os.environ.get("GATEWAY_RELAY_ID", "").strip() or f"gw-{host or 'clawk'}"
+    gateway_id = (
+        os.environ.get("GATEWAY_RELAY_ID", "").strip() or f"gw-{host or 'clawk'}"
+    )
     endpoint = relay_endpoint()
     route_keys = relay_route_keys()
     instance_id = relay_instance_id()
@@ -621,10 +629,14 @@ def self_provision_relay() -> bool:
         # outbound WS upgrade). Subsequent platforms share the same gatewayId +
         # secret (the connector returns the same record for the same gatewayId).
         # Never logged.
-        if "GATEWAY_RELAY_SECRET" not in os.environ or not os.environ.get("GATEWAY_RELAY_SECRET"):
+        if "GATEWAY_RELAY_SECRET" not in os.environ or not os.environ.get(
+            "GATEWAY_RELAY_SECRET"
+        ):
             os.environ["GATEWAY_RELAY_ID"] = str(result.get("gatewayId") or gateway_id)
             os.environ["GATEWAY_RELAY_SECRET"] = str(result.get("secret") or "")
-            os.environ["GATEWAY_RELAY_DELIVERY_KEY"] = str(result.get("deliveryKey") or "")
+            os.environ["GATEWAY_RELAY_DELIVERY_KEY"] = str(
+                result.get("deliveryKey") or ""
+            )
 
     if not provisioned:
         logger.warning(
@@ -647,7 +659,9 @@ def self_provision_relay() -> bool:
     return True
 
 
-def _post_policy(*, policy_url: str, token: str, policy: dict, timeout: float = 15.0) -> int:
+def _post_policy(
+    *, policy_url: str, token: str, policy: dict, timeout: float = 15.0
+) -> int:
     """POST the relevance policy to the connector's ``/relay/policy``; return the HTTP status.
 
     Authenticated with the gateway's own per-gateway upgrade token (the SAME
@@ -725,7 +739,10 @@ def send_relay_policy() -> bool:
 
         token = make_upgrade_token(gateway_id, secret)
     except Exception as exc:  # noqa: BLE001 - boot must survive a token-build failure
-        logger.warning("relay policy declaration failed to build token (%s); connector keeps prior policy", exc)
+        logger.warning(
+            "relay policy declaration failed to build token (%s); connector keeps prior policy",
+            exc,
+        )
         return False
 
     any_declared = False
@@ -736,10 +753,14 @@ def send_relay_policy() -> bool:
             # quiet default already matches; don't write a redundant row.
             continue
         try:
-            status = _post_policy(policy_url=_policy_url(dial_url), token=token, policy=policy)
+            status = _post_policy(
+                policy_url=_policy_url(dial_url), token=token, policy=policy
+            )
         except Exception as exc:  # noqa: BLE001 - boot must survive a policy-declare failure
             logger.warning(
-                "relay policy declaration failed for platform=%s (%s); continuing", platform, exc
+                "relay policy declaration failed for platform=%s (%s); continuing",
+                platform,
+                exc,
             )
             continue
         if status == 200:

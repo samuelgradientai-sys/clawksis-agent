@@ -78,5 +78,5 @@ def test_clamp_gate_honours_flag():
     # The display gate at cli.py: clamp only when long AND not reasoning_full.
     reasoning = "\n".join(f"line{i}" for i in range(25))
     lines = reasoning.strip().splitlines()
-    assert (len(lines) > 10 and not False) is True   # full=False -> clamp
-    assert (len(lines) > 10 and not True) is False   # full=True  -> show all
+    assert (len(lines) > 10 and not False) is True  # full=False -> clamp
+    assert (len(lines) > 10 and not True) is False  # full=True  -> show all

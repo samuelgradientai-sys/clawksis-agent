@@ -5,6 +5,7 @@ spawning a per-profile server: attach (open browser at ?profile=) when one
 is already listening, else re-exec as the machine dashboard with the
 launching profile preselected. `--isolated` opts out.
 """
+
 import sys
 import types
 import pytest
@@ -13,14 +14,21 @@ import pytest
 @pytest.fixture
 def main_mod():
     import clawk_cli.main as main_mod
+
     return main_mod
 
 
 def _args(**kw):
     defaults = dict(
-        status=False, stop=False, host="127.0.0.1", port=9119,
-        no_open=True, insecure=False, skip_build=False,
-        isolated=False, open_profile="",
+        status=False,
+        stop=False,
+        host="127.0.0.1",
+        port=9119,
+        no_open=True,
+        insecure=False,
+        skip_build=False,
+        isolated=False,
+        open_profile="",
     )
     defaults.update(kw)
     return types.SimpleNamespace(**defaults)
@@ -49,6 +57,7 @@ class TestUnifiedDashboardRouting:
         monkeypatch.setattr(main_mod, "_dashboard_listening", lambda host, port: True)
         opened = []
         import webbrowser
+
         monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url))
 
         with pytest.raises(SystemExit) as exc:
@@ -85,6 +94,7 @@ class TestUnifiedDashboardRouting:
         # the platform-native default (~/.clawksis), NOT dropped — see the Docker
         # test below for why we resolve explicitly instead of popping.
         from clawk_constants import get_default_clawk_root
+
         assert env.get("CLAWK_HOME") == str(get_default_clawk_root())
 
     def test_reexec_pins_docker_machine_root(self, main_mod, monkeypatch):
@@ -121,7 +131,9 @@ class TestUnifiedDashboardRouting:
         # and the .install_method stamp actually live.
         assert env.get("CLAWK_HOME") == "/opt/data"
 
-    def test_desktop_profile_backend_skips_machine_dashboard_reroute(self, main_mod, monkeypatch):
+    def test_desktop_profile_backend_skips_machine_dashboard_reroute(
+        self, main_mod, monkeypatch
+    ):
         """A desktop-spawned named-profile backend (CLAWK_DESKTOP=1) must NOT
         reroute into the machine dashboard. The reroute re-execs as the default
         profile and exits, so the desktop never sees a ready backend → boot
@@ -132,7 +144,8 @@ class TestUnifiedDashboardRouting:
         )
         listening_calls = []
         monkeypatch.setattr(
-            main_mod, "_dashboard_listening",
+            main_mod,
+            "_dashboard_listening",
             lambda host, port: listening_calls.append(1) or False,
         )
         execs = []
@@ -150,7 +163,8 @@ class TestUnifiedDashboardRouting:
         )
         listening_calls = []
         monkeypatch.setattr(
-            main_mod, "_dashboard_listening",
+            main_mod,
+            "_dashboard_listening",
             lambda host, port: listening_calls.append(1) or True,
         )
         # With --isolated the routing block is skipped entirely; the command
@@ -168,7 +182,8 @@ class TestUnifiedDashboardRouting:
         )
         listening_calls = []
         monkeypatch.setattr(
-            main_mod, "_dashboard_listening",
+            main_mod,
+            "_dashboard_listening",
             lambda host, port: listening_calls.append(1) or True,
         )
         monkeypatch.setitem(sys.modules, "fastapi", None)

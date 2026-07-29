@@ -83,7 +83,9 @@ def test_telegram_bot_not_authorized_when_allow_bots_none(monkeypatch):
     assert runner._is_user_authorized(_make_telegram_bot_source("999888777")) is False
 
 
-def test_telegram_human_still_checked_against_allowlist_when_bot_policy_set(monkeypatch):
+def test_telegram_human_still_checked_against_allowlist_when_bot_policy_set(
+    monkeypatch,
+):
     runner = _make_bare_runner()
     monkeypatch.setenv("TELEGRAM_ALLOW_BOTS", "all")
     monkeypatch.setenv("TELEGRAM_ALLOWED_USERS", "100200300")

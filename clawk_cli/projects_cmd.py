@@ -56,7 +56,9 @@ def build_parser(
 
     p_list = sub.add_parser("list", aliases=["ls"], help="List projects")
     p_list.add_argument(
-        "--all", action="store_true", dest="include_archived",
+        "--all",
+        action="store_true",
+        dest="include_archived",
         help="Include archived projects",
     )
 
@@ -67,9 +69,7 @@ def build_parser(
     p_add.add_argument("project", help="Project id or slug")
     p_add.add_argument("path", help="Folder path")
     p_add.add_argument("--label", default=None)
-    p_add.add_argument(
-        "--primary", action="store_true", help="Mark as primary repo"
-    )
+    p_add.add_argument("--primary", action="store_true", help="Mark as primary repo")
 
     p_rm = sub.add_parser("remove-folder", help="Remove a folder from a project")
     p_rm.add_argument("project", help="Project id or slug")
@@ -85,7 +85,9 @@ def build_parser(
 
     p_use = sub.add_parser("use", help="Set the active project")
     p_use.add_argument(
-        "project", nargs="?", default=None,
+        "project",
+        nargs="?",
+        default=None,
         help="Project id or slug (omit to clear)",
     )
 
@@ -241,7 +243,9 @@ def _cmd_show(args, conn, proj) -> int:
 
 @_with_project
 def _cmd_add_folder(args, conn, proj) -> int:
-    path = pdb.add_folder(conn, proj.id, args.path, label=args.label, is_primary=args.primary)
+    path = pdb.add_folder(
+        conn, proj.id, args.path, label=args.label, is_primary=args.primary
+    )
     print(f"Added {path} to {proj.slug}")
     return 0
 

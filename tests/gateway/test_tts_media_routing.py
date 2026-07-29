@@ -13,7 +13,12 @@ from unittest.mock import AsyncMock
 import pytest
 
 from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import BasePlatformAdapter, MessageEvent, MessageType, SendResult
+from gateway.platforms.base import (
+    BasePlatformAdapter,
+    MessageEvent,
+    MessageType,
+    SendResult,
+)
 from gateway.run import GatewayRunner
 from gateway.session import SessionSource, build_session_key
 
@@ -63,13 +68,19 @@ def _allowed_media_path(tmp_path, monkeypatch, name):
 
 
 @pytest.mark.asyncio
-async def test_base_adapter_routes_telegram_flac_media_tag_to_document_sender(tmp_path, monkeypatch):
+async def test_base_adapter_routes_telegram_flac_media_tag_to_document_sender(
+    tmp_path, monkeypatch
+):
     adapter = _MediaRoutingAdapter()
     event = _event()
     media_file = _allowed_media_path(tmp_path, monkeypatch, "speech.flac")
     adapter._message_handler = AsyncMock(return_value=f"MEDIA:{media_file}")
-    adapter.send_voice = AsyncMock(return_value=SendResult(success=True, message_id="voice"))
-    adapter.send_document = AsyncMock(return_value=SendResult(success=True, message_id="doc"))
+    adapter.send_voice = AsyncMock(
+        return_value=SendResult(success=True, message_id="voice")
+    )
+    adapter.send_document = AsyncMock(
+        return_value=SendResult(success=True, message_id="doc")
+    )
 
     await adapter._process_message_background(event, build_session_key(event.source))
 
@@ -82,13 +93,19 @@ async def test_base_adapter_routes_telegram_flac_media_tag_to_document_sender(tm
 
 
 @pytest.mark.asyncio
-async def test_base_adapter_routes_non_voice_telegram_ogg_media_tag_to_document_sender(tmp_path, monkeypatch):
+async def test_base_adapter_routes_non_voice_telegram_ogg_media_tag_to_document_sender(
+    tmp_path, monkeypatch
+):
     adapter = _MediaRoutingAdapter()
     event = _event()
     media_file = _allowed_media_path(tmp_path, monkeypatch, "speech.ogg")
     adapter._message_handler = AsyncMock(return_value=f"MEDIA:{media_file}")
-    adapter.send_voice = AsyncMock(return_value=SendResult(success=True, message_id="voice"))
-    adapter.send_document = AsyncMock(return_value=SendResult(success=True, message_id="doc"))
+    adapter.send_voice = AsyncMock(
+        return_value=SendResult(success=True, message_id="voice")
+    )
+    adapter.send_document = AsyncMock(
+        return_value=SendResult(success=True, message_id="doc")
+    )
 
     await adapter._process_message_background(event, build_session_key(event.source))
 
@@ -101,15 +118,21 @@ async def test_base_adapter_routes_non_voice_telegram_ogg_media_tag_to_document_
 
 
 @pytest.mark.asyncio
-async def test_base_adapter_routes_voice_tagged_telegram_ogg_media_tag_to_voice_sender(tmp_path, monkeypatch):
+async def test_base_adapter_routes_voice_tagged_telegram_ogg_media_tag_to_voice_sender(
+    tmp_path, monkeypatch
+):
     adapter = _MediaRoutingAdapter()
     event = _event()
     media_file = _allowed_media_path(tmp_path, monkeypatch, "speech.ogg")
     adapter._message_handler = AsyncMock(
         return_value=f"[[audio_as_voice]]\nMEDIA:{media_file}"
     )
-    adapter.send_voice = AsyncMock(return_value=SendResult(success=True, message_id="voice"))
-    adapter.send_document = AsyncMock(return_value=SendResult(success=True, message_id="doc"))
+    adapter.send_voice = AsyncMock(
+        return_value=SendResult(success=True, message_id="voice")
+    )
+    adapter.send_document = AsyncMock(
+        return_value=SendResult(success=True, message_id="doc")
+    )
 
     await adapter._process_message_background(event, build_session_key(event.source))
 
@@ -132,7 +155,9 @@ def _fake_runner(thread_meta):
 
 
 @pytest.mark.asyncio
-async def test_streaming_delivery_routes_telegram_flac_media_tag_to_document_sender(tmp_path, monkeypatch):
+async def test_streaming_delivery_routes_telegram_flac_media_tag_to_document_sender(
+    tmp_path, monkeypatch
+):
     event = _event(thread_id="topic-1")
     media_file = _allowed_media_path(tmp_path, monkeypatch, "speech.flac")
     adapter = SimpleNamespace(
@@ -141,8 +166,12 @@ async def test_streaming_delivery_routes_telegram_flac_media_tag_to_document_sen
         extract_images=BasePlatformAdapter.extract_images,
         extract_local_files=BasePlatformAdapter.extract_local_files,
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="voice")),
-        send_document=AsyncMock(return_value=SendResult(success=True, message_id="doc")),
-        send_image_file=AsyncMock(return_value=SendResult(success=True, message_id="image")),
+        send_document=AsyncMock(
+            return_value=SendResult(success=True, message_id="doc")
+        ),
+        send_image_file=AsyncMock(
+            return_value=SendResult(success=True, message_id="image")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="video")),
     )
 
@@ -162,7 +191,9 @@ async def test_streaming_delivery_routes_telegram_flac_media_tag_to_document_sen
 
 
 @pytest.mark.asyncio
-async def test_streaming_delivery_routes_non_voice_telegram_ogg_media_tag_to_document_sender(tmp_path, monkeypatch):
+async def test_streaming_delivery_routes_non_voice_telegram_ogg_media_tag_to_document_sender(
+    tmp_path, monkeypatch
+):
     event = _event(thread_id="topic-1")
     media_file = _allowed_media_path(tmp_path, monkeypatch, "speech.ogg")
     adapter = SimpleNamespace(
@@ -171,8 +202,12 @@ async def test_streaming_delivery_routes_non_voice_telegram_ogg_media_tag_to_doc
         extract_images=BasePlatformAdapter.extract_images,
         extract_local_files=BasePlatformAdapter.extract_local_files,
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="voice")),
-        send_document=AsyncMock(return_value=SendResult(success=True, message_id="doc")),
-        send_image_file=AsyncMock(return_value=SendResult(success=True, message_id="image")),
+        send_document=AsyncMock(
+            return_value=SendResult(success=True, message_id="doc")
+        ),
+        send_image_file=AsyncMock(
+            return_value=SendResult(success=True, message_id="image")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="video")),
     )
 
@@ -192,7 +227,9 @@ async def test_streaming_delivery_routes_non_voice_telegram_ogg_media_tag_to_doc
 
 
 @pytest.mark.asyncio
-async def test_streaming_delivery_routes_telegram_mp3_media_tag_to_voice_sender(tmp_path, monkeypatch):
+async def test_streaming_delivery_routes_telegram_mp3_media_tag_to_voice_sender(
+    tmp_path, monkeypatch
+):
     """MP3 audio on Telegram must go through send_voice (which routes to
     sendAudio internally); Telegram accepts MP3 for the audio player."""
     event = _event(thread_id="topic-1")
@@ -203,8 +240,12 @@ async def test_streaming_delivery_routes_telegram_mp3_media_tag_to_voice_sender(
         extract_images=BasePlatformAdapter.extract_images,
         extract_local_files=BasePlatformAdapter.extract_local_files,
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="voice")),
-        send_document=AsyncMock(return_value=SendResult(success=True, message_id="doc")),
-        send_image_file=AsyncMock(return_value=SendResult(success=True, message_id="image")),
+        send_document=AsyncMock(
+            return_value=SendResult(success=True, message_id="doc")
+        ),
+        send_image_file=AsyncMock(
+            return_value=SendResult(success=True, message_id="image")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="video")),
     )
 
@@ -224,7 +265,9 @@ async def test_streaming_delivery_routes_telegram_mp3_media_tag_to_voice_sender(
 
 
 @pytest.mark.asyncio
-async def test_streaming_delivery_blocks_media_path_outside_allowed_roots(tmp_path, monkeypatch):
+async def test_streaming_delivery_blocks_media_path_outside_allowed_roots(
+    tmp_path, monkeypatch
+):
     event = _event(thread_id="topic-1")
     allowed_root = tmp_path / "media-cache"
     allowed_root.mkdir()
@@ -247,8 +290,12 @@ async def test_streaming_delivery_blocks_media_path_outside_allowed_roots(tmp_pa
         extract_images=BasePlatformAdapter.extract_images,
         extract_local_files=BasePlatformAdapter.extract_local_files,
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="voice")),
-        send_document=AsyncMock(return_value=SendResult(success=True, message_id="doc")),
-        send_image_file=AsyncMock(return_value=SendResult(success=True, message_id="image")),
+        send_document=AsyncMock(
+            return_value=SendResult(success=True, message_id="doc")
+        ),
+        send_image_file=AsyncMock(
+            return_value=SendResult(success=True, message_id="image")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="video")),
     )
 

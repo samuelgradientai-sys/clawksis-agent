@@ -43,20 +43,30 @@ def _model_options() -> list[dict[str, Any]]:
 def _pick_slot(current: dict[str, str] | None = None) -> dict[str, str]:
     providers = _model_options()
     if not providers:
-        raise RuntimeError("No configured model providers found. Run `clawk model` first.")
+        raise RuntimeError(
+            "No configured model providers found. Run `clawk model` first."
+        )
     current_provider = (current or {}).get("provider", "")
     provider_default = next(
         (idx for idx, p in enumerate(providers) if p.get("slug") == current_provider),
         0,
     )
-    provider_rows = [f"{p.get('name') or p.get('slug')}  ({p.get('slug')})" for p in providers]
-    provider = providers[_prompt_choice("Select provider", provider_rows, provider_default)]
+    provider_rows = [
+        f"{p.get('name') or p.get('slug')}  ({p.get('slug')})" for p in providers
+    ]
+    provider = providers[
+        _prompt_choice("Select provider", provider_rows, provider_default)
+    ]
     models = list(provider.get("models") or [])
     if not models:
         raise RuntimeError(f"Provider {provider.get('slug')} has no selectable models")
     current_model = (current or {}).get("model", "")
     model_default = models.index(current_model) if current_model in models else 0
-    model = models[_prompt_choice(f"Select model for {provider.get('slug')}", models, model_default)]
+    model = models[
+        _prompt_choice(
+            f"Select model for {provider.get('slug')}", models, model_default
+        )
+    ]
     return {"provider": str(provider.get("slug") or ""), "model": str(model)}
 
 
@@ -93,7 +103,11 @@ def cmd_moa(args) -> None:
 
     if sub in {"config", "configure"}:
         moa = normalize_moa_config(cfg.get("moa") if isinstance(cfg, dict) else {})
-        preset_name = (getattr(args, "name", None) or moa.get("default_preset") or DEFAULT_MOA_PRESET_NAME).strip()
+        preset_name = (
+            getattr(args, "name", None)
+            or moa.get("default_preset")
+            or DEFAULT_MOA_PRESET_NAME
+        ).strip()
         current = moa["presets"].get(preset_name, moa["presets"][moa["default_preset"]])
         print(f"Configure MoA preset: {preset_name}")
         print("Pick at least one reference model; choose Done when finished.")
@@ -104,7 +118,9 @@ def cmd_moa(args) -> None:
             base = existing[idx] if idx < len(existing) else None
             refs.append(_pick_slot(base))
             idx += 1
-            choice = _prompt_choice("Add another reference model?", ["Add another", "Done"], 1)
+            choice = _prompt_choice(
+                "Add another reference model?", ["Add another", "Done"], 1
+            )
             if choice == 1:
                 break
         print("Configure aggregator model.")

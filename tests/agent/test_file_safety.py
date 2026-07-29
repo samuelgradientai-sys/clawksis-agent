@@ -22,15 +22,18 @@ from agent.file_safety import (
 class TestEnvFileReadBlocking:
     """Secret-bearing .env files must be blocked by get_read_block_error."""
 
-    @pytest.mark.parametrize("basename", [
-        ".env",
-        ".env.local",
-        ".env.development",
-        ".env.production",
-        ".env.test",
-        ".env.staging",
-        ".envrc",
-    ])
+    @pytest.mark.parametrize(
+        "basename",
+        [
+            ".env",
+            ".env.local",
+            ".env.development",
+            ".env.production",
+            ".env.test",
+            ".env.staging",
+            ".envrc",
+        ],
+    )
     def test_blocked_env_basenames(self, basename):
         """All secret-bearing .env basenames are blocked regardless of directory."""
         path = f"/tmp/project/{basename}"
@@ -44,12 +47,15 @@ class TestEnvFileReadBlocking:
         error = get_read_block_error("/home/user/app/services/api/.env.production")
         assert error is not None
 
-    @pytest.mark.parametrize("basename", [
-        ".ENV",
-        ".Env.Local",
-        ".ENV.PRODUCTION",
-        ".ENVRC",
-    ])
+    @pytest.mark.parametrize(
+        "basename",
+        [
+            ".ENV",
+            ".Env.Local",
+            ".ENV.PRODUCTION",
+            ".ENVRC",
+        ],
+    )
     def test_blocked_env_basenames_case_insensitive(self, basename):
         """Secret-bearing .env basenames are blocked regardless of case."""
         error = get_read_block_error(f"/tmp/project/{basename}")
@@ -63,7 +69,7 @@ class TestEnvFileReadBlocking:
         assert error is not None
 
     def test_allowed_env_example(self):
-        """"The .env.example file is explicitly allowed — it's documentation, not a secret."""
+        """ "The .env.example file is explicitly allowed — it's documentation, not a secret."""
         error = get_read_block_error("/tmp/project/.env.example")
         assert error is None
 
@@ -74,8 +80,12 @@ class TestEnvFileReadBlocking:
 
     def test_allowed_non_env_files(self):
         """Regular files are not affected by the env guard."""
-        for path in ["/tmp/project/config.yaml", "/tmp/project/main.py",
-                     "/tmp/project/README.md", "/tmp/project/.gitignore"]:
+        for path in [
+            "/tmp/project/config.yaml",
+            "/tmp/project/main.py",
+            "/tmp/project/README.md",
+            "/tmp/project/.gitignore",
+        ]:
             error = get_read_block_error(path)
             assert error is None, f"{path} should be allowed"
 

@@ -71,9 +71,12 @@ def test_hallucinated_cards_fires_on_blocked_event():
     task = _task(status="ready")
     events = [
         _event("created", ts=100),
-        _event("completion_blocked_hallucination", ts=200,
-               phantom_cards=["t_bad1", "t_bad2"],
-               verified_cards=["t_good1"]),
+        _event(
+            "completion_blocked_hallucination",
+            ts=200,
+            phantom_cards=["t_bad1", "t_bad2"],
+            verified_cards=["t_good1"],
+        ),
     ]
     # ``now=300`` keeps the synthetic event timestamps in scope without
     # tripping the stranded_in_ready rule (events are 100/200 epoch
@@ -107,8 +110,12 @@ def test_prose_phantom_refs_fires_after_clean_completion():
     task = _task(status="done")
     events = [
         _event("completed", ts=100, summary="referenced t_bad", result_len=0),
-        _event("suspected_hallucinated_references", ts=101,
-               phantom_refs=["t_deadbeef99"], source="completion_summary"),
+        _event(
+            "suspected_hallucinated_references",
+            ts=101,
+            phantom_refs=["t_deadbeef99"],
+            source="completion_summary",
+        ),
     ]
     diags = kd.compute_task_diagnostics(task, events, [])
     assert len(diags) == 1
@@ -121,8 +128,9 @@ def test_prose_phantom_refs_clears_on_later_clean_edit():
     task = _task(status="done")
     events = [
         _event("completed", ts=100, summary="bad"),
-        _event("suspected_hallucinated_references", ts=101,
-               phantom_refs=["t_ffff0000cc"]),
+        _event(
+            "suspected_hallucinated_references", ts=101, phantom_refs=["t_ffff0000cc"]
+        ),
         _event("edited", ts=200, fields=["result", "summary"]),
     ]
     diags = kd.compute_task_diagnostics(task, events, [])
@@ -133,8 +141,11 @@ def test_repeated_failures_fires_at_threshold_on_spawn():
     """A task with multiple spawn_failed runs gets a spawn-flavoured
     diagnostic (title mentions 'spawn', suggested action is ``doctor``).
     """
-    task = _task(status="ready", consecutive_failures=3,
-                 last_failure_error="Profile 'debugger' does not exist")
+    task = _task(
+        status="ready",
+        consecutive_failures=3,
+        last_failure_error="Profile 'debugger' does not exist",
+    )
     runs = [
         _run(outcome="spawn_failed", run_id=1),
         _run(outcome="spawn_failed", run_id=2),
@@ -154,8 +165,11 @@ def test_repeated_failures_fires_on_timeout_loop():
     """The rule surfaces for timeout loops too — that's the point of
     unifying the counter. Suggested action is 'check logs', not
     'fix profile'."""
-    task = _task(status="ready", consecutive_failures=3,
-                 last_failure_error="elapsed 600s > limit 300s")
+    task = _task(
+        status="ready",
+        consecutive_failures=3,
+        last_failure_error="elapsed 600s > limit 300s",
+    )
     runs = [
         _run(outcome="timed_out", run_id=1),
         _run(outcome="timed_out", run_id=2),
@@ -185,8 +199,11 @@ def test_repeated_failures_default_matches_dispatcher_failure_limit():
     """Default dispatcher auto-blocks at 2 failures, so diagnostics must
     also surface at 2 instead of waiting for the stale threshold of 3.
     """
-    task = _task(status="blocked", consecutive_failures=2,
-                 last_failure_error="elapsed 600s > limit 300s")
+    task = _task(
+        status="blocked",
+        consecutive_failures=2,
+        last_failure_error="elapsed 600s > limit 300s",
+    )
     runs = [_run(outcome="timed_out", run_id=1)]
     diags = kd.compute_task_diagnostics(task, [], runs)
     repeated = [d for d in diags if d.kind == "repeated_failures"]
@@ -199,18 +216,22 @@ def test_repeated_failures_default_matches_dispatcher_failure_limit():
 
 
 def test_repeated_failures_derives_threshold_from_kanban_failure_limit():
-    task = _task(status="ready", consecutive_failures=2,
-                 last_failure_error="Profile 'debugger' does not exist")
-    runs = [_run(outcome="spawn_failed", run_id=1)]
-    assert kd.compute_task_diagnostics(
-        task, [], runs, config={"failure_limit": 4}
-    ) == []
-
-    task = _task(status="blocked", consecutive_failures=4,
-                 last_failure_error="Profile 'debugger' does not exist")
-    diags = kd.compute_task_diagnostics(
-        task, [], runs, config={"failure_limit": 4}
+    task = _task(
+        status="ready",
+        consecutive_failures=2,
+        last_failure_error="Profile 'debugger' does not exist",
     )
+    runs = [_run(outcome="spawn_failed", run_id=1)]
+    assert (
+        kd.compute_task_diagnostics(task, [], runs, config={"failure_limit": 4}) == []
+    )
+
+    task = _task(
+        status="blocked",
+        consecutive_failures=4,
+        last_failure_error="Profile 'debugger' does not exist",
+    )
+    diags = kd.compute_task_diagnostics(task, [], runs, config={"failure_limit": 4})
     repeated = [d for d in diags if d.kind == "repeated_failures"]
     assert len(repeated) == 1
     assert repeated[0].data["failure_threshold"] == 4
@@ -218,8 +239,11 @@ def test_repeated_failures_derives_threshold_from_kanban_failure_limit():
 
 
 def test_repeated_failures_explicit_threshold_overrides_failure_limit():
-    task = _task(status="ready", consecutive_failures=3,
-                 last_failure_error="Profile 'debugger' does not exist")
+    task = _task(
+        status="ready",
+        consecutive_failures=3,
+        last_failure_error="Profile 'debugger' does not exist",
+    )
     runs = [_run(outcome="spawn_failed", run_id=1)]
     diags = kd.compute_task_diagnostics(
         task, [], runs, config={"failure_limit": 5, "failure_threshold": 3}
@@ -300,7 +324,10 @@ def test_stuck_in_blocked_fires_past_threshold():
         _event("blocked", ts=now - 3600 * 48, reason="needs approval"),
     ]
     diags = kd.compute_task_diagnostics(
-        task, events, [], now=now,
+        task,
+        events,
+        [],
+        now=now,
     )
     assert len(diags) == 1
     d = diags[0]
@@ -354,8 +381,10 @@ def test_repeated_crashes_no_error_fallback_title():
 
 
 def test_repeated_failures_surfaces_actual_error_in_title():
-    task = _task(consecutive_failures=5,
-                 last_failure_error="insufficient_quota: billing limit reached")
+    task = _task(
+        consecutive_failures=5,
+        last_failure_error="insufficient_quota: billing limit reached",
+    )
     diags = kd.compute_task_diagnostics(task, [], [])
     assert len(diags) == 1
     d = diags[0]
@@ -394,12 +423,12 @@ def test_diagnostics_sorted_critical_first():
     Status must be non-terminal: done/archived are exempt from the
     failure rules (done means done). ``now=300`` keeps the synthetic
     timestamps from tripping stranded_in_ready — same dodge as above."""
-    task = _task(status="ready", consecutive_failures=10,
-                 last_failure_error="nope")
+    task = _task(status="ready", consecutive_failures=10, last_failure_error="nope")
     events = [
         _event("completed", ts=100, summary="referenced t_missing"),
-        _event("suspected_hallucinated_references", ts=101,
-               phantom_refs=["t_missing11"]),
+        _event(
+            "suspected_hallucinated_references", ts=101, phantom_refs=["t_missing11"]
+        ),
     ]
     diags = kd.compute_task_diagnostics(task, events, [], now=300)
     kinds = [d.kind for d in diags]
@@ -424,21 +453,28 @@ def test_engine_works_on_sqlite_row_objects(kanban_home):
         real = kb.create_task(conn, title="r", assignee="x", created_by="w")
         with pytest.raises(kb.HallucinatedCardsError):
             kb.complete_task(
-                conn, parent,
-                summary="with phantom", created_cards=[real, "t_deadbeef1"],
+                conn,
+                parent,
+                summary="with phantom",
+                created_cards=[real, "t_deadbeef1"],
             )
         # Pull Row objects the way the API helper does.
         row = conn.execute(
-            "SELECT * FROM tasks WHERE id = ?", (parent,),
+            "SELECT * FROM tasks WHERE id = ?",
+            (parent,),
         ).fetchone()
-        events = list(conn.execute(
-            "SELECT * FROM task_events WHERE task_id = ? ORDER BY id",
-            (parent,),
-        ).fetchall())
-        runs = list(conn.execute(
-            "SELECT * FROM task_runs WHERE task_id = ? ORDER BY id",
-            (parent,),
-        ).fetchall())
+        events = list(
+            conn.execute(
+                "SELECT * FROM task_events WHERE task_id = ? ORDER BY id",
+                (parent,),
+            ).fetchall()
+        )
+        runs = list(
+            conn.execute(
+                "SELECT * FROM task_runs WHERE task_id = ? ORDER BY id",
+                (parent,),
+            ).fetchall()
+        )
         diags = kd.compute_task_diagnostics(row, events, runs)
         assert len(diags) == 1
         assert diags[0].kind == "hallucinated_cards"
@@ -526,7 +562,9 @@ def test_stranded_in_ready_skips_claimed_tasks():
     second-guess: the run-level liveness signal owns that decision."""
     now = 100_000
     task = _task(
-        status="ready", assignee="demo", claim_lock="run_xyz",
+        status="ready",
+        assignee="demo",
+        claim_lock="run_xyz",
     )
     events = [_event("created", ts=now - 6 * 3600)]
     diags = kd.compute_task_diagnostics(task, events, [], now=now)
@@ -540,8 +578,8 @@ def test_stranded_in_ready_uses_latest_ready_transition():
     now = 100_000
     task = _task(status="ready", assignee="demo")
     events = [
-        _event("created", ts=now - 6 * 3600),       # 6 h ago
-        _event("reclaimed", ts=now - 20 * 60),      # 20 min ago — wins
+        _event("created", ts=now - 6 * 3600),  # 6 h ago
+        _event("reclaimed", ts=now - 20 * 60),  # 20 min ago — wins
     ]
     diags = kd.compute_task_diagnostics(task, events, [], now=now)
     assert [d for d in diags if d.kind == "stranded_in_ready"] == []
@@ -553,8 +591,8 @@ def test_stranded_in_ready_severity_escalates_with_age():
     task = _task(status="ready", assignee="demo")
     # Default threshold = 1800s.
     cases = [
-        (45 * 60, "warning"),    # 1.5x → warning
-        (90 * 60, "error"),      # 3x → error
+        (45 * 60, "warning"),  # 1.5x → warning
+        (90 * 60, "error"),  # 3x → error
         (4 * 3600, "critical"),  # 8x → critical
     ]
     for age, expected in cases:
@@ -577,7 +615,10 @@ def test_stranded_in_ready_respects_config_override():
     assert [d for d in diags if d.kind == "stranded_in_ready"] == []
     # Lower the threshold to 5 min — now it fires.
     diags = kd.compute_task_diagnostics(
-        task, events, [], now=now,
+        task,
+        events,
+        [],
+        now=now,
         config={"stranded_threshold_seconds": 5 * 60},
     )
     stranded = [d for d in diags if d.kind == "stranded_in_ready"]
@@ -590,7 +631,9 @@ def test_stranded_in_ready_falls_back_to_created_at():
     invisible just because its events got pruned."""
     now = 100_000
     task = _task(
-        status="ready", assignee="demo", created_at=now - 4 * 3600,
+        status="ready",
+        assignee="demo",
+        created_at=now - 4 * 3600,
     )
     # No qualifying events.
     events = [_event("commented", ts=now - 100)]
@@ -604,6 +647,7 @@ def test_stranded_in_ready_works_on_real_db_row(kanban_home):
     """Round-trip through real kanban_db.connect() — confirms the rule
     works on sqlite3.Row objects, not just dicts."""
     import time as _t
+
     conn = kb.connect()
     try:
         # Create a task and force its created_at into the past.
@@ -615,22 +659,25 @@ def test_stranded_in_ready_works_on_real_db_row(kanban_home):
         )
         conn.commit()
 
-        task_row = conn.execute(
-            "SELECT * FROM tasks WHERE id = ?", (tid,)
-        ).fetchone()
-        events = list(conn.execute(
-            "SELECT * FROM task_events WHERE task_id = ? ORDER BY created_at",
-            (tid,),
-        ).fetchall())
+        task_row = conn.execute("SELECT * FROM tasks WHERE id = ?", (tid,)).fetchone()
+        events = list(
+            conn.execute(
+                "SELECT * FROM task_events WHERE task_id = ? ORDER BY created_at",
+                (tid,),
+            ).fetchall()
+        )
         # Override created event timestamps too so age calc lines up.
         conn.execute(
             "UPDATE task_events SET created_at = ? WHERE task_id = ?",
             (old_ts, tid),
         )
         conn.commit()
-        events = list(conn.execute(
-            "SELECT * FROM task_events WHERE task_id = ?", (tid,),
-        ).fetchall())
+        events = list(
+            conn.execute(
+                "SELECT * FROM task_events WHERE task_id = ?",
+                (tid,),
+            ).fetchall()
+        )
 
         diags = kd.compute_task_diagnostics(task_row, events, [])
         stranded = [d for d in diags if d.kind == "stranded_in_ready"]
@@ -638,7 +685,6 @@ def test_stranded_in_ready_works_on_real_db_row(kanban_home):
         assert stranded[0].data["assignee"] == "ghost"
     finally:
         conn.close()
-
 
 
 # ---------------------------------------------------------------------------

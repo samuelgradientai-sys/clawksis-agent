@@ -26,8 +26,16 @@ def _params(level="info", data="hello", logger_name=None):
 class TestLogLevelMap:
     def test_all_mcp_levels_mapped(self):
         # MCP spec (RFC 5424) defines these eight levels.
-        for lvl in ("debug", "info", "notice", "warning",
-                    "error", "critical", "alert", "emergency"):
+        for lvl in (
+            "debug",
+            "info",
+            "notice",
+            "warning",
+            "error",
+            "critical",
+            "alert",
+            "emergency",
+        ):
             assert lvl in _MCP_LOG_LEVEL_MAP
 
     def test_severity_ordering(self):
@@ -54,8 +62,9 @@ class TestLoggingCallback:
         server = MCPServerTask("log_srv")
         callback = server._make_logging_callback()
         with caplog.at_level(logging.WARNING, logger="tools.mcp_tool"):
-            await callback(_params(level="warning", data="rate limited",
-                                   logger_name="http"))
+            await callback(
+                _params(level="warning", data="rate limited", logger_name="http")
+            )
         assert any(
             "MCP server log [log_srv/http]: rate limited" in rec.getMessage()
             and rec.levelno == logging.WARNING
@@ -78,9 +87,7 @@ class TestLoggingCallback:
         callback = server._make_logging_callback()
         with caplog.at_level(logging.INFO, logger="tools.mcp_tool"):
             await callback(_params(data={"event": "connect", "port": 8080}))
-        assert any(
-            '"event": "connect"' in rec.getMessage() for rec in caplog.records
-        )
+        assert any('"event": "connect"' in rec.getMessage() for rec in caplog.records)
 
     @pytest.mark.asyncio
     async def test_unknown_level_defaults_to_info(self, caplog):
@@ -100,7 +107,8 @@ class TestLoggingCallback:
         with caplog.at_level(logging.INFO, logger="tools.mcp_tool"):
             await callback(_params(data="x" * 10_000))
         msg = next(
-            rec.getMessage() for rec in caplog.records
+            rec.getMessage()
+            for rec in caplog.records
             if "MCP server log" in rec.getMessage()
         )
         assert "... [truncated]" in msg
@@ -122,5 +130,6 @@ class TestSDKSupportGate:
         # (by design), but we want to know.
         import inspect
         from mcp import ClientSession
+
         expected = "logging_callback" in inspect.signature(ClientSession).parameters
         assert _MCP_LOGGING_CALLBACK_SUPPORTED == expected

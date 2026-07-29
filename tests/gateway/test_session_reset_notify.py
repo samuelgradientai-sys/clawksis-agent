@@ -23,6 +23,7 @@ from gateway.session import SessionEntry, SessionSource, SessionStore
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_source(platform=Platform.TELEGRAM, chat_id="123", user_id="u1"):
     return SessionSource(
         platform=platform,
@@ -46,6 +47,7 @@ def _make_store(policy=None, tmp_path=None, has_active_processes_fn=None):
 # ---------------------------------------------------------------------------
 # _should_reset returns reason string
 # ---------------------------------------------------------------------------
+
 
 class TestShouldResetReason:
     def test_returns_none_when_not_expired(self, tmp_path):
@@ -71,7 +73,8 @@ class TestShouldResetReason:
             session_key="test",
             session_id="s1",
             created_at=datetime.now() - timedelta(hours=2),
-            updated_at=datetime.now() - timedelta(hours=1),  # 60min ago > 30min threshold
+            updated_at=datetime.now()
+            - timedelta(hours=1),  # 60min ago > 30min threshold
         )
         source = _make_source()
         assert store._should_reset(entry, source) == "idle"
@@ -124,7 +127,9 @@ class TestShouldResetReason:
 
         assert store._should_reset(entry, source) is None
 
-    def test_is_session_expired_fails_closed_when_active_process_check_raises(self, tmp_path):
+    def test_is_session_expired_fails_closed_when_active_process_check_raises(
+        self, tmp_path
+    ):
         def _raise(_session_key):
             raise RuntimeError("process registry unavailable")
 
@@ -148,6 +153,7 @@ class TestShouldResetReason:
 # ---------------------------------------------------------------------------
 # SessionEntry captures reason
 # ---------------------------------------------------------------------------
+
 
 class TestSessionEntryReason:
     def test_auto_reset_reason_stored(self, tmp_path):
@@ -212,6 +218,7 @@ class TestSessionEntryReason:
 # SessionResetPolicy notify config
 # ---------------------------------------------------------------------------
 
+
 class TestResetPolicyNotify:
     def test_notify_defaults_true(self):
         policy = SessionResetPolicy()
@@ -252,6 +259,7 @@ class TestResetPolicyNotify:
 # ---------------------------------------------------------------------------
 # SessionEntry to_dict / from_dict roundtrip for auto-reset fields
 # ---------------------------------------------------------------------------
+
 
 class TestSessionEntryAutoResetRoundtrip:
     def test_was_auto_reset_persists_across_roundtrip(self, tmp_path):
@@ -328,11 +336,14 @@ class TestSessionEntryAutoResetRoundtrip:
 # resume_pending_expired: auto_reset_reason and DB end_reason (#58933)
 # ---------------------------------------------------------------------------
 
+
 def _make_db_mock() -> MagicMock:
     """Return a SessionDB mock with safe defaults for all lookup methods."""
     db = MagicMock()
     db.get_session.return_value = None
-    db.get_compression_tip.return_value = None  # avoids MagicMock leaking into session_id
+    db.get_compression_tip.return_value = (
+        None  # avoids MagicMock leaking into session_id
+    )
     db.find_latest_gateway_session_for_peer.return_value = None
     db.reopen_session.return_value = None
     db.create_session.return_value = None
@@ -363,16 +374,14 @@ class TestResumePendingExpiredAutoReset:
         store.mark_resume_pending(entry.session_key)
         with store._lock:
             entry = store._entries[entry.session_key]
-            entry.last_resume_marked_at = (
-                datetime.now() - timedelta(seconds=freshness_seconds + 60)
+            entry.last_resume_marked_at = datetime.now() - timedelta(
+                seconds=freshness_seconds + 60
             )
             entry.updated_at = datetime.now()  # keep updated_at fresh
             store._save()
         return entry
 
-    def test_stale_resume_pending_sets_auto_reset_reason(
-        self, tmp_path, monkeypatch
-    ):
+    def test_stale_resume_pending_sets_auto_reset_reason(self, tmp_path, monkeypatch):
         """Stale resume_pending triggers was_auto_reset=True with reason
         'resume_pending_expired', NOT 'idle'."""
         monkeypatch.setenv("CLAWK_AUTO_CONTINUE_FRESHNESS", "3600")
@@ -393,9 +402,7 @@ class TestResumePendingExpiredAutoReset:
         assert new.was_auto_reset is True
         assert new.auto_reset_reason == "resume_pending_expired"
 
-    def test_stale_resume_pending_had_activity_flag(
-        self, tmp_path, monkeypatch
-    ):
+    def test_stale_resume_pending_had_activity_flag(self, tmp_path, monkeypatch):
         """reset_had_activity reflects whether the old session was used."""
         monkeypatch.setenv("CLAWK_AUTO_CONTINUE_FRESHNESS", "3600")
         store = _make_store_with_db(
@@ -421,7 +428,8 @@ class TestResumePendingExpiredAutoReset:
         monkeypatch.setenv("CLAWK_AUTO_CONTINUE_FRESHNESS", "3600")
         db = _make_db_mock()
         store = _make_store_with_db(
-            tmp_path, db,
+            tmp_path,
+            db,
             policy=SessionResetPolicy(mode="idle", idle_minutes=999999),
         )
         source = _make_source()
@@ -439,9 +447,7 @@ class TestResumePendingExpiredAutoReset:
             "the DB end_reason must not be the generic 'session_reset'"
         )
 
-    def test_idle_reset_db_end_reason_reflects_idle(
-        self, tmp_path
-    ):
+    def test_idle_reset_db_end_reason_reflects_idle(self, tmp_path):
         """Regular idle auto-reset persists 'idle' as end_reason so that all
         auto-reset paths are auditable (#58933 should not regress the common
         idle/daily path)."""

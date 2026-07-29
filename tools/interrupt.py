@@ -55,7 +55,10 @@ def set_interrupt(active: bool, thread_id: int | None = None) -> None:
         logger.info(
             "[interrupt-debug] set_interrupt(active=%s, target_tid=%s) "
             "called_from_tid=%s current_set=%s",
-            active, tid, threading.current_thread().ident, _snapshot,
+            active,
+            tid,
+            threading.current_thread().ident,
+            _snapshot,
         )
 
 
@@ -92,6 +95,7 @@ def clear_current_thread_interrupt() -> None:
 # import _interrupt_event directly and call .is_set() / .set() / .clear().
 # This shim maps those calls to the per-thread functions above so existing
 # code keeps working while the underlying mechanism is thread-scoped.
+
 
 class _ThreadAwareEventProxy:
     """Drop-in proxy that maps threading.Event methods to per-thread state."""

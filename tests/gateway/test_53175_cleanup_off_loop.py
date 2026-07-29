@@ -23,6 +23,7 @@ loop is never blocked and a stuck teardown degrades gracefully.
 These tests drive that shared helper directly — it is the single chokepoint
 every fixed call site now uses.
 """
+
 import asyncio
 import logging
 import threading

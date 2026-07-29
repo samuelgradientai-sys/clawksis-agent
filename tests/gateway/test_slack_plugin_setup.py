@@ -7,6 +7,7 @@ from ``clawk_cli.config`` (get_env_value / save_env_value) and
 ``clawk_cli.cli_output`` (prompt / prompt_yes_no / print_*), so we patch those
 source modules.
 """
+
 import clawk_cli.config as config_mod
 import clawk_cli.cli_output as cli_output_mod
 from plugins.platforms.slack.adapter import interactive_setup
@@ -23,7 +24,10 @@ def _patch_setup_io(monkeypatch, prompts, saved):
         monkeypatch.setattr(cli_output_mod, name, lambda *_a, **_kw: None)
     # Manifest writing reaches out to clawk_cli.slack_cli + filesystem; stub it.
     import clawk_cli.slack_cli as slack_cli_mod
-    monkeypatch.setattr(slack_cli_mod, "_build_full_manifest", lambda **_kw: {"display_information": {}})
+
+    monkeypatch.setattr(
+        slack_cli_mod, "_build_full_manifest", lambda **_kw: {"display_information": {}}
+    )
 
 
 def test_interactive_setup_saves_home_channel(monkeypatch, tmp_path):

@@ -14,7 +14,6 @@ from __future__ import annotations
 from pathlib import Path
 
 
-
 def _write_config(tmp_path: Path, body: str) -> None:
     clawk_home = tmp_path
     (clawk_home / "config.yaml").write_text(body or "{}\n", encoding="utf-8")
@@ -22,6 +21,7 @@ def _write_config(tmp_path: Path, body: str) -> None:
 
 def _make_agent(tmp_path: Path, **overrides):
     from run_agent import AIAgent
+
     kwargs = dict(
         model="gpt-5.5",
         provider="openai-codex",
@@ -41,6 +41,7 @@ def _make_agent(tmp_path: Path, **overrides):
 
 def test_estimator_chat_completions_messages():
     from agent.chat_completion_helpers import estimate_request_context_tokens
+
     payload = {
         "model": "gpt-5.4",
         "messages": [
@@ -54,6 +55,7 @@ def test_estimator_chat_completions_messages():
 
 def test_estimator_responses_api_input():
     from agent.chat_completion_helpers import estimate_request_context_tokens
+
     payload = {
         "model": "gpt-5.5",
         "instructions": "i" * 1000,
@@ -68,6 +70,7 @@ def test_estimator_responses_api_input():
 def test_estimator_responses_api_long_session_triggers_tier():
     """A real long Codex session (large ``input``) should clear the 50k boundary."""
     from agent.chat_completion_helpers import estimate_request_context_tokens
+
     payload = {
         "model": "gpt-5.5",
         "input": "x" * 240_000,  # ~60k tokens (240k chars / 4)
@@ -78,6 +81,7 @@ def test_estimator_responses_api_long_session_triggers_tier():
 
 def test_estimator_bare_list_back_compat():
     from agent.chat_completion_helpers import estimate_request_context_tokens
+
     messages = [
         {"role": "user", "content": "x" * 800},
     ]
@@ -86,6 +90,7 @@ def test_estimator_bare_list_back_compat():
 
 def test_estimator_empty_inputs():
     from agent.chat_completion_helpers import estimate_request_context_tokens
+
     assert estimate_request_context_tokens({}) == 0
     assert estimate_request_context_tokens([]) == 0
     assert estimate_request_context_tokens(None) == 0
@@ -93,6 +98,7 @@ def test_estimator_empty_inputs():
 
 def test_estimator_unknown_dict_fallback():
     from agent.chat_completion_helpers import estimate_request_context_tokens
+
     payload = {"random_field": "z" * 400}
     assert estimate_request_context_tokens(payload) > 50
 
@@ -175,15 +181,19 @@ def test_explicit_user_config_overrides_default(monkeypatch, tmp_path):
     """If the user explicitly sets a stale_timeout, the new defaults don't apply."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     (tmp_path / ".env").write_text("", encoding="utf-8")
-    _write_config(tmp_path, """\
+    _write_config(
+        tmp_path,
+        """\
 providers:
   openai-codex:
     stale_timeout_seconds: 1800
-""")
+""",
+    )
     monkeypatch.delenv("CLAWK_API_CALL_STALE_TIMEOUT", raising=False)
 
     import importlib
     from clawk_cli import timeouts as to_mod
+
     importlib.reload(to_mod)
 
     agent = _make_agent(tmp_path)

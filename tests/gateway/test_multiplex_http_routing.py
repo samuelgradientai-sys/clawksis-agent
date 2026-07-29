@@ -1,4 +1,5 @@
 """Phase 1: HTTP-inbound /p/<profile>/ routing for the webhook adapter."""
+
 import pytest
 
 from gateway.config import GatewayConfig, Platform
@@ -8,7 +9,9 @@ from gateway.session import SessionSource, build_session_key
 class TestSessionSourceProfileField:
     def test_profile_roundtrips(self):
         s = SessionSource(
-            platform=Platform.WEBHOOK if hasattr(Platform, "WEBHOOK") else Platform.TELEGRAM,
+            platform=Platform.WEBHOOK
+            if hasattr(Platform, "WEBHOOK")
+            else Platform.TELEGRAM,
             chat_id="c1",
             chat_type="webhook",
             profile="coder",

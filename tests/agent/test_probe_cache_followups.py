@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 def _clear_probe_cache():
     """Module-level caches must not leak between tests."""
     from agent import model_metadata
+
     model_metadata._LOCAL_CTX_PROBE_CACHE.clear()
     model_metadata._endpoint_probe_path_cache.clear()
     yield
@@ -82,7 +83,8 @@ class TestOllamaApiShowCaching:
             # Age the entry past the TTL.
             ((key, (val, _ts)),) = list(model_metadata._LOCAL_CTX_PROBE_CACHE.items())
             model_metadata._LOCAL_CTX_PROBE_CACHE[key] = (
-                val, _time.monotonic() - model_metadata._LOCAL_CTX_PROBE_TTL_SECONDS - 1,
+                val,
+                _time.monotonic() - model_metadata._LOCAL_CTX_PROBE_TTL_SECONDS - 1,
             )
             _query_ollama_api_show("llama3", "http://127.0.0.1:11434")
 
@@ -96,7 +98,8 @@ class TestOllamaApiShowCaching:
 
         # Seed a same-(model,url) entry under the sibling probe's key shape.
         model_metadata._LOCAL_CTX_PROBE_CACHE[("llama3", "http://127.0.0.1:11434")] = (
-            999, _time.monotonic(),
+            999,
+            _time.monotonic(),
         )
 
         client = _client_mock(_mock_show_response(131072))
@@ -156,7 +159,8 @@ class TestDetectLocalServerTypeCache:
         # Age the entry past the TTL, then swap the backend behind the URL.
         ((key, (val, _ts)),) = list(model_metadata._endpoint_probe_path_cache.items())
         model_metadata._endpoint_probe_path_cache[key] = (
-            val, _time.monotonic() - model_metadata._ENDPOINT_PROBE_TTL_SECONDS - 1,
+            val,
+            _time.monotonic() - model_metadata._ENDPOINT_PROBE_TTL_SECONDS - 1,
         )
 
         lmstudio_resp = MagicMock()
@@ -169,7 +173,8 @@ class TestDetectLocalServerTypeCache:
         def _get(url, *a, **k):
             if url.endswith("/api/v1/models"):
                 return lmstudio_resp
-            miss = MagicMock(); miss.status_code = 404
+            miss = MagicMock()
+            miss.status_code = 404
             return miss
 
         swap_client.get.side_effect = _get
@@ -184,12 +189,19 @@ class TestLocalhostIPv4SiblingSites:
     def test_helper_rewrites_all_forms(self):
         from agent.model_metadata import _localhost_to_ipv4
 
-        assert _localhost_to_ipv4("http://localhost:1234/v1") == "http://127.0.0.1:1234/v1"
+        assert (
+            _localhost_to_ipv4("http://localhost:1234/v1") == "http://127.0.0.1:1234/v1"
+        )
         assert _localhost_to_ipv4("http://localhost/v1") == "http://127.0.0.1/v1"
         assert _localhost_to_ipv4("http://localhost") == "http://127.0.0.1"
         # Non-localhost passes through untouched.
-        assert _localhost_to_ipv4("http://192.168.1.10:8080") == "http://192.168.1.10:8080"
-        assert _localhost_to_ipv4("https://api.openai.com/v1") == "https://api.openai.com/v1"
+        assert (
+            _localhost_to_ipv4("http://192.168.1.10:8080") == "http://192.168.1.10:8080"
+        )
+        assert (
+            _localhost_to_ipv4("https://api.openai.com/v1")
+            == "https://api.openai.com/v1"
+        )
         assert _localhost_to_ipv4("") == ""
 
     def test_rewrite_is_host_only_not_substring(self):
@@ -217,8 +229,12 @@ class TestLocalhostIPv4SiblingSites:
         from agent.model_metadata import query_ollama_num_ctx
 
         client = _client_mock(_mock_show_response(131072))
-        with patch("agent.model_metadata.detect_local_server_type", return_value="ollama"), \
-             patch("httpx.Client", return_value=client):
+        with (
+            patch(
+                "agent.model_metadata.detect_local_server_type", return_value="ollama"
+            ),
+            patch("httpx.Client", return_value=client),
+        ):
             query_ollama_num_ctx("llama3", "http://localhost:11434")
 
         assert client.post.call_args[0][0].startswith("http://127.0.0.1:11434")
@@ -229,14 +245,19 @@ class TestContextCacheKeyNormalization:
         from agent import model_metadata
 
         monkeypatch.setattr(
-            model_metadata, "_get_context_cache_path",
+            model_metadata,
+            "_get_context_cache_path",
             lambda: tmp_path / "context_lengths.yaml",
         )
 
         model_metadata.save_context_length("m1", "http://host/v1/", 200_000)
         # Both slash variants resolve to the same row.
-        assert model_metadata.get_cached_context_length("m1", "http://host/v1") == 200_000
-        assert model_metadata.get_cached_context_length("m1", "http://host/v1/") == 200_000
+        assert (
+            model_metadata.get_cached_context_length("m1", "http://host/v1") == 200_000
+        )
+        assert (
+            model_metadata.get_cached_context_length("m1", "http://host/v1/") == 200_000
+        )
 
         cache = model_metadata._load_context_cache()
         assert list(cache.keys()) == ["m1@http://host/v1"]
@@ -250,9 +271,13 @@ class TestContextCacheKeyNormalization:
         monkeypatch.setattr(model_metadata, "_get_context_cache_path", lambda: path)
         path.write_text(yaml.dump({"context_lengths": {"m1@http://host/v1/": 128_000}}))
 
-        assert model_metadata.get_cached_context_length("m1", "http://host/v1/") == 128_000
+        assert (
+            model_metadata.get_cached_context_length("m1", "http://host/v1/") == 128_000
+        )
 
-    def test_legacy_slashed_row_found_with_normalized_caller(self, tmp_path, monkeypatch):
+    def test_legacy_slashed_row_found_with_normalized_caller(
+        self, tmp_path, monkeypatch
+    ):
         """Reverse migration direction: old row has the slash, current runtime
         passes the normalized no-slash URL — must still hit, not re-probe."""
         import yaml
@@ -262,7 +287,9 @@ class TestContextCacheKeyNormalization:
         monkeypatch.setattr(model_metadata, "_get_context_cache_path", lambda: path)
         path.write_text(yaml.dump({"context_lengths": {"m1@http://host/v1/": 128_000}}))
 
-        assert model_metadata.get_cached_context_length("m1", "http://host/v1") == 128_000
+        assert (
+            model_metadata.get_cached_context_length("m1", "http://host/v1") == 128_000
+        )
 
     def test_invalidate_clears_both_key_shapes(self, tmp_path, monkeypatch):
         import yaml
@@ -270,17 +297,23 @@ class TestContextCacheKeyNormalization:
 
         path = tmp_path / "context_lengths.yaml"
         monkeypatch.setattr(model_metadata, "_get_context_cache_path", lambda: path)
-        path.write_text(yaml.dump({"context_lengths": {
-            "m1@http://host/v1": 128_000,
-            "m1@http://host/v1/": 64_000,
-        }}))
+        path.write_text(
+            yaml.dump({
+                "context_lengths": {
+                    "m1@http://host/v1": 128_000,
+                    "m1@http://host/v1/": 64_000,
+                }
+            })
+        )
 
         model_metadata._invalidate_cached_context_length("m1", "http://host/v1/")
         cache = model_metadata._load_context_cache()
         assert "m1@http://host/v1" not in cache
         assert "m1@http://host/v1/" not in cache
 
-    def test_invalidate_with_normalized_caller_clears_legacy_row(self, tmp_path, monkeypatch):
+    def test_invalidate_with_normalized_caller_clears_legacy_row(
+        self, tmp_path, monkeypatch
+    ):
         """Reverse direction: invalidating with the no-slash URL must also
         drop a legacy slashed row, or the next lookup resurrects stale data."""
         import yaml
@@ -305,9 +338,15 @@ class TestContextCacheKeyNormalization:
 
         now = _time.monotonic()
         model_metadata._LOCAL_CTX_PROBE_CACHE[("m1", "http://host/v1")] = (999, now)
-        model_metadata._LOCAL_CTX_PROBE_CACHE[("ollama_show", "m1", "http://host/v1")] = (999, now)
+        model_metadata._LOCAL_CTX_PROBE_CACHE[
+            ("ollama_show", "m1", "http://host/v1")
+        ] = (999, now)
 
         model_metadata._invalidate_cached_context_length("m1", "http://host/v1")
 
         assert ("m1", "http://host/v1") not in model_metadata._LOCAL_CTX_PROBE_CACHE
-        assert ("ollama_show", "m1", "http://host/v1") not in model_metadata._LOCAL_CTX_PROBE_CACHE
+        assert (
+            "ollama_show",
+            "m1",
+            "http://host/v1",
+        ) not in model_metadata._LOCAL_CTX_PROBE_CACHE

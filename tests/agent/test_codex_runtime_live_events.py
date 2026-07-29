@@ -170,9 +170,11 @@ def test_one_broken_callback_does_not_hide_other_live_events():
 
     agent = SimpleNamespace(
         tool_progress_callback=broken_progress,
-        tool_start_callback=lambda call_id, name, args: starts.append(
-            (call_id, name, args)
-        ),
+        tool_start_callback=lambda call_id, name, args: starts.append((
+            call_id,
+            name,
+            args,
+        )),
     )
     bridge = make_codex_app_server_event_bridge(agent)
     item = {"type": "dynamicToolCall", "id": "d1", "tool": "search"}

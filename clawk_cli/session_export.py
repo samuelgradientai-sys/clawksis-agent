@@ -72,7 +72,7 @@ def export_record_count(
 
 
 def iter_user_prompt_records(
-    sessions: Iterable[Dict[str, Any]]
+    sessions: Iterable[Dict[str, Any]],
 ) -> Iterator[Dict[str, Any]]:
     """Yield one normalized record for each user-authored prompt."""
     for session in sessions:
@@ -98,9 +98,7 @@ def iter_user_prompt_records(
             yield record
 
 
-def _render_jsonl(
-    sessions: List[Dict[str, Any]], *, only: Optional[ExportOnly]
-) -> str:
+def _render_jsonl(sessions: List[Dict[str, Any]], *, only: Optional[ExportOnly]) -> str:
     if only == "user-prompts":
         rows = iter_user_prompt_records(sessions)
     else:
@@ -121,7 +119,9 @@ def _render_user_prompts_markdown(sessions: List[Dict[str, Any]]) -> str:
     lines: List[str] = []
     if len(sessions) == 1:
         session = sessions[0]
-        lines.append(f"# User prompts for session {_heading_text(_session_id(session))}")
+        lines.append(
+            f"# User prompts for session {_heading_text(_session_id(session))}"
+        )
         lines.extend(_session_metadata_lines(session))
         lines.append("")
         _append_prompt_records(lines, session, heading_level=2)
@@ -255,14 +255,18 @@ def _format_timestamp(value: Any) -> Optional[str]:
         return None
     if isinstance(value, (int, float)):
         return (
-            datetime.fromtimestamp(float(value), tz=timezone.utc)
+            datetime
+            .fromtimestamp(float(value), tz=timezone.utc)
             .isoformat(timespec="seconds")
             .replace("+00:00", "Z")
         )
     if isinstance(value, datetime):
         dt = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc).isoformat(timespec="seconds").replace(
-            "+00:00", "Z"
+        return (
+            dt
+            .astimezone(timezone.utc)
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z")
         )
     return str(value)
 

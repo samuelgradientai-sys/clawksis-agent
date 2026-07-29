@@ -79,6 +79,7 @@ def db(tmp_path):
 # Session lifecycle
 # =========================================================================
 
+
 class TestSessionLifecycle:
     def test_create_and_get_session(self, db):
         sid = db.create_session(
@@ -94,7 +95,6 @@ class TestSessionLifecycle:
         assert session["model"] == "test-model"
         assert session["ended_at"] is None
 
-
     def test_get_nonexistent_session(self, db):
         assert db.get_session("nonexistent") is None
 
@@ -109,8 +109,11 @@ class TestSessionLifecycle:
         assert bare["model"] is None
         # Agent enriches — passes source="cli" but real metadata.
         db.create_session(
-            "s1", source="cli", model="claude-opus-4-6",
-            model_config={"max_iterations": 90}, system_prompt="SYS",
+            "s1",
+            source="cli",
+            model="claude-opus-4-6",
+            model_config={"max_iterations": 90},
+            system_prompt="SYS",
         )
         enriched = db.get_session("s1")
         assert enriched["model"] == "claude-opus-4-6"
@@ -247,9 +250,15 @@ class TestSessionLifecycle:
     def test_update_token_counts_tracks_api_call_count(self, db):
         """api_call_count increments with each update_token_counts call."""
         db.create_session(session_id="s1", source="cli")
-        db.update_token_counts("s1", input_tokens=100, output_tokens=50, api_call_count=1)
-        db.update_token_counts("s1", input_tokens=100, output_tokens=50, api_call_count=1)
-        db.update_token_counts("s1", input_tokens=100, output_tokens=50, api_call_count=1)
+        db.update_token_counts(
+            "s1", input_tokens=100, output_tokens=50, api_call_count=1
+        )
+        db.update_token_counts(
+            "s1", input_tokens=100, output_tokens=50, api_call_count=1
+        )
+        db.update_token_counts(
+            "s1", input_tokens=100, output_tokens=50, api_call_count=1
+        )
 
         session = db.get_session("s1")
         assert session["api_call_count"] == 3
@@ -257,9 +266,12 @@ class TestSessionLifecycle:
     def test_update_token_counts_api_call_count_absolute(self, db):
         """absolute mode sets api_call_count directly."""
         db.create_session(session_id="s1", source="cli")
-        db.update_token_counts("s1", input_tokens=100, output_tokens=50, api_call_count=1)
-        db.update_token_counts("s1", input_tokens=300, output_tokens=150,
-                               api_call_count=5, absolute=True)
+        db.update_token_counts(
+            "s1", input_tokens=100, output_tokens=50, api_call_count=1
+        )
+        db.update_token_counts(
+            "s1", input_tokens=300, output_tokens=150, api_call_count=5, absolute=True
+        )
 
         session = db.get_session("s1")
         assert session["api_call_count"] == 5
@@ -267,7 +279,9 @@ class TestSessionLifecycle:
 
     def test_update_token_counts_backfills_model_when_null(self, db):
         db.create_session(session_id="s1", source="telegram")
-        db.update_token_counts("s1", input_tokens=10, output_tokens=5, model="openai/gpt-5.4")
+        db.update_token_counts(
+            "s1", input_tokens=10, output_tokens=5, model="openai/gpt-5.4"
+        )
 
         session = db.get_session("s1")
         assert session["model"] == "openai/gpt-5.4"
@@ -296,12 +310,20 @@ class TestSessionLifecycle:
         """A mixed-provider session keeps its first accounted route in the legacy row."""
         db.create_session(session_id="s1", source="cli", model="gpt-5.6-sol")
         db.update_token_counts(
-            "s1", input_tokens=10, output_tokens=5, model="gpt-5.6-sol",
-            billing_provider="openai-codex", api_call_count=1,
+            "s1",
+            input_tokens=10,
+            output_tokens=5,
+            model="gpt-5.6-sol",
+            billing_provider="openai-codex",
+            api_call_count=1,
         )
         db.update_token_counts(
-            "s1", input_tokens=10, output_tokens=5, model="glm-5.2",
-            billing_provider="custom:zai", api_call_count=1,
+            "s1",
+            input_tokens=10,
+            output_tokens=5,
+            model="glm-5.2",
+            billing_provider="custom:zai",
+            api_call_count=1,
         )
 
         session = db.get_session("s1")
@@ -310,8 +332,12 @@ class TestSessionLifecycle:
         assert session["api_call_count"] == 2
 
     def test_update_token_counts_preserves_existing_model(self, db):
-        db.create_session(session_id="s1", source="cli", model="anthropic/claude-opus-4.6")
-        db.update_token_counts("s1", input_tokens=10, output_tokens=5, model="openai/gpt-5.4")
+        db.create_session(
+            session_id="s1", source="cli", model="anthropic/claude-opus-4.6"
+        )
+        db.update_token_counts(
+            "s1", input_tokens=10, output_tokens=5, model="openai/gpt-5.4"
+        )
 
         session = db.get_session("s1")
         assert session["model"] == "anthropic/claude-opus-4.6"
@@ -323,11 +349,13 @@ class TestSessionLifecycle:
         the dashboard kept showing the original model after a switch (#34850).
         update_session_model sets the column unconditionally.
         """
-        db.create_session(session_id="s1", source="telegram",
-                          model="xiaomi/mimo-v2.5-pro")
+        db.create_session(
+            session_id="s1", source="telegram", model="xiaomi/mimo-v2.5-pro"
+        )
         # Token updates never change the model once set.
-        db.update_token_counts("s1", input_tokens=10, output_tokens=5,
-                               model="xiaomi/mimo-v2.5-pro")
+        db.update_token_counts(
+            "s1", input_tokens=10, output_tokens=5, model="xiaomi/mimo-v2.5-pro"
+        )
         assert db.get_session("s1")["model"] == "xiaomi/mimo-v2.5-pro"
 
         # Explicit switch overwrites it.
@@ -336,8 +364,9 @@ class TestSessionLifecycle:
 
         # And a subsequent token update does NOT revert it (COALESCE no-ops
         # because the column is now non-NULL).
-        db.update_token_counts("s1", input_tokens=10, output_tokens=5,
-                               model="xiaomi/mimo-v2.5-pro")
+        db.update_token_counts(
+            "s1", input_tokens=10, output_tokens=5, model="xiaomi/mimo-v2.5-pro"
+        )
         assert db.get_session("s1")["model"] == "xiaomi/mimo-v2.5"
 
     def test_update_session_billing_route_overwrites_after_switch(self, db):
@@ -352,36 +381,48 @@ class TestSessionLifecycle:
         """
         db.create_session(session_id="s1", source="telegram")
         # First token update seeds the billing route.
-        db.update_token_counts("s1", input_tokens=10, output_tokens=5,
-                               billing_provider="openrouter",
-                               billing_base_url="https://openrouter.ai/api/v1",
-                               billing_mode="api_key")
+        db.update_token_counts(
+            "s1",
+            input_tokens=10,
+            output_tokens=5,
+            billing_provider="openrouter",
+            billing_base_url="https://openrouter.ai/api/v1",
+            billing_mode="api_key",
+        )
         sess = db.get_session("s1")
         assert sess["billing_provider"] == "openrouter"
         # A later token update never changes it (COALESCE first-writer-wins).
-        db.update_token_counts("s1", input_tokens=10, output_tokens=5,
-                               billing_provider="ollama",
-                               billing_base_url="http://localhost:11434/v1",
-                               billing_mode="local")
+        db.update_token_counts(
+            "s1",
+            input_tokens=10,
+            output_tokens=5,
+            billing_provider="ollama",
+            billing_base_url="http://localhost:11434/v1",
+            billing_mode="local",
+        )
         assert db.get_session("s1")["billing_provider"] == "openrouter"
 
         # Seed a stale prompt snapshot, then switch the billing route.
         db.update_system_prompt("s1", "Model: x/old\nProvider: openrouter")
         assert db.get_session("s1")["system_prompt"] is not None
         db.update_session_billing_route(
-            "s1", provider="ollama",
-            base_url="http://localhost:11434/v1", billing_mode="local",
+            "s1",
+            provider="ollama",
+            base_url="http://localhost:11434/v1",
+            billing_mode="local",
         )
         sess = db.get_session("s1")
         assert sess["billing_provider"] == "ollama"
         assert sess["billing_base_url"] == "http://localhost:11434/v1"
         assert sess["billing_mode"] == "local"
-        assert sess["system_prompt"] is None, \
+        assert sess["system_prompt"] is None, (
             "system_prompt must be nulled so the next turn rebuilds Model:/Provider:"
+        )
 
         # billing_mode defaults to COALESCE — omitting it preserves the value.
         db.update_session_billing_route(
-            "s1", provider="openai",
+            "s1",
+            provider="openai",
             base_url="https://api.openai.com/v1",
         )
         sess = db.get_session("s1")
@@ -391,12 +432,22 @@ class TestSessionLifecycle:
     def test_per_model_usage_recorded_for_single_model(self, db):
         """Each per-call delta lands in session_model_usage (#51607)."""
         db.create_session(session_id="s1", source="cli")
-        db.update_token_counts("s1", input_tokens=200, output_tokens=100,
-                               model="anthropic/claude-opus-4.8",
-                               billing_provider="anthropic", api_call_count=1)
-        db.update_token_counts("s1", input_tokens=100, output_tokens=50,
-                               model="anthropic/claude-opus-4.8",
-                               billing_provider="anthropic", api_call_count=1)
+        db.update_token_counts(
+            "s1",
+            input_tokens=200,
+            output_tokens=100,
+            model="anthropic/claude-opus-4.8",
+            billing_provider="anthropic",
+            api_call_count=1,
+        )
+        db.update_token_counts(
+            "s1",
+            input_tokens=100,
+            output_tokens=50,
+            model="anthropic/claude-opus-4.8",
+            billing_provider="anthropic",
+            api_call_count=1,
+        )
 
         rows = db._conn.execute(
             "SELECT model, billing_provider, api_call_count, input_tokens, "
@@ -417,18 +468,29 @@ class TestSessionLifecycle:
         The ``sessions`` summary row still holds combined totals + the latest
         model, but session_model_usage keeps an accurate per-model split.
         """
-        db.create_session(session_id="s1", source="cli",
-                          model="deepseek/deepseek-v4-pro")
+        db.create_session(
+            session_id="s1", source="cli", model="deepseek/deepseek-v4-pro"
+        )
         # Pre-switch calls on deepseek.
-        db.update_token_counts("s1", input_tokens=40_000, output_tokens=8_000,
-                               model="deepseek/deepseek-v4-pro",
-                               billing_provider="deepseek", api_call_count=2)
+        db.update_token_counts(
+            "s1",
+            input_tokens=40_000,
+            output_tokens=8_000,
+            model="deepseek/deepseek-v4-pro",
+            billing_provider="deepseek",
+            api_call_count=2,
+        )
         # User runs /model — the gateway persists the new model …
         db.update_session_model("s1", "anthropic/claude-opus-4.8")
         # … and subsequent per-call deltas carry the new model/provider.
-        db.update_token_counts("s1", input_tokens=50_000, output_tokens=4_000,
-                               model="anthropic/claude-opus-4.8",
-                               billing_provider="openrouter", api_call_count=3)
+        db.update_token_counts(
+            "s1",
+            input_tokens=50_000,
+            output_tokens=4_000,
+            model="anthropic/claude-opus-4.8",
+            billing_provider="openrouter",
+            api_call_count=3,
+        )
 
         rows = {
             r["model"]: r
@@ -437,8 +499,7 @@ class TestSessionLifecycle:
                 "api_call_count FROM session_model_usage WHERE session_id = 's1'"
             ).fetchall()
         }
-        assert set(rows) == {"deepseek/deepseek-v4-pro",
-                             "anthropic/claude-opus-4.8"}
+        assert set(rows) == {"deepseek/deepseek-v4-pro", "anthropic/claude-opus-4.8"}
         assert rows["deepseek/deepseek-v4-pro"]["input_tokens"] == 40_000
         assert rows["deepseek/deepseek-v4-pro"]["api_call_count"] == 2
         assert rows["anthropic/claude-opus-4.8"]["input_tokens"] == 50_000
@@ -456,8 +517,11 @@ class TestSessionLifecycle:
         recorded model — matches the COALESCE-from-session summary behaviour
         and keeps existing callers (which pass no model) working.
         """
-        db.create_session(session_id="s1", source="cli",
-                          model="gpt-4o", )
+        db.create_session(
+            session_id="s1",
+            source="cli",
+            model="gpt-4o",
+        )
         db.update_token_counts("s1", input_tokens=10, output_tokens=5)
 
         rows = db._conn.execute(
@@ -472,8 +536,9 @@ class TestSessionLifecycle:
         per-call incremental path, so recording here would double-count.
         """
         db.create_session(session_id="s1", source="cli", model="gpt-4o")
-        db.update_token_counts("s1", input_tokens=500, output_tokens=200,
-                               model="gpt-4o", absolute=True)
+        db.update_token_counts(
+            "s1", input_tokens=500, output_tokens=200, model="gpt-4o", absolute=True
+        )
 
         rows = db._conn.execute(
             "SELECT COUNT(*) AS n FROM session_model_usage WHERE session_id = 's1'"
@@ -484,15 +549,25 @@ class TestSessionLifecycle:
         """The same model through distinct billing routes must not collapse."""
         db.create_session(session_id="routes", source="cli", model="shared-model")
         db.update_token_counts(
-            "routes", input_tokens=10, model="shared-model",
-            billing_provider="custom", billing_base_url="https://one.example/v1",
-            billing_mode="api_key", estimated_cost_usd=0.01, api_call_count=1,
+            "routes",
+            input_tokens=10,
+            model="shared-model",
+            billing_provider="custom",
+            billing_base_url="https://one.example/v1",
+            billing_mode="api_key",
+            estimated_cost_usd=0.01,
+            api_call_count=1,
         )
         db.update_token_counts(
-            "routes", input_tokens=20, model="shared-model",
-            billing_provider="custom", billing_base_url="https://two.example/v1",
-            billing_mode="subscription_included", estimated_cost_usd=0.0,
-            cost_status="included", api_call_count=1,
+            "routes",
+            input_tokens=20,
+            model="shared-model",
+            billing_provider="custom",
+            billing_base_url="https://two.example/v1",
+            billing_mode="subscription_included",
+            estimated_cost_usd=0.0,
+            cost_status="included",
+            api_call_count=1,
         )
 
         rows = db._conn.execute(
@@ -500,8 +575,9 @@ class TestSessionLifecycle:
             "FROM session_model_usage WHERE session_id = 'routes' "
             "ORDER BY billing_base_url"
         ).fetchall()
-        assert [(r["billing_base_url"], r["billing_mode"], r["input_tokens"])
-                for r in rows] == [
+        assert [
+            (r["billing_base_url"], r["billing_mode"], r["input_tokens"]) for r in rows
+        ] == [
             ("https://one.example/v1", "api_key", 10),
             ("https://two.example/v1", "subscription_included", 20),
         ]
@@ -509,7 +585,9 @@ class TestSessionLifecycle:
     def test_metadata_only_update_does_not_replace_requested_route(self, db):
         db.create_session(session_id="metadata", source="cli", model="primary")
         db.update_token_counts(
-            "metadata", model="fallback", billing_provider="fallback-provider",
+            "metadata",
+            model="fallback",
+            billing_provider="fallback-provider",
             api_call_count=0,
         )
         row = db.get_session("metadata")
@@ -519,12 +597,18 @@ class TestSessionLifecycle:
     def test_first_accounted_route_replaces_all_route_fields_atomically(self, db):
         db.create_session(session_id="route", source="cli", model="primary")
         db.update_session_billing_route(
-            "route", provider="primary-provider",
-            base_url="https://primary.example/v1", billing_mode="api_key",
+            "route",
+            provider="primary-provider",
+            base_url="https://primary.example/v1",
+            billing_mode="api_key",
         )
         db.update_token_counts(
-            "route", model="fallback", billing_provider="fallback-provider",
-            billing_base_url=None, billing_mode=None, api_call_count=1,
+            "route",
+            model="fallback",
+            billing_provider="fallback-provider",
+            billing_base_url=None,
+            billing_mode=None,
+            api_call_count=1,
         )
         row = db.get_session("route")
         assert row["model"] == "fallback"
@@ -539,8 +623,13 @@ class TestSessionLifecycle:
         db_path = tmp_path / "legacy.db"
         db = SessionDB(db_path=db_path)
         db.create_session(session_id="legacy1", source="cli", model="gpt-4o")
-        db.update_token_counts("legacy1", input_tokens=1234, output_tokens=567,
-                               model="gpt-4o", billing_provider="openai")
+        db.update_token_counts(
+            "legacy1",
+            input_tokens=1234,
+            output_tokens=567,
+            model="gpt-4o",
+            billing_provider="openai",
+        )
         # Simulate a pre-v17 database: drop the per-model rows and roll the
         # recorded schema version back so the backfill migration re-runs.
         db._conn.execute("DELETE FROM session_model_usage")
@@ -588,7 +677,9 @@ class TestSessionLifecycle:
             assert db._fts_table_exists("messages_fts_trigram") is False
 
             db.create_session(session_id="s1", source="cli")
-            db.append_message("s1", role="user", content="hello from sqlite without fts")
+            db.append_message(
+                "s1", role="user", content="hello from sqlite without fts"
+            )
 
             messages = db.get_messages("s1")
             assert len(messages) == 1
@@ -597,9 +688,7 @@ class TestSessionLifecycle:
         finally:
             db.close()
 
-    def test_existing_fts_tables_do_not_break_without_fts5(
-        self, tmp_path, monkeypatch
-    ):
+    def test_existing_fts_tables_do_not_break_without_fts5(self, tmp_path, monkeypatch):
         db_path = tmp_path / "state.db"
         seeded = SessionDB(db_path=db_path)
         try:
@@ -716,7 +805,9 @@ class TestSessionLifecycle:
             ):
                 seeded._conn.execute(f"DROP TRIGGER IF EXISTS {trigger}")
             seeded._conn.commit()
-            seeded.append_message("s1", role="assistant", content="repair only base needle")
+            seeded.append_message(
+                "s1", role="assistant", content="repair only base needle"
+            )
         finally:
             seeded.close()
 
@@ -802,9 +893,7 @@ class TestSessionLifecycle:
         db.append_message("s1", role="user", content="legacy message alpha")
         db.append_message("s1", role="assistant", content="legacy reply beta")
         # Force schema version to v10 so migration runs on next open.
-        db._conn.execute(
-            "UPDATE schema_version SET version = 10"
-        )
+        db._conn.execute("UPDATE schema_version SET version = 10")
         db._conn.commit()
         db.close()
 
@@ -862,6 +951,7 @@ class TestSessionLifecycle:
 # =========================================================================
 # Message storage
 # =========================================================================
+
 
 class TestMessageStorage:
     def test_append_and_get_messages(self, db):
@@ -1049,8 +1139,14 @@ class TestMessageStorage:
 
         # Assistant makes 2 parallel tool calls in one message
         tool_calls = [
-            {"id": "call_1", "function": {"name": "ha_call_service", "arguments": "{}"}},
-            {"id": "call_2", "function": {"name": "ha_call_service", "arguments": "{}"}},
+            {
+                "id": "call_1",
+                "function": {"name": "ha_call_service", "arguments": "{}"},
+            },
+            {
+                "id": "call_2",
+                "function": {"name": "ha_call_service", "arguments": "{}"},
+            },
         ]
         db.append_message("s1", role="assistant", content="", tool_calls=tool_calls)
 
@@ -1067,7 +1163,9 @@ class TestMessageStorage:
 
     def test_tool_calls_serialization(self, db):
         db.create_session(session_id="s1", source="cli")
-        tool_calls = [{"id": "call_1", "function": {"name": "web_search", "arguments": "{}"}}]
+        tool_calls = [
+            {"id": "call_1", "function": {"name": "web_search", "arguments": "{}"}}
+        ]
         db.append_message("s1", role="assistant", tool_calls=tool_calls)
 
         messages = db.get_messages("s1")
@@ -1133,6 +1231,7 @@ class TestMessageStorage:
         """`replace_messages` (used by /retry, /undo, /compress) must write
         tool_name to the DB for messages built by make_tool_result_message."""
         from agent.tool_dispatch_helpers import make_tool_result_message
+
         db.create_session(session_id="s1", source="cli")
         db.replace_messages(
             "s1",
@@ -1152,12 +1251,16 @@ class TestMessageStorage:
         db.create_session(session_id="s1", source="cli")
         db.replace_messages(
             "s1",
-            [make_tool_result_message(
-                "write_file", "worker detached", "c1", effect_disposition="unknown"
-            )],
+            [
+                make_tool_result_message(
+                    "write_file", "worker detached", "c1", effect_disposition="unknown"
+                )
+            ],
         )
 
-        assert db.get_messages_as_conversation("s1")[0]["effect_disposition"] == "unknown"
+        assert (
+            db.get_messages_as_conversation("s1")[0]["effect_disposition"] == "unknown"
+        )
 
     def test_replace_messages_handles_multimodal_content(self, db):
         """`replace_messages` (used by /retry, /undo, /compress) must also
@@ -1218,12 +1321,19 @@ class TestMessageStorage:
             {"id": "call_1", "function": {"name": "web_search", "arguments": "{}"}},
         ]
         db.append_message(
-            "s1", role="assistant", content="", tool_calls=tool_calls,
+            "s1",
+            role="assistant",
+            content="",
+            tool_calls=tool_calls,
             timestamp=1000.0,
         )
         db.append_message(
-            "s1", role="tool", content="result", tool_name="web_search",
-            tool_call_id="call_1", timestamp=999.0,
+            "s1",
+            role="tool",
+            content="result",
+            tool_name="web_search",
+            tool_call_id="call_1",
+            timestamp=999.0,
         )
         db.append_message("s1", role="user", content="thanks", timestamp=998.0)
 
@@ -1290,7 +1400,9 @@ class TestMessageStorage:
             "second answer",
         ]
 
-    def test_get_messages_as_conversation_avoids_repeated_resume_prompts_from_ancestors(self, db):
+    def test_get_messages_as_conversation_avoids_repeated_resume_prompts_from_ancestors(
+        self, db
+    ):
         db.create_session("root", "tui")
         db.append_message("root", role="user", content="same prompt")
         db.append_message("root", role="user", content="same prompt")
@@ -1300,7 +1412,10 @@ class TestMessageStorage:
 
         conv = db.get_messages_as_conversation("child", include_ancestors=True)
 
-        assert [m["content"] for m in conv if m["role"] == "user"] == ["same prompt", "next prompt"]
+        assert [m["content"] for m in conv if m["role"] == "user"] == [
+            "same prompt",
+            "next prompt",
+        ]
 
     def test_get_resume_conversations_matches_separate_reads(self, db):
         """The one-fetch resume projections must be byte-identical to the two
@@ -1324,12 +1439,20 @@ class TestMessageStorage:
             role="assistant",
             content="",
             tool_calls=[
-                {"id": "t1", "type": "function", "function": {"name": "x", "arguments": "{}"}}
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
             ],
         )
 
-        model_expected = db.get_messages_as_conversation("child", repair_alternation=True)
-        display_expected = db.get_messages_as_conversation("child", include_ancestors=True)
+        model_expected = db.get_messages_as_conversation(
+            "child", repair_alternation=True
+        )
+        display_expected = db.get_messages_as_conversation(
+            "child", include_ancestors=True
+        )
 
         model_history, display_history = db.get_resume_conversations("child")
 
@@ -1343,8 +1466,12 @@ class TestMessageStorage:
         db.append_message("solo", role="user", content="hi")
         db.append_message("solo", role="assistant", content="hello")
 
-        model_expected = db.get_messages_as_conversation("solo", repair_alternation=True)
-        display_expected = db.get_messages_as_conversation("solo", include_ancestors=True)
+        model_expected = db.get_messages_as_conversation(
+            "solo", repair_alternation=True
+        )
+        display_expected = db.get_messages_as_conversation(
+            "solo", include_ancestors=True
+        )
         model_history, display_history = db.get_resume_conversations("solo")
 
         assert model_history == model_expected
@@ -1358,8 +1485,12 @@ class TestMessageStorage:
         db.create_session("child", "tui", parent_session_id="root")
         db.append_message("child", role="user", content="next prompt")
 
-        model_expected = db.get_messages_as_conversation("child", repair_alternation=True)
-        display_expected = db.get_messages_as_conversation("child", include_ancestors=True)
+        model_expected = db.get_messages_as_conversation(
+            "child", repair_alternation=True
+        )
+        display_expected = db.get_messages_as_conversation(
+            "child", include_ancestors=True
+        )
         model_history, display_history = db.get_resume_conversations("child")
 
         assert model_history == model_expected
@@ -1454,17 +1585,28 @@ class TestMessageStorage:
             "s1",
             role="assistant",
             content=None,
-            tool_calls=[{"function": {"name": "cronjob", "arguments": "{}"}, "id": "c1", "type": "function"}],
+            tool_calls=[
+                {
+                    "function": {"name": "cronjob", "arguments": "{}"},
+                    "id": "c1",
+                    "type": "function",
+                }
+            ],
             reasoning="I should call the cronjob tool to schedule this.",
         )
-        db.append_message("s1", role="tool", content='{"job_id": "abc"}', tool_call_id="c1")
+        db.append_message(
+            "s1", role="tool", content='{"job_id": "abc"}', tool_call_id="c1"
+        )
 
         conv = db.get_messages_as_conversation("s1")
         assert len(conv) == 3
         # reasoning must be present on the assistant message
         assistant = conv[1]
         assert assistant["role"] == "assistant"
-        assert assistant.get("reasoning") == "I should call the cronjob tool to schedule this."
+        assert (
+            assistant.get("reasoning")
+            == "I should call the cronjob tool to schedule this."
+        )
         # user and tool messages must NOT carry reasoning
         assert "reasoning" not in conv[0]
         assert "reasoning" not in conv[2]
@@ -1535,7 +1677,13 @@ class TestMessageStorage:
             "s1",
             role="assistant",
             content="",
-            tool_calls=[{"id": "c1", "type": "function", "function": {"name": "date", "arguments": "{}"}}],
+            tool_calls=[
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "date", "arguments": "{}"},
+                }
+            ],
             reasoning_content="",
         )
 
@@ -1565,7 +1713,9 @@ class TestMessageStorage:
                 "content": [{"type": "output_text", "text": "Done!"}],
             },
         ]
-        db.append_message("s1", role="assistant", content="Done!", codex_message_items=items)
+        db.append_message(
+            "s1", role="assistant", content="Done!", codex_message_items=items
+        )
 
         conv = db.get_messages_as_conversation("s1")
         assert len(conv) == 1
@@ -1607,12 +1757,15 @@ class TestMessageStorage:
         conv = db.get_messages_as_conversation("s1")
         assert len(conv) == 1
         assert conv[0]["codex_reasoning_items"] == codex_items
-        assert conv[0]["codex_reasoning_items"][0]["encrypted_content"] == "enc_blob_123"
+        assert (
+            conv[0]["codex_reasoning_items"][0]["encrypted_content"] == "enc_blob_123"
+        )
 
 
 # =========================================================================
 # FTS5 search
 # =========================================================================
+
 
 class TestFTS5Search:
     def test_search_finds_content(self, db):
@@ -1655,11 +1808,20 @@ class TestFTS5Search:
         for src in ("cli", "telegram", "signal", "homeassistant", "acp", "matrix"):
             sid = f"s-{src}"
             db.create_session(session_id=sid, source=src)
-            db.append_message(sid, role="user", content=f"universal search test from {src}")
+            db.append_message(
+                sid, role="user", content=f"universal search test from {src}"
+            )
 
         results = db.search_messages("universal search test")
         found_sources = {r["source"] for r in results}
-        assert found_sources == {"cli", "telegram", "signal", "homeassistant", "acp", "matrix"}
+        assert found_sources == {
+            "cli",
+            "telegram",
+            "signal",
+            "homeassistant",
+            "acp",
+            "matrix",
+        }
 
     def test_search_with_role_filter(self, db):
         db.create_session(session_id="s1", source="cli")
@@ -1673,7 +1835,9 @@ class TestFTS5Search:
     def test_search_returns_context(self, db):
         db.create_session(session_id="s1", source="cli")
         db.append_message("s1", role="user", content="Tell me about Kubernetes")
-        db.append_message("s1", role="assistant", content="Kubernetes is an orchestrator.")
+        db.append_message(
+            "s1", role="assistant", content="Kubernetes is an orchestrator."
+        )
 
         results = db.search_messages("Kubernetes")
         assert len(results) == 2
@@ -1688,11 +1852,17 @@ class TestFTS5Search:
         db.append_message("s1", role="user", content="before needle")
         db.append_message("s2", role="user", content="other session message")
         db.append_message("s1", role="assistant", content="needle match")
-        db.append_message("s2", role="assistant", content="another other session message")
+        db.append_message(
+            "s2", role="assistant", content="another other session message"
+        )
         db.append_message("s1", role="user", content="after needle")
 
         results = db.search_messages('"needle match"')
-        needle_result = next(r for r in results if r["session_id"] == "s1" and "needle match" in r["snippet"])
+        needle_result = next(
+            r
+            for r in results
+            if r["session_id"] == "s1" and "needle match" in r["snippet"]
+        )
 
         assert [msg["content"] for msg in needle_result["context"]] == [
             "before needle",
@@ -1707,14 +1877,14 @@ class TestFTS5Search:
 
         # Each of these previously caused sqlite3.OperationalError
         dangerous_queries = [
-            'C++',              # + is FTS5 column filter
-            '"unterminated',    # unbalanced double-quote
-            '(problem',         # unbalanced parenthesis
-            'hello AND',        # dangling boolean operator
-            '***',              # repeated wildcard
-            '{test}',           # curly braces (column reference)
-            'OR hello',         # leading boolean operator
-            'a AND OR b',       # adjacent operators
+            "C++",  # + is FTS5 column filter
+            '"unterminated',  # unbalanced double-quote
+            "(problem",  # unbalanced parenthesis
+            "hello AND",  # dangling boolean operator
+            "***",  # repeated wildcard
+            "{test}",  # curly braces (column reference)
+            "OR hello",  # leading boolean operator
+            "a AND OR b",  # adjacent operators
         ]
         for query in dangerous_queries:
             # Must not raise — should return list (possibly empty)
@@ -1739,14 +1909,20 @@ class TestFTS5Search:
         results = db.search_messages("chat-send")
         assert isinstance(results, list)
         assert len(results) >= 1
-        assert any("chat-send" in (r.get("snippet") or r.get("content", "")).lower()
-                    for r in results)
+        assert any(
+            "chat-send" in (r.get("snippet") or r.get("content", "")).lower()
+            for r in results
+        )
 
     def test_search_dotted_term_does_not_crash(self, db):
         """Dotted terms like 'P2.2' or 'simulate.p2.test.ts' should not crash FTS5."""
         db.create_session(session_id="s1", source="cli")
-        db.append_message("s1", role="user", content="Working on P2.2 session_search edge cases")
-        db.append_message("s1", role="assistant", content="See simulate.p2.test.ts for details")
+        db.append_message(
+            "s1", role="user", content="Working on P2.2 session_search edge cases"
+        )
+        db.append_message(
+            "s1", role="assistant", content="See simulate.p2.test.ts for details"
+        )
 
         results = db.search_messages("P2.2")
         assert isinstance(results, list)
@@ -1774,8 +1950,10 @@ class TestFTS5Search:
         results = db.search_messages("TODO: fix")
         assert isinstance(results, list)
         assert len(results) >= 1
-        assert any("deployment" in (r.get("snippet") or r.get("content", "")).lower()
-                   for r in results)
+        assert any(
+            "deployment" in (r.get("snippet") or r.get("content", "")).lower()
+            for r in results
+        )
 
     def test_search_quoted_phrase_preserved(self, db):
         """User-provided quoted phrases should be preserved for exact matching."""
@@ -1793,27 +1971,29 @@ class TestFTS5Search:
     def test_sanitize_fts5_query_strips_dangerous_chars(self):
         """Unit test for _sanitize_fts5_query static method."""
         from clawk_state import SessionDB
+
         s = SessionDB._sanitize_fts5_query
-        assert s('hello world') == 'hello world'
-        assert '+' not in s('C++')
+        assert s("hello world") == "hello world"
+        assert "+" not in s("C++")
         assert '"' not in s('"unterminated')
-        assert '(' not in s('(problem')
-        assert '{' not in s('{test}')
+        assert "(" not in s("(problem")
+        assert "{" not in s("{test}")
         # Dangling operators removed
-        assert s('hello AND') == 'hello'
-        assert s('OR world') == 'world'
+        assert s("hello AND") == "hello"
+        assert s("OR world") == "world"
         # Leading bare * removed
-        assert s('***') == ''
+        assert s("***") == ""
         # Valid prefix kept
-        assert s('deploy*') == 'deploy*'
+        assert s("deploy*") == "deploy*"
         # Colon (FTS5 column-filter operator) stripped, both terms preserved
-        assert ':' not in s('TODO: fix')
-        assert s('TODO: fix').split() == ['TODO', 'fix']
-        assert ':' not in s('error:timeout')
+        assert ":" not in s("TODO: fix")
+        assert s("TODO: fix").split() == ["TODO", "fix"]
+        assert ":" not in s("error:timeout")
 
     def test_sanitize_fts5_preserves_quoted_phrases(self):
         """Properly paired double-quoted phrases should be preserved."""
         from clawk_state import SessionDB
+
         s = SessionDB._sanitize_fts5_query
         # Simple quoted phrase
         assert s('"exact phrase"') == '"exact phrase"'
@@ -1829,18 +2009,19 @@ class TestFTS5Search:
     def test_sanitize_fts5_quotes_hyphenated_terms(self):
         """Hyphenated terms should be wrapped in quotes for exact matching."""
         from clawk_state import SessionDB
+
         s = SessionDB._sanitize_fts5_query
         # Simple hyphenated term
-        assert s('chat-send') == '"chat-send"'
+        assert s("chat-send") == '"chat-send"'
         # Multiple hyphens
-        assert s('docker-compose-up') == '"docker-compose-up"'
+        assert s("docker-compose-up") == '"docker-compose-up"'
         # Hyphenated term with other words
-        result = s('fix chat-send bug')
+        result = s("fix chat-send bug")
         assert '"chat-send"' in result
-        assert 'fix' in result
-        assert 'bug' in result
+        assert "fix" in result
+        assert "bug" in result
         # Multiple hyphenated terms with OR
-        result = s('chat-send OR deploy-prod')
+        result = s("chat-send OR deploy-prod")
         assert '"chat-send"' in result
         assert '"deploy-prod"' in result
         # Already-quoted hyphenated term — no double quoting
@@ -1851,23 +2032,24 @@ class TestFTS5Search:
     def test_sanitize_fts5_quotes_dotted_terms(self):
         """Dotted terms should be wrapped in quotes to avoid FTS5 query parse edge cases."""
         from clawk_state import SessionDB
+
         s = SessionDB._sanitize_fts5_query
 
-        assert s('P2.2') == '"P2.2"'
-        assert s('simulate.p2') == '"simulate.p2"'
-        assert s('simulate.p2.test.ts') == '"simulate.p2.test.ts"'
+        assert s("P2.2") == '"P2.2"'
+        assert s("simulate.p2") == '"simulate.p2"'
+        assert s("simulate.p2.test.ts") == '"simulate.p2.test.ts"'
 
         # Already quoted — no double quoting
         assert s('"P2.2"') == '"P2.2"'
 
         # Works with boolean syntax
-        result = s('P2.2 OR simulate.p2')
+        result = s("P2.2 OR simulate.p2")
         assert '"P2.2"' in result
         assert '"simulate.p2"' in result
 
         # Mixed dots and hyphens — single pass avoids double-quoting
-        assert s('my-app.config') == '"my-app.config"'
-        assert s('my-app.config.ts') == '"my-app.config.ts"'
+        assert s("my-app.config") == '"my-app.config"'
+        assert s("my-app.config.ts") == '"my-app.config.ts"'
 
     def test_sanitize_fts5_quotes_underscored_terms(self):
         """Underscored terms should be wrapped in quotes for exact matching.
@@ -1877,21 +2059,22 @@ class TestFTS5Search:
         ('sp AND new') that fails to match rows indexed as 'sp_new1'.
         """
         from clawk_state import SessionDB
+
         s = SessionDB._sanitize_fts5_query
         # Simple underscored term
-        assert s('sp_new') == '"sp_new"'
+        assert s("sp_new") == '"sp_new"'
         # Multiple underscores
-        assert s('a_b_c') == '"a_b_c"'
+        assert s("a_b_c") == '"a_b_c"'
         # Mixed underscores and hyphens/dots — single pass avoids double-quoting
-        assert s('sp_new1') == '"sp_new1"'
-        assert s('docker-compose_up') == '"docker-compose_up"'
-        assert s('my.app_config.ts') == '"my.app_config.ts"'
+        assert s("sp_new1") == '"sp_new1"'
+        assert s("docker-compose_up") == '"docker-compose_up"'
+        assert s("my.app_config.ts") == '"my.app_config.ts"'
         # Already-quoted — no double quoting
         assert s('"sp_new"') == '"sp_new"'
         # Mixed with other words
-        result = s('sp_new and 血管瘤')
+        result = s("sp_new and 血管瘤")
         assert '"sp_new"' in result
-        assert '血管瘤' in result
+        assert "血管瘤" in result
 
     def test_sanitize_fts5_query_runtime_is_bounded(self):
         """Adversarial quote/special-char runs should sanitize quickly."""
@@ -1925,6 +2108,7 @@ class TestFTS5Search:
 # CJK (Chinese/Japanese/Korean) LIKE fallback
 # =========================================================================
 
+
 class TestCJKSearchFallback:
     """Regression tests for CJK search (see #11511).
 
@@ -1937,6 +2121,7 @@ class TestCJKSearchFallback:
 
     def test_cjk_detection_covers_all_ranges(self):
         from clawk_state import SessionDB
+
         f = SessionDB._contains_cjk
         # Chinese (CJK Unified Ideographs)
         assert f("记忆断裂") is True
@@ -1956,7 +2141,8 @@ class TestCJKSearchFallback:
         """The headline bug: multi-char Chinese query must not return []."""
         db.create_session(session_id="s1", source="cli")
         db.append_message(
-            "s1", role="user",
+            "s1",
+            role="user",
             content="昨天和其他Agent的聊天记录，记忆断裂问题复现了",
         )
         results = db.search_messages("记忆断裂")
@@ -2020,7 +2206,8 @@ class TestCJKSearchFallback:
         long_prefix = "这是一段很长的前缀用来把匹配位置推到文档中间" * 3
         long_suffix = "这是一段很长的后缀内容填充剩余空间" * 3
         db.append_message(
-            "s1", role="user",
+            "s1",
+            role="user",
             content=f"{long_prefix}记忆断裂{long_suffix}",
         )
         results = db.search_messages("记忆断裂")
@@ -2138,6 +2325,7 @@ class TestCJKSearchFallback:
 # Session search and listing
 # =========================================================================
 
+
 class TestSearchSessions:
     def test_list_all_sessions(self, db):
         db.create_session(session_id="s1", source="cli")
@@ -2168,6 +2356,7 @@ class TestSearchSessions:
 # =========================================================================
 # Counts
 # =========================================================================
+
 
 class TestCounts:
     def test_session_count(self, db):
@@ -2211,6 +2400,7 @@ class TestCounts:
 # Delete and export
 # =========================================================================
 
+
 class TestDeleteAndExport:
     def test_delete_session(self, db):
         db.create_session(session_id="s1", source="cli")
@@ -2223,8 +2413,11 @@ class TestDeleteAndExport:
     def test_delete_session_cascades_per_model_usage(self, db):
         db.create_session(session_id="usage", source="cli", model="gpt-5")
         db.update_token_counts(
-            "usage", input_tokens=10, model="gpt-5",
-            billing_provider="openai", api_call_count=1,
+            "usage",
+            input_tokens=10,
+            model="gpt-5",
+            billing_provider="openai",
+            api_call_count=1,
         )
         assert db.delete_session("usage") is True
         count = db._conn.execute(
@@ -2237,7 +2430,9 @@ class TestDeleteAndExport:
 
     def test_resolve_session_id_exact(self, db):
         db.create_session(session_id="20260315_092437_c9a6ff", source="cli")
-        assert db.resolve_session_id("20260315_092437_c9a6ff") == "20260315_092437_c9a6ff"
+        assert (
+            db.resolve_session_id("20260315_092437_c9a6ff") == "20260315_092437_c9a6ff"
+        )
 
     def test_resolve_session_id_unique_prefix(self, db):
         db.create_session(session_id="20260315_092437_c9a6ff", source="cli")
@@ -2348,23 +2543,21 @@ class TestDeleteAndExport:
             target.close()
 
     def test_import_sessions_restores_valid_parents_and_detaches_missing(self, db):
-        result = db.import_sessions(
-            [
-                {
-                    "id": "child",
-                    "source": "cli",
-                    "parent_session_id": "parent",
-                    "messages": [],
-                },
-                {"id": "parent", "source": "cli", "messages": []},
-                {
-                    "id": "orphan",
-                    "source": "cli",
-                    "parent_session_id": "missing",
-                    "messages": [],
-                },
-            ]
-        )
+        result = db.import_sessions([
+            {
+                "id": "child",
+                "source": "cli",
+                "parent_session_id": "parent",
+                "messages": [],
+            },
+            {"id": "parent", "source": "cli", "messages": []},
+            {
+                "id": "orphan",
+                "source": "cli",
+                "parent_session_id": "missing",
+                "messages": [],
+            },
+        ])
 
         assert result["ok"] is True
         assert result["imported"] == 3
@@ -2373,39 +2566,33 @@ class TestDeleteAndExport:
         assert db.get_session("orphan")["parent_session_id"] is None
 
     def test_import_sessions_rejects_invalid_batch_atomically(self, db):
-        result = db.import_sessions(
-            [
-                {"id": "valid", "source": "cli", "messages": []},
-                {"source": "cli", "messages": []},
-            ]
-        )
+        result = db.import_sessions([
+            {"id": "valid", "source": "cli", "messages": []},
+            {"source": "cli", "messages": []},
+        ])
 
         assert result["ok"] is False
         assert result["imported"] == 0
-        assert result["errors"] == [
-            {"index": 1, "error": "session id is required"}
-        ]
+        assert result["errors"] == [{"index": 1, "error": "session id is required"}]
         assert db.get_session("valid") is None
 
     def test_import_sessions_detaches_cycle_and_lineage_still_terminates(self, db):
-        result = db.import_sessions(
-            [
-                {
-                    "id": "a",
-                    "source": "cli",
-                    "parent_session_id": "b",
-                    "end_reason": "compression",
-                    "messages": [],
-                },
-                {
-                    "id": "b",
-                    "source": "cli",
-                    "parent_session_id": "a",
-                    "end_reason": "compression",
-                    "messages": [],
-                },
-            ]
-        )
+        result = db.import_sessions([
+            {
+                "id": "a",
+                "source": "cli",
+                "parent_session_id": "b",
+                "end_reason": "compression",
+                "messages": [],
+            },
+            {
+                "id": "b",
+                "source": "cli",
+                "parent_session_id": "a",
+                "end_reason": "compression",
+                "messages": [],
+            },
+        ])
 
         assert result["ok"] is True
         assert result["detached"] == 1
@@ -2414,17 +2601,15 @@ class TestDeleteAndExport:
         assert db.get_compression_lineage("a") == ["a", "b"]
 
     def test_import_sessions_detaches_self_parent(self, db):
-        result = db.import_sessions(
-            [
-                {
-                    "id": "self",
-                    "source": "cli",
-                    "parent_session_id": "self",
-                    "end_reason": "compression",
-                    "messages": [],
-                }
-            ]
-        )
+        result = db.import_sessions([
+            {
+                "id": "self",
+                "source": "cli",
+                "parent_session_id": "self",
+                "end_reason": "compression",
+                "messages": [],
+            }
+        ])
 
         assert result["ok"] is True
         assert result["detached"] == 1
@@ -2435,7 +2620,9 @@ class TestDeleteAndExport:
         db.end_session("a", "compression")
         db.create_session("b", "cli", parent_session_id="a")
         db.end_session("b", "compression")
-        db._conn.execute("UPDATE sessions SET parent_session_id = ? WHERE id = ?", ("b", "a"))
+        db._conn.execute(
+            "UPDATE sessions SET parent_session_id = ? WHERE id = ?", ("b", "a")
+        )
         db._conn.commit()
 
         lineage = db.get_compression_lineage("a")
@@ -2468,39 +2655,41 @@ class TestDeleteAndExport:
         result = db.import_sessions([payload])
 
         assert result["ok"] is False
-        assert result["errors"] == [{"index": 0, "session_id": payload["id"], "error": error}]
+        assert result["errors"] == [
+            {"index": 0, "session_id": payload["id"], "error": error}
+        ]
         assert db.get_session(payload["id"]) is None
 
     def test_import_sessions_rejects_oversized_payloads_atomically(self, db):
         oversized = "x" * (SessionDB._IMPORT_MAX_SESSION_BYTES + 1)
-        result = db.import_sessions(
-            [{"id": "oversized", "messages": [{"role": "user", "content": oversized}]}]
-        )
+        result = db.import_sessions([
+            {"id": "oversized", "messages": [{"role": "user", "content": oversized}]}
+        ])
 
         assert result["ok"] is False
         assert result["errors"][0]["error"] == "session exceeds the import size limit"
         assert db.get_session("oversized") is None
 
-        result = db.import_sessions(
-            [
-                {
-                    "id": "too-many-messages",
-                    "messages": [
-                        {"role": "user", "content": "x"}
-                    ]
-                    * (SessionDB._IMPORT_MAX_MESSAGES_PER_SESSION + 1),
-                }
-            ]
-        )
+        result = db.import_sessions([
+            {
+                "id": "too-many-messages",
+                "messages": [{"role": "user", "content": "x"}]
+                * (SessionDB._IMPORT_MAX_MESSAGES_PER_SESSION + 1),
+            }
+        ])
 
         assert result["ok"] is False
-        assert result["errors"][0]["error"] == "messages exceeds the per-session import limit"
+        assert (
+            result["errors"][0]["error"]
+            == "messages exceeds the per-session import limit"
+        )
         assert db.get_session("too-many-messages") is None
 
 
 # =========================================================================
 # Prune
 # =========================================================================
+
 
 class TestPruneSessions:
     def test_prune_old_ended_sessions(self, db):
@@ -2568,7 +2757,12 @@ class TestPruneSessions:
         db.end_session("D", end_reason="done")
 
         # Backdate A and B to be old; C and D stay recent
-        for sid, ts in [("A", old_ts), ("B", old_ts), ("C", recent_ts), ("D", recent_ts)]:
+        for sid, ts in [
+            ("A", old_ts),
+            ("B", old_ts),
+            ("C", recent_ts),
+            ("D", recent_ts),
+        ]:
             db._conn.execute(
                 "UPDATE sessions SET started_at = ? WHERE id = ?", (ts, sid)
             )
@@ -2614,8 +2808,17 @@ class TestPruneSessionFilters:
     """Extended filter surface shared by prune/archive/list_prune_candidates."""
 
     @staticmethod
-    def _mk(db, sid, *, source="cli", age_seconds=0, title=None,
-            end_reason="done", message_count=0, cwd=None):
+    def _mk(
+        db,
+        sid,
+        *,
+        source="cli",
+        age_seconds=0,
+        title=None,
+        end_reason="done",
+        message_count=0,
+        cwd=None,
+    ):
         db.create_session(session_id=sid, source=source, cwd=cwd)
         db.end_session(sid, end_reason=end_reason)
         db._conn.execute(
@@ -2626,9 +2829,9 @@ class TestPruneSessionFilters:
         db._conn.commit()
 
     def test_started_after_window_prunes_only_recent(self, db):
-        self._mk(db, "recent1", age_seconds=3600)       # 1h ago
-        self._mk(db, "recent2", age_seconds=2 * 3600)   # 2h ago
-        self._mk(db, "old", age_seconds=10 * 3600)      # 10h ago
+        self._mk(db, "recent1", age_seconds=3600)  # 1h ago
+        self._mk(db, "recent2", age_seconds=2 * 3600)  # 2h ago
+        self._mk(db, "old", age_seconds=10 * 3600)  # 10h ago
 
         cutoff = time.time() - 5 * 3600
         pruned = db.prune_sessions(older_than_days=None, started_after=cutoff)
@@ -2653,12 +2856,13 @@ class TestPruneSessionFilters:
         assert db.get_session("too_old") is not None
 
     def test_title_and_message_count_filters(self, db):
-        self._mk(db, "smoke1", age_seconds=60, title="Codex Smoke Test 1",
-                 message_count=2)
-        self._mk(db, "smoke2", age_seconds=60, title="codex smoke test 2",
-                 message_count=8)
-        self._mk(db, "real", age_seconds=60, title="Debugging auth",
-                 message_count=8)
+        self._mk(
+            db, "smoke1", age_seconds=60, title="Codex Smoke Test 1", message_count=2
+        )
+        self._mk(
+            db, "smoke2", age_seconds=60, title="codex smoke test 2", message_count=8
+        )
+        self._mk(db, "real", age_seconds=60, title="Debugging auth", message_count=8)
 
         rows = db.list_prune_candidates(title_like="smoke")
         assert {r["id"] for r in rows} == {"smoke1", "smoke2"}
@@ -2672,18 +2876,16 @@ class TestPruneSessionFilters:
         assert db.get_session("real") is not None
 
     def test_end_reason_and_cwd_filters(self, db):
-        self._mk(db, "s1", age_seconds=60, end_reason="done",
-                 cwd="/home/u/scratch/x")
-        self._mk(db, "s2", age_seconds=60, end_reason="error",
-                 cwd="/home/u/scratch")
-        self._mk(db, "s3", age_seconds=60, end_reason="done",
-                 cwd="/home/u/work")
+        self._mk(db, "s1", age_seconds=60, end_reason="done", cwd="/home/u/scratch/x")
+        self._mk(db, "s2", age_seconds=60, end_reason="error", cwd="/home/u/scratch")
+        self._mk(db, "s3", age_seconds=60, end_reason="done", cwd="/home/u/work")
 
         rows = db.list_prune_candidates(cwd_prefix="/home/u/scratch")
         assert {r["id"] for r in rows} == {"s1", "s2"}
 
         pruned = db.prune_sessions(
-            older_than_days=None, end_reason="done",
+            older_than_days=None,
+            end_reason="done",
             cwd_prefix="/home/u/scratch",
         )
         assert pruned == 1
@@ -2694,8 +2896,9 @@ class TestPruneSessionFilters:
         self._mk(db, "plain", age_seconds=60)
         db.set_session_archived("arch", True)
 
-        pruned = db.prune_sessions(older_than_days=None, started_after=0,
-                                   archived=False)
+        pruned = db.prune_sessions(
+            older_than_days=None, started_after=0, archived=False
+        )
         assert pruned == 1
         assert db.get_session("arch") is not None
         assert db.get_session("plain") is None
@@ -2722,8 +2925,7 @@ class TestPruneSessionFilters:
         self._mk(db, "c2", age_seconds=3600, source="telegram")
         rows = db.list_prune_candidates(started_after=0, source="cli")
         assert [r["id"] for r in rows] == ["c1"]
-        pruned = db.prune_sessions(older_than_days=None, started_after=0,
-                                   source="cli")
+        pruned = db.prune_sessions(older_than_days=None, started_after=0, source="cli")
         assert pruned == 1
 
     def test_default_signature_unchanged(self, db):
@@ -2774,9 +2976,10 @@ class TestPruneSessionFilters:
 
         assert db.prune_sessions(older_than_days=None, user_id="alice") == 1
         assert db.get_session("u1") is None
-        assert db.prune_sessions(
-            older_than_days=None, chat_id="c-2", chat_type="group"
-        ) == 1
+        assert (
+            db.prune_sessions(older_than_days=None, chat_id="c-2", chat_type="group")
+            == 1
+        )
         assert db.get_session("u2") is None
 
     def test_branch_like_filter(self, db):
@@ -2788,13 +2991,31 @@ class TestPruneSessionFilters:
         assert db.get_session("b2") is not None
 
     def test_token_cost_toolcall_bounds(self, db):
-        self._mk_rich(db, "cheap", input_tokens=100, output_tokens=50,
-                      actual_cost_usd=0.001, tool_call_count=0)
-        self._mk_rich(db, "mid", input_tokens=5000, output_tokens=2000,
-                      actual_cost_usd=None, estimated_cost_usd=0.5,
-                      tool_call_count=12)
-        self._mk_rich(db, "big", input_tokens=90000, output_tokens=30000,
-                      actual_cost_usd=4.2, tool_call_count=80)
+        self._mk_rich(
+            db,
+            "cheap",
+            input_tokens=100,
+            output_tokens=50,
+            actual_cost_usd=0.001,
+            tool_call_count=0,
+        )
+        self._mk_rich(
+            db,
+            "mid",
+            input_tokens=5000,
+            output_tokens=2000,
+            actual_cost_usd=None,
+            estimated_cost_usd=0.5,
+            tool_call_count=12,
+        )
+        self._mk_rich(
+            db,
+            "big",
+            input_tokens=90000,
+            output_tokens=30000,
+            actual_cost_usd=4.2,
+            tool_call_count=80,
+        )
 
         rows = db.list_prune_candidates(max_tokens=200)
         assert [r["id"] for r in rows] == ["cheap"]
@@ -2810,6 +3031,7 @@ class TestPruneSessionFilters:
 
     def test_unknown_filter_rejected(self, db):
         import pytest as _pytest
+
         with _pytest.raises(TypeError):
             db.prune_sessions(older_than_days=None, bogus_filter="x")
 
@@ -2819,7 +3041,9 @@ class TestDeleteSessionOrphansChildren:
         """Deleting a parent session orphans its children."""
         db.create_session(session_id="parent", source="cli")
         db.create_session(session_id="child", source="cli", parent_session_id="parent")
-        db.create_session(session_id="grandchild", source="cli", parent_session_id="child")
+        db.create_session(
+            session_id="grandchild", source="cli", parent_session_id="child"
+        )
 
         # Should not raise IntegrityError
         result = db.delete_session("parent")
@@ -2914,9 +3138,7 @@ class TestBulkDeleteSessions:
         re-parented to NULL. Same contract as the single-session
         :meth:`delete_session` path."""
         db.create_session(session_id="parent", source="cli")
-        db.create_session(
-            session_id="child", source="cli", parent_session_id="parent"
-        )
+        db.create_session(session_id="child", source="cli", parent_session_id="parent")
 
         deleted = db.delete_sessions(["parent"])
         assert deleted == 1
@@ -3079,6 +3301,7 @@ class TestDeleteEmptySessions:
 # =========================================================================
 # Session title
 # =========================================================================
+
 
 class TestSessionTitle:
     def test_set_and_get_title(self, db):
@@ -3265,6 +3488,7 @@ class TestSessionTitleLineage:
 
     def test_rename_continuation_back_to_base_transfers_title(self, db):
         import time as _time
+
         self._make_compression_chain(db, _time.time() - 3600)
         db.set_session_title("root", "fingerprint-scanner")
         db.set_session_title("tip", "fingerprint-scanner #2")
@@ -3277,6 +3501,7 @@ class TestSessionTitleLineage:
 
     def test_transfer_walks_multi_level_chain(self, db):
         import time as _time
+
         t0 = _time.time() - 7200
         # root (compression) -> mid (compression) -> tip
         self._make_compression_chain(db, t0, root="root", tip="mid")
@@ -3285,7 +3510,9 @@ class TestSessionTitleLineage:
             (t0 + 300, "mid"),
         )
         db.create_session("tip", "cli", parent_session_id="mid")
-        db._conn.execute("UPDATE sessions SET started_at=? WHERE id=?", (t0 + 400, "tip"))
+        db._conn.execute(
+            "UPDATE sessions SET started_at=? WHERE id=?", (t0 + 400, "tip")
+        )
         db._conn.commit()
 
         db.set_session_title("root", "deep-dive")
@@ -3307,13 +3534,16 @@ class TestSessionTitleLineage:
         spawned while the parent was live) is not a continuation, so renaming it
         to the parent's title must still raise."""
         import time as _time
+
         t0 = _time.time() - 3600
         db.create_session("parent", "cli")
         db._conn.execute("UPDATE sessions SET started_at=? WHERE id=?", (t0, "parent"))
         db.create_session("child", "cli", parent_session_id="parent")
         # Child started BEFORE parent ended, and parent ended for a non-
         # compression reason — not a continuation edge.
-        db._conn.execute("UPDATE sessions SET started_at=? WHERE id=?", (t0 + 10, "child"))
+        db._conn.execute(
+            "UPDATE sessions SET started_at=? WHERE id=?", (t0 + 10, "child")
+        )
         db._conn.execute(
             "UPDATE sessions SET ended_at=?, end_reason='user_exit' WHERE id=?",
             (t0 + 100, "parent"),
@@ -3428,6 +3658,7 @@ class TestSchemaInit:
 
     def test_schema_version(self, db):
         from clawk_state import SCHEMA_VERSION
+
         cursor = db._conn.execute("SELECT version FROM schema_version")
         version = cursor.fetchone()[0]
         assert version == SCHEMA_VERSION
@@ -3506,10 +3737,14 @@ class TestSchemaInit:
         db = SessionDB(db_path=old_db)
         cursor = db._conn.execute("PRAGMA table_info(sessions)")
         columns = {row[1] for row in cursor.fetchall()}
-        assert {"telegram_dm_topic_mode", "telegram_topic_thread_id"}.isdisjoint(columns)
+        assert {"telegram_dm_topic_mode", "telegram_topic_thread_id"}.isdisjoint(
+            columns
+        )
         db.close()
 
-    def test_apply_telegram_topic_migration_creates_topic_tables_explicitly(self, tmp_path):
+    def test_apply_telegram_topic_migration_creates_topic_tables_explicitly(
+        self, tmp_path
+    ):
         """The /topic opt-in path owns the DB migration for Telegram topic mode."""
         old_db = tmp_path / "old.db"
         import sqlite3
@@ -3592,7 +3827,10 @@ class TestSchemaInit:
             user_id="208214988",
         )
 
-        assert db.get_telegram_topic_binding(chat_id="208214988", thread_id="17585") is None
+        assert (
+            db.get_telegram_topic_binding(chat_id="208214988", thread_id="17585")
+            is None
+        )
 
         db.bind_telegram_topic(
             chat_id="208214988",
@@ -3612,7 +3850,9 @@ class TestSchemaInit:
         assert db.get_meta("telegram_dm_topic_schema_version") == "2"
         db.close()
 
-    def test_telegram_topic_binding_refuses_to_relink_session_to_another_topic(self, tmp_path):
+    def test_telegram_topic_binding_refuses_to_relink_session_to_another_topic(
+        self, tmp_path
+    ):
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session(
             session_id="topic-session",
@@ -3637,7 +3877,9 @@ class TestSchemaInit:
             )
         db.close()
 
-    def test_list_unlinked_telegram_sessions_for_user_excludes_bound_and_other_users(self, tmp_path):
+    def test_list_unlinked_telegram_sessions_for_user_excludes_bound_and_other_users(
+        self, tmp_path
+    ):
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session(
             session_id="old-unlinked",
@@ -3727,6 +3969,7 @@ class TestSchemaInit:
 
         # Verify migration
         from clawk_state import SCHEMA_VERSION
+
         cursor = migrated_db._conn.execute("SELECT version FROM schema_version")
         assert cursor.fetchone()[0] == SCHEMA_VERSION
 
@@ -3748,7 +3991,9 @@ class TestSchemaInit:
 
         migrated_db.close()
 
-    def test_v9_migration_skips_v10_trigram_backfill_before_v11_rebuild(self, tmp_path, monkeypatch):
+    def test_v9_migration_skips_v10_trigram_backfill_before_v11_rebuild(
+        self, tmp_path, monkeypatch
+    ):
         """Direct v9→current migration should do only the v11 FTS rebuild.
 
         v10 backfilled ``messages_fts_trigram`` with content-only rows. Current
@@ -3767,7 +4012,14 @@ class TestSchemaInit:
         conn.execute(
             "INSERT INTO messages (session_id, role, content, tool_name, tool_calls, timestamp) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            ("s1", "tool", "plain content", "browser_snapshot", '{"name":"browser_snapshot"}', 1001.0),
+            (
+                "s1",
+                "tool",
+                "plain content",
+                "browser_snapshot",
+                '{"name":"browser_snapshot"}',
+                1001.0,
+            ),
         )
         conn.commit()
         conn.close()
@@ -3793,10 +4045,16 @@ class TestSchemaInit:
         migrated_db = SessionDB(db_path=db_path)
         try:
             assert trigram_content_only_inserts == []
-            version = migrated_db._conn.execute("SELECT version FROM schema_version").fetchone()[0]
+            version = migrated_db._conn.execute(
+                "SELECT version FROM schema_version"
+            ).fetchone()[0]
             assert version == SCHEMA_VERSION
-            normal_count = migrated_db._conn.execute("SELECT COUNT(*) FROM messages_fts").fetchone()[0]
-            trigram_count = migrated_db._conn.execute("SELECT COUNT(*) FROM messages_fts_trigram").fetchone()[0]
+            normal_count = migrated_db._conn.execute(
+                "SELECT COUNT(*) FROM messages_fts"
+            ).fetchone()[0]
+            trigram_count = migrated_db._conn.execute(
+                "SELECT COUNT(*) FROM messages_fts_trigram"
+            ).fetchone()[0]
             assert normal_count == 1
             assert trigram_count == 1
             tool_hit = migrated_db._conn.execute(
@@ -3914,11 +4172,15 @@ class TestSchemaInit:
         """Opening the same database twice doesn't error or duplicate columns."""
         db_path = tmp_path / "idempotent.db"
         db1 = SessionDB(db_path=db_path)
-        cols1 = {r[1] for r in db1._conn.execute("PRAGMA table_info(messages)").fetchall()}
+        cols1 = {
+            r[1] for r in db1._conn.execute("PRAGMA table_info(messages)").fetchall()
+        }
         db1.close()
 
         db2 = SessionDB(db_path=db_path)
-        cols2 = {r[1] for r in db2._conn.execute("PRAGMA table_info(messages)").fetchall()}
+        cols2 = {
+            r[1] for r in db2._conn.execute("PRAGMA table_info(messages)").fetchall()
+        }
         db2.close()
 
         assert cols1 == cols2
@@ -4003,6 +4265,7 @@ class TestTitleLineage:
     def test_resolve_returns_latest_numbered(self, db):
         """When numbered variants exist, return the most recent one."""
         import time
+
         db.create_session("s1", "cli")
         db.set_session_title("s1", "my project")
         time.sleep(0.01)
@@ -4115,6 +4378,7 @@ class TestListSessionsRich:
 
     def test_last_active_from_latest_message(self, db):
         import time
+
         db.create_session("s1", "cli")
         db.append_message("s1", "user", "Hello")
         time.sleep(0.01)
@@ -4129,14 +4393,18 @@ class TestListSessionsRich:
         # No messages, so last_active falls back to started_at
         assert sessions[0]["last_active"] == sessions[0]["started_at"]
 
-    def test_order_by_last_active_surfaces_recently_touched_older_session_first(self, db):
+    def test_order_by_last_active_surfaces_recently_touched_older_session_first(
+        self, db
+    ):
         t0 = 1709500000.0
         db.create_session("old", "cli")
         db.create_session("new", "cli")
 
         with db._lock:
             db._conn.execute("UPDATE sessions SET started_at=? WHERE id=?", (t0, "old"))
-            db._conn.execute("UPDATE sessions SET started_at=? WHERE id=?", (t0 + 10, "new"))
+            db._conn.execute(
+                "UPDATE sessions SET started_at=? WHERE id=?", (t0 + 10, "new")
+            )
 
         db.append_message("old", "user", "old first")
         db.append_message("new", "user", "new first")
@@ -4174,7 +4442,9 @@ class TestListSessionsRich:
         t0 = 1709500000.0
         db.create_session("root1", "cli")
         with db._lock:
-            db._conn.execute("UPDATE sessions SET started_at=? WHERE id=?", (t0, "root1"))
+            db._conn.execute(
+                "UPDATE sessions SET started_at=? WHERE id=?", (t0, "root1")
+            )
             db._conn.execute(
                 "UPDATE sessions SET ended_at=?, end_reason=? WHERE id=?",
                 (t0 + 100, "compression", "root1"),
@@ -4184,7 +4454,9 @@ class TestListSessionsRich:
         # Continuation tip created after root ended; last activity much later.
         db.create_session("tip1", "cli", parent_session_id="root1")
         with db._lock:
-            db._conn.execute("UPDATE sessions SET started_at=? WHERE id=?", (t0 + 101, "tip1"))
+            db._conn.execute(
+                "UPDATE sessions SET started_at=? WHERE id=?", (t0 + 101, "tip1")
+            )
         db.append_message("tip1", "user", "latest message")
 
         # Bunch of newer, uncompressed sessions — fresher start_at but older
@@ -4358,7 +4630,11 @@ class TestListSessionsRich:
 
         # Marker is persisted at creation time.
         branch_row = db.get_session("branch")
-        cfg = _json.loads(branch_row["model_config"]) if branch_row["model_config"] else {}
+        cfg = (
+            _json.loads(branch_row["model_config"])
+            if branch_row["model_config"]
+            else {}
+        )
         assert cfg.get("_branched_from") == "parent"
 
         # Visible immediately after branching.
@@ -4380,12 +4656,15 @@ class TestListSessionsRich:
 
         sessions = db.list_sessions_rich()
         ids = [s["id"] for s in sessions]
-        assert "delegate" not in ids, "Delegate sub-agent should not appear in default list"
+        assert "delegate" not in ids, (
+            "Delegate sub-agent should not appear in default list"
+        )
         assert "root" in ids
 
     def test_compression_child_still_hidden(self, db):
         """Compression continuation sessions remain hidden (parent ended with 'compression')."""
         import time as _time
+
         t0 = _time.time()
         db.create_session("root", "cli")
         db._conn.execute("UPDATE sessions SET started_at=? WHERE id=?", (t0, "root"))
@@ -4463,6 +4742,7 @@ class TestCompressionChainProjection:
 
     def test_get_compression_tip_walks_full_chain(self, db):
         import time as _time
+
         self._build_compression_chain(db, _time.time() - 3600)
         assert db.get_compression_tip("root1") == "tip1"
         assert db.get_compression_tip("mid1") == "tip1"
@@ -4478,6 +4758,7 @@ class TestCompressionChainProjection:
         continuations — the started_at >= ended_at guard handles this.
         """
         import time as _time
+
         self._build_compression_chain(db, _time.time() - 3600)
         # delegate1 is a child of root1 but NOT a compression continuation.
         # root1's tip must be tip1 (via mid1), not delegate1.
@@ -4488,6 +4769,7 @@ class TestCompressionChainProjection:
         the root row, so users can see and resume the live conversation.
         """
         import time as _time
+
         self._build_compression_chain(db, _time.time() - 3600)
         # Add an uncompressed root for comparison.
         db.create_session("solo", "cli")
@@ -4535,6 +4817,7 @@ class TestCompressionChainProjection:
         rows — useful for admin/debug UIs.
         """
         import time as _time
+
         self._build_compression_chain(db, _time.time() - 3600)
         sessions = db.list_sessions_rich(
             source="cli", limit=20, project_compression_tips=False
@@ -4553,6 +4836,7 @@ class TestCompressionChainProjection:
         even as new compressions push the tip forward in time.
         """
         import time as _time
+
         t0 = _time.time() - 3600
         self._build_compression_chain(db, t0)
 
@@ -4560,7 +4844,9 @@ class TestCompressionChainProjection:
         # if we used tip.started_at, but below if we correctly use root.started_at.
         t_between = t0 + 120  # between root1 and its compression
         db.create_session("newer", "cli")
-        db._conn.execute("UPDATE sessions SET started_at=? WHERE id=?", (t_between, "newer"))
+        db._conn.execute(
+            "UPDATE sessions SET started_at=? WHERE id=?", (t_between, "newer")
+        )
         db.append_message("newer", "user", "newer session started after root1")
         db._conn.commit()
 
@@ -4576,6 +4862,7 @@ class TestCompressionChainProjection:
         crash the list — it should fall back to surfacing the root as-is.
         """
         import time as _time
+
         t0 = _time.time() - 100
         db.create_session("orphan", "cli")
         db._conn.execute("UPDATE sessions SET started_at=? WHERE id=?", (t0, "orphan"))
@@ -4597,6 +4884,7 @@ class TestCompressionChainProjection:
 # =========================================================================
 # Session source exclusion (--source flag for third-party isolation)
 # =========================================================================
+
 
 class TestExcludeSources:
     """Tests for exclude_sources on list_sessions_rich and search_messages."""
@@ -4697,6 +4985,7 @@ class TestResolveSessionByNameOrId:
 # Concurrent write safety / lock contention fixes (#3139)
 # =========================================================================
 
+
 class TestConcurrentWriteSafety:
     def test_create_session_insert_or_ignore_is_idempotent(self, db):
         """create_session with the same ID twice must not raise (INSERT OR IGNORE)."""
@@ -4749,6 +5038,7 @@ class TestConcurrentWriteSafety:
         # There is no public API, so we check the kwarg via the module default.
         import inspect
         from clawk_state import SessionDB as _SessionDB
+
         src = inspect.getsource(_SessionDB.__init__)
         assert "30" in src, (
             "SQLite timeout should be at least 30s to handle CLI/gateway lock contention"
@@ -4758,6 +5048,7 @@ class TestConcurrentWriteSafety:
 # =========================================================================
 # Auto-maintenance: state_meta + vacuum + maybe_auto_prune_and_vacuum
 # =========================================================================
+
 
 class TestStateMeta:
     def test_get_meta_missing_returns_none(self, db):
@@ -4902,9 +5193,7 @@ class TestAutoMaintenance:
 
     def test_second_call_within_interval_skips(self, db):
         self._make_old_ended(db, "old", days_old=100)
-        first = db.maybe_auto_prune_and_vacuum(
-            retention_days=90, min_interval_hours=24
-        )
+        first = db.maybe_auto_prune_and_vacuum(retention_days=90, min_interval_hours=24)
         assert first["skipped"] is False
         assert first["pruned"] == 1
 
@@ -5026,6 +5315,7 @@ class TestAutoMaintenance:
 # FTS5 indexing of tool_calls / tool_name (#16751)
 # =========================================================================
 
+
 class TestFTS5ToolCallIndexing:
     """Regression tests: search_messages must see tool_name and tool_calls.
 
@@ -5037,7 +5327,9 @@ class TestFTS5ToolCallIndexing:
     def test_tool_name_is_searchable(self, db):
         db.create_session(session_id="s1", source="cli")
         db.append_message(
-            "s1", role="assistant", content="",
+            "s1",
+            role="assistant",
+            content="",
             tool_name="UNIQUETOOLNAME",
         )
         results = db.search_messages("UNIQUETOOLNAME")
@@ -5046,15 +5338,19 @@ class TestFTS5ToolCallIndexing:
     def test_tool_calls_args_are_searchable(self, db):
         db.create_session(session_id="s1", source="cli")
         db.append_message(
-            "s1", role="assistant", content="",
-            tool_calls=[{
-                "id": "c1",
-                "type": "function",
-                "function": {
-                    "name": "web_search",
-                    "arguments": '{"query": "UNIQUESEARCHTOKEN"}',
-                },
-            }],
+            "s1",
+            role="assistant",
+            content="",
+            tool_calls=[
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {
+                        "name": "web_search",
+                        "arguments": '{"query": "UNIQUESEARCHTOKEN"}',
+                    },
+                }
+            ],
         )
         results = db.search_messages("UNIQUESEARCHTOKEN")
         assert len(results) == 1
@@ -5062,12 +5358,16 @@ class TestFTS5ToolCallIndexing:
     def test_tool_function_name_in_tool_calls_is_searchable(self, db):
         db.create_session(session_id="s1", source="cli")
         db.append_message(
-            "s1", role="assistant", content="",
-            tool_calls=[{
-                "id": "c1",
-                "type": "function",
-                "function": {"name": "UNIQUEFUNCNAME", "arguments": "{}"},
-            }],
+            "s1",
+            role="assistant",
+            content="",
+            tool_calls=[
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "UNIQUEFUNCNAME", "arguments": "{}"},
+                }
+            ],
         )
         results = db.search_messages("UNIQUEFUNCNAME")
         assert len(results) == 1
@@ -5082,18 +5382,24 @@ class TestFTS5ToolCallIndexing:
         """
         db.create_session(session_id="s1", source="cli")
         db.append_message(
-            "s1", role="assistant", content="hello",
+            "s1",
+            role="assistant",
+            content="hello",
             tool_name="web_search",
-            tool_calls=[{
-                "id": "c1",
-                "type": "function",
-                "function": {"name": "web_search", "arguments": '{"q": "x"}'},
-            }],
+            tool_calls=[
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "web_search", "arguments": '{"q": "x"}'},
+                }
+            ],
         )
+
         # end_session + end-time prune path would exercise DELETE; hit the
         # row directly through the write helper to keep the regression focused.
         def _delete(conn):
             conn.execute("DELETE FROM messages WHERE session_id = ?", ("s1",))
+
         db._execute_write(_delete)  # must not raise
 
         assert db.search_messages("hello") == []
@@ -5103,7 +5409,9 @@ class TestFTS5ToolCallIndexing:
         """UPDATE must refresh the FTS row so old tokens drop out and new tokens appear."""
         db.create_session(session_id="s1", source="cli")
         db.append_message(
-            "s1", role="assistant", content="",
+            "s1",
+            role="assistant",
+            content="",
             tool_name="ORIGINALTOOL",
         )
         assert len(db.search_messages("ORIGINALTOOL")) == 1
@@ -5113,6 +5421,7 @@ class TestFTS5ToolCallIndexing:
                 "UPDATE messages SET tool_name = ? WHERE session_id = ?",
                 ("RENAMEDTOOL", "s1"),
             )
+
         db._execute_write(_update)
 
         assert db.search_messages("ORIGINALTOOL") == []
@@ -5188,8 +5497,14 @@ class TestFTS5ToolCallMigration:
         conn.execute(
             "INSERT INTO messages (session_id, timestamp, role, content, tool_name, tool_calls) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            ("s1", time.time(), "assistant", "", "LEGACYTOOL",
-             '{"function":{"name":"web_search","arguments":"{\\"q\\":\\"LEGACYARG\\"}"}}'),
+            (
+                "s1",
+                time.time(),
+                "assistant",
+                "",
+                "LEGACYTOOL",
+                '{"function":{"name":"web_search","arguments":"{\\"q\\":\\"LEGACYARG\\"}"}}',
+            ),
         )
         conn.commit()
 
@@ -5203,12 +5518,15 @@ class TestFTS5ToolCallMigration:
         # Now open via SessionDB — migration runs.
         session_db = SessionDB(db_path=db_path)
         try:
-            assert len(session_db.search_messages("LEGACYTOOL")) == 1, \
+            assert len(session_db.search_messages("LEGACYTOOL")) == 1, (
                 "v11 migration must backfill tool_name into FTS"
-            assert len(session_db.search_messages("LEGACYARG")) == 1, \
+            )
+            assert len(session_db.search_messages("LEGACYARG")) == 1, (
                 "v11 migration must backfill tool_calls JSON into FTS"
+            )
             # schema_version bumped
             from clawk_state import SCHEMA_VERSION
+
             row = session_db._conn.execute(
                 "SELECT version FROM schema_version LIMIT 1"
             ).fetchone()
@@ -5347,7 +5665,9 @@ class TestApplyWalProbe:
             "checkpoint_fullfsync barrier must fire on the already-WAL path"
         )
 
-    def test_checkpoint_fullsync_barrier_skipped_off_darwin(self, tmp_path, monkeypatch):
+    def test_checkpoint_fullsync_barrier_skipped_off_darwin(
+        self, tmp_path, monkeypatch
+    ):
         """Non-macOS platforms must NOT issue the macOS-only PRAGMA."""
         import sqlite3
         import clawk_state
@@ -5638,7 +5958,6 @@ class TestSessionArchive:
         assert db.session_count(include_archived=True) == 2
 
 
-
 class TestSessionIdSearch:
     """Session id search backs Desktop's Search Sessions UX."""
 
@@ -5652,18 +5971,26 @@ class TestSessionIdSearch:
         self._seed(db, "20260603_090200_abcd12", content="content without id")
         self._seed(db, "20260602_111111_other99", content="other content")
 
-        assert [s["id"] for s in db.search_sessions_by_id("20260603_090200_abcd12")] == [
+        assert [
+            s["id"] for s in db.search_sessions_by_id("20260603_090200_abcd12")
+        ] == ["20260603_090200_abcd12"]
+        assert [s["id"] for s in db.search_sessions_by_id("20260603")] == [
             "20260603_090200_abcd12"
         ]
-        assert [s["id"] for s in db.search_sessions_by_id("20260603")] == ["20260603_090200_abcd12"]
-        assert [s["id"] for s in db.search_sessions_by_id("ABCD12")] == ["20260603_090200_abcd12"]
+        assert [s["id"] for s in db.search_sessions_by_id("ABCD12")] == [
+            "20260603_090200_abcd12"
+        ]
 
-    def test_search_sessions_by_id_respects_limit_and_prioritizes_exact_matches(self, db):
+    def test_search_sessions_by_id_respects_limit_and_prioritizes_exact_matches(
+        self, db
+    ):
         self._seed(db, "20260603_090200_abcd12")
         self._seed(db, "20260603_090200_abcd12_child")
         self._seed(db, "x_20260603_090200_abcd12")
 
-        ids = [s["id"] for s in db.search_sessions_by_id("20260603_090200_abcd12", limit=2)]
+        ids = [
+            s["id"] for s in db.search_sessions_by_id("20260603_090200_abcd12", limit=2)
+        ]
 
         assert ids == ["20260603_090200_abcd12", "20260603_090200_abcd12_child"]
 
@@ -5671,8 +5998,14 @@ class TestSessionIdSearch:
         self._seed(db, "20260603_090200_live")
         self._seed(db, "20260603_090200_archived", archived=True)
 
-        included = {s["id"] for s in db.search_sessions_by_id("20260603_090200", include_archived=True)}
-        excluded = {s["id"] for s in db.search_sessions_by_id("20260603_090200", include_archived=False)}
+        included = {
+            s["id"]
+            for s in db.search_sessions_by_id("20260603_090200", include_archived=True)
+        }
+        excluded = {
+            s["id"]
+            for s in db.search_sessions_by_id("20260603_090200", include_archived=False)
+        }
 
         assert included == {"20260603_090200_live", "20260603_090200_archived"}
         assert excluded == {"20260603_090200_live"}
@@ -5879,19 +6212,27 @@ def test_gateway_session_recovery_reopens_legacy_agent_close_rows(db):
     )
     db._conn.commit()
 
-    assert db.find_latest_gateway_session_for_peer(
-        source="telegram",
-        user_id="user-1",
-        session_key="agent:main:telegram:dm:chat-1",
-        chat_id="chat-1",
-        chat_type="dm",
-    ) is None
+    assert (
+        db.find_latest_gateway_session_for_peer(
+            source="telegram",
+            user_id="user-1",
+            session_key="agent:main:telegram:dm:chat-1",
+            chat_id="chat-1",
+            chat_type="dm",
+        )
+        is None
+    )
 
 
 def test_gateway_metadata_display_name_origin_round_trip(db):
     """record_gateway_session_peer persists display_name/origin_json (#9006)."""
     db.create_session("gw-meta", "telegram", user_id="u1")
-    origin = {"platform": "telegram", "chat_id": "c1", "chat_name": "Alice", "chat_type": "dm"}
+    origin = {
+        "platform": "telegram",
+        "chat_id": "c1",
+        "chat_name": "Alice",
+        "chat_type": "dm",
+    }
     db.record_gateway_session_peer(
         "gw-meta",
         source="telegram",
@@ -5934,27 +6275,39 @@ def test_set_expiry_finalized_round_trip(db):
 def test_list_gateway_sessions_filters_and_dedupes(db):
     # Two rows on the same session_key: only the newest should be returned.
     db.create_session(
-        "gw-old", "telegram",
-        session_key="agent:main:telegram:dm:c1", chat_id="c1", chat_type="dm",
+        "gw-old",
+        "telegram",
+        session_key="agent:main:telegram:dm:c1",
+        chat_id="c1",
+        chat_type="dm",
     )
     db._conn.execute(
         "UPDATE sessions SET started_at = started_at - 100 WHERE id = 'gw-old'"
     )
     db._conn.commit()
     db.create_session(
-        "gw-new", "telegram",
-        session_key="agent:main:telegram:dm:c1", chat_id="c1", chat_type="dm",
+        "gw-new",
+        "telegram",
+        session_key="agent:main:telegram:dm:c1",
+        chat_id="c1",
+        chat_type="dm",
     )
     db.create_session(
-        "gw-discord", "discord",
-        session_key="agent:main:discord:group:g1:u1", chat_id="g1", chat_type="group",
+        "gw-discord",
+        "discord",
+        session_key="agent:main:discord:group:g1:u1",
+        chat_id="g1",
+        chat_type="group",
     )
     # Non-gateway session (no session_key) must never appear.
     db.create_session("cli-session", "cli")
     # Ended gateway session excluded when active_only.
     db.create_session(
-        "gw-ended", "slack",
-        session_key="agent:main:slack:dm:s1", chat_id="s1", chat_type="dm",
+        "gw-ended",
+        "slack",
+        session_key="agent:main:slack:dm:s1",
+        chat_id="s1",
+        chat_type="dm",
     )
     db.end_session("gw-ended", "session_reset")
 
@@ -5972,45 +6325,62 @@ def test_list_gateway_sessions_filters_and_dedupes(db):
 
 def test_find_session_by_origin_matching_rules(db):
     db.create_session(
-        "gw-o1", "telegram", user_id="u1",
-        session_key="agent:main:telegram:group:c9:u1", chat_id="c9", chat_type="group",
+        "gw-o1",
+        "telegram",
+        user_id="u1",
+        session_key="agent:main:telegram:group:c9:u1",
+        chat_id="c9",
+        chat_type="group",
     )
     db.create_session(
-        "gw-o2", "telegram", user_id="u2",
-        session_key="agent:main:telegram:group:c9:u2", chat_id="c9", chat_type="group",
+        "gw-o2",
+        "telegram",
+        user_id="u2",
+        session_key="agent:main:telegram:group:c9:u2",
+        chat_id="c9",
+        chat_type="group",
     )
 
     # Exact user match wins.
-    assert db.find_session_by_origin(
-        platform="telegram", chat_id="c9", user_id="u2"
-    ) == "gw-o2"
+    assert (
+        db.find_session_by_origin(platform="telegram", chat_id="c9", user_id="u2")
+        == "gw-o2"
+    )
     # Unknown user among multiple distinct users -> None (no contamination).
-    assert db.find_session_by_origin(
-        platform="telegram", chat_id="c9", user_id="u3"
-    ) is None
+    assert (
+        db.find_session_by_origin(platform="telegram", chat_id="c9", user_id="u3")
+        is None
+    )
     # No user given + multiple distinct users -> None.
     assert db.find_session_by_origin(platform="telegram", chat_id="c9") is None
     # Ended sessions are ignored: only gw-o1 remains as a live candidate.
     # A single remaining candidate is returned even without an exact user
     # match — mirrors the original sessions.json scan semantics.
     db.end_session("gw-o2", "session_reset")
-    assert db.find_session_by_origin(
-        platform="telegram", chat_id="c9", user_id="u2"
-    ) == "gw-o1"
+    assert (
+        db.find_session_by_origin(platform="telegram", chat_id="c9", user_id="u2")
+        == "gw-o1"
+    )
     # Single remaining candidate resolves without user_id.
     assert db.find_session_by_origin(platform="telegram", chat_id="c9") == "gw-o1"
     # Thread filter.
     db.create_session(
-        "gw-th", "discord", user_id="u9",
-        session_key="agent:main:discord:thread:t7", chat_id="ch7",
-        chat_type="thread", thread_id="t7",
+        "gw-th",
+        "discord",
+        user_id="u9",
+        session_key="agent:main:discord:thread:t7",
+        chat_id="ch7",
+        chat_type="thread",
+        thread_id="t7",
     )
-    assert db.find_session_by_origin(
-        platform="discord", chat_id="ch7", thread_id="t7"
-    ) == "gw-th"
-    assert db.find_session_by_origin(
-        platform="discord", chat_id="ch7", thread_id="other"
-    ) is None
+    assert (
+        db.find_session_by_origin(platform="discord", chat_id="ch7", thread_id="t7")
+        == "gw-th"
+    )
+    assert (
+        db.find_session_by_origin(platform="discord", chat_id="ch7", thread_id="other")
+        is None
+    )
 
 
 def test_v18_backfill_from_sessions_json(tmp_path, monkeypatch):
@@ -6033,18 +6403,25 @@ def test_v18_backfill_from_sessions_json(tmp_path, monkeypatch):
     db._conn.commit()
     db.close()
 
-    origin = {"platform": "telegram", "chat_id": "123", "chat_name": "Alice",
-              "chat_type": "dm", "user_id": "u1"}
-    (home / "sessions" / "sessions.json").write_text(json.dumps({
-        "_README": "sentinel",
-        "agent:main:telegram:dm:123": {
-            "session_id": "legacy-gw",
-            "display_name": "Alice",
-            "chat_type": "dm",
-            "expiry_finalized": True,
-            "origin": origin,
-        },
-    }))
+    origin = {
+        "platform": "telegram",
+        "chat_id": "123",
+        "chat_name": "Alice",
+        "chat_type": "dm",
+        "user_id": "u1",
+    }
+    (home / "sessions" / "sessions.json").write_text(
+        json.dumps({
+            "_README": "sentinel",
+            "agent:main:telegram:dm:123": {
+                "session_id": "legacy-gw",
+                "display_name": "Alice",
+                "chat_type": "dm",
+                "expiry_finalized": True,
+                "origin": origin,
+            },
+        })
+    )
 
     db = hs.SessionDB(home / "state.db")
     row = db.get_session("legacy-gw")
@@ -6091,7 +6468,9 @@ def test_compression_fallback_streak_round_trips(db):
     assert db.get_compression_fallback_streak("s1") == 2
 
 
-def test_refresh_compression_lock_requires_holder_and_preserves_reclaimability(db, monkeypatch):
+def test_refresh_compression_lock_requires_holder_and_preserves_reclaimability(
+    db, monkeypatch
+):
     db.create_session("s1", "cli")
 
     monkeypatch.setattr(clawk_state.time, "time", lambda: 1000.0)
@@ -6120,6 +6499,7 @@ def test_refresh_compression_lock_requires_holder_and_preserves_reclaimability(d
 # compact_rows — lightweight column projection (issue #47414)
 # =========================================================================
 
+
 class TestCompactRows:
     """list_sessions_rich and _get_session_rich_row with compact_rows=True
     must omit system_prompt but return all other metadata fields."""
@@ -6144,9 +6524,20 @@ class TestCompactRows:
         self._create(db, "s1")
         rows = db.list_sessions_rich(compact_rows=True)
         row = rows[0]
-        for field in ("id", "source", "model", "started_at", "message_count",
-                      "input_tokens", "output_tokens", "title", "cwd",
-                      "archived", "preview", "last_active"):
+        for field in (
+            "id",
+            "source",
+            "model",
+            "started_at",
+            "message_count",
+            "input_tokens",
+            "output_tokens",
+            "title",
+            "cwd",
+            "archived",
+            "preview",
+            "last_active",
+        ):
             assert field in row, f"missing field: {field}"
 
     def test_compact_rows_order_by_last_active(self, db):
@@ -6181,9 +6572,7 @@ class TestCompactRows:
         session_key) and any column added later via declarative
         reconciliation. Guards against a hardcoded column list going stale."""
         self._create(db, "s1")
-        live_cols = {
-            row[1] for row in db._conn.execute("PRAGMA table_info(sessions)")
-        }
+        live_cols = {row[1] for row in db._conn.execute("PRAGMA table_info(sessions)")}
         row = db.list_sessions_rich(compact_rows=True)[0]
         # Hardcode the one sanctioned exclusion: if the excluded set ever
         # widens (or the projection silently drops a column), this fails and
@@ -6197,6 +6586,7 @@ class TestCompactRows:
         merged tip row is fetched with the same compact_rows flag (salvage
         follow-up for #47437)."""
         import time as _time
+
         t0 = _time.time() - 3600
         db.create_session("root", "cli")
         db.update_system_prompt("root", "root blob " * 200)
@@ -6207,7 +6597,9 @@ class TestCompactRows:
         )
         db.create_session("tip", "cli", parent_session_id="root")
         db.update_system_prompt("tip", "tip blob " * 200)
-        db._conn.execute("UPDATE sessions SET started_at=? WHERE id=?", (t0 + 200, "tip"))
+        db._conn.execute(
+            "UPDATE sessions SET started_at=? WHERE id=?", (t0 + 200, "tip")
+        )
         db._conn.commit()
 
         rows = db.list_sessions_rich(compact_rows=True)
@@ -6219,6 +6611,7 @@ class TestCompactRows:
 # =========================================================================
 # get_messages pagination (salvage follow-up for #60347)
 # =========================================================================
+
 
 class TestGetMessagesPagination:
     """get_messages(limit=, offset=) pages in insertion order; the default
@@ -6270,6 +6663,7 @@ class TestGetMessagesPagination:
 # =========================================================================
 # Lone-surrogate persistence
 # =========================================================================
+
 
 class TestLoneSurrogatePersistence:
     """sqlite3 encodes bound str params as UTF-8 and raises UnicodeEncodeError
@@ -6358,4 +6752,3 @@ class TestLoneSurrogatePersistence:
         db.create_session("s1", source="cli")
         assert db.set_session_title("s1", "title \ud835 bad") is True
         assert db.get_session("s1")["title"] == "title \ufffd bad"
-

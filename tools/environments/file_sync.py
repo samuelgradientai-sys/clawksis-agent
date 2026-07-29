@@ -44,10 +44,16 @@ _FORCE_SYNC_ENV = "CLAWK_FORCE_FILE_SYNC"
 
 # Transport callbacks provided by each backend
 UploadFn = Callable[[str, str], None]  # (host_path, remote_path) -> raises on failure
-BulkUploadFn = Callable[[list[tuple[str, str]]], None]  # [(host_path, remote_path), ...] -> raises on failure
-BulkDownloadFn = Callable[[Path], None]  # (dest_tar_path) -> writes tar archive, raises on failure
+BulkUploadFn = Callable[
+    [list[tuple[str, str]]], None
+]  # [(host_path, remote_path), ...] -> raises on failure
+BulkDownloadFn = Callable[
+    [Path], None
+]  # (dest_tar_path) -> writes tar archive, raises on failure
 DeleteFn = Callable[[list[str]], None]  # (remote_paths) -> raises on failure
-GetFilesFn = Callable[[], list[tuple[str, str]]]  # () -> [(host_path, remote_path), ...]
+GetFilesFn = Callable[
+    [], list[tuple[str, str]]
+]  # () -> [(host_path, remote_path), ...]
 
 
 def iter_sync_files(container_base: str = "/root/.clawksis") -> list[tuple[str, str]]:
@@ -68,9 +74,7 @@ def iter_sync_files(container_base: str = "/root/.clawksis") -> list[tuple[str, 
 
     files: list[tuple[str, str]] = []
     for entry in get_credential_file_mounts():
-        remote = entry["container_path"].replace(
-            "/root/.clawksis", container_base, 1
-        )
+        remote = entry["container_path"].replace("/root/.clawksis", container_base, 1)
         files.append((entry["host_path"], remote))
     for entry in iter_skills_files(container_base=container_base):
         files.append((entry["host_path"], entry["container_path"]))
@@ -156,7 +160,9 @@ class FileSyncManager:
         self._bulk_upload_fn = bulk_upload_fn
         self._bulk_download_fn = bulk_download_fn
         self._delete_fn = delete_fn
-        self._synced_files: dict[str, tuple[float, int]] = {}  # remote_path -> (mtime, size)
+        self._synced_files: dict[
+            str, tuple[float, int]
+        ] = {}  # remote_path -> (mtime, size)
         self._pushed_hashes: dict[str, str] = {}  # remote_path -> sha256 hex digest
         self._upload_only_host_paths: set[str] = set()
         self._last_sync_time: float = 0.0  # monotonic; 0 ensures first sync runs
@@ -281,11 +287,15 @@ class FileSyncManager:
                     delay = _SYNC_BACK_BACKOFF[attempt]
                     logger.warning(
                         "sync_back: attempt %d failed (%s), retrying in %ds",
-                        attempt + 1, exc, delay,
+                        attempt + 1,
+                        exc,
+                        delay,
                     )
                     _sleep(delay)
 
-        logger.warning("sync_back: all %d attempts failed: %s", _SYNC_BACK_MAX_RETRIES, last_exc)
+        logger.warning(
+            "sync_back: all %d attempts failed: %s", _SYNC_BACK_MAX_RETRIES, last_exc
+        )
 
     def _sync_back_once(self, lock_path: Path) -> None:
         """Single sync-back attempt with SIGINT protection and file lock."""
@@ -362,7 +372,8 @@ class FileSyncManager:
             if tar_size > _SYNC_BACK_MAX_BYTES:
                 logger.warning(
                     "sync_back: remote tar is %d bytes (cap %d) — skipping extraction",
-                    tar_size, _SYNC_BACK_MAX_BYTES,
+                    tar_size,
+                    _SYNC_BACK_MAX_BYTES,
                 )
                 return
 
@@ -405,7 +416,9 @@ class FileSyncManager:
                                 )
                                 continue
 
-                        if self._is_upload_only_host_path(host_path, upload_only_host_paths):
+                        if self._is_upload_only_host_path(
+                            host_path, upload_only_host_paths
+                        ):
                             logger.debug(
                                 "sync_back: skipping upload-only credential file %s",
                                 remote_path,
@@ -431,8 +444,9 @@ class FileSyncManager:
                 else:
                     logger.debug("sync_back: no remote changes detected")
 
-    def _resolve_host_path(self, remote_path: str,
-                           file_mapping: list[tuple[str, str]] | None = None) -> str | None:
+    def _resolve_host_path(
+        self, remote_path: str, file_mapping: list[tuple[str, str]] | None = None
+    ) -> str | None:
         """Find the host path for a known remote path from the file mapping."""
         mapping = file_mapping if file_mapping is not None else []
         for host, remote in mapping:
@@ -440,10 +454,13 @@ class FileSyncManager:
                 return host
         return None
 
-    def _infer_host_path(self, remote_path: str,
-                         file_mapping: list[tuple[str, str]] | None = None,
-                         *,
-                         upload_only_host_paths: set[str] | None = None) -> str | None:
+    def _infer_host_path(
+        self,
+        remote_path: str,
+        file_mapping: list[tuple[str, str]] | None = None,
+        *,
+        upload_only_host_paths: set[str] | None = None,
+    ) -> str | None:
         """Infer a host path for a new remote file by matching path prefixes.
 
         Uses the existing file mapping to find a remote->host directory
@@ -460,12 +477,14 @@ class FileSyncManager:
             remote_dir = str(Path(remote).parent)
             if remote_path.startswith(remote_dir + "/"):
                 host_dir = str(Path(host).parent)
-                suffix = remote_path[len(remote_dir):]
+                suffix = remote_path[len(remote_dir) :]
                 return host_dir + suffix
         return None
 
     @staticmethod
-    def _is_upload_only_host_path(host_path: str, upload_only_host_paths: set[str]) -> bool:
+    def _is_upload_only_host_path(
+        host_path: str, upload_only_host_paths: set[str]
+    ) -> bool:
         try:
             resolved = str(Path(host_path).expanduser().resolve())
         except OSError:

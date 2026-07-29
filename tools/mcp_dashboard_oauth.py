@@ -32,12 +32,22 @@ class DashboardOAuthFlow:
     error: str | None = None
     tools: list[dict] = field(default_factory=list)
     expected_state: str | None = field(default=None, init=False)
-    _callback: tuple[str, str | None] | None = field(default=None, init=False, repr=False)
+    _callback: tuple[str, str | None] | None = field(
+        default=None, init=False, repr=False
+    )
     _callback_error: str | None = field(default=None, init=False, repr=False)
-    _authorization_ready: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
-    _callback_ready: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
-    _worker_done: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
-    _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    _authorization_ready: threading.Event = field(
+        default_factory=threading.Event, init=False, repr=False
+    )
+    _callback_ready: threading.Event = field(
+        default_factory=threading.Event, init=False, repr=False
+    )
+    _worker_done: threading.Event = field(
+        default_factory=threading.Event, init=False, repr=False
+    )
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False
+    )
 
     async def publish_authorization_url(self, url: str) -> None:
         state = parse_qs(urlparse(url).query).get("state", [None])[0]
@@ -56,7 +66,9 @@ class DashboardOAuthFlow:
         if not ready:
             raise TimeoutError("Timed out waiting for MCP authorization URL")
         if not self.authorization_url:
-            raise RuntimeError(self.error or "MCP OAuth flow ended before authorization")
+            raise RuntimeError(
+                self.error or "MCP OAuth flow ended before authorization"
+            )
         return self.authorization_url
 
     def deliver_callback(

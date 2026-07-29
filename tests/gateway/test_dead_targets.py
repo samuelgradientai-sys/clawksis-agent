@@ -46,6 +46,7 @@ def isolate(tmp_path, monkeypatch):
 # DeadTargetRegistry unit contract
 # --------------------------------------------------------------------------
 
+
 class TestDeadTargetRegistry:
     def test_mark_is_dead_clear_roundtrip(self, isolate):
         reg = DeadTargetRegistry()
@@ -92,6 +93,7 @@ class TestDeadTargetRegistry:
 # --------------------------------------------------------------------------
 # DeliveryRouter end-to-end lifecycle
 # --------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_forbidden_marks_target_dead_then_short_circuits(isolate):
@@ -173,6 +175,7 @@ async def test_shared_registry_is_used_when_injected(isolate):
 # not_found blast radius: chat-level kills the chat, thread/message-level must not
 # --------------------------------------------------------------------------
 
+
 class RaisingAdapter:
     """Raises a fixed error message on every send."""
 
@@ -209,7 +212,9 @@ async def test_chat_level_not_found_marks_target_dead(isolate):
 
 @pytest.mark.parametrize("message", _SUBCHAT_NOT_FOUND_MESSAGES)
 @pytest.mark.asyncio
-async def test_thread_or_message_level_not_found_does_not_mark_chat_dead(isolate, message):
+async def test_thread_or_message_level_not_found_does_not_mark_chat_dead(
+    isolate, message
+):
     # A deleted forum topic / edited-away message is NOT a whole-chat death: marking
     # the parent chat dead would silently short-circuit every future delivery to it.
     adapter = RaisingAdapter(message)
@@ -237,15 +242,31 @@ class TestNotFoundBlastRadius:
         from gateway.platforms.base import is_chat_level_not_found
 
         # Conservative: if a sub-chat marker is present, never kill the whole chat.
-        assert is_chat_level_not_found(error_text="chat not found; message thread not found") is False
+        assert (
+            is_chat_level_not_found(
+                error_text="chat not found; message thread not found"
+            )
+            is False
+        )
 
     def test_classify_dead_from_error_text_gates_not_found(self):
         from gateway.delivery import _classify_dead_from_error_text
 
-        assert _classify_dead_from_error_text("Forbidden: bot was blocked by the user") == "forbidden"
-        assert _classify_dead_from_error_text("Bad Request: chat not found") == "not_found"
-        assert _classify_dead_from_error_text("Bad Request: message thread not found") is None
-        assert _classify_dead_from_error_text("httpx.ReadTimeout: connection timed out") is None
+        assert (
+            _classify_dead_from_error_text("Forbidden: bot was blocked by the user")
+            == "forbidden"
+        )
+        assert (
+            _classify_dead_from_error_text("Bad Request: chat not found") == "not_found"
+        )
+        assert (
+            _classify_dead_from_error_text("Bad Request: message thread not found")
+            is None
+        )
+        assert (
+            _classify_dead_from_error_text("httpx.ReadTimeout: connection timed out")
+            is None
+        )
 
     def test_error_blob_is_shared_source_of_truth(self):
         # Regression guard: classify_send_error and is_chat_level_not_found must

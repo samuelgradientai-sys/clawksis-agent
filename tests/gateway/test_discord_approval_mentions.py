@@ -122,14 +122,22 @@ def test_yaml_config_bridges_nested_discord_extra_websocket_health(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
     _apply_yaml_config(
-        {"platforms": {"discord": {"extra": {
-            "websocket_liveness_interval_seconds": 13,
-            "websocket_liveness_failure_threshold": 4,
-        }}}},
-        {"extra": {
-            "websocket_liveness_interval_seconds": 13,
-            "websocket_liveness_failure_threshold": 4,
-        }},
+        {
+            "platforms": {
+                "discord": {
+                    "extra": {
+                        "websocket_liveness_interval_seconds": 13,
+                        "websocket_liveness_failure_threshold": 4,
+                    }
+                }
+            }
+        },
+        {
+            "extra": {
+                "websocket_liveness_interval_seconds": 13,
+                "websocket_liveness_failure_threshold": 4,
+            }
+        },
     )
 
     assert os.environ["CLAWK_DISCORD_LIVENESS_INTERVAL_SECONDS"] == "13"

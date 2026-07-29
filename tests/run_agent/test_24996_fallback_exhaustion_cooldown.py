@@ -70,8 +70,8 @@ class TestExhaustionArmsCooldown:
                 return_value=(_mock_client(), "resolved"),
             ),
         ):
-            assert agent._try_activate_fallback() is True   # -> entry 0
-            assert agent._try_activate_fallback() is True   # -> entry 1
+            assert agent._try_activate_fallback() is True  # -> entry 0
+            assert agent._try_activate_fallback() is True  # -> entry 1
             # Chain now exhausted; a non-rate-limit failure must arm cooldown.
             assert agent._try_activate_fallback() is False
             cooldown = getattr(agent, "_rate_limited_until", 0)
@@ -103,10 +103,14 @@ class TestExhaustionArmsCooldown:
             ),
         ):
             # First activation with rate_limit reason arms the 60s cooldown.
-            assert agent._try_activate_fallback(reason=FailoverReason.rate_limit) is True
+            assert (
+                agent._try_activate_fallback(reason=FailoverReason.rate_limit) is True
+            )
             # Chain exhausted on the next call (also rate_limit) -> still False,
             # and the 60s cooldown must survive (max(), not overwritten down).
-            assert agent._try_activate_fallback(reason=FailoverReason.rate_limit) is False
+            assert (
+                agent._try_activate_fallback(reason=FailoverReason.rate_limit) is False
+            )
             cooldown = getattr(agent, "_rate_limited_until", 0)
         # ~60s past the frozen clock, far past the short exhaustion window.
         assert cooldown == frozen + 60

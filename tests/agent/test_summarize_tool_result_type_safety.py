@@ -4,6 +4,7 @@ When LLMs return non-string parameter values (e.g. bool, int, None) in tool
 call arguments, _summarize_tool_result() must not crash with TypeError or
 AttributeError. This caused an infinite TUI crash loop in production.
 """
+
 import json
 import pytest
 from agent.context_compressor import _summarize_tool_result
@@ -207,7 +208,7 @@ class TestEdgeCases:
             "command": "ls",
             "background": True,
             "timeout": 30,
-            "extra": None
+            "extra": None,
         })
         result = _summarize_tool_result("terminal", args, '{"exit_code": 0}')
         assert "terminal" in result
@@ -226,14 +227,42 @@ class TestBackstopWrapper:
         """Fuzz the per-tool branches with hostile value shapes."""
         hostile_values = [None, True, 42, 3.14, ["a"], {"k": "v"}]
         tools = [
-            "terminal", "read_file", "write_file", "search_files", "patch",
-            "browser_navigate", "web_search", "web_extract", "delegate_task",
-            "execute_code", "skill_view", "vision_analyze", "memory",
-            "cronjob", "process", "totally_unknown_tool",
+            "terminal",
+            "read_file",
+            "write_file",
+            "search_files",
+            "patch",
+            "browser_navigate",
+            "web_search",
+            "web_extract",
+            "delegate_task",
+            "execute_code",
+            "skill_view",
+            "vision_analyze",
+            "memory",
+            "cronjob",
+            "process",
+            "totally_unknown_tool",
         ]
-        keys = ["command", "path", "content", "pattern", "url", "query",
-                "urls", "goal", "code", "name", "question", "action",
-                "target", "session_id", "mode", "offset", "ref"]
+        keys = [
+            "command",
+            "path",
+            "content",
+            "pattern",
+            "url",
+            "query",
+            "urls",
+            "goal",
+            "code",
+            "name",
+            "question",
+            "action",
+            "target",
+            "session_id",
+            "mode",
+            "offset",
+            "ref",
+        ]
         for tool in tools:
             for value in hostile_values:
                 args = json.dumps({k: value for k in keys})
@@ -243,6 +272,7 @@ class TestBackstopWrapper:
     def test_backstop_fallback_shape(self):
         """When a branch does fail, the fallback names the tool and size."""
         from unittest.mock import patch as _patch
+
         with _patch(
             "agent.context_compressor._summarize_tool_result_unguarded",
             side_effect=TypeError("boom"),
@@ -252,6 +282,7 @@ class TestBackstopWrapper:
 
     def test_backstop_handles_non_string_content(self):
         from unittest.mock import patch as _patch
+
         with _patch(
             "agent.context_compressor._summarize_tool_result_unguarded",
             side_effect=TypeError("boom"),
@@ -266,10 +297,15 @@ class TestDisplayPreviewTypeSafety:
 
     def test_process_preview_non_string_session_id(self):
         from agent.display import build_tool_preview
-        assert build_tool_preview("process", {"action": "poll", "session_id": 123}) == "poll 123"
+
+        assert (
+            build_tool_preview("process", {"action": "poll", "session_id": 123})
+            == "poll 123"
+        )
 
     def test_process_preview_non_string_data(self):
         from agent.display import build_tool_preview
+
         result = build_tool_preview(
             "process", {"action": "submit", "session_id": "abc", "data": 42}
         )
@@ -277,10 +313,12 @@ class TestDisplayPreviewTypeSafety:
 
     def test_process_preview_none_action(self):
         from agent.display import build_tool_preview
+
         result = build_tool_preview("process", {"action": None, "session_id": "abc"})
         assert isinstance(result, str)
 
     def test_process_label_non_string_session_id(self):
         from agent.display import build_tool_label
+
         result = build_tool_label("process", {"action": "poll", "session_id": 123})
         assert isinstance(result, str)

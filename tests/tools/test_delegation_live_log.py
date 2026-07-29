@@ -64,7 +64,10 @@ def test_writer_event_lines_append_in_order_and_flush_immediately():
     assert "terminal ok 1.2s: file1 file2" in joined
     assert "hmm, next step" in joined
     # Ordering: assistant before tool before result before think
-    idx = {k: joined.index(k) for k in ("I'll inspect", "-> terminal", "terminal ok", "hmm,")}
+    idx = {
+        k: joined.index(k)
+        for k in ("I'll inspect", "-> terminal", "terminal ok", "hmm,")
+    }
     assert idx["I'll inspect"] < idx["-> terminal"] < idx["terminal ok"] < idx["hmm,"]
 
 
@@ -141,12 +144,24 @@ def test_observe_maps_child_callback_events_to_lines():
     w.observe("_thinking", "first line of thinking")
     w.observe("reasoning.available", "_thinking", "deep reasoning text", None)
     w.observe("tool.started", "terminal", "ls /tmp", {"command": "ls /tmp"})
-    w.observe("tool.completed", "terminal", None, None,
-              duration=0.5, is_error=False, result="ok output")
+    w.observe(
+        "tool.completed",
+        "terminal",
+        None,
+        None,
+        duration=0.5,
+        is_error=False,
+        result="ok output",
+    )
     w.observe("subagent.text", preview="final reply ")
     w.observe("subagent.text", preview="streamed in parts")
-    w.observe("subagent.complete", preview="short", status="completed",
-              duration_seconds=3.2, summary="did the thing")
+    w.observe(
+        "subagent.complete",
+        preview="short",
+        status="completed",
+        duration_seconds=3.2,
+        summary="did the thing",
+    )
     text = w.path.read_text(encoding="utf-8")
     assert "kick off the goal" in text
     assert "first line of thinking" in text
@@ -160,15 +175,19 @@ def test_observe_maps_child_callback_events_to_lines():
 
 def test_observe_marks_tool_errors():
     w = LiveTranscriptWriter("deleg_err", 0, "g")
-    w.observe("tool.completed", "web_search", None, None,
-              is_error=True, result="Error: boom")
+    w.observe(
+        "tool.completed", "web_search", None, None, is_error=True, result="Error: boom"
+    )
     assert "web_search ERROR" in w.path.read_text(encoding="utf-8")
 
 
 def test_finalize_records_budget_exhaustion_and_errors():
     w = LiveTranscriptWriter("deleg_final", 0, "g")
-    w.finalize({"status": "failed", "exit_reason": "max_iterations",
-                "error": "Subagent did not produce a response."})
+    w.finalize({
+        "status": "failed",
+        "exit_reason": "max_iterations",
+        "error": "Subagent did not produce a response.",
+    })
     text = w.path.read_text(encoding="utf-8")
     assert "end status=failed" in text
     assert "exit_reason=max_iterations" in text
@@ -243,10 +262,13 @@ def test_create_live_transcripts_precreates_paths_and_manifest():
 def test_update_manifest_statuses():
     tasks = [{"goal": "a"}, {"goal": "b"}]
     deleg_id, _writers, _paths = create_live_transcripts(tasks)
-    update_manifest_statuses(deleg_id, [
-        {"task_index": 0, "status": "completed", "exit_reason": "completed"},
-        {"task_index": 1, "status": "error"},
-    ])
+    update_manifest_statuses(
+        deleg_id,
+        [
+            {"task_index": 0, "status": "completed", "exit_reason": "completed"},
+            {"task_index": 1, "status": "error"},
+        ],
+    )
     manifest = json.loads(
         (live_transcript_root() / deleg_id / "manifest.json").read_text()
     )
@@ -277,7 +299,8 @@ def test_prune_stale_live_dirs():
 
 def test_create_live_transcripts_survives_root_failure(monkeypatch):
     monkeypatch.setattr(
-        dll, "live_transcript_root",
+        dll,
+        "live_transcript_root",
         lambda: (_ for _ in ()).throw(RuntimeError("no home")),
     )
     deleg_id, writers, paths = create_live_transcripts([{"goal": "g"}])
@@ -302,16 +325,25 @@ def _make_parent():
 
 
 _CREDS = {
-    "model": "m", "provider": None, "base_url": None, "api_key": None,
-    "api_mode": None, "command": None, "args": None,
+    "model": "m",
+    "provider": None,
+    "base_url": None,
+    "api_key": None,
+    "api_mode": None,
+    "command": None,
+    "args": None,
 }
 
 
 def _fake_run(task_index, goal, child=None, parent_agent=None, **kw):
     return {
-        "task_index": task_index, "status": "completed",
-        "summary": f"done: {goal}", "api_calls": 1,
-        "duration_seconds": 0.1, "model": "m", "exit_reason": "completed",
+        "task_index": task_index,
+        "status": "completed",
+        "summary": f"done: {goal}",
+        "api_calls": 1,
+        "duration_seconds": 0.1,
+        "model": "m",
+        "exit_reason": "completed",
     }
 
 
@@ -358,9 +390,13 @@ def test_delegate_task_background_dispatch_includes_live_transcripts(monkeypatch
     monkeypatch.setattr(dt, "_run_single_child", slow_child)
     monkeypatch.setattr(dt, "_resolve_delegation_credentials", lambda *a, **k: _CREDS)
 
-    out = json.loads(dt.delegate_task(
-        goal="bg goal", background=True, parent_agent=parent,
-    ))
+    out = json.loads(
+        dt.delegate_task(
+            goal="bg goal",
+            background=True,
+            parent_agent=parent,
+        )
+    )
     try:
         assert out["status"] == "dispatched"
         assert "live_transcripts" in out
@@ -407,9 +443,12 @@ def test_batch_dispatch_creates_one_log_per_task(monkeypatch):
     monkeypatch.setattr(dt, "_run_single_child", _fake_run)
     monkeypatch.setattr(dt, "_resolve_delegation_credentials", lambda *a, **k: _CREDS)
 
-    out = json.loads(dt.delegate_task(
-        tasks=[{"goal": "alpha"}, {"goal": "beta"}], parent_agent=parent,
-    ))
+    out = json.loads(
+        dt.delegate_task(
+            tasks=[{"goal": "alpha"}, {"goal": "beta"}],
+            parent_agent=parent,
+        )
+    )
     assert len(out["live_transcripts"]) == 2
     names = [Path(p).name for p in out["live_transcripts"]]
     assert names == ["task-0.log", "task-1.log"]
@@ -440,8 +479,15 @@ def test_child_progress_events_land_in_live_log(monkeypatch):
         cb = child.tool_progress_callback
         cb("_thinking", "planning the work")
         cb("tool.started", "terminal", "echo hi", {"command": "echo hi"})
-        cb("tool.completed", "terminal", None, None,
-           duration=0.2, is_error=False, result="hi")
+        cb(
+            "tool.completed",
+            "terminal",
+            None,
+            None,
+            duration=0.2,
+            is_error=False,
+            result="hi",
+        )
         return _fake_run(task_index, goal)
 
     monkeypatch.setattr(dt, "_build_child_agent", make_child)
@@ -453,7 +499,9 @@ def test_child_progress_events_land_in_live_log(monkeypatch):
     assert "planning the work" in text
     assert "-> terminal(echo hi)" in text
     assert "terminal ok 0.2s: hi" in text
-    assert text.index("planning") < text.index("-> terminal") < text.index("terminal ok")
+    assert (
+        text.index("planning") < text.index("-> terminal") < text.index("terminal ok")
+    )
 
 
 def test_delegate_task_proceeds_when_transcripts_unavailable(monkeypatch):
@@ -469,7 +517,8 @@ def test_delegate_task_proceeds_when_transcripts_unavailable(monkeypatch):
     monkeypatch.setattr(dt, "_run_single_child", _fake_run)
     monkeypatch.setattr(dt, "_resolve_delegation_credentials", lambda *a, **k: _CREDS)
     monkeypatch.setattr(
-        _dll, "live_transcript_root",
+        _dll,
+        "live_transcript_root",
         lambda: (_ for _ in ()).throw(RuntimeError("nope")),
     )
 
@@ -480,6 +529,7 @@ def test_delegate_task_proceeds_when_transcripts_unavailable(monkeypatch):
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(pytest.main([__file__, "-v"]))
 
 
@@ -549,9 +599,9 @@ def test_manifest_goal_is_redacted():
     verbatim would leave the credential exposed one file over — both sinks in
     ``cache/delegation/live/<id>/`` are readable from inside a sandbox.
     """
-    delegation_id, _writers, _paths = create_live_transcripts(
-        [{"goal": f"deploy using {_BEARER}"}]
-    )
+    delegation_id, _writers, _paths = create_live_transcripts([
+        {"goal": f"deploy using {_BEARER}"}
+    ])
 
     manifest = json.loads(
         (live_transcript_root() / delegation_id / "manifest.json").read_text(
@@ -566,9 +616,10 @@ def test_manifest_goal_is_redacted():
 
 def test_no_file_in_the_dispatch_directory_carries_the_raw_key():
     """Whole-directory sweep: every artefact dispatch writes is covered."""
-    delegation_id, _writers, _paths = create_live_transcripts(
-        [{"goal": f"deploy using {_BEARER}"}, {"goal": "second task"}]
-    )
+    delegation_id, _writers, _paths = create_live_transcripts([
+        {"goal": f"deploy using {_BEARER}"},
+        {"goal": "second task"},
+    ])
 
     directory = live_transcript_root() / delegation_id
     written = sorted(p.name for p in directory.iterdir())
@@ -604,7 +655,14 @@ def test_benign_transcript_content_is_untouched():
     """Redaction must not mangle ordinary transcript text."""
     w = LiveTranscriptWriter("deleg_redact_benign", 0, "refactor the parser")
     w.observe("tool.started", "read_file", "src/parser.py", None)
-    w.observe("tool.completed", "read_file", None, None, result="def parse(x): ...", duration=1.5)
+    w.observe(
+        "tool.completed",
+        "read_file",
+        None,
+        None,
+        result="def parse(x): ...",
+        duration=1.5,
+    )
     body = w.path.read_text(encoding="utf-8")
     assert "src/parser.py" in body
     assert "def parse(x)" in body

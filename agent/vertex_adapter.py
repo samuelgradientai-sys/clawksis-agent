@@ -29,6 +29,7 @@ from agent.secret_scope import get_secret as _get_secret, is_multiplex_active
 # who installed plain `clawksis-agent` and only later selected a Gemini model.
 try:
     from tools.lazy_deps import ensure as _lazy_ensure
+
     _lazy_ensure("provider.vertex", prompt=False)
 except Exception:
     pass  # lazy_deps unavailable or install failed — fall through to the real ImportError below
@@ -108,7 +109,9 @@ def _refresh_credentials(creds) -> None:
     creds.refresh(auth_req)
 
 
-def get_vertex_credentials(credentials_path: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
+def get_vertex_credentials(
+    credentials_path: Optional[str] = None,
+) -> Tuple[Optional[str], Optional[str]]:
     """Return a (fresh access_token, project_id) pair or (None, None) on failure.
 
     Caches the underlying Credentials object and refreshes it when within
@@ -140,7 +143,9 @@ def get_vertex_credentials(credentials_path: Optional[str] = None) -> Tuple[Opti
                 # first, so a raw os.environ read here can still pick up a
                 # different profile's service-account path. Refuse rather
                 # than silently authenticating under a stranger's identity.
-                if is_multiplex_active() and os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+                if is_multiplex_active() and os.environ.get(
+                    "GOOGLE_APPLICATION_CREDENTIALS"
+                ):
                     logger.warning(
                         "Vertex ADC skipped for this profile: "
                         "GOOGLE_APPLICATION_CREDENTIALS is set in the process "
@@ -195,7 +200,11 @@ def build_vertex_base_url(project_id: str, region: str = DEFAULT_REGION) -> str:
     Gemini 3.x preview models are only served via the global endpoint at
     the time of writing.
     """
-    host = "aiplatform.googleapis.com" if region == "global" else f"{region}-aiplatform.googleapis.com"
+    host = (
+        "aiplatform.googleapis.com"
+        if region == "global"
+        else f"{region}-aiplatform.googleapis.com"
+    )
     return f"https://{host}/v1beta1/projects/{project_id}/locations/{region}/endpoints/openapi"
 
 

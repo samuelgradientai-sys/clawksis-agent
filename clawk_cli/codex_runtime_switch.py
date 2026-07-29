@@ -196,9 +196,7 @@ def apply(
                 )
 
     if reapplying_enable:
-        msg_lines = [
-            f"openai_runtime already set to {current} — re-applying migration"
-        ]
+        msg_lines = [f"openai_runtime already set to {current} — re-applying migration"]
     else:
         msg_lines = [f"openai_runtime: {current} → {new_value}"]
     if new_value == "codex_app_server":
@@ -212,12 +210,11 @@ def apply(
         # Failures are non-fatal — the runtime change still proceeds.
         try:
             from clawk_cli.codex_runtime_plugin_migration import migrate
+
             mig_report = migrate(config)
             # Tools/MCP servers (excluding the clawk-tools callback,
             # which is internal plumbing — surface separately).
-            user_servers = [
-                s for s in mig_report.migrated if s != "clawk-tools"
-            ]
+            user_servers = [s for s in mig_report.migrated if s != "clawk-tools"]
             if user_servers:
                 msg_lines.append(
                     f"Migrated {len(user_servers)} MCP server(s): "
@@ -231,8 +228,7 @@ def apply(
                 )
             elif mig_report.plugin_query_error:
                 msg_lines.append(
-                    f"Codex plugin discovery skipped: "
-                    f"{mig_report.plugin_query_error}"
+                    f"Codex plugin discovery skipped: {mig_report.plugin_query_error}"
                 )
             # Permissions + Clawksis tool callback are always-on production
             # bits the user benefits from knowing about.

@@ -16,22 +16,24 @@ SCRIPT = REPO_ROOT / "scripts" / "docker_config_migrate.py"
 
 
 def _load_script_module():
-    spec = importlib.util.spec_from_file_location("docker_config_migrate_test_module", SCRIPT)
+    spec = importlib.util.spec_from_file_location(
+        "docker_config_migrate_test_module", SCRIPT
+    )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def _run_migration(clawk_home: Path, **env_overrides: str) -> subprocess.CompletedProcess[str]:
+def _run_migration(
+    clawk_home: Path, **env_overrides: str
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
-    env.update(
-        {
-            "CLAWK_HOME": str(clawk_home),
-            "CLAWK_SKIP_CHMOD": "1",
-            "PYTHONPATH": str(REPO_ROOT),
-        }
-    )
+    env.update({
+        "CLAWK_HOME": str(clawk_home),
+        "CLAWK_SKIP_CHMOD": "1",
+        "PYTHONPATH": str(REPO_ROOT),
+    })
     env.update(env_overrides)
     return subprocess.run(
         [sys.executable, str(SCRIPT)],
@@ -42,7 +44,9 @@ def _run_migration(clawk_home: Path, **env_overrides: str) -> subprocess.Complet
     )
 
 
-def test_docker_config_migrate_backs_up_and_migrates_legacy_config(tmp_path: Path) -> None:
+def test_docker_config_migrate_backs_up_and_migrates_legacy_config(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "config.yaml"
     env_path = tmp_path / ".env"
     model_map = {
@@ -50,23 +54,21 @@ def test_docker_config_migrate_backs_up_and_migrates_legacy_config(tmp_path: Pat
         "local-large": {"context_length": 32768},
     }
     config_path.write_text(
-        yaml.safe_dump(
-            {
-                "_config_version": 11,
-                "custom_providers": [
-                    {
-                        "name": "Local API",
-                        "base_url": "http://localhost:8080/v1",
-                        "api_key": "test-key",
-                        "api_mode": "chat_completions",
-                        "model": "local-small",
-                        "models": model_map,
-                        "context_length": 32768,
-                        "discover_models": False,
-                    }
-                ],
-            }
-        ),
+        yaml.safe_dump({
+            "_config_version": 11,
+            "custom_providers": [
+                {
+                    "name": "Local API",
+                    "base_url": "http://localhost:8080/v1",
+                    "api_key": "test-key",
+                    "api_mode": "chat_completions",
+                    "model": "local-small",
+                    "models": model_map,
+                    "context_length": 32768,
+                    "discover_models": False,
+                }
+            ],
+        }),
         encoding="utf-8",
     )
     env_path.write_text("OPENROUTER_API_KEY=test\n", encoding="utf-8")
@@ -89,20 +91,20 @@ def test_docker_config_migrate_backs_up_and_migrates_legacy_config(tmp_path: Pat
     assert list(tmp_path.glob(".env.bak-*"))
 
 
-def test_docker_config_migrate_backs_up_and_migrates_unversioned_config(tmp_path: Path) -> None:
+def test_docker_config_migrate_backs_up_and_migrates_unversioned_config(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        yaml.safe_dump(
-            {
-                "custom_providers": [
-                    {
-                        "name": "Local API",
-                        "base_url": "http://localhost:8080/v1",
-                        "api_key": "test-key",
-                    }
-                ],
-            }
-        ),
+        yaml.safe_dump({
+            "custom_providers": [
+                {
+                    "name": "Local API",
+                    "base_url": "http://localhost:8080/v1",
+                    "api_key": "test-key",
+                }
+            ],
+        }),
         encoding="utf-8",
     )
 
@@ -150,12 +152,17 @@ def test_docker_config_migrate_restores_backups_after_failed_migration(
     module = _load_script_module()
     config_path = tmp_path / "config.yaml"
     env_path = tmp_path / ".env"
-    original_config = yaml.safe_dump({"_config_version": 11, "gateway": {"provider": "telegram"}})
+    original_config = yaml.safe_dump({
+        "_config_version": 11,
+        "gateway": {"provider": "telegram"},
+    })
     original_env = "TELEGRAM_BOT_TOKEN=test-token\n"
     config_path.write_text(original_config, encoding="utf-8")
     env_path.write_text(original_env, encoding="utf-8")
 
-    monkeypatch.setattr(module, "check_config_version", lambda: (11, DEFAULT_CONFIG["_config_version"]))
+    monkeypatch.setattr(
+        module, "check_config_version", lambda: (11, DEFAULT_CONFIG["_config_version"])
+    )
     monkeypatch.setattr(module, "get_config_path", lambda: config_path)
     monkeypatch.setattr(module, "get_env_path", lambda: env_path)
 
@@ -181,12 +188,18 @@ def test_docker_config_migrate_restores_backups_when_version_does_not_advance(
     module = _load_script_module()
     config_path = tmp_path / "config.yaml"
     env_path = tmp_path / ".env"
-    original_config = yaml.safe_dump({"_config_version": 11, "gateway": {"provider": "telegram"}})
+    original_config = yaml.safe_dump({
+        "_config_version": 11,
+        "gateway": {"provider": "telegram"},
+    })
     original_env = "TELEGRAM_BOT_TOKEN=test-token\n"
     config_path.write_text(original_config, encoding="utf-8")
     env_path.write_text(original_env, encoding="utf-8")
 
-    calls = iter([(11, DEFAULT_CONFIG["_config_version"]), (11, DEFAULT_CONFIG["_config_version"])])
+    calls = iter([
+        (11, DEFAULT_CONFIG["_config_version"]),
+        (11, DEFAULT_CONFIG["_config_version"]),
+    ])
     monkeypatch.setattr(module, "check_config_version", lambda: next(calls))
     monkeypatch.setattr(module, "get_config_path", lambda: config_path)
     monkeypatch.setattr(module, "get_env_path", lambda: env_path)
@@ -204,7 +217,9 @@ def test_docker_config_migrate_restores_backups_when_version_does_not_advance(
     assert env_path.read_text(encoding="utf-8") == original_env
 
 
-def test_docker_config_migrate_second_boot_preserves_env_byte_for_byte(tmp_path: Path) -> None:
+def test_docker_config_migrate_second_boot_preserves_env_byte_for_byte(
+    tmp_path: Path,
+) -> None:
     """Regression for #51579: booting ``gateway run`` twice (i.e. a host
     reboot under ``--restart unless-stopped``) must not strip or rewrite
     ``$CLAWK_HOME/.env``. The first boot migrates the stale config and bumps
@@ -218,12 +233,10 @@ def test_docker_config_migrate_second_boot_preserves_env_byte_for_byte(tmp_path:
     config_path = tmp_path / "config.yaml"
     env_path = tmp_path / ".env"
     config_path.write_text(
-        yaml.safe_dump(
-            {
-                "_config_version": 11,
-                "gateway": {"provider": "telegram"},
-            }
-        ),
+        yaml.safe_dump({
+            "_config_version": 11,
+            "gateway": {"provider": "telegram"},
+        }),
         encoding="utf-8",
     )
     original_env = (

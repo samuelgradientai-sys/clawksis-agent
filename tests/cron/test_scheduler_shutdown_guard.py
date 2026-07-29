@@ -76,9 +76,13 @@ class TestStandaloneDeliverySkipsDuringShutdown:
             "origin": {"platform": "telegram", "chat_id": "123"},
         }
         send_mock = AsyncMock(return_value={"success": True})
-        with patch("gateway.config.load_gateway_config", return_value=self._telegram_cfg()), \
-             patch("tools.send_message_tool._send_to_platform", new=send_mock), \
-             patch("sys.is_finalizing", return_value=True):
+        with (
+            patch(
+                "gateway.config.load_gateway_config", return_value=self._telegram_cfg()
+            ),
+            patch("tools.send_message_tool._send_to_platform", new=send_mock),
+            patch("sys.is_finalizing", return_value=True),
+        ):
             result = _deliver_result(job, "daily report body")
 
         send_mock.assert_not_called()
@@ -97,9 +101,13 @@ class TestStandaloneDeliverySkipsDuringShutdown:
             "origin": {"platform": "telegram", "chat_id": "123"},
         }
         send_mock = AsyncMock(return_value={"success": True})
-        with patch("gateway.config.load_gateway_config", return_value=self._telegram_cfg()), \
-             patch("tools.send_message_tool._send_to_platform", new=send_mock), \
-             patch("sys.is_finalizing", return_value=False):
+        with (
+            patch(
+                "gateway.config.load_gateway_config", return_value=self._telegram_cfg()
+            ),
+            patch("tools.send_message_tool._send_to_platform", new=send_mock),
+            patch("sys.is_finalizing", return_value=False),
+        ):
             result = _deliver_result(job, "daily report body")
 
         send_mock.assert_called_once()
@@ -124,7 +132,7 @@ class TestSourceGuardrail:
         a tick that races teardown skips instead of crashing."""
         idx_submit = source.find("def _submit_with_guard(")
         assert idx_submit >= 0
-        tail = source[idx_submit:idx_submit + 1600]
+        tail = source[idx_submit : idx_submit + 1600]
         assert "_interpreter_shutting_down(" in tail
 
     def test_helper_guards_standalone_delivery(self, source):
@@ -133,5 +141,5 @@ class TestSourceGuardrail:
         idx = source.find("Standalone path: run the async send")
         assert idx >= 0
         # The guard appears shortly before the standalone send comment.
-        window = source[max(0, idx - 600):idx]
+        window = source[max(0, idx - 600) : idx]
         assert "_interpreter_shutting_down()" in window

@@ -6,6 +6,7 @@ reconnects after idle/restart, the ``load_session`` / ``resume_session`` calls
 find the persisted session in the database and restore the full conversation
 history.
 """
+
 from __future__ import annotations
 
 from clawk_constants import get_clawk_home
@@ -121,6 +122,7 @@ def _register_task_cwd(task_id: str, cwd: str) -> None:
         return
     try:
         from tools.terminal_tool import register_task_env_overrides
+
         register_task_env_overrides(task_id, {"cwd": _translate_acp_cwd(cwd)})
     except Exception:
         logger.debug("Failed to register ACP task cwd override", exc_info=True)
@@ -150,6 +152,7 @@ def _clear_task_cwd(task_id: str) -> None:
         return
     try:
         from tools.terminal_tool import clear_task_env_overrides
+
         clear_task_env_overrides(task_id)
     except Exception:
         logger.debug("Failed to clear ACP task cwd override", exc_info=True)
@@ -290,29 +293,35 @@ class SessionManager:
                 history_len = len(s.history)
                 if history_len <= 0:
                     continue
-                if normalized_cwd and _normalize_cwd_for_compare(s.cwd) != normalized_cwd:
+                if (
+                    normalized_cwd
+                    and _normalize_cwd_for_compare(s.cwd) != normalized_cwd
+                ):
                     continue
                 persisted = persisted_rows.get(s.session_id, {})
                 preview = next(
                     (
                         str(msg.get("content") or "").strip()
                         for msg in s.history
-                        if msg.get("role") == "user" and str(msg.get("content") or "").strip()
+                        if msg.get("role") == "user"
+                        and str(msg.get("content") or "").strip()
                     ),
                     persisted.get("preview") or "",
                 )
-                results.append(
-                    {
-                        "session_id": s.session_id,
-                        "cwd": s.cwd,
-                        "model": s.model,
-                        "history_len": history_len,
-                        "title": _build_session_title(persisted.get("title"), preview, s.cwd),
-                        "updated_at": _format_updated_at(
-                            persisted.get("last_active") or persisted.get("started_at") or time.time()
-                        ),
-                    }
-                )
+                results.append({
+                    "session_id": s.session_id,
+                    "cwd": s.cwd,
+                    "model": s.model,
+                    "history_len": history_len,
+                    "title": _build_session_title(
+                        persisted.get("title"), preview, s.cwd
+                    ),
+                    "updated_at": _format_updated_at(
+                        persisted.get("last_active")
+                        or persisted.get("started_at")
+                        or time.time()
+                    ),
+                })
 
         # Merge any persisted sessions not currently in memory.
         for sid, row in persisted_rows.items():
@@ -329,18 +338,27 @@ class SessionManager:
                     session_cwd = json.loads(mc).get("cwd", ".")
                 except (json.JSONDecodeError, TypeError):
                     pass
-            if normalized_cwd and _normalize_cwd_for_compare(session_cwd) != normalized_cwd:
+            if (
+                normalized_cwd
+                and _normalize_cwd_for_compare(session_cwd) != normalized_cwd
+            ):
                 continue
             results.append({
                 "session_id": sid,
                 "cwd": session_cwd,
                 "model": row.get("model") or "",
                 "history_len": message_count,
-                "title": _build_session_title(row.get("title"), row.get("preview"), session_cwd),
-                "updated_at": _format_updated_at(row.get("last_active") or row.get("started_at")),
+                "title": _build_session_title(
+                    row.get("title"), row.get("preview"), session_cwd
+                ),
+                "updated_at": _format_updated_at(
+                    row.get("last_active") or row.get("started_at")
+                ),
             })
 
-        results.sort(key=lambda item: _updated_at_sort_key(item.get("updated_at")), reverse=True)
+        results.sort(
+            key=lambda item: _updated_at_sort_key(item.get("updated_at")), reverse=True
+        )
         return results
 
     def update_cwd(self, session_id: str, cwd: str) -> Optional[SessionState]:
@@ -402,6 +420,7 @@ class SessionManager:
             return self._db_instance
         try:
             from clawk_state import SessionDB
+
             clawk_home = get_clawk_home()
             self._db_instance = SessionDB(db_path=clawk_home / "state.db")
             return self._db_instance
@@ -492,7 +511,9 @@ class SessionManager:
                     state.session_id, state.history, active_only=has_archived
                 )
         except Exception:
-            logger.warning("Failed to persist ACP session %s", state.session_id, exc_info=True)
+            logger.warning(
+                "Failed to persist ACP session %s", state.session_id, exc_info=True
+            )
 
     def _restore(self, session_id: str) -> Optional[SessionState]:
         """Load a session from the database into memory, recreating the AIAgent."""
@@ -505,7 +526,9 @@ class SessionManager:
         try:
             row = db.get_session(session_id)
         except Exception:
-            logger.debug("Failed to query DB for ACP session %s", session_id, exc_info=True)
+            logger.debug(
+                "Failed to query DB for ACP session %s", session_id, exc_info=True
+            )
             return None
 
         if row is None:
@@ -544,7 +567,9 @@ class SessionManager:
                 session_id, repair_alternation=True
             )
         except Exception:
-            logger.warning("Failed to load messages for ACP session %s", session_id, exc_info=True)
+            logger.warning(
+                "Failed to load messages for ACP session %s", session_id, exc_info=True
+            )
             history = []
 
         try:
@@ -557,7 +582,9 @@ class SessionManager:
                 api_mode=restored_api_mode,
             )
         except Exception:
-            logger.warning("Failed to recreate agent for ACP session %s", session_id, exc_info=True)
+            logger.warning(
+                "Failed to recreate agent for ACP session %s", session_id, exc_info=True
+            )
             return None
 
         state = SessionState(
@@ -571,7 +598,9 @@ class SessionManager:
         with self._lock:
             self._sessions[session_id] = state
         _register_task_cwd(session_id, cwd)
-        logger.info("Restored ACP session %s from DB (%d messages)", session_id, len(history))
+        logger.info(
+            "Restored ACP session %s from DB (%d messages)", session_id, len(history)
+        )
         return state
 
     def _delete_persisted(self, session_id: str) -> bool:
@@ -582,7 +611,9 @@ class SessionManager:
         try:
             return db.delete_session(session_id)
         except Exception:
-            logger.debug("Failed to delete ACP session %s from DB", session_id, exc_info=True)
+            logger.debug(
+                "Failed to delete ACP session %s from DB", session_id, exc_info=True
+            )
             return False
 
     # ---- internal -----------------------------------------------------------
@@ -633,19 +664,21 @@ class SessionManager:
         }
 
         try:
-            runtime = resolve_runtime_provider(requested=requested_provider or config_provider)
-            kwargs.update(
-                {
-                    "provider": runtime.get("provider"),
-                    "api_mode": api_mode or runtime.get("api_mode"),
-                    "base_url": base_url or runtime.get("base_url"),
-                    "api_key": runtime.get("api_key"),
-                    "command": runtime.get("command"),
-                    "args": list(runtime.get("args") or []),
-                }
+            runtime = resolve_runtime_provider(
+                requested=requested_provider or config_provider
             )
+            kwargs.update({
+                "provider": runtime.get("provider"),
+                "api_mode": api_mode or runtime.get("api_mode"),
+                "base_url": base_url or runtime.get("base_url"),
+                "api_key": runtime.get("api_key"),
+                "command": runtime.get("command"),
+                "args": list(runtime.get("args") or []),
+            })
         except Exception:
-            logger.debug("ACP session falling back to default provider resolution", exc_info=True)
+            logger.debug(
+                "ACP session falling back to default provider resolution", exc_info=True
+            )
 
         _register_task_cwd(session_id, cwd)
         agent = AIAgent(**kwargs)

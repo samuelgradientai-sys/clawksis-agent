@@ -102,7 +102,9 @@ class TestSetupWorktreeSyncBase:
         assert info is not None
         # The new worktree's HEAD must be the REMOTE tip, not the stale local one.
         wt_head = _head(info["path"])
-        assert wt_head == remote_head, "worktree should start from the fetched remote tip"
+        assert wt_head == remote_head, (
+            "worktree should start from the fetched remote tip"
+        )
         assert wt_head != stale_local_head
         # And it must contain the remote-only file.
         assert (Path(info["path"]) / "feature.txt").exists()

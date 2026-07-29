@@ -152,7 +152,9 @@ class TestAPIServerPlaceholderKeyGuard:
         from gateway.platforms.api_server import APIServerAdapter
 
         adapter = APIServerAdapter(
-            PlatformConfig(enabled=True, extra={"host": "0.0.0.0", "key": "a1b2c3d4e5f6"})
+            PlatformConfig(
+                enabled=True, extra={"host": "0.0.0.0", "key": "a1b2c3d4e5f6"}
+            )
         )
         result = await adapter.connect()
         assert result is False

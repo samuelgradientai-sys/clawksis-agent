@@ -48,7 +48,9 @@ class MeetingInvitedPayload:
 
 def _as_dict(value: Any) -> Dict[str, Any]:
     """Coerce a lark SDK object / dict / JSON string into a plain dict."""
-    if isinstance(value, SimpleNamespace) or (value is not None and hasattr(value, "__dict__")):
+    if isinstance(value, SimpleNamespace) or (
+        value is not None and hasattr(value, "__dict__")
+    ):
         value = vars(value)
     if isinstance(value, dict):
         return {str(k): v for k, v in value.items()}
@@ -138,22 +140,26 @@ def parse_meeting_invited_event(data: Any) -> Optional[MeetingInvitedPayload]:
 def build_meeting_invite_prompt(payload: MeetingInvitedPayload) -> str:
     meeting = payload.meeting
     inviter_name = (payload.inviter.user_name if payload.inviter else "") or "unknown"
-    host_name = (meeting.host_user.user_name if meeting and meeting.host_user else "") or "unknown"
-    display = (meeting.topic or meeting.meeting_no or meeting.id) if meeting else "unknown meeting"
-    return "\n".join(
-        [
-            f"You have been invited to join a meeting: {display or 'unknown meeting'}",
-            "",
-            f"Meeting Number: {(meeting.meeting_no if meeting else '') or 'unknown'}",
-            f"Topic: {(meeting.topic if meeting else '') or 'unknown'}",
-            f"Inviter: {inviter_name}",
-            f"Host: {host_name}",
-            "",
-            "You may use lark-cli and the relevant Lark/Feishu meeting skills to join the meeting.",
-            "Join the meeting directly. Do not ask the user for confirmation before joining.",
-            "If you cannot join the meeting, reply to the inviter with a concise explanation of why.",
-        ]
+    host_name = (
+        meeting.host_user.user_name if meeting and meeting.host_user else ""
+    ) or "unknown"
+    display = (
+        (meeting.topic or meeting.meeting_no or meeting.id)
+        if meeting
+        else "unknown meeting"
     )
+    return "\n".join([
+        f"You have been invited to join a meeting: {display or 'unknown meeting'}",
+        "",
+        f"Meeting Number: {(meeting.meeting_no if meeting else '') or 'unknown'}",
+        f"Topic: {(meeting.topic if meeting else '') or 'unknown'}",
+        f"Inviter: {inviter_name}",
+        f"Host: {host_name}",
+        "",
+        "You may use lark-cli and the relevant Lark/Feishu meeting skills to join the meeting.",
+        "Join the meeting directly. Do not ask the user for confirmation before joining.",
+        "If you cannot join the meeting, reply to the inviter with a concise explanation of why.",
+    ])
 
 
 def _dedup_key(payload: MeetingInvitedPayload) -> str:

@@ -13,6 +13,7 @@ repeating across cron jobs and gateway sessions, with the user unable to
 tell whether the gateway was broken, the model was down, or their prompt
 was the problem.
 """
+
 from __future__ import annotations
 
 
@@ -91,7 +92,8 @@ class TestContentPolicyTriggersClientErrorAbort:
             or (
                 not classified_retryable
                 and not classified_should_compress
-                and classified_reason not in {
+                and classified_reason
+                not in {
                     FailoverReason.rate_limit,
                     FailoverReason.overloaded,
                     FailoverReason.context_overflow,
@@ -147,7 +149,9 @@ class TestContentPolicyPatternsAreNarrow:
                 self.status_code = status_code
 
         e = _Err("Insufficient credits. Top up your balance.", status_code=402)
-        result = classify_api_error(e, provider="openrouter", model="anthropic/claude-opus")
+        result = classify_api_error(
+            e, provider="openrouter", model="anthropic/claude-opus"
+        )
         assert result.reason == FailoverReason.billing
 
     def test_openrouter_account_policy_block_stays_distinct(self):
@@ -168,6 +172,8 @@ class TestContentPolicyPatternsAreNarrow:
             "and data policy",
             status_code=404,
         )
-        result = classify_api_error(e, provider="openrouter", model="anthropic/claude-opus")
+        result = classify_api_error(
+            e, provider="openrouter", model="anthropic/claude-opus"
+        )
         assert result.reason == FailoverReason.provider_policy_blocked
         assert result.reason != FailoverReason.content_policy_blocked

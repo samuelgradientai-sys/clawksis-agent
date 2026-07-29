@@ -117,6 +117,7 @@ def _make_runner(*, compression_in_flight: bool):
     )
 
     import time
+
     agent_mock = MagicMock()
     agent_mock.get_activity_summary.return_value = {
         "seconds_since_activity": 0.0,

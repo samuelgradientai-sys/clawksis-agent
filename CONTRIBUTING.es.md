@@ -283,7 +283,11 @@ MY_TOOL_SCHEMA = {
             "type": "object",
             "properties": {
                 "param1": {"type": "string", "description": "Qué es param1"},
-                "param2": {"type": "integer", "description": "Qué es param2", "default": 10},
+                "param2": {
+                    "type": "integer",
+                    "description": "Qué es param2",
+                    "default": 10,
+                },
             },
             "required": ["param1"],
         },

@@ -57,7 +57,11 @@ class UpstageProfile(ProviderProfile):
     """
 
     def build_api_kwargs_extras(
-        self, *, reasoning_config: dict | None = None, model: str | None = None, **context
+        self,
+        *,
+        reasoning_config: dict | None = None,
+        model: str | None = None,
+        **context,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         top_level: dict[str, Any] = {}
 
@@ -107,9 +111,7 @@ upstage = UpstageProfile(
     auth_type="api_key",
     # default_aux_model left empty → auxiliary side tasks use the main model.
     # entry [0] is the setup default — solar-pro3, the current Solar Pro flagship.
-    fallback_models=(
-        "solar-pro3",
-    ),
+    fallback_models=("solar-pro3",),
 )
 
 register_provider(upstage)

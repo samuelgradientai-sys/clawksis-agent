@@ -114,7 +114,9 @@ class BaseModalExecutionEnvironment(BaseEnvironment):
 
         deadline = None
         if self._client_timeout_grace_seconds is not None:
-            deadline = time.monotonic() + prepared.timeout + self._client_timeout_grace_seconds
+            deadline = (
+                time.monotonic() + prepared.timeout + self._client_timeout_grace_seconds
+            )
 
         _now = time.monotonic()
         _activity_state = {
@@ -148,6 +150,7 @@ class BaseModalExecutionEnvironment(BaseEnvironment):
             # Periodic activity touch so the gateway knows we're alive
             try:
                 from tools.environments.base import touch_activity_if_due
+
                 touch_activity_if_due(_activity_state, "modal command running")
             except Exception:
                 pass

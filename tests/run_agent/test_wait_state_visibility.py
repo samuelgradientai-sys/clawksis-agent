@@ -53,7 +53,9 @@ def test_emit_wait_notice_updates_spinner_and_activity(tmp_path, monkeypatch):
     assert "waiting on test-model" in summary["last_activity_desc"]
 
 
-def test_emit_wait_notice_without_callback_still_touches_activity(tmp_path, monkeypatch):
+def test_emit_wait_notice_without_callback_still_touches_activity(
+    tmp_path, monkeypatch
+):
     """No thinking_callback bound (gateway sessions) — activity still updates."""
     agent = _make_agent(tmp_path, monkeypatch)
     agent.thinking_callback = None
@@ -84,7 +86,9 @@ def test_nonstream_wait_loop_emits_explained_notice(tmp_path, monkeypatch):
     seen: list = []
     agent = _make_agent(tmp_path, monkeypatch, thinking_callback=seen.append)
     agent.api_mode = "codex_responses"
-    monkeypatch.setattr(agent, "_compute_non_stream_stale_timeout", lambda *a, **k: 60.0)
+    monkeypatch.setattr(
+        agent, "_compute_non_stream_stale_timeout", lambda *a, **k: 60.0
+    )
 
     # Compress the 30s cadence: the loop fires the notice every 100 polls of
     # 0.3s; patch the join timeout down via a tiny thread that stays alive
@@ -92,15 +96,25 @@ def test_nonstream_wait_loop_emits_explained_notice(tmp_path, monkeypatch):
     # reliable approach: run a worker that hangs ~1.2s and patch the modulo
     # counter trigger by making the loop's join timeout effectively immediate.
     dummy_client = SimpleNamespace()
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: dummy_client)
-    monkeypatch.setattr(agent, "_abort_request_openai_client", lambda c, reason=None: None)
-    monkeypatch.setattr(agent, "_close_request_openai_client", lambda c, reason=None: None)
+    monkeypatch.setattr(
+        agent, "_create_request_openai_client", lambda **k: dummy_client
+    )
+    monkeypatch.setattr(
+        agent, "_abort_request_openai_client", lambda c, reason=None: None
+    )
+    monkeypatch.setattr(
+        agent, "_close_request_openai_client", lambda c, reason=None: None
+    )
 
     stop = {"flag": False}
 
     def fake_hang(api_kwargs, client=None, on_first_delta=None):
         deadline = time.time() + 10
-        while time.time() < deadline and not stop["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         raise RuntimeError("connection closed")
 

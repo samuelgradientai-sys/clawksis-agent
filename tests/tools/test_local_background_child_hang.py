@@ -10,6 +10,7 @@ of the backgrounded service (indefinitely for a uvicorn server).
 The fix switches ``_drain()`` to select()-based non-blocking reads and
 stops draining shortly after bash exits even if the pipe hasn't EOF'd.
 """
+
 import subprocess
 import time
 
@@ -43,7 +44,9 @@ class TestBackgroundChildDoesNotHang:
             result = local_env.execute(cmd, timeout=15)
             elapsed = time.monotonic() - t0
 
-            assert elapsed < 10.0, (  # hang under guard is 15s+; loose bound rides out runner stalls
+            assert (
+                elapsed < 10.0
+            ), (  # hang under guard is 15s+; loose bound rides out runner stalls
                 f"terminal_tool hung for {elapsed:.1f}s — drain thread "
                 f"is still blocking on backgrounded child's inherited pipe fd"
             )
@@ -56,7 +59,7 @@ class TestBackgroundChildDoesNotHang:
         """The exact pattern from the issue: setsid ... & disown."""
         cmd = (
             'setsid python3 -c "import time; time.sleep(60)" '
-            '> /dev/null 2>&1 < /dev/null & disown; echo started'
+            "> /dev/null 2>&1 < /dev/null & disown; echo started"
         )
         try:
             t0 = time.monotonic()
@@ -91,12 +94,10 @@ class TestBackgroundChildDoesNotHang:
         assert lines[0] == "1"
         assert lines[-1] == "3000"
 
-    def test_foreground_capture_is_bounded_while_draining(
-        self, local_env, monkeypatch
-    ):
+    def test_foreground_capture_is_bounded_while_draining(self, local_env, monkeypatch):
         monkeypatch.setattr("tools.tool_output_limits.get_max_bytes", lambda: 10_000)
         command = (
-            "python3 -c \"import sys; "
+            'python3 -c "import sys; '
             "sys.stdout.write('HEAD-SENTINEL\\n' + 'x' * 2000000 + "
             "'\\nTAIL-SENTINEL')\""
         )
@@ -109,9 +110,7 @@ class TestBackgroundChildDoesNotHang:
         assert result["output"].endswith("TAIL-SENTINEL")
         assert "[OUTPUT TRUNCATED" in result["output"]
 
-    def test_default_capture_is_full_fidelity_for_internal_consumers(
-        self, local_env
-    ):
+    def test_default_capture_is_full_fidelity_for_internal_consumers(self, local_env):
         """Default execute() (no bounded_capture) must return complete output.
 
         Internal consumers — file-operation ``cat`` reads that feed the patch
@@ -122,7 +121,7 @@ class TestBackgroundChildDoesNotHang:
         """
         # ~200 KB — four times the default 50 KB cap.
         command = (
-            "python3 -c \"import sys; "
+            'python3 -c "import sys; '
             "sys.stdout.write('START-MARK\\n' + ('y' * 200000) + '\\nEND-MARK')\""
         )
 
@@ -139,7 +138,7 @@ class TestBackgroundChildDoesNotHang:
     ):
         monkeypatch.setattr("tools.tool_output_limits.get_max_bytes", lambda: 5_000)
         command = (
-            "python3 -c \"import sys; "
+            'python3 -c "import sys; '
             "chunk = 'x' * 4096; "
             "exec('while True: sys.stdout.write(chunk); sys.stdout.flush()')\""
         )
@@ -183,7 +182,7 @@ class TestBackgroundChildDoesNotHang:
         # read boundaries, and most boundaries will land in the middle of the
         # 3-byte UTF-8 encoding of U+65E5.
         cmd = (
-            'python3 -c \'import sys; '
+            "python3 -c 'import sys; "
             'sys.stdout.buffer.write(chr(0x65e5).encode("utf-8") * 10000); '
             'sys.stdout.buffer.write(b"\\n")\''
         )
@@ -192,7 +191,7 @@ class TestBackgroundChildDoesNotHang:
         # All 10000 characters must survive the round-trip
         assert result["output"].count("\u65e5") == 10000, (
             f"lost multibyte chars across read boundaries: got "
-            f"{result['output'].count(chr(0x65e5))} / 10000"
+            f"{result['output'].count(chr(0x65E5))} / 10000"
         )
         # And the "[binary output detected ...]" fallback must NOT fire
         assert "binary output detected" not in result["output"]
@@ -204,7 +203,7 @@ class TestBackgroundChildDoesNotHang:
         """
         # Write a deliberate invalid UTF-8 lead byte sandwiched between valid ASCII
         cmd = (
-            'python3 -c \'import sys; '
+            "python3 -c 'import sys; "
             'sys.stdout.buffer.write(b"before "); '
             'sys.stdout.buffer.write(b"\\xff\\xfe"); '
             'sys.stdout.buffer.write(b" after\\n")\''

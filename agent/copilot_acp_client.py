@@ -34,7 +34,10 @@ ACP_MARKER_BASE_URL = "acp://copilot"
 _DEFAULT_TIMEOUT_SECONDS = 900.0
 
 _TOOL_CALL_BLOCK_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
-_TOOL_CALL_JSON_RE = re.compile(r"\{\s*\"id\"\s*:\s*\"[^\"]+\"\s*,\s*\"type\"\s*:\s*\"function\"\s*,\s*\"function\"\s*:\s*\{.*?\}\s*\}", re.DOTALL)
+_TOOL_CALL_JSON_RE = re.compile(
+    r"\{\s*\"id\"\s*:\s*\"[^\"]+\"\s*,\s*\"type\"\s*:\s*\"function\"\s*,\s*\"function\"\s*:\s*\{.*?\}\s*\}",
+    re.DOTALL,
+)
 
 # Stderr fingerprint of the deprecated `gh copilot` CLI extension
 # (https://github.blog/changelog/2025-09-25-upcoming-deprecation-of-gh-copilot-cli-extension).
@@ -87,7 +90,9 @@ def _resolve_home_dir() -> str:
     try:
         import pwd
 
-        resolved = pwd.getpwuid(os.getuid()).pw_dir.strip()  # windows-footgun: ok — POSIX fallback inside try/except (pwd import fails on Windows)
+        resolved = pwd.getpwuid(
+            os.getuid()
+        ).pw_dir.strip()  # windows-footgun: ok — POSIX fallback inside try/except (pwd import fails on Windows)
         if resolved:
             return resolved
     except Exception:
@@ -108,6 +113,7 @@ def _build_subprocess_env() -> dict[str, str]:
     env["HOME"] = home
     env.setdefault("TERMINAL_HOME_MODE", "auto")
     from clawk_constants import apply_subprocess_home_env
+
     apply_subprocess_home_env(env)
     return env
 
@@ -161,13 +167,11 @@ def _format_messages_as_prompt(
             name = fn.get("name")
             if not isinstance(name, str) or not name.strip():
                 continue
-            tool_specs.append(
-                {
-                    "name": name.strip(),
-                    "description": fn.get("description", ""),
-                    "parameters": fn.get("parameters", {}),
-                }
-            )
+            tool_specs.append({
+                "name": name.strip(),
+                "description": fn.get("description", ""),
+                "parameters": fn.get("parameters", {}),
+            })
         if tool_specs:
             sections.append(
                 "Available tools (OpenAI function schema). "
@@ -177,7 +181,9 @@ def _format_messages_as_prompt(
             )
 
     if tool_choice is not None:
-        sections.append(f"Tool choice hint: {json.dumps(tool_choice, ensure_ascii=False)}")
+        sections.append(
+            f"Tool choice hint: {json.dumps(tool_choice, ensure_ascii=False)}"
+        )
 
     transcript: list[str] = []
     for message in messages:
@@ -207,7 +213,9 @@ def _format_messages_as_prompt(
         sections.append("Conversation transcript:\n\n" + "\n\n".join(transcript))
 
     sections.append("Continue the conversation from the latest user request.")
-    return "\n\n".join(section.strip() for section in sections if section and section.strip())
+    return "\n\n".join(
+        section.strip() for section in sections if section and section.strip()
+    )
 
 
 def _render_message_content(content: Any) -> str:
@@ -296,7 +304,9 @@ def _completion_to_stream_chunks(completion: SimpleNamespace) -> list[SimpleName
     return [data_chunk, usage_chunk]
 
 
-def _extract_tool_calls_from_text(text: str) -> tuple[list[ChatCompletionMessageToolCall], str]:
+def _extract_tool_calls_from_text(
+    text: str,
+) -> tuple[list[ChatCompletionMessageToolCall], str]:
     if not isinstance(text, str) or not text.strip():
         return [], ""
 
@@ -321,7 +331,7 @@ def _extract_tool_calls_from_text(text: str) -> tuple[list[ChatCompletionMessage
             fn_args = json.dumps(fn_args, ensure_ascii=False)
         call_id = obj.get("id")
         if not isinstance(call_id, str) or not call_id.strip():
-            call_id = f"acp_call_{len(extracted)+1}"
+            call_id = f"acp_call_{len(extracted) + 1}"
 
         extracted.append(
             _build_openai_tool_call(
@@ -367,7 +377,6 @@ def _extract_tool_calls_from_text(text: str) -> tuple[list[ChatCompletionMessage
     return extracted, cleaned
 
 
-
 def _ensure_path_within_cwd(path_text: str, cwd: str) -> Path:
     candidate = Path(path_text)
     if not candidate.is_absolute():
@@ -377,7 +386,9 @@ def _ensure_path_within_cwd(path_text: str, cwd: str) -> Path:
     try:
         resolved.relative_to(root)
     except ValueError as exc:
-        raise PermissionError(f"Path '{resolved}' is outside the session cwd '{root}'.") from exc
+        raise PermissionError(
+            f"Path '{resolved}' is outside the session cwd '{root}'."
+        ) from exc
     return resolved
 
 
@@ -502,7 +513,9 @@ class CopilotACPClient:
             return _completion_to_stream_chunks(completion)
         return completion
 
-    def _run_prompt(self, prompt_text: str, *, timeout_seconds: float) -> tuple[str, str]:
+    def _run_prompt(
+        self, prompt_text: str, *, timeout_seconds: float
+    ) -> tuple[str, str]:
         try:
             proc = subprocess.Popen(
                 [self._acp_command] + self._acp_args,
@@ -553,7 +566,13 @@ class CopilotACPClient:
 
         next_id = 0
 
-        def _request(method: str, params: dict[str, Any], *, text_parts: list[str] | None = None, reasoning_parts: list[str] | None = None) -> Any:
+        def _request(
+            method: str,
+            params: dict[str, Any],
+            *,
+            text_parts: list[str] | None = None,
+            reasoning_parts: list[str] | None = None,
+        ) -> Any:
             nonlocal next_id
             next_id += 1
             request_id = next_id
@@ -611,7 +630,9 @@ class CopilotACPClient:
                         f"Original error:\n{stderr_text}"
                     )
                 raise RuntimeError(f"Copilot ACP process exited early: {stderr_text}")
-            raise TimeoutError(f"Timed out waiting for Copilot ACP response to {method}.")
+            raise TimeoutError(
+                f"Timed out waiting for Copilot ACP response to {method}."
+            )
 
         try:
             _request(
@@ -631,13 +652,16 @@ class CopilotACPClient:
                     },
                 },
             )
-            session = _request(
-                "session/new",
-                {
-                    "cwd": self._acp_cwd,
-                    "mcpServers": [],
-                },
-            ) or {}
+            session = (
+                _request(
+                    "session/new",
+                    {
+                        "cwd": self._acp_cwd,
+                        "mcpServers": [],
+                    },
+                )
+                or {}
+            )
             session_id = str(session.get("sessionId") or "").strip()
             if not session_id:
                 raise RuntimeError("Copilot ACP did not return a sessionId.")
@@ -685,7 +709,11 @@ class CopilotACPClient:
                 chunk_text = str(content.get("text") or "")
             if kind == "agent_message_chunk" and chunk_text and text_parts is not None:
                 text_parts.append(chunk_text)
-            elif kind == "agent_thought_chunk" and chunk_text and reasoning_parts is not None:
+            elif (
+                kind == "agent_thought_chunk"
+                and chunk_text
+                and reasoning_parts is not None
+            ):
                 reasoning_parts.append(chunk_text)
             return True
 
@@ -712,7 +740,9 @@ class CopilotACPClient:
                 if isinstance(line, int) and line > 1:
                     lines = content.splitlines(keepends=True)
                     start = line - 1
-                    end = start + limit if isinstance(limit, int) and limit > 0 else None
+                    end = (
+                        start + limit if isinstance(limit, int) and limit > 0 else None
+                    )
                     content = "".join(lines[start:end])
                 if content:
                     content = redact_sensitive_text(content, force=True)

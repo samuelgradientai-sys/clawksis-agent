@@ -108,8 +108,8 @@ voice note (audio extensions) or a document.
 cronjob(
     action="create",
     schedule="every 1h",
-    deliver="simplex",          # uses SIMPLEX_HOME_CHANNEL
-    prompt="Check for alerts and summarise."
+    deliver="simplex",  # uses SIMPLEX_HOME_CHANNEL
+    prompt="Check for alerts and summarise.",
 )
 ```
 

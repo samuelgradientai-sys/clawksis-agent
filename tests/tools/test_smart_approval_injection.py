@@ -93,7 +93,7 @@ class TestStripShellComments(unittest.TestCase):
     def test_preserves_quoted_hashes(self):
         cmd = 'grep "# TODO" src/*.py  # find todos'
         result = _strip_shell_comments(cmd)
-        assert '# TODO' in result
+        assert "# TODO" in result
         assert "find todos" not in result
 
     def test_single_line_no_comment(self):
@@ -202,7 +202,9 @@ class TestSmartApprovePromptHardening(unittest.TestCase):
     @patch("agent.auxiliary_client.call_llm")
     def test_ambiguous_response_escalates(self, mock_call_llm):
         """Unrecognizable LLM output must default to escalate (fail safe)."""
-        mock_call_llm.return_value = self._make_response("I think this is probably fine")
+        mock_call_llm.return_value = self._make_response(
+            "I think this is probably fine"
+        )
         assert _smart_approve("rm -rf /", "recursive delete") == "escalate"
 
 

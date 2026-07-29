@@ -76,10 +76,15 @@ async def test_compress_command_reports_noop_without_success_banner():
         return 100
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs",
+            return_value={"api_key": "test-key"},
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
-        patch("agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate),
+        patch(
+            "agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate
+        ),
     ):
         result = await runner._handle_compress_command(_make_event())
 
@@ -95,7 +100,10 @@ async def test_compress_command_explains_when_token_estimate_rises():
     history = _make_history()
     compressed = [
         history[0],
-        {"role": "assistant", "content": "Dense summary that still counts as more tokens."},
+        {
+            "role": "assistant",
+            "content": "Dense summary that still counts as more tokens.",
+        },
         history[-1],
     ]
     runner = _make_runner(history)
@@ -116,10 +124,15 @@ async def test_compress_command_explains_when_token_estimate_rises():
         raise AssertionError(f"unexpected transcript: {messages!r}")
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs",
+            return_value={"api_key": "test-key"},
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
-        patch("agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate),
+        patch(
+            "agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate
+        ),
     ):
         result = await runner._handle_compress_command(_make_event())
 
@@ -166,10 +179,14 @@ async def test_compress_command_appends_warning_when_compression_aborts():
         raise AssertionError(f"unexpected transcript: {messages!r}")
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
-        patch("agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate),
+        patch(
+            "agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate
+        ),
     ):
         result = await runner._handle_compress_command(_make_event())
 
@@ -228,10 +245,14 @@ async def test_compress_command_surfaces_aux_model_failure_even_when_recovered()
         raise AssertionError(f"unexpected transcript: {messages!r}")
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
-        patch("agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate),
+        patch(
+            "agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate
+        ),
     ):
         result = await runner._handle_compress_command(_make_event())
 
@@ -286,10 +307,14 @@ async def test_compress_command_passes_session_db_and_persists_rotated_session()
         raise AssertionError(f"unexpected transcript: {messages!r}")
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance) as mock_agent_cls,
-        patch("agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate),
+        patch(
+            "agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate
+        ),
     ):
         result = await runner._handle_compress_command(_make_event())
 
@@ -348,10 +373,14 @@ async def test_compress_command_does_not_repoint_session_when_transcript_write_f
         return 100
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
-        patch("agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate),
+        patch(
+            "agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate
+        ),
     ):
         result = await runner._handle_compress_command(_make_event())
 
@@ -407,10 +436,14 @@ async def test_compress_command_in_place_skips_destructive_rewrite():
         raise AssertionError(f"unexpected transcript: {messages!r}")
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
-        patch("agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate),
+        patch(
+            "agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate
+        ),
     ):
         result = await runner._handle_compress_command(_make_event())
 
@@ -442,7 +475,10 @@ async def test_compress_command_preserves_platform_and_gateway_session_key():
     agent_instance._compress_context.return_value = (list(history), "")
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs",
+            return_value={"api_key": "test-key"},
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance) as mock_agent,
         patch("agent.model_metadata.estimate_request_tokens_rough", return_value=100),
@@ -455,7 +491,9 @@ async def test_compress_command_preserves_platform_and_gateway_session_key():
     # not the unbound "cli"/"local" fallback.
     assert kwargs.get("platform") == "telegram"
     # Stable gateway session key preserved, identical to a normal gateway turn.
-    assert kwargs.get("gateway_session_key") == runner._session_key_for_source(_make_source())
+    assert kwargs.get("gateway_session_key") == runner._session_key_for_source(
+        _make_source()
+    )
     assert kwargs["gateway_session_key"]
 
 
@@ -477,7 +515,11 @@ async def test_compress_command_overrides_stale_resolver_identity():
     agent_instance._compress_context.return_value = (list(history), "")
 
     # Resolver injects a WRONG platform and a stale session key.
-    runtime = {"api_key": "test-key", "platform": "discord", "gateway_session_key": "stale-key"}
+    runtime = {
+        "api_key": "test-key",
+        "platform": "discord",
+        "gateway_session_key": "stale-key",
+    }
     with (
         patch("gateway.run._resolve_runtime_agent_kwargs", return_value=runtime),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
@@ -490,7 +532,9 @@ async def test_compress_command_overrides_stale_resolver_identity():
     _, kwargs = mock_agent.call_args
     # Source-derived identity overrides the stale resolver values, passed once.
     assert kwargs["platform"] == "telegram"
-    assert kwargs["gateway_session_key"] == runner._session_key_for_source(_make_source())
+    assert kwargs["gateway_session_key"] == runner._session_key_for_source(
+        _make_source()
+    )
 
 
 @pytest.mark.asyncio
@@ -506,8 +550,13 @@ async def test_compress_command_passes_tool_messages_to_compressor():
         {
             "role": "assistant",
             "content": None,
-            "tool_calls": [{"id": "t1", "type": "function",
-                            "function": {"name": "x", "arguments": "{}"}}],
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
         },
         {"role": "tool", "content": "BIG RESULT " * 50, "tool_call_id": "t1"},
         {"role": "assistant", "content": "done"},
@@ -525,7 +574,10 @@ async def test_compress_command_passes_tool_messages_to_compressor():
     agent_instance._compress_context.return_value = (list(history), "")
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs",
+            return_value={"api_key": "test-key"},
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
         patch("agent.model_metadata.estimate_request_tokens_rough", return_value=100),

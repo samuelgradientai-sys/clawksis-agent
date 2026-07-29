@@ -13,13 +13,20 @@ import tempfile
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from plugins.platforms.discord.adapter import _remember_channel_is_forum, _standalone_send
+from plugins.platforms.discord.adapter import (
+    _remember_channel_is_forum,
+    _standalone_send,
+)
 
 
 def _resp(status, json_data=None, text_data=None):
     r = AsyncMock()
     r.status = status
-    body = json.dumps(json_data or {}).encode() if json_data is not None else (text_data or "").encode()
+    body = (
+        json.dumps(json_data or {}).encode()
+        if json_data is not None
+        else (text_data or "").encode()
+    )
     r.json = AsyncMock(return_value=json_data or {})
     r.text = AsyncMock(return_value=text_data or "")
     # Discord's _standalone_read_*_limited helpers stream resp.content.read();
@@ -112,9 +119,10 @@ def test_no_caption_non_forum_keeps_separate_text():
     _remember_channel_is_forum(chat_id, False)
     img = _tmpfile(".png")
     try:
-        session_ctx, calls = _session_with(
-            [_resp(200, {"id": "t1"}), _resp(200, {"id": "m1"})]
-        )
+        session_ctx, calls = _session_with([
+            _resp(200, {"id": "t1"}),
+            _resp(200, {"id": "m1"}),
+        ])
         with patch("aiohttp.ClientSession", return_value=session_ctx):
             res = asyncio.run(
                 _standalone_send(

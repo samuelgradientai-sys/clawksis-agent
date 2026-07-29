@@ -52,9 +52,10 @@ def test_cli_completion_ownership_rejects_foreign_session():
     cli.session_id = "visible-session"
     cli._session_db = None
 
-    assert not cli._owns_process_notification(
-        {"type": "async_delegation", "session_key": "foreign-session"}
-    )
+    assert not cli._owns_process_notification({
+        "type": "async_delegation",
+        "session_key": "foreign-session",
+    })
 
 
 def test_cli_completion_ownership_accepts_compression_lineage():
@@ -68,9 +69,7 @@ def test_cli_completion_ownership_accepts_compression_lineage():
 
     cli._session_db = FakeSessionDB()
 
-    assert cli._owns_process_notification(
-        {
-            "type": "async_delegation",
-            "session_key": "pre-compression-session",
-        }
-    )
+    assert cli._owns_process_notification({
+        "type": "async_delegation",
+        "session_key": "pre-compression-session",
+    })

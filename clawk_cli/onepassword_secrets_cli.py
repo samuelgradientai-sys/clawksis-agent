@@ -73,7 +73,9 @@ def register_cli(parent_parser: argparse.ArgumentParser) -> None:
 
     set_p = sub.add_parser("set", help="Map an env var to an op:// reference")
     set_p.add_argument("env_var", help="Environment variable name, e.g. OPENAI_API_KEY")
-    set_p.add_argument("reference", help="1Password reference, e.g. op://Private/OpenAI/api key")
+    set_p.add_argument(
+        "reference", help="1Password reference, e.g. op://Private/OpenAI/api key"
+    )
     set_p.set_defaults(func=cmd_set)
 
     remove = sub.add_parser("remove", help="Remove an env-var → reference mapping")
@@ -119,7 +121,9 @@ def cmd_setup(args: argparse.Namespace) -> int:
     binary = op_src.find_op(binary_path)
     if binary is None:
         if binary_path:
-            console.print(f"  [red]✗ {binary_path} is not an executable op binary.[/red]")
+            console.print(
+                f"  [red]✗ {binary_path} is not an executable op binary.[/red]"
+            )
         else:
             console.print("  [red]✗ op not found on PATH.[/red]")
         console.print(f"  Install the 1Password CLI: {_DOCS_URL}")
@@ -136,18 +140,23 @@ def cmd_setup(args: argparse.Namespace) -> int:
     # ------------------------------------------------------------------- token
     console.print()
     console.print("[bold]Step 2[/bold]  Authentication")
-    token_env = (args.token_env or op_cfg.get("service_account_token_env")
-                 or _DEFAULT_TOKEN_ENV).strip()
+    token_env = (
+        args.token_env or op_cfg.get("service_account_token_env") or _DEFAULT_TOKEN_ENV
+    ).strip()
     op_cfg["service_account_token_env"] = token_env
 
     token = (args.token or "").strip()
     if token:
         save_env_value(token_env, token)
         os.environ[token_env] = token
-        console.print(f"  [green]✓[/green] service-account token stored in "
-                      f"{get_env_path()} as {token_env}")
+        console.print(
+            f"  [green]✓[/green] service-account token stored in "
+            f"{get_env_path()} as {token_env}"
+        )
     elif os.environ.get(token_env):
-        console.print(f"  [green]✓[/green] using service-account token from {token_env}")
+        console.print(
+            f"  [green]✓[/green] using service-account token from {token_env}"
+        )
     else:
         who = _op_whoami(binary, op_cfg.get("account", ""))
         if who:
@@ -171,7 +180,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
     console.print("[green]✓ 1Password secret source is enabled.[/green]")
     console.print(
         "  Map credentials:  [cyan]clawk secrets onepassword set OPENAI_API_KEY "
-        "\"op://Private/OpenAI/api key\"[/cyan]\n"
+        '"op://Private/OpenAI/api key"[/cyan]\n'
         "  Preview:          [cyan]clawk secrets onepassword sync[/cyan]\n"
         "  Status:           [cyan]clawk secrets onepassword status[/cyan]"
     )
@@ -232,7 +241,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     if not references:
         console.print(
             "\n  [yellow]No references mapped yet.[/yellow]  Add one: "
-            "[cyan]clawk secrets onepassword set ENV_VAR \"op://…\"[/cyan]"
+            '[cyan]clawk secrets onepassword set ENV_VAR "op://…"[/cyan]'
         )
     return 0
 
@@ -257,8 +266,7 @@ def cmd_set(args: argparse.Namespace) -> int:
     env_map[args.env_var] = valid[args.env_var]
     save_config(cfg)
     console.print(
-        f"[green]✓[/green] mapped [cyan]{args.env_var}[/cyan] → "
-        f"{valid[args.env_var]}"
+        f"[green]✓[/green] mapped [cyan]{args.env_var}[/cyan] → {valid[args.env_var]}"
     )
     if not op_cfg.get("enabled"):
         console.print(
@@ -297,7 +305,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     if not references:
         console.print(
             "[yellow]No op:// references configured.  Add one with "
-            "`clawk secrets onepassword set ENV_VAR \"op://…\"`.[/yellow]"
+            '`clawk secrets onepassword set ENV_VAR "op://…"`.[/yellow]'
         )
         return 0
 

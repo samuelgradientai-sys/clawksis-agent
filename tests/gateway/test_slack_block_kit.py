@@ -53,7 +53,9 @@ class TestNestedLists:
         md = "- a\n  - b\n    - c"
         blocks = render_blocks(md)
         rich = [b for b in blocks if b["type"] == "rich_text"][0]
-        indents = [e["indent"] for e in rich["elements"] if e["type"] == "rich_text_list"]
+        indents = [
+            e["indent"] for e in rich["elements"] if e["type"] == "rich_text_list"
+        ]
         # true nesting: indent levels must strictly increase across the run
         assert indents == sorted(indents)
         assert max(indents) >= 2
@@ -84,10 +86,7 @@ class TestInlineFormatting:
         blocks = render_blocks("- this is **bold** text")
         rich = [b for b in blocks if b["type"] == "rich_text"][0]
         section = rich["elements"][0]["elements"][0]
-        styled = [
-            el for el in section["elements"]
-            if el.get("style", {}).get("bold")
-        ]
+        styled = [el for el in section["elements"] if el.get("style", {}).get("bold")]
         assert styled, "expected a bold-styled text element in the list item"
 
     def test_blank_line_separated_ordered_items_stay_in_one_list(self):
@@ -114,7 +113,9 @@ class TestInlineFormatting:
         rich = [b for b in render_blocks("1. a\n\n- b") if b["type"] == "rich_text"]
         # Single rich_text block (matches contiguous "1. a\n- b"), two sub-lists
         assert len(rich) == 1
-        styles = [e["style"] for e in rich[0]["elements"] if e["type"] == "rich_text_list"]
+        styles = [
+            e["style"] for e in rich[0]["elements"] if e["type"] == "rich_text_list"
+        ]
         assert styles == ["ordered", "bullet"]
 
     def test_blank_line_before_paragraph_ends_the_list(self):
@@ -134,12 +135,7 @@ class TestInlineFormatting:
 
 class TestTables:
     def test_pipe_table_renders_native_table_block(self):
-        md = (
-            "| Name | Status |\n"
-            "|------|--------|\n"
-            "| a | ok |\n"
-            "| b | fail |"
-        )
+        md = "| Name | Status |\n|------|--------|\n| a | ok |\n| b | fail |"
         blocks = render_blocks(md)
         assert len(blocks) == 1
         assert blocks[0]["type"] == "table"
@@ -152,11 +148,7 @@ class TestTables:
         assert "fail" in str(rows[2])
 
     def test_alignment_parsed_into_column_settings(self):
-        md = (
-            "| L | C | R |\n"
-            "|:---|:--:|---:|\n"
-            "| 1 | 2 | 3 |"
-        )
+        md = "| L | C | R |\n|:---|:--:|---:|\n| 1 | 2 | 3 |"
         blocks = render_blocks(md)
         cs = blocks[0]["column_settings"]
         # left is default -> null; center/right emitted
@@ -165,21 +157,20 @@ class TestTables:
         assert cs[2] == {"align": "right"}
 
     def test_inline_formatting_inside_cells(self):
-        md = (
-            "| Item | Link |\n"
-            "|------|------|\n"
-            "| **bold** | [x](https://e.io) |"
-        )
+        md = "| Item | Link |\n|------|------|\n| **bold** | [x](https://e.io) |"
         blocks = render_blocks(md)
         body = blocks[0]["rows"][1]
         # bold styled text element in first cell
         bold = [
-            el for el in body[0]["elements"][0]["elements"]
+            el
+            for el in body[0]["elements"][0]["elements"]
             if el.get("style", {}).get("bold")
         ]
         assert bold
         # link element in second cell
-        links = [el for el in body[1]["elements"][0]["elements"] if el["type"] == "link"]
+        links = [
+            el for el in body[1]["elements"][0]["elements"] if el["type"] == "link"
+        ]
         assert links and links[0]["url"] == "https://e.io"
 
     def test_oversized_table_falls_back_to_monospace(self):
@@ -197,11 +188,7 @@ class TestTables:
         assert blocks[0]["type"] == "rich_text"
 
     def test_escaped_pipe_not_a_column_separator(self):
-        md = (
-            "| Expr | Meaning |\n"
-            "|------|--------|\n"
-            "| a \\| b | or |"
-        )
+        md = "| Expr | Meaning |\n|------|--------|\n| a \\| b | or |"
         blocks = render_blocks(md)
         assert blocks[0]["type"] == "table"
         # the escaped-pipe cell stays a single cell containing a literal pipe

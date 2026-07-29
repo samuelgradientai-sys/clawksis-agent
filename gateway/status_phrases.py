@@ -64,18 +64,31 @@ def _clean_phrase_list(value: Any) -> list[str]:
     return cleaned
 
 
-def _merge_phrase_mapping(catalog: dict[str, list[str]], section: Mapping[str, Any], *, inherited_mode: str | None = None) -> None:
+def _merge_phrase_mapping(
+    catalog: dict[str, list[str]],
+    section: Mapping[str, Any],
+    *,
+    inherited_mode: str | None = None,
+) -> None:
     mode = str(section.get("mode") or inherited_mode or "append").strip().lower()
     replace = mode == "replace"
-    phrase_map = section.get("phrases") if isinstance(section.get("phrases"), Mapping) else section
+    phrase_map = (
+        section.get("phrases")
+        if isinstance(section.get("phrases"), Mapping)
+        else section
+    )
     for surface in _STATUS_SURFACES:
-        phrases = _clean_phrase_list(phrase_map.get(surface) if isinstance(phrase_map, Mapping) else None)
+        phrases = _clean_phrase_list(
+            phrase_map.get(surface) if isinstance(phrase_map, Mapping) else None
+        )
         if not phrases:
             continue
         catalog[surface] = phrases if replace else [*catalog.get(surface, []), *phrases]
 
 
-def _merge_phrase_file(catalog: dict[str, list[str]], path: Path, *, inherited_mode: str | None = None) -> None:
+def _merge_phrase_file(
+    catalog: dict[str, list[str]], path: Path, *, inherited_mode: str | None = None
+) -> None:
     try:
         loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
     except Exception:
@@ -105,7 +118,8 @@ def _iter_phrase_files(path: Path) -> list[Path]:
         return [path]
     if path.is_dir():
         return sorted(
-            child for child in path.iterdir()
+            child
+            for child in path.iterdir()
             if child.is_file() and child.suffix.lower() in {".yaml", ".yml"}
         )
     return []
@@ -143,18 +157,26 @@ def _copy_default_catalog() -> dict[str, list[str]]:
     return {surface: list(phrases) for surface, phrases in _DEFAULT_PHRASES.items()}
 
 
-def _merge_phrase_config(catalog: dict[str, list[str]], section: Any, *, base_dir: Path | None = None) -> None:
+def _merge_phrase_config(
+    catalog: dict[str, list[str]], section: Any, *, base_dir: Path | None = None
+) -> None:
     """Merge one display.status_phrases-style section into ``catalog``."""
     if not isinstance(section, Mapping):
         return
     mode = str(section.get("mode") or "append").strip().lower()
     if base_dir is not None:
-        _merge_phrase_paths(catalog, section.get("path"), base_dir=base_dir, inherited_mode=mode)
-        _merge_phrase_paths(catalog, section.get("paths"), base_dir=base_dir, inherited_mode=mode)
+        _merge_phrase_paths(
+            catalog, section.get("path"), base_dir=base_dir, inherited_mode=mode
+        )
+        _merge_phrase_paths(
+            catalog, section.get("paths"), base_dir=base_dir, inherited_mode=mode
+        )
     _merge_phrase_mapping(catalog, section)
 
 
-def resolve_status_phrase_catalog(user_config: Mapping[str, Any] | None, platform_key: str | None = None) -> dict[str, list[str]]:
+def resolve_status_phrase_catalog(
+    user_config: Mapping[str, Any] | None, platform_key: str | None = None
+) -> dict[str, list[str]]:
     """Resolve built-in + user-configured generic status phrases.
 
     Resolution order mirrors gateway display settings: built-ins, conventional
@@ -164,21 +186,33 @@ def resolve_status_phrase_catalog(user_config: Mapping[str, Any] | None, platfor
     """
     catalog = _copy_default_catalog()
     clawk_home = get_clawk_home()
-    _merge_phrase_paths(catalog, list(_CONVENTIONAL_RELATIVE_PATHS), base_dir=clawk_home)
+    _merge_phrase_paths(
+        catalog, list(_CONVENTIONAL_RELATIVE_PATHS), base_dir=clawk_home
+    )
 
-    display = (user_config or {}).get("display") if isinstance(user_config, Mapping) else None
+    display = (
+        (user_config or {}).get("display") if isinstance(user_config, Mapping) else None
+    )
     if not isinstance(display, Mapping):
         return catalog
 
-    _merge_phrase_config(catalog, display.get("generic_status_phrases"), base_dir=clawk_home)
+    _merge_phrase_config(
+        catalog, display.get("generic_status_phrases"), base_dir=clawk_home
+    )
     _merge_phrase_config(catalog, display.get("status_phrases"), base_dir=clawk_home)
 
     platforms = display.get("platforms")
     if platform_key and isinstance(platforms, Mapping):
         platform_display = platforms.get(platform_key)
         if isinstance(platform_display, Mapping):
-            _merge_phrase_config(catalog, platform_display.get("generic_status_phrases"), base_dir=clawk_home)
-            _merge_phrase_config(catalog, platform_display.get("status_phrases"), base_dir=clawk_home)
+            _merge_phrase_config(
+                catalog,
+                platform_display.get("generic_status_phrases"),
+                base_dir=clawk_home,
+            )
+            _merge_phrase_config(
+                catalog, platform_display.get("status_phrases"), base_dir=clawk_home
+            )
     return catalog
 
 
@@ -212,8 +246,14 @@ def choose_status_phrase(
     raw contents are never embedded in the returned phrase.
     """
     phrase_catalog = catalog or _DEFAULT_PHRASES
-    category = classify_status_context(kind, tool_name=tool_name, preview=preview, args=args)
-    candidates = list(phrase_catalog.get(category) or phrase_catalog.get("generic") or _DEFAULT_PHRASES["generic"])
+    category = classify_status_context(
+        kind, tool_name=tool_name, preview=preview, args=args
+    )
+    candidates = list(
+        phrase_catalog.get(category)
+        or phrase_catalog.get("generic")
+        or _DEFAULT_PHRASES["generic"]
+    )
     if recent:
         recent_set = set(recent)
         fresh = [phrase for phrase in candidates if phrase not in recent_set]

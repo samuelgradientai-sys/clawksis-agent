@@ -18,6 +18,7 @@ class TestClarifyToolBasics:
 
     def test_simple_question_with_callback(self):
         """Should return user response for simple question."""
+
         def mock_callback(question: str, choices: Optional[List[str]]) -> str:
             assert question == "What color?"
             assert choices is None
@@ -30,16 +31,17 @@ class TestClarifyToolBasics:
 
     def test_question_with_choices(self):
         """Should pass choices to callback and return response."""
+
         def mock_callback(question: str, choices: Optional[List[str]]) -> str:
             assert question == "Pick a number"
             assert choices == ["1", "2", "3"]
             return "2"
 
-        result = json.loads(clarify_tool(
-            "Pick a number",
-            choices=["1", "2", "3"],
-            callback=mock_callback
-        ))
+        result = json.loads(
+            clarify_tool(
+                "Pick a number", choices=["1", "2", "3"], callback=mock_callback
+            )
+        )
         assert result["question"] == "Pick a number"
         assert result["choices_offered"] == ["1", "2", "3"]
         assert result["user_response"] == "2"
@@ -99,16 +101,20 @@ class TestClarifyToolChoicesValidation:
             choices_received.extend(choices or [])
             return "answer"
 
-        clarify_tool("Pick", choices=["valid", "  ", "", "also valid"], callback=mock_callback)
+        clarify_tool(
+            "Pick", choices=["valid", "  ", "", "also valid"], callback=mock_callback
+        )
         assert choices_received == ["valid", "also valid"]
 
     def test_invalid_choices_type_returns_error(self):
         """Non-list choices should return error."""
-        result = json.loads(clarify_tool(
-            "Question?",
-            choices="not a list",  # type: ignore
-            callback=lambda q, c: "ignored"
-        ))
+        result = json.loads(
+            clarify_tool(
+                "Question?",
+                choices="not a list",  # type: ignore
+                callback=lambda q, c: "ignored",
+            )
+        )
         assert "error" in result
         assert "list" in result["error"].lower()
 
@@ -129,6 +135,7 @@ class TestClarifyToolCallbackHandling:
 
     def test_callback_exception_returns_error(self):
         """Should return error if callback raises exception."""
+
         def failing_callback(question: str, choices: Optional[List[str]]) -> str:
             raise RuntimeError("User cancelled")
 
@@ -150,6 +157,7 @@ class TestClarifyToolCallbackHandling:
 
     def test_user_response_stripped(self):
         """User response should be stripped of whitespace."""
+
         def mock_callback(question: str, choices: Optional[List[str]]) -> str:
             return "  response with spaces  \n"
 
@@ -190,7 +198,10 @@ class TestClarifyDictChoices:
         assert _flatten_choice({"name": "tight", "value": "x"}) == ""
 
     def test_flatten_prefers_canonical_key_over_name(self):
-        assert _flatten_choice({"name": "tight", "description": "Tight desc"}) == "Tight desc"
+        assert (
+            _flatten_choice({"name": "tight", "description": "Tight desc"})
+            == "Tight desc"
+        )
 
     def test_flatten_drops_keyless_dict(self):
         assert _flatten_choice({"foo": "bar", "n": 1}) == ""
@@ -208,16 +219,18 @@ class TestClarifyDictChoices:
             seen.extend(choices or [])
             return choices[0]
 
-        result = json.loads(clarify_tool(
-            "Pick a layout",
-            choices=[
-                {"choice": "Tight", "description": "Tight, covers all 3 points"},
-                {"description": "Loose layout"},
-                {"name": "modelid", "value": "abc"},  # dropped, not leaked
-                "A plain string choice",
-            ],
-            callback=cb,
-        ))  # type: ignore
+        result = json.loads(
+            clarify_tool(
+                "Pick a layout",
+                choices=[
+                    {"choice": "Tight", "description": "Tight, covers all 3 points"},
+                    {"description": "Loose layout"},
+                    {"name": "modelid", "value": "abc"},  # dropped, not leaked
+                    "A plain string choice",
+                ],
+                callback=cb,
+            )
+        )  # type: ignore
         assert seen == [
             "Tight, covers all 3 points",
             "Loose layout",

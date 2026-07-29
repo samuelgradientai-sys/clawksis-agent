@@ -108,7 +108,9 @@ def resolve_endpoints(
 
     dashboard = os.environ.get("HONCHO_OAUTH_DASHBOARD", default_dashboard).rstrip("/")
     return OAuthEndpoints(
-        authorize_url=os.environ.get("HONCHO_OAUTH_AUTHORIZE_URL", f"{dashboard}/authorize"),
+        authorize_url=os.environ.get(
+            "HONCHO_OAUTH_AUTHORIZE_URL", f"{dashboard}/authorize"
+        ),
         token_url=os.environ.get("HONCHO_OAUTH_TOKEN_URL", default_token),
         client_id=os.environ.get("HONCHO_OAUTH_CLIENT_ID", _DEFAULT_CLIENT_ID),
         scope=os.environ.get("HONCHO_OAUTH_SCOPE", "write"),
@@ -130,7 +132,8 @@ def _pkce() -> tuple[str, str]:
     """Return (verifier, S256 challenge) for an authorization-code request."""
     verifier = secrets.token_urlsafe(64)
     challenge = (
-        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
+        base64
+        .urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
         .rstrip(b"=")
         .decode()
     )
@@ -138,7 +141,9 @@ def _pkce() -> tuple[str, str]:
 
 
 def _prune_pending(now: float) -> None:
-    expired = [s for s, p in _pending.items() if now - p.created_at > _PENDING_TTL_SECONDS]
+    expired = [
+        s for s, p in _pending.items() if now - p.created_at > _PENDING_TTL_SECONDS
+    ]
     for state in expired:
         _pending.pop(state, None)
 
@@ -164,7 +169,9 @@ def begin_authorization(
     state = secrets.token_urlsafe(32)
     with _pending_lock:
         _prune_pending(now)
-        _pending[state] = _Pending(verifier=verifier, redirect_uri=redirect_uri, created_at=now)
+        _pending[state] = _Pending(
+            verifier=verifier, redirect_uri=redirect_uri, created_at=now
+        )
     params = {
         "client_id": endpoints.client_id,
         "redirect_uri": redirect_uri,
@@ -420,12 +427,16 @@ def start_loopback_flow_background(
 
     def _run() -> None:
         try:
-            authorize_via_loopback(config_path=config_path, host=host, source=source, timeout=timeout)
+            authorize_via_loopback(
+                config_path=config_path, host=host, source=source, timeout=timeout
+            )
             _set_status("connected", "Honcho connected")
         except Exception as exc:
             logger.warning("Honcho OAuth loopback flow failed: %s", exc)
             _set_status("error", str(exc))
 
-    _flow_thread = threading.Thread(target=_run, name="honcho-oauth-loopback", daemon=True)
+    _flow_thread = threading.Thread(
+        target=_run, name="honcho-oauth-loopback", daemon=True
+    )
     _flow_thread.start()
     return get_flow_status()

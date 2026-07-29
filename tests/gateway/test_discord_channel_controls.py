@@ -22,14 +22,24 @@ def _ensure_discord_mock():
     discord_mod.DMChannel = type("DMChannel", (), {})
     discord_mod.Thread = type("Thread", (), {})
     discord_mod.ForumChannel = type("ForumChannel", (), {})
-    discord_mod.ui = SimpleNamespace(View=object, button=lambda *a, **k: (lambda fn: fn), Button=object)
-    discord_mod.ButtonStyle = SimpleNamespace(success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3)
-    discord_mod.Color = SimpleNamespace(orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4, purple=lambda: 5)
+    discord_mod.ui = SimpleNamespace(
+        View=object, button=lambda *a, **k: lambda fn: fn, Button=object
+    )
+    discord_mod.ButtonStyle = SimpleNamespace(
+        success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3
+    )
+    discord_mod.Color = SimpleNamespace(
+        orange=lambda: 1,
+        green=lambda: 2,
+        blue=lambda: 3,
+        red=lambda: 4,
+        purple=lambda: 5,
+    )
     discord_mod.Interaction = object
     discord_mod.Embed = MagicMock
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: (lambda fn: fn),
-        choices=lambda **kwargs: (lambda fn: fn),
+        describe=lambda **kwargs: lambda fn: fn,
+        choices=lambda **kwargs: lambda fn: fn,
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
     )
 
@@ -56,7 +66,12 @@ class FakeDMChannel:
 
 
 class FakeTextChannel:
-    def __init__(self, channel_id: int = 1, name: str = "general", guild_name: str = "Clawksis Server"):
+    def __init__(
+        self,
+        channel_id: int = 1,
+        name: str = "general",
+        guild_name: str = "Clawksis Server",
+    ):
         self.id = channel_id
         self.name = name
         self.guild = SimpleNamespace(name=guild_name)
@@ -64,7 +79,13 @@ class FakeTextChannel:
 
 
 class FakeThread:
-    def __init__(self, channel_id: int = 1, name: str = "thread", parent=None, guild_name: str = "Clawksis Server"):
+    def __init__(
+        self,
+        channel_id: int = 1,
+        name: str = "thread",
+        parent=None,
+        guild_name: str = "Clawksis Server",
+    ):
         self.id = channel_id
         self.name = name
         self.parent = parent
@@ -75,7 +96,9 @@ class FakeThread:
 
 @pytest.fixture
 def adapter(monkeypatch):
-    monkeypatch.setattr(discord_platform.discord, "DMChannel", FakeDMChannel, raising=False)
+    monkeypatch.setattr(
+        discord_platform.discord, "DMChannel", FakeDMChannel, raising=False
+    )
     monkeypatch.setattr(discord_platform.discord, "Thread", FakeThread, raising=False)
 
     config = PlatformConfig(enabled=True, token="fake-token")
@@ -160,7 +183,9 @@ async def test_ignored_channels_csv_parsing(adapter, monkeypatch):
 
     for ch_id in (500, 600, 700):
         adapter.handle_message.reset_mock()
-        message = make_message(channel=FakeTextChannel(channel_id=ch_id), content="hello")
+        message = make_message(
+            channel=FakeTextChannel(channel_id=ch_id), content="hello"
+        )
         await adapter._handle_message(message)
         adapter.handle_message.assert_not_awaited()
 
@@ -268,7 +293,9 @@ async def test_no_thread_channels_csv_parsing(adapter, monkeypatch):
     for ch_id in (800, 900):
         adapter._auto_create_thread.reset_mock()
         adapter.handle_message.reset_mock()
-        message = make_message(channel=FakeTextChannel(channel_id=ch_id), content="hello")
+        message = make_message(
+            channel=FakeTextChannel(channel_id=ch_id), content="hello"
+        )
         await adapter._handle_message(message)
         adapter._auto_create_thread.assert_not_awaited()
 
@@ -345,7 +372,9 @@ async def test_auto_thread_failure_notify_error_does_not_crash(adapter, monkeypa
     adapter._auto_create_thread = AsyncMock(return_value=None)
 
     channel = FakeTextChannel(channel_id=800)
-    channel.send = AsyncMock(side_effect=RuntimeError("Cannot connect to host discord.com:443"))
+    channel.send = AsyncMock(
+        side_effect=RuntimeError("Cannot connect to host discord.com:443")
+    )
     message = make_message(channel=channel, content="hello")
 
     # No exception must propagate.
@@ -362,58 +391,73 @@ async def test_auto_thread_failure_notify_error_does_not_crash(adapter, monkeypa
 def test_config_bridges_ignored_channels(monkeypatch, tmp_path):
     """gateway/config.py bridges discord.ignored_channels to env var."""
     import yaml
+
     config_file = tmp_path / "config.yaml"
-    config_file.write_text(yaml.dump({
-        "discord": {
-            "ignored_channels": ["111", "222"],
-        },
-    }))
+    config_file.write_text(
+        yaml.dump({
+            "discord": {
+                "ignored_channels": ["111", "222"],
+            },
+        })
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     # Use setenv (not delenv) so monkeypatch registers cleanup even when
     # the var doesn't exist yet — load_gateway_config will overwrite it.
     monkeypatch.setenv("DISCORD_IGNORED_CHANNELS", "")
 
     from gateway.config import load_gateway_config
+
     load_gateway_config()
 
     import os
+
     assert os.getenv("DISCORD_IGNORED_CHANNELS") == "111,222"
 
 
 def test_config_bridges_no_thread_channels(monkeypatch, tmp_path):
     """gateway/config.py bridges discord.no_thread_channels to env var."""
     import yaml
+
     config_file = tmp_path / "config.yaml"
-    config_file.write_text(yaml.dump({
-        "discord": {
-            "no_thread_channels": ["333"],
-        },
-    }))
+    config_file.write_text(
+        yaml.dump({
+            "discord": {
+                "no_thread_channels": ["333"],
+            },
+        })
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setenv("DISCORD_NO_THREAD_CHANNELS", "")
 
     from gateway.config import load_gateway_config
+
     load_gateway_config()
 
     import os
+
     assert os.getenv("DISCORD_NO_THREAD_CHANNELS") == "333"
 
 
 def test_config_env_var_takes_precedence(monkeypatch, tmp_path):
     """Env vars should take precedence over config.yaml values."""
     import yaml
+
     config_file = tmp_path / "config.yaml"
-    config_file.write_text(yaml.dump({
-        "discord": {
-            "ignored_channels": ["111"],
-        },
-    }))
+    config_file.write_text(
+        yaml.dump({
+            "discord": {
+                "ignored_channels": ["111"],
+            },
+        })
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setenv("DISCORD_IGNORED_CHANNELS", "999")
 
     from gateway.config import load_gateway_config
+
     load_gateway_config()
 
     import os
+
     # Env var should NOT be overwritten
     assert os.getenv("DISCORD_IGNORED_CHANNELS") == "999"

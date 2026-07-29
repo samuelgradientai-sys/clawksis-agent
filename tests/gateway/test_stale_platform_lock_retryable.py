@@ -60,10 +60,13 @@ def adapter():
 
 def test_stale_lock_failure_is_retryable(adapter):
     """Lock failure must be retryable, not permanently fatal (#54167)."""
-    with patch(
-        "gateway.status.acquire_scoped_lock",
-        return_value=(False, {"pid": 99999, "start_time": "2026-01-01T00:00:00Z"}),
-    ), patch.object(adapter, "_write_runtime_status_safe"):
+    with (
+        patch(
+            "gateway.status.acquire_scoped_lock",
+            return_value=(False, {"pid": 99999, "start_time": "2026-01-01T00:00:00Z"}),
+        ),
+        patch.object(adapter, "_write_runtime_status_safe"),
+    ):
         result = adapter._acquire_platform_lock(
             "telegram-bot-token", "test-token", "Telegram bot token"
         )

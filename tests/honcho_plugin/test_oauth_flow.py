@@ -36,7 +36,9 @@ class _FakeAS(BaseHTTPRequestHandler):
         # The redirect must be the IP literal matching the bound host — a
         # `localhost` redirect can resolve to ::1 and miss the IPv4 listener.
         # Host must be the IP literal (port may fall back off :8765).
-        assert redirect.startswith("http://127.0.0.1:") and "/callback" in redirect, redirect
+        assert redirect.startswith("http://127.0.0.1:") and "/callback" in redirect, (
+            redirect
+        )
         # Consent shows a home-relative display path — never an absolute path
         # that would leak the username / home layout off the machine.
         cp = q["config_path"][0]
@@ -118,7 +120,9 @@ def _browser_driver(authorize_url: str) -> None:
 
 def test_full_loopback_flow_then_refresh(tmp_path, fake_as):
     config_path = tmp_path / "honcho.json"
-    config_path.write_text(json.dumps({"hosts": {"obsidian": {"workspace": "obsidian"}}}))
+    config_path.write_text(
+        json.dumps({"hosts": {"obsidian": {"workspace": "obsidian"}}})
+    )
 
     cred = oauth_flow.authorize_via_loopback(
         config_path=config_path,
@@ -151,8 +155,11 @@ def test_state_mismatch_is_rejected(fake_as, tmp_path):
     _, state = oauth_flow.begin_authorization(endpoints)
     with pytest.raises(ValueError, match="unknown or expired"):
         oauth_flow.complete_authorization(
-            endpoints, "code", "not-the-real-state",
-            config_path=tmp_path / "honcho.json", host="clawk",
+            endpoints,
+            "code",
+            "not-the-real-state",
+            config_path=tmp_path / "honcho.json",
+            host="clawk",
         )
 
 
@@ -194,7 +201,9 @@ def test_grant_persists_default_client_id(tmp_path, fake_as, monkeypatch):
 
 def test_config_path_rides_the_authorize_link(fake_as):
     endpoints = oauth_flow.resolve_endpoints()
-    url, _ = oauth_flow.begin_authorization(endpoints, config_path="~/.clawksis/honcho.json")
+    url, _ = oauth_flow.begin_authorization(
+        endpoints, config_path="~/.clawksis/honcho.json"
+    )
     q = parse_qs(urlparse(url).query)
     assert q["config_path"][0] == "~/.clawksis/honcho.json"
     bare, _ = oauth_flow.begin_authorization(endpoints)
@@ -206,8 +215,13 @@ def test_display_config_path_never_leaks_absolute_path():
 
     # Under home → collapsed to ~/…; outside home → bare filename only.
     under_home = Path.home() / ".clawk" / "profiles" / "work" / "honcho.json"
-    assert oauth_flow._display_config_path(under_home) == "~/.clawksis/profiles/work/honcho.json"
-    assert oauth_flow._display_config_path("/var/folders/tmp/honcho.json") == "honcho.json"
+    assert (
+        oauth_flow._display_config_path(under_home)
+        == "~/.clawksis/profiles/work/honcho.json"
+    )
+    assert (
+        oauth_flow._display_config_path("/var/folders/tmp/honcho.json") == "honcho.json"
+    )
 
 
 def test_cli_flow_stores_tokens_without_applying_config(tmp_path, fake_as):
@@ -257,7 +271,9 @@ def _wait_until(predicate, timeout=2.0):
     return False
 
 
-def test_launcher_runs_flow_in_background_and_reports_connected(monkeypatch, reset_flow):
+def test_launcher_runs_flow_in_background_and_reports_connected(
+    monkeypatch, reset_flow
+):
     seen = {}
     gate = threading.Event()
 
@@ -268,9 +284,13 @@ def test_launcher_runs_flow_in_background_and_reports_connected(monkeypatch, res
     monkeypatch.setattr(oauth_flow, "authorize_via_loopback", fake)
     monkeypatch.setattr(oauth_flow, "_detect_connection", lambda: (True, "oauth"))
 
-    st = oauth_flow.start_loopback_flow_background(config_path=Path("/t/honcho.json"), host="clawk")
+    st = oauth_flow.start_loopback_flow_background(
+        config_path=Path("/t/honcho.json"), host="clawk"
+    )
     assert st["state"] == "pending"  # returns immediately, before the flow finishes
-    assert _wait_until(lambda: seen.get("source") == "clawk-desktop")  # default source tag
+    assert _wait_until(
+        lambda: seen.get("source") == "clawk-desktop"
+    )  # default source tag
     assert seen["host"] == "clawk"
     gate.set()
     assert _wait_until(lambda: oauth_flow.get_flow_status()["state"] == "connected")
@@ -283,7 +303,9 @@ def test_launcher_reports_error_on_flow_failure(monkeypatch, reset_flow):
     monkeypatch.setattr(oauth_flow, "authorize_via_loopback", boom)
     monkeypatch.setattr(oauth_flow, "_detect_connection", lambda: (False, None))
 
-    oauth_flow.start_loopback_flow_background(config_path=Path("/t/honcho.json"), host="clawk")
+    oauth_flow.start_loopback_flow_background(
+        config_path=Path("/t/honcho.json"), host="clawk"
+    )
     assert _wait_until(lambda: oauth_flow.get_flow_status()["state"] == "error")
     assert "loopback bind failed" in oauth_flow.get_flow_status()["detail"]
 
@@ -299,9 +321,13 @@ def test_launcher_is_idempotent_while_pending(monkeypatch, reset_flow):
     monkeypatch.setattr(oauth_flow, "authorize_via_loopback", fake)
     monkeypatch.setattr(oauth_flow, "_detect_connection", lambda: (False, None))
 
-    s1 = oauth_flow.start_loopback_flow_background(config_path=Path("/t/h.json"), host="clawk")
+    s1 = oauth_flow.start_loopback_flow_background(
+        config_path=Path("/t/h.json"), host="clawk"
+    )
     assert _wait_until(lambda: len(calls) == 1)  # first flow is running
-    s2 = oauth_flow.start_loopback_flow_background(config_path=Path("/t/h.json"), host="clawk")
+    s2 = oauth_flow.start_loopback_flow_background(
+        config_path=Path("/t/h.json"), host="clawk"
+    )
     block.set()
     assert s1["state"] == "pending" and s2["state"] == "pending"
     assert _wait_until(lambda: oauth_flow.get_flow_status()["state"] == "connected")
@@ -323,11 +349,21 @@ def test_get_flow_status_reports_stored_connection(tmp_path, monkeypatch, reset_
     s = oauth_flow.get_flow_status()
     assert s["connected"] is True and s["auth"] == "apikey"
 
-    cfgfile.write_text(json.dumps({"hosts": {"clawk": {
-        "apiKey": "hch-at-tok",
-        "oauth": {"refreshToken": "hch-rt-x", "expiresAt": 9_999_999_999,
-                  "clientId": "clawk-desktop", "tokenEndpoint": "http://x/oauth/token"},
-    }}}))
+    cfgfile.write_text(
+        json.dumps({
+            "hosts": {
+                "clawk": {
+                    "apiKey": "hch-at-tok",
+                    "oauth": {
+                        "refreshToken": "hch-rt-x",
+                        "expiresAt": 9_999_999_999,
+                        "clientId": "clawk-desktop",
+                        "tokenEndpoint": "http://x/oauth/token",
+                    },
+                }
+            }
+        })
+    )
     s = oauth_flow.get_flow_status()
     assert s["connected"] is True and s["auth"] == "oauth"
 
@@ -339,7 +375,9 @@ def test_memory_oauth_router_dispatches_by_provider_convention():
     from clawk_cli.memory_oauth import _resolve_flow
 
     mod = _resolve_flow("honcho")
-    assert hasattr(mod, "start_loopback_flow_background") and hasattr(mod, "get_flow_status")
+    assert hasattr(mod, "start_loopback_flow_background") and hasattr(
+        mod, "get_flow_status"
+    )
 
     for bad in ("builtin", "no-such-provider", "../etc"):
         with pytest.raises(HTTPException) as exc:

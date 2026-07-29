@@ -42,6 +42,7 @@ from tools.environments.local import (
 # _msys_to_windows_path — pure-function unit tests
 # ---------------------------------------------------------------------------
 
+
 class TestMsysToWindowsPath:
     def test_noop_on_non_windows(self, monkeypatch):
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", False)
@@ -92,6 +93,7 @@ class TestMsysToWindowsPath:
 # _windows_to_msys_path — reverse translation for bash builtin cd
 # ---------------------------------------------------------------------------
 
+
 class TestWindowsToMsysPath:
     def test_noop_on_non_windows(self, monkeypatch):
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", False)
@@ -121,10 +123,13 @@ class TestWindowsToMsysPath:
 # _bash_safe_path / _quote_bash_path — shell-script interpolation
 # ---------------------------------------------------------------------------
 
+
 class TestBashSafePath:
     def test_native_windows_path_becomes_msys(self, monkeypatch):
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
-        assert _bash_safe_path(r"C:\Users\alice\notes.txt") == "/c/Users/alice/notes.txt"
+        assert (
+            _bash_safe_path(r"C:\Users\alice\notes.txt") == "/c/Users/alice/notes.txt"
+        )
 
     def test_forward_slash_native_path_becomes_msys(self, monkeypatch):
         """Production get_temp_dir emits C:/... — still needs /c/... rewrite."""
@@ -137,7 +142,9 @@ class TestBashSafePath:
     def test_mixed_msys_path_normalizes_backslashes(self, monkeypatch):
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
         mixed = r"/c/Users/Alexander\Documents\NewTEST\readme.txt"
-        assert _bash_safe_path(mixed) == "/c/Users/Alexander/Documents/NewTEST/readme.txt"
+        assert (
+            _bash_safe_path(mixed) == "/c/Users/Alexander/Documents/NewTEST/readme.txt"
+        )
 
     def test_noop_off_windows(self, monkeypatch):
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", False)
@@ -157,9 +164,12 @@ class TestBashSafePath:
 # _resolve_safe_cwd — Windows fast path
 # ---------------------------------------------------------------------------
 
+
 class TestResolveSafeCwdWindows:
     def test_msys_path_resolves_to_native_when_native_exists(
-        self, monkeypatch, tmp_path,
+        self,
+        monkeypatch,
+        tmp_path,
     ):
         """The whole point of this fix: a Git Bash ``/c/Users/x`` value
         should resolve to its native equivalent if that native dir exists,
@@ -173,9 +183,7 @@ class TestResolveSafeCwdWindows:
         # On Linux CI tmp_path is /tmp/... ; the resolver shouldn't even
         # try to translate that (regex won't match), so emulate the
         # mapping by pointing the translator at the real native dir.
-        with patch.object(
-            local_mod, "_msys_to_windows_path", return_value=native
-        ):
+        with patch.object(local_mod, "_msys_to_windows_path", return_value=native):
             assert _resolve_safe_cwd("/c/whatever") == native
 
 
@@ -183,9 +191,12 @@ class TestResolveSafeCwdWindows:
 # End-to-end: _update_cwd via stdout marker (Windows simulation)
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateCwdWindowsMsys:
     def test_marker_output_msys_path_stored_in_native_form(
-        self, monkeypatch, tmp_path,
+        self,
+        monkeypatch,
+        tmp_path,
     ):
         """When Git Bash emits ``/c/Users/x`` in the cwd marker on Windows,
         ``_update_cwd`` must translate to native form before
@@ -213,13 +224,13 @@ class TestUpdateCwdWindowsMsys:
                 return str(new_dir)
             return p
 
-        with patch.object(local_mod, "_msys_to_windows_path", side_effect=fake_translate):
-            env._update_cwd(
-                {
-                    "output": f"x\n{marker}/c/whatever/from/bash{marker}\n",
-                    "returncode": 0,
-                }
-            )
+        with patch.object(
+            local_mod, "_msys_to_windows_path", side_effect=fake_translate
+        ):
+            env._update_cwd({
+                "output": f"x\n{marker}/c/whatever/from/bash{marker}\n",
+                "returncode": 0,
+            })
 
         assert env.cwd == str(new_dir)
 
@@ -227,6 +238,7 @@ class TestUpdateCwdWindowsMsys:
 # ---------------------------------------------------------------------------
 # End-to-end: _extract_cwd_from_output rollback when marker is invalid
 # ---------------------------------------------------------------------------
+
 
 class TestExtractCwdFromOutputWindowsMsys:
     def test_stale_msys_marker_does_not_clobber_cwd(self, monkeypatch, tmp_path):
@@ -278,7 +290,9 @@ class TestExtractCwdFromOutputWindowsMsys:
             "returncode": 0,
         }
 
-        with patch.object(local_mod, "_msys_to_windows_path", return_value=str(new_dir)):
+        with patch.object(
+            local_mod, "_msys_to_windows_path", return_value=str(new_dir)
+        ):
             env._extract_cwd_from_output(result)
 
         assert env.cwd == str(new_dir)
@@ -288,13 +302,16 @@ class TestExtractCwdFromOutputWindowsMsys:
 # MSYS_NO_PATHCONV — native Windows command flags (#56700)
 # ---------------------------------------------------------------------------
 
+
 class TestWindowsMsysPathconvDefaults:
     def test_make_run_env_sets_msys_no_pathconv_on_windows(self, monkeypatch):
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
         run_env = _make_run_env({})
         assert run_env.get("MSYS_NO_PATHCONV") == "1"
 
-    def test_sanitize_subprocess_env_sets_msys_no_pathconv_on_windows(self, monkeypatch):
+    def test_sanitize_subprocess_env_sets_msys_no_pathconv_on_windows(
+        self, monkeypatch
+    ):
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
         env = _sanitize_subprocess_env({})
         assert env.get("MSYS_NO_PATHCONV") == "1"
@@ -335,6 +352,7 @@ class TestWindowsMsysPathconvDefaults:
 # Git Bash coreutils on PATH — non-login ``bash -c`` fallback (empty
 # write_file error / terminal exit 127 when login bash is broken)
 # ---------------------------------------------------------------------------
+
 
 class TestGitBashCoreutilsOnPath:
     def _fake_isdir(self, existing):
@@ -389,14 +407,18 @@ class TestGitBashCoreutilsOnPath:
         # paths don't collide with the POSIX ``:`` pathsep on the test host.
         monkeypatch.setattr(os, "pathsep", ";")
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
-        monkeypatch.setattr(local_mod, "_git_bash_bin_dirs_cache", ["/pg/usr/bin", "/pg/bin"])
+        monkeypatch.setattr(
+            local_mod, "_git_bash_bin_dirs_cache", ["/pg/usr/bin", "/pg/bin"]
+        )
         already = r"/pg/usr/bin;C:\Windows\System32;/pg/bin"
         assert _prepend_git_bash_dirs(already) == already
 
     def test_make_run_env_prepends_coreutils_on_windows(self, monkeypatch):
         monkeypatch.setattr(os, "pathsep", ";")
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
-        monkeypatch.setattr(local_mod, "_git_bash_bin_dirs_cache", ["/pg/mingw64/bin", "/pg/usr/bin"])
+        monkeypatch.setattr(
+            local_mod, "_git_bash_bin_dirs_cache", ["/pg/mingw64/bin", "/pg/usr/bin"]
+        )
         run_env = _make_run_env({"PATH": r"C:\Windows\System32"})
         path = run_env.get("PATH") or run_env.get("Path")
         entries = path.split(";")
@@ -416,6 +438,7 @@ class TestGitBashCoreutilsOnPath:
 # ---------------------------------------------------------------------------
 # Command wrapping — native Windows cwd must be Git Bash-friendly for cd
 # ---------------------------------------------------------------------------
+
 
 class TestWrapCommandWindowsNativeCwd:
     def test_wrap_command_converts_native_cwd_for_builtin_cd(self, monkeypatch):
@@ -440,8 +463,12 @@ class TestWrapCommandWindowsNativeCwd:
 
         captured = {}
 
-        def fake_run_bash(self, cmd_string, *, login=False, timeout=120, stdin_data=None):
-            captured.setdefault("script", cmd_string)  # bootstrap only; ignore the failure-path probe
+        def fake_run_bash(
+            self, cmd_string, *, login=False, timeout=120, stdin_data=None
+        ):
+            captured.setdefault(
+                "script", cmd_string
+            )  # bootstrap only; ignore the failure-path probe
             raise RuntimeError("stop after capturing bootstrap")
 
         monkeypatch.setattr(LocalEnvironment, "_run_bash", fake_run_bash)
@@ -453,15 +480,21 @@ class TestWrapCommandWindowsNativeCwd:
         assert "builtin cd -- /c/Users/liush 2>/dev/null || true" in captured["script"]
         assert r"C:\Users\liush" not in captured["script"]
 
-    def test_init_session_bootstrap_quotes_snapshot_paths_in_msys_form(self, monkeypatch):
+    def test_init_session_bootstrap_quotes_snapshot_paths_in_msys_form(
+        self, monkeypatch
+    ):
         """Snapshot paths must reach bash as /c/... — C:/... still trips MSYS
         arg conversion during bash -l and surfaces as \\drivers\\etc."""
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
 
         captured = {}
 
-        def fake_run_bash(self, cmd_string, *, login=False, timeout=120, stdin_data=None):
-            captured.setdefault("script", cmd_string)  # bootstrap only; ignore the failure-path probe
+        def fake_run_bash(
+            self, cmd_string, *, login=False, timeout=120, stdin_data=None
+        ):
+            captured.setdefault(
+                "script", cmd_string
+            )  # bootstrap only; ignore the failure-path probe
             raise RuntimeError("stop after capturing bootstrap")
 
         monkeypatch.setattr(LocalEnvironment, "_run_bash", fake_run_bash)
@@ -480,17 +513,25 @@ class TestWrapCommandWindowsNativeCwd:
             env.init_session()
 
         script = captured["script"]
-        assert "/c/Users/Alexander/.clawk/cache/terminal/clawk-snap-deadbeef.sh" in script
+        assert (
+            "/c/Users/Alexander/.clawk/cache/terminal/clawk-snap-deadbeef.sh" in script
+        )
         assert "C:/Users/Alexander" not in script
         assert r"C:\Users\Alexander" not in script
 
-    def test_init_session_bootstrap_rewrites_backslash_snapshot_paths(self, monkeypatch):
+    def test_init_session_bootstrap_rewrites_backslash_snapshot_paths(
+        self, monkeypatch
+    ):
         monkeypatch.setattr(local_mod, "_IS_WINDOWS", True)
 
         captured = {}
 
-        def fake_run_bash(self, cmd_string, *, login=False, timeout=120, stdin_data=None):
-            captured.setdefault("script", cmd_string)  # bootstrap only; ignore the failure-path probe
+        def fake_run_bash(
+            self, cmd_string, *, login=False, timeout=120, stdin_data=None
+        ):
+            captured.setdefault(
+                "script", cmd_string
+            )  # bootstrap only; ignore the failure-path probe
             raise RuntimeError("stop after capturing bootstrap")
 
         monkeypatch.setattr(LocalEnvironment, "_run_bash", fake_run_bash)

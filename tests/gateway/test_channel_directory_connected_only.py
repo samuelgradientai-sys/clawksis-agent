@@ -11,7 +11,9 @@ from gateway.channel_directory import build_channel_directory
 from gateway.platforms.base import Platform
 
 
-def test_does_not_resurrect_disconnected_platforms_from_session_history(tmp_path, monkeypatch):
+def test_does_not_resurrect_disconnected_platforms_from_session_history(
+    tmp_path, monkeypatch
+):
     cache_file = tmp_path / "channel_directory.json"
 
     calls = []
@@ -20,8 +22,13 @@ def test_does_not_resurrect_disconnected_platforms_from_session_history(tmp_path
         calls.append(plat_name)
         return {"channels": [{"id": "1", "name": "old"}]}
 
-    with patch("gateway.channel_directory._build_from_sessions", side_effect=fake_build_from_sessions), \
-         patch("gateway.channel_directory.DIRECTORY_PATH", cache_file):
+    with (
+        patch(
+            "gateway.channel_directory._build_from_sessions",
+            side_effect=fake_build_from_sessions,
+        ),
+        patch("gateway.channel_directory.DIRECTORY_PATH", cache_file),
+    ):
         # Only telegram is connected; no discord/slack/whatsapp adapters.
         directory = asyncio.run(build_channel_directory({Platform.TELEGRAM: object()}))
 
@@ -36,10 +43,13 @@ def test_does_not_resurrect_disconnected_platforms_from_session_history(tmp_path
 def test_connected_platform_still_uses_session_discovery(tmp_path):
     cache_file = tmp_path / "channel_directory.json"
 
-    with patch(
-        "gateway.channel_directory._build_from_sessions",
-        return_value={"channels": []},
-    ) as mock_sessions, patch("gateway.channel_directory.DIRECTORY_PATH", cache_file):
+    with (
+        patch(
+            "gateway.channel_directory._build_from_sessions",
+            return_value={"channels": []},
+        ) as mock_sessions,
+        patch("gateway.channel_directory.DIRECTORY_PATH", cache_file),
+    ):
         directory = asyncio.run(build_channel_directory({Platform.TELEGRAM: object()}))
 
     assert "telegram" in directory["platforms"]

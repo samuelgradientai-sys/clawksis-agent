@@ -21,13 +21,18 @@ class TestOwnCgroupPath:
             lambda p: proc_self if p == "/proc/self/cgroup" else Path(p),
         )
 
-        assert cgroup_cleanup._own_cgroup_path() == "/user.slice/user-1000.slice/clawk-gateway.service"
+        assert (
+            cgroup_cleanup._own_cgroup_path()
+            == "/user.slice/user-1000.slice/clawk-gateway.service"
+        )
 
     def test_returns_none_when_proc_missing(self, monkeypatch):
         def _raise(_path):
             raise FileNotFoundError
 
-        monkeypatch.setattr(cgroup_cleanup.Path, "read_text", lambda self, *a, **k: _raise(self))
+        monkeypatch.setattr(
+            cgroup_cleanup.Path, "read_text", lambda self, *a, **k: _raise(self)
+        )
         assert cgroup_cleanup._own_cgroup_path() is None
 
 
@@ -46,7 +51,9 @@ class TestReapCgroup:
         monkeypatch.setattr(cgroup_cleanup, "Path", _fake_path)
 
         killed_pids: list[tuple[int, int]] = []
-        monkeypatch.setattr(cgroup_cleanup.os, "kill", lambda pid, sig: killed_pids.append((pid, sig)))
+        monkeypatch.setattr(
+            cgroup_cleanup.os, "kill", lambda pid, sig: killed_pids.append((pid, sig))
+        )
 
         count = cgroup_cleanup.reap_cgroup(cgroup_path)
 

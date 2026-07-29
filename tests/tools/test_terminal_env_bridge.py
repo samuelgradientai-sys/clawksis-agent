@@ -42,11 +42,7 @@ def _write_config(text: str) -> None:
 def test_unset_terminal_env_backfills_backend_from_config():
     """The core #63141 fix: config's docker backend reaches _get_env_config
     even when no launcher bridged TERMINAL_ENV into this process."""
-    _write_config(
-        "terminal:\n"
-        "  backend: docker\n"
-        "  docker_image: custom/image:1\n"
-    )
+    _write_config("terminal:\n  backend: docker\n  docker_image: custom/image:1\n")
 
     config = terminal_tool._get_env_config()
 
@@ -69,11 +65,7 @@ def test_explicit_terminal_env_wins_over_config(monkeypatch):
 def test_preset_terminal_vars_survive_backfill(monkeypatch):
     """override=False: already-set sibling TERMINAL_* values stay
     authoritative; only missing ones are backfilled."""
-    _write_config(
-        "terminal:\n"
-        "  backend: docker\n"
-        "  docker_image: config/image:1\n"
-    )
+    _write_config("terminal:\n  backend: docker\n  docker_image: config/image:1\n")
     monkeypatch.setenv("TERMINAL_DOCKER_IMAGE", "env/image:2")
 
     config = terminal_tool._get_env_config()

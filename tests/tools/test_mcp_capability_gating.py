@@ -15,6 +15,7 @@ servers like Unreal Engine's editor MCP). Its cadence is configurable via
 
 Discovery gating ported from anomalyco/opencode#31271.
 """
+
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -128,6 +129,7 @@ class TestKeepaliveProbe:
             )
 
         import tools.mcp_tool as mcp_mod
+
         orig = mcp_mod.asyncio.wait
         mcp_mod.asyncio.wait = fake_wait
         try:
@@ -204,6 +206,7 @@ class TestKeepaliveInterval:
             )
 
         import tools.mcp_tool as mcp_mod
+
         orig = mcp_mod.asyncio.wait
         mcp_mod.asyncio.wait = fake_wait
         try:
@@ -215,6 +218,7 @@ class TestKeepaliveInterval:
     @pytest.mark.asyncio
     async def test_default_interval_when_unset(self):
         from tools.mcp_tool import _DEFAULT_KEEPALIVE_INTERVAL
+
         assert await self._captured_interval({}) == _DEFAULT_KEEPALIVE_INTERVAL
 
     @pytest.mark.asyncio
@@ -224,6 +228,7 @@ class TestKeepaliveInterval:
     @pytest.mark.asyncio
     async def test_interval_clamped_to_floor(self):
         from tools.mcp_tool import _MIN_KEEPALIVE_INTERVAL
+
         # A sub-floor value must clamp up, never busy-loop the keepalive.
         assert (
             await self._captured_interval({"keepalive_interval": 0.1})
@@ -235,6 +240,7 @@ def _mcp_error(code, message="boom"):
     """Build a real McpError carrying a JSON-RPC error code."""
     from mcp.shared.exceptions import McpError
     from mcp.types import ErrorData
+
     return McpError(ErrorData(code=code, message=message))
 
 
@@ -243,25 +249,30 @@ class TestMethodNotFoundDetection:
 
     def test_structural_code_match(self):
         from tools.mcp_tool import _is_method_not_found_error
+
         assert _is_method_not_found_error(_mcp_error(-32601)) is True
 
     def test_other_mcp_error_code_is_not_match(self):
         from tools.mcp_tool import _is_method_not_found_error
+
         # Invalid params (-32602) is a real error, NOT "ping unsupported".
         assert _is_method_not_found_error(_mcp_error(-32602)) is False
 
     def test_substring_fallback(self):
         from tools.mcp_tool import _is_method_not_found_error
+
         assert _is_method_not_found_error(Exception("Method not found")) is True
 
     def test_unknown_method_phrasing_is_match(self):
         # agentmemory's MCP server surfaces method-not-found as a plain
         # "Unknown method: ping" string with no structural -32601 code (#50028).
         from tools.mcp_tool import _is_method_not_found_error
+
         assert _is_method_not_found_error(Exception("Unknown method: ping")) is True
 
     def test_unrelated_exception_is_not_match(self):
         from tools.mcp_tool import _is_method_not_found_error
+
         assert _is_method_not_found_error(TimeoutError()) is False
         assert _is_method_not_found_error(Exception("session terminated")) is False
 
@@ -376,5 +387,3 @@ class TestKeepaliveProbeFallback:
         await task._discover_tools()
 
         assert task._ping_unsupported is False
-
-

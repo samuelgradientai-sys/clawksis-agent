@@ -292,7 +292,9 @@ before the user is confused by another "No MCP tools available" reload:
 
 ```python
 body = json.dumps({
-    "jsonrpc": "2.0", "id": 1, "method": "initialize",
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
     "params": {
         "protocolVersion": "2025-06-18",
         "capabilities": {},

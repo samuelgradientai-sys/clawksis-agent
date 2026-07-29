@@ -187,11 +187,11 @@ class TestZaiModelGating:
     @pytest.mark.parametrize(
         "model",
         [
-            "glm-4-9b",   # pre-4.5, no thinking param
+            "glm-4-9b",  # pre-4.5, no thinking param
             "glm-4",
             "glm-3-turbo",
-            "",            # bare/unknown
-            None,          # missing
+            "",  # bare/unknown
+            None,  # missing
             "charglm-3",  # non-GLM-versioned id
         ],
     )

@@ -8,7 +8,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gateway.config import Platform, _PLATFORM_CONNECTED_CHECKERS, _BUILTIN_PLATFORM_VALUES
+from gateway.config import (
+    Platform,
+    _PLATFORM_CONNECTED_CHECKERS,
+    _BUILTIN_PLATFORM_VALUES,
+)
 
 
 def test_all_builtins_have_checker_or_generic_token_path():
@@ -21,14 +25,17 @@ def test_all_builtins_have_checker_or_generic_token_path():
     a built-in just because nobody added it to the checker dict.
     """
     # Platforms covered by the generic token/api_key branch
-    generic_token_values = {p.value for p in {
-        Platform.TELEGRAM,
-        Platform.DISCORD,
-        Platform.SLACK,
-        Platform.MATRIX,
-        Platform.MATTERMOST,
-        Platform.HOMEASSISTANT,
-    }}
+    generic_token_values = {
+        p.value
+        for p in {
+            Platform.TELEGRAM,
+            Platform.DISCORD,
+            Platform.SLACK,
+            Platform.MATRIX,
+            Platform.MATTERMOST,
+            Platform.HOMEASSISTANT,
+        }
+    }
 
     # Platforms with a bespoke checker
     checker_values = {p.value for p in set(_PLATFORM_CONNECTED_CHECKERS.keys())}
@@ -42,6 +49,7 @@ def test_all_builtins_have_checker_or_generic_token_path():
     try:
         from clawk_cli.plugins import discover_plugins
         from gateway.platform_registry import platform_registry
+
         discover_plugins()
         for _entry in platform_registry.all_entries():
             if _entry.is_connected is not None or _entry.validate_config is not None:
@@ -66,7 +74,9 @@ def test_all_builtins_have_checker_or_generic_token_path():
     )
 
 
-@pytest.mark.parametrize("platform, checker", list(_PLATFORM_CONNECTED_CHECKERS.items()))
+@pytest.mark.parametrize(
+    "platform, checker", list(_PLATFORM_CONNECTED_CHECKERS.items())
+)
 def test_checker_handles_minimal_config(platform, checker):
     """Each bespoke checker must not crash on a minimal PlatformConfig."""
     mock_config = MagicMock()
@@ -80,7 +90,9 @@ def test_checker_handles_minimal_config(platform, checker):
     assert isinstance(result, bool)
 
 
-@pytest.mark.parametrize("platform, checker", list(_PLATFORM_CONNECTED_CHECKERS.items()))
+@pytest.mark.parametrize(
+    "platform, checker", list(_PLATFORM_CONNECTED_CHECKERS.items())
+)
 def test_checker_returns_true_when_configured(platform, checker, monkeypatch):
     """Each bespoke checker must return True when the config looks valid."""
     mock_config = MagicMock()
@@ -126,4 +138,6 @@ def test_checker_returns_true_when_configured(platform, checker, monkeypatch):
         pytest.skip(f"No synthetic config defined for {platform.value}")
 
     result = checker(mock_config)
-    assert result is True, f"{platform.value} checker should return True with valid-looking config"
+    assert result is True, (
+        f"{platform.value} checker should return True with valid-looking config"
+    )

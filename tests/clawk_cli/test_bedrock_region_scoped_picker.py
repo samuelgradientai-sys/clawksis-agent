@@ -61,9 +61,7 @@ class TestRoutableFromRegion:
         )
 
     def test_unknown_region_hides_nothing(self):
-        assert bedrock_model_routable_from_region(
-            "us.anthropic.claude-sonnet-4-6", ""
-        )
+        assert bedrock_model_routable_from_region("us.anthropic.claude-sonnet-4-6", "")
 
 
 class TestGeoPrefixContract:
@@ -73,8 +71,13 @@ class TestGeoPrefixContract:
         mapped = {
             bedrock_region_geo_prefix(r)
             for r in (
-                "us-east-1", "eu-central-2", "ap-southeast-1",
-                "ca-central-1", "sa-east-1", "me-south-1", "af-south-1",
+                "us-east-1",
+                "eu-central-2",
+                "ap-southeast-1",
+                "ca-central-1",
+                "sa-east-1",
+                "me-south-1",
+                "af-south-1",
             )
         }
         ap_aliases = {"apac.", "jp."}

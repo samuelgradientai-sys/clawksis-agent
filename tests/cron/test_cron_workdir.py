@@ -30,40 +30,48 @@ def tmp_cron_dir(tmp_path, monkeypatch):
 # jobs._normalize_workdir
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeWorkdir:
     def test_none_returns_none(self):
         from cron.jobs import _normalize_workdir
+
         assert _normalize_workdir(None) is None
 
     def test_empty_string_returns_none(self):
         from cron.jobs import _normalize_workdir
+
         assert _normalize_workdir("") is None
         assert _normalize_workdir("   ") is None
 
     def test_absolute_existing_dir_returns_resolved_str(self, tmp_path):
         from cron.jobs import _normalize_workdir
+
         result = _normalize_workdir(str(tmp_path))
         assert result == str(tmp_path.resolve())
 
     def test_tilde_expands(self, tmp_path, monkeypatch):
         from cron.jobs import _normalize_workdir
+
         monkeypatch.setenv("HOME", str(tmp_path))
         result = _normalize_workdir("~")
         assert result == str(tmp_path.resolve())
 
     def test_relative_path_rejected(self):
         from cron.jobs import _normalize_workdir
+
         with pytest.raises(ValueError, match="absolute path"):
             _normalize_workdir("some/relative/path")
 
     def test_missing_dir_rejected(self, tmp_path):
         from cron.jobs import _normalize_workdir
+
         missing = tmp_path / "does-not-exist"
         with pytest.raises(ValueError, match="does not exist"):
             _normalize_workdir(str(missing))
 
     def test_file_not_dir_rejected(self, tmp_path):
         from cron.jobs import _normalize_workdir
+
         f = tmp_path / "file.txt"
         f.write_text("hi")
         with pytest.raises(ValueError, match="not a directory"):
@@ -74,9 +82,11 @@ class TestNormalizeWorkdir:
 # jobs.create_job and update_job
 # ---------------------------------------------------------------------------
 
+
 class TestCreateJobWorkdir:
     def test_workdir_stored_when_set(self, tmp_cron_dir):
         from cron.jobs import create_job, get_job
+
         job = create_job(
             prompt="hello",
             schedule="every 1h",
@@ -87,6 +97,7 @@ class TestCreateJobWorkdir:
 
     def test_workdir_none_preserves_old_behaviour(self, tmp_cron_dir):
         from cron.jobs import create_job, get_job
+
         job = create_job(prompt="hello", schedule="every 1h")
         stored = get_job(job["id"])
         # Field is present on the dict but None — downstream code checks
@@ -95,6 +106,7 @@ class TestCreateJobWorkdir:
 
     def test_create_rejects_invalid_workdir(self, tmp_cron_dir):
         from cron.jobs import create_job
+
         with pytest.raises(ValueError):
             create_job(
                 prompt="hello",
@@ -106,28 +118,28 @@ class TestCreateJobWorkdir:
 class TestUpdateJobWorkdir:
     def test_set_workdir_via_update(self, tmp_cron_dir):
         from cron.jobs import create_job, get_job, update_job
+
         job = create_job(prompt="x", schedule="every 1h")
         update_job(job["id"], {"workdir": str(tmp_cron_dir)})
         assert get_job(job["id"])["workdir"] == str(tmp_cron_dir.resolve())
 
     def test_clear_workdir_with_none(self, tmp_cron_dir):
         from cron.jobs import create_job, get_job, update_job
-        job = create_job(
-            prompt="x", schedule="every 1h", workdir=str(tmp_cron_dir)
-        )
+
+        job = create_job(prompt="x", schedule="every 1h", workdir=str(tmp_cron_dir))
         update_job(job["id"], {"workdir": None})
         assert get_job(job["id"])["workdir"] is None
 
     def test_clear_workdir_with_empty_string(self, tmp_cron_dir):
         from cron.jobs import create_job, get_job, update_job
-        job = create_job(
-            prompt="x", schedule="every 1h", workdir=str(tmp_cron_dir)
-        )
+
+        job = create_job(prompt="x", schedule="every 1h", workdir=str(tmp_cron_dir))
         update_job(job["id"], {"workdir": ""})
         assert get_job(job["id"])["workdir"] is None
 
     def test_update_rejects_invalid_workdir(self, tmp_cron_dir):
         from cron.jobs import create_job, update_job
+
         job = create_job(prompt="x", schedule="every 1h")
         with pytest.raises(ValueError):
             update_job(job["id"], {"workdir": "nope/relative"})
@@ -136,6 +148,7 @@ class TestUpdateJobWorkdir:
 # ---------------------------------------------------------------------------
 # tools.cronjob_tools: end-to-end JSON round-trip
 # ---------------------------------------------------------------------------
+
 
 class TestCronjobToolWorkdir:
     def test_create_with_workdir_json_roundtrip(self, tmp_cron_dir):
@@ -179,14 +192,13 @@ class TestCronjobToolWorkdir:
         )
         job_id = created["job_id"]
 
-        updated = json.loads(
-            cronjob(action="update", job_id=job_id, workdir="")
-        )
+        updated = json.loads(cronjob(action="update", job_id=job_id, workdir=""))
         assert updated["success"] is True
         assert "workdir" not in updated["job"]
 
     def test_schema_advertises_workdir(self):
         from tools.cronjob_tools import CRONJOB_SCHEMA
+
         assert "workdir" in CRONJOB_SCHEMA["parameters"]["properties"]
         desc = CRONJOB_SCHEMA["parameters"]["properties"]["workdir"]["description"]
         assert "absolute" in desc.lower()
@@ -195,6 +207,7 @@ class TestCronjobToolWorkdir:
 # ---------------------------------------------------------------------------
 # scheduler.tick(): workdir partition
 # ---------------------------------------------------------------------------
+
 
 class TestTickWorkdirPartition:
     """
@@ -212,11 +225,14 @@ class TestTickWorkdirPartition:
         workdir_b = {"id": "b", "name": "B", "workdir": str(tmp_path)}
         parallel_job = {"id": "c", "name": "C", "workdir": None}
 
-        monkeypatch.setattr(sched, "get_due_jobs", lambda: [workdir_a, workdir_b, parallel_job])
+        monkeypatch.setattr(
+            sched, "get_due_jobs", lambda: [workdir_a, workdir_b, parallel_job]
+        )
         monkeypatch.setattr(sched, "advance_next_run", lambda *_a, **_kw: None)
 
         # Record call order / thread context.
         import threading
+
         calls: list[tuple[str, str]] = []
         order_lock = threading.Lock()
 
@@ -229,9 +245,7 @@ class TestTickWorkdirPartition:
         monkeypatch.setattr(sched, "run_job", fake_run_job)
         monkeypatch.setattr(sched, "save_job_output", lambda _jid, _o: None)
         monkeypatch.setattr(sched, "mark_job_run", lambda *_a, **_kw: None)
-        monkeypatch.setattr(
-            sched, "_deliver_result", lambda *_a, **_kw: None
-        )
+        monkeypatch.setattr(sched, "_deliver_result", lambda *_a, **_kw: None)
 
         n = sched.tick(verbose=False)
         assert n == 3
@@ -255,6 +269,7 @@ class TestTickWorkdirPartition:
 # ---------------------------------------------------------------------------
 # scheduler.run_job: TERMINAL_CWD + skip_context_files wiring
 # ---------------------------------------------------------------------------
+
 
 class TestRunJobTerminalCwd:
     """
@@ -293,6 +308,7 @@ class TestRunJobTerminalCwd:
 
         # Bypass the real provider resolver — it reads ~/.clawksis and credentials.
         from clawk_cli import runtime_provider as _rtp
+
         monkeypatch.setattr(
             _rtp,
             "resolve_runtime_provider",
@@ -305,10 +321,14 @@ class TestRunJobTerminalCwd:
         )
 
         # Stub scheduler helpers that would otherwise hit the filesystem / config.
-        monkeypatch.setattr(sched, "_build_job_prompt", lambda job, prerun_script=None: "hi")
+        monkeypatch.setattr(
+            sched, "_build_job_prompt", lambda job, prerun_script=None: "hi"
+        )
         monkeypatch.setattr(sched, "_resolve_origin", lambda job: None)
         monkeypatch.setattr(sched, "_resolve_delivery_target", lambda job: None)
-        monkeypatch.setattr(sched, "_resolve_cron_enabled_toolsets", lambda job, cfg: None)
+        monkeypatch.setattr(
+            sched, "_resolve_cron_enabled_toolsets", lambda job, cfg: None
+        )
         # Unlimited inactivity so the poll loop returns immediately.
         monkeypatch.setenv("CLAWK_CRON_TIMEOUT", "0")
 
@@ -316,11 +336,10 @@ class TestRunJobTerminalCwd:
         # happily clobber TERMINAL_CWD out from under us if the real user .env
         # has TERMINAL_CWD set (common on dev boxes).  Stub it out.
         import dotenv
+
         monkeypatch.setattr(dotenv, "load_dotenv", lambda *_a, **_kw: True)
 
-    def test_workdir_sets_and_restores_terminal_cwd(
-        self, tmp_path, monkeypatch
-    ):
+    def test_workdir_sets_and_restores_terminal_cwd(self, tmp_path, monkeypatch):
         import os
         import cron.scheduler as sched
 

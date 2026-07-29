@@ -22,9 +22,7 @@ def _fresh_cache(monkeypatch, tmp_path):
     an empty external-dirs list + a tmp skills root."""
     st._SKILLS_CACHE.clear()
     monkeypatch.setattr(st, "_skills_dir", lambda: tmp_path / "skills")
-    monkeypatch.setattr(
-        "agent.skill_utils.get_external_skills_dirs", lambda: []
-    )
+    monkeypatch.setattr("agent.skill_utils.get_external_skills_dirs", lambda: [])
     monkeypatch.setattr(st, "_get_disabled_skill_names", lambda: set())
     yield
     st._SKILLS_CACHE.clear()
@@ -70,6 +68,7 @@ def test_nested_category_skill_add_invalidates(tmp_path):
     root_stat = root.stat()
     _write_skill(tmp_path, "cat-a", "skill-two")
     import os
+
     os.utime(root, (root_stat.st_atime, root_stat.st_mtime))
 
     names = sorted(s["name"] for s in st._find_all_skills())
@@ -100,6 +99,7 @@ def test_ttl_expiry_forces_rescan(tmp_path, monkeypatch):
 
     # Edit the file in place; keep every directory mtime identical.
     import os
+
     cat = tmp_path / "skills" / "cat-a"
     root = tmp_path / "skills"
     stats = {p: p.stat() for p in (root, cat, skill_dir)}

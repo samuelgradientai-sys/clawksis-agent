@@ -109,8 +109,7 @@ VIDEO_GENERATE_SCHEMA: Dict[str, Any] = {
                 "type": "string",
                 "enum": list(COMMON_ASPECT_RATIOS),
                 "description": (
-                    "Output aspect ratio. Providers clamp to their supported "
-                    "set."
+                    "Output aspect ratio. Providers clamp to their supported set."
                 ),
                 "default": DEFAULT_ASPECT_RATIO,
             },
@@ -118,8 +117,7 @@ VIDEO_GENERATE_SCHEMA: Dict[str, Any] = {
                 "type": "string",
                 "enum": list(COMMON_RESOLUTIONS),
                 "description": (
-                    "Output resolution. Providers clamp to their supported "
-                    "set."
+                    "Output resolution. Providers clamp to their supported set."
                 ),
                 "default": DEFAULT_RESOLUTION,
             },
@@ -141,8 +139,7 @@ VIDEO_GENERATE_SCHEMA: Dict[str, Any] = {
             "seed": {
                 "type": "integer",
                 "description": (
-                    "Optional seed for reproducible outputs (provider-"
-                    "dependent)."
+                    "Optional seed for reproducible outputs (provider-dependent)."
                 ),
             },
             "model": {
@@ -252,17 +249,23 @@ def _missing_provider_error(configured: Optional[str]) -> str:
             f"installed video gen backends, or `clawk tools` → Video "
             f"Generation to pick one."
         )
-        return json.dumps(error_response(
-            error=msg, error_type="provider_not_registered",
-            provider=configured,
-        ))
+        return json.dumps(
+            error_response(
+                error=msg,
+                error_type="provider_not_registered",
+                provider=configured,
+            )
+        )
     msg = (
         "No video generation backend is configured. Run `clawk tools` → "
         "Video Generation to enable one (xAI, FAL, or Google Veo)."
     )
-    return json.dumps(error_response(
-        error=msg, error_type="no_provider_configured",
-    ))
+    return json.dumps(
+        error_response(
+            error=msg,
+            error_type="no_provider_configured",
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -312,8 +315,12 @@ def _handle_video_generate(args: Dict[str, Any], **_kw: Any) -> str:
     image_url = (args.get("image_url") or "").strip() or None
     reference_image_urls = _normalize_reference_images(args.get("reference_image_urls"))
     duration = _coerce_int(args.get("duration"))
-    aspect_ratio = (args.get("aspect_ratio") or DEFAULT_ASPECT_RATIO).strip() or DEFAULT_ASPECT_RATIO
-    resolution = (args.get("resolution") or DEFAULT_RESOLUTION).strip() or DEFAULT_RESOLUTION
+    aspect_ratio = (
+        args.get("aspect_ratio") or DEFAULT_ASPECT_RATIO
+    ).strip() or DEFAULT_ASPECT_RATIO
+    resolution = (
+        args.get("resolution") or DEFAULT_RESOLUTION
+    ).strip() or DEFAULT_RESOLUTION
     negative_prompt = (args.get("negative_prompt") or "").strip() or None
     audio = _coerce_bool(args.get("audio"))
     seed = _coerce_int(args.get("seed"))
@@ -361,40 +368,48 @@ def _handle_video_generate(args: Dict[str, Any], **_kw: Any) -> str:
         # caller error — log and surface a clear contract message.
         logger.warning(
             "video_gen provider '%s' rejected kwargs (signature too narrow): %s",
-            getattr(provider, "name", "?"), exc,
+            getattr(provider, "name", "?"),
+            exc,
         )
-        return json.dumps(error_response(
-            error=(
-                f"Provider '{getattr(provider, 'name', '?')}' signature is "
-                f"out of date with the video_generate schema. Report this "
-                f"to the plugin author."
-            ),
-            error_type="provider_contract",
-            provider=getattr(provider, "name", ""),
-            model=model or "",
-            prompt=prompt,
-        ))
+        return json.dumps(
+            error_response(
+                error=(
+                    f"Provider '{getattr(provider, 'name', '?')}' signature is "
+                    f"out of date with the video_generate schema. Report this "
+                    f"to the plugin author."
+                ),
+                error_type="provider_contract",
+                provider=getattr(provider, "name", ""),
+                model=model or "",
+                prompt=prompt,
+            )
+        )
     except Exception as exc:
         logger.warning(
             "video_gen provider '%s' raised: %s",
-            getattr(provider, "name", "?"), exc,
+            getattr(provider, "name", "?"),
+            exc,
         )
-        return json.dumps(error_response(
-            error=f"Provider '{getattr(provider, 'name', '?')}' error: {exc}",
-            error_type="provider_exception",
-            provider=getattr(provider, "name", ""),
-            model=model or "",
-            prompt=prompt,
-        ))
+        return json.dumps(
+            error_response(
+                error=f"Provider '{getattr(provider, 'name', '?')}' error: {exc}",
+                error_type="provider_exception",
+                provider=getattr(provider, "name", ""),
+                model=model or "",
+                prompt=prompt,
+            )
+        )
 
     if not isinstance(result, dict):
-        return json.dumps(error_response(
-            error="Provider returned a non-dict result",
-            error_type="provider_contract",
-            provider=getattr(provider, "name", ""),
-            model=model or "",
-            prompt=prompt,
-        ))
+        return json.dumps(
+            error_response(
+                error="Provider returned a non-dict result",
+                error_type="provider_contract",
+                provider=getattr(provider, "name", ""),
+                model=model or "",
+                prompt=prompt,
+            )
+        )
 
     return json.dumps(result)
 
@@ -445,7 +460,9 @@ def _format_model_caveats(
     caveats: List[str] = []
 
     modalities = set(model_meta.get("modalities") or [])
-    modality = model_meta.get("modality")  # FAL's plugin uses this key for single-modality entries
+    modality = model_meta.get(
+        "modality"
+    )  # FAL's plugin uses this key for single-modality entries
     if modality:
         modalities.add(modality)
 
@@ -455,9 +472,7 @@ def _format_model_caveats(
             "text-only calls will be rejected"
         )
     elif "text" in modalities and "image" not in modalities:
-        caveats.append(
-            "this model is text-to-video only — image_url is not supported"
-        )
+        caveats.append("this model is text-to-video only — image_url is not supported")
 
     return caveats
 
@@ -517,7 +532,11 @@ def _build_dynamic_video_schema() -> Dict[str, Any]:
     # both text and image. Single-modality backends are already covered by
     # the model caveat above.
     modalities = set(caps.get("modalities") or [])
-    if "text" in modalities and "image" in modalities and not model_meta.get("modality"):
+    if (
+        "text" in modalities
+        and "image" in modalities
+        and not model_meta.get("modality")
+    ):
         parts.append(
             "- supports both text-to-video (omit image_url) and "
             "image-to-video (pass image_url) — routes automatically"

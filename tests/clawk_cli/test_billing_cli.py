@@ -29,15 +29,21 @@ def _boom_modal(*a, **kw):
 
 
 def test_billing_logged_out(cli, monkeypatch, capsys):
-    monkeypatch.setattr(bv, "build_billing_state", lambda *a, **kw: BillingState(logged_in=False))
+    monkeypatch.setattr(
+        bv, "build_billing_state", lambda *a, **kw: BillingState(logged_in=False)
+    )
     cli._show_billing("/billing")
     out = capsys.readouterr().out
     assert "Not logged into Nous Portal" in out
     assert "clawk portal" in out
 
 
-def test_billing_overview_non_interactive_renders_text_not_modal(cli, monkeypatch, capsys):
-    monkeypatch.setattr(ClawksisCLI, "_prompt_text_input_modal", _boom_modal, raising=False)
+def test_billing_overview_non_interactive_renders_text_not_modal(
+    cli, monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        ClawksisCLI, "_prompt_text_input_modal", _boom_modal, raising=False
+    )
     state = BillingState(
         logged_in=True,
         org_name="Acme",
@@ -45,8 +51,11 @@ def test_billing_overview_non_interactive_renders_text_not_modal(cli, monkeypatc
         balance_usd=Decimal("142.5"),
         cli_billing_enabled=True,
         charge_presets=(Decimal("100"),),
-        monthly_cap=MonthlyCap(limit_usd=Decimal("1000"), spent_this_month_usd=Decimal("180"),
-                               is_default_ceiling=True),
+        monthly_cap=MonthlyCap(
+            limit_usd=Decimal("1000"),
+            spent_this_month_usd=Decimal("180"),
+            is_default_ceiling=True,
+        ),
         portal_url="https://portal/billing?topup=open",
     )
     monkeypatch.setattr(bv, "build_billing_state", lambda *a, **kw: state)
@@ -64,8 +73,11 @@ def test_billing_overview_non_interactive_renders_text_not_modal(cli, monkeypatc
 
 def test_billing_member_cannot_charge(cli, monkeypatch, capsys):
     state = BillingState(
-        logged_in=True, role="MEMBER", balance_usd=Decimal("10"),
-        cli_billing_enabled=True, portal_url="https://portal/billing",
+        logged_in=True,
+        role="MEMBER",
+        balance_usd=Decimal("10"),
+        cli_billing_enabled=True,
+        portal_url="https://portal/billing",
     )
     monkeypatch.setattr(bv, "build_billing_state", lambda *a, **kw: state)
     cli._show_billing("/billing")
@@ -75,8 +87,11 @@ def test_billing_member_cannot_charge(cli, monkeypatch, capsys):
 
 def test_billing_killswitch_off_blocks(cli, monkeypatch, capsys):
     state = BillingState(
-        logged_in=True, role="OWNER", balance_usd=Decimal("10"),
-        cli_billing_enabled=False, portal_url="https://portal/billing",
+        logged_in=True,
+        role="OWNER",
+        balance_usd=Decimal("10"),
+        cli_billing_enabled=False,
+        portal_url="https://portal/billing",
     )
     monkeypatch.setattr(bv, "build_billing_state", lambda *a, **kw: state)
     cli._show_billing("/billing")
@@ -86,9 +101,14 @@ def test_billing_killswitch_off_blocks(cli, monkeypatch, capsys):
 
 def test_billing_limit_screen_readonly(cli, monkeypatch, capsys):
     state = BillingState(
-        logged_in=True, role="OWNER", cli_billing_enabled=True,
-        monthly_cap=MonthlyCap(limit_usd=Decimal("1000"), spent_this_month_usd=Decimal("250"),
-                               is_default_ceiling=True),
+        logged_in=True,
+        role="OWNER",
+        cli_billing_enabled=True,
+        monthly_cap=MonthlyCap(
+            limit_usd=Decimal("1000"),
+            spent_this_month_usd=Decimal("250"),
+            is_default_ceiling=True,
+        ),
         portal_url="https://portal/billing",
     )
     monkeypatch.setattr(bv, "build_billing_state", lambda *a, **kw: state)
@@ -104,10 +124,15 @@ def test_billing_limit_screen_readonly(cli, monkeypatch, capsys):
 def test_billing_sub_arg_ignored_opens_overview(cli, monkeypatch, capsys):
     # A stray sub-arg must NOT error and must NOT dispatch to a sub-screen —
     # it just opens the overview (spec §0.4: zero sub-commands).
-    monkeypatch.setattr(ClawksisCLI, "_prompt_text_input_modal", _boom_modal, raising=False)
+    monkeypatch.setattr(
+        ClawksisCLI, "_prompt_text_input_modal", _boom_modal, raising=False
+    )
     state = BillingState(
-        logged_in=True, role="OWNER", balance_usd=Decimal("142.5"),
-        cli_billing_enabled=True, charge_presets=(Decimal("25"),),
+        logged_in=True,
+        role="OWNER",
+        balance_usd=Decimal("142.5"),
+        cli_billing_enabled=True,
+        charge_presets=(Decimal("25"),),
         portal_url="https://portal/billing",
     )
     monkeypatch.setattr(bv, "build_billing_state", lambda *a, **kw: state)
@@ -120,9 +145,13 @@ def test_billing_sub_arg_ignored_opens_overview(cli, monkeypatch, capsys):
 
 
 def test_billing_buy_non_interactive_defers_to_portal(cli, monkeypatch, capsys):
-    monkeypatch.setattr(ClawksisCLI, "_prompt_text_input_modal", _boom_modal, raising=False)
+    monkeypatch.setattr(
+        ClawksisCLI, "_prompt_text_input_modal", _boom_modal, raising=False
+    )
     state = BillingState(
-        logged_in=True, role="OWNER", cli_billing_enabled=True,
+        logged_in=True,
+        role="OWNER",
+        cli_billing_enabled=True,
         charge_presets=(Decimal("25"), Decimal("50"), Decimal("100")),
         card=CardInfo(brand="visa", last4="4242"),
         portal_url="https://portal/billing",
@@ -150,8 +179,11 @@ def _scripted(*responses):
 
 def test_overview_shows_card_with_provenance(cli, monkeypatch, capsys):
     state = BillingState(
-        logged_in=True, role="OWNER", balance_usd=Decimal("10"),
-        cli_billing_enabled=True, charge_presets=(Decimal("25"),),
+        logged_in=True,
+        role="OWNER",
+        balance_usd=Decimal("10"),
+        cli_billing_enabled=True,
+        charge_presets=(Decimal("25"),),
         card=CardInfo(brand="Visa", last4="4242", resolved_via="subPin"),
         portal_url="https://portal/billing",
     )
@@ -163,9 +195,13 @@ def test_overview_shows_card_with_provenance(cli, monkeypatch, capsys):
 
 def test_overview_shows_no_card_hint(cli, monkeypatch, capsys):
     state = BillingState(
-        logged_in=True, role="OWNER", balance_usd=Decimal("10"),
-        cli_billing_enabled=True, charge_presets=(Decimal("25"),),
-        card=None, portal_url="https://portal/billing",
+        logged_in=True,
+        role="OWNER",
+        balance_usd=Decimal("10"),
+        cli_billing_enabled=True,
+        charge_presets=(Decimal("25"),),
+        card=None,
+        portal_url="https://portal/billing",
     )
     monkeypatch.setattr(bv, "build_billing_state", lambda *a, **kw: state)
     cli._show_billing("/topup")
@@ -177,9 +213,13 @@ def test_overview_shows_no_card_hint(cli, monkeypatch, capsys):
 def test_link_card_renders_brand_alone(cli, monkeypatch, capsys):
     # A Link payment method has no card number (last4 = "") — never "Link ····".
     state = BillingState(
-        logged_in=True, role="OWNER", balance_usd=Decimal("10"),
-        cli_billing_enabled=True, charge_presets=(Decimal("25"),),
-        card=CardInfo(brand="Link", last4=""), portal_url="https://portal/billing",
+        logged_in=True,
+        role="OWNER",
+        balance_usd=Decimal("10"),
+        cli_billing_enabled=True,
+        charge_presets=(Decimal("25"),),
+        card=CardInfo(brand="Link", last4=""),
+        portal_url="https://portal/billing",
     )
     monkeypatch.setattr(bv, "build_billing_state", lambda *a, **kw: state)
     cli._show_billing("/topup")
@@ -193,16 +233,27 @@ def test_buy_flow_no_card_guides_then_continues_after_recheck(cli, monkeypatch, 
     # once the card exists, continues straight into the preset menu.
     cli._app = object()
     common = dict(
-        logged_in=True, role="OWNER", cli_billing_enabled=True,
+        logged_in=True,
+        role="OWNER",
+        cli_billing_enabled=True,
         charge_presets=(Decimal("25"), Decimal("50")),
-        min_usd=Decimal("5"), max_usd=Decimal("500"),
+        min_usd=Decimal("5"),
+        max_usd=Decimal("500"),
         portal_url="https://portal/billing",
     )
     nocard = BillingState(card=None, **common)
-    withcard = BillingState(card=CardInfo(brand="Visa", last4="4242", resolved_via="customerDefault"), **common)
+    withcard = BillingState(
+        card=CardInfo(brand="Visa", last4="4242", resolved_via="customerDefault"),
+        **common,
+    )
     monkeypatch.setattr(bv, "build_billing_state", lambda *a, **kw: withcard)
     # add-card modal → "recheck"; preset modal → "cancel" (we only test the routing)
-    monkeypatch.setattr(ClawksisCLI, "_prompt_text_input_modal", _scripted("recheck", "cancel"), raising=False)
+    monkeypatch.setattr(
+        ClawksisCLI,
+        "_prompt_text_input_modal",
+        _scripted("recheck", "cancel"),
+        raising=False,
+    )
 
     cli._billing_buy_flow(nocard)
     out = capsys.readouterr().out
@@ -215,8 +266,11 @@ def test_buy_flow_no_card_guides_then_continues_after_recheck(cli, monkeypatch, 
 def test_buy_flow_no_card_back_abandons(cli, monkeypatch, capsys):
     cli._app = object()
     nocard = BillingState(
-        logged_in=True, role="OWNER", cli_billing_enabled=True,
-        charge_presets=(Decimal("25"),), card=None,
+        logged_in=True,
+        role="OWNER",
+        cli_billing_enabled=True,
+        charge_presets=(Decimal("25"),),
+        card=None,
         portal_url="https://portal/billing",
     )
     calls = {"n": 0}
@@ -226,7 +280,9 @@ def test_buy_flow_no_card_back_abandons(cli, monkeypatch, capsys):
         return nocard
 
     monkeypatch.setattr(bv, "build_billing_state", _no_fetch)
-    monkeypatch.setattr(ClawksisCLI, "_prompt_text_input_modal", _scripted("cancel"), raising=False)
+    monkeypatch.setattr(
+        ClawksisCLI, "_prompt_text_input_modal", _scripted("cancel"), raising=False
+    )
 
     cli._billing_buy_flow(nocard)
     out = capsys.readouterr().out

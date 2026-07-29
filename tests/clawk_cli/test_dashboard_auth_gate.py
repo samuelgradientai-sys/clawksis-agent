@@ -3,6 +3,7 @@
 Phase 0 — establish a baseline pin on the current (pre-OAuth) behavior so
 later phases can prove they didn't break loopback mode.
 """
+
 import pytest
 
 # Phase 5 / Phase 6: these tests mutate ``web_server.app.state.auth_required``
@@ -54,9 +55,7 @@ def test_loopback_protected_route_accepts_session_token(client_loopback):
     )
     # 200 or 404 (no sessions yet) both prove the auth layer let it through.
     # 500 is also acceptable if there's a downstream issue unrelated to auth.
-    assert r.status_code != 401, (
-        f"Expected auth to succeed but got 401; body: {r.text}"
-    )
+    assert r.status_code != 401, f"Expected auth to succeed but got 401; body: {r.text}"
 
 
 def test_loopback_index_injects_session_token(client_loopback):
@@ -82,24 +81,28 @@ def test_loopback_host_header_validation_still_enforced(client_loopback):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("host,allow_public,expected", [
-    ("127.0.0.1", False, False),
-    ("127.0.0.1", True,  False),
-    ("localhost", False, False),
-    ("::1",       False, False),
-    # Fork-specific: --insecure (allow_public=True) IS still the documented
-    # escape hatch here — ``should_require_auth`` returns
-    # ``(host not in loopback) and (not allow_public)``. Upstream dropped the
-    # hatch in the June 2026 hardening; the fork keeps it.
-    ("0.0.0.0",   True,  False),    # --insecure escape hatch
-    ("0.0.0.0",   False, True),
-    ("192.168.1.5", False, True),
-    ("10.0.0.1",  True,  False),    # --insecure escape hatch
-    ("100.64.0.1", False, True),    # Tailscale CGNAT — treated as public
-    ("clawksis-agent-prod-abc.fly.dev", False, True),
-])
+@pytest.mark.parametrize(
+    "host,allow_public,expected",
+    [
+        ("127.0.0.1", False, False),
+        ("127.0.0.1", True, False),
+        ("localhost", False, False),
+        ("::1", False, False),
+        # Fork-specific: --insecure (allow_public=True) IS still the documented
+        # escape hatch here — ``should_require_auth`` returns
+        # ``(host not in loopback) and (not allow_public)``. Upstream dropped the
+        # hatch in the June 2026 hardening; the fork keeps it.
+        ("0.0.0.0", True, False),  # --insecure escape hatch
+        ("0.0.0.0", False, True),
+        ("192.168.1.5", False, True),
+        ("10.0.0.1", True, False),  # --insecure escape hatch
+        ("100.64.0.1", False, True),  # Tailscale CGNAT — treated as public
+        ("clawksis-agent-prod-abc.fly.dev", False, True),
+    ],
+)
 def test_should_require_auth_truth_table(host, allow_public, expected):
     from clawk_cli.web_server import should_require_auth
+
     assert should_require_auth(host, allow_public) is expected
 
 
@@ -116,6 +119,7 @@ def _stub_uvicorn_run(monkeypatch):
     import asyncio
     import contextlib
     import uvicorn
+
     captured: dict = {"kwargs": {}}
 
     class _FakeConfig:
@@ -172,8 +176,10 @@ def test_start_server_loopback_sets_auth_required_false(monkeypatch):
     # Force a fresh state to detect that start_server actually set it.
     web_server.app.state.auth_required = None
     web_server.start_server(
-        host="127.0.0.1", port=9119,
-        open_browser=False, allow_public=False,
+        host="127.0.0.1",
+        port=9119,
+        open_browser=False,
+        allow_public=False,
     )
     assert web_server.app.state.auth_required is False
 
@@ -184,8 +190,10 @@ def test_start_server_insecure_public_sets_auth_required_false(monkeypatch):
     _stub_uvicorn_run(monkeypatch)
     web_server.app.state.auth_required = None
     web_server.start_server(
-        host="0.0.0.0", port=9119,
-        open_browser=False, allow_public=True,
+        host="0.0.0.0",
+        port=9119,
+        open_browser=False,
+        allow_public=True,
     )
     assert web_server.app.state.auth_required is False
 
@@ -200,12 +208,15 @@ def test_start_server_public_without_insecure_records_auth_required(monkeypatch)
     so the rest of the system can branch on it.
     """
     from clawk_cli.dashboard_auth import clear_providers
+
     clear_providers()
     _stub_uvicorn_run(monkeypatch)
     web_server.app.state.auth_required = None
     web_server.start_server(
-        host="0.0.0.0", port=9119,
-        open_browser=False, allow_public=False,
+        host="0.0.0.0",
+        port=9119,
+        open_browser=False,
+        allow_public=False,
     )
     assert web_server.app.state.auth_required is True
 
@@ -232,8 +243,10 @@ def test_start_server_gate_with_provider_proceeds_and_sets_proxy_headers(monkeyp
     try:
         web_server.app.state.auth_required = None
         web_server.start_server(
-            host="0.0.0.0", port=9119,
-            open_browser=False, allow_public=False,
+            host="0.0.0.0",
+            port=9119,
+            open_browser=False,
+            allow_public=False,
         )
         assert web_server.app.state.auth_required is True
         assert captured["kwargs"].get("host") == "0.0.0.0"
@@ -260,8 +273,10 @@ def test_start_server_gate_without_provider_fails_closed(monkeypatch):
     web_server.app.state.auth_required = None
     with pytest.raises(SystemExit, match=r"setup page is unavailable"):
         web_server.start_server(
-            host="0.0.0.0", port=9119,
-            open_browser=False, allow_public=False,
+            host="0.0.0.0",
+            port=9119,
+            open_browser=False,
+            allow_public=False,
         )
 
 
@@ -269,8 +284,10 @@ def test_start_server_loopback_keeps_proxy_headers_off(monkeypatch):
     """Loopback bind: proxy_headers stays False (no TLS terminator in front)."""
     captured = _stub_uvicorn_run(monkeypatch)
     web_server.start_server(
-        host="127.0.0.1", port=9119,
-        open_browser=False, allow_public=False,
+        host="127.0.0.1",
+        port=9119,
+        open_browser=False,
+        allow_public=False,
     )
     assert captured["kwargs"].get("proxy_headers") is False
 
@@ -281,8 +298,10 @@ def test_start_server_insecure_keeps_proxy_headers_off(monkeypatch):
     captured = _stub_uvicorn_run(monkeypatch)
     web_server.app.state.auth_required = None
     web_server.start_server(
-        host="0.0.0.0", port=9119,
-        open_browser=False, allow_public=True,
+        host="0.0.0.0",
+        port=9119,
+        open_browser=False,
+        allow_public=True,
     )
     assert web_server.app.state.auth_required is False
     assert captured["kwargs"].get("proxy_headers") is False

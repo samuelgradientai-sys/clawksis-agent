@@ -28,6 +28,7 @@ from gateway.session import SessionEntry, SessionSource, SessionStore
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_entry(key: str, session_id: str, **kw) -> SessionEntry:
     now = datetime.now()
     return SessionEntry(
@@ -80,6 +81,7 @@ def _source() -> SessionSource:
 # _is_session_ended_in_db helper
 # ---------------------------------------------------------------------------
 
+
 class TestIsSessionEndedInDb:
     def test_ended_row_is_stale(self, tmp_path):
         db = _db_returning({"sid": {"end_reason": "agent_close", "id": "sid"}})
@@ -119,11 +121,14 @@ class TestIsSessionEndedInDb:
 # get_or_create_session — runtime self-heal
 # ---------------------------------------------------------------------------
 
+
 class TestRuntimeStaleGuard:
     def test_stale_agent_close_entry_recovered_preserving_session_id(self, tmp_path):
         """Stale `agent_close` entry → recovery reopens the SAME session_id."""
         source = _source()
-        db = _db_returning({"sid_stale": {"end_reason": "agent_close", "id": "sid_stale"}})
+        db = _db_returning({
+            "sid_stale": {"end_reason": "agent_close", "id": "sid_stale"}
+        })
         # Recovery finds the agent_close row and reopens it (transcript-preserving).
         db.find_latest_gateway_session_for_peer.return_value = {
             "id": "sid_stale",
@@ -145,7 +150,9 @@ class TestRuntimeStaleGuard:
     def test_stale_ws_orphan_reap_entry_recovered_preserving_session_id(self, tmp_path):
         """Stale ``ws_orphan_reap`` entry → recovery reopens the SAME session_id (#63207)."""
         source = _source()
-        db = _db_returning({"sid_stale": {"end_reason": "ws_orphan_reap", "id": "sid_stale"}})
+        db = _db_returning({
+            "sid_stale": {"end_reason": "ws_orphan_reap", "id": "sid_stale"}
+        })
         db.find_latest_gateway_session_for_peer.return_value = {
             "id": "sid_stale",
             "started_at": (datetime.now() - timedelta(hours=2)).timestamp(),
@@ -164,7 +171,9 @@ class TestRuntimeStaleGuard:
         """Stale entry, no recoverable row → brand-new session (no silent drop)."""
         source = _source()
         # Ended with a non-recoverable reason (e.g. /new) → finder returns None.
-        db = _db_returning({"sid_stale": {"end_reason": "new_command", "id": "sid_stale"}})
+        db = _db_returning({
+            "sid_stale": {"end_reason": "new_command", "id": "sid_stale"}
+        })
         db.find_latest_gateway_session_for_peer.return_value = None
         store = _make_store_with_db(tmp_path, db)
         key = store._generate_session_key(source)
@@ -195,7 +204,9 @@ class TestRuntimeStaleGuard:
         """A stale entry that is ALSO suspended is still dropped via the stale
         path — we must not consult the dead entry's reset/suspend state."""
         source = _source()
-        db = _db_returning({"sid_stale": {"end_reason": "agent_close", "id": "sid_stale"}})
+        db = _db_returning({
+            "sid_stale": {"end_reason": "agent_close", "id": "sid_stale"}
+        })
         db.find_latest_gateway_session_for_peer.return_value = None  # → fresh
         store = _make_store_with_db(tmp_path, db)
         key = store._generate_session_key(source)
@@ -222,7 +233,8 @@ class TestRuntimeStaleGuard:
         db.get_session.assert_not_called()
 
     def test_stale_agent_close_overdue_policy_creates_fresh_session(
-        self, tmp_path,
+        self,
+        tmp_path,
     ):
         """Stale `agent_close` entry + overdue reset policy → fresh session.
 
@@ -238,7 +250,9 @@ class TestRuntimeStaleGuard:
         config = GatewayConfig(
             default_reset_policy=SessionResetPolicy(mode="idle", idle_minutes=60),
         )
-        db = _db_returning({"sid_stale": {"end_reason": "agent_close", "id": "sid_stale"}})
+        db = _db_returning({
+            "sid_stale": {"end_reason": "agent_close", "id": "sid_stale"}
+        })
         # Recovery would normally reopen this row — but it shouldn't, because
         # the reset policy says this session is overdue.
         db.find_latest_gateway_session_for_peer.return_value = {

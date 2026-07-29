@@ -36,6 +36,7 @@ def _set_interactive_stdin(monkeypatch, *, is_tty: bool = True) -> None:
 # ClawksisTokenStorage
 # ---------------------------------------------------------------------------
 
+
 class TestClawksisTokenStorage:
     def test_roundtrip_tokens(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -61,7 +62,9 @@ class TestClawksisTokenStorage:
         data = json.loads(token_path.read_text())
         assert data["access_token"] == "abc123"
 
-    @pytest.mark.skipif(sys.platform.startswith("win"), reason="POSIX mode bits not enforced on Windows")
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"), reason="POSIX mode bits not enforced on Windows"
+    )
     def test_token_file_created_with_0o600(self, tmp_path, monkeypatch):
         """Tokens must land on disk at 0o600 with no umask-default exposure window.
 
@@ -74,6 +77,7 @@ class TestClawksisTokenStorage:
         storage = ClawksisTokenStorage("perm-test-server")
 
         import asyncio
+
         mock_token = MagicMock()
         mock_token.model_dump.return_value = {
             "access_token": "secret-abc",
@@ -85,7 +89,9 @@ class TestClawksisTokenStorage:
         token_path = tmp_path / "mcp-tokens" / "perm-test-server.json"
         assert token_path.exists()
         mode = stat.S_IMODE(token_path.stat().st_mode)
-        assert mode == 0o600, f"token file mode {oct(mode)} != 0o600 — TOCTOU race regressed"
+        assert mode == 0o600, (
+            f"token file mode {oct(mode)} != 0o600 — TOCTOU race regressed"
+        )
 
         parent_mode = stat.S_IMODE(token_path.parent.stat().st_mode)
         assert parent_mode == 0o700, (
@@ -131,7 +137,9 @@ class TestClawksisTokenStorage:
 
         d = tmp_path / "mcp-tokens"
         d.mkdir(parents=True)
-        (d / "my-server.json").write_text('{"access_token": "x", "token_type": "Bearer"}')
+        (d / "my-server.json").write_text(
+            '{"access_token": "x", "token_type": "Bearer"}'
+        )
 
         assert storage.has_cached_tokens()
 
@@ -144,6 +152,7 @@ class TestClawksisTokenStorage:
         (d / "bad-server.json").write_text("NOT VALID JSON{{{")
 
         import asyncio
+
         assert asyncio.run(storage.get_tokens()) is None
 
     def test_corrupt_client_info_returns_none(self, tmp_path, monkeypatch):
@@ -155,12 +164,14 @@ class TestClawksisTokenStorage:
         (d / "bad-server.client.json").write_text("GARBAGE")
 
         import asyncio
+
         assert asyncio.run(storage.get_client_info()) is None
 
 
 # ---------------------------------------------------------------------------
 # build_oauth_auth
 # ---------------------------------------------------------------------------
+
 
 class TestBuildOAuthAuth:
     def test_returns_oauth_provider(self, tmp_path, monkeypatch):
@@ -176,6 +187,7 @@ class TestBuildOAuthAuth:
 
     def test_returns_none_without_sdk(self, monkeypatch):
         import tools.mcp_oauth as mod
+
         monkeypatch.setattr(mod, "_OAUTH_AVAILABLE", False)
         result = build_oauth_auth("test", "https://example.com")
         assert result is None
@@ -188,11 +200,15 @@ class TestBuildOAuthAuth:
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         _set_interactive_stdin(monkeypatch)
-        build_oauth_auth("slack", "https://slack.example.com/mcp", {
-            "client_id": "my-app-id",
-            "client_secret": "my-secret",
-            "scope": "channels:read",
-        })
+        build_oauth_auth(
+            "slack",
+            "https://slack.example.com/mcp",
+            {
+                "client_id": "my-app-id",
+                "client_secret": "my-secret",
+                "scope": "channels:read",
+            },
+        )
 
         client_path = tmp_path / "mcp-tokens" / "slack.client.json"
         assert client_path.exists()
@@ -208,9 +224,13 @@ class TestBuildOAuthAuth:
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         _set_interactive_stdin(monkeypatch)
-        provider = build_oauth_auth("scoped", "https://example.com/mcp", {
-            "scope": "read write admin",
-        })
+        provider = build_oauth_auth(
+            "scoped",
+            "https://example.com/mcp",
+            {
+                "scope": "read write admin",
+            },
+        )
         assert provider is not None
         assert provider.context.client_metadata.scope == "read write admin"
 
@@ -218,6 +238,7 @@ class TestBuildOAuthAuth:
 # ---------------------------------------------------------------------------
 # Utility functions
 # ---------------------------------------------------------------------------
+
 
 class TestUtilities:
     def test_find_free_port_returns_int(self):
@@ -261,6 +282,7 @@ class TestRedirectHandlerSshHint:
 
     def test_ssh_hint_shown_on_ssh_session(self, monkeypatch, capsys):
         import tools.mcp_oauth as mco
+
         monkeypatch.setattr(mco, "_is_interactive", lambda: True)
         monkeypatch.setenv("SSH_CLIENT", "1.2.3.4 1234 22")
         monkeypatch.delenv("SSH_TTY", raising=False)
@@ -276,6 +298,7 @@ class TestRedirectHandlerSshHint:
 
     def test_ssh_hint_shown_via_ssh_tty(self, monkeypatch, capsys):
         import tools.mcp_oauth as mco
+
         monkeypatch.setattr(mco, "_is_interactive", lambda: True)
         monkeypatch.delenv("SSH_CLIENT", raising=False)
         monkeypatch.setenv("SSH_TTY", "/dev/pts/1")
@@ -290,6 +313,7 @@ class TestRedirectHandlerSshHint:
 
     def test_no_ssh_hint_on_local_session(self, monkeypatch, capsys):
         import tools.mcp_oauth as mco
+
         monkeypatch.setattr(mco, "_is_interactive", lambda: True)
         monkeypatch.delenv("SSH_CLIENT", raising=False)
         monkeypatch.delenv("SSH_TTY", raising=False)
@@ -304,6 +328,7 @@ class TestRedirectHandlerSshHint:
 
     def test_no_ssh_hint_when_port_is_zero(self, monkeypatch, capsys):
         import tools.mcp_oauth as mco
+
         monkeypatch.setattr(mco, "_is_interactive", lambda: True)
         monkeypatch.setenv("SSH_CLIENT", "1.2.3.4 1234 22")
         monkeypatch.setattr(mco, "_can_open_browser", lambda: False)
@@ -314,13 +339,16 @@ class TestRedirectHandlerSshHint:
         err = capsys.readouterr().err
         assert "ssh -N -L" not in err
 
-    def test_configured_redirect_uri_shows_proxy_hint_not_tunnel(self, monkeypatch, capsys):
+    def test_configured_redirect_uri_shows_proxy_hint_not_tunnel(
+        self, monkeypatch, capsys
+    ):
         """With a proxy redirect_uri, the SSH hint must not push the loopback tunnel.
 
         The Funnel/proxy callback reaches this machine on its own, so the
         ``ssh -N -L`` guidance would be actively misleading.
         """
         import tools.mcp_oauth as mco
+
         monkeypatch.setattr(mco, "_oauth_port", 49203)
         monkeypatch.setattr(mco, "_is_interactive", lambda: True)
         monkeypatch.setenv("SSH_CLIENT", "1.2.3.4 1234 22")
@@ -340,6 +368,7 @@ class TestRedirectHandlerSshHint:
     def test_configured_redirect_uri_no_hint_when_local(self, monkeypatch, capsys):
         """Off SSH, a configured redirect_uri prints no remote-session hint."""
         import tools.mcp_oauth as mco
+
         monkeypatch.setattr(mco, "_oauth_port", 49204)
         monkeypatch.setattr(mco, "_is_interactive", lambda: True)
         monkeypatch.delenv("SSH_CLIENT", raising=False)
@@ -360,6 +389,7 @@ class TestRedirectHandlerSshHint:
 # ---------------------------------------------------------------------------
 # Path traversal protection
 # ---------------------------------------------------------------------------
+
 
 class TestPathTraversal:
     """Verify server_name is sanitized to prevent path traversal."""
@@ -396,6 +426,7 @@ class TestPathTraversal:
 # ---------------------------------------------------------------------------
 # Callback handler isolation
 # ---------------------------------------------------------------------------
+
 
 class TestCallbackHandlerIsolation:
     """Verify concurrent OAuth flows don't share state."""
@@ -445,11 +476,13 @@ class TestCallbackHandlerIsolation:
 # Port sharing
 # ---------------------------------------------------------------------------
 
+
 class TestOAuthPortSharing:
     """Verify build_oauth_auth and _wait_for_callback use the same port."""
 
     def test_port_stored_globally(self, tmp_path, monkeypatch):
         import tools.mcp_oauth as mod
+
         mod._oauth_port = None
 
         try:
@@ -468,6 +501,7 @@ class TestOAuthPortSharing:
 # ---------------------------------------------------------------------------
 # TOCTOU port reservation (#22161)
 # ---------------------------------------------------------------------------
+
 
 class TestCallbackPortReservation:
     """The socket picked at selection time stays bound until callback bind.
@@ -518,7 +552,9 @@ class TestCallbackPortReservation:
     def test_reservation_pool_is_bounded(self):
         import tools.mcp_oauth as mod
 
-        ports = [mod._reserve_callback_port() for _ in range(mod._MAX_RESERVED_SOCKETS + 3)]
+        ports = [
+            mod._reserve_callback_port() for _ in range(mod._MAX_RESERVED_SOCKETS + 3)
+        ]
         try:
             assert len(mod._reserved_sockets) <= mod._MAX_RESERVED_SOCKETS
             # newest reservations survive
@@ -614,6 +650,7 @@ class TestCallbackPortReservation:
 # remove_oauth_tokens
 # ---------------------------------------------------------------------------
 
+
 class TestRemoveOAuthTokens:
     def test_removes_files(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -635,6 +672,7 @@ class TestRemoveOAuthTokens:
 # ---------------------------------------------------------------------------
 # Non-interactive / startup-safety tests
 # ---------------------------------------------------------------------------
+
 
 class TestIsInteractive:
     """_is_interactive() detects headless/daemon/container environments."""
@@ -688,10 +726,13 @@ class TestIsInteractive:
         loop_thread.start()
         result = {}
         try:
+
             async def _probe_on_loop_thread():
                 # runs on the loop thread, NOT the one that set suppression
-                return (threading.current_thread() is not discovery_thread,
-                        _is_interactive())
+                return (
+                    threading.current_thread() is not discovery_thread,
+                    _is_interactive(),
+                )
 
             discovery_thread = None
 
@@ -702,7 +743,9 @@ class TestIsInteractive:
                     fut = asyncio.run_coroutine_threadsafe(
                         _probe_on_loop_thread(), loop
                     )
-                    result["cross_thread"], result["interactive"] = fut.result(timeout=5)
+                    result["cross_thread"], result["interactive"] = fut.result(
+                        timeout=5
+                    )
 
             dt = threading.Thread(target=_discovery)
             dt.start()
@@ -736,15 +779,22 @@ class TestWaitForCallbackNoBlocking:
             pass
 
         with patch.object(mod.asyncio, "sleep", instant_sleep):
-            with patch("builtins.input", side_effect=AssertionError("input() must not be called")):
-                with pytest.raises(OAuthNonInteractiveError, match="callback timed out"):
+            with patch(
+                "builtins.input",
+                side_effect=AssertionError("input() must not be called"),
+            ):
+                with pytest.raises(
+                    OAuthNonInteractiveError, match="callback timed out"
+                ):
                     asyncio.run(_wait_for_callback())
 
 
 class TestBuildOAuthAuthNonInteractive:
     """build_oauth_auth() in non-interactive mode."""
 
-    def test_noninteractive_without_cached_tokens_fails_fast(self, tmp_path, monkeypatch):
+    def test_noninteractive_without_cached_tokens_fails_fast(
+        self, tmp_path, monkeypatch
+    ):
         """Without cached tokens, non-interactive mode skips browser auth."""
         pytest.importorskip("mcp.client.auth")
 
@@ -756,7 +806,9 @@ class TestBuildOAuthAuthNonInteractive:
         with pytest.raises(OAuthNonInteractiveError, match="non-interactive"):
             build_oauth_auth("atlassian", "https://mcp.atlassian.com/v1/mcp")
 
-    def test_noninteractive_with_cached_tokens_no_warning(self, tmp_path, monkeypatch, caplog):
+    def test_noninteractive_with_cached_tokens_no_warning(
+        self, tmp_path, monkeypatch, caplog
+    ):
         """With cached tokens, non-interactive mode logs no 'no cached tokens' warning."""
         pytest.importorskip("mcp.client.auth")
 
@@ -768,12 +820,15 @@ class TestBuildOAuthAuthNonInteractive:
         # Pre-populate cached tokens
         d = tmp_path / "mcp-tokens"
         d.mkdir(parents=True)
-        (d / "atlassian.json").write_text(json.dumps({
-            "access_token": "cached",
-            "token_type": "Bearer",
-        }))
+        (d / "atlassian.json").write_text(
+            json.dumps({
+                "access_token": "cached",
+                "token_type": "Bearer",
+            })
+        )
 
         import logging
+
         with caplog.at_level(logging.WARNING, logger="tools.mcp_oauth"):
             auth = build_oauth_auth("atlassian", "https://mcp.atlassian.com/v1/mcp")
 
@@ -792,7 +847,9 @@ class TestNonInteractiveFailFastAtCallbackBoundary:
     collide on the callback port ('Address already in use').
     """
 
-    def test_wait_for_callback_rejects_before_binding_when_noninteractive(self, monkeypatch):
+    def test_wait_for_callback_rejects_before_binding_when_noninteractive(
+        self, monkeypatch
+    ):
         """No listener bound and no poll loop entered when non-interactive."""
         import tools.mcp_oauth as mod
         import asyncio
@@ -801,18 +858,23 @@ class TestNonInteractiveFailFastAtCallbackBoundary:
         monkeypatch.setattr(mod, "_is_interactive", lambda: False)
 
         # Binding the callback listener or entering the poll loop is the bug.
-        fake_server = MagicMock(side_effect=AssertionError("must not bind callback listener"))
+        fake_server = MagicMock(
+            side_effect=AssertionError("must not bind callback listener")
+        )
         monkeypatch.setattr(mod, "HTTPServer", fake_server)
 
         async def no_sleep(_seconds):
             raise AssertionError("must not wait for the callback timeout")
+
         monkeypatch.setattr(mod.asyncio, "sleep", no_sleep)
 
         with pytest.raises(OAuthNonInteractiveError, match="interactive session"):
             asyncio.run(mod._wait_for_callback())
         fake_server.assert_not_called()
 
-    def test_wait_for_callback_fail_fast_holds_even_with_cached_token_file(self, tmp_path, monkeypatch):
+    def test_wait_for_callback_fail_fast_holds_even_with_cached_token_file(
+        self, tmp_path, monkeypatch
+    ):
         """Guard does not depend on token-file existence.
 
         A stale token file on disk passes build_oauth_auth's guard, so the
@@ -837,18 +899,25 @@ class TestNonInteractiveFailFastAtCallbackBoundary:
         with pytest.raises(OAuthNonInteractiveError):
             asyncio.run(mod._wait_for_callback())
 
-    def test_redirect_handler_rejects_and_does_not_open_browser(self, monkeypatch, capsys):
+    def test_redirect_handler_rejects_and_does_not_open_browser(
+        self, monkeypatch, capsys
+    ):
         """Non-interactive redirect must not print an auth URL or open a browser."""
         import tools.mcp_oauth as mod
         import asyncio
 
         monkeypatch.setattr(mod, "_is_interactive", lambda: False)
         monkeypatch.setattr(
-            "webbrowser.open", MagicMock(side_effect=AssertionError("must not open browser"))
+            "webbrowser.open",
+            MagicMock(side_effect=AssertionError("must not open browser")),
         )
 
         with pytest.raises(OAuthNonInteractiveError, match="browser authorization"):
-            asyncio.run(mod._make_redirect_handler(49300)("https://idp.example.com/authorize?x=1"))
+            asyncio.run(
+                mod._make_redirect_handler(49300)(
+                    "https://idp.example.com/authorize?x=1"
+                )
+            )
 
         err = capsys.readouterr().err
         assert "https://idp.example.com/authorize" not in err
@@ -860,7 +929,9 @@ class TestNonInteractiveFailFastAtCallbackBoundary:
 
         monkeypatch.setattr(mod, "_is_interactive", lambda: False)
         with pytest.raises(OAuthNonInteractiveError, match="clawk mcp login"):
-            asyncio.run(mod._make_redirect_handler(49301)("https://idp.example.com/authorize"))
+            asyncio.run(
+                mod._make_redirect_handler(49301)("https://idp.example.com/authorize")
+            )
 
         mod._oauth_port = _find_free_port()
         with pytest.raises(OAuthNonInteractiveError, match="clawk mcp login"):
@@ -885,7 +956,9 @@ class TestNonInteractiveFailFastAtCallbackBoundary:
         monkeypatch.delenv("SSH_TTY", raising=False)
         monkeypatch.setattr(mod, "_can_open_browser", lambda: False)
 
-        asyncio.run(mod._make_redirect_handler(49302)("https://idp.example.com/authorize?x=9"))
+        asyncio.run(
+            mod._make_redirect_handler(49302)("https://idp.example.com/authorize?x=9")
+        )
 
         err = capsys.readouterr().err
         assert "https://idp.example.com/authorize?x=9" in err
@@ -959,7 +1032,10 @@ def test_resolve_redirect_uri_prefers_configured_value():
     """An explicit redirect_uri in cfg overrides the localhost default."""
     from tools.mcp_oauth import _resolve_redirect_uri
 
-    assert _resolve_redirect_uri({"redirect_uri": _PROXY_REDIRECT}, 1234) == _PROXY_REDIRECT
+    assert (
+        _resolve_redirect_uri({"redirect_uri": _PROXY_REDIRECT}, 1234)
+        == _PROXY_REDIRECT
+    )
 
 
 def test_resolve_redirect_uri_falls_back_to_localhost():
@@ -973,7 +1049,10 @@ def test_resolve_redirect_uri_empty_string_falls_back():
     """An empty redirect_uri is treated as unset (YAML ``redirect_uri:``)."""
     from tools.mcp_oauth import _resolve_redirect_uri
 
-    assert _resolve_redirect_uri({"redirect_uri": ""}, 5678) == "http://127.0.0.1:5678/callback"
+    assert (
+        _resolve_redirect_uri({"redirect_uri": ""}, 5678)
+        == "http://127.0.0.1:5678/callback"
+    )
 
 
 def test_resolve_redirect_uri_redirect_host_localhost():
@@ -1048,7 +1127,9 @@ def test_build_client_metadata_redirect_uri_defaults_to_localhost():
     ]
 
 
-def test_maybe_preregister_client_persists_configured_redirect_uri(tmp_path, monkeypatch):
+def test_maybe_preregister_client_persists_configured_redirect_uri(
+    tmp_path, monkeypatch
+):
     """Pre-registered client info records the configured redirect_uri verbatim.
 
     The redirect_uri on the stored client_info MUST match the one in the
@@ -1072,7 +1153,9 @@ def test_maybe_preregister_client_persists_configured_redirect_uri(tmp_path, mon
     assert [u.rstrip("/") for u in written["redirect_uris"]] == [_PROXY_REDIRECT]
 
 
-def test_maybe_preregister_client_redirect_uri_defaults_to_localhost(tmp_path, monkeypatch):
+def test_maybe_preregister_client_redirect_uri_defaults_to_localhost(
+    tmp_path, monkeypatch
+):
     """Without redirect_uri, pre-registration falls back to the loopback callback."""
     pytest.importorskip("mcp")
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -1094,7 +1177,9 @@ def test_maybe_preregister_client_redirect_uri_defaults_to_localhost(tmp_path, m
     ]
 
 
-def test_configure_callback_port_reuses_cached_client_redirect_port(tmp_path, monkeypatch):
+def test_configure_callback_port_reuses_cached_client_redirect_port(
+    tmp_path, monkeypatch
+):
     """Cached client registrations must keep using their registered port."""
     from tools.mcp_oauth import _configure_callback_port
 
@@ -1102,10 +1187,12 @@ def test_configure_callback_port_reuses_cached_client_redirect_port(tmp_path, mo
     storage = ClawksisTokenStorage("summ")
     token_dir = tmp_path / "mcp-tokens"
     token_dir.mkdir(parents=True)
-    (token_dir / "summ.client.json").write_text(json.dumps({
-        "client_id": "client-123",
-        "redirect_uris": ["http://127.0.0.1:57727/callback"],
-    }))
+    (token_dir / "summ.client.json").write_text(
+        json.dumps({
+            "client_id": "client-123",
+            "redirect_uris": ["http://127.0.0.1:57727/callback"],
+        })
+    )
 
     cfg = {"redirect_port": 0}
     port = _configure_callback_port(cfg, storage)
@@ -1124,10 +1211,12 @@ def test_configure_callback_reuses_cached_https_redirect_uri(tmp_path, monkeypat
 
     storage = ClawksisTokenStorage("hosted")
     storage._client_info_path().parent.mkdir(parents=True)
-    storage._client_info_path().write_text(json.dumps({
-        "client_id": "client-123",
-        "redirect_uris": ["https://agent.example/api/mcp/oauth/callback/hosted"],
-    }))
+    storage._client_info_path().write_text(
+        json.dumps({
+            "client_id": "client-123",
+            "redirect_uris": ["https://agent.example/api/mcp/oauth/callback/hosted"],
+        })
+    )
 
     cfg: dict = {}
     _configure_callback_port(cfg, storage)
@@ -1138,7 +1227,9 @@ def test_configure_callback_reuses_cached_https_redirect_uri(tmp_path, monkeypat
     )
 
 
-def test_configure_callback_port_explicit_overrides_cached_client_port(tmp_path, monkeypatch):
+def test_configure_callback_port_explicit_overrides_cached_client_port(
+    tmp_path, monkeypatch
+):
     """Explicit config wins over any cached registration."""
     from tools.mcp_oauth import _configure_callback_port
 
@@ -1146,10 +1237,12 @@ def test_configure_callback_port_explicit_overrides_cached_client_port(tmp_path,
     storage = ClawksisTokenStorage("summ")
     token_dir = tmp_path / "mcp-tokens"
     token_dir.mkdir(parents=True)
-    (token_dir / "summ.client.json").write_text(json.dumps({
-        "client_id": "client-123",
-        "redirect_uris": ["http://127.0.0.1:57727/callback"],
-    }))
+    (token_dir / "summ.client.json").write_text(
+        json.dumps({
+            "client_id": "client-123",
+            "redirect_uris": ["http://127.0.0.1:57727/callback"],
+        })
+    )
 
     cfg = {"redirect_port": 54321}
     port = _configure_callback_port(cfg, storage)
@@ -1176,11 +1269,13 @@ def test_build_oauth_auth_preserves_server_url_path():
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    with patch.object(mcp_oauth, "_OAUTH_AVAILABLE", True), \
-         patch.object(mcp_oauth, "OAuthClientProvider", _FakeProvider), \
-         patch.object(mcp_oauth, "_is_interactive", return_value=True), \
-         patch.object(mcp_oauth, "_maybe_preregister_client"), \
-         patch.object(mcp_oauth, "ClawksisTokenStorage") as mock_storage_cls:
+    with (
+        patch.object(mcp_oauth, "_OAUTH_AVAILABLE", True),
+        patch.object(mcp_oauth, "OAuthClientProvider", _FakeProvider),
+        patch.object(mcp_oauth, "_is_interactive", return_value=True),
+        patch.object(mcp_oauth, "_maybe_preregister_client"),
+        patch.object(mcp_oauth, "ClawksisTokenStorage") as mock_storage_cls,
+    ):
         mock_storage_cls.return_value = MagicMock(has_cached_tokens=lambda: True)
         build_oauth_auth(
             server_name="notion",
@@ -1191,7 +1286,9 @@ def test_build_oauth_auth_preserves_server_url_path():
     assert captured["server_url"] == "https://mcp.notion.com/mcp"
 
 
-def test_build_oauth_auth_wires_configured_redirect_uri_into_handler(monkeypatch, capsys):
+def test_build_oauth_auth_wires_configured_redirect_uri_into_handler(
+    monkeypatch, capsys
+):
     """The configured redirect_uri is bound into the redirect_handler closure so
     the remote-session hint stays accurate for proxied callbacks."""
     from tools import mcp_oauth
@@ -1202,11 +1299,13 @@ def test_build_oauth_auth_wires_configured_redirect_uri_into_handler(monkeypatch
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    with patch.object(mcp_oauth, "_OAUTH_AVAILABLE", True), \
-         patch.object(mcp_oauth, "OAuthClientProvider", _FakeProvider), \
-         patch.object(mcp_oauth, "_is_interactive", return_value=True), \
-         patch.object(mcp_oauth, "_maybe_preregister_client"), \
-         patch.object(mcp_oauth, "ClawksisTokenStorage") as mock_storage_cls:
+    with (
+        patch.object(mcp_oauth, "_OAUTH_AVAILABLE", True),
+        patch.object(mcp_oauth, "OAuthClientProvider", _FakeProvider),
+        patch.object(mcp_oauth, "_is_interactive", return_value=True),
+        patch.object(mcp_oauth, "_maybe_preregister_client"),
+        patch.object(mcp_oauth, "ClawksisTokenStorage") as mock_storage_cls,
+    ):
         mock_storage_cls.return_value = MagicMock(has_cached_tokens=lambda: True)
         build_oauth_auth(
             server_name="proxy",
@@ -1239,11 +1338,13 @@ def test_build_oauth_auth_handler_redirect_uri_none_when_unset(monkeypatch, caps
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    with patch.object(mcp_oauth, "_OAUTH_AVAILABLE", True), \
-         patch.object(mcp_oauth, "OAuthClientProvider", _FakeProvider), \
-         patch.object(mcp_oauth, "_is_interactive", return_value=True), \
-         patch.object(mcp_oauth, "_maybe_preregister_client"), \
-         patch.object(mcp_oauth, "ClawksisTokenStorage") as mock_storage_cls:
+    with (
+        patch.object(mcp_oauth, "_OAUTH_AVAILABLE", True),
+        patch.object(mcp_oauth, "OAuthClientProvider", _FakeProvider),
+        patch.object(mcp_oauth, "_is_interactive", return_value=True),
+        patch.object(mcp_oauth, "_maybe_preregister_client"),
+        patch.object(mcp_oauth, "ClawksisTokenStorage") as mock_storage_cls,
+    ):
         mock_storage_cls.return_value = MagicMock(has_cached_tokens=lambda: True)
         build_oauth_auth(
             server_name="loopback",
@@ -1324,7 +1425,6 @@ def test_maybe_preregister_client_redirect_uri_with_secret(tmp_path, monkeypatch
     assert written["token_endpoint_auth_method"] == "client_secret_post"
 
 
-
 class TestPasteCallbackReader:
     """_paste_callback_reader parses redirect URLs / query strings from stdin."""
 
@@ -1335,7 +1435,9 @@ class TestPasteCallbackReader:
         result = self._empty_result()
         monkeypatch.setattr(
             "sys.stdin",
-            MagicMock(readline=lambda: "http://127.0.0.1:37949/callback?code=abc&state=xyz\n"),
+            MagicMock(
+                readline=lambda: "http://127.0.0.1:37949/callback?code=abc&state=xyz\n"
+            ),
         )
         _paste_callback_reader(result)
         assert result["auth_code"] == "abc"
@@ -1413,8 +1515,10 @@ class TestPasteCallbackReader:
     def test_swallows_stdin_errors(self, monkeypatch):
         """OSError / interrupt on readline must not propagate."""
         result = self._empty_result()
+
         def raise_oserror():
             raise OSError("stdin closed")
+
         monkeypatch.setattr("sys.stdin", MagicMock(readline=raise_oserror))
         _paste_callback_reader(result)  # must not raise
         assert result["auth_code"] is None
@@ -1425,17 +1529,22 @@ class TestWaitForCallbackPasteIntegration:
 
     def test_paste_prompt_shown_on_tty(self, monkeypatch, capsys):
         import tools.mcp_oauth as mod
+
         mod._oauth_port = _find_free_port()
         monkeypatch.setattr(mod, "_is_interactive", lambda: True)
+
         # Make stdin readline block forever so HTTP listener path drives the test;
         # we just want to verify the prompt was printed and the thread spawned.
         def block_forever():
             import threading
+
             threading.Event().wait()
+
         monkeypatch.setattr("sys.stdin", MagicMock(readline=block_forever))
 
         async def instant_sleep(_):
             pass
+
         with patch.object(mod.asyncio, "sleep", instant_sleep):
             with pytest.raises(OAuthNonInteractiveError):
                 asyncio.run(_wait_for_callback())
@@ -1445,19 +1554,26 @@ class TestWaitForCallbackPasteIntegration:
     def test_paste_prompt_NOT_shown_when_noninteractive(self, monkeypatch, capsys):
         """Preserves existing invariant: no input() / paste prompt in headless runs."""
         import tools.mcp_oauth as mod
+
         mod._oauth_port = _find_free_port()
         monkeypatch.setattr(mod, "_is_interactive", lambda: False)
 
         async def instant_sleep(_):
             pass
+
         with patch.object(mod.asyncio, "sleep", instant_sleep):
-            with patch("builtins.input", side_effect=AssertionError("input() must not be called")):
+            with patch(
+                "builtins.input",
+                side_effect=AssertionError("input() must not be called"),
+            ):
                 with pytest.raises(OAuthNonInteractiveError):
                     asyncio.run(_wait_for_callback())
         err = capsys.readouterr().err
         assert "paste the redirect URL" not in err
 
-    def test_paste_prompt_NOT_shown_when_interactivity_suppressed(self, monkeypatch, capsys):
+    def test_paste_prompt_NOT_shown_when_interactivity_suppressed(
+        self, monkeypatch, capsys
+    ):
         """Background MCP discovery must not race the CLI/TUI stdin reader."""
         import tools.mcp_oauth as mod
 
@@ -1484,9 +1600,12 @@ class TestPasteCallbackSkipToken:
     def _empty_result(self):
         return {"auth_code": None, "state": None, "error": None}
 
-    @pytest.mark.parametrize("token", ["skip", "SKIP", "Skip", "cancel", "s", "n", "no", "q", "quit"])
+    @pytest.mark.parametrize(
+        "token", ["skip", "SKIP", "Skip", "cancel", "s", "n", "no", "q", "quit"]
+    )
     def test_skip_tokens_set_sentinel(self, monkeypatch, token):
         from tools.mcp_oauth import _USER_SKIPPED_SENTINEL
+
         result = self._empty_result()
         monkeypatch.setattr("sys.stdin", MagicMock(readline=lambda: token + "\n"))
         _paste_callback_reader(result)
@@ -1512,6 +1631,7 @@ class TestPasteCallbackSkipToken:
     def test_skip_token_not_parsed_as_url(self, monkeypatch, capsys):
         """`skip` must NOT fall through to URL parsing (which would silently no-op)."""
         from tools.mcp_oauth import _USER_SKIPPED_SENTINEL
+
         result = self._empty_result()
         monkeypatch.setattr("sys.stdin", MagicMock(readline=lambda: "skip\n"))
         _paste_callback_reader(result)
@@ -1527,12 +1647,14 @@ class TestWaitForCallbackSkipIntegration:
     def test_skip_raises_non_interactive_error(self, monkeypatch):
         """Skip token must raise OAuthNonInteractiveError (mcp_tool handles as non-fatal)."""
         import tools.mcp_oauth as mod
+
         mod._oauth_port = _find_free_port()
         monkeypatch.setattr(mod, "_is_interactive", lambda: True)
         monkeypatch.setattr("sys.stdin", MagicMock(readline=lambda: "skip\n"))
 
         async def instant_sleep(_):
             pass
+
         with patch.object(mod.asyncio, "sleep", instant_sleep):
             with pytest.raises(OAuthNonInteractiveError, match="user_skipped"):
                 asyncio.run(_wait_for_callback())
@@ -1540,12 +1662,14 @@ class TestWaitForCallbackSkipIntegration:
     def test_paste_prompt_mentions_skip(self, monkeypatch, capsys):
         """The interactive prompt must tell users about the skip option."""
         import tools.mcp_oauth as mod
+
         mod._oauth_port = _find_free_port()
         monkeypatch.setattr(mod, "_is_interactive", lambda: True)
         monkeypatch.setattr("sys.stdin", MagicMock(readline=lambda: "skip\n"))
 
         async def instant_sleep(_):
             pass
+
         with patch.object(mod.asyncio, "sleep", instant_sleep):
             with pytest.raises(OAuthNonInteractiveError):
                 asyncio.run(_wait_for_callback())
@@ -1556,6 +1680,7 @@ class TestWaitForCallbackSkipIntegration:
 # ---------------------------------------------------------------------------
 # poison_client_registration (GH#36767)
 # ---------------------------------------------------------------------------
+
 
 class TestPoisonClientRegistration:
     def test_poison_backs_up_and_removes_client_and_meta(self, tmp_path, monkeypatch):
@@ -1591,8 +1716,9 @@ def test_wait_for_callback_port_in_use_reports_clear_error(monkeypatch):
     import tools.mcp_oauth as mo
 
     monkeypatch.setattr(mo, "_is_interactive", lambda: True)
-    with patch.object(mo, "_oauth_port", 54321), patch.object(
-        mo, "HTTPServer", side_effect=OSError("address already in use")
+    with (
+        patch.object(mo, "_oauth_port", 54321),
+        patch.object(mo, "HTTPServer", side_effect=OSError("address already in use")),
     ):
         with pytest.raises(mo.OAuthNonInteractiveError) as excinfo:
             asyncio.run(mo._wait_for_callback())

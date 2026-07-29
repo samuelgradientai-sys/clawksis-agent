@@ -5,6 +5,7 @@ their token usage into session_model_usage with a ``task`` dimension via
 the ambient accounting context (agent/aux_accounting.py), making aux model
 spend visible in analytics.
 """
+
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -43,8 +44,12 @@ class TestRecordAuxiliaryUsage:
     def test_records_task_row(self, db):
         db.create_session("s1", source="cli")
         db.record_auxiliary_usage(
-            "s1", "vision", model="gemini-3-flash",
-            billing_provider="gemini", input_tokens=500, output_tokens=50,
+            "s1",
+            "vision",
+            model="gemini-3-flash",
+            billing_provider="gemini",
+            input_tokens=500,
+            output_tokens=50,
         )
         rows = _usage_rows(db, "s1")
         assert len(rows) == 1
@@ -60,7 +65,11 @@ class TestRecordAuxiliaryUsage:
         db.create_session("s1", source="cli")
         for _ in range(3):
             db.record_auxiliary_usage(
-                "s1", "compression", model="glm-5", input_tokens=1000, output_tokens=100,
+                "s1",
+                "compression",
+                model="glm-5",
+                input_tokens=1000,
+                output_tokens=100,
             )
         rows = _usage_rows(db, "s1")
         assert len(rows) == 1
@@ -80,8 +89,11 @@ class TestRecordAuxiliaryUsage:
         main-loop model/provider."""
         db.create_session("s1", source="cli", model="anthropic/claude-opus-4.6")
         db.update_token_counts(
-            "s1", input_tokens=10, model="anthropic/claude-opus-4.6",
-            billing_provider="anthropic", api_call_count=1,
+            "s1",
+            input_tokens=10,
+            model="anthropic/claude-opus-4.6",
+            billing_provider="anthropic",
+            api_call_count=1,
         )
         db.record_auxiliary_usage("s1", "vision", input_tokens=5)  # no model given
         rows = {r["task"]: r for r in _usage_rows(db, "s1")}
@@ -93,12 +105,20 @@ class TestRecordAuxiliaryUsage:
     def test_main_loop_and_aux_rows_coexist(self, db):
         db.create_session("s1", source="cli")
         db.update_token_counts(
-            "s1", input_tokens=100, output_tokens=10,
-            model="main-model", billing_provider="nous", api_call_count=1,
+            "s1",
+            input_tokens=100,
+            output_tokens=10,
+            model="main-model",
+            billing_provider="nous",
+            api_call_count=1,
         )
         db.record_auxiliary_usage(
-            "s1", "title_generation", model="main-model",
-            billing_provider="nous", input_tokens=40, output_tokens=8,
+            "s1",
+            "title_generation",
+            model="main-model",
+            billing_provider="nous",
+            input_tokens=40,
+            output_tokens=8,
         )
         rows = _usage_rows(db, "s1")
         tasks = sorted(r["task"] for r in rows)
@@ -121,11 +141,15 @@ class TestSchemaMigrationV22:
     def test_v21_db_migrates_with_existing_rows(self, tmp_path):
         """A legacy DB with pre-task rows migrates: rows preserved, task=''."""
         import sqlite3 as _sq
+
         db = SessionDB(tmp_path / "state.db")
         db.create_session("legacy", source="cli")
         db.update_token_counts(
-            "legacy", input_tokens=42, model="old-model",
-            billing_provider="openrouter", api_call_count=1,
+            "legacy",
+            input_tokens=42,
+            model="old-model",
+            billing_provider="openrouter",
+            api_call_count=1,
         )
         db.close()
 
@@ -170,7 +194,8 @@ class TestSchemaMigrationV22:
         db2 = SessionDB(tmp_path / "state.db")
         with db2._lock:
             pk_cols = [
-                r[1] for r in db2._conn.execute(
+                r[1]
+                for r in db2._conn.execute(
                     "SELECT * FROM pragma_table_info('session_model_usage') WHERE pk > 0"
                 ).fetchall()
             ]
@@ -276,7 +301,9 @@ class TestAmbientAccountingContext:
         db.create_session("s1", source="cli")
         token = set_accounting_context(db, "s1")
         try:
-            out = _validate_llm_response(_mk_response(), "web_extract", provider="openrouter")
+            out = _validate_llm_response(
+                _mk_response(), "web_extract", provider="openrouter"
+            )
         finally:
             reset_accounting_context(token)
         assert out is not None
@@ -310,25 +337,43 @@ class TestAnalyticsAuxRows:
 
         db.create_session("s1", source="cli")
         db.update_token_counts(
-            "s1", input_tokens=1000, output_tokens=100,
-            model="main-model", billing_provider="nous", api_call_count=1,
+            "s1",
+            input_tokens=1000,
+            output_tokens=100,
+            model="main-model",
+            billing_provider="nous",
+            api_call_count=1,
         )
         db.record_auxiliary_usage(
-            "s1", "vision", model="vision-model",
-            billing_provider="gemini", input_tokens=300, output_tokens=30,
+            "s1",
+            "vision",
+            model="vision-model",
+            billing_provider="gemini",
+            input_tokens=300,
+            output_tokens=30,
         )
         db.record_auxiliary_usage(
-            "s1", "compression", model="main-model",
-            billing_provider="nous", input_tokens=200, output_tokens=20,
+            "s1",
+            "compression",
+            model="main-model",
+            billing_provider="nous",
+            input_tokens=200,
+            output_tokens=20,
         )
 
         aux = _aux_usage_rows(db, cutoff=0)
         assert {r["task"] for r in aux} == {"vision", "compression"}
 
-        by_model = [{
-            "model": "main-model", "input_tokens": 1000, "output_tokens": 100,
-            "estimated_cost": 0, "sessions": 1, "api_calls": 1,
-        }]
+        by_model = [
+            {
+                "model": "main-model",
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "estimated_cost": 0,
+                "sessions": 1,
+                "api_calls": 1,
+            }
+        ]
         merged = _merge_aux_into_by_model(by_model, aux)
         by_name = {r["model"]: r for r in merged}
         # vision-only model surfaces as its own entry
@@ -350,12 +395,20 @@ class TestInsightsAuxTotals:
 
         db.create_session("s1", source="cli")
         db.update_token_counts(
-            "s1", input_tokens=1000, output_tokens=100,
-            model="main-model", billing_provider="nous", api_call_count=1,
+            "s1",
+            input_tokens=1000,
+            output_tokens=100,
+            model="main-model",
+            billing_provider="nous",
+            api_call_count=1,
         )
         db.record_auxiliary_usage(
-            "s1", "compression", model="glm-5",
-            billing_provider="openrouter", input_tokens=5000, output_tokens=500,
+            "s1",
+            "compression",
+            model="glm-5",
+            billing_provider="openrouter",
+            input_tokens=5000,
+            output_tokens=500,
         )
         report = InsightsEngine(db).generate(days=30)
         ov = report["overview"]
@@ -370,17 +423,29 @@ class TestInsightsAuxTotals:
 
         db.create_session("s2", source="telegram")
         db.update_token_counts(
-            "s2", input_tokens=2000, output_tokens=200,
-            model="main-model", billing_provider="nous", api_call_count=1,
+            "s2",
+            input_tokens=2000,
+            output_tokens=200,
+            model="main-model",
+            billing_provider="nous",
+            api_call_count=1,
         )
         db.update_token_counts(
-            "s2", input_tokens=2000, output_tokens=200,
-            model="main-model", billing_provider="nous",
-            absolute=True, api_call_count=1,
+            "s2",
+            input_tokens=2000,
+            output_tokens=200,
+            model="main-model",
+            billing_provider="nous",
+            absolute=True,
+            api_call_count=1,
         )
         db.record_auxiliary_usage(
-            "s2", "title_generation", model="main-model",
-            billing_provider="nous", input_tokens=40, output_tokens=8,
+            "s2",
+            "title_generation",
+            model="main-model",
+            billing_provider="nous",
+            input_tokens=40,
+            output_tokens=8,
         )
         report = InsightsEngine(db).generate(days=30)
         ov = report["overview"]

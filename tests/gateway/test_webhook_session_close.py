@@ -59,9 +59,7 @@ class _FakeRunner:
 def _make_store(tmp_path) -> SessionStore:
     sessions_dir = tmp_path / "sessions"
     sessions_dir.mkdir()
-    config = GatewayConfig(
-        platforms={Platform.WEBHOOK: PlatformConfig(enabled=True)}
-    )
+    config = GatewayConfig(platforms={Platform.WEBHOOK: PlatformConfig(enabled=True)})
     store = SessionStore(sessions_dir=sessions_dir, config=config)
     assert store._db is not None, "test requires a real SessionDB"
     return store
@@ -85,7 +83,9 @@ def _make_event(adapter: WebhookAdapter, delivery_id: str, text: str) -> Message
     )
 
 
-async def _drain_background_tasks(adapter: WebhookAdapter, timeout: float = 5.0) -> None:
+async def _drain_background_tasks(
+    adapter: WebhookAdapter, timeout: float = 5.0
+) -> None:
     """Wait for the adapter's spawned processing task(s) to finish."""
     deadline = asyncio.get_event_loop().time() + timeout
     while adapter._background_tasks and asyncio.get_event_loop().time() < deadline:
@@ -100,15 +100,13 @@ async def test_completed_webhook_delivery_closes_its_session(tmp_path):
     store = _make_store(tmp_path)
     runner = _FakeRunner(store)
 
-    adapter = _make_adapter(
-        {
-            "alerts": {
-                "secret": _INSECURE_NO_AUTH,
-                "prompt": "Alert: {message}",
-                "deliver": "log",
-            }
+    adapter = _make_adapter({
+        "alerts": {
+            "secret": _INSECURE_NO_AUTH,
+            "prompt": "Alert: {message}",
+            "deliver": "log",
         }
-    )
+    })
     adapter.gateway_runner = runner
 
     # Stub the RUNNER-side handler (the seam the live gateway injects) — the
@@ -157,9 +155,9 @@ async def test_webhook_session_closed_even_when_agent_run_raises(tmp_path):
     store = _make_store(tmp_path)
     runner = _FakeRunner(store)
 
-    adapter = _make_adapter(
-        {"alerts": {"secret": _INSECURE_NO_AUTH, "prompt": "x", "deliver": "log"}}
-    )
+    adapter = _make_adapter({
+        "alerts": {"secret": _INSECURE_NO_AUTH, "prompt": "x", "deliver": "log"}
+    })
     adapter.gateway_runner = runner
 
     created = {}
@@ -196,9 +194,9 @@ async def test_end_webhook_session_awaits_async_session_db(tmp_path):
     runner = _FakeRunner(store)
     runner._session_db = AsyncSessionDB(store._db)
 
-    adapter = _make_adapter(
-        {"alerts": {"secret": _INSECURE_NO_AUTH, "prompt": "x", "deliver": "log"}}
-    )
+    adapter = _make_adapter({
+        "alerts": {"secret": _INSECURE_NO_AUTH, "prompt": "x", "deliver": "log"}
+    })
     adapter.gateway_runner = runner
 
     event = _make_event(adapter, "alert-async-001", "x")

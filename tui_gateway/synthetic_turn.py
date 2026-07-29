@@ -121,17 +121,27 @@ class SyntheticHeavyAgent:
                     spec = {}
         return {
             # Primary control: wall-clock seconds of GIL-holding compute.
-            "duration_s": float(spec.get("duration_s", _env_float("CLAWK_ISO_CERTIFY_DURATION_S", 8.0))),
+            "duration_s": float(
+                spec.get("duration_s", _env_float("CLAWK_ISO_CERTIFY_DURATION_S", 8.0))
+            ),
             # Pure-Python integer ops per interrupt-check chunk. Small enough
             # that an interrupt is honored within a few ms; large enough that
             # the loop stays hot on the GIL between checks.
-            "chunk": int(spec.get("chunk", _env_int("CLAWK_ISO_CERTIFY_CHUNK", 20_000))),
+            "chunk": int(
+                spec.get("chunk", _env_int("CLAWK_ISO_CERTIFY_CHUNK", 20_000))
+            ),
             # Streamed-delta cadence (seconds). Each delta is a loop wakeup that
             # marshals a frame across the transport — the serving-path pressure.
-            "delta_interval_s": float(spec.get("delta_interval_s", _env_float("CLAWK_ISO_CERTIFY_DELTA_S", 0.05))),
+            "delta_interval_s": float(
+                spec.get(
+                    "delta_interval_s", _env_float("CLAWK_ISO_CERTIFY_DELTA_S", 0.05)
+                )
+            ),
             # Notional output tokens attributed per streamed delta (drives the
             # 100K+-token "heavy turn" proxy in usage/metadata).
-            "tokens_per_delta": int(spec.get("tokens_per_delta", _env_int("CLAWK_ISO_CERTIFY_TPD", 512))),
+            "tokens_per_delta": int(
+                spec.get("tokens_per_delta", _env_int("CLAWK_ISO_CERTIFY_TPD", 512))
+            ),
             # Optional per-chunk sleep to model a lighter/mixed regime (0 = pure
             # burn). --dry-run uses a short duration, NOT a sleep, so the smoke
             # path still exercises the real dispatch seam.
@@ -155,7 +165,9 @@ class SyntheticHeavyAgent:
         tokens_per_delta = max(0, spec["tokens_per_delta"])
         sleep_s = max(0.0, spec["sleep_s"])
 
-        base_history = list(conversation_history if conversation_history is not None else self.history)
+        base_history = list(
+            conversation_history if conversation_history is not None else self.history
+        )
         start = time.monotonic()
         last_delta = start
         acc = 0
@@ -208,7 +220,9 @@ class SyntheticHeavyAgent:
         }
 
 
-def maybe_build_synthetic_agent(session_id: str, model_override: Any = None) -> SyntheticHeavyAgent | None:
+def maybe_build_synthetic_agent(
+    session_id: str, model_override: Any = None
+) -> SyntheticHeavyAgent | None:
     """Return a :class:`SyntheticHeavyAgent` when the seam is armed, else ``None``.
 
     ``model_override`` (dict or str) only influences the reported ``model`` label

@@ -40,7 +40,9 @@ def _discord_descriptor() -> CapabilityDescriptor:
     )
 
 
-def _discord_event(scope_id: str, channel_id: str, user_id: str, text: str) -> MessageEvent:
+def _discord_event(
+    scope_id: str, channel_id: str, user_id: str, text: str
+) -> MessageEvent:
     """Synthetic inbound the connector would build from a discord.js message."""
     source = SessionSource(
         platform=Platform.DISCORD,
@@ -73,7 +75,9 @@ async def test_connect_registers_inbound_handler(wired):
 async def test_inbound_event_reaches_adapter(wired, monkeypatch):
     adapter, stub = wired
     captured = []
-    monkeypatch.setattr(adapter, "handle_message", lambda ev: _async_capture(captured, ev))
+    monkeypatch.setattr(
+        adapter, "handle_message", lambda ev: _async_capture(captured, ev)
+    )
     await adapter.connect()
     ev = _discord_event("guildA", "chan1", "userX", "hello")
     await stub.push_inbound(ev)

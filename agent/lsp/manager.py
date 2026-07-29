@@ -32,6 +32,7 @@ servers are missing binaries and auto-install is off, ``is_active``
 returns False and the file_operations layer falls through to the
 in-process syntax check.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -103,6 +104,7 @@ class _BackgroundLoop:
         Returns the coroutine's result, or raises its exception.
         """
         from agent.async_utils import safe_schedule_threadsafe
+
         if self._loop is None:
             if asyncio.iscoroutine(coro):
                 coro.close()
@@ -192,6 +194,7 @@ class LSPService:
         """
         try:
             from clawk_cli.config import load_config
+
             cfg = load_config()
         except Exception as e:  # noqa: BLE001
             logger.debug("LSP config load failed: %s", e)
@@ -378,6 +381,7 @@ class LSPService:
                     # that mapped into a deleted region drop out
                     # silently — they no longer apply.
                     from agent.lsp.range_shift import shift_baseline
+
                     baseline = shift_baseline(baseline, line_shift)
                 seen = {_diag_key(d) for d in baseline}
                 diags = [d for d in diags if _diag_key(d) not in seen]
@@ -385,7 +389,10 @@ class LSPService:
             # to the just-emitted state, mirroring claude-code's
             # diagnosticTracking.
             try:
-                fresh = self._loop.run(self._current_diags_async(file_path), timeout=2.0) or []
+                fresh = (
+                    self._loop.run(self._current_diags_async(file_path), timeout=2.0)
+                    or []
+                )
             except Exception:  # noqa: BLE001
                 fresh = []
             if fresh:
@@ -465,8 +472,12 @@ class LSPService:
         if client is None:
             return []
         try:
-            version = await client.open_file(file_path, language_id=language_id_for(file_path))
-            fresh = await client.wait_for_diagnostics(file_path, version, mode=self._wait_mode)
+            version = await client.open_file(
+                file_path, language_id=language_id_for(file_path)
+            )
+            fresh = await client.wait_for_diagnostics(
+                file_path, version, mode=self._wait_mode
+            )
         except Exception as e:  # noqa: BLE001
             logger.debug("snapshot open/wait failed: %s", e)
             return []
@@ -478,7 +489,9 @@ class LSPService:
             return []
         return list(client.diagnostics_for(file_path, fresh_only=True))
 
-    async def _open_and_wait_async(self, file_path: str) -> Optional[List[Dict[str, Any]]]:
+    async def _open_and_wait_async(
+        self, file_path: str
+    ) -> Optional[List[Dict[str, Any]]]:
         """Open + wait for FRESH diagnostics.
 
         Returns the fresh diagnostic list, or ``None`` when the server
@@ -491,7 +504,9 @@ class LSPService:
         if client is None:
             return None
         try:
-            version = await client.open_file(file_path, language_id=language_id_for(file_path))
+            version = await client.open_file(
+                file_path, language_id=language_id_for(file_path)
+            )
             await client.save_file(file_path)
             fresh = await client.wait_for_diagnostics(
                 file_path, version, mode=self._wait_mode, timeout=self._wait_timeout
@@ -578,7 +593,8 @@ class LSPService:
                 env=spec.env,
                 cwd=spec.cwd,
                 initialization_options=spec.initialization_options,
-                seed_diagnostics_on_first_push=spec.seed_diagnostics_on_first_push or srv.seed_first_push,
+                seed_diagnostics_on_first_push=spec.seed_diagnostics_on_first_push
+                or srv.seed_first_push,
             )
             try:
                 await client.start()
@@ -656,15 +672,13 @@ def _diag_key(d: Dict[str, Any]) -> str:
     code = d.get("code")
     if code is not None and not isinstance(code, str):
         code = str(code)
-    return "\x00".join(
-        [
-            str(d.get("severity") or 1),
-            str(code or ""),
-            str(d.get("source") or ""),
-            str(d.get("message") or "").strip(),
-            f"{start.get('line', 0)}:{start.get('character', 0)}-{end.get('line', 0)}:{end.get('character', 0)}",
-        ]
-    )
+    return "\x00".join([
+        str(d.get("severity") or 1),
+        str(code or ""),
+        str(d.get("source") or ""),
+        str(d.get("message") or "").strip(),
+        f"{start.get('line', 0)}:{start.get('character', 0)}-{end.get('line', 0)}:{end.get('character', 0)}",
+    ])
 
 
 __all__ = ["LSPService"]

@@ -203,9 +203,7 @@ class AnthropicTransport(ProviderTransport):
 
                     if not _tool_registry.get_entry(name):
                         bare = name[len(_MCP_PREFIX) :]  # read_file
-                        single = (
-                            "mcp_" + bare
-                        )  # mcp_read_file / mcp_linear_get_issue
+                        single = "mcp_" + bare  # mcp_read_file / mcp_linear_get_issue
                         if _tool_registry.get_entry(single):
                             name = single
                         elif _tool_registry.get_entry(bare):
@@ -240,8 +238,7 @@ class AnthropicTransport(ProviderTransport):
         )
 
         _has_tool_use = any(
-            isinstance(b, dict) and b.get("type") == "tool_use"
-            for b in ordered_blocks
+            isinstance(b, dict) and b.get("type") == "tool_use" for b in ordered_blocks
         )
 
         if _has_signed_thinking and _has_tool_use:

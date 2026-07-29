@@ -38,10 +38,15 @@ class TestProfileScopeDefaultFallback:
         monkeypatch.setenv("OPENROUTER_BASE_URL", "https://from-environ.example/v1")
         with adapter._profile_scope(None):
             # Legacy single-profile path: unscoped get_secret reads os.environ.
-            assert ss.get_secret("OPENROUTER_BASE_URL") == "https://from-environ.example/v1"
+            assert (
+                ss.get_secret("OPENROUTER_BASE_URL")
+                == "https://from-environ.example/v1"
+            )
         assert ss.current_secret_scope() is None
 
-    def test_default_scope_installed_under_multiplex(self, adapter, tmp_path, monkeypatch):
+    def test_default_scope_installed_under_multiplex(
+        self, adapter, tmp_path, monkeypatch
+    ):
         """No /p/ prefix + multiplex active → default profile scope, not nullcontext."""
         (tmp_path / ".env").write_text(
             "OPENROUTER_BASE_URL=https://openrouter.ai/api/v1\n",
@@ -57,7 +62,9 @@ class TestProfileScopeDefaultFallback:
         with adapter._profile_scope(None):
             assert ss.current_secret_scope() is not None
             # Profile .env wins; process env must not leak through.
-            assert ss.get_secret("OPENROUTER_BASE_URL") == "https://openrouter.ai/api/v1"
+            assert (
+                ss.get_secret("OPENROUTER_BASE_URL") == "https://openrouter.ai/api/v1"
+            )
 
         # Scope torn down; fail-closed behavior restored outside.
         assert ss.current_secret_scope() is None

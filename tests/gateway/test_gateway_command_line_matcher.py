@@ -25,7 +25,7 @@ ACCEPT = [
     "python -m clawk_cli/main.py gateway run",
     "python gateway/run.py",
     "clawk-gateway.exe",
-    "clawk gateway",          # bare `clawk gateway` defaults to run
+    "clawk gateway",  # bare `clawk gateway` defaults to run
     "clawk gateway run",
     # profile selector AFTER the `gateway` token (argv is profile-position
     # agnostic — _apply_profile_override strips --profile/-p anywhere)
@@ -42,11 +42,11 @@ ACCEPT = [
 ]
 
 REJECT = [
-    "python -m tui_gateway",                              # unrelated module
-    "python -m clawk_cli.main gateway status",           # other subcommand
+    "python -m tui_gateway",  # unrelated module
+    "python -m clawk_cli.main gateway status",  # other subcommand
     "python -m clawk_cli.main gateway restart",
     "python -m clawk_cli.main gateway stop",
-    "python -m clawk_cli.main --profile x dashboard",    # non-gateway subcommand
+    "python -m clawk_cli.main --profile x dashboard",  # non-gateway subcommand
     "some random python -m mygateway thing",
     "",
     None,

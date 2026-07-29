@@ -265,7 +265,7 @@ class OpenAIImageGenProvider(ImageGenProvider):
         sources: List[str] = []
         if isinstance(image_url, str) and image_url.strip():
             sources.append(image_url.strip())
-        for ref in (normalize_reference_images(reference_image_urls) or []):
+        for ref in normalize_reference_images(reference_image_urls) or []:
             sources.append(ref)
         sources = sources[:16]  # gpt-image-2 edit caps at 16 images
         is_edit = bool(sources)

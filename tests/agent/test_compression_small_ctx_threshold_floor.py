@@ -21,7 +21,9 @@ from agent.context_compressor import ContextCompressor
 def _make(ctx: int, pct: float = 0.50) -> ContextCompressor:
     with patch.object(cc, "get_model_context_length", return_value=ctx):
         return ContextCompressor(
-            model="test/model", threshold_percent=pct, quiet_mode=True,
+            model="test/model",
+            threshold_percent=pct,
+            quiet_mode=True,
         )
 
 
@@ -67,8 +69,14 @@ class TestReasoningExcludedFromSummarizer:
         comp = _make(128_000)
         turns = [
             {"role": "user", "content": "do the thing"},
-            {"role": "assistant", "content": "<think>INLINE_TRACE</think>visible answer"},
-            {"role": "assistant", "content": "<reasoning>VARIANT_TRACE</reasoning>other answer"},
+            {
+                "role": "assistant",
+                "content": "<think>INLINE_TRACE</think>visible answer",
+            },
+            {
+                "role": "assistant",
+                "content": "<reasoning>VARIANT_TRACE</reasoning>other answer",
+            },
         ]
         ser = comp._serialize_for_summary(turns)
         assert "INLINE_TRACE" not in ser
@@ -157,6 +165,7 @@ class TestSummaryBudgetEnvelope:
         # The budget still lands as prompt guidance, within the envelope.
         prompt = captured["messages"][0]["content"]
         import re
+
         m = re.search(r"Target ~(\d+) tokens", prompt)
         assert m, "prompt-level token target guidance missing"
         assert 1_000 <= int(m.group(1)) <= 10_000
@@ -181,6 +190,8 @@ class TestSummaryBudgetEnvelope:
 class TestTailBudgetProportionality:
     def test_tail_budget_is_target_ratio_of_threshold(self):
         comp = _make(128_000)
-        assert comp.tail_token_budget == int(comp.threshold_tokens * comp.summary_target_ratio)
+        assert comp.tail_token_budget == int(
+            comp.threshold_tokens * comp.summary_target_ratio
+        )
         # Sanity: tail protection stays a modest slice of the window (<= 20%).
         assert comp.tail_token_budget <= comp.context_length * 0.20

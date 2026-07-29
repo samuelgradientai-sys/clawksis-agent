@@ -238,13 +238,14 @@ import unreal
 # Actors (EditorActorSubsystem supersedes EditorLevelLibrary for these)
 eas = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 actors = eas.get_all_level_actors()
-actor  = eas.spawn_actor_from_class(unreal.PointLight, unreal.Vector(0, 0, 200))
+actor = eas.spawn_actor_from_class(unreal.PointLight, unreal.Vector(0, 0, 200))
 mesh_a = eas.spawn_actor_from_object(
     unreal.EditorAssetLibrary.load_asset("/Engine/BasicShapes/Cube.Cube"),
-    unreal.Vector(0, 0, 50))
+    unreal.Vector(0, 0, 50),
+)
 actor.set_actor_label("Key Light")
 actor.set_actor_location(unreal.Vector(100, 0, 250), False, True)
-actor.set_actor_rotation(unreal.Rotator(0, -30, 45), True)   # roll, pitch, yaw
+actor.set_actor_rotation(unreal.Rotator(0, -30, 45), True)  # roll, pitch, yaw
 eas.destroy_actor(actor)
 
 # Assets
@@ -264,7 +265,7 @@ with unreal.ScopedEditorTransaction("Agent: dress set") as trans:
 task = unreal.AssetImportTask()
 task.filename = "/abs/path/model.fbx"
 task.destination_path = "/Game/Imported"
-task.automated = True      # suppresses the import dialog — critical for MCP
+task.automated = True  # suppresses the import dialog — critical for MCP
 task.save = True
 unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
 

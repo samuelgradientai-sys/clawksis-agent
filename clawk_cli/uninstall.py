@@ -1180,7 +1180,9 @@ def _print_uninstall_dry_run(
             profiles = _discover_named_profiles()
 
             if profiles:
-                print("  • Named profiles (interactive uninstall asks before removing):")
+                print(
+                    "  • Named profiles (interactive uninstall asks before removing):"
+                )
 
                 for prof in profiles:
                     print(f"    - {prof.name}: {prof.path}")

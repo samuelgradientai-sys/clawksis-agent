@@ -19,7 +19,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 
-def _install_telegram_mock(monkeypatch: pytest.MonkeyPatch, bot_factory: MagicMock) -> None:
+def _install_telegram_mock(
+    monkeypatch: pytest.MonkeyPatch, bot_factory: MagicMock
+) -> None:
     parse_mode = SimpleNamespace(MARKDOWN_V2="MarkdownV2", HTML="HTML")
     constants_mod = SimpleNamespace(ParseMode=parse_mode)
     _MessageEntity = lambda **_kw: SimpleNamespace(**_kw)
@@ -43,8 +45,15 @@ def _make_bot() -> MagicMock:
 
 def _no_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
     for var in (
-        "TELEGRAM_PROXY", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY",
-        "http_proxy", "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy",
+        "TELEGRAM_PROXY",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
     ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr("gateway.run._gateway_runner_ref", lambda: None, raising=False)
@@ -58,7 +67,9 @@ def _tmpfile(suffix: str) -> str:
     return f.name
 
 
-def test_image_caption_rides_bubble_no_separate_text(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_image_caption_rides_bubble_no_separate_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from tools.send_message_tool import _send_telegram
 
     _no_proxy(monkeypatch)
@@ -97,7 +108,9 @@ def test_video_caption_rides_bubble(monkeypatch: pytest.MonkeyPatch) -> None:
         os.unlink(vid)
 
 
-def test_long_text_falls_back_to_separate_message(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_long_text_falls_back_to_separate_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from tools.send_message_tool import _send_telegram
 
     _no_proxy(monkeypatch)
@@ -128,7 +141,9 @@ def test_multi_file_keeps_separate_text(monkeypatch: pytest.MonkeyPatch) -> None
     img2 = _tmpfile(".jpg")
     try:
         res = asyncio.run(
-            _send_telegram("tok", "123", "two pics", media_files=[(img, False), (img2, False)])
+            _send_telegram(
+                "tok", "123", "two pics", media_files=[(img, False), (img2, False)]
+            )
         )
         assert res["success"] is True
         # Ambiguous caption→file association: text stays a separate message.

@@ -38,8 +38,10 @@ class _AsyncCM:
         return False
 
 
-def _make_adapter(bridge_script: str = "/tmp/test-bridge.js",
-                  session_path: Path = Path("/tmp/test-wa-session")):
+def _make_adapter(
+    bridge_script: str = "/tmp/test-bridge.js",
+    session_path: Path = Path("/tmp/test-wa-session"),
+):
     """Create a WhatsAppAdapter with test attributes (bypass __init__)."""
     from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
@@ -97,9 +99,7 @@ def _fresh_node_modules(bridge_dir: Path) -> None:
 
     nm = bridge_dir / "node_modules"
     nm.mkdir()
-    (nm / ".clawk-pkg-hash").write_text(
-        _file_content_hash(bridge_dir / "package.json")
-    )
+    (nm / ".clawk-pkg-hash").write_text(_file_content_hash(bridge_dir / "package.json"))
 
 
 class TestFileContentHash:
@@ -153,12 +153,21 @@ class TestStaleBridgeHandshake:
         disk_hash = _file_content_hash(bridge_dir / "bridge.js")
         mock_client = _mock_health({"status": "connected", "scriptHash": disk_hash})
 
-        with patch("plugins.platforms.whatsapp.adapter.check_whatsapp_requirements", return_value=True), \
-             patch("aiohttp.ClientSession", mock_client), \
-             patch("plugins.platforms.whatsapp.adapter.asyncio.create_task") as mock_task, \
-             patch("subprocess.Popen") as mock_popen, \
-             patch.object(adapter, "_acquire_platform_lock", return_value=True, create=True), \
-             patch.object(adapter, "_mark_connected", create=True):
+        with (
+            patch(
+                "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements",
+                return_value=True,
+            ),
+            patch("aiohttp.ClientSession", mock_client),
+            patch(
+                "plugins.platforms.whatsapp.adapter.asyncio.create_task"
+            ) as mock_task,
+            patch("subprocess.Popen") as mock_popen,
+            patch.object(
+                adapter, "_acquire_platform_lock", return_value=True, create=True
+            ),
+            patch.object(adapter, "_mark_connected", create=True),
+        ):
             result = await adapter.connect()
 
         assert result is True
@@ -173,9 +182,10 @@ class TestStaleBridgeHandshake:
             bridge_script=str(bridge_dir / "bridge.js"),
             session_path=tmp_path / "session",
         )
-        mock_client = _mock_health(
-            {"status": "connected", "scriptHash": "deadbeefdeadbeef"}
-        )
+        mock_client = _mock_health({
+            "status": "connected",
+            "scriptHash": "deadbeefdeadbeef",
+        })
         # Spawned bridge dies immediately → connect() returns False, but the
         # assertion that matters is that the stale bridge was NOT reused and
         # a new process spawn was attempted.
@@ -183,13 +193,25 @@ class TestStaleBridgeHandshake:
         mock_proc.poll.return_value = 1
         mock_proc.returncode = 1
 
-        with patch("plugins.platforms.whatsapp.adapter.check_whatsapp_requirements", return_value=True), \
-             patch("aiohttp.ClientSession", mock_client), \
-             patch("plugins.platforms.whatsapp.adapter.asyncio.sleep", new_callable=AsyncMock), \
-             patch("plugins.platforms.whatsapp.adapter._kill_stale_bridge_by_pidfile"), \
-             patch("plugins.platforms.whatsapp.adapter._kill_port_process") as mock_kill_port, \
-             patch("subprocess.Popen", return_value=mock_proc) as mock_popen, \
-             patch.object(adapter, "_acquire_platform_lock", return_value=True, create=True):
+        with (
+            patch(
+                "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements",
+                return_value=True,
+            ),
+            patch("aiohttp.ClientSession", mock_client),
+            patch(
+                "plugins.platforms.whatsapp.adapter.asyncio.sleep",
+                new_callable=AsyncMock,
+            ),
+            patch("plugins.platforms.whatsapp.adapter._kill_stale_bridge_by_pidfile"),
+            patch(
+                "plugins.platforms.whatsapp.adapter._kill_port_process"
+            ) as mock_kill_port,
+            patch("subprocess.Popen", return_value=mock_proc) as mock_popen,
+            patch.object(
+                adapter, "_acquire_platform_lock", return_value=True, create=True
+            ),
+        ):
             result = await adapter.connect()
 
         assert result is False  # mock proc died; not the point of the test
@@ -211,13 +233,23 @@ class TestStaleBridgeHandshake:
         mock_proc.poll.return_value = 1
         mock_proc.returncode = 1
 
-        with patch("plugins.platforms.whatsapp.adapter.check_whatsapp_requirements", return_value=True), \
-             patch("aiohttp.ClientSession", mock_client), \
-             patch("plugins.platforms.whatsapp.adapter.asyncio.sleep", new_callable=AsyncMock), \
-             patch("plugins.platforms.whatsapp.adapter._kill_stale_bridge_by_pidfile"), \
-             patch("plugins.platforms.whatsapp.adapter._kill_port_process"), \
-             patch("subprocess.Popen", return_value=mock_proc) as mock_popen, \
-             patch.object(adapter, "_acquire_platform_lock", return_value=True, create=True):
+        with (
+            patch(
+                "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements",
+                return_value=True,
+            ),
+            patch("aiohttp.ClientSession", mock_client),
+            patch(
+                "plugins.platforms.whatsapp.adapter.asyncio.sleep",
+                new_callable=AsyncMock,
+            ),
+            patch("plugins.platforms.whatsapp.adapter._kill_stale_bridge_by_pidfile"),
+            patch("plugins.platforms.whatsapp.adapter._kill_port_process"),
+            patch("subprocess.Popen", return_value=mock_proc) as mock_popen,
+            patch.object(
+                adapter, "_acquire_platform_lock", return_value=True, create=True
+            ),
+        ):
             await adapter.connect()
 
         mock_popen.assert_called_once()
@@ -236,14 +268,24 @@ class TestDepRefreshStamp:
         mock_proc.poll.return_value = 1
         mock_proc.returncode = 1
 
-        with patch("plugins.platforms.whatsapp.adapter.check_whatsapp_requirements", return_value=True), \
-             patch("aiohttp.ClientSession", _mock_health({"status": "disconnected"})), \
-             patch("plugins.platforms.whatsapp.adapter.asyncio.sleep", new_callable=AsyncMock), \
-             patch("plugins.platforms.whatsapp.adapter._kill_stale_bridge_by_pidfile"), \
-             patch("plugins.platforms.whatsapp.adapter._kill_port_process"), \
-             patch("subprocess.run") as mock_run, \
-             patch("subprocess.Popen", return_value=mock_proc), \
-             patch.object(adapter, "_acquire_platform_lock", return_value=True, create=True):
+        with (
+            patch(
+                "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements",
+                return_value=True,
+            ),
+            patch("aiohttp.ClientSession", _mock_health({"status": "disconnected"})),
+            patch(
+                "plugins.platforms.whatsapp.adapter.asyncio.sleep",
+                new_callable=AsyncMock,
+            ),
+            patch("plugins.platforms.whatsapp.adapter._kill_stale_bridge_by_pidfile"),
+            patch("plugins.platforms.whatsapp.adapter._kill_port_process"),
+            patch("subprocess.run") as mock_run,
+            patch("subprocess.Popen", return_value=mock_proc),
+            patch.object(
+                adapter, "_acquire_platform_lock", return_value=True, create=True
+            ),
+        ):
             await adapter.connect()
 
         mock_run.assert_not_called()
@@ -262,20 +304,31 @@ class TestDepRefreshStamp:
         mock_proc.poll.return_value = 1
         mock_proc.returncode = 1
 
-        with patch("plugins.platforms.whatsapp.adapter.check_whatsapp_requirements", return_value=True), \
-             patch("aiohttp.ClientSession", _mock_health({"status": "disconnected"})), \
-             patch("plugins.platforms.whatsapp.adapter.asyncio.sleep", new_callable=AsyncMock), \
-             patch("plugins.platforms.whatsapp.adapter._kill_stale_bridge_by_pidfile"), \
-             patch("plugins.platforms.whatsapp.adapter._kill_port_process"), \
-             patch("subprocess.run", return_value=MagicMock(returncode=0)) as mock_run, \
-             patch("subprocess.Popen", return_value=mock_proc), \
-             patch.object(adapter, "_acquire_platform_lock", return_value=True, create=True):
+        with (
+            patch(
+                "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements",
+                return_value=True,
+            ),
+            patch("aiohttp.ClientSession", _mock_health({"status": "disconnected"})),
+            patch(
+                "plugins.platforms.whatsapp.adapter.asyncio.sleep",
+                new_callable=AsyncMock,
+            ),
+            patch("plugins.platforms.whatsapp.adapter._kill_stale_bridge_by_pidfile"),
+            patch("plugins.platforms.whatsapp.adapter._kill_port_process"),
+            patch("subprocess.run", return_value=MagicMock(returncode=0)) as mock_run,
+            patch("subprocess.Popen", return_value=mock_proc),
+            patch.object(
+                adapter, "_acquire_platform_lock", return_value=True, create=True
+            ),
+        ):
             await adapter.connect()
 
         mock_run.assert_called_once()
         assert "install" in mock_run.call_args[0][0]
         # Stamp updated to the new package.json hash
         from plugins.platforms.whatsapp.adapter import _file_content_hash
+
         stamp = (bridge_dir / "node_modules" / ".clawk-pkg-hash").read_text().strip()
         assert stamp == _file_content_hash(bridge_dir / "package.json")
 
@@ -295,14 +348,24 @@ class TestDepRefreshStamp:
             (bridge_dir / "node_modules").mkdir(exist_ok=True)
             return MagicMock(returncode=0)
 
-        with patch("plugins.platforms.whatsapp.adapter.check_whatsapp_requirements", return_value=True), \
-             patch("aiohttp.ClientSession", _mock_health({"status": "disconnected"})), \
-             patch("plugins.platforms.whatsapp.adapter.asyncio.sleep", new_callable=AsyncMock), \
-             patch("plugins.platforms.whatsapp.adapter._kill_stale_bridge_by_pidfile"), \
-             patch("plugins.platforms.whatsapp.adapter._kill_port_process"), \
-             patch("subprocess.run", side_effect=_npm_install) as mock_run, \
-             patch("subprocess.Popen", return_value=mock_proc), \
-             patch.object(adapter, "_acquire_platform_lock", return_value=True, create=True):
+        with (
+            patch(
+                "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements",
+                return_value=True,
+            ),
+            patch("aiohttp.ClientSession", _mock_health({"status": "disconnected"})),
+            patch(
+                "plugins.platforms.whatsapp.adapter.asyncio.sleep",
+                new_callable=AsyncMock,
+            ),
+            patch("plugins.platforms.whatsapp.adapter._kill_stale_bridge_by_pidfile"),
+            patch("plugins.platforms.whatsapp.adapter._kill_port_process"),
+            patch("subprocess.run", side_effect=_npm_install) as mock_run,
+            patch("subprocess.Popen", return_value=mock_proc),
+            patch.object(
+                adapter, "_acquire_platform_lock", return_value=True, create=True
+            ),
+        ):
             await adapter.connect()
 
         mock_run.assert_called_once()
@@ -321,13 +384,23 @@ class TestCacheDirEnvPassthrough:
         mock_proc.poll.return_value = 1
         mock_proc.returncode = 1
 
-        with patch("plugins.platforms.whatsapp.adapter.check_whatsapp_requirements", return_value=True), \
-             patch("aiohttp.ClientSession", _mock_health({"status": "disconnected"})), \
-             patch("plugins.platforms.whatsapp.adapter.asyncio.sleep", new_callable=AsyncMock), \
-             patch("plugins.platforms.whatsapp.adapter._kill_stale_bridge_by_pidfile"), \
-             patch("plugins.platforms.whatsapp.adapter._kill_port_process"), \
-             patch("subprocess.Popen", return_value=mock_proc) as mock_popen, \
-             patch.object(adapter, "_acquire_platform_lock", return_value=True, create=True):
+        with (
+            patch(
+                "plugins.platforms.whatsapp.adapter.check_whatsapp_requirements",
+                return_value=True,
+            ),
+            patch("aiohttp.ClientSession", _mock_health({"status": "disconnected"})),
+            patch(
+                "plugins.platforms.whatsapp.adapter.asyncio.sleep",
+                new_callable=AsyncMock,
+            ),
+            patch("plugins.platforms.whatsapp.adapter._kill_stale_bridge_by_pidfile"),
+            patch("plugins.platforms.whatsapp.adapter._kill_port_process"),
+            patch("subprocess.Popen", return_value=mock_proc) as mock_popen,
+            patch.object(
+                adapter, "_acquire_platform_lock", return_value=True, create=True
+            ),
+        ):
             await adapter.connect()
 
         env = mock_popen.call_args.kwargs["env"]
@@ -336,6 +409,7 @@ class TestCacheDirEnvPassthrough:
             get_document_cache_dir,
             get_image_cache_dir,
         )
+
         assert env["CLAWK_IMAGE_CACHE_DIR"] == str(get_image_cache_dir())
         assert env["CLAWK_AUDIO_CACHE_DIR"] == str(get_audio_cache_dir())
         assert env["CLAWK_DOCUMENT_CACHE_DIR"] == str(get_document_cache_dir())

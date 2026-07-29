@@ -144,7 +144,9 @@ def _tracked_lockfiles(ref: str, repo_root: str) -> set[str]:
 
 def diff_refs(base: str, head: str, repo_root: str = ".") -> dict[str, dict[str, list]]:
     """Diff every package-lock.json tracked at either ref."""
-    lockfiles = _tracked_lockfiles(base, repo_root) | _tracked_lockfiles(head, repo_root)
+    lockfiles = _tracked_lockfiles(base, repo_root) | _tracked_lockfiles(
+        head, repo_root
+    )
     diffs = {}
     for path in sorted(lockfiles):
         base_text = _git_show(base, path, repo_root)

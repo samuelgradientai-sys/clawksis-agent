@@ -6,6 +6,7 @@ socket when present. Reconnecting with the same opaque token replays the
 buffer and resumes live. See
 docs/superpowers/specs/2026-06-20-pty-keepalive-reattach-design.md.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -40,7 +41,9 @@ class RingBuffer:
 
 
 class PtySession:
-    def __init__(self, key: str, bridge, *, buffer_cap: int, read_timeout: float) -> None:
+    def __init__(
+        self, key: str, bridge, *, buffer_cap: int, read_timeout: float
+    ) -> None:
         self.key = key
         self.bridge = bridge
         self.buffer = RingBuffer(buffer_cap)
@@ -57,8 +60,10 @@ class PtySession:
     async def _drain(self) -> None:
         loop = asyncio.get_running_loop()
         while True:
-            chunk = await loop.run_in_executor(None, self.bridge.read, self._read_timeout)
-            if chunk is None:                       # EOF — the agent process exited
+            chunk = await loop.run_in_executor(
+                None, self.bridge.read, self._read_timeout
+            )
+            if chunk is None:  # EOF — the agent process exited
                 self.alive = False
                 ws = self._ws
                 if ws is not None:
@@ -67,7 +72,7 @@ class PtySession:
                     except Exception:
                         pass
                 return
-            if not chunk:                            # idle tick
+            if not chunk:  # idle tick
                 await asyncio.sleep(0)
                 continue
             self.buffer.append(chunk)
@@ -76,7 +81,7 @@ class PtySession:
                 try:
                     await ws.send_bytes(chunk)
                 except Exception:
-                    pass                             # detached mid-send; keep buffering
+                    pass  # detached mid-send; keep buffering
 
     async def attach(self, ws) -> None:
         old = self._ws
@@ -137,21 +142,23 @@ async def run_reaper(registry: "PtySessionRegistry", *, interval: float = 60.0) 
 
 
 class PtySessionRegistry:
-    def __init__(self, *, ttl: float, max_sessions: int,
-                 buffer_cap: int, read_timeout: float) -> None:
+    def __init__(
+        self, *, ttl: float, max_sessions: int, buffer_cap: int, read_timeout: float
+    ) -> None:
         self._ttl = ttl
         self._max = max_sessions
         self._buffer_cap = buffer_cap
         self._read_timeout = read_timeout
         self._sessions: Dict[str, PtySession] = {}
 
-    async def attach_or_spawn(self, key: str, *, spawn: Callable[[], object]
-                              ) -> Tuple[PtySession, bool]:
+    async def attach_or_spawn(
+        self, key: str, *, spawn: Callable[[], object]
+    ) -> Tuple[PtySession, bool]:
         await self.reap_idle()
         existing = self._sessions.get(key)
         if existing is not None and existing.alive:
             return existing, False
-        if existing is not None:                       # dead remnant
+        if existing is not None:  # dead remnant
             await existing.close()
             self._sessions.pop(key, None)
         if len(self._sessions) >= self._max:
@@ -159,8 +166,9 @@ class PtySessionRegistry:
         # PTY spawn does blocking fork/exec work — keep it off the event
         # loop (#53227).
         bridge = await asyncio.to_thread(spawn)
-        session = PtySession(key, bridge, buffer_cap=self._buffer_cap,
-                             read_timeout=self._read_timeout)
+        session = PtySession(
+            key, bridge, buffer_cap=self._buffer_cap, read_timeout=self._read_timeout
+        )
         await session.start()
         self._sessions[key] = session
         return session, True
@@ -173,17 +181,24 @@ class PtySessionRegistry:
     async def reap_idle(self, now: Optional[float] = None) -> None:
         now = time.monotonic() if now is None else now
         doomed = [
-            key for key, s in self._sessions.items()
+            key
+            for key, s in self._sessions.items()
             if (not s.alive)
-            or (not s.attached and s.last_detached_at is not None
-                and (now - s.last_detached_at) > self._ttl)
+            or (
+                not s.attached
+                and s.last_detached_at is not None
+                and (now - s.last_detached_at) > self._ttl
+            )
         ]
         for key in doomed:
             await self._sessions.pop(key).close()
 
     def _reap_one_idle_or_raise(self) -> None:
-        idle = [s for s in self._sessions.values()
-                if not s.attached and s.last_detached_at is not None]
+        idle = [
+            s
+            for s in self._sessions.values()
+            if not s.attached and s.last_detached_at is not None
+        ]
         if not idle:
             raise RegistryFull()
         oldest = min(idle, key=lambda s: s.last_detached_at or 0.0)

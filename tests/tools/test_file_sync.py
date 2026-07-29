@@ -9,7 +9,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tools.environments.file_sync import FileSyncManager, _FORCE_SYNC_ENV, iter_sync_files
+from tools.environments.file_sync import (
+    FileSyncManager,
+    _FORCE_SYNC_ENV,
+    iter_sync_files,
+)
 
 
 @pytest.fixture
@@ -296,7 +300,9 @@ class TestEdgeCases:
 
 
 class TestSyncBackSecurity:
-    def test_sync_back_does_not_overwrite_uploaded_credential_files(self, tmp_path, monkeypatch):
+    def test_sync_back_does_not_overwrite_uploaded_credential_files(
+        self, tmp_path, monkeypatch
+    ):
         credential = tmp_path / "token.json"
         credential.write_text("host-token", encoding="utf-8")
         skill = tmp_path / "skill.py"

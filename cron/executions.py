@@ -66,6 +66,7 @@ def _record(row: Optional[sqlite3.Row]) -> Optional[Dict[str, Any]]:
 def _process_start_time(pid: int) -> Optional[int]:
     try:
         from gateway.status import get_process_start_time
+
         return get_process_start_time(pid)
     except Exception:
         return None
@@ -74,6 +75,7 @@ def _process_start_time(pid: int) -> Optional[int]:
 def _owner_is_live(pid: int, started_at: Optional[int]) -> bool:
     try:
         from gateway.status import _pid_exists
+
         if not _pid_exists(pid):
             return False
     except Exception:
@@ -107,8 +109,15 @@ def create_execution(job_id: str, *, source: str) -> Dict[str, Any]:
                (id, job_id, source, process_id, pid, process_started_at,
                 status, claimed_at)
                VALUES (?, ?, ?, ?, ?, ?, 'claimed', ?)""",
-            (execution_id, str(job_id), str(source), _PROCESS_ID, pid,
-             _process_start_time(pid), now),
+            (
+                execution_id,
+                str(job_id),
+                str(source),
+                _PROCESS_ID,
+                pid,
+                _process_start_time(pid),
+                now,
+            ),
         )
         row = conn.execute(
             "SELECT * FROM executions WHERE id=?", (execution_id,)
@@ -127,13 +136,18 @@ def mark_execution_running(execution_id: str) -> Optional[Dict[str, Any]]:
         )
         if cur.rowcount != 1:
             return None
-        return _record(conn.execute(
-            "SELECT * FROM executions WHERE id=?", (execution_id,)
-        ).fetchone())
+        return _record(
+            conn.execute(
+                "SELECT * FROM executions WHERE id=?", (execution_id,)
+            ).fetchone()
+        )
 
 
 def finish_execution(
-    execution_id: str, *, success: bool, error: Optional[str] = None,
+    execution_id: str,
+    *,
+    success: bool,
+    error: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Write a terminal result once; terminal attempts cannot be rewritten."""
     now = _clawk_now().isoformat()
@@ -148,9 +162,11 @@ def finish_execution(
         if cur.rowcount != 1:
             return None
         _prune_unlocked(conn)
-        return _record(conn.execute(
-            "SELECT * FROM executions WHERE id=?", (execution_id,)
-        ).fetchone())
+        return _record(
+            conn.execute(
+                "SELECT * FROM executions WHERE id=?", (execution_id,)
+            ).fetchone()
+        )
 
 
 def recover_interrupted_executions() -> int:
@@ -170,10 +186,12 @@ def recover_interrupted_executions() -> int:
             cur = conn.execute(
                 """UPDATE executions SET status='unknown', finished_at=?, error=?
                    WHERE id=? AND status IN ('claimed','running')""",
-                (now,
-                 "Scheduler restarted after this execution's owner exited before a durable "
-                 "terminal state; whether side effects ran is unknown.",
-                 row["id"]),
+                (
+                    now,
+                    "Scheduler restarted after this execution's owner exited before a durable "
+                    "terminal state; whether side effects ran is unknown.",
+                    row["id"],
+                ),
             )
             changed += cur.rowcount
         if changed:
@@ -182,7 +200,9 @@ def recover_interrupted_executions() -> int:
 
 
 def list_executions(
-    *, job_id: Optional[str] = None, limit: int = 50,
+    *,
+    job_id: Optional[str] = None,
+    limit: int = 50,
     before_claimed_at: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Return indexed, newest-first execution history with cursor pagination."""
@@ -198,7 +218,8 @@ def list_executions(
     params.append(max(1, min(int(limit), 500)))
     with _lock, _connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM executions" + where
+            "SELECT * FROM executions"
+            + where
             + " ORDER BY claimed_at DESC, id DESC LIMIT ?",
             params,
         ).fetchall()

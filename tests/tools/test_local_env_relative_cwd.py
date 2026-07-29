@@ -13,7 +13,9 @@ def test_relative_initial_cwd_resolves_from_parent(tmp_path, monkeypatch):
     assert _resolve_local_initial_cwd("clawksis-agent") == str(project)
 
 
-def test_relative_initial_cwd_matching_current_dir_uses_current_dir(tmp_path, monkeypatch):
+def test_relative_initial_cwd_matching_current_dir_uses_current_dir(
+    tmp_path, monkeypatch
+):
     project = tmp_path / "clawksis-agent"
     project.mkdir()
     monkeypatch.chdir(project)
@@ -21,7 +23,9 @@ def test_relative_initial_cwd_matching_current_dir_uses_current_dir(tmp_path, mo
     assert _resolve_local_initial_cwd("clawksis-agent") == str(project)
 
 
-def test_local_environment_does_not_cd_into_nested_matching_relative_cwd(tmp_path, monkeypatch):
+def test_local_environment_does_not_cd_into_nested_matching_relative_cwd(
+    tmp_path, monkeypatch
+):
     project = tmp_path / "clawksis-agent"
     project.mkdir()
     monkeypatch.chdir(project)

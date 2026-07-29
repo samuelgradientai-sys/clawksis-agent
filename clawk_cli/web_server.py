@@ -1743,7 +1743,8 @@ def _normalize_main_model_assignment(provider: str, model: str) -> tuple[str, st
 
             cur_provider = (
                 str(cur_cfg.get("provider", "") or "").strip().lower()
-                if isinstance(cur_cfg, dict) else ""
+                if isinstance(cur_cfg, dict)
+                else ""
             )
 
         except Exception:
@@ -3858,9 +3859,13 @@ async def get_profiles_sessions(
     same rows as ``/api/sessions``, just tagged ``profile="default"``.
     """
     if archived not in ("exclude", "only", "include"):
-        raise HTTPException(status_code=400, detail="archived must be one of: exclude, only, include")
+        raise HTTPException(
+            status_code=400, detail="archived must be one of: exclude, only, include"
+        )
     if order not in ("created", "recent"):
-        raise HTTPException(status_code=400, detail="order must be one of: created, recent")
+        raise HTTPException(
+            status_code=400, detail="order must be one of: created, recent"
+        )
 
     from clawk_state import SessionDB
     from clawk_cli import profiles as profiles_mod
@@ -3936,7 +3941,7 @@ async def get_profiles_sessions(
 
     sort_key = "last_active" if order == "recent" else "started_at"
     merged.sort(key=lambda s: s.get(sort_key) or s.get("started_at") or 0, reverse=True)
-    window = merged[offset:offset + limit]
+    window = merged[offset : offset + limit]
     return {
         "sessions": window,
         "total": total,
@@ -5090,7 +5095,9 @@ def _models_from_custom_endpoint_entry(entry: Dict[str, Any]) -> List[str]:
         models.insert(0, default_model)
 
     seen: set[str] = set()
-    return [model for model in models if model and not (model in seen or seen.add(model))]
+    return [
+        model for model in models if model and not (model in seen or seen.add(model))
+    ]
 
 
 def _custom_endpoint_response(cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -5105,12 +5112,21 @@ def _custom_endpoint_response(cfg: Dict[str, Any]) -> Dict[str, Any]:
         for provider_id, raw_entry in providers.items():
             if not isinstance(raw_entry, dict):
                 continue
-            base_url = str(raw_entry.get("base_url") or raw_entry.get("url") or raw_entry.get("api") or "").strip()
+            base_url = str(
+                raw_entry.get("base_url")
+                or raw_entry.get("url")
+                or raw_entry.get("api")
+                or ""
+            ).strip()
             if not base_url:
                 continue
             endpoint_id = str(provider_id)
             models = _models_from_custom_endpoint_entry(raw_entry)
-            endpoint_model = str(raw_entry.get("model") or raw_entry.get("default_model") or (models[0] if models else ""))
+            endpoint_model = str(
+                raw_entry.get("model")
+                or raw_entry.get("default_model")
+                or (models[0] if models else "")
+            )
             endpoints.append({
                 "id": endpoint_id,
                 "name": str(raw_entry.get("name") or endpoint_id),
@@ -5120,25 +5136,36 @@ def _custom_endpoint_response(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 "context_length": raw_entry.get("context_length"),
                 "discover_models": bool(raw_entry.get("discover_models", True)),
                 "has_api_key": bool(str(raw_entry.get("api_key", "") or "").strip()),
-                "api_key_preview": redact_key(str(raw_entry.get("api_key", "") or "")) if raw_entry.get("api_key") else None,
+                "api_key_preview": redact_key(str(raw_entry.get("api_key", "") or ""))
+                if raw_entry.get("api_key")
+                else None,
                 "is_current": endpoint_id == current_provider,
                 "source": "providers",
             })
 
-    if current_provider.lower() == "custom" and current_base_url and not any(e["id"] == "custom" for e in endpoints):
-        endpoints.insert(0, {
-            "id": "custom",
-            "name": "Custom",
-            "base_url": current_base_url,
-            "model": current_model,
-            "models": [current_model] if current_model else [],
-            "context_length": model_cfg.get("context_length"),
-            "discover_models": True,
-            "has_api_key": bool(str(model_cfg.get("api_key", "") or "").strip()),
-            "api_key_preview": redact_key(str(model_cfg.get("api_key", "") or "")) if model_cfg.get("api_key") else None,
-            "is_current": True,
-            "source": "direct-config",
-        })
+    if (
+        current_provider.lower() == "custom"
+        and current_base_url
+        and not any(e["id"] == "custom" for e in endpoints)
+    ):
+        endpoints.insert(
+            0,
+            {
+                "id": "custom",
+                "name": "Custom",
+                "base_url": current_base_url,
+                "model": current_model,
+                "models": [current_model] if current_model else [],
+                "context_length": model_cfg.get("context_length"),
+                "discover_models": True,
+                "has_api_key": bool(str(model_cfg.get("api_key", "") or "").strip()),
+                "api_key_preview": redact_key(str(model_cfg.get("api_key", "") or ""))
+                if model_cfg.get("api_key")
+                else None,
+                "is_current": True,
+                "source": "direct-config",
+            },
+        )
 
     return {
         "endpoints": endpoints,
@@ -5173,7 +5200,9 @@ def _detach_main_model_from_provider(cfg: Dict[str, Any], provider_key: str) -> 
     cfg["model"] = model_cfg
 
 
-def _write_custom_endpoint(cfg: Dict[str, Any], body: CustomEndpointUpdate) -> Tuple[str, Dict[str, Any]]:
+def _write_custom_endpoint(
+    cfg: Dict[str, Any], body: CustomEndpointUpdate
+) -> Tuple[str, Dict[str, Any]]:
     endpoint_id = _custom_endpoint_id(body.id or body.name)
     name = (body.name or "").strip()
     base_url = (body.base_url or "").strip().rstrip("/")
@@ -5185,7 +5214,9 @@ def _write_custom_endpoint(cfg: Dict[str, Any], body: CustomEndpointUpdate) -> T
         raise HTTPException(status_code=400, detail="base_url required")
     parsed = urllib.parse.urlparse(base_url)
     if not parsed.scheme or not parsed.netloc:
-        raise HTTPException(status_code=400, detail="base_url must include scheme and host")
+        raise HTTPException(
+            status_code=400, detail="base_url must include scheme and host"
+        )
     if not model:
         raise HTTPException(status_code=400, detail="model required")
 
@@ -5214,9 +5245,13 @@ def _write_custom_endpoint(cfg: Dict[str, Any], body: CustomEndpointUpdate) -> T
     # enumerate the provider's catalogue. Keep the other models (and their
     # context lengths) and just ensure this one is present.
     existing_models = entry.get("models")
-    models_map: Dict[str, Any] = dict(existing_models) if isinstance(existing_models, dict) else {}
+    models_map: Dict[str, Any] = (
+        dict(existing_models) if isinstance(existing_models, dict) else {}
+    )
     current_model_entry = models_map.get(model)
-    models_map[model] = dict(current_model_entry) if isinstance(current_model_entry, dict) else {}
+    models_map[model] = (
+        dict(current_model_entry) if isinstance(current_model_entry, dict) else {}
+    )
     entry["models"] = models_map
     if body.context_length and body.context_length > 0:
         entry["context_length"] = int(body.context_length)
@@ -5282,7 +5317,9 @@ def activate_custom_endpoint(endpoint_id: str):
         if not model or not base_url:
             raise HTTPException(status_code=400, detail="custom endpoint is incomplete")
 
-        model_cfg = _apply_main_model_assignment(cfg.get("model", {}), provider_key, model, base_url)
+        model_cfg = _apply_main_model_assignment(
+            cfg.get("model", {}), provider_key, model, base_url
+        )
         if entry.get("api_key"):
             model_cfg["api_key"] = entry["api_key"]
         cfg["model"] = model_cfg
@@ -5291,8 +5328,12 @@ def activate_custom_endpoint(endpoint_id: str):
     except HTTPException:
         raise
     except Exception:
-        _log.exception("POST /api/providers/custom-endpoints/%s/activate failed", endpoint_id)
-        raise HTTPException(status_code=500, detail="Failed to activate custom endpoint")
+        _log.exception(
+            "POST /api/providers/custom-endpoints/%s/activate failed", endpoint_id
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to activate custom endpoint"
+        )
 
 
 @app.delete("/api/providers/custom-endpoints/{endpoint_id}")
@@ -5325,7 +5366,12 @@ async def validate_custom_endpoint(body: CustomEndpointUpdate):
 
     base_url = (body.base_url or "").strip().rstrip("/")
     if not base_url:
-        return {"ok": False, "reachable": True, "message": "Enter an endpoint URL first.", "models": []}
+        return {
+            "ok": False,
+            "reachable": True,
+            "message": "Enter an endpoint URL first.",
+            "models": [],
+        }
 
     url = base_url + "/models"
     headers = {"Accept": "application/json"}
@@ -5336,14 +5382,34 @@ async def validate_custom_endpoint(body: CustomEndpointUpdate):
         with httpx.Client(timeout=httpx.Timeout(8.0)) as client:
             resp = client.get(url, headers=headers)
     except Exception:
-        return {"ok": False, "reachable": False, "message": f"Could not reach {url}.", "models": []}
+        return {
+            "ok": False,
+            "reachable": False,
+            "message": f"Could not reach {url}.",
+            "models": [],
+        }
 
     if resp.status_code in (401, 403):
-        return {"ok": False, "reachable": True, "message": "The endpoint rejected the API key.", "models": []}
+        return {
+            "ok": False,
+            "reachable": True,
+            "message": "The endpoint rejected the API key.",
+            "models": [],
+        }
     if not resp.is_success:
-        return {"ok": False, "reachable": True, "message": f"Endpoint returned HTTP {resp.status_code}.", "models": []}
+        return {
+            "ok": False,
+            "reachable": True,
+            "message": f"Endpoint returned HTTP {resp.status_code}.",
+            "models": [],
+        }
 
-    return {"ok": True, "reachable": True, "message": "", "models": _parse_model_ids(resp)}
+    return {
+        "ok": True,
+        "reachable": True,
+        "message": "",
+        "models": _parse_model_ids(resp),
+    }
 
 
 @app.post("/api/providers/validate")
@@ -12444,7 +12510,9 @@ def _toolset_model_catalog(ts_key: str, plugin_name: str):
     return _plugin_video_gen_catalog(plugin_name)
 
 
-def _find_toolset_provider_row(ts_key: str, config: dict, provider: Optional[str]) -> Optional[dict]:
+def _find_toolset_provider_row(
+    ts_key: str, config: dict, provider: Optional[str]
+) -> Optional[dict]:
     """Resolve a provider picker row by name, or the active row when omitted."""
     from clawk_cli.tools_config import (
         TOOL_CATEGORIES,
@@ -12477,7 +12545,13 @@ async def get_toolset_models(
     """
     section = _MODEL_CATALOG_TOOLSETS.get(name)
     if section is None:
-        return {"name": name, "has_models": False, "models": [], "current": None, "default": None}
+        return {
+            "name": name,
+            "has_models": False,
+            "models": [],
+            "current": None,
+            "default": None,
+        }
 
     with _profile_scope(profile):
         config = load_config()
@@ -12671,7 +12745,9 @@ class ToolsetEnvUpdate(BaseModel):
 
 
 @app.put("/api/tools/toolsets/{name}/env")
-async def save_toolset_env(name: str, body: ToolsetEnvUpdate, profile: Optional[str] = None):
+async def save_toolset_env(
+    name: str, body: ToolsetEnvUpdate, profile: Optional[str] = None
+):
     """Persist API keys for a toolset's provider env vars.
 
     Writes each ``key: value`` to ``~/.clawksis/.env`` via ``save_env_value`` —
@@ -12722,7 +12798,13 @@ async def save_toolset_env(name: str, body: ToolsetEnvUpdate, profile: Optional[
                 skipped.append(key)
 
         status = {k: bool(get_env_value(k)) for k in allowed}
-    return {"ok": True, "name": name, "saved": saved, "skipped": skipped, "is_set": status}
+    return {
+        "ok": True,
+        "name": name,
+        "saved": saved,
+        "skipped": skipped,
+        "is_set": status,
+    }
 
 
 class ToolsetPostSetup(BaseModel):

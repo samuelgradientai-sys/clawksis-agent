@@ -90,7 +90,9 @@ class RelayTransport(Protocol):
         """Proxy a chat-info lookup to the connector."""
         ...
 
-    async def send_interrupt(self, session_key: str, reason: Optional[str] = None) -> None:
+    async def send_interrupt(
+        self, session_key: str, reason: Optional[str] = None
+    ) -> None:
         """Route a mid-turn /stop to the connector for ``session_key``.
 
         The connector forwards it down the socket owned by the gateway

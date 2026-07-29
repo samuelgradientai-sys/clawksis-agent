@@ -36,7 +36,9 @@ def _make_payload(event_id="evt_1"):
                 "start_time": "1780384522000",
                 "end_time": "1780384522000",
                 "host_user": {
-                    "id": _user_id("ou_390b35dca44816efc9afa812aaff3a69", "on_host", "e65g874e"),
+                    "id": _user_id(
+                        "ou_390b35dca44816efc9afa812aaff3a69", "on_host", "e65g874e"
+                    ),
                     "user_type": 1,
                     "user_role": 2,
                     "user_name": "赵磊",
@@ -86,7 +88,8 @@ class _Adapter:
     async def _resolve_sender_profile(self, sender_id):
         self.profile_requests.append(sender_id)
         return {
-            "user_id": getattr(sender_id, "user_id", None) or getattr(sender_id, "open_id", None),
+            "user_id": getattr(sender_id, "user_id", None)
+            or getattr(sender_id, "open_id", None),
             "user_name": "Resolved Inviter",
             "user_id_alt": getattr(sender_id, "union_id", None),
         }
@@ -150,7 +153,9 @@ class TestMeetingInviteParsing(unittest.TestCase):
         self.assertIn("Meeting Number: 884264377", prompt)
         self.assertIn("Inviter: 赵磊", prompt)
         self.assertIn("Join the meeting directly.", prompt)
-        self.assertIn("You may use lark-cli and the relevant Lark/Feishu meeting skills", prompt)
+        self.assertIn(
+            "You may use lark-cli and the relevant Lark/Feishu meeting skills", prompt
+        )
         self.assertIn("Do not ask the user for confirmation", prompt)
         self.assertIn("If you cannot join the meeting", prompt)
         self.assertNotIn("ou_390b35dca44816efc9afa812aaff3a69", prompt)
@@ -180,13 +185,21 @@ class TestMeetingInviteHandler(unittest.TestCase):
         self.assertEqual(event.source.user_id, "e65g874e")
         self.assertEqual(event.source.user_name, "Resolved Inviter")
         self.assertEqual(event.source.chat_name, "Resolved Inviter")
-        self.assertEqual(event.source.user_id_alt, "on_e19a19e6ffafbd54fbb3c4d251d6fa19")
+        self.assertEqual(
+            event.source.user_id_alt, "on_e19a19e6ffafbd54fbb3c4d251d6fa19"
+        )
         self.assertEqual(len(adapter.profile_requests), 1)
-        self.assertEqual(adapter.profile_requests[0].open_id, "ou_390b35dca44816efc9afa812aaff3a69")
+        self.assertEqual(
+            adapter.profile_requests[0].open_id, "ou_390b35dca44816efc9afa812aaff3a69"
+        )
         self.assertEqual(adapter.profile_requests[0].user_id, "e65g874e")
-        self.assertEqual(adapter.profile_requests[0].union_id, "on_e19a19e6ffafbd54fbb3c4d251d6fa19")
+        self.assertEqual(
+            adapter.profile_requests[0].union_id, "on_e19a19e6ffafbd54fbb3c4d251d6fa19"
+        )
         self.assertIsNone(event.message_id)
-        self.assertIn("You have been invited to join a meeting: 赵磊的视频会议", event.text)
+        self.assertIn(
+            "You have been invited to join a meeting: 赵磊的视频会议", event.text
+        )
         self.assertNotIn("{'open_id'", event.text)
 
     def test_duplicate_event_is_dropped(self):
@@ -220,32 +233,43 @@ class TestMeetingInviteSendRouting(unittest.TestCase):
             @staticmethod
             def create(request):
                 created_requests.append(request)
-                return SimpleNamespace(success=lambda: True, data=SimpleNamespace(message_id="om_1"))
+                return SimpleNamespace(
+                    success=lambda: True, data=SimpleNamespace(message_id="om_1")
+                )
 
         adapter = FeishuAdapter(PlatformConfig())
         adapter._client = SimpleNamespace(
-            im=SimpleNamespace(v1=SimpleNamespace(message=SimpleNamespace(create=_Message.create)))
+            im=SimpleNamespace(
+                v1=SimpleNamespace(message=SimpleNamespace(create=_Message.create))
+            )
         )
 
-        with patch.object(
-            FeishuAdapter,
-            "_build_create_message_body",
-            staticmethod(lambda **kwargs: SimpleNamespace(**kwargs)),
-        ), patch.object(
-            FeishuAdapter,
-            "_build_create_message_request",
-            staticmethod(lambda receive_id_type, request_body: SimpleNamespace(
-                receive_id_type=receive_id_type,
-                request_body=request_body,
-            )),
+        with (
+            patch.object(
+                FeishuAdapter,
+                "_build_create_message_body",
+                staticmethod(lambda **kwargs: SimpleNamespace(**kwargs)),
+            ),
+            patch.object(
+                FeishuAdapter,
+                "_build_create_message_request",
+                staticmethod(
+                    lambda receive_id_type, request_body: SimpleNamespace(
+                        receive_id_type=receive_id_type,
+                        request_body=request_body,
+                    )
+                ),
+            ),
         ):
-            self._run(adapter._send_raw_message(
-                chat_id="feishu_user_id:3001",
-                msg_type="text",
-                payload='{"text":"ok"}',
-                reply_to=None,
-                metadata=None,
-            ))
+            self._run(
+                adapter._send_raw_message(
+                    chat_id="feishu_user_id:3001",
+                    msg_type="text",
+                    payload='{"text":"ok"}',
+                    reply_to=None,
+                    metadata=None,
+                )
+            )
 
         self.assertEqual(created_requests[0].receive_id_type, "user_id")
         self.assertEqual(created_requests[0].request_body.receive_id, "3001")

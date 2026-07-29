@@ -18,8 +18,14 @@ def _make_agent(
     agent.model = "openai/gpt-5.4"
     agent.tools = tools or [
         {"type": "function", "function": {"name": "terminal", "description": "run"}},
-        {"type": "function", "function": {"name": "mcp_demo_tool", "description": "mcp"}},
-        {"type": "function", "function": {"name": "delegate_task", "description": "spawn"}},
+        {
+            "type": "function",
+            "function": {"name": "mcp_demo_tool", "description": "mcp"},
+        },
+        {
+            "type": "function",
+            "function": {"name": "delegate_task", "description": "spawn"},
+        },
     ]
     agent._memory_store = None
     agent._memory_enabled = True
@@ -45,7 +51,15 @@ def test_breakdown_includes_major_categories():
         data = compute_session_context_breakdown(agent, history)
 
     ids = {item["id"] for item in data["categories"]}
-    assert {"system_prompt", "tool_definitions", "rules", "skills", "mcp", "subagent_definitions", "conversation"} <= ids
+    assert {
+        "system_prompt",
+        "tool_definitions",
+        "rules",
+        "skills",
+        "mcp",
+        "subagent_definitions",
+        "conversation",
+    } <= ids
     assert data["context_max"] == 200_000
     assert data["estimated_total"] > 0
 

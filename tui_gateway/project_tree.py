@@ -155,7 +155,9 @@ def _place_by_heuristic(path: str) -> Optional[dict]:
     kanban_dir = kanban_worktree_dir(path)
     if kanban_dir:
         repo_path = re.sub(r"[/\\]+$", "", _with_base_name(kanban_dir, ""))
-        return _placement(repo_path, _kanban_lane_id(repo_path), "kanban", kanban_dir, False, True)
+        return _placement(
+            repo_path, _kanban_lane_id(repo_path), "kanban", kanban_dir, False, True
+        )
 
     m = re.match(r"^(.+)-wt-(.+)$", base)
     if m:
@@ -165,7 +167,9 @@ def _place_by_heuristic(path: str) -> Optional[dict]:
     return _placement(path, path, base, path, True, False)
 
 
-def _place(cwd: str, branch: str, resolve: Optional[Resolve], persisted_root: str) -> Optional[dict]:
+def _place(
+    cwd: str, branch: str, resolve: Optional[Resolve], persisted_root: str
+) -> Optional[dict]:
     info = resolve(cwd) if resolve else None
 
     if info and info.get("repo_root") and info.get("worktree_root"):
@@ -177,11 +181,15 @@ def _place(cwd: str, branch: str, resolve: Optional[Resolve], persisted_root: st
             # Unrecorded branch folds into the one trunk lane, so a repo never
             # shows two "main" lanes (recorded "main" + the empty-branch bucket).
             b = (branch or "").strip() or DEFAULT_BRANCH_LABEL
-            return _placement(repo_root, _branch_lane_id(repo_root, b), b, repo_root, True, False)
+            return _placement(
+                repo_root, _branch_lane_id(repo_root, b), b, repo_root, True, False
+            )
 
         kanban_dir = kanban_worktree_dir(worktree_root)
         if kanban_dir:
-            return _placement(repo_root, _kanban_lane_id(repo_root), "kanban", kanban_dir, False, True)
+            return _placement(
+                repo_root, _kanban_lane_id(repo_root), "kanban", kanban_dir, False, True
+            )
 
         label = base_name(worktree_root) or worktree_root
         return _placement(repo_root, worktree_root, label, worktree_root, False, False)
@@ -191,9 +199,23 @@ def _place(cwd: str, branch: str, resolve: Optional[Resolve], persisted_root: st
     if persisted_root:
         kanban_dir = kanban_worktree_dir(cwd)
         if kanban_dir:
-            return _placement(persisted_root, _kanban_lane_id(persisted_root), "kanban", kanban_dir, False, True)
+            return _placement(
+                persisted_root,
+                _kanban_lane_id(persisted_root),
+                "kanban",
+                kanban_dir,
+                False,
+                True,
+            )
         b = (branch or "").strip() or DEFAULT_BRANCH_LABEL
-        return _placement(persisted_root, _branch_lane_id(persisted_root, b), b, persisted_root, True, False)
+        return _placement(
+            persisted_root,
+            _branch_lane_id(persisted_root, b),
+            b,
+            persisted_root,
+            True,
+            False,
+        )
 
     return _place_by_heuristic(cwd)
 
@@ -267,7 +289,9 @@ def _session_time(session: dict) -> float:
     return float(session.get("last_active") or session.get("started_at") or 0)
 
 
-def _build_repos(sessions: list[dict], resolve: Optional[Resolve], hydrate: bool) -> list[dict]:
+def _build_repos(
+    sessions: list[dict], resolve: Optional[Resolve], hydrate: bool
+) -> list[dict]:
     """Build the ``repo -> lane -> sessions`` subtree for a set of sessions."""
     lanes: dict[str, dict] = {}  # lane_key -> {group, repo_key, repo_label, repo_path}
 
@@ -366,7 +390,13 @@ def _seed_folder_repos(
         root_key = _path_key(root)
         if not root_key or root_key in seen:
             continue
-        seeded.append({"id": root, "label": base_name(root) or root, "path": root, "groups": [], "sessionCount": 0})
+        seeded.append({
+            "id": root,
+            "label": base_name(root) or root,
+            "path": root,
+            "groups": [],
+            "sessionCount": 0,
+        })
         seen.add(root_key)
 
     if len(seeded) != len(repos):
@@ -416,7 +446,9 @@ def _project_for_path(index: _FolderIndex, target: str) -> Optional[dict]:
     return index.match(target)[0]
 
 
-def _project_for_session(session: dict, index: _FolderIndex, resolve: Optional[Resolve]) -> Optional[dict]:
+def _project_for_session(
+    session: dict, index: _FolderIndex, resolve: Optional[Resolve]
+) -> Optional[dict]:
     cwd = (session.get("cwd") or "").strip()
     if not cwd:
         return None
@@ -525,7 +557,9 @@ def build_tree(
         psessions = by_project.get(project["id"], [])
         scoped_ids.extend(s["id"] for s in psessions if s.get("id"))
         repos = _seed_folder_repos(
-            _build_repos(psessions, resolve, hydrate), project.get("folders") or [], resolve
+            _build_repos(psessions, resolve, hydrate),
+            project.get("folders") or [],
+            resolve,
         )
         result.append(
             _project_node(
@@ -624,7 +658,15 @@ def build_tree(
                 pid=root,
                 label=label,
                 path=root,
-                repos=[{"id": root, "label": label, "path": root, "groups": [], "sessionCount": 0}],
+                repos=[
+                    {
+                        "id": root,
+                        "label": label,
+                        "path": root,
+                        "groups": [],
+                        "sessionCount": 0,
+                    }
+                ],
                 session_count=int(repo.get("sessions") or 0),
                 last_active=float(repo.get("last_active") or 0),
                 preview_sessions=[],

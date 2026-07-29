@@ -96,8 +96,14 @@ def _guard_would_reuse_after_fix(runner, session_key, session_id, current_mc=Non
     peek_cached_sid = peek_entry[3] if peek_entry and len(peek_entry) > 3 else None
 
     cached_sid_is_dead = False
-    if peek_cached_sid is not None and session_id is not None and peek_cached_sid != session_id:
-        cached_sid_is_dead = runner.session_store._is_session_ended_in_db(peek_cached_sid)
+    if (
+        peek_cached_sid is not None
+        and session_id is not None
+        and peek_cached_sid != session_id
+    ):
+        cached_sid_is_dead = runner.session_store._is_session_ended_in_db(
+            peek_cached_sid
+        )
 
     with runner._agent_cache_lock:
         cached = runner._agent_cache.get(session_key)
@@ -107,7 +113,9 @@ def _guard_would_reuse_after_fix(runner, session_key, session_id, current_mc=Non
         cached_sid = cached[3] if len(cached) > 3 else None
 
         session_id_mismatch = (
-            cached_sid is not None and session_id is not None and cached_sid != session_id
+            cached_sid is not None
+            and session_id is not None
+            and cached_sid != session_id
         )
         stale_dead_sid_reuse = (
             session_id_mismatch and cached_sid_is_dead and cached_sid == peek_cached_sid
@@ -171,9 +179,13 @@ class TestStaleSelfHealAgentCacheEviction:
         with runner._agent_cache_lock:
             runner._agent_cache["telegram:USER1"] = (agent, "sig", 3, "sA")
 
-        would_reuse, evicted = _guard_would_reuse_after_fix(runner, "telegram:USER1", "sB")
+        would_reuse, evicted = _guard_would_reuse_after_fix(
+            runner, "telegram:USER1", "sB"
+        )
 
-        assert would_reuse is True, "Regression: legit #54947 sibling-switch reuse broke."
+        assert would_reuse is True, (
+            "Regression: legit #54947 sibling-switch reuse broke."
+        )
         assert evicted is False
         with runner._agent_cache_lock:
             assert runner._agent_cache["telegram:USER1"][0] is agent
@@ -246,7 +258,9 @@ class TestStaleSelfHealAgentCacheEviction:
         # peek_cached_sid is None (no entry existed at peek time) so
         # cached_sid_is_dead is never computed True, and stale_dead_sid_reuse
         # is False by construction — the live entry must be reused normally.
-        would_reuse, evicted = _guard_would_reuse_after_fix(runner, "telegram:USER1", "sC")
+        would_reuse, evicted = _guard_would_reuse_after_fix(
+            runner, "telegram:USER1", "sC"
+        )
 
         assert would_reuse is True
         assert evicted is False

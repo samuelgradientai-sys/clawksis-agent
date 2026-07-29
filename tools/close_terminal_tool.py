@@ -25,7 +25,9 @@ def close_terminal_tool(process_id: str) -> str:
     """Ask the desktop GUI to close a background process's read-only tab."""
     pid = (process_id or "").strip()
     if not pid:
-        return tool_error("process_id is required (the background process whose tab to close).")
+        return tool_error(
+            "process_id is required (the background process whose tab to close)."
+        )
 
     return json.dumps(process_registry.request_close_terminal(pid), ensure_ascii=False)
 
@@ -65,7 +67,9 @@ registry.register(
     name="close_terminal",
     toolset="terminal",
     schema=CLOSE_TERMINAL_SCHEMA,
-    handler=lambda args, **kw: close_terminal_tool(process_id=args.get("process_id", "")),
+    handler=lambda args, **kw: close_terminal_tool(
+        process_id=args.get("process_id", "")
+    ),
     check_fn=check_close_terminal_requirements,
     emoji="🖥️",
 )

@@ -149,7 +149,9 @@ def resolve_active_pet(configured_slug: str | None = None) -> InstalledPet | Non
     return pets[0] if pets else None
 
 
-def install_pet(slug: str, *, force: bool = False, timeout: float = _DOWNLOAD_TIMEOUT) -> InstalledPet:
+def install_pet(
+    slug: str, *, force: bool = False, timeout: float = _DOWNLOAD_TIMEOUT
+) -> InstalledPet:
     """Download *slug* from the manifest into the pets directory.
 
     Idempotent: a fully-installed pet is returned as-is unless *force*.  Raises
@@ -178,7 +180,11 @@ def install_pet(slug: str, *, force: bool = False, timeout: float = _DOWNLOAD_TI
     directory = pets_dir() / slug
     directory.mkdir(parents=True, exist_ok=True)
 
-    sprite_ext = ".png" if entry.spritesheet_url.lower().split("?")[0].endswith(".png") else ".webp"
+    sprite_ext = (
+        ".png"
+        if entry.spritesheet_url.lower().split("?")[0].endswith(".png")
+        else ".webp"
+    )
     sprite_path = directory / f"spritesheet{sprite_ext}"
 
     _download(entry.spritesheet_url, sprite_path, timeout=timeout)
@@ -271,7 +277,9 @@ def register_local_pet(
 
     pet = load_pet(slug)
     if pet is None or not pet.exists:
-        raise PetStoreError(f"register of generated pet '{slug}' did not produce a spritesheet")
+        raise PetStoreError(
+            f"register of generated pet '{slug}' did not produce a spritesheet"
+        )
     return pet
 
 
@@ -321,7 +329,9 @@ def _is_petdex_host(url: str) -> bool:
     return host == "petdex.dev" or host.endswith(".petdex.dev")
 
 
-def thumbnail_png(slug: str, *, source_url: str = "", timeout: float = 30.0) -> bytes | None:
+def thumbnail_png(
+    slug: str, *, source_url: str = "", timeout: float = 30.0
+) -> bytes | None:
     """Return a small idle-frame PNG for *slug*, cached on disk.
 
     Crops the top-left (idle, frame 0) cell of the spritesheet and downsamples
@@ -377,9 +387,12 @@ def thumbnail_png(slug: str, *, source_url: str = "", timeout: float = 30.0) -> 
         from PIL import Image
 
         with Image.open(io.BytesIO(sheet_bytes)) as im:
-            frame = im.convert("RGBA").crop(
-                (0, 0, min(_THUMB_FRAME_W, im.width), min(_THUMB_FRAME_H, im.height))
-            )
+            frame = im.convert("RGBA").crop((
+                0,
+                0,
+                min(_THUMB_FRAME_W, im.width),
+                min(_THUMB_FRAME_H, im.height),
+            ))
             height = round(_THUMB_W * _THUMB_FRAME_H / _THUMB_FRAME_W)
             frame = frame.resize((_THUMB_W, height), Image.NEAREST)
             buf = io.BytesIO()

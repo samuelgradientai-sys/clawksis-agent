@@ -33,7 +33,17 @@ DEFAULT = {
 }
 
 
-def _lanes(python=False, frontend=False, site=False, scan=False, deps=False, npm_lock=False, mcp_catalog=False, docker_meta=False, ci_review=False) -> dict[str, bool]:
+def _lanes(
+    python=False,
+    frontend=False,
+    site=False,
+    scan=False,
+    deps=False,
+    npm_lock=False,
+    mcp_catalog=False,
+    docker_meta=False,
+    ci_review=False,
+) -> dict[str, bool]:
     return {
         "python": python,
         "frontend": frontend,
@@ -50,22 +60,40 @@ def _lanes(python=False, frontend=False, site=False, scan=False, deps=False, npm
 CASES = {
     "docs-only → nothing heavy": (["README.md", "docs/guide.md"], _lanes()),
     "python source → python": (["run_agent.py"], _lanes(python=True, scan=True)),
-    "dep manifest → python": (["pyproject.toml"], _lanes(python=True, scan=True, deps=True)),
+    "dep manifest → python": (
+        ["pyproject.toml"],
+        _lanes(python=True, scan=True, deps=True),
+    ),
     "uv.lock → python": (["uv.lock"], _lanes(python=True)),
     "ts package → frontend": (["apps/desktop/src/app.tsx"], _lanes(frontend=True)),
     "ui-tui → frontend": (["ui-tui/src/entry.ts"], _lanes(frontend=True)),
     # Lockfile bump shifts every TS package's tree, but not the Python suite.
-    "root lockfile → frontend, not python": (["package-lock.json"], _lanes(frontend=True, npm_lock=True)),
-    "nested lockfile → npm_lock": (["website/package-lock.json"], _lanes(site=True, npm_lock=True)),
+    "root lockfile → frontend, not python": (
+        ["package-lock.json"],
+        _lanes(frontend=True, npm_lock=True),
+    ),
+    "nested lockfile → npm_lock": (
+        ["website/package-lock.json"],
+        _lanes(site=True, npm_lock=True),
+    ),
     "website → site": (["website/docs/intro.md"], _lanes(site=True)),
     # SKILL.md reads like docs, but the skill-doc tests read skills/, so a
     # skill edit must still run Python.
-    "skill md → python + site": (["skills/github/SKILL.md"], _lanes(python=True, site=True)),
+    "skill md → python + site": (
+        ["skills/github/SKILL.md"],
+        _lanes(python=True, site=True),
+    ),
     "dockerfile → docker meta": (["Dockerfile"], _lanes(docker_meta=True)),
     # Unknown top-level file keeps Python on rather than risk a silent skip.
     "unknown toplevel → python": (["Makefile"], _lanes(python=True)),
-    "mixed docs+python → python": (["README.md", "agent/x.py"], _lanes(python=True, scan=True)),
-    "mixed docs+frontend → frontend": (["README.md", "apps/x.tsx"], _lanes(frontend=True)),
+    "mixed docs+python → python": (
+        ["README.md", "agent/x.py"],
+        _lanes(python=True, scan=True),
+    ),
+    "mixed docs+frontend → frontend": (
+        ["README.md", "apps/x.tsx"],
+        _lanes(frontend=True),
+    ),
     # Supply-chain lanes
     ".pth file → scan": (["evil.pth"], _lanes(python=True, scan=True)),
     "setup.py → scan": (["setup.py"], _lanes(python=True, scan=True)),

@@ -12,21 +12,20 @@ import sys
 from pathlib import Path
 
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _clear_provider_caches():
     """Force providers/__init__.py to re-discover on next list_providers()."""
     import providers as _pkg
+
     _pkg._REGISTRY.clear()
     _pkg._ALIASES.clear()
     _pkg._discovered = False
     # Evict any cached plugin modules so the next import re-executes.
     for mod in list(sys.modules.keys()):
-        if (
-            mod.startswith("plugins.model_providers")
-            or mod.startswith("_clawk_user_provider")
+        if mod.startswith("plugins.model_providers") or mod.startswith(
+            "_clawk_user_provider"
         ):
             del sys.modules[mod]
 
@@ -37,7 +36,9 @@ def test_bundled_plugins_discovered():
     assert plugins_dir.is_dir(), f"Missing {plugins_dir}"
 
     child_dirs = [c for c in plugins_dir.iterdir() if c.is_dir()]
-    assert len(child_dirs) >= 28, f"Expected at least 28 provider plugins, found {len(child_dirs)}"
+    assert len(child_dirs) >= 28, (
+        f"Expected at least 28 provider plugins, found {len(child_dirs)}"
+    )
 
     for child in child_dirs:
         assert (child / "__init__.py").exists(), f"{child.name} missing __init__.py"
@@ -67,8 +68,16 @@ def test_all_profiles_register():
 
     # Spot-check representative providers from different categories
     for required in (
-        "openrouter", "anthropic", "custom", "bedrock", "openai-codex",
-        "minimax-oauth", "gmi", "xiaomi", "alibaba-coding-plan", "fireworks",
+        "openrouter",
+        "anthropic",
+        "custom",
+        "bedrock",
+        "openai-codex",
+        "minimax-oauth",
+        "gmi",
+        "xiaomi",
+        "alibaba-coding-plan",
+        "fireworks",
     ):
         assert required in names, f"Missing profile: {required}"
 
@@ -132,9 +141,7 @@ def test_general_plugin_manager_skips_model_provider_kind(tmp_path, monkeypatch)
     user_plugin = clawk_home / "plugins" / "test-model-provider"
     user_plugin.mkdir(parents=True)
     (user_plugin / "plugin.yaml").write_text(
-        "name: test-model-provider\n"
-        "kind: model-provider\n"
-        "version: 0.0.1\n"
+        "name: test-model-provider\nkind: model-provider\nversion: 0.0.1\n"
     )
     (user_plugin / "__init__.py").write_text(
         # Intentionally broken import — if the general loader tries to

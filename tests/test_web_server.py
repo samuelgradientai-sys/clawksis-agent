@@ -142,7 +142,9 @@ def test_start_server_runs_on_uvicorns_loop_factory(monkeypatch):
     # from get_loop_factory(). Pin a sentinel so we can assert it is threaded
     # through to the runner unchanged.
     sentinel_factory = object()
-    monkeypatch.setattr(uvicorn.Config, "_loop_factory", sentinel_factory, raising=False)
+    monkeypatch.setattr(
+        uvicorn.Config, "_loop_factory", sentinel_factory, raising=False
+    )
 
     seen: dict = {}
 

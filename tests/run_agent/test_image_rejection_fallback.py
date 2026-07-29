@@ -32,27 +32,34 @@ class TestStripImagesPreservesAlternation:
         assert msgs[0]["content"] == "just text"
 
     def test_strips_image_url_part_preserves_text(self):
-        msgs = [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "describe"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
-            ],
-        }]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "describe"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,abc"},
+                    },
+                ],
+            }
+        ]
         changed = _strip_images_from_messages(msgs)
         assert changed is True
         assert msgs[0]["content"] == [{"type": "text", "text": "describe"}]
 
     def test_strips_all_recognized_image_types(self):
-        msgs = [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "hi"},
-                {"type": "image_url", "image_url": {}},
-                {"type": "image", "source": {}},
-                {"type": "input_image", "image_url": "http://x"},
-            ],
-        }]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "hi"},
+                    {"type": "image_url", "image_url": {}},
+                    {"type": "image", "source": {}},
+                    {"type": "input_image", "image_url": "http://x"},
+                ],
+            }
+        ]
         changed = _strip_images_from_messages(msgs)
         assert changed is True
         assert msgs[0]["content"] == [{"type": "text", "text": "hi"}]
@@ -66,17 +73,22 @@ class TestStripImagesPreservesAlternation:
             {
                 "role": "assistant",
                 "content": None,
-                "tool_calls": [{
-                    "id": "call_abc",
-                    "type": "function",
-                    "function": {"name": "computer_use", "arguments": "{}"},
-                }],
+                "tool_calls": [
+                    {
+                        "id": "call_abc",
+                        "type": "function",
+                        "function": {"name": "computer_use", "arguments": "{}"},
+                    }
+                ],
             },
             {
                 "role": "tool",
                 "tool_call_id": "call_abc",
                 "content": [
-                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,..."},
+                    },
                 ],
             },
         ]
@@ -96,7 +108,13 @@ class TestStripImagesPreservesAlternation:
             {
                 "role": "assistant",
                 "content": None,
-                "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "x", "arguments": "{}"}}],
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "x", "arguments": "{}"},
+                    }
+                ],
             },
             {
                 "role": "tool",
@@ -137,8 +155,16 @@ class TestStripImagesPreservesAlternation:
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [
-                    {"id": "c1", "type": "function", "function": {"name": "x", "arguments": "{}"}},
-                    {"id": "c2", "type": "function", "function": {"name": "x", "arguments": "{}"}},
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "x", "arguments": "{}"},
+                    },
+                    {
+                        "id": "c2",
+                        "type": "function",
+                        "function": {"name": "x", "arguments": "{}"},
+                    },
                 ],
             },
             {

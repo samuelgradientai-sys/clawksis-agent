@@ -31,10 +31,10 @@ class TestToWhatsappJid:
         "jid",
         [
             "50766715226@s.whatsapp.net",  # already a user JID
-            "123456789-987654321@g.us",    # group JID
-            "130631430344750@lid",         # linked identity
-            "status@broadcast",            # broadcast pseudo-chat
-            "123@newsletter",              # channel/newsletter
+            "123456789-987654321@g.us",  # group JID
+            "130631430344750@lid",  # linked identity
+            "status@broadcast",  # broadcast pseudo-chat
+            "123@newsletter",  # channel/newsletter
         ],
     )
     def test_fully_qualified_jid_passes_through(self, jid):

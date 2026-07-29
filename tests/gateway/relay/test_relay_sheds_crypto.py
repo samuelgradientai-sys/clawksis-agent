@@ -103,7 +103,9 @@ def test_relay_package_calls_no_signature_verification():
                 continue
             m = _FORBIDDEN_SYMBOL_RE.search(line)
             if m:
-                offenders.append(f"{path.name}:{lineno}: '{m.group(0)}' in: {stripped[:80]}")
+                offenders.append(
+                    f"{path.name}:{lineno}: '{m.group(0)}' in: {stripped[:80]}"
+                )
     assert not offenders, (
         "The relay path must not perform platform signature/crypto verification "
         "(A2). Found verification-symbol references:\n  "
@@ -130,9 +132,9 @@ def test_channel_auth_uses_only_stdlib_crypto_not_platform_modules():
         elif isinstance(node, ast.ImportFrom):
             imported.append(node.module or "")
     # No platform-crypto module import.
-    assert not [m for m in imported if any(tok in m for tok in _FORBIDDEN_MODULE_TOKENS)], (
-        f"auth.py must not import platform crypto; imports={imported}"
-    )
+    assert not [
+        m for m in imported if any(tok in m for tok in _FORBIDDEN_MODULE_TOKENS)
+    ], f"auth.py must not import platform crypto; imports={imported}"
     # It does use stdlib hmac/hashlib (that's how it authenticates the channel).
     assert "hmac" in imported and "hashlib" in imported, (
         f"auth.py should authenticate the channel with stdlib hmac/hashlib; imports={imported}"

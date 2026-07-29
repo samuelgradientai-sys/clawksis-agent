@@ -29,10 +29,7 @@ class _FakeExtractProvider(WebSearchProvider):
 
     async def extract(self, urls, **kwargs):
         self.received_urls.extend(urls)
-        return [
-            {"url": url, "title": "", "content": "ok"}
-            for url in urls
-        ]
+        return [{"url": url, "title": "", "content": "ok"} for url in urls]
 
 
 @pytest.fixture
@@ -63,26 +60,34 @@ def extract_provider(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_web_extract_dispatches_urls_from_search_result_objects(extract_provider):
-    result = json.loads(await web_tools.web_extract_tool([
-        {"url": "https://example.com/a", "title": "A"},
-        {"href": "https://example.org/b"},
-    ]))
+    result = json.loads(
+        await web_tools.web_extract_tool([
+            {"url": "https://example.com/a", "title": "A"},
+            {"href": "https://example.org/b"},
+        ])
+    )
 
     assert extract_provider.received_urls == [
         "https://example.com/a",
         "https://example.org/b",
     ]
-    assert [entry["url"] for entry in result["results"]] == extract_provider.received_urls
+    assert [
+        entry["url"] for entry in result["results"]
+    ] == extract_provider.received_urls
 
 
 @pytest.mark.asyncio
-async def test_web_extract_reports_invalid_items_without_dispatching_them(extract_provider):
-    result = json.loads(await web_tools.web_extract_tool([
-        {"url": "https://example.com/good"},
-        {"title": "missing URL"},
-        {"url": 123},
-        None,
-    ]))
+async def test_web_extract_reports_invalid_items_without_dispatching_them(
+    extract_provider,
+):
+    result = json.loads(
+        await web_tools.web_extract_tool([
+            {"url": "https://example.com/good"},
+            {"title": "missing URL"},
+            {"url": 123},
+            None,
+        ])
+    )
 
     assert extract_provider.received_urls == ["https://example.com/good"]
     assert [entry["url"] for entry in result["results"]] == [
@@ -106,9 +111,12 @@ def test_web_extract_registry_dispatch_accepts_search_result_objects(
     extract_provider,
 ):
     """The model-facing registry path preserves object URLs through dispatch."""
-    raw = web_tools.registry.dispatch("web_extract", {
-        "urls": [{"url": "https://example.net/from-registry", "title": "R"}],
-    })
+    raw = web_tools.registry.dispatch(
+        "web_extract",
+        {
+            "urls": [{"url": "https://example.net/from-registry", "title": "R"}],
+        },
+    )
     assert isinstance(raw, str)
     result = json.loads(raw)
 

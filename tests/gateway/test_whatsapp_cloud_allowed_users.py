@@ -62,9 +62,7 @@ def test_allowed_users_env_populates_allowlist_and_enforces_it(monkeypatch):
 
 
 def test_allow_all_users_env_opts_into_open_dms(monkeypatch):
-    adapter = _build_adapter(
-        monkeypatch, {"WHATSAPP_CLOUD_ALLOW_ALL_USERS": "true"}
-    )
+    adapter = _build_adapter(monkeypatch, {"WHATSAPP_CLOUD_ALLOW_ALL_USERS": "true"})
 
     assert adapter._dm_policy == "open"
     assert adapter._open_dm_opted_in() is True

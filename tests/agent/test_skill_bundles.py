@@ -20,8 +20,12 @@ from agent.skill_bundles import (
 
 
 def _make_bundle_yaml(
-    bundles_dir: Path, slug: str, skills: list[str],
-    description: str = "", instruction: str = "", name: str | None = None,
+    bundles_dir: Path,
+    slug: str,
+    skills: list[str],
+    description: str = "",
+    instruction: str = "",
+    name: str | None = None,
 ) -> Path:
     bundles_dir.mkdir(parents=True, exist_ok=True)
     lines = []
@@ -61,9 +65,11 @@ def bundles_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_BUNDLES_DIR", str(bundles_dir))
     # Patch SKILLS_DIR so skill loading hits our temp tree.
     import tools.skills_tool as skills_tool_module
+
     monkeypatch.setattr(skills_tool_module, "SKILLS_DIR", skills_dir)
     # Reset module-level cache between tests.
     import agent.skill_bundles as mod
+
     mod._bundles_cache = {}
     mod._bundles_cache_mtime = None
     return bundles_dir, skills_dir
@@ -153,6 +159,7 @@ class TestGetSkillBundles:
         assert "/a" in get_skill_bundles()
         # Add a second bundle and bump mtime.
         import time as _t
+
         _t.sleep(0.05)  # ensure mtime granularity is exceeded
         _make_bundle_yaml(bundles_dir, "b", ["s2"])
         os.utime(bundles_dir, None)
@@ -226,9 +233,8 @@ class TestBuildBundleInvocationMessage:
             return {"skill-b"} if platform == "telegram" else set()
 
         import agent.skill_utils as su_module
-        monkeypatch.setattr(
-            su_module, "get_disabled_skill_names", _fake_disabled
-        )
+
+        monkeypatch.setattr(su_module, "get_disabled_skill_names", _fake_disabled)
 
         result = build_bundle_invocation_message("/combo", platform="telegram")
         assert result is not None
@@ -252,6 +258,7 @@ class TestBuildBundleInvocationMessage:
         scan_bundles()
 
         import agent.skill_utils as su_module
+
         monkeypatch.setattr(
             su_module,
             "get_disabled_skill_names",
@@ -287,7 +294,9 @@ class TestBuildBundleInvocationMessage:
         bundles_dir, skills_dir = bundles_env
         _make_skill(skills_dir, "skill-a")
         _make_bundle_yaml(
-            bundles_dir, "combo", ["skill-a"],
+            bundles_dir,
+            "combo",
+            ["skill-a"],
             instruction="Always check tests first.",
         )
         scan_bundles()
@@ -310,7 +319,9 @@ class TestBuildBundleInvocationMessage:
 class TestSaveAndDeleteBundle:
     def test_save_creates_file(self, bundles_env):
         bundles_dir, _ = bundles_env
-        path = save_bundle("test-bundle", ["s1", "s2"], description="d", instruction="i")
+        path = save_bundle(
+            "test-bundle", ["s1", "s2"], description="d", instruction="i"
+        )
         assert path.exists()
         assert path.parent == bundles_dir
         content = path.read_text()

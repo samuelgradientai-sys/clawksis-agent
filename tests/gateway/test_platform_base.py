@@ -29,17 +29,24 @@ class TestInboundMediaSizeCap:
     def test_default_cap_is_128_mib(self, monkeypatch):
         # No config override -> default. Patch loader to return empty config.
         import gateway.platforms.base as base
-        monkeypatch.setattr(base, "get_inbound_media_max_bytes", lambda: base.DEFAULT_INBOUND_MEDIA_MAX_BYTES)
+
+        monkeypatch.setattr(
+            base,
+            "get_inbound_media_max_bytes",
+            lambda: base.DEFAULT_INBOUND_MEDIA_MAX_BYTES,
+        )
         assert base.DEFAULT_INBOUND_MEDIA_MAX_BYTES == 128 * 1024 * 1024
 
     def test_image_bytes_rejected_when_oversized(self, monkeypatch):
         import gateway.platforms.base as base
+
         monkeypatch.setattr(base, "get_inbound_media_max_bytes", lambda: 16)
         with pytest.raises(ValueError, match="Inbound image payload is too large"):
             cache_image_from_bytes(self._PNG, ext=".png")
 
     def test_audio_bytes_rejected_when_oversized(self, monkeypatch):
         import gateway.platforms.base as base
+
         monkeypatch.setattr(base, "get_inbound_media_max_bytes", lambda: 4)
         with pytest.raises(ValueError, match="Inbound audio payload is too large"):
             cache_audio_from_bytes(b"x" * 8, ext=".ogg")
@@ -47,19 +54,24 @@ class TestInboundMediaSizeCap:
     def test_video_bytes_rejected_when_oversized(self, monkeypatch):
         # Video was the gap in the original report — verify it's covered.
         import gateway.platforms.base as base
+
         monkeypatch.setattr(base, "get_inbound_media_max_bytes", lambda: 4)
         with pytest.raises(ValueError, match="Inbound video payload is too large"):
             cache_video_from_bytes(b"x" * 8, ext=".mp4")
 
     def test_legit_image_accepted_under_cap(self, monkeypatch):
         import gateway.platforms.base as base
-        monkeypatch.setattr(base, "get_inbound_media_max_bytes", lambda: 128 * 1024 * 1024)
+
+        monkeypatch.setattr(
+            base, "get_inbound_media_max_bytes", lambda: 128 * 1024 * 1024
+        )
         path = cache_image_from_bytes(self._PNG, ext=".png")
         assert os.path.exists(path)
         assert os.path.getsize(path) == len(self._PNG)
 
     def test_cap_of_zero_disables_check(self, monkeypatch):
         import gateway.platforms.base as base
+
         monkeypatch.setattr(base, "get_inbound_media_max_bytes", lambda: 0)
         # A would-be-oversized video passes through when the cap is disabled.
         path = cache_video_from_bytes(b"x" * 5000, ext=".mp4")
@@ -436,9 +448,7 @@ class TestExtractMedia:
 
     def test_media_tag_windows_drive_root(self):
         """extract_media should recognise a path at the drive root."""
-        media, cleaned = BasePlatformAdapter.extract_media(
-            r"MEDIA:D:\report.md"
-        )
+        media, cleaned = BasePlatformAdapter.extract_media(r"MEDIA:D:\report.md")
         assert len(media) == 1
         assert media[0][0].endswith("report.md")
 
@@ -450,9 +460,7 @@ class TestExtractMedia:
 
     def test_relative_path_still_ignored(self):
         """Relative Windows-style paths (no drive letter) must not match."""
-        media, _ = BasePlatformAdapter.extract_media(
-            r"MEDIA:Users\kotsu\file.pdf"
-        )
+        media, _ = BasePlatformAdapter.extract_media(r"MEDIA:Users\kotsu\file.pdf")
         assert media == []
 
     # --- Code block / inline code / blockquote false-positive guards (#35695) ---
@@ -597,8 +605,8 @@ class TestMediaInsideSerializedJson:
         content = "See [[as_document]] MEDIA:/d/report.pdf now"
         media, cleaned = BasePlatformAdapter.extract_media(content)
         assert [p for p, _ in media] == ["/d/report.pdf"]
-        assert "MEDIA:" not in cleaned          # real tag removed
-        assert cleaned.endswith("now")          # trailing text intact (not chopped)
+        assert "MEDIA:" not in cleaned  # real tag removed
+        assert cleaned.endswith("now")  # trailing text intact (not chopped)
 
 
 class TestMediaExtensionAllowlistParity:
@@ -613,8 +621,7 @@ class TestMediaExtensionAllowlistParity:
     MEDIA_DELIVERY_EXTS source of truth, and the strip is anchored to that set.
     """
 
-    DROPPED_BEFORE = ["md", "json", "yaml", "yml", "xml", "html", "htm",
-                      "tsv", "svg"]
+    DROPPED_BEFORE = ["md", "json", "yaml", "yml", "xml", "html", "htm", "tsv", "svg"]
 
     def test_previously_dropped_extensions_now_extract(self):
         for ext in self.DROPPED_BEFORE:
@@ -624,6 +631,7 @@ class TestMediaExtensionAllowlistParity:
 
     def test_extract_media_and_local_files_share_one_extension_set(self):
         from gateway.platforms.base import MEDIA_DELIVERY_EXTS
+
         # Both functions reference MEDIA_DELIVERY_EXTS; assert the documents
         # that motivated the bug are present in the shared set.
         for ext in (".md", ".json", ".yaml", ".yml", ".xml", ".html", ".htm"):
@@ -637,6 +645,7 @@ class TestMediaExtensionAllowlistParity:
         Validated unknown-extension paths DO deliver — see
         TestUniversalMediaEgress (#36060)."""
         from gateway.platforms.base import MEDIA_TAG_CLEANUP_RE
+
         text = "Saved to MEDIA:/tmp/data.weirdext done"
         media, _ = BasePlatformAdapter.extract_media(text)
         assert media == []  # nonexistent path fails validation, not delivered
@@ -645,6 +654,7 @@ class TestMediaExtensionAllowlistParity:
 
     def test_known_extension_tag_is_stripped_from_body(self):
         from gateway.platforms.base import MEDIA_TAG_CLEANUP_RE
+
         text = "Here is your report: MEDIA:/tmp/report.md"
         stripped = MEDIA_TAG_CLEANUP_RE.sub("", text).strip()
         assert "MEDIA:" not in stripped
@@ -662,7 +672,9 @@ class TestExtensionlessMediaDelivery:
         )
         monkeypatch.delenv("CLAWK_MEDIA_DELIVERY_STRICT", raising=False)
 
-    def test_extensionless_media_extracted_when_file_validates(self, tmp_path, monkeypatch):
+    def test_extensionless_media_extracted_when_file_validates(
+        self, tmp_path, monkeypatch
+    ):
         root = tmp_path / "output"
         root.mkdir()
         caddy = root / "Caddyfile"
@@ -676,7 +688,9 @@ class TestExtensionlessMediaDelivery:
         assert "MEDIA:" not in cleaned
         assert "Done." in cleaned
 
-    def test_extensionless_media_left_visible_when_not_on_disk(self, tmp_path, monkeypatch):
+    def test_extensionless_media_left_visible_when_not_on_disk(
+        self, tmp_path, monkeypatch
+    ):
         root = tmp_path / "output"
         root.mkdir()
         self._patch_allow_root(monkeypatch, root)
@@ -687,7 +701,9 @@ class TestExtensionlessMediaDelivery:
         assert "MEDIA:/nonexistent/Caddyfile" in cleaned
 
     def test_strip_media_directives_for_display_strips_validated_extensionless(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         root = tmp_path / "output"
         root.mkdir()
@@ -731,12 +747,24 @@ class TestUniversalMediaEgress:
         )
         monkeypatch.delenv("CLAWK_MEDIA_DELIVERY_STRICT", raising=False)
 
-    @pytest.mark.parametrize("name", [
-        "script.py", "server.log", "notes.weirdext", "app.ts", "run.sh",
-        "config.toml", "styles.css", "contract.sol",
-    ])
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "script.py",
+            "server.log",
+            "notes.weirdext",
+            "app.ts",
+            "run.sh",
+            "config.toml",
+            "styles.css",
+            "contract.sol",
+        ],
+    )
     def test_unknown_extension_delivered_when_file_validates(
-        self, tmp_path, monkeypatch, name,
+        self,
+        tmp_path,
+        monkeypatch,
+        name,
     ):
         root = tmp_path / "output"
         root.mkdir()
@@ -752,7 +780,9 @@ class TestUniversalMediaEgress:
         assert "Done." in cleaned
 
     def test_unknown_extension_left_visible_when_not_on_disk(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         root = tmp_path / "output"
         root.mkdir()
@@ -764,7 +794,9 @@ class TestUniversalMediaEgress:
         assert "MEDIA:/nonexistent/script.py" in cleaned
 
     def test_denylisted_paths_still_rejected_regardless_of_extension(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         # A denylisted path must not deliver even though .py/.log/etc now
         # route through the validated pass. _media_delivery_denied_paths()
@@ -786,7 +818,9 @@ class TestUniversalMediaEgress:
         assert "MEDIA:" in cleaned  # rejected tag stays visible
 
     def test_strip_for_display_strips_validated_unknown_extension(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         root = tmp_path / "output"
         root.mkdir()
@@ -836,7 +870,9 @@ class TestMediaDeliveryPathValidation:
         media_file.write_bytes(b"OggS")
         self._patch_roots(monkeypatch, root)
 
-        assert BasePlatformAdapter.validate_media_delivery_path(str(media_file)) == str(media_file.resolve())
+        assert BasePlatformAdapter.validate_media_delivery_path(str(media_file)) == str(
+            media_file.resolve()
+        )
 
     def test_rejects_existing_file_outside_safe_root(self, tmp_path, monkeypatch):
         root = tmp_path / "media-cache"
@@ -885,10 +921,14 @@ class TestMediaDeliveryPathValidation:
         self._patch_roots(monkeypatch)
         monkeypatch.setenv("CLAWK_MEDIA_ALLOW_DIRS", str(extra_root))
 
-        assert BasePlatformAdapter.validate_media_delivery_path(str(media_file)) == str(media_file.resolve())
+        assert BasePlatformAdapter.validate_media_delivery_path(str(media_file)) == str(
+            media_file.resolve()
+        )
 
     def test_allows_stale_kanban_attachment_but_not_neighboring_workspace(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         """Strict mode trusts durable attachments without trusting scratch."""
         self._patch_roots(monkeypatch)
@@ -926,7 +966,9 @@ class TestMediaDeliveryPathValidation:
         fresh.parent.mkdir(parents=True)
         fresh.write_bytes(b"%PDF-1.4")
 
-        assert BasePlatformAdapter.validate_media_delivery_path(str(fresh)) == str(fresh.resolve())
+        assert BasePlatformAdapter.validate_media_delivery_path(str(fresh)) == str(
+            fresh.resolve()
+        )
 
     def test_recency_trust_rejects_old_file(self, tmp_path, monkeypatch):
         """A pre-existing host file (~/.bashrc, /etc/passwd shape) is rejected.
@@ -947,7 +989,9 @@ class TestMediaDeliveryPathValidation:
 
         assert BasePlatformAdapter.validate_media_delivery_path(str(stale)) is None
 
-    def test_recency_trust_disabled_falls_back_to_pure_allowlist(self, tmp_path, monkeypatch):
+    def test_recency_trust_disabled_falls_back_to_pure_allowlist(
+        self, tmp_path, monkeypatch
+    ):
         """Setting trust_recent_files=false reverts to pre-existing strict behavior."""
         self._patch_roots(monkeypatch)
         monkeypatch.delenv("CLAWK_MEDIA_ALLOW_DIRS", raising=False)
@@ -958,7 +1002,9 @@ class TestMediaDeliveryPathValidation:
 
         assert BasePlatformAdapter.validate_media_delivery_path(str(fresh)) is None
 
-    def test_recency_trust_denies_system_paths_even_when_fresh(self, tmp_path, monkeypatch):
+    def test_recency_trust_denies_system_paths_even_when_fresh(
+        self, tmp_path, monkeypatch
+    ):
         """A freshly-touched file under /etc must NOT be uploaded.
 
         Belt-and-braces: even if an attacker rewrites the file's mtime
@@ -998,7 +1044,9 @@ class TestMediaDeliveryPathValidation:
         report.parent.mkdir(parents=True)
         report.write_bytes(b"%PDF-1.4")
 
-        assert BasePlatformAdapter.validate_media_delivery_path(str(report)) == str(report.resolve())
+        assert BasePlatformAdapter.validate_media_delivery_path(str(report)) == str(
+            report.resolve()
+        )
 
     def test_filter_keeps_recently_produced_files(self, tmp_path, monkeypatch):
         """End-to-end: filter_local_delivery_paths routes a fresh PDF through."""
@@ -1049,7 +1097,9 @@ class TestMediaDeliveryDefaultMode:
         old_mtime = time.time() - 7200  # 2 hours ago — far outside any window
         os.utime(notes, (old_mtime, old_mtime))
 
-        assert BasePlatformAdapter.validate_media_delivery_path(str(notes)) == str(notes.resolve())
+        assert BasePlatformAdapter.validate_media_delivery_path(str(notes)) == str(
+            notes.resolve()
+        )
 
     def test_accepts_any_extension_not_on_denylist(self, tmp_path, monkeypatch):
         """No extension allowlist — .md, .txt, .json, .py all deliver."""
@@ -1058,7 +1108,9 @@ class TestMediaDeliveryDefaultMode:
         for name in ("report.md", "log.txt", "data.json", "script.py", "blob.bin"):
             f = tmp_path / name
             f.write_bytes(b"x")
-            assert BasePlatformAdapter.validate_media_delivery_path(str(f)) == str(f.resolve())
+            assert BasePlatformAdapter.validate_media_delivery_path(str(f)) == str(
+                f.resolve()
+            )
 
     def test_denylist_still_blocks_credentials(self, tmp_path, monkeypatch):
         """Default mode is permissive but not naive — credential paths
@@ -1146,7 +1198,9 @@ class TestMediaDeliveryDefaultMode:
 
         assert BasePlatformAdapter.validate_media_delivery_path(str(secret)) is None
 
-    def test_denylist_blocks_clawk_config_in_active_profile(self, tmp_path, monkeypatch):
+    def test_denylist_blocks_clawk_config_in_active_profile(
+        self, tmp_path, monkeypatch
+    ):
         """The active profile config stays blocked in default mode."""
         self._patch_roots(monkeypatch)
 
@@ -1161,9 +1215,13 @@ class TestMediaDeliveryDefaultMode:
             clawk_dir,
         )
 
-        assert BasePlatformAdapter.validate_media_delivery_path(str(config_file)) is None
+        assert (
+            BasePlatformAdapter.validate_media_delivery_path(str(config_file)) is None
+        )
 
-    def test_denylist_blocks_shared_clawk_root_config_for_profiles(self, tmp_path, monkeypatch):
+    def test_denylist_blocks_shared_clawk_root_config_for_profiles(
+        self, tmp_path, monkeypatch
+    ):
         """Profile-mode gateways must still block the shared Clawksis root config."""
         self._patch_roots(monkeypatch)
 
@@ -1183,7 +1241,9 @@ class TestMediaDeliveryDefaultMode:
             clawk_root,
         )
 
-        assert BasePlatformAdapter.validate_media_delivery_path(str(config_file)) is None
+        assert (
+            BasePlatformAdapter.validate_media_delivery_path(str(config_file)) is None
+        )
 
     def test_denylist_blocks_google_token_default_mode(self, tmp_path, monkeypatch):
         """Integration credentials at the CLAWK_HOME root (google_token.json)
@@ -1205,7 +1265,9 @@ class TestMediaDeliveryDefaultMode:
 
         assert BasePlatformAdapter.validate_media_delivery_path(str(token)) is None
 
-    def test_denylist_blocks_google_token_even_when_freshly_refreshed(self, tmp_path, monkeypatch):
+    def test_denylist_blocks_google_token_even_when_freshly_refreshed(
+        self, tmp_path, monkeypatch
+    ):
         """The exploit was that the Google integration rewrites
         google_token.json every turn, bumping its mtime to ~now, so the
         strict-mode recency window (trust_recent_files) kept re-trusting it
@@ -1261,9 +1323,13 @@ class TestMediaDeliveryDefaultMode:
         monkeypatch.setattr("gateway.platforms.base._CLAWK_HOME", clawk_dir)
         monkeypatch.setattr("gateway.platforms.base._CLAWK_ROOT", clawk_dir)
 
-        assert BasePlatformAdapter.validate_media_delivery_path(str(artifact)) == str(artifact.resolve())
+        assert BasePlatformAdapter.validate_media_delivery_path(str(artifact)) == str(
+            artifact.resolve()
+        )
 
-    def test_denylist_blocks_non_cache_file_under_clawk_home(self, tmp_path, monkeypatch):
+    def test_denylist_blocks_non_cache_file_under_clawk_home(
+        self, tmp_path, monkeypatch
+    ):
         """A non-credential file the agent wrote directly under ~/.clawksis
         (not in a cache subdir) is still deliverable via recency trust — we
         did NOT blanket-deny the tree (per #32090/#34425). This guards against
@@ -1282,7 +1348,9 @@ class TestMediaDeliveryDefaultMode:
         monkeypatch.setattr("gateway.platforms.base._CLAWK_HOME", clawk_dir)
         monkeypatch.setattr("gateway.platforms.base._CLAWK_ROOT", clawk_dir)
 
-        assert BasePlatformAdapter.validate_media_delivery_path(str(artifact)) == str(artifact.resolve())
+        assert BasePlatformAdapter.validate_media_delivery_path(str(artifact)) == str(
+            artifact.resolve()
+        )
 
     def test_strict_mode_envvar_restores_legacy_behavior(self, tmp_path, monkeypatch):
         """Setting CLAWK_MEDIA_DELIVERY_STRICT=1 reactivates the older
@@ -1346,9 +1414,8 @@ class TestMediaDeliveryDefaultMode:
             (str(fake_home),),
         )
 
-        assert (
-            BasePlatformAdapter.validate_media_delivery_path(str(doc))
-            == str(doc.resolve())
+        assert BasePlatformAdapter.validate_media_delivery_path(str(doc)) == str(
+            doc.resolve()
         )
 
     def test_root_home_credential_subdir_still_blocked(self, tmp_path, monkeypatch):
@@ -1392,7 +1459,9 @@ class TestMediaDeliveryDefaultMode:
 
         assert BasePlatformAdapter.validate_media_delivery_path(str(env_file)) is None
 
-    def test_profile_scoped_cache_delivers_under_symlinked_root(self, tmp_path, monkeypatch):
+    def test_profile_scoped_cache_delivers_under_symlinked_root(
+        self, tmp_path, monkeypatch
+    ):
         """Reopened #31733: a profile gateway whose CLAWK_HOME is symlinked
         under a denied prefix (e.g. /opt/data -> /root/.clawk) emits
         profile-scoped paths (``<root>/profiles/<name>/cache/images/x.png``)
@@ -1419,16 +1488,15 @@ class TestMediaDeliveryDefaultMode:
             "gateway.platforms.base._MEDIA_DELIVERY_DENIED_PREFIXES",
             (str(denied_root),),
         )
-        monkeypatch.setattr(
-            "gateway.platforms.base._CLAWK_ROOT", clawk_root
+        monkeypatch.setattr("gateway.platforms.base._CLAWK_ROOT", clawk_root)
+
+        assert BasePlatformAdapter.validate_media_delivery_path(str(image)) == str(
+            image.resolve()
         )
 
-        assert (
-            BasePlatformAdapter.validate_media_delivery_path(str(image))
-            == str(image.resolve())
-        )
-
-    def test_profile_scoped_credential_still_blocked_under_root(self, tmp_path, monkeypatch):
+    def test_profile_scoped_credential_still_blocked_under_root(
+        self, tmp_path, monkeypatch
+    ):
         """The profile-cache allowlist must not un-block a credential sitting
         directly in the profile dir (``profiles/<name>/auth.json``): it's not
         under a cache subdir, so the credential denylist still rejects it.
@@ -1449,9 +1517,7 @@ class TestMediaDeliveryDefaultMode:
             "gateway.platforms.base._MEDIA_DELIVERY_DENIED_PREFIXES",
             (str(denied_root),),
         )
-        monkeypatch.setattr(
-            "gateway.platforms.base._CLAWK_ROOT", clawk_root
-        )
+        monkeypatch.setattr("gateway.platforms.base._CLAWK_ROOT", clawk_root)
 
         assert BasePlatformAdapter.validate_media_delivery_path(str(cred)) is None
 
@@ -1476,11 +1542,11 @@ class TestMediaDeliveryDefaultMode:
             (str(my_home), str(other_home)),
         )
 
-        assert (
-            BasePlatformAdapter.validate_media_delivery_path(str(other_file)) is None
-        )
+        assert BasePlatformAdapter.validate_media_delivery_path(str(other_file)) is None
 
-    def test_root_home_workdir_symlink_to_credential_blocked(self, tmp_path, monkeypatch):
+    def test_root_home_workdir_symlink_to_credential_blocked(
+        self, tmp_path, monkeypatch
+    ):
         """A symlink in the workdir pointing at a credential is rejected on its
         resolved target, even under the $HOME exception.
         """
@@ -1508,32 +1574,38 @@ class TestMediaDeliveryDefaultMode:
 # should_send_media_as_audio
 # ---------------------------------------------------------------------------
 
+
 class TestShouldSendMediaAsAudio:
     """Audio-routing policy shared by gateway + scheduler + send_message."""
 
     def test_unknown_extension_returns_false(self):
         from gateway.platforms.base import should_send_media_as_audio
+
         assert should_send_media_as_audio(None, ".png") is False
         assert should_send_media_as_audio("telegram", ".pdf") is False
 
     def test_non_telegram_platforms_route_all_audio(self):
         from gateway.platforms.base import should_send_media_as_audio
+
         for ext in (".mp3", ".m4a", ".wav", ".flac", ".ogg", ".opus"):
             assert should_send_media_as_audio("discord", ext) is True
             assert should_send_media_as_audio("slack", ext) is True
 
     def test_telegram_mp3_and_m4a_route_to_audio(self):
         from gateway.platforms.base import should_send_media_as_audio
+
         assert should_send_media_as_audio("telegram", ".mp3") is True
         assert should_send_media_as_audio("telegram", ".m4a") is True
 
     def test_telegram_wav_and_flac_fall_through_to_document(self):
         from gateway.platforms.base import should_send_media_as_audio
+
         assert should_send_media_as_audio("telegram", ".wav") is False
         assert should_send_media_as_audio("telegram", ".flac") is False
 
     def test_telegram_ogg_opus_only_when_voice_flagged(self):
         from gateway.platforms.base import should_send_media_as_audio
+
         assert should_send_media_as_audio("telegram", ".ogg", is_voice=True) is True
         assert should_send_media_as_audio("telegram", ".opus", is_voice=True) is True
         assert should_send_media_as_audio("telegram", ".ogg") is False
@@ -1542,6 +1614,7 @@ class TestShouldSendMediaAsAudio:
     def test_accepts_platform_enum(self):
         from gateway.config import Platform
         from gateway.platforms.base import should_send_media_as_audio
+
         assert should_send_media_as_audio(Platform.TELEGRAM, ".mp3") is True
         assert should_send_media_as_audio(Platform.TELEGRAM, ".flac") is False
         assert should_send_media_as_audio(Platform.DISCORD, ".flac") is True
@@ -1636,9 +1709,7 @@ class TestTruncateMessage:
         for max_length in (0, 1, 2):
             chunks = self._truncate_with_timeout("abcdefghij", max_length)
             assert chunks, f"no chunks for max_length={max_length}"
-            reassembled = "".join(
-                re.sub(r"\s*\(\d+/\d+\)$", "", c) for c in chunks
-            )
+            reassembled = "".join(re.sub(r"\s*\(\d+/\d+\)$", "", c) for c in chunks)
             for ch in "abcdefghij":
                 assert ch in reassembled, f"char {ch!r} lost at max_length={max_length}"
 
@@ -1949,11 +2020,20 @@ class TestMediaDeliveryDiagnosability:
     def test_rejected_path_appears_in_log(self, tmp_path, caplog):
         outside = tmp_path / "outside.ogg"
         outside.write_bytes(b"OggS")
-        with patch.dict(os.environ, {"CLAWK_MEDIA_DELIVERY_STRICT": "1",
-                                     "CLAWK_MEDIA_TRUST_RECENT_FILES": "0"}), \
-                patch("gateway.platforms.base.MEDIA_DELIVERY_SAFE_ROOTS", ()):
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "CLAWK_MEDIA_DELIVERY_STRICT": "1",
+                    "CLAWK_MEDIA_TRUST_RECENT_FILES": "0",
+                },
+            ),
+            patch("gateway.platforms.base.MEDIA_DELIVERY_SAFE_ROOTS", ()),
+        ):
             with caplog.at_level("WARNING"):
-                out = BasePlatformAdapter.filter_media_delivery_paths([(str(outside), False)])
+                out = BasePlatformAdapter.filter_media_delivery_paths([
+                    (str(outside), False)
+                ])
         assert out == []
         # The dropped path must be in the log so operators can diagnose it.
         assert str(outside) in caplog.text
@@ -1985,6 +2065,7 @@ class TestMediaDeliveryDiagnosability:
 
     def test_canonical_cache_roots_present(self):
         from gateway.platforms.base import MEDIA_DELIVERY_SAFE_ROOTS
+
         roots = {str(r) for r in MEDIA_DELIVERY_SAFE_ROOTS}
         assert any(r.endswith("cache/images") for r in roots)
         assert any(r.endswith("cache/documents") for r in roots)
@@ -2010,6 +2091,7 @@ class _CapturingAdapter(BasePlatformAdapter):
 
     def __init__(self):
         from gateway.config import Platform, PlatformConfig
+
         super().__init__(PlatformConfig(enabled=True), Platform.TELEGRAM)
         self.sent: list[dict] = []
 
@@ -2024,6 +2106,7 @@ class _CapturingAdapter(BasePlatformAdapter):
 
     async def send(self, chat_id, content, reply_to=None, metadata=None):
         from gateway.platforms.base import SendResult
+
         self.sent.append({
             "chat_id": chat_id,
             "content": content,
@@ -2068,7 +2151,9 @@ class TestMediaFallbackDoesNotLeakHostPath:
     @pytest.mark.asyncio
     async def test_send_document_fallback_omits_file_path(self):
         adapter = _CapturingAdapter()
-        result = await adapter.send_document(chat_id="123", file_path=self.SENSITIVE_PATH)
+        result = await adapter.send_document(
+            chat_id="123", file_path=self.SENSITIVE_PATH
+        )
         assert result.success
         sent_text = adapter.sent[0]["content"]
         assert self.SENSITIVE_PATH not in sent_text
@@ -2094,7 +2179,9 @@ class TestMediaFallbackDoesNotLeakHostPath:
     @pytest.mark.asyncio
     async def test_send_image_file_fallback_omits_image_path(self):
         adapter = _CapturingAdapter()
-        result = await adapter.send_image_file(chat_id="123", image_path=self.SENSITIVE_PATH)
+        result = await adapter.send_image_file(
+            chat_id="123", image_path=self.SENSITIVE_PATH
+        )
         assert result.success
         sent_text = adapter.sent[0]["content"]
         assert self.SENSITIVE_PATH not in sent_text

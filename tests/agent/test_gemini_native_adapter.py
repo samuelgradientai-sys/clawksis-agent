@@ -36,9 +36,7 @@ def test_build_native_request_preserves_thought_signature_on_tool_replay():
                             "name": "get_weather",
                             "arguments": '{"city": "Paris"}',
                         },
-                        "extra_content": {
-                            "google": {"thought_signature": "sig-123"}
-                        },
+                        "extra_content": {"google": {"thought_signature": "sig-123"}},
                     }
                 ],
             },
@@ -98,10 +96,16 @@ def test_parallel_tool_results_merge_into_one_user_content():
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": "call_1", "type": "function",
-                 "function": {"name": "read_file", "arguments": '{"path": "a.txt"}'}},
-                {"id": "call_2", "type": "function",
-                 "function": {"name": "read_file", "arguments": '{"path": "b.txt"}'}},
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "read_file", "arguments": '{"path": "a.txt"}'},
+                },
+                {
+                    "id": "call_2",
+                    "type": "function",
+                    "function": {"name": "read_file", "arguments": '{"path": "b.txt"}'},
+                },
             ],
         },
         {"role": "tool", "tool_call_id": "call_1", "content": "AAA"},
@@ -116,9 +120,7 @@ def test_parallel_tool_results_merge_into_one_user_content():
     assert roles == ["user", "model", "user"]
 
     # Both parallel functionResponses land in the single trailing user content.
-    response_parts = [
-        p for p in contents[2]["parts"] if "functionResponse" in p
-    ]
+    response_parts = [p for p in contents[2]["parts"] if "functionResponse" in p]
     outputs = [p["functionResponse"]["response"]["output"] for p in response_parts]
     assert outputs == ["AAA", "BBB"]
 
@@ -237,27 +239,37 @@ def test_native_client_uses_x_goog_api_key_and_native_models_endpoint(monkeypatc
         def close(self):
             return None
 
-    monkeypatch.setattr("agent.gemini_native_adapter.httpx.Client", lambda *a, **k: DummyHTTP())
+    monkeypatch.setattr(
+        "agent.gemini_native_adapter.httpx.Client", lambda *a, **k: DummyHTTP()
+    )
 
-    client = GeminiNativeClient(api_key="AIza-test", base_url="https://generativelanguage.googleapis.com/v1beta")
+    client = GeminiNativeClient(
+        api_key="AIza-test", base_url="https://generativelanguage.googleapis.com/v1beta"
+    )
     response = client.chat.completions.create(
         model="gemini-2.5-flash",
         messages=[{"role": "user", "content": "Hello"}],
     )
 
-    assert recorded["url"] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    assert (
+        recorded["url"]
+        == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    )
     assert recorded["headers"]["x-goog-api-key"] == "AIza-test"
     assert "Authorization" not in recorded["headers"]
     assert response.choices[0].message.content == "hello"
 
 
-@pytest.mark.parametrize("model, expected", [
-    ("google/gemini-2.0-flash", "gemini-2.0-flash"),
-    ("gemini/gemini-3-pro-preview", "gemini-3-pro-preview"),
-    ("Google/Gemini-2.5-Pro", "Gemini-2.5-Pro"),
-    ("models/gemini-x", "models/gemini-x"),
-    ("tunedModels/my-tune", "tunedModels/my-tune"),
-])
+@pytest.mark.parametrize(
+    "model, expected",
+    [
+        ("google/gemini-2.0-flash", "gemini-2.0-flash"),
+        ("gemini/gemini-3-pro-preview", "gemini-3-pro-preview"),
+        ("Google/Gemini-2.5-Pro", "Gemini-2.5-Pro"),
+        ("models/gemini-x", "models/gemini-x"),
+        ("tunedModels/my-tune", "tunedModels/my-tune"),
+    ],
+)
 def test_bare_gemini_model_id_strips_only_self_prefix(model, expected):
     from agent.gemini_native_adapter import bare_gemini_model_id
 
@@ -272,22 +284,37 @@ def test_native_client_strips_self_prefix_from_model_url(monkeypatch):
     class DummyHTTP:
         def post(self, url, json=None, headers=None, timeout=None):
             recorded["url"] = url
-            return DummyResponse(payload={
-                "candidates": [{"content": {"parts": [{"text": "ok"}]}, "finishReason": "STOP"}],
-                "usageMetadata": {"promptTokenCount": 1, "candidatesTokenCount": 1, "totalTokenCount": 2},
-            })
+            return DummyResponse(
+                payload={
+                    "candidates": [
+                        {"content": {"parts": [{"text": "ok"}]}, "finishReason": "STOP"}
+                    ],
+                    "usageMetadata": {
+                        "promptTokenCount": 1,
+                        "candidatesTokenCount": 1,
+                        "totalTokenCount": 2,
+                    },
+                }
+            )
 
         def close(self):
             return None
 
-    monkeypatch.setattr("agent.gemini_native_adapter.httpx.Client", lambda *a, **k: DummyHTTP())
-    client = GeminiNativeClient(api_key="AIza-test", base_url="https://generativelanguage.googleapis.com/v1beta")
+    monkeypatch.setattr(
+        "agent.gemini_native_adapter.httpx.Client", lambda *a, **k: DummyHTTP()
+    )
+    client = GeminiNativeClient(
+        api_key="AIza-test", base_url="https://generativelanguage.googleapis.com/v1beta"
+    )
     client.chat.completions.create(
         model="google/gemini-2.0-flash",
         messages=[{"role": "user", "content": "Hello"}],
     )
 
-    assert recorded["url"] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    assert (
+        recorded["url"]
+        == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    )
 
 
 def test_native_http_error_keeps_status_and_retry_after():
@@ -343,7 +370,11 @@ def test_native_client_rejects_empty_api_key_with_actionable_message():
 async def test_async_native_client_streams_without_requiring_async_iterator_from_sync_client():
     from agent.gemini_native_adapter import AsyncGeminiNativeClient
 
-    chunk = SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="hi"), finish_reason=None)])
+    chunk = SimpleNamespace(
+        choices=[
+            SimpleNamespace(delta=SimpleNamespace(content="hi"), finish_reason=None)
+        ]
+    )
     sync_stream = iter([chunk])
 
     def _advance(iterator):
@@ -355,7 +386,9 @@ async def test_async_native_client_streams_without_requiring_async_iterator_from
     sync_client = SimpleNamespace(
         api_key="AIza-test",
         base_url="https://generativelanguage.googleapis.com/v1beta",
-        chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: sync_stream)),
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=lambda **kwargs: sync_stream)
+        ),
         _advance_stream_iterator=_advance,
         close=lambda: None,
     )
@@ -385,12 +418,19 @@ def test_stream_event_translation_emits_tool_call_delta_with_stable_index():
         ]
     }
 
-    first = translate_stream_event(event, model="gemini-2.5-flash", tool_call_indices=tool_call_indices)
-    second = translate_stream_event(event, model="gemini-2.5-flash", tool_call_indices=tool_call_indices)
+    first = translate_stream_event(
+        event, model="gemini-2.5-flash", tool_call_indices=tool_call_indices
+    )
+    second = translate_stream_event(
+        event, model="gemini-2.5-flash", tool_call_indices=tool_call_indices
+    )
 
     assert first[0].choices[0].delta.tool_calls[0].index == 0
     assert second[0].choices[0].delta.tool_calls[0].index == 0
-    assert first[0].choices[0].delta.tool_calls[0].id == second[0].choices[0].delta.tool_calls[0].id
+    assert (
+        first[0].choices[0].delta.tool_calls[0].id
+        == second[0].choices[0].delta.tool_calls[0].id
+    )
     assert first[0].choices[0].delta.tool_calls[0].function.arguments == '{"q": "abc"}'
     assert second[0].choices[0].delta.tool_calls[0].function.arguments == ""
     assert first[-1].choices[0].finish_reason == "tool_calls"
@@ -413,11 +453,16 @@ def test_stream_event_translation_keeps_identical_calls_in_distinct_parts():
         ]
     }
 
-    chunks = translate_stream_event(event, model="gemini-2.5-flash", tool_call_indices={})
+    chunks = translate_stream_event(
+        event, model="gemini-2.5-flash", tool_call_indices={}
+    )
     tool_chunks = [chunk for chunk in chunks if chunk.choices[0].delta.tool_calls]
     assert tool_chunks[0].choices[0].delta.tool_calls[0].index == 0
     assert tool_chunks[1].choices[0].delta.tool_calls[0].index == 1
-    assert tool_chunks[0].choices[0].delta.tool_calls[0].id != tool_chunks[1].choices[0].delta.tool_calls[0].id
+    assert (
+        tool_chunks[0].choices[0].delta.tool_calls[0].id
+        != tool_chunks[1].choices[0].delta.tool_calls[0].id
+    )
 
 
 def test_system_instruction_includes_role_field_and_stays_out_of_contents():
@@ -452,14 +497,22 @@ def test_max_tokens_none_defaults_to_gemini_output_ceiling():
         GEMINI_DEFAULT_MAX_OUTPUT_TOKENS,
     )
 
-    req = build_gemini_request(messages=[{"role": "user", "content": "hi"}], max_tokens=None)
-    assert req["generationConfig"]["maxOutputTokens"] == GEMINI_DEFAULT_MAX_OUTPUT_TOKENS == 65535
+    req = build_gemini_request(
+        messages=[{"role": "user", "content": "hi"}], max_tokens=None
+    )
+    assert (
+        req["generationConfig"]["maxOutputTokens"]
+        == GEMINI_DEFAULT_MAX_OUTPUT_TOKENS
+        == 65535
+    )
 
 
 def test_explicit_max_tokens_is_respected():
     from agent.gemini_native_adapter import build_gemini_request
 
-    req = build_gemini_request(messages=[{"role": "user", "content": "hi"}], max_tokens=4096)
+    req = build_gemini_request(
+        messages=[{"role": "user", "content": "hi"}], max_tokens=4096
+    )
     assert req["generationConfig"]["maxOutputTokens"] == 4096
 
 

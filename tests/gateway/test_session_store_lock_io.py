@@ -8,6 +8,7 @@ SELECTs (``_is_session_ended_in_db``), a full routing-index rewrite +
 These tests assert those three I/O calls are invoked *outside* the lock.
 They follow the mock-DB idiom from ``test_session_store_runtime_stale_guard``.
 """
+
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -23,6 +24,7 @@ from gateway.session import SessionEntry, SessionSource, SessionStore
 # ---------------------------------------------------------------------------
 # Test helpers
 # ---------------------------------------------------------------------------
+
 
 class _TrackedLock:
     """Drop-in replacement for ``threading.Lock`` that tracks hold state.
@@ -107,6 +109,7 @@ def _seed_entry(store, key, session_id) -> SessionEntry:
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestStaleCheckOutsideLock:
     def test_is_session_ended_not_holding_lock(self, tmp_path):
         """``_is_session_ended_in_db`` must run with the lock released."""
@@ -161,8 +164,7 @@ class TestSaveOutsideLock:
         store.get_or_create_session(source, force_new=True)
 
         assert not save_calls_under_lock, (
-            f"_save called {len(save_calls_under_lock)} time(s) "
-            f"while lock was held"
+            f"_save called {len(save_calls_under_lock)} time(s) while lock was held"
         )
 
 
@@ -223,7 +225,9 @@ def test_concurrent_same_key_returns_one_published_session(tmp_path):
     key = store._generate_session_key(source)
     assert entries[0] is entries[1]
     assert entries[0].session_id == store._entries[key].session_id
-    created_ids = {call.kwargs["session_id"] for call in db.create_session.call_args_list}
+    created_ids = {
+        call.kwargs["session_id"] for call in db.create_session.call_args_list
+    }
     assert created_ids == {entries[0].session_id}
 
 
@@ -250,7 +254,9 @@ def test_concurrent_force_new_returns_one_published_session(tmp_path):
         entries = [owner.result(timeout=10), follower.result(timeout=10)]
 
     assert entries[0] is entries[1]
-    created_ids = {call.kwargs["session_id"] for call in db.create_session.call_args_list}
+    created_ids = {
+        call.kwargs["session_id"] for call in db.create_session.call_args_list
+    }
     assert created_ids == {entries[0].session_id}
 
 
@@ -275,9 +281,7 @@ def test_auto_reset_does_not_recover_session_being_ended(tmp_path):
     # Auto-reset now writes through promote_to_session_reset (upgrades
     # accidental agent_close/ws_orphan_reap ends) with the specific
     # auditable reason — a suspended session resets as "suspended".
-    db.promote_to_session_reset.assert_called_once_with(
-        old.session_id, "suspended"
-    )
+    db.promote_to_session_reset.assert_called_once_with(old.session_id, "suspended")
     db.end_session.assert_not_called()
 
 

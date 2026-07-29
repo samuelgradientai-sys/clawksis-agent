@@ -91,7 +91,9 @@ def test_restore_stamps_restored_flag(tmp_path, monkeypatch):
 def test_unfiltered_drain_never_consumes_restored_events():
     """The legacy consume-everything branch must fail closed on restored events."""
     reg = _make_registry()
-    reg.completion_queue.put(_delegation_event(session_key="DEAD_SESSION", restored=True))
+    reg.completion_queue.put(
+        _delegation_event(session_key="DEAD_SESSION", restored=True)
+    )
 
     results = reg.drain_notifications()  # no filter — legacy CLI post-turn shape
 

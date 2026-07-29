@@ -17,12 +17,28 @@ from clawk_cli.session_filters import (
 
 def _ns(**kwargs):
     defaults = dict(
-        older_than=None, newer_than=None, before=None, after=None,
-        source=None, title=None, end_reason=None, cwd=None,
-        min_messages=None, max_messages=None,
-        model=None, provider=None, user=None, chat_id=None, chat_type=None,
-        branch=None, min_tokens=None, max_tokens=None, min_cost=None,
-        max_cost=None, min_tool_calls=None, max_tool_calls=None,
+        older_than=None,
+        newer_than=None,
+        before=None,
+        after=None,
+        source=None,
+        title=None,
+        end_reason=None,
+        cwd=None,
+        min_messages=None,
+        max_messages=None,
+        model=None,
+        provider=None,
+        user=None,
+        chat_id=None,
+        chat_type=None,
+        branch=None,
+        min_tokens=None,
+        max_tokens=None,
+        min_cost=None,
+        max_cost=None,
+        min_tool_calls=None,
+        max_tool_calls=None,
     )
     defaults.update(kwargs)
     return Namespace(**defaults)
@@ -36,7 +52,7 @@ class TestParseDurationSeconds:
             ("5h", 18000),
             ("2d", 172800),
             ("1w", 604800),
-            ("90", 90 * 86400),   # bare number = days (back-compat)
+            ("90", 90 * 86400),  # bare number = days (back-compat)
             ("1.5h", 5400),
             ("10 min", 600),
             ("2 hours", 7200),
@@ -77,9 +93,7 @@ class TestBuildPruneFilters:
 
     def test_older_than_bare_days(self):
         f = build_prune_filters(_ns(older_than="90"))
-        assert f["started_before"] == pytest.approx(
-            time.time() - 90 * 86400, abs=5
-        )
+        assert f["started_before"] == pytest.approx(time.time() - 90 * 86400, abs=5)
         assert f["started_after"] is None
 
     def test_window_before_and_after(self):
@@ -94,14 +108,18 @@ class TestBuildPruneFilters:
         # --older-than 1d and --before 5h both set the upper bound;
         # 1d ago is earlier (tighter for "older than") so it wins.
         f = build_prune_filters(_ns(older_than="1d", before="5h"))
-        assert f["started_before"] == pytest.approx(
-            time.time() - 86400, abs=5
-        )
+        assert f["started_before"] == pytest.approx(time.time() - 86400, abs=5)
 
     def test_passthrough_filters(self):
         f = build_prune_filters(
-            _ns(source="cli", title="smoke", end_reason="done",
-                cwd="/tmp/x", min_messages=1, max_messages=9)
+            _ns(
+                source="cli",
+                title="smoke",
+                end_reason="done",
+                cwd="/tmp/x",
+                min_messages=1,
+                max_messages=9,
+            )
         )
         assert f["source"] == "cli"
         assert f["title_like"] == "smoke"
@@ -112,10 +130,20 @@ class TestBuildPruneFilters:
 
     def test_passthrough_extended_filters(self):
         f = build_prune_filters(
-            _ns(model="sonnet", provider="openrouter", user="alice",
-                chat_id="c-9", chat_type="group", branch="feature/x",
-                min_tokens=100, max_tokens=5000, min_cost=0.01,
-                max_cost=2.5, min_tool_calls=1, max_tool_calls=40)
+            _ns(
+                model="sonnet",
+                provider="openrouter",
+                user="alice",
+                chat_id="c-9",
+                chat_type="group",
+                branch="feature/x",
+                min_tokens=100,
+                max_tokens=5000,
+                min_cost=0.01,
+                max_cost=2.5,
+                min_tool_calls=1,
+                max_tool_calls=40,
+            )
         )
         assert f["model_like"] == "sonnet"
         assert f["provider"] == "openrouter"
@@ -131,8 +159,7 @@ class TestBuildPruneFilters:
         assert f["max_tool_calls"] == 40
 
     def test_describe_filters_extended(self):
-        f = build_prune_filters(_ns(model="gpt-5", provider="nous",
-                                    max_cost=0.5))
+        f = build_prune_filters(_ns(model="gpt-5", provider="nous", max_cost=0.5))
         desc = describe_filters(f)
         assert "model contains 'gpt-5'" in desc
         assert "provider 'nous'" in desc

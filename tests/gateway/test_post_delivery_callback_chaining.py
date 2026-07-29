@@ -11,6 +11,7 @@ callbacks — the outer invoker in ``_handle_message`` awaits awaitable
 callbacks, and a sync wrapper would silently drop coroutine results from
 async callbacks chained behind it.
 """
+
 import asyncio
 import inspect
 
@@ -118,9 +119,7 @@ class TestPostDeliveryCallbackChaining:
         assert fired == ["gen7"]
 
     def test_pop_at_wrong_generation_returns_none(self, adapter):
-        adapter.register_post_delivery_callback(
-            "s", lambda: None, generation=5
-        )
+        adapter.register_post_delivery_callback("s", lambda: None, generation=5)
         assert adapter.pop_post_delivery_callback("s", generation=99) is None
         # Correct generation still finds it.
         assert adapter.pop_post_delivery_callback("s", generation=5) is not None

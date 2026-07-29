@@ -76,7 +76,9 @@ def _indent_level(spaces: str) -> int:
 _INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 _LINK_RE = re.compile(r"(?<!!)\[([^\]]+)\]\(([^()\s]+(?:\([^()]*\)[^()\s]*)*)\)")
 _BOLD_RE = re.compile(r"(?:\*\*|__)(.+?)(?:\*\*|__)")
-_ITALIC_RE = re.compile(r"(?<![\*_])(?:\*|_)(?![\*_\s])(.+?)(?<![\*_\s])(?:\*|_)(?![\*_])")
+_ITALIC_RE = re.compile(
+    r"(?<![\*_])(?:\*|_)(?![\*_\s])(.+?)(?<![\*_\s])(?:\*|_)(?![\*_])"
+)
 _STRIKE_RE = re.compile(r"~~(.+?)~~")
 
 
@@ -104,7 +106,7 @@ def _inline_elements(text: str) -> List[Dict[str, Any]]:
         pos = 0
         # inline code is opaque — no nested styling
         for m in _INLINE_CODE_RE.finditer(s):
-            _walk_links(s[pos:m.start()], style)
+            _walk_links(s[pos : m.start()], style)
             code_style = dict(style)
             code_style["code"] = True
             emit_text(m.group(1), code_style or None)
@@ -114,8 +116,12 @@ def _inline_elements(text: str) -> List[Dict[str, Any]]:
     def _walk_links(s: str, style: Dict[str, bool]) -> None:
         pos = 0
         for m in _LINK_RE.finditer(s):
-            _walk_emphasis(s[pos:m.start()], style)
-            link_el: Dict[str, Any] = {"type": "link", "url": m.group(2), "text": m.group(1)}
+            _walk_emphasis(s[pos : m.start()], style)
+            link_el: Dict[str, Any] = {
+                "type": "link",
+                "url": m.group(2),
+                "text": m.group(1),
+            }
             if style:
                 link_el["style"] = dict(style)
             elements.append(link_el)
@@ -126,14 +132,18 @@ def _inline_elements(text: str) -> List[Dict[str, Any]]:
         if not s:
             return
         # Try bold, then strike, then italic, recursing into the inner span.
-        for rx, key in ((_BOLD_RE, "bold"), (_STRIKE_RE, "strike"), (_ITALIC_RE, "italic")):
+        for rx, key in (
+            (_BOLD_RE, "bold"),
+            (_STRIKE_RE, "strike"),
+            (_ITALIC_RE, "italic"),
+        ):
             m = rx.search(s)
             if m:
-                _walk_emphasis(s[:m.start()], style)
+                _walk_emphasis(s[: m.start()], style)
                 inner_style = dict(style)
                 inner_style[key] = True
                 _walk_emphasis(m.group(1), inner_style)
-                _walk_emphasis(s[m.end():], style)
+                _walk_emphasis(s[m.end() :], style)
                 return
         emit_text(s, dict(style) if style else None)
 
@@ -151,7 +161,10 @@ def _header_block(text: str) -> Block:
     clean = re.sub(r"[*_~`]", "", text).strip()
     if len(clean) > MAX_HEADER_TEXT:
         clean = clean[: MAX_HEADER_TEXT - 1] + "…"
-    return {"type": "header", "text": {"type": "plain_text", "text": clean, "emoji": True}}
+    return {
+        "type": "header",
+        "text": {"type": "plain_text", "text": clean, "emoji": True},
+    }
 
 
 def _divider_block() -> Block:
@@ -206,9 +219,10 @@ def _list_block(items: List[Tuple[int, bool, str]]) -> Block:
             elements.append(cur)
             cur_key = key
         assert cur is not None
-        cur["elements"].append(
-            {"type": "rich_text_section", "elements": _inline_elements(text)}
-        )
+        cur["elements"].append({
+            "type": "rich_text_section",
+            "elements": _inline_elements(text),
+        })
     return {"type": "rich_text", "elements": elements}
 
 
@@ -255,9 +269,7 @@ def _rich_text_cell(text: str) -> Dict[str, Any]:
     """A ``rich_text`` table cell carrying inline-formatted content."""
     return {
         "type": "rich_text",
-        "elements": [
-            {"type": "rich_text_section", "elements": _inline_elements(text)}
-        ],
+        "elements": [{"type": "rich_text_section", "elements": _inline_elements(text)}],
     }
 
 
@@ -451,7 +463,9 @@ def render_blocks(
                     elif om:
                         items.append((_indent_level(om.group(1)), True, om.group(3)))
                         i += 1
-                    elif lines[i].strip() and lines[i].startswith((" ", "\t")) and items:
+                    elif (
+                        lines[i].strip() and lines[i].startswith((" ", "\t")) and items
+                    ):
                         # continuation line of the previous item
                         indent, ordered, txt = items[-1]
                         items[-1] = (indent, ordered, txt + " " + lines[i].strip())

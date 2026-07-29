@@ -1,4 +1,5 @@
 """Contract tests for the Docker image's immutable /opt/clawksis install tree."""
+
 from __future__ import annotations
 
 import re

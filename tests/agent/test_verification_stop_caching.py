@@ -21,9 +21,15 @@ import pytest
 
 def _fresh_run_agent(clawk_home):
     for mod in list(sys.modules):
-        if mod == "run_agent" or mod.startswith("agent.") or mod.startswith("tools.") or mod.startswith("clawk_"):
+        if (
+            mod == "run_agent"
+            or mod.startswith("agent.")
+            or mod.startswith("tools.")
+            or mod.startswith("clawk_")
+        ):
             del sys.modules[mod]
     import run_agent  # noqa: F401
+
     return sys.modules["run_agent"]
 
 
@@ -35,15 +41,22 @@ def test_verification_flags_registered_as_ephemeral(tmp_path, monkeypatch):
     assert "_pre_verify_synthetic" in ra._EPHEMERAL_SCAFFOLDING_FLAGS
 
     # The nudge messages ARE scaffolding (they carry the synthetic flag).
-    assert ra._is_ephemeral_scaffolding(
-        {"role": "user", "content": "[System: run tests]", "_pre_verify_synthetic": True}
-    )
-    assert ra._is_ephemeral_scaffolding(
-        {"role": "user", "content": "[System: run tests]", "_verification_stop_synthetic": True}
-    )
+    assert ra._is_ephemeral_scaffolding({
+        "role": "user",
+        "content": "[System: run tests]",
+        "_pre_verify_synthetic": True,
+    })
+    assert ra._is_ephemeral_scaffolding({
+        "role": "user",
+        "content": "[System: run tests]",
+        "_verification_stop_synthetic": True,
+    })
     # Real messages (including the assistant candidate) are not.
     assert not ra._is_ephemeral_scaffolding({"role": "user", "content": "hi"})
-    assert not ra._is_ephemeral_scaffolding({"role": "assistant", "content": "premature done"})
+    assert not ra._is_ephemeral_scaffolding({
+        "role": "assistant",
+        "content": "premature done",
+    })
 
 
 def _make_agent(ra, session_id, tmp_path):
@@ -77,7 +90,11 @@ def test_db_flush_drops_only_nudge_keeps_candidate(tmp_path, monkeypatch):
         # Assistant candidate — NOT flagged synthetic, persists.
         {"role": "assistant", "content": "premature done"},
         # Nudge — flagged synthetic, gets dropped.
-        {"role": "user", "content": "[System: run tests]", "_verification_stop_synthetic": True},
+        {
+            "role": "user",
+            "content": "[System: run tests]",
+            "_verification_stop_synthetic": True,
+        },
         {"role": "assistant", "content": "verified and clean"},
     ]
 
@@ -107,7 +124,11 @@ def test_json_log_drops_only_nudge_keeps_candidate(tmp_path, monkeypatch):
         # Assistant candidate — NOT flagged synthetic, persists.
         {"role": "assistant", "content": "premature done"},
         # Nudge — flagged synthetic, gets dropped.
-        {"role": "user", "content": "[System: run tests]", "_pre_verify_synthetic": True},
+        {
+            "role": "user",
+            "content": "[System: run tests]",
+            "_pre_verify_synthetic": True,
+        },
         {"role": "assistant", "content": "verified and clean"},
     ]
 

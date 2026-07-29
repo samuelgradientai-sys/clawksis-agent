@@ -19,6 +19,7 @@ from gateway.session import SessionEntry, SessionSource, SessionStore
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_entry(key: str, session_id: str) -> SessionEntry:
     now = datetime.now()
     return SessionEntry(
@@ -63,6 +64,7 @@ def _db_returning(rows: dict) -> MagicMock:
 # ---------------------------------------------------------------------------
 # Core behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestPruneStaleSessionsLocked:
     def test_prunes_ended_session(self, tmp_path):
@@ -137,9 +139,13 @@ class TestPruneStaleSessionsLocked:
         db.find_latest_gateway_session_for_peer.assert_called_once()
         db.reopen_session.assert_called_once_with("sid_child")
 
-    def test_prunes_stale_entry_when_recovery_only_finds_same_ended_session(self, tmp_path):
+    def test_prunes_stale_entry_when_recovery_only_finds_same_ended_session(
+        self, tmp_path
+    ):
         key = "agent:main:telegram:dm:5140768830"
-        db = _db_returning({"sid_parent": {"end_reason": "agent_close", "id": "sid_parent"}})
+        db = _db_returning({
+            "sid_parent": {"end_reason": "agent_close", "id": "sid_parent"}
+        })
         db.find_latest_gateway_session_for_peer.return_value = {
             "id": "sid_parent",
             "started_at": 1782744974.0,
@@ -160,7 +166,9 @@ class TestPruneStaleSessionsLocked:
         runtime stale guard retry recovery on the next message.
         """
         key = "agent:main:telegram:dm:5140768830"
-        db = _db_returning({"sid_parent": {"end_reason": "compression", "id": "sid_parent"}})
+        db = _db_returning({
+            "sid_parent": {"end_reason": "compression", "id": "sid_parent"}
+        })
         db.find_latest_gateway_session_for_peer.side_effect = RuntimeError("db busy")
         store = _make_store_with_db(tmp_path, db)
         store._entries[key] = _make_entry_with_origin(key, "sid_parent")
@@ -201,7 +209,9 @@ class TestPruneStaleSessionsLocked:
         assert "key" in store._entries  # safe fallback — keep on error
 
     def test_sessions_json_rewritten_after_pruning(self, tmp_path):
-        db = _db_returning({"sid_stale": {"end_reason": "agent_close", "id": "sid_stale"}})
+        db = _db_returning({
+            "sid_stale": {"end_reason": "agent_close", "id": "sid_stale"}
+        })
         store = _make_store_with_db(tmp_path, db)
         store._entries["stale_key"] = _make_entry("stale_key", "sid_stale")
 
@@ -223,13 +233,16 @@ class TestPruneStaleSessionsLocked:
 # Integration: _ensure_loaded_locked calls _prune_stale_sessions_locked
 # ---------------------------------------------------------------------------
 
+
 class TestEnsureLoadedCallsPrune:
     def test_stale_entry_pruned_during_load(self, tmp_path):
         entry = _make_entry("dm_key", "sid_stale")
         (tmp_path / "sessions.json").write_text(
             json.dumps({"dm_key": entry.to_dict()}, indent=2), encoding="utf-8"
         )
-        db = _db_returning({"sid_stale": {"end_reason": "agent_close", "id": "sid_stale"}})
+        db = _db_returning({
+            "sid_stale": {"end_reason": "agent_close", "id": "sid_stale"}
+        })
         config = GatewayConfig(default_reset_policy=SessionResetPolicy(mode="none"))
         store = SessionStore(sessions_dir=tmp_path, config=config)
         store._db = db

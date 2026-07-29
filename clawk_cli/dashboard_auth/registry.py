@@ -4,6 +4,7 @@ Plugins call ``register_provider`` via the plugin context hook at startup.
 The auth gate middleware iterates ``list_providers()`` and uses
 ``get_provider`` to dispatch on the session's ``provider`` field.
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,7 +37,8 @@ def register_provider(provider: DashboardAuthProvider) -> None:
         _providers[provider.name] = provider
     _log.info(
         "dashboard-auth: registered provider %r (%s)",
-        provider.name, provider.display_name,
+        provider.name,
+        provider.display_name,
     )
 
 

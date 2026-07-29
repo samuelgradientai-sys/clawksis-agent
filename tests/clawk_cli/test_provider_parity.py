@@ -83,7 +83,9 @@ def test_each_provider_lands_on_the_tab_its_auth_type_dictates():
         if d.tab == "keys" and d.api_key_env_vars:
             assert d.slug in keys, f"{d.slug} (keys tab) missing from /api/env"
         elif d.tab == "accounts":
-            assert d.slug in accounts, f"{d.slug} (accounts tab) missing from /api/providers/oauth"
+            assert d.slug in accounts, (
+                f"{d.slug} (accounts tab) missing from /api/providers/oauth"
+            )
 
 
 def test_no_provider_appears_on_both_tabs():

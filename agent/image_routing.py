@@ -58,7 +58,15 @@ _VALID_MODES = frozenset({"auto", "native", "text"})
 # them differently (send_document), and we don't want to attach a PDF as a
 # vision part.
 _IMAGE_EXTS = (
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif", ".heic",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".bmp",
+    ".tiff",
+    ".tif",
+    ".heic",
 )
 _IMAGE_EXT_PATTERN = "|".join(e.lstrip(".") for e in _IMAGE_EXTS)
 
@@ -216,16 +224,20 @@ def _supports_vision_override(
     # Extract the stripped name from "custom:<name>" if present
     stripped_suffix = ""
     if config_provider.startswith("custom:"):
-        stripped_suffix = config_provider[len("custom:"):]
+        stripped_suffix = config_provider[len("custom:") :]
     providers_raw = cfg.get("providers")
-    providers_cfg: Dict[str, Any] = providers_raw if isinstance(providers_raw, dict) else {}
+    providers_cfg: Dict[str, Any] = (
+        providers_raw if isinstance(providers_raw, dict) else {}
+    )
     for p in dict.fromkeys(filter(None, (provider, config_provider, stripped_suffix))):
         entry_raw = providers_cfg.get(p)
         entry: Dict[str, Any] = entry_raw if isinstance(entry_raw, dict) else {}
         models_raw = entry.get("models")
         models_cfg: Dict[str, Any] = models_raw if isinstance(models_raw, dict) else {}
         per_model_raw = models_cfg.get(model)
-        per_model: Dict[str, Any] = per_model_raw if isinstance(per_model_raw, dict) else {}
+        per_model: Dict[str, Any] = (
+            per_model_raw if isinstance(per_model_raw, dict) else {}
+        )
         coerced = _coerce_capability_bool(per_model.get("supports_vision"))
         if coerced is not None:
             return coerced
@@ -241,7 +253,7 @@ def _supports_vision_override(
         for p in filter(None, (provider, config_provider)):
             candidate_names.add(p)
             if p.startswith("custom:"):
-                candidate_names.add(p[len("custom:"):])
+                candidate_names.add(p[len("custom:") :])
             else:
                 candidate_names.add(f"custom:{p}")
         for entry_raw in custom_providers:
@@ -272,7 +284,9 @@ def _resolve_inference_base_url(
         runtime = str(_runtime_main_value("base_url") or "").strip()
         runtime_provider = str(_runtime_main_value("provider") or "").strip().lower()
         requested_provider = str(provider or "").strip().lower()
-        if runtime and (not requested_provider or requested_provider == runtime_provider):
+        if runtime and (
+            not requested_provider or requested_provider == runtime_provider
+        ):
             return runtime
     except Exception:
         pass
@@ -391,9 +405,12 @@ def _lookup_supports_vision(
     caps = None
     try:
         from agent.models_dev import get_model_capabilities
+
         caps = get_model_capabilities(provider, model)
     except Exception as exc:  # pragma: no cover - defensive
-        logger.debug("image_routing: caps lookup failed for %s:%s — %s", provider, model, exc)
+        logger.debug(
+            "image_routing: caps lookup failed for %s:%s — %s", provider, model, exc
+        )
     if caps is not None:
         return bool(caps.supports_vision)
 
@@ -500,8 +517,14 @@ def _sniff_mime_from_bytes(raw: bytes) -> Optional[str]:
         if brand in {b"avif", b"avis"}:
             return "image/avif"
         if brand in {
-            b"heic", b"heix", b"hevc", b"hevx",
-            b"mif1", b"msf1", b"heim", b"heis",
+            b"heic",
+            b"heix",
+            b"hevc",
+            b"hevx",
+            b"mif1",
+            b"msf1",
+            b"heim",
+            b"heis",
         }:
             return "image/heic"
     # TIFF: II*\0 (little-endian) or MM\0* (big-endian)
@@ -530,7 +553,10 @@ def _sniff_mime_from_bytes(raw: bytes) -> Optional[str]:
 # do hit this in practice. SVG is vector and Pillow cannot rasterize it;
 # it is skipped (logged) rather than transcoded.
 _UNIVERSALLY_SUPPORTED_MIMES = frozenset({
-    "image/png", "image/jpeg", "image/gif", "image/webp",
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
 })
 
 
@@ -580,9 +606,7 @@ def _transcode_to_png(raw: bytes) -> Optional[bytes]:
             im.save(buf, format="PNG", optimize=False)
             return buf.getvalue()
     except Exception as exc:
-        logger.info(
-            "image_routing: Pillow could not transcode image to PNG -- %s", exc
-        )
+        logger.info("image_routing: Pillow could not transcode image to PNG -- %s", exc)
         return None
 
 
@@ -639,7 +663,9 @@ def _file_to_data_url(path: Path) -> Optional[str]:
 
         raise_if_read_blocked(str(path))
     except ValueError as exc:
-        logger.warning("image_routing: blocked local image attachment %s -- %s", path, exc)
+        logger.warning(
+            "image_routing: blocked local image attachment %s -- %s", path, exc
+        )
         return None
     except Exception:
         # Keep attachment routing best-effort if the guard itself is unavailable.
@@ -658,12 +684,14 @@ def _file_to_data_url(path: Path) -> Optional[str]:
                 "image_routing: %s is %s which is not accepted by all major "
                 "vision providers and could not be transcoded to PNG; "
                 "skipping this attachment.",
-                path, mime,
+                path,
+                mime,
             )
             return None
         logger.info(
             "image_routing: transcoded %s (%s) -> image/png for provider compatibility",
-            path.name, mime,
+            path.name,
+            mime,
         )
         raw = transcoded
         mime = "image/png"

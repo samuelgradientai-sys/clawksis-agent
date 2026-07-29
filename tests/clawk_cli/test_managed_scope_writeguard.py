@@ -1,4 +1,5 @@
 """Write-guard tests — managed keys can't be set/removed by the user."""
+
 import pytest
 
 

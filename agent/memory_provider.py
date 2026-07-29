@@ -147,7 +147,9 @@ class MemoryProvider(ABC):
         Must return a JSON string (the tool result).
         Only called for tool names returned by get_tool_schemas().
         """
-        raise NotImplementedError(f"Provider {self.name} does not handle tool {tool_name}")
+        raise NotImplementedError(
+            f"Provider {self.name} does not handle tool {tool_name}"
+        )
 
     def shutdown(self) -> None:
         """Clean shutdown — flush queues, close connections."""
@@ -229,8 +231,9 @@ class MemoryProvider(ABC):
         """
         return ""
 
-    def on_delegation(self, task: str, result: str, *,
-                      child_session_id: str = "", **kwargs) -> None:
+    def on_delegation(
+        self, task: str, result: str, *, child_session_id: str = "", **kwargs
+    ) -> None:
         """Called on the PARENT agent when a subagent completes.
 
         The parent's memory provider gets the task+result pair as an

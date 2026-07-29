@@ -215,8 +215,11 @@ def test_final_response_fills_pure_tool_call_tail(monkeypatch):
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": "t1", "type": "function",
-                 "function": {"name": "f", "arguments": "{}"}}
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
             ],
         },
     ]
@@ -257,8 +260,11 @@ def test_final_response_does_not_clobber_tool_call_tail_with_text(monkeypatch):
             "role": "assistant",
             "content": "partial text",
             "tool_calls": [
-                {"id": "t1", "type": "function",
-                 "function": {"name": "f", "arguments": "{}"}}
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
             ],
         },
     ]
@@ -298,8 +304,11 @@ def test_fill_pops_db_persisted_marker_for_durable_rewrite(monkeypatch):
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": "t1", "type": "function",
-                 "function": {"name": "f", "arguments": "{}"}}
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
             ],
             "_db_persisted": True,  # stamped by conversation_loop.py:4990
         },

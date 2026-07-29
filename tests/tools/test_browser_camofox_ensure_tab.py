@@ -25,9 +25,13 @@ def test_ensure_tab_sends_list_item_id():
     mock_response.json.return_value = {"tabId": "tab-42"}
     mock_response.raise_for_status = MagicMock()
 
-    with patch.object(mod, "_get_session", return_value=fake_session), \
-         patch.object(mod, "get_camofox_url", return_value="http://localhost:9377"), \
-         patch("tools.browser_camofox.requests.post", return_value=mock_response) as mock_post:
+    with (
+        patch.object(mod, "_get_session", return_value=fake_session),
+        patch.object(mod, "get_camofox_url", return_value="http://localhost:9377"),
+        patch(
+            "tools.browser_camofox.requests.post", return_value=mock_response
+        ) as mock_post,
+    ):
         result = mod._ensure_tab("test-task", url="https://example.com")
 
     # Verify the POST was called
@@ -57,8 +61,10 @@ def test_ensure_tab_skips_creation_when_tab_exists():
         "managed": False,
     }
 
-    with patch.object(mod, "_get_session", return_value=fake_session), \
-         patch("tools.browser_camofox.requests.post") as mock_post:
+    with (
+        patch.object(mod, "_get_session", return_value=fake_session),
+        patch("tools.browser_camofox.requests.post") as mock_post,
+    ):
         result = mod._ensure_tab("test-task")
 
     # No POST should be made — tab already exists

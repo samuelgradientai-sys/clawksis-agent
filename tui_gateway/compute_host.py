@@ -49,7 +49,9 @@ class SpikeAgent:
         delta_count: int = 24,
         delay_s: float = 0.001,
     ) -> dict[str, Any]:
-        base_history = list(conversation_history if conversation_history is not None else self.history)
+        base_history = list(
+            conversation_history if conversation_history is not None else self.history
+        )
         chunks: list[str] = []
         interrupted = False
         for index in range(max(0, int(delta_count))):
@@ -73,7 +75,11 @@ class SpikeAgent:
             {"role": "assistant", "content": final},
         ]
         self.history = messages
-        return {"final_response": final, "messages": messages, "interrupted": interrupted}
+        return {
+            "final_response": final,
+            "messages": messages,
+            "interrupted": interrupted,
+        }
 
 
 @dataclass
@@ -149,8 +155,14 @@ class ComputeHost:
             else float(os.environ.get("CLAWK_COMPUTE_HOST_HEARTBEAT_SECS") or "15")
         )
         if self._heartbeat_secs > 0:
-            threading.Thread(target=self._heartbeat_loop, name="compute-host-heartbeat", daemon=True).start()
-            threading.Thread(target=self._parent_guard_loop, name="compute-host-ppid-guard", daemon=True).start()
+            threading.Thread(
+                target=self._heartbeat_loop, name="compute-host-heartbeat", daemon=True
+            ).start()
+            threading.Thread(
+                target=self._parent_guard_loop,
+                name="compute-host-ppid-guard",
+                daemon=True,
+            ).start()
 
     def emit(self, frame: dict[str, Any]) -> None:
         frame.setdefault("host_ns", now_ns())
@@ -204,26 +216,32 @@ class ComputeHost:
             self._closed.set()
             self._executor.shutdown(wait=False, cancel_futures=True)
         else:
-            self.emit(
-                {
-                    "type": "error",
-                    "request_id": frame.get("request_id"),
-                    "message": f"unknown frame type: {kind}",
-                }
-            )
+            self.emit({
+                "type": "error",
+                "request_id": frame.get("request_id"),
+                "message": f"unknown frame type: {kind}",
+            })
 
     # ── Phase-0 deterministic spike frames ─────────────────────────────
 
     def _handle_seed(self, frame: dict[str, Any]) -> None:
         sid = str(frame.get("sid") or "")
         if not sid:
-            self.emit({"type": "error", "request_id": frame.get("request_id"), "message": "sid required"})
+            self.emit({
+                "type": "error",
+                "request_id": frame.get("request_id"),
+                "message": "sid required",
+            })
             return
         history = frame.get("history")
         if not isinstance(history, list):
             history = []
         self._sessions[sid] = HostSession(sid=sid, agent=SpikeAgent(sid, list(history)))
-        self.emit({"type": "session.seeded", "sid": sid, "request_id": frame.get("request_id")})
+        self.emit({
+            "type": "session.seeded",
+            "sid": sid,
+            "request_id": frame.get("request_id"),
+        })
 
     def _handle_turn_start(self, frame: dict[str, Any]) -> None:
         sid = str(frame.get("sid") or "")
@@ -239,11 +257,21 @@ class ComputeHost:
         sid = str(frame.get("sid") or "")
         session = self._sessions.get(sid)
         if session is None:
-            self.emit({"type": "turn.error", "sid": sid, "request_id": frame.get("request_id"), "message": "unknown session"})
+            self.emit({
+                "type": "turn.error",
+                "sid": sid,
+                "request_id": frame.get("request_id"),
+                "message": "unknown session",
+            })
             return
         with session.lock:
             if session.running:
-                self.emit({"type": "turn.error", "sid": sid, "request_id": frame.get("request_id"), "message": "session busy"})
+                self.emit({
+                    "type": "turn.error",
+                    "sid": sid,
+                    "request_id": frame.get("request_id"),
+                    "message": "session busy",
+                })
                 return
             session.running = True
         future = self._executor.submit(self._run_spike_turn, session, dict(frame))
@@ -256,22 +284,25 @@ class ComputeHost:
         spike = self._sessions.get(sid)
         if spike is not None:
             spike.agent.interrupt()
-            self.emit(
-                {
-                    "type": "interrupt.ack",
-                    "sid": sid,
-                    "request_id": frame.get("request_id"),
-                    "applied": True,
-                    "applied_ns": now_ns(),
-                }
-            )
+            self.emit({
+                "type": "interrupt.ack",
+                "sid": sid,
+                "request_id": frame.get("request_id"),
+                "applied": True,
+                "applied_ns": now_ns(),
+            })
             return
         try:
             from tui_gateway import server
 
             session = server._sessions.get(sid)
             if session is None:
-                self.emit({"type": "interrupt.ack", "sid": sid, "request_id": frame.get("request_id"), "applied": False})
+                self.emit({
+                    "type": "interrupt.ack",
+                    "sid": sid,
+                    "request_id": frame.get("request_id"),
+                    "applied": False,
+                })
                 return
             agent = session.get("agent")
             if agent is not None and hasattr(agent, "interrupt"):
@@ -279,9 +310,21 @@ class ComputeHost:
             with session.get("history_lock", threading.Lock()):
                 session["_turn_cancel_requested"] = True
                 session["queued_prompt"] = None
-            self.emit({"type": "interrupt.ack", "sid": sid, "request_id": frame.get("request_id"), "applied": True, "applied_ns": now_ns()})
+            self.emit({
+                "type": "interrupt.ack",
+                "sid": sid,
+                "request_id": frame.get("request_id"),
+                "applied": True,
+                "applied_ns": now_ns(),
+            })
         except Exception as exc:
-            self.emit({"type": "interrupt.ack", "sid": sid, "request_id": frame.get("request_id"), "applied": False, "message": str(exc)})
+            self.emit({
+                "type": "interrupt.ack",
+                "sid": sid,
+                "request_id": frame.get("request_id"),
+                "applied": False,
+                "message": str(exc),
+            })
 
     def _run_spike_turn(self, session: HostSession, frame: dict[str, Any]) -> None:
         request_id = frame.get("request_id") or uuid.uuid4().hex
@@ -297,19 +340,22 @@ class ComputeHost:
         with session.lock:
             history = list(session.agent.history)
         session.agent.clear_interrupt()
-        self.emit({"type": "turn.started", "sid": session.sid, "request_id": request_id, "started_ns": now_ns()})
+        self.emit({
+            "type": "turn.started",
+            "sid": session.sid,
+            "request_id": request_id,
+            "started_ns": now_ns(),
+        })
 
         def stream(delta: str) -> None:
             self._bump_progress()
-            self.emit(
-                {
-                    "type": "delta",
-                    "sid": session.sid,
-                    "request_id": request_id,
-                    "text": delta,
-                    "emitted_ns": now_ns(),
-                }
-            )
+            self.emit({
+                "type": "delta",
+                "sid": session.sid,
+                "request_id": request_id,
+                "text": delta,
+                "emitted_ns": now_ns(),
+            })
 
         try:
             result = session.agent.run_conversation(
@@ -324,21 +370,24 @@ class ComputeHost:
                 session.running = False
                 history_version = session.history_version
             self._bump_progress()
-            self.emit(
-                {
-                    "type": "turn.end",
-                    "sid": session.sid,
-                    "request_id": request_id,
-                    "history_version": history_version,
-                    "message_count": len(result.get("messages") or []),
-                    "interrupted": bool(result.get("interrupted")),
-                    "ended_ns": now_ns(),
-                }
-            )
+            self.emit({
+                "type": "turn.end",
+                "sid": session.sid,
+                "request_id": request_id,
+                "history_version": history_version,
+                "message_count": len(result.get("messages") or []),
+                "interrupted": bool(result.get("interrupted")),
+                "ended_ns": now_ns(),
+            })
         except Exception as exc:  # pragma: no cover - defensive host boundary
             with session.lock:
                 session.running = False
-            self.emit({"type": "turn.error", "sid": session.sid, "request_id": request_id, "message": str(exc)})
+            self.emit({
+                "type": "turn.error",
+                "sid": session.sid,
+                "request_id": request_id,
+                "message": str(exc),
+            })
 
     # ── Real dashboard turn path ───────────────────────────────────────
 
@@ -346,7 +395,12 @@ class ComputeHost:
         sid = str(frame.get("sid") or "")
         request_id = str(frame.get("request_id") or uuid.uuid4().hex)
         if not sid:
-            self.emit({"type": "turn.error", "sid": sid, "request_id": request_id, "message": "sid required"})
+            self.emit({
+                "type": "turn.error",
+                "sid": sid,
+                "request_id": request_id,
+                "message": "sid required",
+            })
             return
         try:
             from tui_gateway import server
@@ -354,13 +408,26 @@ class ComputeHost:
             session = self._ensure_server_session(server, frame)
             with session["history_lock"]:
                 if session.get("running"):
-                    self.emit({"type": "turn.error", "sid": sid, "request_id": request_id, "message": "session busy"})
+                    self.emit({
+                        "type": "turn.error",
+                        "sid": sid,
+                        "request_id": request_id,
+                        "message": "session busy",
+                    })
                     return
                 session["running"] = True
                 session["_turn_cancel_requested"] = False
                 session["last_active"] = time.time()
-                server._start_inflight_turn(session, frame.get("text") if "text" in frame else frame.get("prompt"))
-            self.emit({"type": "turn.started", "sid": sid, "request_id": request_id, "started_ns": now_ns()})
+                server._start_inflight_turn(
+                    session,
+                    frame.get("text") if "text" in frame else frame.get("prompt"),
+                )
+            self.emit({
+                "type": "turn.started",
+                "sid": sid,
+                "request_id": request_id,
+                "started_ns": now_ns(),
+            })
             try:
                 server._ensure_session_db_row(session)
             except Exception:
@@ -387,20 +454,18 @@ class ComputeHost:
                 session_key = str(session.get("session_key") or "")
             session_info = server._session_info(session.get("agent"), session)
             self._bump_progress()
-            self.emit(
-                {
-                    "type": "turn.end",
-                    "sid": sid,
-                    "request_id": request_id,
-                    "history_version": history_version,
-                    "session_key": session_key,
-                    "message_count": message_count,
-                    "interrupted": interrupted,
-                    "ended_ns": now_ns(),
-                    "session_info": session_info,
-                    "session_info_emitted": True,
-                }
-            )
+            self.emit({
+                "type": "turn.end",
+                "sid": sid,
+                "request_id": request_id,
+                "history_version": history_version,
+                "session_key": session_key,
+                "message_count": message_count,
+                "interrupted": interrupted,
+                "ended_ns": now_ns(),
+                "session_info": session_info,
+                "session_info_emitted": True,
+            })
         except Exception as exc:
             try:
                 from tui_gateway import server
@@ -412,7 +477,13 @@ class ComputeHost:
                         server._clear_inflight_turn(session)
             except Exception:
                 pass
-            self.emit({"type": "turn.error", "sid": sid, "request_id": request_id, "reason": "exception", "message": str(exc)})
+            self.emit({
+                "type": "turn.error",
+                "sid": sid,
+                "request_id": request_id,
+                "reason": "exception",
+                "message": str(exc),
+            })
 
     def _ensure_server_session(self, server: Any, frame: dict[str, Any]) -> dict:
         sid = str(frame.get("sid") or "")
@@ -518,10 +589,24 @@ class ComputeHost:
         try:
             from tui_gateway import server
 
-            resp = server.handle_request({"id": request_id, "method": "reload.mcp", "params": {"session_id": sid, "confirm": True}})
-            self.emit({"type": "reload_mcp.ack", "sid": sid, "request_id": request_id, "response": resp})
+            resp = server.handle_request({
+                "id": request_id,
+                "method": "reload.mcp",
+                "params": {"session_id": sid, "confirm": True},
+            })
+            self.emit({
+                "type": "reload_mcp.ack",
+                "sid": sid,
+                "request_id": request_id,
+                "response": resp,
+            })
         except Exception as exc:
-            self.emit({"type": "control.error", "sid": sid, "request_id": request_id, "message": str(exc)})
+            self.emit({
+                "type": "control.error",
+                "sid": sid,
+                "request_id": request_id,
+                "message": str(exc),
+            })
 
     def _handle_control(self, frame: dict[str, Any]) -> None:
         sid = str(frame.get("sid") or "")
@@ -533,14 +618,29 @@ class ComputeHost:
 
             route = MUTATOR_ROUTE_TABLE.get(route_name)
             if route is None:
-                self.emit({"type": "control.error", "sid": sid, "request_id": request_id, "message": f"unclassified route: {route_name}"})
+                self.emit({
+                    "type": "control.error",
+                    "sid": sid,
+                    "request_id": request_id,
+                    "message": f"unclassified route: {route_name}",
+                })
                 return
             session = server._sessions.get(sid)
             if session is None:
-                self.emit({"type": "control.error", "sid": sid, "request_id": request_id, "message": "session not found"})
+                self.emit({
+                    "type": "control.error",
+                    "sid": sid,
+                    "request_id": request_id,
+                    "message": "session not found",
+                })
                 return
             if route == "idle-gated" and session.get("running"):
-                self.emit({"type": "control.error", "sid": sid, "request_id": request_id, "message": "session busy"})
+                self.emit({
+                    "type": "control.error",
+                    "sid": sid,
+                    "request_id": request_id,
+                    "message": "session busy",
+                })
                 return
             if route_name == "reload.mcp":
                 self._handle_reload_mcp({**frame, "type": "reload_mcp"})
@@ -553,21 +653,24 @@ class ComputeHost:
                 history_version = int(session.get("history_version", 0))
                 message_count = len(session.get("history") or [])
                 session_key = str(session.get("session_key") or "")
-            self.emit(
-                {
-                    "type": "control.ack",
-                    "sid": sid,
-                    "request_id": request_id,
-                    "route_name": route_name,
-                    "output": output,
-                    "session_key": session_key,
-                    "history_version": history_version,
-                    "message_count": message_count,
-                    "session_info": server._session_info(session.get("agent"), session),
-                }
-            )
+            self.emit({
+                "type": "control.ack",
+                "sid": sid,
+                "request_id": request_id,
+                "route_name": route_name,
+                "output": output,
+                "session_key": session_key,
+                "history_version": history_version,
+                "message_count": message_count,
+                "session_info": server._session_info(session.get("agent"), session),
+            })
         except Exception as exc:
-            self.emit({"type": "control.error", "sid": sid, "request_id": request_id, "message": str(exc)})
+            self.emit({
+                "type": "control.error",
+                "sid": sid,
+                "request_id": request_id,
+                "message": str(exc),
+            })
 
     def _bump_progress(self) -> None:
         with self._progress_lock:
@@ -579,27 +682,35 @@ class ComputeHost:
                 active_turns = sum(1 for f in self._turn_futures if not f.done())
             with self._progress_lock:
                 counter = self._progress_counter
-            self.emit(
-                {
-                    "type": "hb",
-                    "active_turns": active_turns,
-                    "progress_counter": counter,
-                    "rss_mb": _rss_mb(os.getpid()),
-                }
-            )
+            self.emit({
+                "type": "hb",
+                "active_turns": active_turns,
+                "progress_counter": counter,
+                "rss_mb": _rss_mb(os.getpid()),
+            })
 
     def _parent_guard_loop(self) -> None:
         while not self._closed.wait(1.0):
             ppid = os.getppid()
             if ppid in {0, 1} or (self._parent_pid and ppid != self._parent_pid):
-                self.emit({"type": "orphan", "old_ppid": self._parent_pid, "ppid": ppid})
+                self.emit({
+                    "type": "orphan",
+                    "old_ppid": self._parent_pid,
+                    "ppid": ppid,
+                })
                 self.shutdown(reason="orphan")
                 os._exit(0)
 
 
 def _rss_mb(pid: int) -> float:
     try:
-        out = subprocess.check_output(["ps", "-o", "rss=", "-p", str(pid)], text=True, stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2).strip()
+        out = subprocess.check_output(
+            ["ps", "-o", "rss=", "-p", str(pid)],
+            text=True,
+            stdin=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+        ).strip()
         return int(out.splitlines()[-1].strip()) / 1024.0 if out else 0.0
     except Exception:
         return 0.0
@@ -631,16 +742,14 @@ def run_host(stdin: Any = None, stdout: Any = None) -> None:
     except Exception:
         pass
 
-    host.emit(
-        {
-            "type": "hello",
-            "host_pid": os.getpid(),
-            "boot_id": host._boot_id,
-            "build_sha": _build_sha(),
-            "cwd": os.getcwd(),
-            "clawk_home": os.environ.get("CLAWK_HOME", ""),
-        }
-    )
+    host.emit({
+        "type": "hello",
+        "host_pid": os.getpid(),
+        "boot_id": host._boot_id,
+        "build_sha": _build_sha(),
+        "cwd": os.getcwd(),
+        "clawk_home": os.environ.get("CLAWK_HOME", ""),
+    })
 
     def _reader() -> None:
         for raw in stdin:
@@ -660,7 +769,9 @@ def run_host(stdin: Any = None, stdout: Any = None) -> None:
             if host._closed.is_set():
                 break
 
-    reader = threading.Thread(target=_reader, name="compute-host-control-reader", daemon=True)
+    reader = threading.Thread(
+        target=_reader, name="compute-host-control-reader", daemon=True
+    )
     reader.start()
     try:
         while not host._closed.wait(0.2):

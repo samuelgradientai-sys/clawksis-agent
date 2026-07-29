@@ -27,7 +27,9 @@ def _make_run_side_effect(branch="main", verify_ok=True, commit_count="0"):
 
         # git rev-list HEAD..origin/{branch} --count
         if "rev-list" in joined:
-            return subprocess.CompletedProcess(cmd, 0, stdout=f"{commit_count}\n", stderr="")
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout=f"{commit_count}\n", stderr=""
+            )
 
         # Fallback: return a successful CompletedProcess with empty stdout
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
@@ -65,9 +67,14 @@ def _patch_managed_uv(request):
     def _fake_update_managed_uv():
         return None  # never actually self-update in tests
 
-    with patch("clawk_cli.managed_uv.resolve_uv", side_effect=_fake_resolve_uv), \
-         patch("clawk_cli.managed_uv.ensure_uv", side_effect=_fake_ensure_uv), \
-         patch("clawk_cli.managed_uv.update_managed_uv", side_effect=_fake_update_managed_uv):
+    with (
+        patch("clawk_cli.managed_uv.resolve_uv", side_effect=_fake_resolve_uv),
+        patch("clawk_cli.managed_uv.ensure_uv", side_effect=_fake_ensure_uv),
+        patch(
+            "clawk_cli.managed_uv.update_managed_uv",
+            side_effect=_fake_update_managed_uv,
+        ),
+    ):
         yield
 
 
@@ -157,9 +164,7 @@ class TestCmdUpdateNpmLockfileCache:
 
         monkeypatch.setattr(hm, "PROJECT_ROOT", tmp_path)
         (tmp_path / "package-lock.json").write_text('{"lockfileVersion": 3}')
-        (tmp_path / "package.json").write_text(
-            '{"workspaces": ["apps/*", "ui-tui"]}'
-        )
+        (tmp_path / "package.json").write_text('{"workspaces": ["apps/*", "ui-tui"]}')
         (tmp_path / "ui-tui").mkdir()
         (tmp_path / "ui-tui" / "package.json").write_text("{}")
         (tmp_path / "apps" / "desktop").mkdir(parents=True)
@@ -213,9 +218,11 @@ class TestCmdUpdateNpmLockfileCache:
         monkeypatch.setattr(hm, "PROJECT_ROOT", tmp_path)
         (tmp_path / "package.json").write_text("{}")
 
-        with patch("shutil.which", return_value="/usr/bin/npm"), \
-             patch.object(hm, "_npm_lockfile_changed", return_value=False), \
-             patch("subprocess.run") as mock_run:
+        with (
+            patch("shutil.which", return_value="/usr/bin/npm"),
+            patch.object(hm, "_npm_lockfile_changed", return_value=False),
+            patch("subprocess.run") as mock_run,
+        ):
             hm._update_node_dependencies()
 
         mock_run.assert_not_called()
@@ -273,8 +280,17 @@ class TestCmdUpdatePip:
         hm._cmd_update_pip(mock_args)
 
         assert mock_run.call_count == 1
-        assert mock_run.call_args.args[0] == ["/usr/bin/uv", "pip", "install", "--upgrade", "clawksis-agent"]
-        assert mock_run.call_args.kwargs["env"]["VIRTUAL_ENV"] == "/tmp/clawk-launcher-venv"
+        assert mock_run.call_args.args[0] == [
+            "/usr/bin/uv",
+            "pip",
+            "install",
+            "--upgrade",
+            "clawksis-agent",
+        ]
+        assert (
+            mock_run.call_args.kwargs["env"]["VIRTUAL_ENV"]
+            == "/tmp/clawk-launcher-venv"
+        )
 
     @patch("shutil.which", return_value="/usr/bin/uv")
     @patch("subprocess.run")
@@ -333,7 +349,9 @@ class TestCmdUpdateTermuxUvBootstrap:
         # Production resolve_uv only checks $CLAWK_HOME/bin/uv; model an empty
         # managed dir so the PATH probe is what surfaces the packaged uv.
         monkeypatch.setattr("clawk_cli.managed_uv.resolve_uv", lambda: None)
-        monkeypatch.setattr("shutil.which", lambda name: pkg_uv if name == "uv" else None)
+        monkeypatch.setattr(
+            "shutil.which", lambda name: pkg_uv if name == "uv" else None
+        )
 
         uv_bin = hm._ensure_uv_for_termux(["/termux/python", "-m", "pip"])
 
@@ -355,7 +373,9 @@ class TestCmdUpdateBranchFallback:
 
         cmd_update(mock_args)
 
-        commands = [" ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list]
+        commands = [
+            " ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list
+        ]
 
         # rev-list should use origin/main, not origin/fix/stoicneko
         rev_list_cmds = [c for c in commands if "rev-list" in c]
@@ -379,7 +399,9 @@ class TestCmdUpdateBranchFallback:
 
         cmd_update(mock_args)
 
-        commands = [" ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list]
+        commands = [
+            " ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list
+        ]
 
         rev_list_cmds = [c for c in commands if "rev-list" in c]
         assert len(rev_list_cmds) == 1
@@ -391,9 +413,7 @@ class TestCmdUpdateBranchFallback:
 
     @patch("shutil.which", return_value=None)
     @patch("subprocess.run")
-    def test_update_already_up_to_date(
-        self, mock_run, _mock_which, mock_args, capsys
-    ):
+    def test_update_already_up_to_date(self, mock_run, _mock_which, mock_args, capsys):
         mock_run.side_effect = _make_run_side_effect(
             branch="main", verify_ok=True, commit_count="0"
         )
@@ -404,7 +424,9 @@ class TestCmdUpdateBranchFallback:
         assert "Already up to date!" in captured.out
 
         # Should NOT have called pull
-        commands = [" ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list]
+        commands = [
+            " ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list
+        ]
         pull_cmds = [c for c in commands if "pull" in c]
         assert len(pull_cmds) == 0
 
@@ -424,15 +446,20 @@ class TestCmdUpdateBranchFallback:
             branch="main", verify_ok=True, commit_count="0"
         )
 
-        with patch.object(
-            hm,
-            "_get_origin_url",
-            return_value="https://github.com/example/clawksis-agent.git",
-        ), patch.object(hm, "_sync_with_upstream_if_needed") as sync_mock:
+        with (
+            patch.object(
+                hm,
+                "_get_origin_url",
+                return_value="https://github.com/example/clawksis-agent.git",
+            ),
+            patch.object(hm, "_sync_with_upstream_if_needed") as sync_mock,
+        ):
             cmd_update(mock_args)
 
         expected_git_cmd = (
-            ["git", "-c", "windows.appendAtomically=false"] if hm._is_windows() else ["git"]
+            ["git", "-c", "windows.appendAtomically=false"]
+            if hm._is_windows()
+            else ["git"]
         )
         sync_mock.assert_called_once_with(expected_git_cmd, PROJECT_ROOT)
         captured = capsys.readouterr()
@@ -453,9 +480,14 @@ class TestCmdUpdateBranchFallback:
         # #33788) so it no longer appears in subprocess.run's call list.
         # Mock it so the test doesn't actually shell out to ``tsc``.
         import subprocess as _subprocess
+
         build_ok = _subprocess.CompletedProcess([], 0, stdout="", stderr="")
-        with patch.object(hm, "_is_termux_env", return_value=False), \
-             patch.object(hm, "_run_with_idle_timeout", return_value=build_ok) as mock_idle:
+        with (
+            patch.object(hm, "_is_termux_env", return_value=False),
+            patch.object(
+                hm, "_run_with_idle_timeout", return_value=build_ok
+            ) as mock_idle,
+        ):
             cmd_update(mock_args)
 
         npm_calls = [
@@ -509,7 +541,17 @@ class TestCmdUpdateBranchFallback:
             # The web/ install runs from the workspace root when the root
             # lockfile exists (npm workspaces hoist node_modules upward).
             assert npm_calls[2:] == [
-                (["/usr/bin/npm", "ci", "--include=dev", "--workspace", "web", "--silent"], PROJECT_ROOT),
+                (
+                    [
+                        "/usr/bin/npm",
+                        "ci",
+                        "--include=dev",
+                        "--workspace",
+                        "web",
+                        "--silent",
+                    ],
+                    PROJECT_ROOT,
+                ),
             ]
 
         # The web UI build itself went through the streaming helper.
@@ -538,19 +580,28 @@ class TestCmdUpdateBranchFallback:
                 "(no capture_output) so postinstall progress is visible"
             )
 
-    def test_update_non_interactive_runs_safe_config_migrations(self, mock_args, capsys):
+    def test_update_non_interactive_runs_safe_config_migrations(
+        self, mock_args, capsys
+    ):
         """Dashboard/web updates apply non-interactive migrations before restart."""
-        with patch("shutil.which", return_value=None), patch(
-            "subprocess.run"
-        ) as mock_run, patch("builtins.input") as mock_input, patch(
-            "clawk_cli.config.get_missing_env_vars", return_value=["MISSING_KEY"]
-        ), patch(
-            "clawk_cli.config.get_missing_config_fields",
-            return_value=[{"key": "new.option", "default": True}],
-        ), patch("clawk_cli.config.check_config_version", return_value=(1, 2)), patch(
-            "clawk_cli.config.migrate_config",
-            return_value={"env_added": [], "config_added": ["new.option"]},
-        ), patch("clawk_cli.main.sys") as mock_sys:
+        with (
+            patch("shutil.which", return_value=None),
+            patch("subprocess.run") as mock_run,
+            patch("builtins.input") as mock_input,
+            patch(
+                "clawk_cli.config.get_missing_env_vars", return_value=["MISSING_KEY"]
+            ),
+            patch(
+                "clawk_cli.config.get_missing_config_fields",
+                return_value=[{"key": "new.option", "default": True}],
+            ),
+            patch("clawk_cli.config.check_config_version", return_value=(1, 2)),
+            patch(
+                "clawk_cli.config.migrate_config",
+                return_value={"env_added": [], "config_added": ["new.option"]},
+            ),
+            patch("clawk_cli.main.sys") as mock_sys,
+        ):
             mock_sys.stdin.isatty.return_value = False
             mock_sys.stdout.isatty.return_value = False
             mock_run.side_effect = _make_run_side_effect(
@@ -578,22 +629,20 @@ class TestCmdUpdateMigrationPrompt:
     yes looked like a no-op.
     """
 
-    def test_version_bump_only_applies_silently_without_prompt(
-        self, mock_args, capsys
-    ):
+    def test_version_bump_only_applies_silently_without_prompt(self, mock_args, capsys):
         """Only the version moved → apply non-interactively, never prompt."""
-        with patch("shutil.which", return_value=None), patch(
-            "subprocess.run"
-        ) as mock_run, patch("builtins.input") as mock_input, patch(
-            "clawk_cli.config.get_missing_env_vars", return_value=[]
-        ), patch(
-            "clawk_cli.config.get_missing_config_fields", return_value=[]
-        ), patch(
-            "clawk_cli.config.check_config_version", return_value=(5, 24)
-        ), patch(
-            "clawk_cli.config.migrate_config",
-            return_value={"env_added": [], "config_added": [], "warnings": []},
-        ) as mock_migrate:
+        with (
+            patch("shutil.which", return_value=None),
+            patch("subprocess.run") as mock_run,
+            patch("builtins.input") as mock_input,
+            patch("clawk_cli.config.get_missing_env_vars", return_value=[]),
+            patch("clawk_cli.config.get_missing_config_fields", return_value=[]),
+            patch("clawk_cli.config.check_config_version", return_value=(5, 24)),
+            patch(
+                "clawk_cli.config.migrate_config",
+                return_value={"env_added": [], "config_added": [], "warnings": []},
+            ) as mock_migrate,
+        ):
             mock_run.side_effect = _make_run_side_effect(
                 branch="main", verify_ok=True, commit_count="1"
             )
@@ -608,28 +657,30 @@ class TestCmdUpdateMigrationPrompt:
             # The misleading question must NOT appear for a pure version bump.
             assert "configure them now" not in out.lower()
 
-    def test_new_options_are_listed_by_name_before_prompt(
-        self, mock_args, capsys
-    ):
+    def test_new_options_are_listed_by_name_before_prompt(self, mock_args, capsys):
         """New env/config keys are printed by name so the user can decide."""
         env_items = [
             {"name": "FOO_API_KEY", "description": "Foo service API key"},
         ]
         cfg_items = [
-            {"key": "display.new_widget", "description": "New config option: display.new_widget"},
+            {
+                "key": "display.new_widget",
+                "description": "New config option: display.new_widget",
+            },
         ]
-        with patch("shutil.which", return_value=None), patch(
-            "subprocess.run"
-        ) as mock_run, patch("builtins.input", return_value="n"), patch(
-            "clawk_cli.config.get_missing_env_vars", return_value=env_items
-        ), patch(
-            "clawk_cli.config.get_missing_config_fields", return_value=cfg_items
-        ), patch(
-            "clawk_cli.config.check_config_version", return_value=(1, 24)
-        ), patch(
-            "clawk_cli.config.migrate_config",
-            return_value={"env_added": [], "config_added": [], "warnings": []},
-        ), patch("clawk_cli.main.sys") as mock_sys:
+        with (
+            patch("shutil.which", return_value=None),
+            patch("subprocess.run") as mock_run,
+            patch("builtins.input", return_value="n"),
+            patch("clawk_cli.config.get_missing_env_vars", return_value=env_items),
+            patch("clawk_cli.config.get_missing_config_fields", return_value=cfg_items),
+            patch("clawk_cli.config.check_config_version", return_value=(1, 24)),
+            patch(
+                "clawk_cli.config.migrate_config",
+                return_value={"env_added": [], "config_added": [], "warnings": []},
+            ),
+            patch("clawk_cli.main.sys") as mock_sys,
+        ):
             mock_sys.stdin.isatty.return_value = True
             mock_sys.stdout.isatty.return_value = True
             mock_run.side_effect = _make_run_side_effect(
@@ -727,7 +778,15 @@ class TestCmdUpdateBranchFlag:
     target without monkey-patching the implementation.
     """
 
-    def _branch_side_effect(self, current_branch, target_branch, *, checkout_fails=False, track_fails=False, commit_count="0"):
+    def _branch_side_effect(
+        self,
+        current_branch,
+        target_branch,
+        *,
+        checkout_fails=False,
+        track_fails=False,
+        commit_count="0",
+    ):
         """Mock side-effect that knows about checkout/track behavior.
 
         - ``current_branch``  what ``git rev-parse --abbrev-ref HEAD`` returns
@@ -743,20 +802,36 @@ class TestCmdUpdateBranchFlag:
             joined = " ".join(str(c) for c in cmd)
 
             if "rev-parse" in joined and "--abbrev-ref" in joined:
-                return subprocess.CompletedProcess(cmd, 0, stdout=f"{current_branch}\n", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout=f"{current_branch}\n", stderr=""
+                )
 
             if "checkout" in joined and "-B" in joined:
                 rc = 128 if track_fails else 0
-                err = f"fatal: '{target_branch}' did not match any file(s) known to git\n" if track_fails else ""
+                err = (
+                    f"fatal: '{target_branch}' did not match any file(s) known to git\n"
+                    if track_fails
+                    else ""
+                )
                 return subprocess.CompletedProcess(cmd, rc, stdout="", stderr=err)
 
-            if "checkout" in joined and "-B" not in joined and "rev-parse" not in joined:
+            if (
+                "checkout" in joined
+                and "-B" not in joined
+                and "rev-parse" not in joined
+            ):
                 rc = 128 if checkout_fails else 0
-                err = f"error: pathspec '{target_branch}' did not match\n" if checkout_fails else ""
+                err = (
+                    f"error: pathspec '{target_branch}' did not match\n"
+                    if checkout_fails
+                    else ""
+                )
                 return subprocess.CompletedProcess(cmd, rc, stdout="", stderr=err)
 
             if "rev-list" in joined:
-                return subprocess.CompletedProcess(cmd, 0, stdout=f"{commit_count}\n", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout=f"{commit_count}\n", stderr=""
+                )
 
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
@@ -764,7 +839,9 @@ class TestCmdUpdateBranchFlag:
 
     @patch("shutil.which", return_value=None)
     @patch("subprocess.run")
-    def test_branch_flag_pulls_against_named_branch(self, mock_run, _mock_which, capsys):
+    def test_branch_flag_pulls_against_named_branch(
+        self, mock_run, _mock_which, capsys
+    ):
         """--branch bb/gui makes rev-list and pull target origin/bb/gui."""
         mock_run.side_effect = self._branch_side_effect(
             current_branch="bb/gui", target_branch="bb/gui", commit_count="3"
@@ -773,7 +850,9 @@ class TestCmdUpdateBranchFlag:
 
         cmd_update(args)
 
-        commands = [" ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list]
+        commands = [
+            " ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list
+        ]
 
         # rev-list must compare against origin/bb/gui, not origin/main
         rev_list_cmds = [c for c in commands if "rev-list" in c]
@@ -782,11 +861,15 @@ class TestCmdUpdateBranchFlag:
 
         # pull must target bb/gui
         pull_cmds = [c for c in commands if "pull" in c and "ff-only" in c]
-        assert any("bb/gui" in c and "main" not in c.split() for c in pull_cmds), pull_cmds
+        assert any("bb/gui" in c and "main" not in c.split() for c in pull_cmds), (
+            pull_cmds
+        )
 
     @patch("shutil.which", return_value=None)
     @patch("subprocess.run")
-    def test_branch_flag_defaults_to_main_when_none(self, mock_run, _mock_which, capsys):
+    def test_branch_flag_defaults_to_main_when_none(
+        self, mock_run, _mock_which, capsys
+    ):
         """No --branch (or --branch=None) preserves the historical 'main' default."""
         mock_run.side_effect = self._branch_side_effect(
             current_branch="main", target_branch="main", commit_count="0"
@@ -795,13 +878,17 @@ class TestCmdUpdateBranchFlag:
 
         cmd_update(args)
 
-        commands = [" ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list]
+        commands = [
+            " ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list
+        ]
         rev_list_cmds = [c for c in commands if "rev-list" in c]
         assert all("origin/main" in c for c in rev_list_cmds), rev_list_cmds
 
     @patch("shutil.which", return_value=None)
     @patch("subprocess.run")
-    def test_branch_flag_switches_from_different_branch(self, mock_run, _mock_which, capsys):
+    def test_branch_flag_switches_from_different_branch(
+        self, mock_run, _mock_which, capsys
+    ):
         """When HEAD is on main and --branch=bb/gui, switch to bb/gui first."""
         mock_run.side_effect = self._branch_side_effect(
             current_branch="main", target_branch="bb/gui", commit_count="2"
@@ -810,9 +897,13 @@ class TestCmdUpdateBranchFlag:
 
         cmd_update(args)
 
-        commands = [" ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list]
+        commands = [
+            " ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list
+        ]
         # First checkout call should switch us to bb/gui (not -B; happy-path branch exists locally)
-        checkout_cmds = [c for c in commands if "checkout" in c and "rev-parse" not in c]
+        checkout_cmds = [
+            c for c in commands if "checkout" in c and "rev-parse" not in c
+        ]
         assert len(checkout_cmds) >= 1
         assert "bb/gui" in checkout_cmds[0]
 
@@ -821,20 +912,24 @@ class TestCmdUpdateBranchFlag:
 
     @patch("shutil.which", return_value=None)
     @patch("subprocess.run")
-    def test_branch_flag_tracks_remote_when_branch_absent_locally(self, mock_run, _mock_which, capsys):
+    def test_branch_flag_tracks_remote_when_branch_absent_locally(
+        self, mock_run, _mock_which, capsys
+    ):
         """If local lacks the branch but origin has it, fall back to ``checkout -B``."""
         mock_run.side_effect = self._branch_side_effect(
             current_branch="main",
             target_branch="bb/gui",
             checkout_fails=True,  # plain checkout fails
-            track_fails=False,    # -B from origin/bb/gui succeeds
+            track_fails=False,  # -B from origin/bb/gui succeeds
             commit_count="2",
         )
         args = SimpleNamespace(branch="bb/gui")
 
         cmd_update(args)
 
-        commands = [" ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list]
+        commands = [
+            " ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list
+        ]
         # Should have BOTH a failed `checkout bb/gui` AND a successful `checkout -B bb/gui origin/bb/gui`
         track_cmds = [c for c in commands if "checkout" in c and "-B" in c]
         assert len(track_cmds) == 1
@@ -843,7 +938,9 @@ class TestCmdUpdateBranchFlag:
 
     @patch("shutil.which", return_value=None)
     @patch("subprocess.run")
-    def test_branch_flag_fails_when_branch_missing_everywhere(self, mock_run, _mock_which, capsys):
+    def test_branch_flag_fails_when_branch_missing_everywhere(
+        self, mock_run, _mock_which, capsys
+    ):
         """If branch doesn't exist locally OR on origin, exit non-zero with clear error."""
         mock_run.side_effect = self._branch_side_effect(
             current_branch="main",
@@ -898,7 +995,11 @@ class TestCmdUpdateCheckBranchFlag:
 
             if "fetch" in joined and "upstream" in joined:
                 rc = 0 if upstream_fetch_ok else 128
-                err = "" if upstream_fetch_ok else "fatal: 'upstream' does not appear to be a git repository\n"
+                err = (
+                    ""
+                    if upstream_fetch_ok
+                    else "fatal: 'upstream' does not appear to be a git repository\n"
+                )
                 return subprocess.CompletedProcess(cmd, rc, stdout="", stderr=err)
 
             if "fetch" in joined and "origin" in joined:
@@ -909,7 +1010,9 @@ class TestCmdUpdateCheckBranchFlag:
                 return subprocess.CompletedProcess(cmd, rc, stdout="", stderr="")
 
             if "rev-list" in joined:
-                return subprocess.CompletedProcess(cmd, 0, stdout=f"{commit_count}\n", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout=f"{commit_count}\n", stderr=""
+                )
 
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
@@ -928,7 +1031,9 @@ class TestCmdUpdateCheckBranchFlag:
 
         cmd_update(args)
 
-        commands = [" ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list]
+        commands = [
+            " ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list
+        ]
         # Non-main branch skips upstream probe entirely.
         assert not any("fetch" in c and "upstream" in c for c in commands), commands
         # Verify and rev-list both target origin/bb/gui.
@@ -966,7 +1071,9 @@ class TestCmdUpdateCheckBranchFlag:
         assert "not found" in out
 
         # rev-list must never have been called once verify failed.
-        commands = [" ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list]
+        commands = [
+            " ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list
+        ]
         assert not any("rev-list" in c for c in commands), commands
 
     @patch("clawk_cli.config.detect_install_method", return_value="git")
@@ -982,7 +1089,9 @@ class TestCmdUpdateCheckBranchFlag:
 
         cmd_update(args)
 
-        commands = [" ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list]
+        commands = [
+            " ".join(str(a) for a in c.args[0]) for c in mock_run.call_args_list
+        ]
         # Should have tried upstream first.
         assert any("fetch" in c and "upstream" in c for c in commands), commands
         # Compare ref is upstream/main (upstream fetch succeeded).
@@ -1219,17 +1328,21 @@ class TestNodeRuntimeNpmResolution:
         monkeypatch.setattr(
             hm.shutil,
             "which",
-            lambda command, path=None: windows_npm if command == "npm" else "/usr/bin/uv",
+            lambda command, path=None: (
+                windows_npm if command == "npm" else "/usr/bin/uv"
+            ),
         )
         monkeypatch.setenv("PATH", "/mnt/c/Program Files/nodejs")
 
-        with patch("subprocess.run") as mock_run, \
-             patch.object(hm, "_web_ui_build_needed", return_value=True), \
-             patch.object(hm, "_desktop_packaged_executable", return_value=None), \
-             patch.object(hm, "_desktop_dist_exists", return_value=True), \
-             patch.object(hm, "_run_npm_install_deterministic") as mock_npm_install, \
-             patch.object(hm, "_run_with_idle_timeout") as mock_idle_build, \
-             patch.object(hm, "_run_logged_subprocess") as mock_desktop_build:
+        with (
+            patch("subprocess.run") as mock_run,
+            patch.object(hm, "_web_ui_build_needed", return_value=True),
+            patch.object(hm, "_desktop_packaged_executable", return_value=None),
+            patch.object(hm, "_desktop_dist_exists", return_value=True),
+            patch.object(hm, "_run_npm_install_deterministic") as mock_npm_install,
+            patch.object(hm, "_run_with_idle_timeout") as mock_idle_build,
+            patch.object(hm, "_run_logged_subprocess") as mock_desktop_build,
+        ):
             mock_run.side_effect = _make_run_side_effect(
                 branch="main", verify_ok=True, commit_count="1"
             )

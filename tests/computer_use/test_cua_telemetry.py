@@ -25,13 +25,17 @@ class TestTelemetryDisabledFlag:
             assert cua_backend._cua_telemetry_disabled() is True
 
     def test_explicit_false_disables(self):
-        with patch("clawk_cli.config.load_config",
-                   return_value={"computer_use": {"cua_telemetry": False}}):
+        with patch(
+            "clawk_cli.config.load_config",
+            return_value={"computer_use": {"cua_telemetry": False}},
+        ):
             assert cua_backend._cua_telemetry_disabled() is True
 
     def test_opt_in_true_does_not_disable(self):
-        with patch("clawk_cli.config.load_config",
-                   return_value={"computer_use": {"cua_telemetry": True}}):
+        with patch(
+            "clawk_cli.config.load_config",
+            return_value={"computer_use": {"cua_telemetry": True}},
+        ):
             assert cua_backend._cua_telemetry_disabled() is False
 
     def test_config_load_failure_fails_safe(self):
@@ -73,8 +77,10 @@ class TestChildEnv:
             assert env[_VAR] == "0"
 
     def test_defaults_to_os_environ_when_no_base(self):
-        with patch.object(cua_backend, "_cua_telemetry_disabled", return_value=True), \
-             patch.dict("os.environ", {"SOME_MARKER": "yes"}, clear=False):
+        with (
+            patch.object(cua_backend, "_cua_telemetry_disabled", return_value=True),
+            patch.dict("os.environ", {"SOME_MARKER": "yes"}, clear=False),
+        ):
             env = cua_backend.cua_driver_child_env()
             assert env.get("SOME_MARKER") == "yes"
             assert env[_VAR] == "0"

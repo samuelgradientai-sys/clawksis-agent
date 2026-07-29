@@ -22,6 +22,7 @@ import time
 
 try:
     import fcntl as _fcntl
+
     _HAS_FCNTL = True
 except ImportError:
     _fcntl = None  # type: ignore[assignment]
@@ -29,6 +30,7 @@ except ImportError:
 
 try:
     import socket as _socket
+
     _HAS_SOCKET = True
 except ImportError:
     _socket = None  # type: ignore[assignment]
@@ -139,7 +141,9 @@ def handle_spurious_eof(
             s = _socket.fromfd(0, _socket.AF_UNIX, _socket.SOCK_STREAM)
             try:
                 # Zero timeval: tv_sec=0, tv_usec=0 (struct timeval on most platforms)
-                s.setsockopt(_socket.SOL_SOCKET, _socket.SO_RCVTIMEO, struct.pack("ll", 0, 0))
+                s.setsockopt(
+                    _socket.SOL_SOCKET, _socket.SO_RCVTIMEO, struct.pack("ll", 0, 0)
+                )
             finally:
                 s.close()
         except Exception:

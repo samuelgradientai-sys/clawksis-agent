@@ -119,7 +119,9 @@ def test_background_mcp_discovery_suppresses_interactive_oauth(monkeypatch):
         sys.modules,
         "clawk_cli.config",
         types.SimpleNamespace(
-            read_raw_config=lambda: {"mcp_servers": {"demo": {"url": "https://mcp.example.test/mcp"}}},
+            read_raw_config=lambda: {
+                "mcp_servers": {"demo": {"url": "https://mcp.example.test/mcp"}}
+            },
         ),
     )
     monkeypatch.setitem(

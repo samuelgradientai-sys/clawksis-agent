@@ -15,6 +15,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_clawk_tree(root: Path) -> None:
     """Create a realistic ~/.clawksis directory structure for testing."""
     (root / "config.yaml").write_text("model:\n  provider: openrouter\n")
@@ -48,7 +49,9 @@ def _make_clawk_tree(root: Path) -> None:
     # Profiles
     (root / "profiles").mkdir(exist_ok=True)
     (root / "profiles" / "coder").mkdir()
-    (root / "profiles" / "coder" / "config.yaml").write_text("model:\n  provider: anthropic\n")
+    (root / "profiles" / "coder" / "config.yaml").write_text(
+        "model:\n  provider: anthropic\n"
+    )
     (root / "profiles" / "coder" / ".env").write_text("ANTHROPIC_API_KEY=sk-ant-123\n")
 
     # clawksis-agent repo (should be EXCLUDED)
@@ -81,22 +84,27 @@ def _symlink_file_or_skip(link: Path, target: Path) -> None:
 # _should_exclude tests
 # ---------------------------------------------------------------------------
 
+
 class TestShouldExclude:
     def test_excludes_clawk_agent(self):
         from clawk_cli.backup import _should_exclude
+
         assert _should_exclude(Path("clawksis-agent/run_agent.py"))
         assert _should_exclude(Path("clawksis-agent/.git/HEAD"))
 
     def test_excludes_pycache(self):
         from clawk_cli.backup import _should_exclude
+
         assert _should_exclude(Path("plugins/__pycache__/mod.cpython-312.pyc"))
 
     def test_excludes_pyc_files(self):
         from clawk_cli.backup import _should_exclude
+
         assert _should_exclude(Path("some/module.pyc"))
 
     def test_excludes_pid_files(self):
         from clawk_cli.backup import _should_exclude
+
         assert _should_exclude(Path("gateway.pid"))
         assert _should_exclude(Path("cron.pid"))
 
@@ -104,12 +112,14 @@ class TestShouldExclude:
         """checkpoints/ is session-local trajectory cache — hash-keyed,
         regenerated per-session, won't port to another machine anyway."""
         from clawk_cli.backup import _should_exclude
+
         assert _should_exclude(Path("checkpoints/abc123/trajectory.json"))
         assert _should_exclude(Path("checkpoints/deadbeef/step_0001.json"))
 
     def test_excludes_backups_dir(self):
         """backups/ is excluded so pre-update backups don't nest exponentially."""
         from clawk_cli.backup import _should_exclude
+
         assert _should_exclude(Path("backups/pre-update-2026-04-27-063400.zip"))
 
     def test_excludes_sqlite_sidecars(self):
@@ -117,6 +127,7 @@ class TestShouldExclude:
         safe-copied .db — pairing a fresh snapshot with stale sidecar state
         produces a torn restore."""
         from clawk_cli.backup import _should_exclude
+
         assert _should_exclude(Path("state.db-wal"))
         assert _should_exclude(Path("state.db-shm"))
         assert _should_exclude(Path("state.db-journal"))
@@ -126,34 +137,45 @@ class TestShouldExclude:
 
     def test_includes_config(self):
         from clawk_cli.backup import _should_exclude
+
         assert not _should_exclude(Path("config.yaml"))
 
     def test_includes_env(self):
         from clawk_cli.backup import _should_exclude
+
         assert not _should_exclude(Path(".env"))
 
     def test_includes_skills(self):
         from clawk_cli.backup import _should_exclude
+
         assert not _should_exclude(Path("skills/my-skill/SKILL.md"))
 
     def test_includes_profiles(self):
         from clawk_cli.backup import _should_exclude
+
         assert not _should_exclude(Path("profiles/coder/config.yaml"))
 
     def test_includes_sessions(self):
         from clawk_cli.backup import _should_exclude
+
         assert not _should_exclude(Path("sessions/abc.json"))
 
     def test_includes_logs(self):
         from clawk_cli.backup import _should_exclude
+
         assert not _should_exclude(Path("logs/agent.log"))
 
     def test_includes_nested_clawk_agent_in_skills(self):
         """skills/autonomous-ai-agents/clawksis-agent/ must NOT be excluded —
         only the root-level clawksis-agent/ repo is skipped."""
         from clawk_cli.backup import _should_exclude
-        assert not _should_exclude(Path("skills/autonomous-ai-agents/clawksis-agent/SKILL.md"))
-        assert not _should_exclude(Path("skills/autonomous-ai-agents/clawksis-agent/sub/item.txt"))
+
+        assert not _should_exclude(
+            Path("skills/autonomous-ai-agents/clawksis-agent/SKILL.md")
+        )
+        assert not _should_exclude(
+            Path("skills/autonomous-ai-agents/clawksis-agent/sub/item.txt")
+        )
 
     @pytest.mark.parametrize(
         "rel",
@@ -174,23 +196,28 @@ class TestShouldExclude:
         """Python dep trees and tool caches under CLAWK_HOME must be skipped —
         these are what balloon a backup to hundreds of thousands of files."""
         from clawk_cli.backup import _should_exclude
+
         assert _should_exclude(Path(rel))
 
     def test_does_not_exclude_curator_archive(self):
         """skills/.archive/ holds restorable archived skills and MUST survive
         a backup — it is intentionally NOT in the exclusion set."""
         from clawk_cli.backup import _should_exclude
+
         assert not _should_exclude(Path("skills/.archive/old-skill/SKILL.md"))
 
     def test_does_not_exclude_legit_files_resembling_cache_names(self):
         """Only directory-component matches are excluded; a normal file is kept."""
         from clawk_cli.backup import _should_exclude
+
         assert not _should_exclude(Path("skills/my-skill/venv-notes.md"))
         assert not _should_exclude(Path("memories/cache.json"))
+
 
 # ---------------------------------------------------------------------------
 # Backup tests
 # ---------------------------------------------------------------------------
+
 
 class TestBackup:
     def test_creates_zip(self, tmp_path, monkeypatch):
@@ -207,6 +234,7 @@ class TestBackup:
         args = Namespace(output=str(out_zip))
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         assert out_zip.exists()
@@ -227,7 +255,9 @@ class TestBackup:
             # Skins
             assert "skins/cyber.yaml" in names
 
-    def test_failed_sqlite_backup_never_raw_copies_live_wal_db(self, tmp_path, monkeypatch, capsys):
+    def test_failed_sqlite_backup_never_raw_copies_live_wal_db(
+        self, tmp_path, monkeypatch, capsys
+    ):
         """A failed backup() must not silently archive the stale main DB file.
 
         Keep a real, uncheckpointed WAL transaction live so a raw copy of only
@@ -252,6 +282,7 @@ class TestBackup:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         import clawk_cli.backup as backup_mod
+
         real_connect = backup_mod.sqlite3.connect
 
         class FailingBackupConnection:
@@ -303,6 +334,7 @@ class TestBackup:
         args = Namespace(output=str(out_zip))
 
         import clawk_cli.backup as backup_mod
+
         staged_dirs = []
         real_ntf = backup_mod.tempfile.NamedTemporaryFile
 
@@ -318,7 +350,9 @@ class TestBackup:
         assert staged_dirs, "no SQLite snapshot was staged"
         assert all(d == str(out_dir) for d in staged_dirs), staged_dirs
 
-    def test_pre_update_db_snapshots_staged_beside_output_zip(self, tmp_path, monkeypatch):
+    def test_pre_update_db_snapshots_staged_beside_output_zip(
+        self, tmp_path, monkeypatch
+    ):
         """The pre-update/pre-migration zip path (_write_full_zip_backup) must
         also stage SQLite snapshots beside its output zip, not in /tmp."""
         clawk_home = tmp_path / ".clawksis"
@@ -332,6 +366,7 @@ class TestBackup:
         out_zip.parent.mkdir(parents=True, exist_ok=True)
 
         import clawk_cli.backup as backup_mod
+
         staged_dirs = []
         real_ntf = backup_mod.tempfile.NamedTemporaryFile
 
@@ -359,12 +394,15 @@ class TestBackup:
         args = Namespace(output=str(out_zip))
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         with zipfile.ZipFile(out_zip, "r") as zf:
             names = zf.namelist()
             agent_files = [n for n in names if "clawksis-agent" in n]
-            assert agent_files == [], f"clawksis-agent files leaked into backup: {agent_files}"
+            assert agent_files == [], (
+                f"clawksis-agent files leaked into backup: {agent_files}"
+            )
 
     def test_excludes_dependency_and_cache_trees(self, tmp_path, monkeypatch):
         """A plugin venv / site-packages / pip cache under CLAWK_HOME must be
@@ -375,7 +413,9 @@ class TestBackup:
         _make_clawk_tree(clawk_home)
 
         # Simulate the heavy regeneratable trees that ballooned the backup.
-        venv_pkg = clawk_home / "plugins" / "heavy" / ".venv" / "lib" / "site-packages" / "dep"
+        venv_pkg = (
+            clawk_home / "plugins" / "heavy" / ".venv" / "lib" / "site-packages" / "dep"
+        )
         venv_pkg.mkdir(parents=True)
         (venv_pkg / "__init__.py").write_text("# dep\n")
         pip_cache = clawk_home / ".cache" / "uv" / "wheels"
@@ -387,11 +427,14 @@ class TestBackup:
 
         out_zip = tmp_path / "backup.zip"
         from clawk_cli.backup import run_backup
+
         run_backup(Namespace(output=str(out_zip)))
 
         with zipfile.ZipFile(out_zip, "r") as zf:
             names = zf.namelist()
-        leaked = [n for n in names if ".venv" in n or "site-packages" in n or ".cache" in n]
+        leaked = [
+            n for n in names if ".venv" in n or "site-packages" in n or ".cache" in n
+        ]
         assert leaked == [], f"regeneratable trees leaked into backup: {leaked}"
         # Real data still present.
         assert "skills/my-skill/SKILL.md" in names
@@ -417,6 +460,7 @@ class TestBackup:
         args = Namespace(output=str(out_zip))
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         with zipfile.ZipFile(out_zip, "r") as zf:
@@ -441,6 +485,7 @@ class TestBackup:
         args = Namespace(output=str(out_zip))
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         with zipfile.ZipFile(out_zip, "r") as zf:
@@ -461,6 +506,7 @@ class TestBackup:
         args = Namespace(output=str(out_zip))
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         with zipfile.ZipFile(out_zip, "r") as zf:
@@ -480,6 +526,7 @@ class TestBackup:
         args = Namespace(output=None)
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         # Should exist in home dir
@@ -502,6 +549,7 @@ class TestBackup:
         args = Namespace(output=str(out_zip))
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         with zipfile.ZipFile(out_zip, "r") as zf:
@@ -514,6 +562,7 @@ class TestBackup:
 # _validate_backup_zip tests
 # ---------------------------------------------------------------------------
 
+
 class TestValidateBackupZip:
     def _make_zip(self, zip_path: Path, filenames: list[str]) -> None:
         with zipfile.ZipFile(zip_path, "w") as zf:
@@ -523,6 +572,7 @@ class TestValidateBackupZip:
     def test_state_db_passes(self, tmp_path):
         """A zip containing state.db is accepted as a valid Clawksis backup."""
         from clawk_cli.backup import _validate_backup_zip
+
         zip_path = tmp_path / "backup.zip"
         self._make_zip(zip_path, ["state.db", "sessions/abc.json"])
         with zipfile.ZipFile(zip_path, "r") as zf:
@@ -532,6 +582,7 @@ class TestValidateBackupZip:
     def test_old_wrong_db_name_fails(self, tmp_path):
         """A zip with only clawk_state.db (old wrong name) is rejected."""
         from clawk_cli.backup import _validate_backup_zip
+
         zip_path = tmp_path / "old.zip"
         self._make_zip(zip_path, ["clawk_state.db", "memory_store.db"])
         with zipfile.ZipFile(zip_path, "r") as zf:
@@ -541,6 +592,7 @@ class TestValidateBackupZip:
     def test_config_yaml_passes(self, tmp_path):
         """A zip containing config.yaml is accepted (existing behaviour preserved)."""
         from clawk_cli.backup import _validate_backup_zip
+
         zip_path = tmp_path / "backup.zip"
         self._make_zip(zip_path, ["config.yaml", "skills/x/SKILL.md"])
         with zipfile.ZipFile(zip_path, "r") as zf:
@@ -551,6 +603,7 @@ class TestValidateBackupZip:
 # ---------------------------------------------------------------------------
 # Import tests
 # ---------------------------------------------------------------------------
+
 
 class TestImport:
     def _make_backup_zip(self, zip_path: Path, files: dict[str, str | bytes]) -> None:
@@ -570,21 +623,29 @@ class TestImport:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model:\n  provider: openrouter\n",
-            ".env": "OPENROUTER_API_KEY=sk-test\n",
-            "skills/my-skill/SKILL.md": "# My Skill\n",
-            "profiles/coder/config.yaml": "model:\n  provider: anthropic\n",
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model:\n  provider: openrouter\n",
+                ".env": "OPENROUTER_API_KEY=sk-test\n",
+                "skills/my-skill/SKILL.md": "# My Skill\n",
+                "profiles/coder/config.yaml": "model:\n  provider: anthropic\n",
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         run_import(args)
 
-        assert (clawk_home / "config.yaml").read_text() == "model:\n  provider: openrouter\n"
+        assert (
+            clawk_home / "config.yaml"
+        ).read_text() == "model:\n  provider: openrouter\n"
         assert (clawk_home / ".env").read_text() == "OPENROUTER_API_KEY=sk-test\n"
-        assert (clawk_home / "skills" / "my-skill" / "SKILL.md").read_text() == "# My Skill\n"
+        assert (
+            clawk_home / "skills" / "my-skill" / "SKILL.md"
+        ).read_text() == "# My Skill\n"
         assert (clawk_home / "profiles" / "coder" / "config.yaml").exists()
 
     def test_strips_clawk_prefix(self, tmp_path, monkeypatch):
@@ -595,14 +656,18 @@ class TestImport:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            ".clawksis/config.yaml": "model: test\n",
-            ".clawksis/skills/a/SKILL.md": "# A\n",
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                ".clawksis/config.yaml": "model: test\n",
+                ".clawksis/skills/a/SKILL.md": "# A\n",
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         run_import(args)
 
         assert (clawk_home / "config.yaml").read_text() == "model: test\n"
@@ -622,6 +687,7 @@ class TestImport:
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         with pytest.raises(SystemExit):
             run_import(args)
 
@@ -633,14 +699,18 @@ class TestImport:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         zip_path = tmp_path / "random.zip"
-        self._make_backup_zip(zip_path, {
-            "some/random/file.txt": "hello",
-            "another/thing.json": "{}",
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "some/random/file.txt": "hello",
+                "another/thing.json": "{}",
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         with pytest.raises(SystemExit):
             run_import(args)
 
@@ -653,14 +723,18 @@ class TestImport:
 
         zip_path = tmp_path / "evil.zip"
         # Include a marker file so validation passes
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model: test\n",
-            "../../etc/passwd": "root:x:0:0\n",
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model: test\n",
+                "../../etc/passwd": "root:x:0:0\n",
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         run_import(args)
 
         # config.yaml should be restored
@@ -686,15 +760,19 @@ class TestImport:
         (clawk_home / "gateway_state.json").write_text(live_state)
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model: test\n",
-            # A backup from a laptop where the gateway was stopped.
-            "gateway_state.json": '{"gateway_state": "stopped", "desired_state": "stopped"}',
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model: test\n",
+                # A backup from a laptop where the gateway was stopped.
+                "gateway_state.json": '{"gateway_state": "stopped", "desired_state": "stopped"}',
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         run_import(args)
 
         # config.yaml is restored normally...
@@ -711,14 +789,18 @@ class TestImport:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model: test\n",
-            "gateway_state.json": '{"gateway_state": "stopped"}',
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model: test\n",
+                "gateway_state.json": '{"gateway_state": "stopped"}',
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         run_import(args)
 
         assert (clawk_home / "config.yaml").exists()
@@ -734,22 +816,30 @@ class TestImport:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         live_state = '{"gateway_state": "running"}'
-        (clawk_home / "profiles" / "coder" / "gateway_state.json").write_text(live_state)
+        (clawk_home / "profiles" / "coder" / "gateway_state.json").write_text(
+            live_state
+        )
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model: test\n",
-            "profiles/coder/config.yaml": "model: anthropic\n",
-            "profiles/coder/gateway_state.json": '{"gateway_state": "stopped"}',
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model: test\n",
+                "profiles/coder/config.yaml": "model: anthropic\n",
+                "profiles/coder/gateway_state.json": '{"gateway_state": "stopped"}',
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         run_import(args)
 
         # Profile config is restored, but its live gateway state is preserved.
-        assert (clawk_home / "profiles" / "coder" / "config.yaml").read_text() == "model: anthropic\n"
+        assert (
+            clawk_home / "profiles" / "coder" / "config.yaml"
+        ).read_text() == "model: anthropic\n"
         assert (
             clawk_home / "profiles" / "coder" / "gateway_state.json"
         ).read_text() == live_state
@@ -768,17 +858,21 @@ class TestImport:
         (clawk_home / "processes.json").write_text('{"live": true}')
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model: test\n",
-            "gateway.pid": "9999",
-            "cron.pid": "8888",
-            "gateway.lock": "7777",
-            "processes.json": '{"stale": true}',
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model: test\n",
+                "gateway.pid": "9999",
+                "cron.pid": "8888",
+                "gateway.lock": "7777",
+                "processes.json": '{"stale": true}',
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         run_import(args)
 
         # Live runtime files are untouched; the backup's foreign ones never land.
@@ -798,13 +892,17 @@ class TestImport:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model: restored\n",
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model: restored\n",
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=False)
 
         from clawk_cli.backup import run_import
+
         with patch("builtins.input", return_value="n"):
             run_import(args)
 
@@ -820,13 +918,17 @@ class TestImport:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model: restored\n",
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model: restored\n",
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         run_import(args)
 
         assert (clawk_home / "config.yaml").read_text() == "model: restored\n"
@@ -840,6 +942,7 @@ class TestImport:
         args = Namespace(zipfile=str(tmp_path / "nonexistent.zip"), force=True)
 
         from clawk_cli.backup import run_import
+
         with pytest.raises(SystemExit):
             run_import(args)
 
@@ -852,27 +955,34 @@ class TestImport:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model: openrouter\n",
-            ".env": "OPENROUTER_API_KEY=sk-secret\n",
-            "auth.json": '{"providers": {"nous": "token"}}',
-            "state.db": b"SQLite format 3\x00",
-            "profiles/coder/.env": "ANTHROPIC_API_KEY=sk-ant-secret\n",
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model: openrouter\n",
+                ".env": "OPENROUTER_API_KEY=sk-secret\n",
+                "auth.json": '{"providers": {"nous": "token"}}',
+                "state.db": b"SQLite format 3\x00",
+                "profiles/coder/.env": "ANTHROPIC_API_KEY=sk-ant-secret\n",
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         run_import(args)
 
         for rel in (".env", "auth.json", "state.db", "profiles/coder/.env"):
             mode = (clawk_home / rel).stat().st_mode & 0o777
-            assert mode == 0o600, f"{rel} restored with mode {oct(mode)}, expected 0o600"
+            assert mode == 0o600, (
+                f"{rel} restored with mode {oct(mode)}, expected 0o600"
+            )
 
 
 # ---------------------------------------------------------------------------
 # Round-trip test
 # ---------------------------------------------------------------------------
+
 
 class TestRoundTrip:
     def test_backup_then_import(self, tmp_path, monkeypatch):
@@ -901,7 +1011,9 @@ class TestRoundTrip:
         run_import(Namespace(zipfile=str(out_zip), force=True))
 
         # Verify key files
-        assert (dst_home / "config.yaml").read_text() == "model:\n  provider: openrouter\n"
+        assert (
+            dst_home / "config.yaml"
+        ).read_text() == "model:\n  provider: openrouter\n"
         assert (dst_home / ".env").read_text() == "OPENROUTER_API_KEY=sk-test-123\n"
         assert (dst_home / "skills" / "my-skill" / "SKILL.md").exists()
         assert (dst_home / "profiles" / "coder" / "config.yaml").exists()
@@ -920,26 +1032,32 @@ class TestRoundTrip:
 # Validate / detect-prefix unit tests
 # ---------------------------------------------------------------------------
 
+
 class TestFormatSize:
     def test_bytes(self):
         from clawk_cli.backup import _format_size
+
         assert _format_size(512) == "512 B"
 
     def test_kilobytes(self):
         from clawk_cli.backup import _format_size
+
         assert "KB" in _format_size(2048)
 
     def test_megabytes(self):
         from clawk_cli.backup import _format_size
+
         assert "MB" in _format_size(5 * 1024 * 1024)
 
     def test_gigabytes(self):
         from clawk_cli.backup import _format_size
-        assert "GB" in _format_size(3 * 1024 ** 3)
+
+        assert "GB" in _format_size(3 * 1024**3)
 
     def test_terabytes(self):
         from clawk_cli.backup import _format_size
-        assert "TB" in _format_size(2 * 1024 ** 4)
+
+        assert "TB" in _format_size(2 * 1024**4)
 
 
 class TestValidation:
@@ -1027,6 +1145,7 @@ class TestValidation:
 # Edge case tests for uncovered paths
 # ---------------------------------------------------------------------------
 
+
 class TestBackupEdgeCases:
     def test_nonexistent_clawk_home(self, tmp_path, monkeypatch):
         """Backup exits when clawk home doesn't exist."""
@@ -1037,6 +1156,7 @@ class TestBackupEdgeCases:
         args = Namespace(output=str(tmp_path / "out.zip"))
 
         from clawk_cli.backup import run_backup
+
         with pytest.raises(SystemExit):
             run_backup(args)
 
@@ -1055,6 +1175,7 @@ class TestBackupEdgeCases:
         args = Namespace(output=str(out_dir))
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         zips = list(out_dir.glob("clawk-backup-*.zip"))
@@ -1073,6 +1194,7 @@ class TestBackupEdgeCases:
         args = Namespace(output=str(out_path))
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         # Should have .tar.zip suffix
@@ -1092,6 +1214,7 @@ class TestBackupEdgeCases:
         args = Namespace(output=str(tmp_path / "out.zip"))
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         # No zip should be created
@@ -1115,6 +1238,7 @@ class TestBackupEdgeCases:
         args = Namespace(output=str(out_zip))
 
         from clawk_cli.backup import run_backup
+
         try:
             run_backup(args)
         finally:
@@ -1142,6 +1266,7 @@ class TestBackupEdgeCases:
         args = Namespace(output=str(out_zip))
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         # Zip should still be created with the valid files
@@ -1166,6 +1291,7 @@ class TestBackupEdgeCases:
         args = Namespace(output=str(out_zip))
 
         from clawk_cli.backup import run_backup
+
         run_backup(args)
 
         # The zip should exist but not contain itself
@@ -1192,6 +1318,7 @@ class TestImportEdgeCases:
         args = Namespace(zipfile=str(not_zip), force=True)
 
         from clawk_cli.backup import run_import
+
         with pytest.raises(SystemExit):
             run_import(args)
 
@@ -1209,6 +1336,7 @@ class TestImportEdgeCases:
         args = Namespace(zipfile=str(zip_path), force=False)
 
         from clawk_cli.backup import run_import
+
         with patch("builtins.input", side_effect=EOFError):
             with pytest.raises(SystemExit):
                 run_import(args)
@@ -1227,6 +1355,7 @@ class TestImportEdgeCases:
         args = Namespace(zipfile=str(zip_path), force=False)
 
         from clawk_cli.backup import run_import
+
         with patch("builtins.input", side_effect=KeyboardInterrupt):
             with pytest.raises(SystemExit):
                 run_import(args)
@@ -1244,14 +1373,18 @@ class TestImportEdgeCases:
         locked_dir.chmod(0o555)
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model: test\n",
-            "locked/secret.txt": "data",
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model: test\n",
+                "locked/secret.txt": "data",
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         try:
             run_import(args)
         finally:
@@ -1277,6 +1410,7 @@ class TestImportEdgeCases:
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         run_import(args)
 
         assert (clawk_home / "config.yaml").exists()
@@ -1286,6 +1420,7 @@ class TestImportEdgeCases:
 # ---------------------------------------------------------------------------
 # Profile restoration tests
 # ---------------------------------------------------------------------------
+
 
 class TestProfileRestoration:
     def _make_backup_zip(self, zip_path: Path, files: dict[str, str | bytes]) -> None:
@@ -1305,16 +1440,20 @@ class TestProfileRestoration:
         wrapper_dir.mkdir(parents=True)
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model:\n  provider: openrouter\n",
-            "profiles/coder/config.yaml": "model:\n  provider: anthropic\n",
-            "profiles/coder/.env": "ANTHROPIC_API_KEY=sk-test\n",
-            "profiles/researcher/config.yaml": "model:\n  provider: deepseek\n",
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model:\n  provider: openrouter\n",
+                "profiles/coder/config.yaml": "model:\n  provider: anthropic\n",
+                "profiles/coder/.env": "ANTHROPIC_API_KEY=sk-test\n",
+                "profiles/researcher/config.yaml": "model:\n  provider: deepseek\n",
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         run_import(args)
 
         # Profile directories should exist
@@ -1340,15 +1479,19 @@ class TestProfileRestoration:
         wrapper_dir.mkdir(parents=True)
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model: test\n",
-            "profiles/valid/config.yaml": "model: test\n",
-            "profiles/empty/readme.txt": "nothing here\n",
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model: test\n",
+                "profiles/valid/config.yaml": "model: test\n",
+                "profiles/empty/readme.txt": "nothing here\n",
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         from clawk_cli.backup import run_import
+
         run_import(args)
 
         # Only valid profile should get a wrapper
@@ -1363,15 +1506,22 @@ class TestProfileRestoration:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         zip_path = tmp_path / "backup.zip"
-        self._make_backup_zip(zip_path, {
-            "config.yaml": "model: test\n",
-            "profiles/coder/config.yaml": "model: test\n",
-        })
+        self._make_backup_zip(
+            zip_path,
+            {
+                "config.yaml": "model: test\n",
+                "profiles/coder/config.yaml": "model: test\n",
+            },
+        )
 
         args = Namespace(zipfile=str(zip_path), force=True)
 
         # Simulate profiles module not being available
-        original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+        original_import = (
+            __builtins__.__import__
+            if hasattr(__builtins__, "__import__")
+            else __import__
+        )
 
         def fake_import(name, *a, **kw):
             if name == "clawk_cli.profiles":
@@ -1379,6 +1529,7 @@ class TestProfileRestoration:
             return original_import(name, *a, **kw)
 
         from clawk_cli.backup import run_import
+
         with patch("builtins.__import__", side_effect=fake_import):
             run_import(args)
 
@@ -1390,9 +1541,11 @@ class TestProfileRestoration:
 # SQLite safe copy tests
 # ---------------------------------------------------------------------------
 
+
 class TestSafeCopyDb:
     def test_copies_valid_database(self, tmp_path):
         from clawk_cli.backup import _safe_copy_db
+
         src = tmp_path / "test.db"
         dst = tmp_path / "copy.db"
 
@@ -1412,6 +1565,7 @@ class TestSafeCopyDb:
 
     def test_copies_wal_mode_database(self, tmp_path):
         from clawk_cli.backup import _safe_copy_db
+
         src = tmp_path / "wal.db"
         dst = tmp_path / "copy.db"
 
@@ -1434,6 +1588,7 @@ class TestSafeCopyDb:
 # ---------------------------------------------------------------------------
 # Quick state snapshot tests
 # ---------------------------------------------------------------------------
+
 
 class TestQuickSnapshot:
     @pytest.fixture
@@ -1461,6 +1616,7 @@ class TestQuickSnapshot:
 
     def test_creates_snapshot(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot
+
         snap_id = create_quick_snapshot(clawk_home=clawk_home)
         assert snap_id is not None
         snap_dir = clawk_home / "state-snapshots" / snap_id
@@ -1469,11 +1625,13 @@ class TestQuickSnapshot:
 
     def test_label_in_id(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot
+
         snap_id = create_quick_snapshot(label="before-upgrade", clawk_home=clawk_home)
         assert "before-upgrade" in snap_id
 
     def test_state_db_safely_copied(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot
+
         snap_id = create_quick_snapshot(clawk_home=clawk_home)
         db_copy = clawk_home / "state-snapshots" / snap_id / "state.db"
         assert db_copy.exists()
@@ -1486,8 +1644,11 @@ class TestQuickSnapshot:
 
     def test_copies_nested_files(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot
+
         snap_id = create_quick_snapshot(clawk_home=clawk_home)
-        assert (clawk_home / "state-snapshots" / snap_id / "cron" / "jobs.json").exists()
+        assert (
+            clawk_home / "state-snapshots" / snap_id / "cron" / "jobs.json"
+        ).exists()
 
     def test_copies_discord_recovery_ledger(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot
@@ -1511,6 +1672,7 @@ class TestQuickSnapshot:
 
     def test_copies_channel_aliases(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot
+
         snap_id = create_quick_snapshot(clawk_home=clawk_home)
         copied = clawk_home / "state-snapshots" / snap_id / "channel_aliases.json"
         assert copied.exists()
@@ -1518,6 +1680,7 @@ class TestQuickSnapshot:
 
     def test_missing_files_skipped(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot
+
         snap_id = create_quick_snapshot(clawk_home=clawk_home)
         with open(clawk_home / "state-snapshots" / snap_id / "manifest.json") as f:
             meta = json.load(f)
@@ -1526,6 +1689,7 @@ class TestQuickSnapshot:
 
     def test_empty_home_returns_none(self, tmp_path):
         from clawk_cli.backup import create_quick_snapshot
+
         empty = tmp_path / "empty"
         empty.mkdir()
         assert create_quick_snapshot(clawk_home=empty) is None
@@ -1534,11 +1698,10 @@ class TestQuickSnapshot:
         """Files above the cap are skipped with a warning; small files
         (the pairing/cron data the snapshot exists for) still land."""
         from clawk_cli.backup import create_quick_snapshot
+
         # state.db in the fixture is a few KB — cap below it
         cap = 1024
-        snap_id = create_quick_snapshot(
-            clawk_home=clawk_home, max_file_size=cap
-        )
+        snap_id = create_quick_snapshot(clawk_home=clawk_home, max_file_size=cap)
         assert snap_id is not None
         snap_dir = clawk_home / "state-snapshots" / snap_id
         assert not (snap_dir / "state.db").exists()
@@ -1554,18 +1717,19 @@ class TestQuickSnapshot:
     def test_max_file_size_none_copies_everything(self, clawk_home):
         """Default (no cap) preserves manual /snapshot behavior."""
         from clawk_cli.backup import create_quick_snapshot
+
         snap_id = create_quick_snapshot(clawk_home=clawk_home, max_file_size=None)
         assert (clawk_home / "state-snapshots" / snap_id / "state.db").exists()
 
     def test_max_file_size_under_cap_copies(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot
-        snap_id = create_quick_snapshot(
-            clawk_home=clawk_home, max_file_size=1 << 30
-        )
+
+        snap_id = create_quick_snapshot(clawk_home=clawk_home, max_file_size=1 << 30)
         assert (clawk_home / "state-snapshots" / snap_id / "state.db").exists()
 
     def test_list_snapshots(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot, list_quick_snapshots
+
         id1 = create_quick_snapshot(label="first", clawk_home=clawk_home)
         id2 = create_quick_snapshot(label="second", clawk_home=clawk_home)
 
@@ -1576,6 +1740,7 @@ class TestQuickSnapshot:
 
     def test_list_limit(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot, list_quick_snapshots
+
         for i in range(5):
             create_quick_snapshot(label=f"s{i}", clawk_home=clawk_home)
         snaps = list_quick_snapshots(limit=3, clawk_home=clawk_home)
@@ -1583,6 +1748,7 @@ class TestQuickSnapshot:
 
     def test_restore_config(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot, restore_quick_snapshot
+
         snap_id = create_quick_snapshot(clawk_home=clawk_home)
 
         (clawk_home / "config.yaml").write_text("model:\n  provider: anthropic\n")
@@ -1594,6 +1760,7 @@ class TestQuickSnapshot:
 
     def test_restore_state_db(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot, restore_quick_snapshot
+
         snap_id = create_quick_snapshot(clawk_home=clawk_home)
 
         conn = sqlite3.connect(str(clawk_home / "state.db"))
@@ -1610,17 +1777,28 @@ class TestQuickSnapshot:
 
     def test_restore_nonexistent(self, clawk_home):
         from clawk_cli.backup import restore_quick_snapshot
+
         assert restore_quick_snapshot("nonexistent", clawk_home=clawk_home) is False
 
     def test_auto_prune(self, clawk_home):
-        from clawk_cli.backup import create_quick_snapshot, list_quick_snapshots, _QUICK_DEFAULT_KEEP
+        from clawk_cli.backup import (
+            create_quick_snapshot,
+            list_quick_snapshots,
+            _QUICK_DEFAULT_KEEP,
+        )
+
         for i in range(_QUICK_DEFAULT_KEEP + 5):
             create_quick_snapshot(label=f"snap-{i:03d}", clawk_home=clawk_home)
         snaps = list_quick_snapshots(limit=100, clawk_home=clawk_home)
         assert len(snaps) <= _QUICK_DEFAULT_KEEP
 
     def test_manual_prune(self, clawk_home):
-        from clawk_cli.backup import create_quick_snapshot, prune_quick_snapshots, list_quick_snapshots
+        from clawk_cli.backup import (
+            create_quick_snapshot,
+            prune_quick_snapshots,
+            list_quick_snapshots,
+        )
+
         for i in range(10):
             create_quick_snapshot(label=f"s{i}", clawk_home=clawk_home)
         deleted = prune_quick_snapshots(keep=3, clawk_home=clawk_home)
@@ -1704,9 +1882,9 @@ class TestQuickSnapshot:
         # Other state still present → snapshot succeeds.
         assert snap_id is not None
 
-# ---------------------------------------------------------------------------
-# Pre-update backup (clawk update safety net)
-# ---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
+    # Pre-update backup (clawk update safety net)
+    # ---------------------------------------------------------------------------
 
     # -- security: path traversal regression coverage -----------------------
     # Per @egilewski audit on PR #9217: restore_quick_snapshot must reject
@@ -1727,18 +1905,18 @@ class TestQuickSnapshot:
         from clawk_cli.backup import restore_quick_snapshot
 
         hostile_ids = [
-            "../../etc",                # parent traversal
-            "../outside",               # single parent
-            "..",                       # bare parent dir
-            ".",                        # bare current dir
-            "subdir/snap",              # forward slash
-            "subdir\\snap",           # backslash (Windows-style)
-            "",                         # empty string
+            "../../etc",  # parent traversal
+            "../outside",  # single parent
+            "..",  # bare parent dir
+            ".",  # bare current dir
+            "subdir/snap",  # forward slash
+            "subdir\\snap",  # backslash (Windows-style)
+            "",  # empty string
         ]
         for hostile in hostile_ids:
-            assert restore_quick_snapshot(
-                hostile, clawk_home=clawk_home
-            ) is False, f"hostile snapshot_id was not rejected: {hostile!r}"
+            assert restore_quick_snapshot(hostile, clawk_home=clawk_home) is False, (
+                f"hostile snapshot_id was not rejected: {hostile!r}"
+            )
 
     def test_restore_rejects_manifest_rel_traversal(self, clawk_home):
         """A snapshot whose manifest.json contains a rel path that escapes
@@ -1810,15 +1988,21 @@ class TestQuickSnapshotProjectsKanban:
 
     def test_in_quick_state_files(self):
         from clawk_cli.backup import _QUICK_STATE_FILES
+
         # All per-profile user-created stores that the upgrade can wipe.
         for name in (
-            "projects.db", "kanban.db", "kanban/boards",
-            "response_store.db", "memory_store.db", "verification_evidence.db",
+            "projects.db",
+            "kanban.db",
+            "kanban/boards",
+            "response_store.db",
+            "memory_store.db",
+            "verification_evidence.db",
         ):
             assert name in _QUICK_STATE_FILES, name
 
     def test_projects_db_snapshotted(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot
+
         snap_id = create_quick_snapshot(clawk_home=clawk_home)
         copy = clawk_home / "state-snapshots" / snap_id / "projects.db"
         assert copy.exists()
@@ -1829,6 +2013,7 @@ class TestQuickSnapshotProjectsKanban:
 
     def test_kanban_db_snapshotted(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot
+
         snap_id = create_quick_snapshot(clawk_home=clawk_home)
         copy = clawk_home / "state-snapshots" / snap_id / "kanban.db"
         assert copy.exists()
@@ -1839,6 +2024,7 @@ class TestQuickSnapshotProjectsKanban:
 
     def test_restore_recreates_emptied_projects_db(self, clawk_home):
         from clawk_cli.backup import create_quick_snapshot, restore_quick_snapshot
+
         snap_id = create_quick_snapshot(clawk_home=clawk_home)
 
         # Simulate the upgrade wiping the store back to an empty schema.
@@ -1870,8 +2056,13 @@ class TestQuickSnapshotProjectsKanban:
 
         snap_id = create_quick_snapshot(clawk_home=clawk_home)
         copy = (
-            clawk_home / "state-snapshots" / snap_id
-            / "kanban" / "boards" / "work" / "kanban.db"
+            clawk_home
+            / "state-snapshots"
+            / snap_id
+            / "kanban"
+            / "boards"
+            / "work"
+            / "kanban.db"
         )
         assert copy.exists(), "non-default board kanban.db was not snapshotted"
 
@@ -1973,8 +2164,18 @@ class TestQuickSnapshotProjectsKanban:
         monkeypatch.setattr(bk, "_safe_copy_db", _spy)
         snap_id = create_quick_snapshot(clawk_home=clawk_home)
         # The board db was copied via _safe_copy_db (not raw copy).
-        assert any(s.endswith("boards/work/kanban.db") for s in called["db"]), called["db"]
-        copy = clawk_home / "state-snapshots" / snap_id / "kanban" / "boards" / "work" / "kanban.db"
+        assert any(s.endswith("boards/work/kanban.db") for s in called["db"]), called[
+            "db"
+        ]
+        copy = (
+            clawk_home
+            / "state-snapshots"
+            / snap_id
+            / "kanban"
+            / "boards"
+            / "work"
+            / "kanban.db"
+        )
         rows = sqlite3.connect(str(copy)).execute("SELECT * FROM tasks").fetchall()
         assert rows == [("w1", "ship")]
 
@@ -1983,7 +2184,9 @@ class TestPreUpdateBackup:
     """Tests for create_pre_update_backup — the auto-backup ``clawk update``
     runs before touching anything."""
 
-    def test_failed_sqlite_snapshot_removes_incomplete_archive(self, tmp_path, monkeypatch):
+    def test_failed_sqlite_snapshot_removes_incomplete_archive(
+        self, tmp_path, monkeypatch
+    ):
         """The non-interactive full-zip helper must fail the entire archive
         rather than return success after omitting a live WAL database."""
         clawk_home = tmp_path / ".clawksis"
@@ -2002,6 +2205,7 @@ class TestPreUpdateBackup:
         assert Path(f"{db_path}-wal").stat().st_size > 0
 
         import clawk_cli.backup as backup_mod
+
         real_connect = backup_mod.sqlite3.connect
 
         class FailingBackupConnection:
@@ -2039,6 +2243,7 @@ class TestPreUpdateBackup:
 
     def test_creates_backup_under_backups_dir(self, clawk_home):
         from clawk_cli.backup import create_pre_update_backup
+
         out = create_pre_update_backup(clawk_home=clawk_home)
         assert out is not None
         assert out.exists()
@@ -2050,6 +2255,7 @@ class TestPreUpdateBackup:
         """Pre-update backup should include the same user data that
         ``clawk backup`` would, and should exclude the same directories."""
         from clawk_cli.backup import create_pre_update_backup
+
         out = create_pre_update_backup(clawk_home=clawk_home)
         assert out is not None
         with zipfile.ZipFile(out) as zf:
@@ -2071,6 +2277,7 @@ class TestPreUpdateBackup:
         """The ``backups/`` directory must be excluded so that each backup
         doesn't grow exponentially by including all prior backups."""
         from clawk_cli.backup import create_pre_update_backup
+
         # First backup
         out1 = create_pre_update_backup(clawk_home=clawk_home)
         assert out1 is not None
@@ -2097,7 +2304,8 @@ class TestPreUpdateBackup:
             _t.sleep(1.05)  # ensure distinct seconds in timestamp
 
         remaining = sorted(
-            p.name for p in (clawk_home / "backups").iterdir()
+            p.name
+            for p in (clawk_home / "backups").iterdir()
             if p.name.startswith("pre-update-")
         )
         assert len(remaining) == 3
@@ -2125,6 +2333,7 @@ class TestPreUpdateBackup:
 
     def test_returns_none_if_root_missing(self, tmp_path):
         from clawk_cli.backup import create_pre_update_backup
+
         assert create_pre_update_backup(clawk_home=tmp_path / "does-not-exist") is None
 
     def test_keep_zero_does_not_delete_freshly_created_backup(self, clawk_home):
@@ -2135,6 +2344,7 @@ class TestPreUpdateBackup:
         set ``pre_update_backup: false`` instead.
         """
         from clawk_cli.backup import create_pre_update_backup
+
         out = create_pre_update_backup(clawk_home=clawk_home, keep=0)
         assert out is not None
         assert out.exists(), (
@@ -2146,6 +2356,7 @@ class TestPreUpdateBackup:
         """Mirror coverage: any value <1 should be floored, not literally
         applied as a slice index."""
         from clawk_cli.backup import create_pre_update_backup
+
         out = create_pre_update_backup(clawk_home=clawk_home, keep=-3)
         assert out is not None
         assert out.exists()
@@ -2165,13 +2376,13 @@ class TestPreUpdateBackup:
         third = create_pre_update_backup(clawk_home=clawk_home, keep=0)
 
         remaining = {
-            p.name for p in (clawk_home / "backups").iterdir()
+            p.name
+            for p in (clawk_home / "backups").iterdir()
             if p.name.startswith("pre-update-")
         }
         assert third.name in remaining, "Floor must preserve the new backup"
         assert first.name not in remaining and second.name not in remaining, (
-            f"keep=0 floor of 1 should still prune older backups; "
-            f"remaining={remaining}"
+            f"keep=0 floor of 1 should still prune older backups; remaining={remaining}"
         )
 
     def test_skips_symlinked_files(self, clawk_home, tmp_path):
@@ -2213,11 +2424,15 @@ class TestRunPreUpdateBackup:
     @staticmethod
     def _set_mode(clawk_home, value):
         import yaml
-        (clawk_home / "config.yaml").write_text(yaml.safe_dump({
-            "_config_version": 22,
-            "updates": {"pre_update_backup": value},
-        }))
+
+        (clawk_home / "config.yaml").write_text(
+            yaml.safe_dump({
+                "_config_version": 22,
+                "updates": {"pre_update_backup": value},
+            })
+        )
         import sys as _sys
+
         for mod in list(_sys.modules.keys()):
             if mod.startswith("clawk_cli.config"):
                 del _sys.modules[mod]
@@ -2236,6 +2451,7 @@ class TestRunPreUpdateBackup:
         """With no config, the default mode is ``quick``: a state snapshot is
         created but NOT the full zip."""
         from clawk_cli.main import _run_pre_update_backup
+
         snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
         out = capsys.readouterr().out
         assert snap_id is not None
@@ -2247,6 +2463,7 @@ class TestRunPreUpdateBackup:
     def test_backup_flag_forces_full(self, clawk_home, capsys):
         """--backup forces the full zip (plus quick snapshot) for one run."""
         from clawk_cli.main import _run_pre_update_backup
+
         snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=True))
         out = capsys.readouterr().out
         assert snap_id is not None
@@ -2259,6 +2476,7 @@ class TestRunPreUpdateBackup:
     def test_no_backup_flag_skips_everything(self, clawk_home, capsys):
         """--no-backup skips BOTH the quick snapshot and the zip."""
         from clawk_cli.main import _run_pre_update_backup
+
         snap_id = _run_pre_update_backup(Namespace(no_backup=True, backup=False))
         out = capsys.readouterr().out
         assert snap_id is None
@@ -2272,6 +2490,7 @@ class TestRunPreUpdateBackup:
         snapshot too (it previously ran unconditionally), with no output."""
         self._set_mode(clawk_home, "off")
         from clawk_cli.main import _run_pre_update_backup
+
         snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
         out = capsys.readouterr().out
         assert snap_id is None
@@ -2283,6 +2502,7 @@ class TestRunPreUpdateBackup:
         """Legacy boolean ``false`` (the old zip opt-out) now means off."""
         self._set_mode(clawk_home, False)
         from clawk_cli.main import _run_pre_update_backup
+
         snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
         assert snap_id is None
         assert capsys.readouterr().out == ""
@@ -2293,6 +2513,7 @@ class TestRunPreUpdateBackup:
         """Legacy boolean ``true`` (the old always-zip opt-in) means full."""
         self._set_mode(clawk_home, True)
         from clawk_cli.main import _run_pre_update_backup
+
         snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
         out = capsys.readouterr().out
         assert snap_id is not None
@@ -2303,6 +2524,7 @@ class TestRunPreUpdateBackup:
     def test_config_full_mode(self, clawk_home, capsys):
         self._set_mode(clawk_home, "full")
         from clawk_cli.main import _run_pre_update_backup
+
         snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
         out = capsys.readouterr().out
         assert snap_id is not None
@@ -2313,6 +2535,7 @@ class TestRunPreUpdateBackup:
     def test_config_quick_mode(self, clawk_home, capsys):
         self._set_mode(clawk_home, "quick")
         from clawk_cli.main import _run_pre_update_backup
+
         snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
         out = capsys.readouterr().out
         assert snap_id is not None
@@ -2323,6 +2546,7 @@ class TestRunPreUpdateBackup:
     def test_unknown_mode_falls_back_to_quick(self, clawk_home, capsys):
         self._set_mode(clawk_home, "bogus-mode")
         from clawk_cli.main import _run_pre_update_backup
+
         snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
         out = capsys.readouterr().out
         assert snap_id is not None
@@ -2333,6 +2557,7 @@ class TestRunPreUpdateBackup:
         """--no-backup wins even when config says full."""
         self._set_mode(clawk_home, "full")
         from clawk_cli.main import _run_pre_update_backup
+
         snap_id = _run_pre_update_backup(Namespace(no_backup=True, backup=False))
         out = capsys.readouterr().out
         assert snap_id is None
@@ -2344,6 +2569,7 @@ class TestRunPreUpdateBackup:
         """--backup wins over config off for a single run."""
         self._set_mode(clawk_home, "off")
         from clawk_cli.main import _run_pre_update_backup
+
         snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=True))
         out = capsys.readouterr().out
         assert snap_id is not None
@@ -2354,6 +2580,7 @@ class TestRunPreUpdateBackup:
 # ---------------------------------------------------------------------------
 # Pre-migration backup (clawk claw migrate safety net)
 # ---------------------------------------------------------------------------
+
 
 class TestPreMigrationBackup:
     """Tests for create_pre_migration_backup — the auto-backup
@@ -2368,6 +2595,7 @@ class TestPreMigrationBackup:
 
     def test_creates_backup_under_backups_dir(self, clawk_home):
         from clawk_cli.backup import create_pre_migration_backup
+
         out = create_pre_migration_backup(clawk_home=clawk_home)
         assert out is not None
         assert out.exists()
@@ -2381,6 +2609,7 @@ class TestPreMigrationBackup:
         """Pre-migration backup reuses the same exclusion rules as
         ``clawk backup`` / ``create_pre_update_backup`` — no drift."""
         from clawk_cli.backup import create_pre_migration_backup
+
         out = create_pre_migration_backup(clawk_home=clawk_home)
         assert out is not None
         with zipfile.ZipFile(out) as zf:
@@ -2398,6 +2627,7 @@ class TestPreMigrationBackup:
         """The zip produced by pre-migration backup must be a valid Clawksis
         backup — `clawk import` should accept it."""
         from clawk_cli.backup import create_pre_migration_backup, _validate_backup_zip
+
         out = create_pre_migration_backup(clawk_home=clawk_home)
         assert out is not None
         with zipfile.ZipFile(out) as zf:
@@ -2406,6 +2636,7 @@ class TestPreMigrationBackup:
 
     def test_does_not_recurse_into_prior_backups(self, clawk_home):
         from clawk_cli.backup import create_pre_migration_backup
+
         out1 = create_pre_migration_backup(clawk_home=clawk_home)
         assert out1 is not None
         out2 = create_pre_migration_backup(clawk_home=clawk_home)
@@ -2426,11 +2657,14 @@ class TestPreMigrationBackup:
             _t.sleep(1.05)  # timestamp resolution
 
         remaining = sorted((clawk_home / "backups").glob("pre-migration-*.zip"))
-        assert len(remaining) <= 3, f"expected <=3 backups retained, got {len(remaining)}"
+        assert len(remaining) <= 3, (
+            f"expected <=3 backups retained, got {len(remaining)}"
+        )
 
     def test_missing_clawk_home_returns_none(self, tmp_path):
         """Fresh install with no ~/.clawksis yet — nothing to back up."""
         from clawk_cli.backup import create_pre_migration_backup
+
         missing = tmp_path / "does-not-exist"
         out = create_pre_migration_backup(clawk_home=missing)
         assert out is None
@@ -2438,22 +2672,30 @@ class TestPreMigrationBackup:
     def test_does_not_touch_pre_update_backups(self, clawk_home):
         """Pre-migration rotation must only prune pre-migration-*.zip files,
         leaving pre-update-*.zip backups untouched."""
-        from clawk_cli.backup import create_pre_update_backup, create_pre_migration_backup
+        from clawk_cli.backup import (
+            create_pre_update_backup,
+            create_pre_migration_backup,
+        )
+
         update_backup = create_pre_update_backup(clawk_home=clawk_home, keep=5)
         assert update_backup is not None and update_backup.exists()
         # Spin up a lot of migration backups with keep=1
         import time as _t
+
         for _ in range(3):
             out = create_pre_migration_backup(clawk_home=clawk_home, keep=1)
             assert out is not None
             _t.sleep(1.05)
         # Update backup must still be there
-        assert update_backup.exists(), "pre-migration rotation wrongly pruned the pre-update backup"
+        assert update_backup.exists(), (
+            "pre-migration rotation wrongly pruned the pre-update backup"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Cron jobs auto-restore after silent migration loss (issue #34600)
 # ---------------------------------------------------------------------------
+
 
 class TestRestoreCronJobsIfEmptied:
     """`clawk update` config migration can leave cron/jobs.json valid-but-empty,
@@ -2467,10 +2709,12 @@ class TestRestoreCronJobsIfEmptied:
 
     def _make_snapshot(self, clawk_home: Path, label="pre-update"):
         from clawk_cli.backup import create_quick_snapshot
+
         return create_quick_snapshot(label=label, clawk_home=clawk_home, keep=5)
 
     def test_restores_when_emptied_after_migration(self, tmp_path):
         from clawk_cli.backup import restore_cron_jobs_if_emptied
+
         clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         # Pre-update: 3 real jobs.
@@ -2493,6 +2737,7 @@ class TestRestoreCronJobsIfEmptied:
 
     def test_noop_when_live_file_still_has_jobs(self, tmp_path):
         from clawk_cli.backup import restore_cron_jobs_if_emptied
+
         clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         self._seed_jobs(jobs_path, [{"id": "a"}, {"id": "b"}])
@@ -2506,6 +2751,7 @@ class TestRestoreCronJobsIfEmptied:
         """Desktop scheduler overwrites jobs.json with its own small set,
         losing tool-created crons while keeping desktop-tracked ones."""
         from clawk_cli.backup import restore_cron_jobs_if_emptied
+
         clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         # Pre-update: 19 jobs (18 tool-created + 1 desktop watchdog).
@@ -2530,6 +2776,7 @@ class TestRestoreCronJobsIfEmptied:
 
     def test_noop_when_snapshot_had_no_jobs(self, tmp_path):
         from clawk_cli.backup import restore_cron_jobs_if_emptied
+
         clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         # Pre-update genuinely had zero jobs; current is also empty.
@@ -2545,6 +2792,7 @@ class TestRestoreCronJobsIfEmptied:
         _count_cron_jobs report None — that would silently disable the
         auto-restore safety net. utf-8-sig matches cron/jobs.load_jobs."""
         from clawk_cli.backup import _count_cron_jobs, restore_cron_jobs_if_emptied
+
         clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         self._seed_jobs(jobs_path, [{"id": "a"}, {"id": "b"}, {"id": "c"}])
@@ -2564,6 +2812,7 @@ class TestRestoreCronJobsIfEmptied:
         """An unparseable live file is left alone — that's a different failure
         mode the user should see, not silently overwrite."""
         from clawk_cli.backup import restore_cron_jobs_if_emptied
+
         clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         self._seed_jobs(jobs_path, [{"id": "a"}])
@@ -2577,6 +2826,7 @@ class TestRestoreCronJobsIfEmptied:
 
     def test_noop_when_snapshot_id_missing(self, tmp_path):
         from clawk_cli.backup import restore_cron_jobs_if_emptied
+
         clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         self._seed_jobs(jobs_path, [])
@@ -2587,6 +2837,7 @@ class TestRestoreCronJobsIfEmptied:
         """A legacy snapshot storing a bare JSON list (not {"jobs": [...]}) is
         still counted and restored."""
         from clawk_cli.backup import restore_cron_jobs_if_emptied
+
         clawk_home = tmp_path / ".clawksis"
         jobs_path = clawk_home / "cron" / "jobs.json"
         jobs_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2605,6 +2856,7 @@ class TestRestoreCronJobsIfEmptied:
 # location, NOT under CLAWK_HOME. (backup/import cycle data-loss fix)
 # ---------------------------------------------------------------------------
 
+
 class TestMemoryProviderExternalPaths:
     def _make_min_tree(self, clawk_home: Path) -> None:
         clawk_home.mkdir(parents=True, exist_ok=True)
@@ -2612,7 +2864,9 @@ class TestMemoryProviderExternalPaths:
         (clawk_home / ".env").write_text("OPENROUTER_API_KEY=sk-test\n")
         (clawk_home / "state.db").write_bytes(b"x")
 
-    def test_backup_captures_external_paths_under_external_prefix(self, tmp_path, monkeypatch):
+    def test_backup_captures_external_paths_under_external_prefix(
+        self, tmp_path, monkeypatch
+    ):
         """Provider state under ~/.honcho is archived beneath _external/,
         encoded relative to the home directory."""
         clawk_home = tmp_path / ".clawksis"
@@ -2628,6 +2882,7 @@ class TestMemoryProviderExternalPaths:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         import clawk_cli.backup as backup_mod
+
         monkeypatch.setattr(
             backup_mod, "_collect_memory_provider_external_paths", lambda: [honcho]
         )
@@ -2655,6 +2910,7 @@ class TestMemoryProviderExternalPaths:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         import clawk_cli.backup as backup_mod
+
         monkeypatch.setattr(
             backup_mod, "_collect_memory_provider_external_paths", lambda: [outside]
         )
@@ -2669,7 +2925,9 @@ class TestMemoryProviderExternalPaths:
         (outside / "leak.json").unlink()
         outside.rmdir()
 
-    def test_import_restores_external_to_home_relative_location(self, tmp_path, monkeypatch):
+    def test_import_restores_external_to_home_relative_location(
+        self, tmp_path, monkeypatch
+    ):
         """_external/ members restore to ~/<relpath>, not under CLAWK_HOME,
         and credential-shaped files get 0600."""
         dst_home = tmp_path / "dst"
@@ -2688,6 +2946,7 @@ class TestMemoryProviderExternalPaths:
         monkeypatch.setattr(Path, "home", lambda: dst_home)
 
         from clawk_cli.backup import run_import
+
         run_import(Namespace(zipfile=str(zip_path), force=True))
 
         restored = dst_home / ".honcho" / "config.json"
@@ -2717,6 +2976,7 @@ class TestMemoryProviderExternalPaths:
         monkeypatch.setattr(Path, "home", lambda: dst_home)
 
         from clawk_cli.backup import run_import
+
         run_import(Namespace(zipfile=str(zip_path), force=True))
 
         assert not sentinel.exists()

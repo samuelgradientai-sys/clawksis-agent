@@ -145,7 +145,9 @@ def test_pending_fallback_notice_emitted_once_on_success():
     # Simulate try_activate_fallback: buffer the noisy switch line AND record
     # the durable one-shot notice.
     agent._buffer_status("🔄 Primary model failed — switching to fallback: m2 via p2")
-    agent._pending_fallback_notice = "🔄 Switched to fallback model: m1 via p1 → m2 via p2"
+    agent._pending_fallback_notice = (
+        "🔄 Switched to fallback model: m1 via p1 → m2 via p2"
+    )
 
     # Success path order: emit pending notice, then drop the buffer.
     agent._emit_pending_fallback_notice()
@@ -182,7 +184,9 @@ def test_flush_discards_pending_fallback_notice():
     agent._emit_status = lambda msg: emitted.append(msg)
 
     agent._buffer_status("🔄 Primary model failed — switching to fallback: m2 via p2")
-    agent._pending_fallback_notice = "🔄 Switched to fallback model: m1 via p1 → m2 via p2"
+    agent._pending_fallback_notice = (
+        "🔄 Switched to fallback model: m1 via p1 → m2 via p2"
+    )
 
     # Terminal failure flushes the buffered trace...
     agent._flush_status_buffer()
@@ -206,7 +210,9 @@ def test_pending_fallback_notice_survives_emit_callback_error():
         raise RuntimeError("simulated callback failure")
 
     agent._emit_status = boom
-    agent._pending_fallback_notice = "🔄 Switched to fallback model: m1 via p1 → m2 via p2"
+    agent._pending_fallback_notice = (
+        "🔄 Switched to fallback model: m1 via p1 → m2 via p2"
+    )
 
     # Should not raise.
     agent._emit_pending_fallback_notice()

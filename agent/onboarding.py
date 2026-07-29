@@ -33,6 +33,7 @@ PROFILE_BUILD_FLAG = "profile_build_offered"
 # Hint content
 # -------------------------------------------------------------------------
 
+
 def busy_input_hint_gateway(mode: str) -> str:
     """Hint shown the first time a user messages while the agent is busy.
 
@@ -131,6 +132,7 @@ def detect_openclaw_residue(home: Optional[Path] = None) -> bool:
 # Onboarding profile-build path (opt-in, consent-gated)
 # -------------------------------------------------------------------------
 
+
 def profile_build_mode(config: Mapping[str, Any]) -> str:
     """Resolve the onboarding profile-build mode from config.
 
@@ -177,7 +179,7 @@ def profile_build_directive() -> str:
         "  3. With consent, you may use web_search to confirm public details "
         "(e.g. employer, public profiles) from the data points they gave.\n"
         "  4. Save each confirmed, durable fact with the memory tool using "
-        "target=\"user\" — keep entries compact and high-signal.\n"
+        'target="user" — keep entries compact and high-signal.\n'
         "If they decline at any point, stop immediately and continue normally. "
         "Keep the whole exchange light and conversational, not an interrogation.]"
     )
@@ -186,6 +188,7 @@ def profile_build_directive() -> str:
 # -------------------------------------------------------------------------
 # State read / write
 # -------------------------------------------------------------------------
+
 
 def _get_seen_dict(config: Mapping[str, Any]) -> Mapping[str, Any]:
     onboarding = config.get("onboarding") if isinstance(config, Mapping) else None

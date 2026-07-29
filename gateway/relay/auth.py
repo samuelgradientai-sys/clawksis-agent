@@ -50,7 +50,9 @@ _DEFAULT_UPGRADE_TTL_SECONDS = 300
 
 def _hmac_hex(payload: str, secret: str) -> str:
     """HMAC-SHA256 hex digest of ``payload`` under ``secret`` (UTF-8)."""
-    return hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.new(
+        secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
 
 
 def sign(payload: str, secret: str) -> str:

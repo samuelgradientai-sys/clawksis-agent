@@ -32,9 +32,9 @@ class _FakeAgent:
         self.model = "anthropic/claude-opus-4.6"
         self._last_flushed_db_idx = 7
         self._todo_store = TodoStore()
-        self._todo_store.write(
-            [{"id": "t1", "content": "unfinished task", "status": "in_progress"}]
-        )
+        self._todo_store.write([
+            {"id": "t1", "content": "unfinished task", "status": "in_progress"}
+        ])
         self.commit_memory_session = MagicMock()
         self._invalidate_system_prompt = MagicMock()
 
@@ -109,14 +109,16 @@ def _make_cli(env_overrides=None, config_overrides=None, **kwargs):
         "prompt_toolkit.formatted_text": MagicMock(),
         "prompt_toolkit.auto_suggest": MagicMock(),
     }
-    with patch.dict(sys.modules, prompt_toolkit_stubs), patch.dict(
-        "os.environ", clean_env, clear=False
+    with (
+        patch.dict(sys.modules, prompt_toolkit_stubs),
+        patch.dict("os.environ", clean_env, clear=False),
     ):
         import cli as _cli_mod
 
         _cli_mod = importlib.reload(_cli_mod)
-        with patch.object(_cli_mod, "get_tool_definitions", return_value=[]), patch.dict(
-            _cli_mod.__dict__, {"CLI_CONFIG": _clean_config}
+        with (
+            patch.object(_cli_mod, "get_tool_definitions", return_value=[]),
+            patch.dict(_cli_mod.__dict__, {"CLI_CONFIG": _clean_config}),
         ):
             return _cli_mod.ClawksisCLI(**kwargs)
 
@@ -124,7 +126,9 @@ def _make_cli(env_overrides=None, config_overrides=None, **kwargs):
 def _prepare_cli_with_active_session(tmp_path):
     cli = _make_cli()
     cli._session_db = SessionDB(db_path=tmp_path / "state.db")
-    cli._session_db.create_session(session_id=cli.session_id, source="cli", model=cli.model)
+    cli._session_db.create_session(
+        session_id=cli.session_id, source="cli", model=cli.model
+    )
 
     cli.agent = _FakeAgent(cli.session_id, cli.session_start)
     cli.conversation_history = [{"role": "user", "content": "hello"}]
@@ -222,8 +226,8 @@ def test_new_session_delivers_context_engine_boundary_synchronously(tmp_path):
     old_session_id = cli.session_id
 
     engine_calls = []
-    cli.agent.context_compressor.on_session_end = (
-        lambda sid, msgs: engine_calls.append((sid, list(msgs)))
+    cli.agent.context_compressor.on_session_end = lambda sid, msgs: (
+        engine_calls.append((sid, list(msgs)))
     )
 
     cli.process_command("/new")

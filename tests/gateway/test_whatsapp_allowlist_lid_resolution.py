@@ -24,7 +24,9 @@ PHONE = "351912345678"
 LID = "77214955630717"
 
 
-def _make_adapter(dm_policy=None, allow_from=None, group_policy=None, group_allow_from=None):
+def _make_adapter(
+    dm_policy=None, allow_from=None, group_policy=None, group_allow_from=None
+):
     from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
     extra = {}
@@ -54,13 +56,16 @@ def _write_lid_mapping(phone=PHONE, lid=LID):
     """Mirror what the JS bridge writes: phone→lid and lid→phone (reverse)."""
     session_dir = get_clawk_home() / "whatsapp" / "session"
     session_dir.mkdir(parents=True, exist_ok=True)
-    (session_dir / f"lid-mapping-{phone}.json").write_text(json.dumps(lid), encoding="utf-8")
+    (session_dir / f"lid-mapping-{phone}.json").write_text(
+        json.dumps(lid), encoding="utf-8"
+    )
     (session_dir / f"lid-mapping-{lid}_reverse.json").write_text(
         json.dumps(phone), encoding="utf-8"
     )
 
 
 # --------------------------------------------------------------------- DM gate
+
 
 def test_dm_phone_allowlist_matches_lid_sender():
     """allow_from has the phone number; inbound sender arrives as @lid (the bug)."""
@@ -134,6 +139,7 @@ def test_dm_open_policy_blocked_without_opt_in():
 
 # ------------------------------------------------------------------ group gate
 
+
 def test_group_jid_exact_match_still_works():
     """Group allowlists use full ``@g.us`` JIDs — exact match must pass through."""
     adapter = _make_adapter(
@@ -152,6 +158,7 @@ def test_group_unlisted_jid_blocked():
 
 
 # ------------------------------------------------------ end-to-end intake gate
+
 
 def test_should_process_message_dm_phone_allowlist_lid_sender():
     """Full intake path: a DM from a phone-allowlisted contact arriving as @lid."""

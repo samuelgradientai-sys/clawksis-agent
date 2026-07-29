@@ -1,4 +1,5 @@
 """Tests for clawk-api-server toolset and API server tool availability."""
+
 from unittest.mock import patch, MagicMock
 
 
@@ -23,25 +24,45 @@ class TestClawksisApiServerToolset:
     def test_toolset_includes_core_tools(self):
         tools = resolve_toolset("clawk-api-server")
         expected = [
-            "terminal", "process",
-            "read_file", "write_file", "patch", "search_files",
-            "vision_analyze", "image_generate",
-            "execute_code", "delegate_task",
-            "todo", "memory", "session_search", "cronjob",
+            "terminal",
+            "process",
+            "read_file",
+            "write_file",
+            "patch",
+            "search_files",
+            "vision_analyze",
+            "image_generate",
+            "execute_code",
+            "delegate_task",
+            "todo",
+            "memory",
+            "session_search",
+            "cronjob",
         ]
         for tool in expected:
             assert tool in tools, f"Missing expected tool: {tool}"
 
     def test_toolset_includes_browser_tools(self):
         tools = resolve_toolset("clawk-api-server")
-        for tool in ["browser_navigate", "browser_snapshot", "browser_click",
-                      "browser_type", "browser_scroll", "browser_back",
-                      "browser_press"]:
+        for tool in [
+            "browser_navigate",
+            "browser_snapshot",
+            "browser_click",
+            "browser_type",
+            "browser_scroll",
+            "browser_back",
+            "browser_press",
+        ]:
             assert tool in tools, f"Missing browser tool: {tool}"
 
     def test_toolset_includes_homeassistant_tools(self):
         tools = resolve_toolset("clawk-api-server")
-        for tool in ["ha_list_entities", "ha_get_state", "ha_list_services", "ha_call_service"]:
+        for tool in [
+            "ha_list_entities",
+            "ha_get_state",
+            "ha_list_services",
+            "ha_call_service",
+        ]:
             assert tool in tools, f"Missing HA tool: {tool}"
 
     def test_toolset_excludes_clarify(self):
@@ -60,6 +81,7 @@ class TestClawksisApiServerToolset:
 class TestApiServerPlatformConfig:
     def test_platforms_dict_includes_api_server(self):
         from clawk_cli.tools_config import PLATFORMS
+
         assert "api_server" in PLATFORMS
         assert PLATFORMS["api_server"]["default_toolset"] == "clawk-api-server"
 
@@ -72,6 +94,7 @@ class TestApiServerPlatformConfig:
         composite, so it must stay enabled."""
         from tools.registry import discover_builtin_tools
         from clawk_cli.tools_config import _get_platform_tools
+
         discover_builtin_tools()
         assert "terminal" in _get_platform_tools({}, "api_server")
 
@@ -87,8 +110,11 @@ class TestApiServerPlatformConfig:
         registry.register(
             name=sentinel,
             toolset="delegation",
-            schema={"name": sentinel, "description": "test",
-                    "parameters": {"type": "object", "properties": {}}},
+            schema={
+                "name": sentinel,
+                "description": "test",
+                "parameters": {"type": "object", "properties": {}},
+            },
             handler=lambda args, **kw: "{}",
         )
         try:
@@ -106,6 +132,7 @@ class TestApiServerPlatformConfig:
         import os
         from unittest.mock import patch
         from clawk_cli.tools_config import _get_platform_tools
+
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("HASS_TOKEN", None)
             os.environ.pop("XAI_API_KEY", None)
@@ -125,14 +152,20 @@ class TestApiServerAdapterToolset:
 
         adapter = APIServerAdapter(PlatformConfig())
 
-        with patch("gateway.run._resolve_runtime_agent_kwargs") as mock_kwargs, \
-             patch("gateway.run._resolve_gateway_model") as mock_model, \
-             patch("gateway.run._load_gateway_config") as mock_config, \
-             patch("run_agent.AIAgent") as mock_agent_cls:
-
-            mock_kwargs.return_value = {"api_key": "test-key", "base_url": None,
-                                        "provider": None, "api_mode": None,
-                                        "command": None, "args": []}
+        with (
+            patch("gateway.run._resolve_runtime_agent_kwargs") as mock_kwargs,
+            patch("gateway.run._resolve_gateway_model") as mock_model,
+            patch("gateway.run._load_gateway_config") as mock_config,
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
+            mock_kwargs.return_value = {
+                "api_key": "test-key",
+                "base_url": None,
+                "provider": None,
+                "api_mode": None,
+                "command": None,
+                "args": [],
+            }
             mock_model.return_value = "test/model"
             # No platform_toolsets override — should fall back to clawk-api-server default
             mock_config.return_value = {}
@@ -155,14 +188,20 @@ class TestApiServerAdapterToolset:
 
         adapter = APIServerAdapter(PlatformConfig())
 
-        with patch("gateway.run._resolve_runtime_agent_kwargs") as mock_kwargs, \
-             patch("gateway.run._resolve_gateway_model") as mock_model, \
-             patch("gateway.run._load_gateway_config") as mock_config, \
-             patch("run_agent.AIAgent") as mock_agent_cls:
-
-            mock_kwargs.return_value = {"api_key": "test-key", "base_url": None,
-                                        "provider": None, "api_mode": None,
-                                        "command": None, "args": []}
+        with (
+            patch("gateway.run._resolve_runtime_agent_kwargs") as mock_kwargs,
+            patch("gateway.run._resolve_gateway_model") as mock_model,
+            patch("gateway.run._load_gateway_config") as mock_config,
+            patch("run_agent.AIAgent") as mock_agent_cls,
+        ):
+            mock_kwargs.return_value = {
+                "api_key": "test-key",
+                "base_url": None,
+                "provider": None,
+                "api_mode": None,
+                "command": None,
+                "args": [],
+            }
             mock_model.return_value = "test/model"
             # User overrides with just web and terminal
             mock_config.return_value = {

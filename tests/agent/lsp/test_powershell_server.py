@@ -5,6 +5,7 @@ bundle (GitHub release zip) driven by a ``pwsh`` bootstrap script, not a
 single binary on PATH. These tests cover the registry wiring plus the
 two-prerequisite spawn logic (pwsh host + module bundle).
 """
+
 from __future__ import annotations
 
 import os

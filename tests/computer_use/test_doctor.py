@@ -51,7 +51,11 @@ def _ok_report() -> dict:
         "overall": "ok",
         "checks": [
             {"name": "binary_version", "status": "pass", "message": "cua-driver 0.5.8"},
-            {"name": "tcc_accessibility", "status": "pass", "message": "Accessibility is granted."},
+            {
+                "name": "tcc_accessibility",
+                "status": "pass",
+                "message": "Accessibility is granted.",
+            },
         ],
     }
 
@@ -87,9 +91,11 @@ class TestDoctorExitCodes:
             {"jsonrpc": "2.0", "id": 1, "result": {}},
             {"jsonrpc": "2.0", "id": 2, "result": {"structuredContent": _ok_report()}},
         )
-        with patch("shutil.which", return_value="/fake/cua-driver"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("sys.stdout", new_callable=StringIO):
+        with (
+            patch("shutil.which", return_value="/fake/cua-driver"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("sys.stdout", new_callable=StringIO),
+        ):
             code = doctor.run_doctor()
         assert code == 0
 
@@ -98,11 +104,17 @@ class TestDoctorExitCodes:
 
         proc = _fake_proc_with_responses(
             {"jsonrpc": "2.0", "id": 1, "result": {}},
-            {"jsonrpc": "2.0", "id": 2, "result": {"structuredContent": _degraded_report()}},
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "result": {"structuredContent": _degraded_report()},
+            },
         )
-        with patch("shutil.which", return_value="/fake/cua-driver"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("sys.stdout", new_callable=StringIO):
+        with (
+            patch("shutil.which", return_value="/fake/cua-driver"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("sys.stdout", new_callable=StringIO),
+        ):
             code = doctor.run_doctor()
         assert code == 1
 
@@ -117,17 +129,21 @@ class TestDoctorExitCodes:
             {"jsonrpc": "2.0", "id": 1, "result": {}},
             {"jsonrpc": "2.0", "id": 2, "result": {"structuredContent": report}},
         )
-        with patch("shutil.which", return_value="/fake/cua-driver"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("sys.stdout", new_callable=StringIO):
+        with (
+            patch("shutil.which", return_value="/fake/cua-driver"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("sys.stdout", new_callable=StringIO),
+        ):
             code = doctor.run_doctor()
         assert code == 1
 
     def test_missing_binary_exits_2(self):
         from tools.computer_use import doctor
 
-        with patch("shutil.which", return_value=None), \
-             patch("sys.stdout", new_callable=StringIO):
+        with (
+            patch("shutil.which", return_value=None),
+            patch("sys.stdout", new_callable=StringIO),
+        ):
             code = doctor.run_doctor()
         assert code == 2
 
@@ -145,13 +161,18 @@ class TestDoctorExitCodes:
         proc.wait = MagicMock(return_value=0)
         proc.kill = MagicMock()
 
-        with patch("shutil.which", return_value="/fake/cua-driver"), \
-             patch("subprocess.Popen", return_value=proc):
+        with (
+            patch("shutil.which", return_value="/fake/cua-driver"),
+            patch("subprocess.Popen", return_value=proc),
+        ):
             code = doctor.run_doctor()
         assert code == 2
         # stderr should mention the failure
         captured = capsys.readouterr()
-        assert "cua-driver" in captured.err.lower() or "health_report" in captured.err.lower()
+        assert (
+            "cua-driver" in captured.err.lower()
+            or "health_report" in captured.err.lower()
+        )
 
 
 # ── response-shape parsing ─────────────────────────────────────────────────
@@ -165,9 +186,11 @@ class TestResponseShapeParsing:
             {"jsonrpc": "2.0", "id": 1, "result": {}},
             {"jsonrpc": "2.0", "id": 2, "result": {"structuredContent": _ok_report()}},
         )
-        with patch("shutil.which", return_value="/fake/cua-driver"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("sys.stdout", new_callable=StringIO) as out:
+        with (
+            patch("shutil.which", return_value="/fake/cua-driver"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("sys.stdout", new_callable=StringIO) as out,
+        ):
             doctor.run_doctor()
         # Header line includes driver version + platform + overall.
         text = out.getvalue()
@@ -182,7 +205,8 @@ class TestResponseShapeParsing:
         proc = _fake_proc_with_responses(
             {"jsonrpc": "2.0", "id": 1, "result": {}},
             {
-                "jsonrpc": "2.0", "id": 2,
+                "jsonrpc": "2.0",
+                "id": 2,
                 "result": {
                     "content": [
                         {"type": "text", "text": json.dumps(_ok_report())},
@@ -190,9 +214,11 @@ class TestResponseShapeParsing:
                 },
             },
         )
-        with patch("shutil.which", return_value="/fake/cua-driver"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("sys.stdout", new_callable=StringIO) as out:
+        with (
+            patch("shutil.which", return_value="/fake/cua-driver"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("sys.stdout", new_callable=StringIO) as out,
+        ):
             code = doctor.run_doctor()
         assert code == 0
         assert "ok" in out.getvalue()
@@ -202,10 +228,16 @@ class TestResponseShapeParsing:
 
         proc = _fake_proc_with_responses(
             {"jsonrpc": "2.0", "id": 1, "result": {}},
-            {"jsonrpc": "2.0", "id": 2, "error": {"code": -32601, "message": "method not found"}},
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "error": {"code": -32601, "message": "method not found"},
+            },
         )
-        with patch("shutil.which", return_value="/fake/cua-driver"), \
-             patch("subprocess.Popen", return_value=proc):
+        with (
+            patch("shutil.which", return_value="/fake/cua-driver"),
+            patch("subprocess.Popen", return_value=proc),
+        ):
             code = doctor.run_doctor()
         assert code == 2
         assert "method not found" in capsys.readouterr().err
@@ -222,16 +254,19 @@ class TestArgPassthrough:
             {"jsonrpc": "2.0", "id": 1, "result": {}},
             {"jsonrpc": "2.0", "id": 2, "result": {"structuredContent": _ok_report()}},
         )
-        with patch("shutil.which", return_value="/fake/cua-driver"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("sys.stdout", new_callable=StringIO):
+        with (
+            patch("shutil.which", return_value="/fake/cua-driver"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("sys.stdout", new_callable=StringIO),
+        ):
             doctor.run_doctor(include=["binary_version", "tcc_accessibility"])
 
         # Inspect the second write to stdin — the tools/call payload.
         writes = [call.args[0] for call in proc.stdin.write.call_args_list]
         call_payload = next(json.loads(w) for w in writes if "tools/call" in w)
         assert call_payload["params"]["arguments"]["include"] == [
-            "binary_version", "tcc_accessibility",
+            "binary_version",
+            "tcc_accessibility",
         ]
 
     def test_skip_passed_through(self):
@@ -241,9 +276,11 @@ class TestArgPassthrough:
             {"jsonrpc": "2.0", "id": 1, "result": {}},
             {"jsonrpc": "2.0", "id": 2, "result": {"structuredContent": _ok_report()}},
         )
-        with patch("shutil.which", return_value="/fake/cua-driver"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("sys.stdout", new_callable=StringIO):
+        with (
+            patch("shutil.which", return_value="/fake/cua-driver"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("sys.stdout", new_callable=StringIO),
+        ):
             doctor.run_doctor(skip=["bundle_identity"])
         writes = [call.args[0] for call in proc.stdin.write.call_args_list]
         call_payload = next(json.loads(w) for w in writes if "tools/call" in w)
@@ -259,9 +296,11 @@ class TestArgPassthrough:
             {"jsonrpc": "2.0", "id": 1, "result": {}},
             {"jsonrpc": "2.0", "id": 2, "result": {"structuredContent": _ok_report()}},
         )
-        with patch("shutil.which", return_value="/fake/cua-driver"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("sys.stdout", new_callable=StringIO):
+        with (
+            patch("shutil.which", return_value="/fake/cua-driver"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("sys.stdout", new_callable=StringIO),
+        ):
             doctor.run_doctor()
         writes = [call.args[0] for call in proc.stdin.write.call_args_list]
         call_payload = next(json.loads(w) for w in writes if "tools/call" in w)
@@ -279,9 +318,11 @@ class TestJsonOutput:
             {"jsonrpc": "2.0", "id": 1, "result": {}},
             {"jsonrpc": "2.0", "id": 2, "result": {"structuredContent": _ok_report()}},
         )
-        with patch("shutil.which", return_value="/fake/cua-driver"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("sys.stdout", new_callable=StringIO) as out:
+        with (
+            patch("shutil.which", return_value="/fake/cua-driver"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("sys.stdout", new_callable=StringIO) as out,
+        ):
             doctor.run_doctor(json_output=True)
         # Verify the captured text round-trips through json.loads and matches
         # the input report (the contract: --json passes the structured payload
@@ -301,9 +342,11 @@ class TestDriverCmdResolution:
             {"jsonrpc": "2.0", "id": 1, "result": {}},
             {"jsonrpc": "2.0", "id": 2, "result": {"structuredContent": _ok_report()}},
         )
-        with patch("shutil.which", return_value="/fake/explicit-binary") as which_mock, \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("sys.stdout", new_callable=StringIO):
+        with (
+            patch("shutil.which", return_value="/fake/explicit-binary") as which_mock,
+            patch("subprocess.Popen", return_value=proc),
+            patch("sys.stdout", new_callable=StringIO),
+        ):
             doctor.run_doctor(driver_cmd="/custom/path/cua-driver")
         # shutil.which should have been called with the explicit arg, not
         # the env-var / default resolver.
@@ -317,9 +360,11 @@ class TestDriverCmdResolution:
             {"jsonrpc": "2.0", "id": 1, "result": {}},
             {"jsonrpc": "2.0", "id": 2, "result": {"structuredContent": _ok_report()}},
         )
-        with patch("shutil.which", return_value="/env/path/cua-driver") as which_mock, \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("sys.stdout", new_callable=StringIO):
+        with (
+            patch("shutil.which", return_value="/env/path/cua-driver") as which_mock,
+            patch("subprocess.Popen", return_value=proc),
+            patch("sys.stdout", new_callable=StringIO),
+        ):
             doctor.run_doctor()
         # First (and only) which call should have used the env var.
         which_mock.assert_called_with("/env/path/cua-driver")
