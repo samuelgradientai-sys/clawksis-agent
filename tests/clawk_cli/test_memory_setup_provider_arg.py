@@ -93,6 +93,9 @@ class TestInstallDependenciesRunner:
         assert calls[0][:3] == [py, "-m", "pip"]
         assert calls[-1][:4] == [py, "-m", "pip", "install"]
 
+    # NOTA (sync v2026.7.20): el test propio ``test_aborts_when_neither_uv_nor_pip``
+    # NO se reintroduce: upstream reemplazo el dead-end "cannot install" por un
+    # bootstrap de pip via ensurepip, que es justo lo que cubre este test.
     def test_bootstraps_pip_via_ensurepip_when_missing(self, tmp_path):
         """Neither uv nor pip -> ensurepip bootstrap, then pip install."""
         def behavior(cmd):

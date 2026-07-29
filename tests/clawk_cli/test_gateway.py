@@ -830,6 +830,11 @@ def test_install_linux_gateway_from_setup_non_root_never_offers_system(monkeypat
     assert "sudo clawk" not in out
 
 
+# NOTA (sync v2026.7.20): el test propio
+# ``test_install_linux_gateway_from_setup_system_choice_without_root_prints_followup``
+# NO se reintroduce: upstream endurecio el flujo y ya no imprime la receta de
+# auto-elevacion `sudo clawk gateway install --system ...` (clawk_cli/gateway.py
+# ahora solo dice "requires root"). Este test cubre el contrato nuevo.
 def test_install_linux_gateway_from_setup_system_choice_without_root_no_sudo_recipe(monkeypatch, capsys):
     # Defensive guard: if "system" is forced non-root (not reachable via wizard),
     # we refuse and do NOT print a self-elevation recipe.
