@@ -15,17 +15,6 @@ hard reset also clears an unmerged index, so the subsequent checkout proceeds.
 Fork users who customize their clone use ``clawk update``, which keeps the
 stash machinery and clears the conflict with ``git reset`` before stashing
 (#4735).
-
-NOTE (sync v2026.7.20): upstream's rewrite of this file
-(``tools/upstream/pending/tests__test_install_unmerged_index.py.theirs``) is
-deliberately NOT adopted yet. It asserts the autostash path
-(``ls-files --unmerged`` + ``stash push --include-untracked``) and the Windows
-venv-resident-process sweep, none of which exist in this fork's
-``scripts/install.sh`` / ``scripts/install.ps1`` — both are still unmerged
-divergences (see ``tools/upstream/pending/REPORT.md``). The fork replaced the
-autostash with a ``git reset --hard`` on the managed clone on purpose; adopt
-the upstream tests only if/when that decision is reversed together with the
-scripts.
 """
 
 from __future__ import annotations
