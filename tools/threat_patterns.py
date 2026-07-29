@@ -126,9 +126,13 @@ _PATTERNS: List[Tuple[str, str, str]] = [
     # ── Persistence / SSH backdoor (strict scope — memory + skills) ──
     (r'authorized_keys', "ssh_backdoor", "strict"),
     (r'\$HOME/\.ssh|\~/\.ssh', "ssh_access", "strict"),
-    (r'\$HOME/\.clawk/\.env|\~/\.clawk/\.env', "clawk_env", "strict"),
+    # ``\.clawks?i?s?`` cubre el home real del fork (``~/.clawksis``) y el
+    # legacy ``~/.clawk``: el rebrand movio el directorio pero estos regex
+    # habian quedado atras, asi que un exfil de ``~/.clawksis/.env`` no
+    # matcheaba. No angostar en syncs de upstream.
+    (r'\$HOME/\.clawk(?:sis)?/\.env|\~/\.clawk(?:sis)?/\.env', "clawk_env", "strict"),
     (r'(update|modify|edit|write|change|append|add\s+to)\s+[^\n]{0,2048}(?:AGENTS\.md|CLAUDE\.md|\.cursorrules|\.clinerules)', "agent_config_mod", "strict"),
-    (r'(update|modify|edit|write|change|append|add\s+to)\s+[^\n]{0,2048}\.clawk/(config\.yaml|SOUL\.md)', "clawk_config_mod", "strict"),
+    (r'(update|modify|edit|write|change|append|add\s+to)\s+[^\n]{0,2048}\.clawk(?:sis)?/(config\.yaml|SOUL\.md)', "clawk_config_mod", "strict"),
 
     # ── Hardcoded secrets ────────────────────────────────────────────
     (r'(?:api[_-]?key|token|secret|password)\s*[=:]\s*["\'][A-Za-z0-9+/=_-]{20,}', "hardcoded_secret", "strict"),

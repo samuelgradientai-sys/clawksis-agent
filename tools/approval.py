@@ -3268,11 +3268,22 @@ def check_all_command_guards(command: str, env_type: str,
     is_gateway = _is_gateway_approval_context()
     is_ask = env_var_enabled("CLAWK_EXEC_ASK")
 
+    is_cron = env_var_enabled("CLAWK_CRON_SESSION")
+
     # Preserve the existing non-interactive behavior: outside CLI/gateway/ask
     # flows, we do not block on approvals and we skip external guard work.
-    if not is_cli and not is_gateway and not is_ask:
+    #
+    # Cron sessions enter this block unconditionally (fork behavior): the
+    # gateway process sets CLAWK_EXEC_ASK=1 (gateway/run.py) and the cron
+    # ticker runs *inside* that process, so a cron tick sees is_ask=True.
+    # Without forcing entry here the command skips cron_mode, falls through to
+    # the gateway/ask approval path, finds no notify callback registered for
+    # the cron session and returns a never-resolving "pending_approval"
+    # (terminal exit_code -1) — the job hangs. Mirrors the cron handling in
+    # check_execute_code_guard().
+    if is_cron or (not is_cli and not is_gateway and not is_ask):
         # Cron sessions: respect cron_mode config
-        if env_var_enabled("CLAWK_CRON_SESSION"):
+        if is_cron:
             if _get_cron_approval_mode() == "deny":
                 # Run detection to get a description for the block message
                 is_dangerous, _pk, description = detect_dangerous_command(command)

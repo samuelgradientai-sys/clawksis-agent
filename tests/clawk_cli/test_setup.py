@@ -1,5 +1,4 @@
 """Tests for setup.py configuration flows."""
-
 import sys
 import types
 
@@ -29,14 +28,10 @@ def _clear_provider_env(monkeypatch):
 
 def _stub_tts(monkeypatch):
     """Stub out TTS prompts so setup_model_provider doesn't block."""
-    monkeypatch.setattr(
-        "clawk_cli.setup.prompt_choice",
-        lambda q, c, d=0: (
-            _maybe_keep_current_tts(q, c)
-            if _maybe_keep_current_tts(q, c) is not None
-            else d
-        ),
-    )
+    monkeypatch.setattr("clawk_cli.setup.prompt_choice", lambda q, c, d=0: (
+        _maybe_keep_current_tts(q, c) if _maybe_keep_current_tts(q, c) is not None
+        else d
+    ))
     monkeypatch.setattr("clawk_cli.setup.prompt_yes_no", lambda *a, **kw: False)
 
 
@@ -64,9 +59,7 @@ def test_setup_delegates_to_select_provider_and_model(tmp_path, monkeypatch):
     config = load_config()
 
     def fake_select():
-        _write_model_config(
-            tmp_path, "custom", "http://localhost:11434/v1", "qwen3.5:32b"
-        )
+        _write_model_config(tmp_path, "custom", "http://localhost:11434/v1", "qwen3.5:32b")
 
     monkeypatch.setattr("clawk_cli.main.select_provider_and_model", fake_select)
 
@@ -91,9 +84,7 @@ def test_setup_syncs_openrouter_from_disk(tmp_path, monkeypatch):
     assert isinstance(config.get("model"), str)  # fresh install
 
     def fake_select():
-        _write_model_config(
-            tmp_path, "openrouter", model_name="anthropic/claude-opus-4.6"
-        )
+        _write_model_config(tmp_path, "openrouter", model_name="anthropic/claude-opus-4.6")
 
     monkeypatch.setattr("clawk_cli.main.select_provider_and_model", fake_select)
 
@@ -114,9 +105,7 @@ def test_setup_syncs_nous_from_disk(tmp_path, monkeypatch):
     config = load_config()
 
     def fake_select():
-        _write_model_config(
-            tmp_path, "nous", "https://inference.example.com/v1", "gemini-3-flash"
-        )
+        _write_model_config(tmp_path, "nous", "https://inference.example.com/v1", "gemini-3-flash")
 
     monkeypatch.setattr("clawk_cli.main.select_provider_and_model", fake_select)
 
@@ -140,9 +129,7 @@ def test_setup_custom_providers_synced(tmp_path, monkeypatch):
     def fake_select():
         _write_model_config(tmp_path, "custom", "http://localhost:8080/v1", "llama3")
         cfg = load_config()
-        cfg["custom_providers"] = [
-            {"name": "Local", "base_url": "http://localhost:8080/v1"}
-        ]
+        cfg["custom_providers"] = [{"name": "Local", "base_url": "http://localhost:8080/v1"}]
         save_config(cfg)
 
     monkeypatch.setattr("clawk_cli.main.select_provider_and_model", fake_select)
@@ -151,14 +138,10 @@ def test_setup_custom_providers_synced(tmp_path, monkeypatch):
     save_config(config)
 
     reloaded = load_config()
-    assert reloaded.get("custom_providers") == [
-        {"name": "Local", "base_url": "http://localhost:8080/v1"}
-    ]
+    assert reloaded.get("custom_providers") == [{"name": "Local", "base_url": "http://localhost:8080/v1"}]
 
 
-def test_setup_gateway_skips_service_install_when_systemctl_missing(
-    monkeypatch, capsys
-):
+def test_setup_gateway_skips_service_install_when_systemctl_missing(monkeypatch, capsys):
     env = {
         "TELEGRAM_BOT_TOKEN": "",
         "TELEGRAM_HOME_CHANNEL": "",
@@ -181,6 +164,12 @@ def test_setup_gateway_skips_service_install_when_systemctl_missing(
     monkeypatch.setattr(setup_mod, "get_env_value", lambda key: env.get(key, ""))
     monkeypatch.setattr(gateway_mod, "get_env_value", lambda key: env.get(key, ""))
     monkeypatch.setattr(setup_mod, "prompt_yes_no", lambda *args, **kwargs: False)
+    # Keep the checklist pre-selection (so matrix stays "configured" and the
+    # post-config service guidance runs), but stub the migrated plugins'
+    # interactive_setup so their wizards don't read real stdin. #41112.
+    monkeypatch.setattr(setup_mod, "prompt_checklist", lambda _q, _items, pre=(), **k: list(pre))
+    import clawk_cli.gateway as _gw_mod
+    monkeypatch.setattr(_gw_mod, "_configure_platform", lambda *a, **k: None)
     monkeypatch.setattr("platform.system", lambda: "Linux")
 
     monkeypatch.setattr(gateway_mod, "supports_systemd_services", lambda: False)
@@ -220,6 +209,12 @@ def test_setup_gateway_in_container_shows_docker_guidance(monkeypatch, capsys):
     monkeypatch.setattr(setup_mod, "get_env_value", lambda key: env.get(key, ""))
     monkeypatch.setattr(gateway_mod, "get_env_value", lambda key: env.get(key, ""))
     monkeypatch.setattr(setup_mod, "prompt_yes_no", lambda *args, **kwargs: False)
+    # Keep the checklist pre-selection (so matrix stays "configured" and the
+    # post-config service guidance runs), but stub the migrated plugins'
+    # interactive_setup so their wizards don't read real stdin. #41112.
+    monkeypatch.setattr(setup_mod, "prompt_checklist", lambda _q, _items, pre=(), **k: list(pre))
+    import clawk_cli.gateway as _gw_mod
+    monkeypatch.setattr(_gw_mod, "_configure_platform", lambda *a, **k: None)
     monkeypatch.setattr("platform.system", lambda: "Linux")
 
     monkeypatch.setattr(gateway_mod, "supports_systemd_services", lambda: False)
@@ -229,7 +224,6 @@ def test_setup_gateway_in_container_shows_docker_guidance(monkeypatch, capsys):
 
     # Patch is_container at the import location in setup.py
     import clawk_constants
-
     monkeypatch.setattr(clawk_constants, "is_container", lambda: True)
 
     setup_mod.setup_gateway({})
@@ -247,17 +241,12 @@ def test_setup_syncs_custom_provider_removal_from_disk(tmp_path, monkeypatch):
     _stub_tts(monkeypatch)
 
     config = load_config()
-    config["custom_providers"] = [
-        {"name": "Local", "base_url": "http://localhost:8080/v1"}
-    ]
+    config["custom_providers"] = [{"name": "Local", "base_url": "http://localhost:8080/v1"}]
     save_config(config)
 
     def fake_select():
         cfg = load_config()
-        cfg["model"] = {
-            "provider": "openrouter",
-            "default": "anthropic/claude-opus-4.6",
-        }
+        cfg["model"] = {"provider": "openrouter", "default": "anthropic/claude-opus-4.6"}
         cfg["custom_providers"] = []
         save_config(cfg)
 
@@ -337,30 +326,20 @@ def test_select_provider_and_model_warns_if_named_custom_provider_disappears(
     _clear_provider_env(monkeypatch)
 
     cfg = load_config()
-    cfg["custom_providers"] = [
-        {"name": "Local", "base_url": "http://localhost:8080/v1"}
-    ]
+    cfg["custom_providers"] = [{"name": "Local", "base_url": "http://localhost:8080/v1"}]
     save_config(cfg)
 
     def fake_prompt_provider_choice(choices, default=0):
         current = load_config()
         current["custom_providers"] = []
         save_config(current)
-        return next(
-            i
-            for i, label in enumerate(choices)
-            if label.startswith("Local (localhost:8080/v1)")
-        )
+        return next(i for i, label in enumerate(choices) if label.startswith("Local (localhost:8080/v1)"))
 
     monkeypatch.setattr("clawk_cli.auth.resolve_provider", lambda provider: None)
-    monkeypatch.setattr(
-        "clawk_cli.main._prompt_provider_choice", fake_prompt_provider_choice
-    )
+    monkeypatch.setattr("clawk_cli.main._prompt_provider_choice", fake_prompt_provider_choice)
     monkeypatch.setattr(
         "clawk_cli.main._model_flow_named_custom",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("named custom flow should not run")
-        ),
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("named custom flow should not run")),
     )
 
     from clawk_cli.main import select_provider_and_model
@@ -406,9 +385,7 @@ def test_select_provider_and_model_accepts_named_provider_from_providers_section
     assert "Active provider:  volcengine-plan" in out
 
 
-def test_codex_setup_uses_runtime_access_token_for_live_model_list(
-    tmp_path, monkeypatch
-):
+def test_codex_setup_uses_runtime_access_token_for_live_model_list(tmp_path, monkeypatch):
     """Codex model list fetching uses the runtime access token."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setenv("OPENROUTER_API_KEY", "or-test-key")
@@ -419,9 +396,7 @@ def test_codex_setup_uses_runtime_access_token_for_live_model_list(
     _stub_tts(monkeypatch)
 
     def fake_select():
-        _write_model_config(
-            tmp_path, "openai-codex", "https://api.openai.com/v1", "gpt-4o"
-        )
+        _write_model_config(tmp_path, "openai-codex", "https://api.openai.com/v1", "gpt-4o")
 
     monkeypatch.setattr("clawk_cli.main.select_provider_and_model", fake_select)
 
@@ -433,12 +408,21 @@ def test_codex_setup_uses_runtime_access_token_for_live_model_list(
     assert reloaded["model"]["provider"] == "openai-codex"
 
 
+# NOTA (sync v2026.7.20): los tests de upstream
+# ``test_modal_setup_can_use_nous_subscription_without_modal_creds`` y
+# ``test_modal_setup_persists_direct_mode_when_user_chooses_their_own_account``
+# NO se adoptan: cubren el prompt "Select how Modal execution should be billed:"
+# y ``managed_nous_tools_enabled``, que el fork no tiene — Modal es siempre BYOK
+# aca (clawk_cli/setup.py fija ``modal_mode = "direct"``). Los dos tests propios
+# de abajo cubren ese contrato.
+
+
 def test_modal_setup_persists_direct_mode(tmp_path, monkeypatch):
     """Modal is BYOK-only now: selecting it always persists direct mode.
 
     The managed / Nous-subscription billing path was removed (the fork bills
-    nothing for inference — see commit "barrido de menciones Nous inertes"), so
-    there is no "Select how Modal execution should be billed:" prompt anymore.
+    nothing for inference), so there is no "Select how Modal execution should
+    be billed:" prompt anymore.
     """
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     # Pretend the modal SDK is importable so the install path is skipped.
@@ -483,13 +467,9 @@ def test_modal_setup_saves_byok_tokens(tmp_path, monkeypatch):
 
     monkeypatch.setattr("clawk_cli.setup.prompt_choice", fake_prompt_choice)
     monkeypatch.setattr("clawk_cli.setup.get_env_value", lambda key: "")
-    monkeypatch.setattr(
-        "clawk_cli.setup.prompt", lambda *args, **kwargs: next(prompt_values)
-    )
+    monkeypatch.setattr("clawk_cli.setup.prompt", lambda *args, **kwargs: next(prompt_values))
     monkeypatch.setattr("clawk_cli.setup.prompt_yes_no", lambda *a, **k: False)
-    monkeypatch.setattr(
-        "clawk_cli.setup.save_env_value", lambda k, v: saved.update({k: v})
-    )
+    monkeypatch.setattr("clawk_cli.setup.save_env_value", lambda k, v: saved.update({k: v}))
 
     from clawk_cli.setup import setup_terminal_backend
 
@@ -501,33 +481,56 @@ def test_modal_setup_saves_byok_tokens(tmp_path, monkeypatch):
     assert saved.get("MODAL_TOKEN_SECRET") == "token-secret"
 
 
-def test_setup_slack_saves_home_channel(monkeypatch):
-    """_setup_slack() saves SLACK_HOME_CHANNEL when the user provides one."""
-    saved = {}
-    prompts = iter(["xoxb-test-token", "xapp-test-token", "", "C01ABC2DE3F"])
-
-    monkeypatch.setattr(setup_mod, "get_env_value", lambda key: "")
-    monkeypatch.setattr(setup_mod, "save_env_value", lambda k, v: saved.update({k: v}))
-    monkeypatch.setattr(setup_mod, "prompt", lambda *_a, **_kw: next(prompts))
-    monkeypatch.setattr(setup_mod, "prompt_yes_no", lambda *_a, **_kw: False)
-    monkeypatch.setattr(setup_mod, "_write_slack_manifest_and_instruct", lambda: None)
-
-    setup_mod._setup_slack()
-
-    assert saved.get("SLACK_HOME_CHANNEL") == "C01ABC2DE3F"
+# test_setup_slack_* moved to tests/gateway/test_slack_plugin_setup.py — the
+# _setup_slack wizard migrated to the slack plugin's interactive_setup (#41112).
+# Los tests propios test_setup_slack_saves_home_channel /
+# test_setup_slack_home_channel_empty_not_saved NO se reintroducen aca:
+# clawk_cli/setup.py ya no expone _setup_slack y la misma cobertura vive en
+# tests/gateway/test_slack_plugin_setup.py.
 
 
-def test_setup_slack_home_channel_empty_not_saved(monkeypatch):
-    """_setup_slack() does not save SLACK_HOME_CHANNEL when left blank."""
-    saved = {}
-    prompts = iter(["xoxb-test-token", "xapp-test-token", "", ""])
+def test_prompt_yes_no_returns_default_when_noninteractive_env_set(monkeypatch):
+    """CLAWK_NONINTERACTIVE=1 (set by dashboard/desktop spawns) must make
+    prompt_yes_no fall back to its default instead of reading stdin."""
+    monkeypatch.setenv("CLAWK_NONINTERACTIVE", "1")
 
-    monkeypatch.setattr(setup_mod, "get_env_value", lambda key: "")
-    monkeypatch.setattr(setup_mod, "save_env_value", lambda k, v: saved.update({k: v}))
-    monkeypatch.setattr(setup_mod, "prompt", lambda *_a, **_kw: next(prompts))
-    monkeypatch.setattr(setup_mod, "prompt_yes_no", lambda *_a, **_kw: False)
-    monkeypatch.setattr(setup_mod, "_write_slack_manifest_and_instruct", lambda: None)
+    def _boom(*_a, **_k):
+        raise AssertionError("input() must not be called in non-interactive mode")
 
-    setup_mod._setup_slack()
+    monkeypatch.setattr("builtins.input", _boom)
 
-    assert "SLACK_HOME_CHANNEL" not in saved
+    assert setup_mod.prompt_yes_no("Install it now?", True) is True
+    assert setup_mod.prompt_yes_no("Install it now?", False) is False
+
+
+def test_prompt_yes_no_eof_returns_default_instead_of_exiting(monkeypatch):
+    """A closed/redirected stdin (EOFError) must yield the default, not abort.
+
+    Regression: the Windows gateway start path asks "Install it now?" when the
+    service is not installed; spawned from the desktop app (stdin=DEVNULL) the
+    EOFError used to sys.exit(1), killing every desktop-triggered restart."""
+    monkeypatch.delenv("CLAWK_NONINTERACTIVE", raising=False)
+
+    def _eof(*_a, **_k):
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", _eof)
+
+    assert setup_mod.prompt_yes_no("Install it now?", True) is True
+    assert setup_mod.prompt_yes_no("Install it now?", False) is False
+
+
+def test_prompt_yes_no_keyboard_interrupt_still_exits(monkeypatch):
+    """Ctrl+C is an explicit user abort and must keep exiting."""
+    monkeypatch.delenv("CLAWK_NONINTERACTIVE", raising=False)
+
+    def _interrupt(*_a, **_k):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("builtins.input", _interrupt)
+
+    import pytest
+
+    with pytest.raises(SystemExit):
+        setup_mod.prompt_yes_no("Install it now?", True)
+
