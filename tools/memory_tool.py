@@ -873,7 +873,7 @@ def _apply_write_gate(
 
     try:
         from tools import write_approval as wa
-    except Exception:
+    except ImportError:
         # If the gate module can't load, fail open (current behaviour) rather
         # than blocking all memory writes.
         return None
@@ -933,7 +933,7 @@ def _apply_batch_write_gate(
     """
     try:
         from tools import write_approval as wa
-    except Exception:
+    except ImportError:
         return None
 
     label = "user profile" if target == "user" else "memory"
