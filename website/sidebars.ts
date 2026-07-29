@@ -192,8 +192,6 @@ const sidebars: SidebarsConfig = {
                   key: 'skills-bundled-devops',
                   collapsed: true,
                   items: [
-                    'user-guide/skills/bundled/devops/devops-kanban-orchestrator',
-                    'user-guide/skills/bundled/devops/devops-kanban-worker',
                   ],
                 },
                 {
@@ -526,7 +524,6 @@ const sidebars: SidebarsConfig = {
                     'user-guide/skills/optional/productivity/productivity-canvas',
                     'user-guide/skills/optional/productivity/productivity-here-now',
                     'user-guide/skills/optional/productivity/productivity-memento-flashcards',
-                    'user-guide/skills/optional/productivity/productivity-shop-app',
                     'user-guide/skills/optional/productivity/productivity-shopify',
                     'user-guide/skills/optional/productivity/productivity-siyuan',
                     'user-guide/skills/optional/productivity/productivity-telephony',
@@ -679,7 +676,6 @@ const sidebars: SidebarsConfig = {
         'guides/use-mcp-with-clawk',
         'guides/use-soul-with-clawk',
         'guides/use-voice-mode-with-clawk',
-        'guides/build-a-clawk-plugin',
         'guides/automate-with-cron',
         'guides/cron-script-only',
         'guides/automation-blueprints',
