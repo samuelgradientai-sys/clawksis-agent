@@ -14,7 +14,6 @@ used by new code that needs to be backend-agnostic — specifically the
 profile create/delete hooks (Phase 4) and the s6 dispatch path in
 ``clawk gateway start/stop/restart`` when running inside a container.
 """
-
 from __future__ import annotations
 
 import re
@@ -42,9 +41,13 @@ def validate_profile_name(name: str) -> None:
     if not name:
         raise ValueError("profile name must not be empty")
     if len(name) > _MAX_PROFILE_LEN:
-        raise ValueError(f"profile name too long ({len(name)} > {_MAX_PROFILE_LEN})")
+        raise ValueError(
+            f"profile name too long ({len(name)} > {_MAX_PROFILE_LEN})"
+        )
     if not _VALID_PROFILE_RE.match(name):
-        raise ValueError(f"profile name must match [a-z0-9][a-z0-9_-]*, got {name!r}")
+        raise ValueError(
+            f"profile name must match [a-z0-9][a-z0-9_-]*, got {name!r}"
+        )
 
 
 @runtime_checkable
@@ -74,6 +77,7 @@ class ServiceManager(Protocol):
         profile: str,
         *,
         extra_env: dict[str, str] | None = None,
+        start_now: bool = True,
     ) -> None: ...
     def unregister_profile_gateway(self, profile: str) -> None: ...
     def list_profile_gateways(self) -> list[str]: ...
@@ -83,7 +87,8 @@ def detect_service_manager() -> ServiceManagerKind:
     """Detect which service manager is available in this environment.
 
     Returns:
-        "s6" — inside a container when /init is s6-svscan (Phase 2+)
+        "s6" — s6-svscan is PID 1 (s6-overlay image; Docker, Podman, or a
+               Fly Firecracker microVM)
         "windows" — native Windows host
         "launchd" — macOS host
         "systemd" — Linux host with a working user/system bus
@@ -97,14 +102,20 @@ def detect_service_manager() -> ServiceManagerKind:
     # Imports deferred so importing this module doesn't drag in the
     # whole gateway dependency graph for callers that only need the
     # Protocol type or validate_profile_name().
-    from clawk_constants import is_container
     from clawk_cli.gateway import (
         is_macos,
         is_windows,
         supports_systemd_services,
     )
 
-    if is_container() and _s6_running():
+    # Gate on _s6_running() alone (PID 1 comm == s6-svscan AND /run/s6/basedir),
+    # NOT is_container(): the latter only detects Docker/Podman/lxc, so it is
+    # False on Fly's Firecracker microVMs even though s6-overlay is PID 1 there.
+    # That false negative made the whole s6 dispatch path inert on Fly, so
+    # `clawk gateway start/stop/restart` fell through to host code that spawns
+    # a foreground gateway competing with the supervised one. _s6_running() is
+    # already an s6-overlay-specific signal, so the container gate was redundant.
+    if _s6_running():
         return "s6"
     if is_windows():
         return "windows"
@@ -172,6 +183,7 @@ class _RegistrationUnsupportedMixin:
         profile: str,
         *,
         extra_env: dict[str, str] | None = None,
+        start_now: bool = True,
     ) -> None:
         raise NotImplementedError(
             f"{type(self).__name__} does not support runtime profile "
@@ -200,22 +212,18 @@ class SystemdServiceManager(_RegistrationUnsupportedMixin):
 
     def start(self, name: str) -> None:
         from clawk_cli.gateway import systemd_start
-
         systemd_start()
 
     def stop(self, name: str) -> None:
         from clawk_cli.gateway import systemd_stop
-
         systemd_stop()
 
     def restart(self, name: str) -> None:
         from clawk_cli.gateway import systemd_restart
-
         systemd_restart()
 
     def is_running(self, name: str) -> bool:
         from clawk_cli.gateway import _probe_systemd_service_running
-
         _, running = _probe_systemd_service_running()
         return running
 
@@ -227,22 +235,18 @@ class LaunchdServiceManager(_RegistrationUnsupportedMixin):
 
     def start(self, name: str) -> None:
         from clawk_cli.gateway import launchd_start
-
         launchd_start()
 
     def stop(self, name: str) -> None:
         from clawk_cli.gateway import launchd_stop
-
         launchd_stop()
 
     def restart(self, name: str) -> None:
         from clawk_cli.gateway import launchd_restart
-
         launchd_restart()
 
     def is_running(self, name: str) -> bool:
         from clawk_cli.gateway import _probe_launchd_service_running
-
         return _probe_launchd_service_running()
 
 
@@ -269,7 +273,6 @@ class WindowsServiceManager(_RegistrationUnsupportedMixin):
         elevated_handoff: bool = False,
     ) -> None:
         from clawk_cli import gateway_windows
-
         gateway_windows.install(
             force=force,
             start_now=start_now,
@@ -279,23 +282,19 @@ class WindowsServiceManager(_RegistrationUnsupportedMixin):
 
     def start(self, name: str) -> None:
         from clawk_cli import gateway_windows
-
         gateway_windows.start()
 
     def stop(self, name: str) -> None:
         from clawk_cli import gateway_windows
-
         gateway_windows.stop()
 
     def restart(self, name: str) -> None:
         from clawk_cli import gateway_windows
-
         gateway_windows.restart()
 
     def is_running(self, name: str) -> bool:
         from clawk_cli import gateway_windows
         from clawk_cli.gateway import find_gateway_pids
-
         if not gateway_windows.is_installed():
             return False
         return bool(find_gateway_pids())
@@ -334,6 +333,62 @@ def get_service_manager() -> ServiceManager:
 # automatic supervision on the next rescan.
 S6_DYNAMIC_SCANDIR = Path("/run/service")
 S6_SERVICE_PREFIX = "gateway-"
+
+
+def _profile_dir_for_gateway_service(name: str) -> Path:
+    """Resolve ``gateway-<profile>`` to its persistent profile directory.
+
+    s6 lifecycle commands may be invoked from any active profile, including
+    ``gateway stop --all``. Do not write the caller's CLAWK_HOME blindly;
+    derive the shared profile root from the current CLAWK_HOME and map the
+    service suffix to either the root default profile or
+    ``<root>/profiles/<profile>``.
+    """
+    import os
+
+    profile = name[len(S6_SERVICE_PREFIX):] if name.startswith(S6_SERVICE_PREFIX) else name
+    validate_profile_name(profile)
+    clawk_home = Path(os.environ.get("CLAWK_HOME", "/opt/data"))
+    if clawk_home.parent.name == "profiles":
+        root = clawk_home.parent.parent
+    else:
+        root = clawk_home
+    return root if profile == "default" else root / "profiles" / profile
+
+
+def _write_gateway_desired_state(name: str, desired_state: str) -> None:
+    """Persist durable s6 gateway intent next to runtime status.
+
+    ``gateway_state`` remains the volatile runtime field written by the
+    gateway process. ``desired_state`` records the operator's start/stop
+    intent so container-boot reconciliation can restore the correct s6
+    want-up/want-down state after pod recreation even if the previous runtime
+    state was transient (draining, startup_failed, etc.). The write is
+    best-effort: a failed persistence attempt must not prevent immediate s6
+    lifecycle control.
+    """
+    import json
+    import time
+
+    profile_dir = _profile_dir_for_gateway_service(name)
+    state_file = profile_dir / "gateway_state.json"
+    try:
+        if not profile_dir.exists():
+            return
+        try:
+            data = json.loads(state_file.read_text()) if state_file.exists() else {}
+            if not isinstance(data, dict):
+                data = {}
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        data["desired_state"] = desired_state
+        data["updated_at"] = int(time.time())
+        tmp = state_file.with_suffix(state_file.suffix + ".tmp")
+        tmp.write_text(json.dumps(data, separators=(",", ":")) + "\n")
+        tmp.replace(state_file)
+    except OSError:
+        return
+
 
 # s6-overlay installs its binaries under /command/ and only adds that
 # directory to PATH for processes started under the supervision tree
@@ -530,17 +585,14 @@ class S6CommandError(S6Error):
     """
 
     def __init__(
-        self,
-        *,
-        service: str,
-        action: str,
-        returncode: int,
-        stderr: str,
+        self, *, service: str, action: str, returncode: int, stderr: str,
     ) -> None:
         self.action = action
         self.returncode = returncode
         self.stderr = stderr
-        message = f"s6-svc {action} on {service!r} failed (rc={returncode})"
+        message = (
+            f"s6-svc {action} on {service!r} failed (rc={returncode})"
+        )
         if stderr.strip():
             message += f": {stderr.strip()}"
         super().__init__(message, service=service)
@@ -614,7 +666,6 @@ class S6ServiceManager:
         parameter because they were dead code through the entire stack.
         """
         import shlex
-
         lines = [
             "#!/command/with-contenv sh",
             "# shellcheck shell=sh",
@@ -633,15 +684,54 @@ class S6ServiceManager:
         # start`, etc. See `_gateway_command_inner` for the matching
         # guard.
         lines.append("export CLAWK_S6_SUPERVISED_CHILD=1")
+        # ``--replace`` makes the supervised gateway authoritative for its
+        # profile's CLAWK_HOME. Without it, a gateway started OUTSIDE s6
+        # (a stray ``clawk gateway run`` from a shell, an agent action, or
+        # the Open WebUI helper) grabs the per-CLAWK_HOME PID lock first;
+        # the supervised slot then execs a bare ``gateway run``, hits the
+        # "Another gateway instance is already running" guard, exits
+        # non-zero, and s6 restarts it — a restart loop that floods the
+        # log and never binds (NS-505). ``--replace``
+        # instead reaps the stale holder (hardened takeover path: marker +
+        # SIGTERM→SIGKILL-with-confirmation + scoped-lock cleanup, see
+        # gateway/run.py) so s6 always wins. The CLAWK_S6_SUPERVISED_CHILD
+        # sentinel above prevents the run→start→run redirect recursion.
+        # Each profile is scoped to its own CLAWK_HOME and s6 guarantees a
+        # single supervised instance per slot, so there is no legitimate
+        # supervised sibling for ``--replace`` to clobber.
         if profile == "default":
-            gateway_cmd = "clawk gateway run"
+            gateway_cmd = "clawk gateway run --replace"
         else:
-            gateway_cmd = f"clawk -p {shlex.quote(profile)} gateway run"
+            gateway_cmd = f"clawk -p {shlex.quote(profile)} gateway run --replace"
         # Skip the drop when already non-root (setgroups() lacks CAP_SETGID →
         # s6 boot-loop).
         lines.append(f'[ "$(id -u)" = 0 ] || exec {gateway_cmd}')
         lines.append(f"exec s6-setuidgid clawk {gateway_cmd}")
         return "\n".join(lines) + "\n"
+
+    @staticmethod
+    def _render_finish_script() -> str:
+        """Generate the finish script for a profile-gateway s6 service.
+
+        When the gateway exits with EX_CONFIG (78) — a fatal
+        configuration error such as a token collision or no messaging
+        platforms — we tell s6-supervise to stop restarting by exiting
+        125 (permanent failure).  Any other exit code lets s6 restart
+        normally.  See #51228.
+        """
+        from gateway.restart import GATEWAY_FATAL_CONFIG_EXIT_CODE
+
+        code = GATEWAY_FATAL_CONFIG_EXIT_CODE
+        return (
+            "#!/command/with-contenv sh\n"
+            "# shellcheck shell=sh\n"
+            "# $1 = exit code from the run script.\n"
+            f"# Exit {code} (EX_CONFIG) = fatal config error — don't restart.\n"
+            f'if [ "$1" = "{code}" ]; then\n'
+            "  exit 125\n"
+            "fi\n"
+            "exit 0\n"
+        )
 
     @staticmethod
     def _render_log_run(profile: str) -> str:
@@ -687,7 +777,6 @@ class S6ServiceManager:
             correlatable in ``current``.
         """
         import shlex
-
         prof = shlex.quote(profile)
         return (
             f"#!/command/with-contenv sh\n"
@@ -695,7 +784,17 @@ class S6ServiceManager:
             f': "${{CLAWK_HOME:=/opt/data}}"\n'
             f'log_dir="$CLAWK_HOME/logs/gateways/{prof}"\n'
             f'mkdir -p "$log_dir"\n'
+            # The gateways/ parent must be chowned too (non-recursively):
+            # `mkdir -p` creates it root-owned on a root-context boot, and a
+            # leaf-only chown leaves it that way — every profile registered
+            # later then runs its log service as clawk and crash-loops on
+            # `mkdir: Permission denied`. The parent chown runs on every
+            # root-context boot, so it also heals volumes already poisoned
+            # by older images. Non-recursive on purpose: sibling profile
+            # dirs are each managed by their own log/run. See #45258.
+            f'chown clawk:clawk "$CLAWK_HOME/logs/gateways" 2>/dev/null || true\n'
             f'chown -R clawk:clawk "$log_dir" 2>/dev/null || true\n'
+            f'rm -f "$log_dir/lock"\n'
             # Skip the drop when already non-root (CAP_SETGID).
             f'[ "$(id -u)" = 0 ] || exec s6-log 1 n10 s1000000 T "$log_dir"\n'
             f'exec s6-setuidgid clawk s6-log 1 n10 s1000000 T "$log_dir"\n'
@@ -730,7 +829,7 @@ class S6ServiceManager:
             # Strip the gateway- prefix back off so the message
             # matches what the user typed on the CLI (``-p <profile>``).
             profile = (
-                name[len(S6_SERVICE_PREFIX) :]
+                name[len(S6_SERVICE_PREFIX):]
                 if name.startswith(S6_SERVICE_PREFIX)
                 else name
             )
@@ -739,10 +838,7 @@ class S6ServiceManager:
         try:
             subprocess.run(
                 [f"{_S6_BIN_DIR}/s6-svc", action_flag, str(service_dir)],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=5,
+                check=True, capture_output=True, text=True, timeout=5,
             )
         except subprocess.CalledProcessError as exc:
             raise S6CommandError(
@@ -761,6 +857,7 @@ class S6ServiceManager:
                 (permission denied on the supervise FIFO, timeout, etc.).
         """
         self._run_svc("-u", "start", name)
+        _write_gateway_desired_state(name, "running")
 
     def _supervised_pid(self, name: str) -> int | None:
         """Return the PID of the supervised gateway process, or None.
@@ -776,9 +873,7 @@ class S6ServiceManager:
         try:
             result = subprocess.run(
                 [f"{_S6_BIN_DIR}/s6-svstat", str(self.scandir / name)],
-                capture_output=True,
-                text=True,
-                timeout=5,
+                capture_output=True, text=True, timeout=5,
             )
         except (OSError, subprocess.SubprocessError):
             return None
@@ -814,6 +909,7 @@ class S6ServiceManager:
             except Exception:
                 pass
         self._run_svc("-d", "stop", name)
+        _write_gateway_desired_state(name, "stopped")
 
     def restart(self, name: str) -> None:
         """Restart a registered service (``s6-svc -t`` = SIGTERM).
@@ -823,16 +919,14 @@ class S6ServiceManager:
             S6CommandError: s6-svc exited non-zero for any other reason.
         """
         self._run_svc("-t", "restart", name)
+        _write_gateway_desired_state(name, "running")
 
     def is_running(self, name: str) -> bool:
         """True iff ``s6-svstat`` reports the service as up."""
         import subprocess
-
         result = subprocess.run(
             [f"{_S6_BIN_DIR}/s6-svstat", str(self.scandir / name)],
-            capture_output=True,
-            text=True,
-            timeout=5,
+            capture_output=True, text=True, timeout=5,
         )
         return result.returncode == 0 and "up " in result.stdout
 
@@ -846,15 +940,15 @@ class S6ServiceManager:
         profile: str,
         *,
         extra_env: dict[str, str] | None = None,
+        start_now: bool = True,
     ) -> None:
         """Create the s6 service directory for a profile gateway.
 
         Triggers ``s6-svscanctl -a`` so s6-svscan picks the new directory
-        up immediately. The service is created in the *up* state — to
-        register without auto-starting, follow up with ``stop(profile)``
-        (or pass the start flag via the future ``start_now=False`` arg,
-        which the Phase 4 reconciliation path uses via a ``down``
-        marker file written directly).
+        up immediately.  When *start_now* is ``True`` (the default) the
+        service starts immediately; when ``False`` a ``down`` marker file
+        is written so s6-supervise leaves the service stopped until the
+        user explicitly runs ``clawk -p <profile> gateway start``.
 
         Raises:
             ValueError: if the profile name is invalid or the service
@@ -871,9 +965,23 @@ class S6ServiceManager:
             )
 
         # Build the service directory atomically: write to a sibling
-        # temp dir, then rename. Avoids s6-svscan observing a half-
-        # populated directory on a fast rescan.
-        tmp_dir = svc_dir.with_name(svc_dir.name + ".tmp")
+        # temp dir, then rename. The staging name is DOT-PREFIXED
+        # (``.gateway-<profile>.tmp``) so s6-svscan ignores it while it
+        # is half-built: s6-svscan skips any scandir entry whose name
+        # begins with ``.``. Without the dot prefix, a concurrent
+        # ``s6-svscanctl -a`` rescan (fired by the cont-init reconciler
+        # registering ``gateway-default``, or by a sibling register)
+        # would supervise the still-being-seeded ``.tmp`` slot: it has a
+        # valid ``type``/``run`` by that point, so s6-supervise spawns
+        # AS ROOT and mkdir's ``supervise/`` root-owned 0700 — then this
+        # process's ``_seed_supervise_skeleton`` early-returns on the now-
+        # existing ``supervise/`` and the next ``mkdir supervise/event``
+        # hits EACCES. That is the arm64-only CI flake on
+        # test_s6_unregister_removes_service_dir_in_live_container
+        # (the wider scheduling jitter on the native arm64 runner lets the
+        # rescan land inside the ~ms seed window). The atomic rename to
+        # the dotless live name below is unaffected.
+        tmp_dir = svc_dir.with_name("." + svc_dir.name + ".tmp")
         if tmp_dir.exists():
             shutil.rmtree(tmp_dir, ignore_errors=True)
         tmp_dir.mkdir(parents=True)
@@ -885,6 +993,10 @@ class S6ServiceManager:
             run_path = tmp_dir / "run"
             run_path.write_text(run_script)
             run_path.chmod(0o755)
+
+            finish_path = tmp_dir / "finish"
+            finish_path.write_text(self._render_finish_script())
+            finish_path.chmod(0o755)
 
             # Persistent log rotation (OQ8-C).
             log_subdir = tmp_dir / "log"
@@ -902,6 +1014,13 @@ class S6ServiceManager:
             # rationale.
             _seed_supervise_skeleton(tmp_dir)
 
+            # When start_now is False, write a `down` marker so
+            # s6-supervise does not auto-start the service on rescan.
+            # Mirrors the same pattern in container_boot.py
+            # _register_gateway_slot when start=False.
+            if not start_now:
+                (tmp_dir / "down").touch()
+
             tmp_dir.rename(svc_dir)
         except Exception:
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -910,15 +1029,15 @@ class S6ServiceManager:
         # Trigger rescan so s6-svscan picks up the new service.
         result = subprocess.run(
             [f"{_S6_BIN_DIR}/s6-svscanctl", "-a", str(self.scandir)],
-            capture_output=True,
-            text=True,
-            timeout=5,
+            capture_output=True, text=True, timeout=5,
         )
         if result.returncode != 0:
             # Clean up: rescan failed, leave the directory in place would
             # be confusing (no supervisor watching it).
             shutil.rmtree(svc_dir, ignore_errors=True)
-            raise RuntimeError(f"s6-svscanctl failed: {result.stderr or result.stdout}")
+            raise RuntimeError(
+                f"s6-svscanctl failed: {result.stderr or result.stdout}"
+            )
 
     def unregister_profile_gateway(self, profile: str) -> None:
         """Stop the profile gateway service and remove its directory.
@@ -947,17 +1066,13 @@ class S6ServiceManager:
         # Stop the service (best effort — service may already be down).
         subprocess.run(
             [f"{_S6_BIN_DIR}/s6-svc", "-d", str(svc_dir)],
-            capture_output=True,
-            text=True,
-            timeout=5,
+            capture_output=True, text=True, timeout=5,
             check=False,
         )
         # Wait for it to actually go down (up to 10s).
         subprocess.run(
             [f"{_S6_BIN_DIR}/s6-svwait", "-D", "-t", "10000", str(svc_dir)],
-            capture_output=True,
-            text=True,
-            timeout=15,
+            capture_output=True, text=True, timeout=15,
             check=False,
         )
 
@@ -969,9 +1084,7 @@ class S6ServiceManager:
         # files inside the slot, so the upcoming rmtree doesn't race.
         subprocess.run(
             [f"{_S6_BIN_DIR}/s6-svscanctl", "-an", str(self.scandir)],
-            capture_output=True,
-            text=True,
-            timeout=5,
+            capture_output=True, text=True, timeout=5,
             check=False,
         )
         # Give s6-svscan a moment to reap. There's no synchronous
@@ -1006,5 +1119,5 @@ class S6ServiceManager:
                 continue
             if not entry.name.startswith(S6_SERVICE_PREFIX):
                 continue
-            profiles.append(entry.name[len(S6_SERVICE_PREFIX) :])
+            profiles.append(entry.name[len(S6_SERVICE_PREFIX):])
         return profiles

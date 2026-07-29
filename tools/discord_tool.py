@@ -1,102 +1,78 @@
 """Discord server introspection and management tool.
 
-
-
 Provides the agent with the ability to interact with Discord servers
-
 when running on the Discord gateway. Uses Discord REST API directly
-
 with the bot token — no dependency on the gateway adapter's client.
 
-
-
 Only included in the clawk-discord toolset, so it has zero cost
-
 for users on other platforms.
-
-
 
 The schema exposed to the model is filtered by two gates:
 
-
-
 1. Privileged intents detected from GET /applications/@me at schema
-
    build time. Actions that require an intent the bot doesn't have
-
    (search_members / member_info → GUILD_MEMBERS intent) are hidden.
-
    fetch_messages is kept regardless of MESSAGE_CONTENT intent, but
-
    its description is annotated when the intent is missing.
 
-
-
 2. User config allowlist at ``discord.server_actions``. If the user
-
    sets a comma-separated list (or YAML list) of action names, only
-
    those appear in the schema. Empty/unset means all intent-available
-
    actions are exposed.
 
-
-
 Per-guild permissions (MANAGE_ROLES etc.) are NOT pre-checked — Discord
-
 returns a 403 at call time and :func:`_enrich_403` maps it to
-
 actionable guidance the model can relay to the user.
-
 """
 
 import json
-
 import logging
-
 import os
-
+import threading
 import urllib.error
-
 import urllib.parse
-
 import urllib.request
-
-from typing import Any, Dict, List, Optional, Tuple
-
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from tools.registry import registry
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-
 DISCORD_API_BASE = "https://discord.com/api/v10"
-
+_DISCORD_RESPONSE_BODY_MAX_BYTES = 4 * 1024 * 1024
+_DISCORD_ERROR_BODY_MAX_BYTES = 64 * 1024
 
 # Application flag bits (from GET /applications/@me → "flags").
-
 # Source: https://discord.com/developers/docs/resources/application#application-object-application-flags
-
 _FLAG_GATEWAY_GUILD_MEMBERS = 1 << 14
-
 _FLAG_GATEWAY_GUILD_MEMBERS_LIMITED = 1 << 15
-
 _FLAG_GATEWAY_MESSAGE_CONTENT = 1 << 18
-
 _FLAG_GATEWAY_MESSAGE_CONTENT_LIMITED = 1 << 19
 
-
 # ---------------------------------------------------------------------------
-
 # Helpers
-
 # ---------------------------------------------------------------------------
+
+class DiscordAPIError(Exception):
+    """Raised when a Discord API call fails."""
+    def __init__(self, status: int, body: str):
+        self.status = status
+        self.body = body
+        super().__init__(f"Discord API error {status}: {body}")
+
+
+def _read_limited_response_body(source: Any, limit: int, *, label: str) -> bytes:
+    body = source.read(limit + 1)
+    if len(body) > limit:
+        raise DiscordAPIError(502, f"Discord API {label} exceeded {limit} bytes.")
+    return body
 
 
 def _get_bot_token() -> Optional[str]:
     """Resolve the Discord bot token from environment."""
-
     return os.getenv("DISCORD_BOT_TOKEN", "").strip() or None
 
 
@@ -109,14 +85,11 @@ def _discord_request(
     timeout: int = 15,
 ) -> Any:
     """Make a request to the Discord REST API."""
-
     url = f"{DISCORD_API_BASE}{path}"
-
     if params:
         url += "?" + urllib.parse.urlencode(params)
 
     data = None
-
     if body is not None:
         data = json.dumps(body).encode("utf-8")
 
@@ -135,39 +108,31 @@ def _discord_request(
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             if resp.status == 204:
                 return None
-
-            return json.loads(resp.read().decode("utf-8"))
-
+            response_body = _read_limited_response_body(
+                resp,
+                _DISCORD_RESPONSE_BODY_MAX_BYTES,
+                label="response body",
+            )
+            return json.loads(response_body.decode("utf-8"))
     except urllib.error.HTTPError as e:
         error_body = ""
-
         try:
-            error_body = e.read().decode("utf-8", errors="replace")
-
+            raw_error_body = _read_limited_response_body(
+                e,
+                _DISCORD_ERROR_BODY_MAX_BYTES,
+                label="error body",
+            )
+            error_body = raw_error_body.decode("utf-8", errors="replace")
+        except DiscordAPIError as too_large:
+            error_body = too_large.body
         except Exception:
             pass
-
         raise DiscordAPIError(e.code, error_body) from e
 
 
-class DiscordAPIError(Exception):
-    """Raised when a Discord API call fails."""
-
-    def __init__(self, status: int, body: str):
-
-        self.status = status
-
-        self.body = body
-
-        super().__init__(f"Discord API error {status}: {body}")
-
-
 # ---------------------------------------------------------------------------
-
 # Channel type mapping
-
 # ---------------------------------------------------------------------------
-
 
 _CHANNEL_TYPE_NAMES = {
     0: "text",
@@ -184,50 +149,146 @@ _CHANNEL_TYPE_NAMES = {
 
 
 def _channel_type_name(type_id: int) -> str:
-
     return _CHANNEL_TYPE_NAMES.get(type_id, f"unknown({type_id})")
 
 
 # ---------------------------------------------------------------------------
-
 # Capability detection (application intents)
-
 # ---------------------------------------------------------------------------
 
-
 # Module-level cache so the app/me endpoint is hit at most once per process.
-
 _capability_cache: Dict[str, Dict[str, Any]] = {}
 
+# Disk-cache TTL for detected capabilities.  Privileged intents change only
+# when the user flips them in the Discord Developer Portal, so 24h staleness
+# is harmless — and a stale value only affects which actions appear in the
+# schema (a hidden action re-appears on the next refresh; an exposed action
+# the bot lost fails at call time with an enriched 403).
+_CAPABILITY_DISK_TTL_SECONDS = 24 * 3600
 
-def _detect_capabilities(token: str, *, force: bool = False) -> Dict[str, Any]:
-    """Detect the bot's app-wide capabilities via GET /applications/@me.
-
-
-
-    Returns a dict with keys:
-
-
-
-    - ``has_members_intent``: GUILD_MEMBERS intent is enabled
-
-    - ``has_message_content``: MESSAGE_CONTENT intent is enabled
-
-    - ``detected``: detection succeeded (False means exposing everything
-
-      and letting runtime errors handle it)
+# One background detection per process at most.
+_capability_bg_started: set = set()
+_capability_bg_lock = threading.Lock()
 
 
+def _capability_disk_cache_path() -> "Path":
+    from pathlib import Path
 
-    Cached in a module-global. Pass ``force=True`` to re-fetch.
+    from clawk_constants import get_clawk_home
 
+    return get_clawk_home() / "cache" / "discord_capabilities.json"
+
+
+def _token_cache_key(token: str) -> str:
+    """Stable non-reversible cache key for a bot token."""
+    import hashlib
+
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+
+
+def _load_caps_from_disk(token: str) -> Optional[Dict[str, Any]]:
+    """Return fresh disk-cached capabilities for *token*, or None."""
+    import time
+
+    try:
+        path = _capability_disk_cache_path()
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        entry = data.get(_token_cache_key(token))
+        if not isinstance(entry, dict):
+            return None
+        if time.time() - float(entry.get("ts", 0)) > _CAPABILITY_DISK_TTL_SECONDS:
+            return None
+        caps = entry.get("caps")
+        if isinstance(caps, dict) and "has_members_intent" in caps:
+            return caps
+    except Exception:
+        pass
+    return None
+
+
+def _save_caps_to_disk(token: str, caps: Dict[str, Any]) -> None:
+    import time
+
+    try:
+        path = _capability_disk_cache_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                data = {}
+        except Exception:
+            data = {}
+        data[_token_cache_key(token)] = {"caps": caps, "ts": time.time()}
+        tmp = path.with_suffix(".json.tmp")
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(data, f)
+        tmp.replace(path)
+    except Exception:
+        logger.debug("discord capability disk-cache write failed", exc_info=True)
+
+
+def _detect_capabilities_nonblocking(token: str) -> Dict[str, Any]:
+    """Non-blocking capability lookup for schema builds.
+
+    Resolution order:
+      1. In-process memory cache (populated by a previous sync/bg detection).
+      2. Fresh disk cache (populated by a previous process).
+      3. Permissive default + fire-and-forget background detection that
+         populates both caches for the next schema build / process.
+
+    Rationale: ``_detect_capabilities`` makes a blocking HTTPS call to
+    discord.com (measured ~2s, up to 5s on the timeout) and used to run
+    inside ``get_tool_definitions`` → ``AIAgent.__init__`` — i.e. on the
+    critical path of the FIRST TOKEN of every cold process for any user
+    with DISCORD_BOT_TOKEN set, on every platform.  The permissive default
+    mirrors the existing detection-failure fallback: all actions exposed,
+    call-time 403s mapped to guidance by ``_enrich_403``.
     """
+    cached = _capability_cache.get(token)
+    if cached is not None:
+        return cached
 
-    global _capability_cache
+    disk = _load_caps_from_disk(token)
+    if disk is not None:
+        _capability_cache[token] = disk
+        return disk
 
-    if token in _capability_cache and not force:
-        return _capability_cache[token]
+    # Cold start — pin the permissive default for THIS process (schema
+    # stability: tool schemas must not change between agent inits within a
+    # live process, or the per-conversation prompt cache breaks) and detect
+    # in the background for the NEXT process via the disk cache.
+    caps_default = {
+        "has_members_intent": True,
+        "has_message_content": True,
+        "detected": False,
+    }
+    _capability_cache[token] = caps_default
 
+    with _capability_bg_lock:
+        if token not in _capability_bg_started:
+            _capability_bg_started.add(token)
+
+            def _bg_detect() -> None:
+                try:
+                    caps = _fetch_capabilities(token)
+                    if caps.get("detected"):
+                        _save_caps_to_disk(token, caps)
+                except Exception:
+                    logger.debug("background discord capability detection failed", exc_info=True)
+
+            threading.Thread(
+                target=_bg_detect, name="discord-caps-detect", daemon=True
+            ).start()
+
+    return caps_default
+
+
+def _fetch_capabilities(token: str) -> Dict[str, Any]:
+    """Fetch capabilities from GET /applications/@me. Pure network fetch —
+    does NOT read or write the in-process cache (background detection must
+    not mutate schemas mid-process)."""
     caps: Dict[str, Any] = {
         "has_members_intent": True,
         "has_message_content": True,
@@ -236,53 +297,59 @@ def _detect_capabilities(token: str, *, force: bool = False) -> Dict[str, Any]:
 
     try:
         app = _discord_request("GET", "/applications/@me", token, timeout=5)
-
         flags = int(app.get("flags", 0) or 0)
-
         caps["has_members_intent"] = bool(
             flags & (_FLAG_GATEWAY_GUILD_MEMBERS | _FLAG_GATEWAY_GUILD_MEMBERS_LIMITED)
         )
-
         caps["has_message_content"] = bool(
-            flags
-            & (_FLAG_GATEWAY_MESSAGE_CONTENT | _FLAG_GATEWAY_MESSAGE_CONTENT_LIMITED)
+            flags & (_FLAG_GATEWAY_MESSAGE_CONTENT | _FLAG_GATEWAY_MESSAGE_CONTENT_LIMITED)
         )
-
         caps["detected"] = True
-
     except Exception as exc:  # nosec — detection is best-effort
         logger.info(
-            "Discord capability detection failed (%s); exposing all actions.",
-            exc,
+            "Discord capability detection failed (%s); exposing all actions.", exc,
         )
 
-    _capability_cache[token] = caps
+    return caps
 
+
+def _detect_capabilities(token: str, *, force: bool = False) -> Dict[str, Any]:
+    """Detect the bot's app-wide capabilities via GET /applications/@me.
+
+    Returns a dict with keys:
+
+    - ``has_members_intent``: GUILD_MEMBERS intent is enabled
+    - ``has_message_content``: MESSAGE_CONTENT intent is enabled
+    - ``detected``: detection succeeded (False means exposing everything
+      and letting runtime errors handle it)
+
+    Cached in a module-global. Pass ``force=True`` to re-fetch.
+    """
+    global _capability_cache
+    if token in _capability_cache and not force:
+        return _capability_cache[token]
+
+    caps = _fetch_capabilities(token)
+    _capability_cache[token] = caps
     return caps
 
 
 def _reset_capability_cache() -> None:
     """Test hook: clear the detection cache."""
-
-    global _capability_cache
-
+    global _capability_cache, _capability_bg_started
     _capability_cache = {}
+    with _capability_bg_lock:
+        _capability_bg_started = set()
 
 
 # ---------------------------------------------------------------------------
-
 # Action implementations
-
 # ---------------------------------------------------------------------------
-
 
 def _list_guilds(token: str, **_kwargs: Any) -> str:
     """List all guilds the bot is a member of."""
-
     guilds = _discord_request("GET", "/users/@me/guilds", token)
-
     result = []
-
     for g in guilds:
         result.append({
             "id": g["id"],
@@ -291,17 +358,12 @@ def _list_guilds(token: str, **_kwargs: Any) -> str:
             "owner": g.get("owner", False),
             "permissions": g.get("permissions"),
         })
-
     return json.dumps({"guilds": result, "count": len(result)})
 
 
 def _server_info(token: str, guild_id: str, **_kwargs: Any) -> str:
     """Get detailed information about a guild."""
-
-    g = _discord_request(
-        "GET", f"/guilds/{guild_id}", token, params={"with_counts": "true"}
-    )
-
+    g = _discord_request("GET", f"/guilds/{guild_id}", token, params={"with_counts": "true"})
     return json.dumps({
         "id": g["id"],
         "name": g["name"],
@@ -319,17 +381,13 @@ def _server_info(token: str, guild_id: str, **_kwargs: Any) -> str:
 
 def _list_channels(token: str, guild_id: str, **_kwargs: Any) -> str:
     """List all channels in a guild, organized by category."""
-
     channels = _discord_request("GET", f"/guilds/{guild_id}/channels", token)
 
     # Organize: categories first, then channels under each
-
     categories: Dict[Optional[str], Dict[str, Any]] = {}
-
     uncategorized: List[Dict[str, Any]] = []
 
     # First pass: collect categories
-
     for ch in channels:
         if ch["type"] == 4:  # category
             categories[ch["id"]] = {
@@ -340,11 +398,9 @@ def _list_channels(token: str, guild_id: str, **_kwargs: Any) -> str:
             }
 
     # Second pass: assign channels to categories
-
     for ch in channels:
         if ch["type"] == 4:
             continue
-
         entry = {
             "id": ch["id"],
             "name": ch.get("name", ""),
@@ -353,29 +409,21 @@ def _list_channels(token: str, guild_id: str, **_kwargs: Any) -> str:
             "topic": ch.get("topic"),
             "nsfw": ch.get("nsfw", False),
         }
-
         parent = ch.get("parent_id")
-
         if parent and parent in categories:
             categories[parent]["channels"].append(entry)
-
         else:
             uncategorized.append(entry)
 
     # Sort
-
     sorted_cats = sorted(categories.values(), key=lambda c: c["position"])
-
     for cat in sorted_cats:
         cat["channels"].sort(key=lambda c: c["position"])
-
     uncategorized.sort(key=lambda c: c["position"])
 
     result: List[Dict[str, Any]] = []
-
     if uncategorized:
         result.append({"category": None, "channels": uncategorized})
-
     for cat in sorted_cats:
         result.append({
             "category": {"id": cat["id"], "name": cat["name"]},
@@ -383,15 +431,12 @@ def _list_channels(token: str, guild_id: str, **_kwargs: Any) -> str:
         })
 
     total = sum(len(group["channels"]) for group in result)
-
     return json.dumps({"channel_groups": result, "total_channels": total})
 
 
 def _channel_info(token: str, channel_id: str, **_kwargs: Any) -> str:
     """Get detailed info about a specific channel."""
-
     ch = _discord_request("GET", f"/channels/{channel_id}", token)
-
     return json.dumps({
         "id": ch["id"],
         "name": ch.get("name"),
@@ -408,11 +453,8 @@ def _channel_info(token: str, channel_id: str, **_kwargs: Any) -> str:
 
 def _list_roles(token: str, guild_id: str, **_kwargs: Any) -> str:
     """List all roles in a guild."""
-
     roles = _discord_request("GET", f"/guilds/{guild_id}/roles", token)
-
     result = []
-
     for r in sorted(roles, key=lambda r: r.get("position", 0), reverse=True):
         result.append({
             "id": r["id"],
@@ -424,17 +466,13 @@ def _list_roles(token: str, guild_id: str, **_kwargs: Any) -> str:
             "member_count": r.get("member_count"),
             "hoist": r.get("hoist", False),
         })
-
     return json.dumps({"roles": result, "count": len(result)})
 
 
 def _member_info(token: str, guild_id: str, user_id: str, **_kwargs: Any) -> str:
     """Get info about a specific guild member."""
-
     m = _discord_request("GET", f"/guilds/{guild_id}/members/{user_id}", token)
-
     user = m.get("user", {})
-
     return json.dumps({
         "user_id": user.get("id"),
         "username": user.get("username"),
@@ -448,28 +486,17 @@ def _member_info(token: str, guild_id: str, user_id: str, **_kwargs: Any) -> str
     })
 
 
-def _search_members(
-    token: str, guild_id: str, query: str, limit: int = 20, **_kwargs: Any
-) -> str:
+def _search_members(token: str, guild_id: str, query: str, limit: int = 20, **_kwargs: Any) -> str:
     """Search for guild members by name."""
-
     try:
         limit = int(limit)
-
     except (TypeError, ValueError):
         limit = 20
-
     params = {"query": query, "limit": str(min(limit, 100))}
-
-    members = _discord_request(
-        "GET", f"/guilds/{guild_id}/members/search", token, params=params
-    )
-
+    members = _discord_request("GET", f"/guilds/{guild_id}/members/search", token, params=params)
     result = []
-
     for m in members:
         user = m.get("user", {})
-
         result.append({
             "user_id": user.get("id"),
             "username": user.get("username"),
@@ -478,43 +505,28 @@ def _search_members(
             "bot": user.get("bot", False),
             "roles": m.get("roles", []),
         })
-
     return json.dumps({"members": result, "count": len(result)})
 
 
 def _fetch_messages(
-    token: str,
-    channel_id: str,
-    limit: int = 50,
-    before: Optional[str] = None,
-    after: Optional[str] = None,
+    token: str, channel_id: str, limit: int = 50,
+    before: Optional[str] = None, after: Optional[str] = None,
     **_kwargs: Any,
 ) -> str:
     """Fetch recent messages from a channel."""
-
     try:
         limit = int(limit)
-
     except (TypeError, ValueError):
         limit = 50
-
     params: Dict[str, str] = {"limit": str(min(limit, 100))}
-
     if before:
         params["before"] = before
-
     if after:
         params["after"] = after
-
-    messages = _discord_request(
-        "GET", f"/channels/{channel_id}/messages", token, params=params
-    )
-
+    messages = _discord_request("GET", f"/channels/{channel_id}/messages", token, params=params)
     result = []
-
     for msg in messages:
         author = msg.get("author", {})
-
         result.append({
             "id": msg["id"],
             "content": msg.get("content", ""),
@@ -527,104 +539,74 @@ def _fetch_messages(
             "timestamp": msg.get("timestamp"),
             "edited_timestamp": msg.get("edited_timestamp"),
             "attachments": [
-                {
-                    "filename": a.get("filename"),
-                    "url": a.get("url"),
-                    "size": a.get("size"),
-                }
+                {"filename": a.get("filename"), "url": a.get("url"), "size": a.get("size")}
                 for a in msg.get("attachments", [])
             ],
             "reactions": [
                 {"emoji": r.get("emoji", {}).get("name"), "count": r.get("count", 0)}
                 for r in msg.get("reactions", [])
-            ]
-            if msg.get("reactions")
-            else [],
+            ] if msg.get("reactions") else [],
             "pinned": msg.get("pinned", False),
         })
-
     return json.dumps({"messages": result, "count": len(result)})
 
 
 def _list_pins(token: str, channel_id: str, **_kwargs: Any) -> str:
     """List pinned messages in a channel."""
-
     messages = _discord_request("GET", f"/channels/{channel_id}/pins", token)
-
     result = []
-
     for msg in messages:
         author = msg.get("author", {})
-
         result.append({
             "id": msg["id"],
             "content": msg.get("content", "")[:200],  # Truncate for overview
             "author": author.get("username"),
             "timestamp": msg.get("timestamp"),
         })
-
     return json.dumps({"pinned_messages": result, "count": len(result)})
 
 
 def _pin_message(token: str, channel_id: str, message_id: str, **_kwargs: Any) -> str:
     """Pin a message in a channel."""
-
     _discord_request("PUT", f"/channels/{channel_id}/pins/{message_id}", token)
-
     return json.dumps({"success": True, "message": f"Message {message_id} pinned."})
 
 
 def _unpin_message(token: str, channel_id: str, message_id: str, **_kwargs: Any) -> str:
     """Unpin a message from a channel."""
-
     _discord_request("DELETE", f"/channels/{channel_id}/pins/{message_id}", token)
-
     return json.dumps({"success": True, "message": f"Message {message_id} unpinned."})
 
 
-def _delete_message(
-    token: str, channel_id: str, message_id: str, **_kwargs: Any
-) -> str:
+def _delete_message(token: str, channel_id: str, message_id: str, **_kwargs: Any) -> str:
     """Delete a message from a channel or thread."""
-
     _discord_request("DELETE", f"/channels/{channel_id}/messages/{message_id}", token)
-
     return json.dumps({"success": True, "message": f"Message {message_id} deleted."})
 
 
 def _create_thread(
-    token: str,
-    channel_id: str,
-    name: str,
+    token: str, channel_id: str, name: str,
     message_id: Optional[str] = None,
     auto_archive_duration: int = 1440,
     **_kwargs: Any,
 ) -> str:
     """Create a thread in a channel."""
-
     if message_id:
         # Create thread from an existing message
-
         path = f"/channels/{channel_id}/messages/{message_id}/threads"
-
         body: Dict[str, Any] = {
             "name": name,
             "auto_archive_duration": auto_archive_duration,
         }
-
     else:
         # Create a standalone thread
-
         path = f"/channels/{channel_id}/threads"
-
         body = {
             "name": name,
             "auto_archive_duration": auto_archive_duration,
             "type": 11,  # PUBLIC_THREAD
         }
-
     thread = _discord_request("POST", path, token, body=body)
-
     return json.dumps({
         "success": True,
         "thread_id": thread["id"],
@@ -632,42 +614,21 @@ def _create_thread(
     })
 
 
-def _add_role(
-    token: str, guild_id: str, user_id: str, role_id: str, **_kwargs: Any
-) -> str:
+def _add_role(token: str, guild_id: str, user_id: str, role_id: str, **_kwargs: Any) -> str:
     """Add a role to a guild member."""
-
-    _discord_request(
-        "PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", token
-    )
-
-    return json.dumps({
-        "success": True,
-        "message": f"Role {role_id} added to user {user_id}.",
-    })
+    _discord_request("PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", token)
+    return json.dumps({"success": True, "message": f"Role {role_id} added to user {user_id}."})
 
 
-def _remove_role(
-    token: str, guild_id: str, user_id: str, role_id: str, **_kwargs: Any
-) -> str:
+def _remove_role(token: str, guild_id: str, user_id: str, role_id: str, **_kwargs: Any) -> str:
     """Remove a role from a guild member."""
-
-    _discord_request(
-        "DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", token
-    )
-
-    return json.dumps({
-        "success": True,
-        "message": f"Role {role_id} removed from user {user_id}.",
-    })
+    _discord_request("DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", token)
+    return json.dumps({"success": True, "message": f"Role {role_id} removed from user {user_id}."})
 
 
 # ---------------------------------------------------------------------------
-
 # Action dispatch + metadata
-
 # ---------------------------------------------------------------------------
-
 
 _ACTIONS = {
     "list_guilds": _list_guilds,
@@ -687,23 +648,15 @@ _ACTIONS = {
     "remove_role": _remove_role,
 }
 
-
 _CORE_ACTION_NAMES = frozenset({"fetch_messages", "search_members", "create_thread"})
-
 _ADMIN_ACTION_NAMES = frozenset(_ACTIONS.keys()) - _CORE_ACTION_NAMES
 
-
 _CORE_ACTIONS = {k: v for k, v in _ACTIONS.items() if k in _CORE_ACTION_NAMES}
-
 _ADMIN_ACTIONS = {k: v for k, v in _ACTIONS.items() if k in _ADMIN_ACTION_NAMES}
 
-
 # Single-source-of-truth manifest: action → (signature, one-line description).
-
 # Consumed by :func:`_build_schema` so the schema's top-level description
-
 # always matches the registered action set.
-
 _ACTION_MANIFEST: List[Tuple[str, str, str]] = [
     ("list_guilds", "()", "list servers the bot is in"),
     ("server_info", "(guild_id)", "server details + member counts"),
@@ -712,32 +665,20 @@ _ACTION_MANIFEST: List[Tuple[str, str, str]] = [
     ("list_roles", "(guild_id)", "roles sorted by position"),
     ("member_info", "(guild_id, user_id)", "lookup a specific member"),
     ("search_members", "(guild_id, query)", "find members by name prefix"),
-    (
-        "fetch_messages",
-        "(channel_id)",
-        "recent messages; optional before/after snowflakes",
-    ),
+    ("fetch_messages", "(channel_id)", "recent messages; optional before/after snowflakes"),
     ("list_pins", "(channel_id)", "pinned messages in a channel"),
     ("pin_message", "(channel_id, message_id)", "pin a message"),
     ("unpin_message", "(channel_id, message_id)", "unpin a message"),
     ("delete_message", "(channel_id, message_id)", "delete a message"),
-    (
-        "create_thread",
-        "(channel_id, name)",
-        "create a public thread; optional message_id anchor",
-    ),
+    ("create_thread", "(channel_id, name)", "create a public thread; optional message_id anchor"),
     ("add_role", "(guild_id, user_id, role_id)", "assign a role"),
     ("remove_role", "(guild_id, user_id, role_id)", "remove a role"),
 ]
 
-
 # Actions that require the GUILD_MEMBERS privileged intent.
-
 _INTENT_GATED_MEMBERS = frozenset({"member_info", "search_members"})
 
-
 # Per-action required params for runtime validation.
-
 _REQUIRED_PARAMS: Dict[str, List[str]] = {
     "server_info": ["guild_id"],
     "list_channels": ["guild_id"],
@@ -757,69 +698,47 @@ _REQUIRED_PARAMS: Dict[str, List[str]] = {
 
 
 # ---------------------------------------------------------------------------
-
 # Config-based action allowlist
-
 # ---------------------------------------------------------------------------
-
 
 def _load_allowed_actions_config() -> Optional[List[str]]:
     """Read ``discord.server_actions`` from user config.
 
-
-
     Returns a list of allowed action names, or ``None`` if the user
-
     hasn't restricted the set (default: all actions allowed).
 
-
-
     Accepts either a comma-separated string or a YAML list.
-
     Unknown action names are dropped with a log warning.
-
     """
-
     try:
         from clawk_cli.config import load_config
-
         cfg = load_config()
-
     except Exception as exc:
         logger.debug("discord: could not load config (%s); allowing all actions.", exc)
-
         return None
 
     raw = (cfg.get("discord") or {}).get("server_actions")
-
     if raw is None or raw == "":
         return None
 
     if isinstance(raw, str):
         names = [n.strip() for n in raw.split(",") if n.strip()]
-
     elif isinstance(raw, (list, tuple)):
         names = [str(n).strip() for n in raw if str(n).strip()]
-
     else:
         logger.warning(
-            "discord.server_actions: unexpected type %s; ignoring.",
-            type(raw).__name__,
+            "discord.server_actions: unexpected type %s; ignoring.", type(raw).__name__,
         )
-
         return None
 
     valid = [n for n in names if n in _ACTIONS]
-
     invalid = [n for n in names if n not in _ACTIONS]
-
     if invalid:
         logger.warning(
-            "discord.server_actions: unknown action(s) ignored: %s. Known: %s",
-            ", ".join(invalid),
-            ", ".join(_ACTIONS.keys()),
+            "discord.server_actions: unknown action(s) ignored: %s. "
+            "Known: %s",
+            ", ".join(invalid), ", ".join(_ACTIONS.keys()),
         )
-
     return valid
 
 
@@ -829,36 +748,23 @@ def _available_actions(
 ) -> List[str]:
     """Compute the visible action list from intents + config allowlist.
 
-
-
     Preserves the canonical order from :data:`_ACTIONS`.
-
     """
-
     actions: List[str] = []
-
     for name in _ACTIONS:
         # Intent filter
-
         if not caps.get("has_members_intent", True) and name in _INTENT_GATED_MEMBERS:
             continue
-
         # Config allowlist filter
-
         if allowlist is not None and name not in allowlist:
             continue
-
         actions.append(name)
-
     return actions
 
 
 # ---------------------------------------------------------------------------
-
 # Schema construction
-
 # ---------------------------------------------------------------------------
-
 
 def _build_schema(
     actions: List[str],
@@ -867,40 +773,25 @@ def _build_schema(
 ) -> Optional[Dict[str, Any]]:
     """Build the tool schema for the given filtered action list.
 
-
-
     Returns ``None`` when *actions* is empty — callers should drop the
-
     tool from registration in that case.
-
     """
-
     caps = caps or {}
-
     if not actions:
         return None
 
     # Action manifest lines (action-first, parameter-scoped).
-
     manifest_lines = [
         f"  {name}{sig}  — {desc}"
         for name, sig, desc in _ACTION_MANIFEST
         if name in actions
     ]
-
     manifest_block = "\n".join(manifest_lines)
 
     content_note = ""
-
     affected_actions = {"fetch_messages", "list_pins"} & set(actions)
-
-    if (
-        affected_actions
-        and caps.get("detected")
-        and caps.get("has_message_content") is False
-    ):
+    if affected_actions and caps.get("detected") and caps.get("has_message_content") is False:
         names = " and ".join(sorted(affected_actions))
-
         content_note = (
             f"\n\nNOTE: Bot does NOT have the MESSAGE_CONTENT privileged intent. "
             f"{names} will return message metadata (author, "
@@ -919,7 +810,6 @@ def _build_schema(
             "per-guild permission (e.g. MANAGE_ROLES for add_role)."
             f"{content_note}"
         )
-
     else:
         description = (
             "Read and participate in a Discord server.\n\n"
@@ -1000,46 +890,33 @@ def _get_dynamic_schema(
     tool_name: str,
 ) -> Optional[Dict[str, Any]]:
     """Build a dynamic schema for *action_subset* filtered by intents + config."""
-
     token = _get_bot_token()
-
     if not token:
         return None
-
-    caps = _detect_capabilities(token)
-
+    caps = _detect_capabilities_nonblocking(token)
     allowlist = _load_allowed_actions_config()
-
     actions = [a for a in _available_actions(caps, allowlist) if a in action_subset]
-
     if not actions:
         return None
-
     return _build_schema(actions, caps, tool_name=tool_name)
 
 
 def get_dynamic_schema_core() -> Optional[Dict[str, Any]]:
-
     return _get_dynamic_schema(_CORE_ACTIONS, "discord")
 
 
 def get_dynamic_schema_admin() -> Optional[Dict[str, Any]]:
-
     return _get_dynamic_schema(_ADMIN_ACTIONS, "discord_admin")
 
 
 def get_dynamic_schema() -> Optional[Dict[str, Any]]:
     """Backward-compat wrapper — returns core schema."""
-
     return get_dynamic_schema_core()
 
 
 # ---------------------------------------------------------------------------
-
 # 403 error enrichment
-
 # ---------------------------------------------------------------------------
-
 
 _ACTION_403_HINT = {
     "pin_message": (
@@ -1047,7 +924,9 @@ _ACTION_403_HINT = {
         "Ask the server admin to grant the bot a role that has MANAGE_MESSAGES, "
         "or a per-channel overwrite."
     ),
-    "unpin_message": ("Bot lacks MANAGE_MESSAGES permission in this channel."),
+    "unpin_message": (
+        "Bot lacks MANAGE_MESSAGES permission in this channel."
+    ),
     "delete_message": (
         "Bot lacks MANAGE_MESSAGES permission in this channel, or cannot view the channel/message."
     ),
@@ -1069,7 +948,9 @@ _ACTION_403_HINT = {
     "list_pins": (
         "Bot cannot view this channel (missing VIEW_CHANNEL or READ_MESSAGE_HISTORY)."
     ),
-    "channel_info": ("Bot cannot view this channel (missing VIEW_CHANNEL)."),
+    "channel_info": (
+        "Bot cannot view this channel (missing VIEW_CHANNEL)."
+    ),
     "search_members": (
         "Likely missing the Server Members privileged intent — enable it in the "
         "Discord Developer Portal under your bot's settings."
@@ -1083,36 +964,25 @@ _ACTION_403_HINT = {
 
 def _enrich_403(action: str, body: str) -> str:
     """Return a user-friendly guidance string for a 403 on ``action``."""
-
     hint = _ACTION_403_HINT.get(action)
-
     base = f"Discord API 403 (forbidden) on '{action}'."
-
     if hint:
         return f"{base} {hint} (Raw: {body})"
-
     return f"{base} (Raw: {body})"
 
 
 # ---------------------------------------------------------------------------
-
 # Check function
-
 # ---------------------------------------------------------------------------
-
 
 def check_discord_tool_requirements() -> bool:
     """Tool is available only when a Discord bot token is configured."""
-
     return bool(_get_bot_token())
 
 
 # ---------------------------------------------------------------------------
-
 # Handlers
-
 # ---------------------------------------------------------------------------
-
 
 def _run_discord_action(
     action: str,
@@ -1131,14 +1001,11 @@ def _run_discord_action(
     auto_archive_duration: int = 1440,
 ) -> str:
     """Shared handler logic for both discord tools."""
-
     token = _get_bot_token()
-
     if not token:
         return json.dumps({"error": "DISCORD_BOT_TOKEN not configured."})
 
     action_fn = valid_actions.get(action)
-
     if not action_fn:
         return json.dumps({
             "error": f"Unknown action: {action}",
@@ -1146,13 +1013,9 @@ def _run_discord_action(
         })
 
     # Config-level allowlist gate (defense in depth — schema already filtered,
-
     # but a stale cached schema from a prior config should not let denied
-
     # actions through).
-
     allowlist = _load_allowed_actions_config()
-
     if allowlist is not None and action not in allowlist:
         return json.dumps({
             "error": (
@@ -1172,7 +1035,6 @@ def _run_discord_action(
     }
 
     missing = [p for p in _REQUIRED_PARAMS.get(action, []) if not local_vars.get(p)]
-
     if missing:
         return json.dumps({
             "error": f"Missing required parameters for '{action}': {', '.join(missing)}",
@@ -1193,76 +1055,50 @@ def _run_discord_action(
             after=after,
             auto_archive_duration=auto_archive_duration,
         )
-
     except DiscordAPIError as e:
         logger.warning("Discord API error in %s action '%s': %s", tool_label, action, e)
-
         if e.status == 403:
             return json.dumps({"error": _enrich_403(action, e.body)})
-
         return json.dumps({"error": str(e)})
-
     except Exception as e:
         logger.exception("Unexpected error in %s action '%s'", tool_label, action)
-
         return json.dumps({"error": f"Unexpected error: {e}"})
 
 
 def discord_core(action: str, **kwargs) -> str:
     """Execute a core Discord action (fetch_messages, search_members, create_thread)."""
-
     return _run_discord_action(action, _CORE_ACTIONS, "discord", **kwargs)
 
 
 def discord_admin_handler(action: str, **kwargs) -> str:
     """Execute a Discord admin action (server management)."""
-
     return _run_discord_action(action, _ADMIN_ACTIONS, "discord_admin", **kwargs)
 
 
 # ---------------------------------------------------------------------------
-
 # Tool registration
-
 # ---------------------------------------------------------------------------
 
-
 _HANDLER_DEFAULTS = {
-    "action": "",
-    "guild_id": "",
-    "channel_id": "",
-    "user_id": "",
-    "role_id": "",
-    "message_id": "",
-    "query": "",
-    "name": "",
-    "limit": 50,
-    "before": "",
-    "after": "",
-    "auto_archive_duration": 1440,
+    "action": "", "guild_id": "", "channel_id": "", "user_id": "",
+    "role_id": "", "message_id": "", "query": "", "name": "",
+    "limit": 50, "before": "", "after": "", "auto_archive_duration": 1440,
 }
 
 
 def _make_handler(handler_fn):
     """Create a registry-compatible handler lambda for a discord handler."""
-
     return lambda args, **kw: handler_fn(
         **{k: args.get(k, v) for k, v in _HANDLER_DEFAULTS.items()},
     )
 
 
 _STATIC_CORE_SCHEMA = _build_schema(
-    list(_CORE_ACTIONS.keys()),
-    caps={"detected": False},
-    tool_name="discord",
+    list(_CORE_ACTIONS.keys()), caps={"detected": False}, tool_name="discord",
 )
-
 _STATIC_ADMIN_SCHEMA = _build_schema(
-    list(_ADMIN_ACTIONS.keys()),
-    caps={"detected": False},
-    tool_name="discord_admin",
+    list(_ADMIN_ACTIONS.keys()), caps={"detected": False}, tool_name="discord_admin",
 )
-
 
 registry.register(
     name="discord",
@@ -1272,7 +1108,6 @@ registry.register(
     check_fn=check_discord_tool_requirements,
     requires_env=["DISCORD_BOT_TOKEN"],
 )
-
 
 registry.register(
     name="discord_admin",

@@ -117,8 +117,25 @@ def _effective_provider_label() -> str:
     except AuthError:
         effective = requested or "auto"
 
-    if effective == "openrouter" and get_env_value("OPENAI_BASE_URL"):
-        effective = "custom"
+    if effective == "openrouter":
+        # A custom endpoint may be configured either in config.yaml
+        # (model.base_url — the canonical location; the runtime treats
+        # config.yaml as the single source of truth) or via the legacy
+        # OPENAI_BASE_URL env var. Either way, labeling it "OpenRouter"
+        # is misleading (#3296).
+        config_base_url = ""
+
+        try:
+            model_cfg = load_config().get("model")
+
+            if isinstance(model_cfg, dict):
+                config_base_url = (model_cfg.get("base_url") or "").strip()
+
+        except Exception:
+            pass
+
+        if config_base_url or get_env_value("OPENAI_BASE_URL"):
+            effective = "custom"
 
     return provider_label(effective)
 
@@ -128,8 +145,6 @@ from clawk_constants import is_termux as _is_termux
 
 def show_status(args):
     """Show status of all Clawksis components."""
-
-    show_all = getattr(args, "all", False)
 
     deep = getattr(args, "deep", False)
 
@@ -204,6 +219,7 @@ def show_status(args):
         "StepFun Step Plan": "STEPFUN_API_KEY",
         "MiniMax": "MINIMAX_API_KEY",
         "MiniMax-CN": "MINIMAX_CN_API_KEY",
+        "DeepInfra": "DEEPINFRA_API_KEY",
         "Firecrawl": "FIRECRAWL_API_KEY",
         "Tavily": "TAVILY_API_KEY",
         "Browser Use": "BROWSER_USE_API_KEY",  # Optional — local browser works without this
@@ -241,7 +257,7 @@ def show_status(args):
 
         has_key = bool(value)
 
-        display = redact_key(value) if not show_all else value
+        display = redact_key(value)
 
         print(f"  {name:<12}  {check_mark(has_key)} {display}")
 
@@ -249,7 +265,7 @@ def show_status(args):
 
     anthropic_value = get_anthropic_key()
 
-    anthropic_display = redact_key(anthropic_value) if not show_all else anthropic_value
+    anthropic_display = redact_key(anthropic_value)
 
     print(
         f"  {'Anthropic':<12}  {check_mark(bool(anthropic_value))} {anthropic_display}"
@@ -451,6 +467,7 @@ def show_status(args):
         "StepFun Step Plan": ("STEPFUN_API_KEY",),
         "MiniMax": ("MINIMAX_API_KEY",),
         "MiniMax (China)": ("MINIMAX_CN_API_KEY",),
+        "DeepInfra": ("DEEPINFRA_API_KEY",),
     }
 
     for pname, env_vars in apikey_providers.items():
@@ -694,7 +711,9 @@ def show_status(args):
         import json
 
         try:
-            with open(jobs_file, encoding="utf-8") as f:
+            # utf-8-sig: same dialect as cron/jobs.load_jobs — Windows editors
+            # may leave a UTF-8 BOM that plain utf-8 json.load rejects.
+            with open(jobs_file, encoding="utf-8-sig") as f:
                 data = json.load(f)
 
                 jobs = data.get("jobs", [])
@@ -719,22 +738,55 @@ def show_status(args):
 
     print(color("◆ Sessions", Colors.CYAN, Colors.BOLD))
 
-    sessions_file = get_clawk_home() / "sessions" / "sessions.json"
+    # Gateway session count: state.db is the source of truth (#9006);
+    # fall back to sessions.json for pre-migration installs.
+    _session_count = None
 
-    if sessions_file.exists():
-        import json
+    try:
+        from clawk_state import SessionDB
+
+        _db = SessionDB()
 
         try:
-            with open(sessions_file, encoding="utf-8") as f:
-                data = json.load(f)
+            _lister = getattr(_db, "list_gateway_sessions", None)
 
-                print(f"  Active:       {len(data)} session(s)")
+            if callable(_lister):
+                _session_count = len(_lister(active_only=True))
 
-        except Exception:
-            print("  Active:       (error reading sessions file)")
+        finally:
+            _db.close()
+
+    except Exception:
+        _session_count = None
+
+    if _session_count is not None and _session_count > 0:
+        print(f"  Active:       {_session_count} session(s)")
 
     else:
-        print("  Active:       0")
+        sessions_file = get_clawk_home() / "sessions" / "sessions.json"
+
+        if sessions_file.exists():
+            import json
+
+            try:
+                with open(sessions_file, encoding="utf-8") as f:
+                    data = json.load(f)
+
+                    _entries = (
+                        {k: v for k, v in data.items() if not str(k).startswith("_")}
+                        if isinstance(data, dict)
+                        else {}
+                    )
+
+                    print(f"  Active:       {len(_entries)} session(s)")
+
+            except Exception:
+                print("  Active:       (error reading sessions file)")
+
+        else:
+            print(
+                f"  Active:       {_session_count if _session_count is not None else 0}"
+            )
 
     # =========================================================================
 
