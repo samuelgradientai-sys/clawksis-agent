@@ -144,6 +144,45 @@ def _resilience_breaker(agent):
         return None, ""
 
 
+def _image_error_max_dimension(error: Exception) -> Optional[int]:
+    """Extract a provider-reported image dimension ceiling, if present."""
+
+    parts = []
+
+    for value in (
+        error,
+        getattr(error, "message", None),
+        getattr(error, "body", None),
+    ):
+        if value:
+            try:
+                parts.append(str(value))
+
+            except Exception:
+                pass
+
+    text = " ".join(parts).lower()
+
+    if "image" not in text or "dimension" not in text or "max allowed size" not in text:
+        return None
+
+    match = re.search(r"max allowed size(?:\s+for [^:]+)?:\s*(\d{3,5})\s*pixels?", text)
+
+    if not match:
+        return None
+
+    try:
+        max_dimension = int(match.group(1))
+
+    except ValueError:
+        return None
+
+    if 512 <= max_dimension <= 8000:
+        return max_dimension
+
+    return None
+
+
 def _ollama_context_limit_error(agent: Any, request_tokens: int) -> Optional[str]:
     """Return a user-facing error when Ollama is loaded with too little context."""
 
@@ -621,6 +660,38 @@ def _get_continuation_prompt(
             "length limit. Continue exactly where you left off. Do not "
             "restart or repeat prior text. Finish the answer directly.]"
         )
+
+
+def _sync_failover_system_message(agent, api_messages, active_system_prompt):
+    """Refresh the in-flight system message after a provider failover.
+
+    ``try_activate_fallback`` rewrites the ``Model:``/``Provider:`` identity
+    lines on ``agent._cached_system_prompt`` (see
+    ``rewrite_prompt_model_identity``) so the agent reports the model that is
+    actually answering.  But the current call block's ``api_messages`` were
+    built from the pre-failover prompt, and the retry loop rebuilds
+    ``api_kwargs`` from that list each iteration — without this sync the
+    whole turn (and every gateway turn, since fallback re-activates per
+    message while the primary is down) ships the stale identity.
+
+    Mutates ``api_messages[0]`` in place and returns the prompt to use as
+    ``active_system_prompt`` for subsequent call-block rebuilds.
+    """
+
+    sp = getattr(agent, "_cached_system_prompt", None)
+
+    if not isinstance(sp, str) or not sp:
+        return active_system_prompt
+
+    if api_messages and api_messages[0].get("role") == "system":
+        effective = sp
+
+        if agent.ephemeral_system_prompt:
+            effective = (effective + "\n\n" + agent.ephemeral_system_prompt).strip()
+
+        api_messages[0]["content"] = effective
+
+    return sp
 
 
 def run_conversation(
@@ -2524,6 +2595,10 @@ def run_conversation(
                         )
 
                     if agent._try_activate_fallback():
+                        active_system_prompt = _sync_failover_system_message(
+                            agent, api_messages, active_system_prompt
+                        )
+
                         retry_count = 0
 
                         compression_attempts = 0
@@ -2657,6 +2732,10 @@ def run_conversation(
                             )
 
                         if agent._try_activate_fallback():
+                            active_system_prompt = _sync_failover_system_message(
+                                agent, api_messages, active_system_prompt
+                            )
+
                             retry_count = 0
 
                             compression_attempts = 0
@@ -3966,7 +4045,12 @@ def run_conversation(
                 ):
                     image_shrink_retry_attempted = True
 
-                    if agent._try_shrink_image_parts_in_messages(api_messages):
+                    image_max_dimension = _image_error_max_dimension(api_error) or 8000
+
+                    if agent._try_shrink_image_parts_in_messages(
+                        api_messages,
+                        max_dimension=image_max_dimension,
+                    ):
                         agent._vprint(
                             f"{agent.log_prefix}📐 Image(s) exceeded provider size limit — "
                             f"shrank and retrying...",
@@ -4750,6 +4834,10 @@ def run_conversation(
                             )
 
                         if agent._try_activate_fallback(reason=classified.reason):
+                            active_system_prompt = _sync_failover_system_message(
+                                agent, api_messages, active_system_prompt
+                            )
+
                             retry_count = 0
 
                             compression_attempts = 0
@@ -5298,6 +5386,10 @@ def run_conversation(
                             )
 
                     if agent._try_activate_fallback():
+                        active_system_prompt = _sync_failover_system_message(
+                            agent, api_messages, active_system_prompt
+                        )
+
                         retry_count = 0
 
                         compression_attempts = 0
@@ -5591,6 +5683,10 @@ def run_conversation(
                         )
 
                     if agent._try_activate_fallback():
+                        active_system_prompt = _sync_failover_system_message(
+                            agent, api_messages, active_system_prompt
+                        )
+
                         retry_count = 0
 
                         compression_attempts = 0
@@ -7090,6 +7186,10 @@ def run_conversation(
                         )
 
                         if agent._try_activate_fallback():
+                            active_system_prompt = _sync_failover_system_message(
+                                agent, api_messages, active_system_prompt
+                            )
+
                             agent._empty_content_retries = 0
 
                             agent._buffer_status(

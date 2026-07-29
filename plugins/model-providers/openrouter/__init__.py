@@ -11,6 +11,34 @@ logger = logging.getLogger(__name__)
 _CACHE: list[str] | None = None
 
 
+
+# default *unknown* Anthropic models to "cannot disable" (the modern contract)
+# and keep only this explicit legacy allowlist of models that can. Mirrors the
+# default-to-newest philosophy in agent/anthropic_adapter._get_anthropic_max_output.
+_ANTHROPIC_REASONING_OPTIONAL_SUBSTRINGS = (
+    "claude-3",          # 3, 3.5, 3.7
+    "claude-opus-4-0", "claude-opus-4.0", "claude-opus-4-1", "claude-opus-4.1",
+    "claude-sonnet-4-0", "claude-sonnet-4.0",
+    "claude-opus-4-2025", "claude-sonnet-4-2025",  # date-stamped 4.0 IDs
+    "claude-opus-4-5", "claude-opus-4.5",
+    "claude-sonnet-4-5", "claude-sonnet-4.5",
+    "claude-haiku-4-5", "claude-haiku-4.5",
+)
+
+def _anthropic_reasoning_is_mandatory(model: str | None) -> bool:
+    """Return True for Anthropic models that reject any disable-thinking form.
+
+    Claude 4.6+ (adaptive thinking) and newer named models have no "off"
+    switch — sending ``reasoning: {enabled: false}`` makes OpenRouter emit
+    ``thinking: {type: "disabled"}``, which these models 400 on. Unknown /
+    new Anthropic model names default to mandatory so the next un-numbered
+    release doesn't reintroduce the 400.
+    """
+    m = (model or "").lower()
+    if not m.startswith(("anthropic/", "claude")) and "claude" not in m:
+        return False
+    return not any(sub in m for sub in _ANTHROPIC_REASONING_OPTIONAL_SUBSTRINGS)
+
 class OpenRouterProfile(ProviderProfile):
     """OpenRouter aggregator — provider preferences, reasoning config passthrough."""
 
@@ -86,8 +114,20 @@ class OpenRouterProfile(ProviderProfile):
         the same backend server across turns.
         """
         extra_body: dict[str, Any] = {}
+        top_level: dict[str, Any] = {}
         if supports_reasoning:
-            if reasoning_config is not None:
+            # Claude 4.6+ via OpenRouter: cualquier forma de ``reasoning``
+            # termina en ``thinking: {type: "disabled"}`` y el modelo tira 400.
+            # Se omite ``reasoning`` y el effort pedido se rutea al top-level
+            # ``verbosity`` (que OpenRouter mapea a output_config.effort), asi
+            # la perilla que el usuario ya configura sigue funcionando.
+            if _anthropic_reasoning_is_mandatory(model):
+                cfg = reasoning_config or {}
+                effort = cfg.get("effort")
+
+                if cfg.get("enabled", True) is not False and effort and effort != "none":
+                    top_level["verbosity"] = effort
+            elif reasoning_config is not None:
                 extra_body["reasoning"] = dict(reasoning_config)
             else:
                 extra_body["reasoning"] = {"enabled": True, "effort": "medium"}
@@ -96,7 +136,10 @@ class OpenRouterProfile(ProviderProfile):
         if session_id and model and model.startswith(("x-ai/grok-", "xai/grok-")):
             extra_headers["x-grok-conv-id"] = session_id
 
-        return extra_body, {"extra_headers": extra_headers} if extra_headers else {}
+        if extra_headers:
+            top_level["extra_headers"] = extra_headers
+
+        return extra_body, top_level
 
 
 openrouter = OpenRouterProfile(

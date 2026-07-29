@@ -1668,6 +1668,116 @@ class ModelAssignment(BaseModel):
     profile: Optional[str] = None
 
 
+def _normalize_main_model_assignment(provider: str, model: str) -> tuple[str, str]:
+    """Normalize a main-slot (provider, model) pair before persisting.
+
+    The Models page has two assignment paths and only one of them was safe:
+
+    - The "Change" picker sends a real Clawksis provider slug — fine.
+    - The per-card "Use as → Main model" menu sends ``entry.provider``
+      from the analytics rows, falling back to the model's VENDOR prefix
+      (``modelVendor("anthropic/claude-opus-4.6") == "anthropic"``) when
+      the session row has no ``billing_provider`` (older sessions, NULL
+      rows).  That wrote ``provider: anthropic`` +
+      ``default: anthropic/claude-opus-4.6`` to config — a vendor-prefixed
+      OpenRouter slug on the NATIVE Anthropic provider.  New sessions then
+      400 against api.anthropic.com ("model: anthropic/claude-opus-4.6 not
+      found") and the user reads it as "changing models does nothing".
+
+    Two repairs, both at this single chokepoint so every caller inherits:
+
+    1. Vendor-name → Clawksis-provider mapping: when the provider string is
+       not a known Clawksis provider/alias (e.g. ``moonshotai``, ``x-ai`` is
+       known but ``poolside`` isn't) but the model is a vendor-prefixed
+       aggregator slug, keep the user's CURRENT aggregator if they're on
+       one, else fall back to openrouter.
+    2. Model-format normalization for the resolved provider via
+       ``normalize_model_for_provider`` (e.g. ``anthropic/claude-opus-4.6``
+       on native anthropic → ``claude-opus-4-6``).
+    """
+
+    from clawk_cli.config import get_compatible_custom_providers
+    from clawk_cli.models import _KNOWN_PROVIDER_NAMES, normalize_provider
+    from clawk_cli.model_normalize import normalize_model_for_provider
+    from clawk_cli.providers import resolve_custom_provider, resolve_user_provider
+
+    prov_in = (provider or "").strip()
+
+    model_in = (model or "").strip()
+
+    canonical = normalize_provider(prov_in)
+
+    # User-declared providers are real routing targets, not analytics vendor
+    # labels. Resolve them before the unknown-vendor fallback. ``providers:``
+    # keeps its declared bare slug; ``custom_providers:`` canonicalizes both a
+    # bare display name and ``custom:<name>`` to the durable custom slug.
+    try:
+        cfg = load_config()
+
+    except Exception:
+        cfg = {}
+
+    user_providers = cfg.get("providers") if isinstance(cfg, dict) else None
+
+    user_provider = resolve_user_provider(
+        prov_in, user_providers if isinstance(user_providers, dict) else {}
+    )
+
+    custom_provider = resolve_custom_provider(
+        prov_in,
+        get_compatible_custom_providers(cfg) if isinstance(cfg, dict) else [],
+    )
+
+    if user_provider is not None:
+        return user_provider.id, model_in
+
+    if custom_provider is not None:
+        return custom_provider.id, model_in
+
+    if canonical not in _KNOWN_PROVIDER_NAMES and "/" in model_in:
+        # Vendor prefix posing as a provider (analytics fallback). Resolve
+        # against the user's current provider when it's an aggregator that
+        # serves vendor-prefixed slugs; otherwise default to openrouter.
+        try:
+            cur_cfg = cfg.get("model", {})
+
+            cur_provider = (
+                str(cur_cfg.get("provider", "") or "").strip().lower()
+                if isinstance(cur_cfg, dict) else ""
+            )
+
+        except Exception:
+            cur_provider = ""
+
+        from clawk_cli.models import _AGGREGATOR_PROVIDERS
+
+        if cur_provider and normalize_provider(cur_provider) in _AGGREGATOR_PROVIDERS:
+            canonical = normalize_provider(cur_provider)
+
+            prov_in = cur_provider
+
+        else:
+            canonical = "openrouter"
+
+            prov_in = "openrouter"
+
+    # Custom/user-config providers keep the model verbatim — the registry
+    # normalizer doesn't know their namespaces.
+    if canonical in _KNOWN_PROVIDER_NAMES and not canonical.startswith("custom"):
+        try:
+            normalized_model = normalize_model_for_provider(model_in, canonical)
+
+            if normalized_model:
+                model_in = normalized_model
+
+        except Exception:
+            _log.debug(
+                "model normalization failed for %s/%s", prov_in, model_in, exc_info=True
+            )
+
+    return prov_in, model_in
+
+
 def _apply_main_model_assignment(
     model_cfg: "Any", provider: str, model: str, base_url: str = ""
 ) -> dict:
@@ -4429,6 +4539,21 @@ async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = N
                 raise HTTPException(
                     status_code=400, detail="provider and model required for main"
                 )
+
+            provider, model = _normalize_main_model_assignment(provider, model)
+
+            providers_cfg = cfg.get("providers")
+
+            provider_entry = (
+                providers_cfg.get(provider) if isinstance(providers_cfg, dict) else None
+            )
+
+            if (
+                not base_url
+                and isinstance(provider_entry, dict)
+                and provider_entry.get("base_url")
+            ):
+                base_url = str(provider_entry.get("base_url") or "").strip()
 
             model_cfg = _apply_main_model_assignment(
                 cfg.get("model", {}), provider, model, base_url
@@ -11234,6 +11359,8 @@ def _write_profile_model(profile_dir: Path, provider: str, model: str) -> None:
     token = set_clawk_home_override(str(profile_dir))
 
     try:
+        provider, model = _normalize_main_model_assignment(provider, model)
+
         cfg = load_config()
 
         cfg["model"] = _apply_main_model_assignment(

@@ -185,7 +185,7 @@ class TestOpenRouterProfileParity:
         prefs = {"allow": ["anthropic"]}
 
         legacy = transport.build_kwargs(
-            model="anthropic/claude-sonnet-4.6",
+            model="anthropic/claude-sonnet-4.5",
             messages=_msgs(),
             tools=None,
             provider_profile=get_provider_profile("openrouter"),
@@ -193,7 +193,7 @@ class TestOpenRouterProfileParity:
         )
 
         profile = transport.build_kwargs(
-            model="anthropic/claude-sonnet-4.6",
+            model="anthropic/claude-sonnet-4.5",
             messages=_msgs(),
             tools=None,
             provider_profile=get_provider_profile("openrouter"),
@@ -207,7 +207,7 @@ class TestOpenRouterProfileParity:
         rc = {"enabled": True, "effort": "high"}
 
         legacy = transport.build_kwargs(
-            model="anthropic/claude-sonnet-4.6",
+            model="anthropic/claude-sonnet-4.5",
             messages=_msgs(),
             tools=None,
             provider_profile=get_provider_profile("openrouter"),
@@ -216,7 +216,7 @@ class TestOpenRouterProfileParity:
         )
 
         profile = transport.build_kwargs(
-            model="anthropic/claude-sonnet-4.6",
+            model="anthropic/claude-sonnet-4.5",
             messages=_msgs(),
             tools=None,
             provider_profile=get_provider_profile("openrouter"),
@@ -229,7 +229,7 @@ class TestOpenRouterProfileParity:
     def test_default_reasoning(self, transport):
 
         legacy = transport.build_kwargs(
-            model="anthropic/claude-sonnet-4.6",
+            model="anthropic/claude-sonnet-4.5",
             messages=_msgs(),
             tools=None,
             provider_profile=get_provider_profile("openrouter"),
@@ -237,7 +237,7 @@ class TestOpenRouterProfileParity:
         )
 
         profile = transport.build_kwargs(
-            model="anthropic/claude-sonnet-4.6",
+            model="anthropic/claude-sonnet-4.5",
             messages=_msgs(),
             tools=None,
             provider_profile=get_provider_profile("openrouter"),
@@ -245,6 +245,26 @@ class TestOpenRouterProfileParity:
         )
 
         assert profile["extra_body"]["reasoning"] == legacy["extra_body"]["reasoning"]
+
+    def test_mandatory_anthropic_omits_reasoning_and_routes_verbosity(self, transport):
+        """Claude 4.6+ via OpenRouter no acepta ningun `reasoning`.
+
+        Enviarlo hace que OpenRouter emita `thinking: {type: "disabled"}` y el
+        modelo responde 400. El effort pedido se rutea al top-level
+        ``verbosity``, que OpenRouter mapea a output_config.effort.
+        """
+
+        kwargs = transport.build_kwargs(
+            model="anthropic/claude-sonnet-4.6",
+            messages=_msgs(),
+            tools=None,
+            provider_profile=get_provider_profile("openrouter"),
+            supports_reasoning=True,
+            reasoning_config={"enabled": True, "effort": "high"},
+        )
+
+        assert "reasoning" not in kwargs.get("extra_body", {})
+        assert kwargs.get("verbosity") == "high"
 
 
 class TestQwenProfileParity:
@@ -389,7 +409,7 @@ class TestDeveloperRoleParity:
         ]
 
         kw = transport.build_kwargs(
-            model="anthropic/claude-sonnet-4.6",
+            model="anthropic/claude-sonnet-4.5",
             messages=msgs,
             tools=None,
             provider_profile=get_provider_profile("openrouter"),
