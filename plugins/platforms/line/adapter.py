@@ -460,7 +460,11 @@ def verify_line_signature(body: bytes, signature: str, channel_secret: str) -> b
     except Exception:
         return False
 
-    return hmac.compare_digest(expected, signature)
+    # Compare as bytes: compare_digest raises TypeError on a str with
+
+    # non-ASCII characters, and the signature is a raw request header.
+
+    return hmac.compare_digest(expected.encode(), signature.encode())
 
 
 # ---------------------------------------------------------------------------
@@ -1124,7 +1128,7 @@ class LineAdapter(BasePlatformAdapter):
 
     # ------------------------------------------------------------------
 
-    async def connect(self) -> bool:
+    async def connect(self, *, is_reconnect: bool = False) -> bool:
 
         if not self.channel_access_token or not self.channel_secret:
             self._set_fatal_error(

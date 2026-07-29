@@ -40,7 +40,7 @@ Optional knobs (under ``web.xai`` in ``config.yaml``)::
 
       xai:
 
-        model: "grok-4.3"             # reasoning model required by web_search
+        model: "grok-build-0.1"       # reasoning model required by web_search
 
         allowed_domains: ["x.ai"]     # max 5 — mutually exclusive with excluded_domains
 
@@ -84,7 +84,7 @@ from tools.xai_http import (
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_MODEL = "grok-4.3"
+DEFAULT_MODEL = "grok-build-0.1"
 
 DEFAULT_TIMEOUT = 90
 
@@ -411,7 +411,10 @@ class XAIWebSearchProvider(WebSearchProvider):
                     )
 
                     try:
-                        refreshed = resolve_xai_http_credentials(force_refresh=True)
+                        refreshed = resolve_xai_http_credentials(
+                            force_refresh=True,
+                            api_key_hint=api_key,
+                        )
 
                         refreshed_key = str(refreshed.get("api_key") or "").strip()
 
