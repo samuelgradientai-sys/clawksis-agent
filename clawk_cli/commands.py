@@ -1950,6 +1950,21 @@ _SLACK_NAME_LIMIT = 32
 
 _SLACK_INVALID_CHARS = re.compile(r"[^a-z0-9_\-]")
 
+# Commands intentionally reachable on Slack only via ``/clawk <command>``. Slack
+# caps apps at 50 slash commands and the registry is at that ceiling; rather
+# than let the clamp silently drop whichever command sorts last (which is what
+# starves the high-value short aliases /btw and /q of a slot), we explicitly
+# route a few low-frequency commands through ``/clawk <command>`` on Slack only.
+# They remain native on every other surface (CLI, TUI, Telegram, Discord). Keep
+# this list TIGHT and intentional — the telegram-parity test reads it so an
+# entry here is a deliberate "Slack-via-/clawk" decision, not a silent clamp.
+#   - moa: high-cost slash mode, available through /clawk moa to avoid
+#     displacing existing native Slack slash commands at the 50-command cap.
+#   - debug: the log/report upload surface; reached via /clawk debug on Slack.
+# NOTE: upstream also lists ``topup`` (its billing/balance surface). This BYOK
+# fork has no such command, so it is omitted rather than carried as a dead entry.
+_SLACK_VIA_CLAWK_ONLY = frozenset({"moa", "debug"})
+
 _SLACK_RESERVED_COMMANDS = frozenset({
     # Built-in Slack slash commands that cannot be registered by apps.
     # https://slack.com/help/articles/201259356-Use-built-in-slash-commands
@@ -2060,6 +2075,11 @@ def slack_native_slashes() -> list[tuple[str, str, str]]:
             return
 
         if slack_name in _SLACK_RESERVED_COMMANDS:
+            return
+
+        if slack_name in _SLACK_VIA_CLAWK_ONLY:
+            # Intentionally Slack-via-/clawk only (see _SLACK_VIA_CLAWK_ONLY).
+
             return
 
         if len(entries) >= _SLACK_MAX_SLASH_COMMANDS:

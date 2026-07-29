@@ -15,6 +15,30 @@ import pytest
 
 
 # ---------------------------------------------------------------------------
+# Optional-dependency gate
+# ---------------------------------------------------------------------------
+#
+# ``mcp`` (the Model Context Protocol Python SDK) is an OPTIONAL extra
+# (``pip install 'clawksis-agent[mcp]'``). ``tools.mcp_tool`` is written to
+# import and degrade gracefully without it — it must NEVER acquire an
+# import-time hard dependency on ``mcp`` — so the SDK-backed surface (sampling
+# types, the stdio/HTTP client session, ``_MCP_NEW_HTTP``) simply isn't there on
+# an install without the extra. Tests that exercise that surface are skipped
+# rather than failed; everything mock-only in this file still runs.
+try:
+    import mcp  # noqa: F401
+
+    _MCP_SDK_INSTALLED = True
+except ImportError:  # pragma: no cover - exercised only without the mcp SDK
+    _MCP_SDK_INSTALLED = False
+
+requires_mcp_sdk = pytest.mark.skipif(
+    not _MCP_SDK_INSTALLED,
+    reason="optional 'mcp' SDK not installed - MCP SDK-backed surface unavailable",
+)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -1110,6 +1134,7 @@ class TestMCPServerTask:
             mock_read, mock_write,
         )
 
+    @requires_mcp_sdk
     def test_start_connects_and_discovers_tools(self):
         """start() creates a Task that connects, discovers tools, and waits."""
         from tools.mcp_tool import MCPServerTask
@@ -1138,6 +1163,7 @@ class TestMCPServerTask:
 
         asyncio.run(_test())
 
+    @requires_mcp_sdk
     def test_no_command_raises(self):
         """Missing 'command' in config raises ValueError."""
         from tools.mcp_tool import MCPServerTask
@@ -1249,6 +1275,7 @@ class TestMCPServerTask:
 
         asyncio.run(_test())
 
+    @requires_mcp_sdk
     def test_empty_env_gets_safe_defaults(self):
         """Empty env dict gets safe default env vars (PATH, HOME, etc.)."""
         from tools.mcp_tool import MCPServerTask
@@ -1280,6 +1307,7 @@ class TestMCPServerTask:
 
         asyncio.run(_test())
 
+    @requires_mcp_sdk
     def test_shutdown_signals_task_exit(self):
         """shutdown() signals the event and waits for task completion."""
         from tools.mcp_tool import MCPServerTask
@@ -1887,6 +1915,7 @@ class TestHTTPConfig:
 
         asyncio.run(_test())
 
+    @requires_mcp_sdk
     def test_http_seeds_initial_protocol_header(self):
         from tools.mcp_tool import LATEST_PROTOCOL_VERSION, MCPServerTask
 
@@ -2793,13 +2822,19 @@ try:
 except ImportError:
     ToolUseContent = _CompatType
 
-from tools.mcp_tool import (
-    CreateMessageResultWithTools,
-    SamplingHandler,
-    SamplingToolsCapability,
-    ToolUseContent,
-    _safe_numeric,
-)
+from tools.mcp_tool import SamplingHandler, _safe_numeric
+
+# The MCP sampling types are re-exported by ``tools.mcp_tool`` only when the
+# OPTIONAL ``mcp`` SDK is installed (see the ``requires_mcp_sdk`` note at the
+# top of this module). Import them defensively: without the SDK the names do
+# not exist on the module and an unguarded import would break collection for
+# the ~180 mock-only tests in this file.
+if _MCP_SDK_INSTALLED:
+    from tools.mcp_tool import (  # noqa: F811
+        CreateMessageResultWithTools,
+        SamplingToolsCapability,
+        ToolUseContent,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -3107,6 +3142,7 @@ class TestConvertMessages:
 # 6. Text-only sampling callback (full flow)
 # ---------------------------------------------------------------------------
 
+@requires_mcp_sdk
 class TestSamplingCallbackText:
     def setup_method(self):
         self.handler = SamplingHandler("txt", {})
@@ -3197,6 +3233,7 @@ class TestSamplingCallbackText:
 # 7. Tool use sampling callback
 # ---------------------------------------------------------------------------
 
+@requires_mcp_sdk
 class TestSamplingCallbackToolUse:
     def setup_method(self):
         self.handler = SamplingHandler("tu", {})
@@ -3249,6 +3286,7 @@ class TestSamplingCallbackToolUse:
 # 8. Tool loop governance
 # ---------------------------------------------------------------------------
 
+@requires_mcp_sdk
 class TestToolLoopGovernance:
     def test_max_tool_rounds_enforcement(self):
         """After max_tool_rounds consecutive tool responses, an error is returned."""
@@ -3316,6 +3354,7 @@ class TestToolLoopGovernance:
 # 9. Error paths: rate limit, timeout, no provider
 # ---------------------------------------------------------------------------
 
+@requires_mcp_sdk
 class TestSamplingErrors:
     def test_rate_limit_error(self):
         handler = SamplingHandler("rle", {"max_rpm": 1})
@@ -3428,6 +3467,7 @@ class TestSamplingErrors:
 # 10. Model whitelist
 # ---------------------------------------------------------------------------
 
+@requires_mcp_sdk
 class TestModelWhitelist:
     def test_allowed_model_passes(self):
         handler = SamplingHandler("wl", {"allowed_models": ["gpt-4o", "test-model"]})
@@ -3471,6 +3511,7 @@ class TestModelWhitelist:
 # 11. Malformed tool_call arguments
 # ---------------------------------------------------------------------------
 
+@requires_mcp_sdk
 class TestMalformedToolCallArgs:
     def test_invalid_json_wrapped_as_raw(self):
         """Malformed JSON arguments get wrapped in {"_raw": ...}."""
@@ -3522,6 +3563,7 @@ class TestMalformedToolCallArgs:
 # 12. Metrics tracking
 # ---------------------------------------------------------------------------
 
+@requires_mcp_sdk
 class TestMetricsTracking:
     def test_request_and_token_metrics(self):
         handler = SamplingHandler("met", {})
@@ -3569,6 +3611,7 @@ class TestMetricsTracking:
 # 13. session_kwargs()
 # ---------------------------------------------------------------------------
 
+@requires_mcp_sdk
 class TestSessionKwargs:
     def test_returns_correct_keys(self):
         handler = SamplingHandler("sk", {})
@@ -3589,6 +3632,7 @@ class TestSessionKwargs:
 # 14. MCPServerTask integration
 # ---------------------------------------------------------------------------
 
+@requires_mcp_sdk
 class TestMCPServerTaskSamplingIntegration:
     def test_sampling_handler_created_when_enabled(self):
         """MCPServerTask.run() creates a SamplingHandler when sampling is enabled."""

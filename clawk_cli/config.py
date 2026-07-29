@@ -4506,6 +4506,30 @@ def get_missing_skill_config_vars() -> List[Dict[str, Any]]:
     return missing
 
 
+# ``_normalize_custom_provider_entry`` runs on every ``load_picker_context()``
+# call (i.e. per interactive picker/inventory request), so any warning it emits
+# fires repeatedly for the same static config. Deduplicate per (provider,
+# signature): on Windows a repeated-warning storm contends on
+# ``concurrent-log-handler``'s cross-process rotation lock and can peg a core /
+# stall the gateway/serve event loop. The cache lives for the process lifetime.
+_PROVIDER_NORMALIZE_WARNED: set = set()
+
+
+def _warn_once_per_provider(
+    provider_key: str, signature: str, msg: str, *args: Any
+) -> None:
+    """Emit ``logger.warning(msg, *args)`` at most once per (provider, signature)."""
+
+    dedup_key = (provider_key or "?", signature)
+
+    if dedup_key in _PROVIDER_NORMALIZE_WARNED:
+        return
+
+    _PROVIDER_NORMALIZE_WARNED.add(dedup_key)
+
+    logger.warning(msg, *args)
+
+
 def _normalize_custom_provider_entry(
     entry: Any,
     *,
@@ -4539,6 +4563,9 @@ def _normalize_custom_provider_entry(
         entry["key_env"] = entry["api_key_env"]
 
     _KNOWN_KEYS = {
+        # Clawksis' own config writer emits a redundant ``provider`` key; accept
+        # it silently rather than reporting it as unknown (warn-storm regression).
+        "provider",
         "name",
         "api",
         "url",
@@ -4557,11 +4584,16 @@ def _normalize_custom_provider_entry(
         "stale_timeout_seconds",
         "discover_models",
         "extra_body",
+        "extra_headers",
+        "ssl_ca_cert",
+        "ssl_verify",
     }
 
     for camel, snake in _CAMEL_ALIASES.items():
         if camel in entry and snake not in entry:
-            logger.warning(
+            _warn_once_per_provider(
+                provider_key,
+                f"camel:{camel}",
                 "providers.%s: camelCase key '%s' auto-mapped to '%s' "
                 "(use snake_case to avoid this warning)",
                 provider_key or "?",
@@ -4574,7 +4606,9 @@ def _normalize_custom_provider_entry(
     unknown = set(entry.keys()) - _KNOWN_KEYS - set(_CAMEL_ALIASES.keys())
 
     if unknown:
-        logger.warning(
+        _warn_once_per_provider(
+            provider_key,
+            "unknown:" + ",".join(sorted(unknown)),
             "providers.%s: unknown config keys ignored: %s",
             provider_key or "?",
             ", ".join(sorted(unknown)),
@@ -4589,6 +4623,17 @@ def _normalize_custom_provider_entry(
 
         if isinstance(raw_url, str) and raw_url.strip():
             candidate = raw_url.strip()
+
+            # Accept URLs containing unresolved placeholder tokens — both
+            # ``${ENV_VAR}`` env-refs and bare ``{region}``-style templates —
+            # without URL validation. They are expanded at runtime, so a
+            # caller reaching this normalizer with raw (un-expanded) config
+            # would otherwise see the provider silently dropped.
+
+            if re.search(r"\{[^}]+\}", candidate):
+                base_url = candidate
+
+                break
 
             parsed = urlparse(candidate)
 

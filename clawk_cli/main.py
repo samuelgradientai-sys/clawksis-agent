@@ -13201,6 +13201,55 @@ def _kill_stale_dashboard_processes(
 _warn_stale_dashboard_processes = _kill_stale_dashboard_processes
 
 
+def _atomic_replace_dir(src: str, dst: str) -> None:
+    """Replace directory *dst* with *src* without leaving *dst* half-deleted.
+
+    The naive ``rmtree(dst); copytree(src, dst)`` has a destructive window: if
+    the copy fails partway (common on the Windows ZIP-update path, which only
+    runs because file I/O is already flaky on that machine), the old directory
+    is already gone and nothing replaced it — the install is left with a
+    deleted tree (the failure mode where ``ui-tui/`` vanished and broke the TUI).
+
+    Instead, stage the new copy into a sibling temp dir first; only once that
+    fully succeeds do we swap it in. A failure during staging raises with the
+    original *dst* still intact.
+    """
+
+    staging = f"{dst}.clawk-update-staging"
+
+    backup = f"{dst}.clawk-update-old"
+
+    # Clear any leftovers from a previously-interrupted update.
+
+    for leftover in (staging, backup):
+        if os.path.exists(leftover):
+            shutil.rmtree(leftover, ignore_errors=True)
+
+    # 1. Stage the new copy. If this fails, dst is untouched.
+
+    shutil.copytree(src, staging)
+
+    # 2. Swap: move the live dir aside, move staging into place. Both moves are
+    #    same-filesystem renames; if the second fails we restore the backup.
+
+    if os.path.exists(dst):
+        os.rename(dst, backup)
+
+    try:
+        os.rename(staging, dst)
+
+    except OSError:
+        if os.path.exists(backup) and not os.path.exists(dst):
+            os.rename(backup, dst)  # roll back to the original
+
+        raise
+
+    # 3. New dir is in place; drop the old one (best-effort — never fatal).
+
+    if os.path.exists(backup):
+        shutil.rmtree(backup, ignore_errors=True)
+
+
 def _update_via_zip(args):
     """Update Clawksis by downloading a ZIP archive.
 
@@ -13329,10 +13378,10 @@ def _update_via_zip(args):
             dst = os.path.join(str(PROJECT_ROOT), item)
 
             if os.path.isdir(src):
-                if os.path.exists(dst):
-                    shutil.rmtree(dst)
+                # Atomic-ish replace: never leave dst half-deleted if the copy
+                # fails partway (the Windows ZIP-path failure mode).
 
-                shutil.copytree(src, dst)
+                _atomic_replace_dir(src, dst)
 
             else:
                 shutil.copy2(src, dst)
@@ -16139,6 +16188,62 @@ def _install_hangup_protection(gateway_mode: bool = False):
         state["log_file"] = None
 
     return state
+
+
+def _log_only_write(text: str) -> None:
+    """Write ``text`` to ``~/.clawksis/logs/update.log`` only, never the terminal.
+
+    During ``clawk update`` ``sys.stdout`` is an ``_UpdateOutputStream`` that
+    mirrors to both the terminal and ``update.log``. Loud, low-signal
+    subprocess output (npm installs, the dashboard/vite build, installer
+    "Next steps" walls) should be captured and tucked into the log so failures
+    stay debuggable, without flooding the user's terminal — the same clean-output
+    contract ``_quiet_step`` enforces. This reaches past the mirroring stream
+    straight to the underlying log handle; when stdout is not the mirroring
+    stream (no ``_log``) it is a silent no-op.
+    """
+
+    if not text:
+        return
+
+    stream = sys.stdout
+
+    log_file = getattr(stream, "_log", None)
+
+    if log_file is None:
+        return
+
+    try:
+        log_file.write(text if text.endswith("\n") else text + "\n")
+
+        log_file.flush()
+
+    except Exception:
+        pass
+
+
+def _run_logged_subprocess(cmd, *, cwd=None, env=None):
+    """Run ``cmd`` capturing combined output into update.log (not the terminal).
+
+    Returns the ``CompletedProcess`` (with ``stdout`` populated) so the caller
+    can decide whether to surface the captured output on failure.
+    """
+
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        env=env,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    _log_only_write(result.stdout or "")
+
+    return result
 
 
 def _finalize_update_output(state):
