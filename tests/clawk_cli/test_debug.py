@@ -1483,94 +1483,10 @@ class TestCollectShareBundle:
         assert uploaded[0] == expected
 
 
-class TestBuildNousBundle:
-    def test_envelope_shape_and_gzip(self, clawk_home):
-        import gzip
-        import json as _json
-
-        from clawk_cli.debug import build_nous_bundle
-
-        files = {"report": "hello", "agent.log": "log line"}
-        blob = build_nous_bundle(files, redact=True)
-
-        # It's gzip — magic bytes.
-        assert blob[:2] == b"\x1f\x8b"
-        envelope = _json.loads(gzip.decompress(blob).decode())
-        assert envelope["format"] == "clawk-debug-share/1"
-        assert envelope["redacted"] is True
-        assert envelope["files"] == files
-        assert "created" in envelope
-
-    def test_redacted_false_recorded(self):
-        import gzip
-        import json as _json
-
-        from clawk_cli.debug import build_nous_bundle
-
-        blob = build_nous_bundle({"report": "x"}, redact=False)
-        envelope = _json.loads(gzip.decompress(blob).decode())
-        assert envelope["redacted"] is False
-
-
-class TestRunDebugShareNous:
-    def _args(self, **over):
-        class _A:
-            lines = 50
-            expire = 7
-            local = False
-            nous = True
-            no_redact = False
-            yes = True
-
-        a = _A()
-        for k, v in over.items():
-            setattr(a, k, v)
-        return a
-
-    def test_nous_success_prints_view_url(self, clawk_home, capsys):
-        from clawk_cli.debug import run_debug_share
-
-        res = {
-            "id": "id-1",
-            "viewUrl": "https://support.example.com/diagnostics/id-1",
-            "expiresAt": "2026-06-20T00:00:00Z",
-        }
-        with patch("clawk_cli.dump.run_dump"), patch(
-            "clawk_cli.diagnostics_upload.share_to_nous", return_value=res
-        ) as share:
-            run_debug_share(self._args())
-
-        out = capsys.readouterr().out
-        assert "Nous-INTERNAL" in out
-        assert "https://support.example.com/diagnostics/id-1" in out
-        assert "2026-06-20T00:00:00Z" in out
-        # The blob passed to share_to_nous must be gzip bytes.
-        blob = share.call_args[0][0]
-        assert isinstance(blob, (bytes, bytearray)) and blob[:2] == b"\x1f\x8b"
-
-    def test_nous_failure_suggests_local(self, clawk_home, capsys):
-        from clawk_cli.debug import run_debug_share
-
-        with patch("clawk_cli.dump.run_dump"), patch(
-            "clawk_cli.diagnostics_upload.share_to_nous",
-            side_effect=RuntimeError("service down"),
-        ):
-            with pytest.raises(SystemExit) as exc:
-                run_debug_share(self._args())
-        assert exc.value.code == 1
-        err = capsys.readouterr().err
-        assert "Nous upload failed" in err
-        assert "--local" in err
-
-    def test_nous_does_not_touch_pastebin(self, clawk_home):
-        from clawk_cli.debug import run_debug_share
-
-        res = {"id": "id-1", "viewUrl": "https://v"}
-        with patch("clawk_cli.dump.run_dump"), patch(
-            "clawk_cli.diagnostics_upload.share_to_nous", return_value=res
-        ), patch("clawk_cli.debug.upload_to_pastebin") as paste:
-            run_debug_share(self._args())
-        paste.assert_not_called()
+# NOTE (fork): upstream's ``TestBuildNousBundle`` and ``TestRunDebugShareNous``
+# are intentionally NOT carried over — Clawksis purged the Nous coupling
+# (``clawk_cli/diagnostics_upload.py`` was deleted and ``run_debug_share``
+# refuses ``--nous`` loudly instead of uploading to a vendor service).
 
 
 class TestDebugSlashCommand:
@@ -1733,19 +1649,9 @@ class TestShareConsentGate:
 
         assert "https://paste.rs/test" in capsys.readouterr().out
 
-    def test_nous_path_also_gated(self, clawk_home, capsys, monkeypatch):
-        """The --nous S3 path enforces the same consent gate (sibling site)."""
-        from clawk_cli.debug import run_debug_share
-
-        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
-        monkeypatch.setattr("builtins.input", lambda _: "n")
-
-        with patch("clawk_cli.dump.run_dump"), \
-             patch("clawk_cli.diagnostics_upload.share_to_nous") as mock_nous:
-            run_debug_share(self._args(nous=True))
-
-        mock_nous.assert_not_called()
-        assert "Aborted" in capsys.readouterr().out
+    # NOTE (fork): upstream's ``test_nous_path_also_gated`` is not carried
+    # over — the fork has no Nous upload path to gate (``--nous`` exits 1
+    # before the consent prompt).
 
     def test_local_never_prompts(self, clawk_home, capsys, monkeypatch):
         """--local renders to stdout and must not prompt or upload."""

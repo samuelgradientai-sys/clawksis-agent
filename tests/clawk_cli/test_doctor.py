@@ -1204,7 +1204,11 @@ class TestDoctorXaiOAuthStatus:
         assert "Auth Providers" in out
 
     def test_import_failure_does_not_affect_other_providers(self, monkeypatch, tmp_path):
-        """Nous / Codex / Gemini / MiniMax rows must survive an xAI import failure."""
+        """Codex / MiniMax rows must survive an xAI import failure.
+
+        Fork-specific: Clawksis' doctor has no "Nous Portal auth" row (the Nous
+        coupling was purged), so the surviving row asserted here is Codex.
+        """
         home = tmp_path / ".clawksis"
         home.mkdir(parents=True, exist_ok=True)
         (home / "config.yaml").write_text("memory: {}\n", encoding="utf-8")
@@ -1222,8 +1226,7 @@ class TestDoctorXaiOAuthStatus:
         monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
 
         from clawk_cli import auth as _auth_mod
-        monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {"logged_in": True})
-        monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {"logged_in": False})
+        monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {"logged_in": True})
         monkeypatch.setattr(_auth_mod, "get_minimax_oauth_auth_status", lambda: {"logged_in": False})
         monkeypatch.delattr(_auth_mod, "get_xai_oauth_auth_status", raising=False)
 
@@ -1231,7 +1234,7 @@ class TestDoctorXaiOAuthStatus:
         with contextlib.redirect_stdout(buf):
             doctor_mod.run_doctor(Namespace(fix=False))
         out = buf.getvalue()
-        assert "Nous Portal auth" in out
+        assert "OpenAI Codex auth" in out
         assert "logged in" in out
 
     def test_function_raises_does_not_crash_doctor(self, monkeypatch, tmp_path):

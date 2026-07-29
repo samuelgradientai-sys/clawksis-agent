@@ -16,6 +16,14 @@ approval:
 
   prompt_short:    "      Escolha [o/s/D]: "
 
+  choose_smart_deny: "      [o]uma vez  |  [d]negar"
+
+  prompt_smart_deny: "      Escolha [o/D]: "
+
+  smart_deny_once_inputs: "o,once"
+
+  smart_deny_deny_inputs: "d,deny"
+
   timeout:         "      ⏱ Tempo esgotado — comando negado"
 
   allowed_once:    "      ✓ Permitido uma vez"
@@ -33,10 +41,6 @@ approval:
 
 
 gateway:
-
-  credits:
-
-    not_logged_in: "Não estás autenticado no Nous Portal — executa `/model` para iniciar sessão e depois `/credits`."
 
   approval_expired: "⚠️ A aprovação expirou (o agente já não está à espera). Peça ao agente para tentar novamente."
 
@@ -182,6 +186,8 @@ gateway:
 
     nothing_to_do:         "Ainda não há nada para comprimir (a transcrição continua a ser todo o contexto protegido)."
 
+    aggressive_unsupported: "--aggressive não é suportado; usa '/compress here [N]' para manter apenas as trocas recentes, ou /undo para remover turnos."
+
     focus_line:            "Foco: \"{topic}\""
 
     summary_failed:        "⚠️ Falha ao gerar o resumo ({error}). {count} mensagem(ns) histórica(s) foram removidas e substituídas por um marcador; o contexto anterior já não pode ser recuperado. Considera verificar a configuração do modelo auxiliary.compression."
@@ -218,6 +224,10 @@ gateway:
 
     denied_plural:         "❌ Comandos negados ({count} comandos)."
 
+    denied_reason_singular: "❌ Comando negado. Motivo repassado ao agente: \"{reason}\""
+
+    denied_reason_plural:  "❌ Comandos negados ({count} comandos). Motivo repassado ao agente: \"{reason}\""
+
 
 
   fast:
@@ -239,6 +249,12 @@ gateway:
     status_fast:           "fast"
 
     status_normal:         "normal"
+
+    picker_title:          "⚡ **Priority Processing**\\n\\nModo atual: `{mode}`\\n\\nEscolha uma opção:"
+
+    choice_fast:           "fast — Priority Processing ativado"
+
+    choice_normal:         "normal — processamento padrão"
 
 
 
@@ -304,6 +320,24 @@ gateway:
 
     no_output:             "(sem saída)"
 
+    wake:
+
+      completed:           "completed"
+
+      gave_up:             "gave up (retries exhausted)"
+
+      crashed:             "crashed (worker exited); dispatcher will retry"
+
+      timed_out:           "timed out; dispatcher will retry"
+
+      blocked:             "blocked; needs attention"
+
+      status_default:      "status changed"
+
+      status_joiner:       ", "
+
+      message:             "[kanban] Task {task_id} {status}.\nTitle: {title}\nAssignee: @{assignee}\nBoard: {board}\n\nCheck the result or decide the next step."
+
 
 
   personality:
@@ -346,7 +380,7 @@ gateway:
 
     scope_global:              "configuração global"
 
-    status:                    "🧠 **Definições de raciocínio**\n\n**Esforço:** `{level}`\n**Âmbito:** {scope}\n**Visualização:** {display}\n\n_Uso:_ `/reasoning <none|minimal|low|medium|high|xhigh|reset|show|hide> [--global]`"
+    status:                    "🧠 **Definições de raciocínio**\n\n**Esforço:** `{level}`\n**Âmbito:** {scope}\n**Visualização:** {display}\n\n_Uso:_ `/reasoning <none|minimal|low|medium|high|xhigh|max|ultra|reset|show|hide> [--global]`"
 
     display_on:                "ativada ✓"
 
@@ -360,7 +394,17 @@ gateway:
 
     reset_done:                "🧠 ✓ Substituição de raciocínio da sessão removida; a regressar à configuração global."
 
-    unknown_arg:               "⚠️ Argumento desconhecido: `{arg}`\n\n**Níveis válidos:** none, minimal, low, medium, high, xhigh\n**Visualização:** show, hide\n**Persistir:** adiciona `--global` para guardar para além desta sessão"
+    unknown_arg:               "⚠️ Argumento desconhecido: `{arg}`\n\n**Níveis válidos:** none, minimal, low, medium, high, xhigh, max, ultra\n**Visualização:** show, hide\n**Persistir:** adiciona `--global` para guardar para além desta sessão"
+
+    picker_title:              "🧠 **Definições de raciocínio**\\n\\n**Esforço:** `{level}`\\n**Âmbito:** {scope}\\n**Visualização:** {display}\\n\\nEscolha uma opção:"
+
+    choice_none:               "none — desativar raciocínio"
+
+    choice_reset:              "reset — limpar o override de sessão"
+
+    choice_show:               "mostrar raciocínio nas respostas"
+
+    choice_hide:               "ocultar raciocínio das respostas"
 
     set_global:                "🧠 ✓ Esforço de raciocínio definido como `{effort}` (guardado na configuração)\n_(produz efeito na próxima mensagem)_"
 
@@ -444,6 +488,24 @@ gateway:
 
     db_unavailable:        "Base de dados de sessões indisponível."
 
+    parse_error:           "⚠️ Could not parse `/resume` arguments: {error}.
+
+Use quotes around titles with spaces, for example: `/resume \"Project A Plan\"`."
+
+    matrix_no_named_sessions: "No named sessions found for this Matrix room.
+
+Use `/title My Session` to name the current room session, `/resume --all` to list all Matrix sessions, or `/resume --cross-room <session name>` to explicitly cross room boundaries."
+
+    matrix_blocked_no_origin: "⚠️ Matrix /resume blocked: this named session has no recorded room origin, so Clawksis will not resume it inside the current room by default. Use `/resume --cross-room {name}` if you intentionally want to cross room boundaries."
+
+    matrix_blocked_other_room: "⚠️ Matrix /resume blocked: that session belongs to a different Matrix room ({room}). Use `/resume --cross-room {name}` if you intentionally want to resume it here."
+
+    matrix_cross_room_success: "⚠️ Cross-room resume: resumed **{title}** inside Matrix room **{room}**.
+
+Future messages in this room will use that transcript until `/reset` or another `/resume`.{msg_part}"
+
+    blocked_not_owner:     "⚠️ /resume blocked: '**{name}**' belongs to a different user or chat. You can only resume sessions from this chat."
+
     no_named_sessions:     "Não foram encontradas sessões com nome.\nUsa `/title A minha sessão` para nomear a sessão atual e depois `/resume A minha sessão` para voltar a ela."
 
     list_header:           "📋 **Sessões com nome**\n"
@@ -473,16 +535,6 @@ gateway:
     resumed_many:          "↻ Sessão **{title}** retomada ({count} mensagens). Conversa restaurada."
 
     resumed_no_count:      "↻ Sessão **{title}** retomada. Conversa restaurada."
-
-    parse_error:           "⚠️ Could not parse the command. Check your quotes and try again ({error})."
-
-    matrix_no_named_sessions: "No named sessions found in this Matrix room.\nUse `/title My Session` to name your current session, then `/resume My Session` to return to it later. Use `/resume --all` to list sessions from other rooms."
-
-    matrix_blocked_no_origin: "🚫 Resume blocked: could not confirm session '**{name}**' belongs to this Matrix room.\nUse `/resume --cross-room {name}` to override."
-
-    matrix_blocked_other_room: "🚫 Resume blocked: session '**{name}**' belongs to another Matrix room (**{room}**).\nUse `/resume --cross-room {name}` to override."
-
-    matrix_cross_room_success: "↻ Cross-room resume: **{title}** into **{room}**{msg_part}. Conversation restored."
 
 
 
@@ -518,6 +570,18 @@ gateway:
 
     header:                "📊 **Estado do Clawksis Gateway**"
 
+    matrix_scope_header:   "**Matrix scope:**"
+
+    matrix_scope_room:     "  room: {room}"
+
+    matrix_scope_room_id:  "  room_id: {room_id}"
+
+    matrix_scope_thread:   "  thread_id: {thread_id}"
+
+    matrix_scope_mode:     "  session_scope: {scope}"
+
+    matrix_scope_key:      "  session_key: {session_key}"
+
     session_id:            "**ID da sessão:** `{session_id}`"
 
     title:                 "**Título:** {title}"
@@ -525,6 +589,14 @@ gateway:
     created:               "**Criada:** {timestamp}"
 
     last_activity:         "**Última atividade:** {timestamp}"
+
+    model:                 "**Model:** `{model}`"
+
+    model_provider:        "**Model:** `{model}` ({provider})"
+
+    context:               "**Context:** {used} / {total} ({pct}%)"
+
+    context_used:          "**Context:** ~{used} tokens"
 
     tokens:                "**Tokens de API cumulativos (reenviados a cada chamada):** {tokens}"
 
@@ -537,18 +609,6 @@ gateway:
     queued:                "**Seguimentos em fila:** {count}"
 
     platforms:             "**Plataformas ligadas:** {platforms}"
-
-    matrix_scope_header:   "**Matrix scope:**"
-
-    matrix_scope_room:     "- room: {room}"
-
-    matrix_scope_room_id:  "- room_id: {room_id}"
-
-    matrix_scope_thread:   "- thread: {thread_id}"
-
-    matrix_scope_mode:     "- session_scope: {scope}"
-
-    matrix_scope_key:      "- session_key: {session_key}"
 
 
 
@@ -656,6 +716,26 @@ gateway:
 
     label_compressions:       "Compressões: {count}"
 
+    breakdown_header: "🧩 **Detalhamento do contexto** _(estimado)_"
+
+    breakdown_line: "• {label}: ~{count} ({pct}%)"
+
+    breakdown_cat_system_prompt: "Prompt do sistema"
+
+    breakdown_cat_tool_definitions: "Definições de ferramentas"
+
+    breakdown_cat_rules: "Regras"
+
+    breakdown_cat_skills: "Habilidades"
+
+    breakdown_cat_mcp: "MCP"
+
+    breakdown_cat_subagent_definitions: "Definições de subagentes"
+
+    breakdown_cat_memory: "Memória"
+
+    breakdown_cat_conversation: "Conversa"
+
     header_session_info:      "📊 **Informações da sessão**"
 
     label_messages:           "Mensagens: {count}"
@@ -665,6 +745,16 @@ gateway:
     detailed_after_first:     "_(Utilização detalhada disponível após a primeira resposta do agente)_"
 
     no_data:                  "Não há dados de utilização disponíveis para esta sessão."
+
+    unknown_subcommand:       "Subcomando /usage desconhecido: `{args}`. Tente `/usage` ou `/usage reset [--force]`."
+
+    reset_wrong_provider:     "Os resets de limite acumulados só estão disponíveis no provedor openai-codex. Troque primeiro com `/model`."
+
+
+
+  credits:
+
+    not_logged_in:            "Você não está conectado ao Nous Portal. Faça login para ver seu saldo de créditos e recarregar."
 
 
 
@@ -679,6 +769,8 @@ gateway:
     mode_all:              "⚙️ Progresso de ferramentas: **ALL** — cada chamada de ferramenta é mostrada (comprimento da pré-visualização: `display.tool_preview_length`, predefinição 40)."
 
     mode_verbose:          "⚙️ Progresso de ferramentas: **VERBOSE** — cada chamada de ferramenta com os argumentos completos."
+
+    mode_log:              "⚙️ Progresso de ferramentas: **LOG** — silencioso no chat; as chamadas de ferramentas são gravadas em ~/.clawksis/logs/tool_calls.log."
 
     saved_suffix:          "_(guardado para **{platform}** — produz efeito na próxima mensagem)_"
 
@@ -713,6 +805,10 @@ gateway:
     label_voice_only:      "Ativado (resposta de voz a mensagens de voz)"
 
     label_all:             "TTS (resposta de voz a todas as mensagens)"
+
+    help:                  "{toggle}\n\n**Como funciona o /voice**\n• `/voice on` — resposta por voz quando envias uma mensagem de voz\n• `/voice tts` — resposta por voz a *todas* as mensagens\n• `/voice off` — voltar às respostas apenas em texto\n• `/voice status` — mostrar o modo atual\n• `/voice` (sem argumento) — alternar rapidamente entre ligado e desligado{channels}"
+
+    help_channels:         "\n\n**Canais de voz ao vivo (Discord)**\n• Entra primeiro num canal de voz, depois `/voice channel` — eu entro, ouço e falo as minhas respostas\n• `/voice leave` — desligar do canal de voz"
 
 
 

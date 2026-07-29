@@ -20,6 +20,10 @@ graft optional-mcps
 
 recursive-include plugins plugin.yaml plugin.yml
 
+# Gateway assets include images plus YAML catalogs such as status_phrases.yaml.
+
+recursive-include gateway/assets *
+
 global-exclude __pycache__
 
 global-exclude *.py[cod]

@@ -24,6 +24,14 @@ approval:
 
   prompt_short:    "      Rogha [o/s/D]: "
 
+  choose_smart_deny: "      [o]uair amháin  |  [d]iúltaigh"
+
+  prompt_smart_deny: "      Rogha [o/D]: "
+
+  smart_deny_once_inputs: "o,once"
+
+  smart_deny_deny_inputs: "d,deny"
+
   timeout:         "      ⏱ Am istigh — ag diúltú don ordú"
 
   allowed_once:    "      ✓ Ceadaithe uair amháin"
@@ -41,10 +49,6 @@ approval:
 
 
 gateway:
-
-  credits:
-
-    not_logged_in: "Níl tú logáilte isteach i Nous Portal — rith `/model` chun logáil isteach, ansin `/credits`."
 
   approval_expired: "⚠️ Tá an cead imithe in éag (níl an gníomhaire ag fanacht níos mó). Iarr ar an ngníomhaire iarracht eile a dhéanamh."
 
@@ -190,6 +194,8 @@ gateway:
 
     nothing_to_do:         "Níl aon rud le dlúthú fós (tá an traschríbhinn fós uile mar chomhthéacs cosanta)."
 
+    aggressive_unsupported: "Ní thacaítear le --aggressive; úsáid '/compress here [N]' chun na malartuithe is déanaí amháin a choinneáil, nó /undo chun sealanna a scriosadh."
+
     focus_line:            "Fócas: \"{topic}\""
 
     summary_failed:        "⚠️ Theip ar ghiniúint achoimre ({error}). Baineadh {count} teachtaireacht stairiúil agus cuireadh ionadaí ina n-áit; níl an comhthéacs roimhe seo in-aisghabhála a thuilleadh. Smaoinigh ar an gcumraíocht auxiliary.compression a sheiceáil."
@@ -226,6 +232,10 @@ gateway:
 
     denied_plural:         "❌ Orduithe diúltaithe ({count} ordú)."
 
+    denied_reason_singular: "❌ Ordú diúltaithe. Cúis curtha ar aghaidh chuig an ngníomhaire: \"{reason}\""
+
+    denied_reason_plural:  "❌ Orduithe diúltaithe ({count} ordú). Cúis curtha ar aghaidh chuig an ngníomhaire: \"{reason}\""
+
 
 
   fast:
@@ -247,6 +257,12 @@ gateway:
     status_fast:           "fast"
 
     status_normal:         "normal"
+
+    picker_title:          "⚡ **Priority Processing**\\n\\nMód reatha: `{mode}`\\n\\nRoghnaigh rogha:"
+
+    choice_fast:           "fast — Priority Processing ar siúl"
+
+    choice_normal:         "normal — gnáthphróiseáil"
 
 
 
@@ -312,6 +328,24 @@ gateway:
 
     no_output:             "(gan aschur)"
 
+    wake:
+
+      completed:           "completed"
+
+      gave_up:             "gave up (retries exhausted)"
+
+      crashed:             "crashed (worker exited); dispatcher will retry"
+
+      timed_out:           "timed out; dispatcher will retry"
+
+      blocked:             "blocked; needs attention"
+
+      status_default:      "status changed"
+
+      status_joiner:       ", "
+
+      message:             "[kanban] Task {task_id} {status}.\nTitle: {title}\nAssignee: @{assignee}\nBoard: {board}\n\nCheck the result or decide the next step."
+
 
 
   personality:
@@ -354,7 +388,7 @@ gateway:
 
     scope_global:              "cumraíocht dhomhanda"
 
-    status:                    "🧠 **Socruithe Réasúnaíochta**\n\n**Iarracht:** `{level}`\n**Scóip:** {scope}\n**Taispeáint:** {display}\n\n_Úsáid:_ `/reasoning <none|minimal|low|medium|high|xhigh|reset|show|hide> [--global]`"
+    status:                    "🧠 **Socruithe Réasúnaíochta**\n\n**Iarracht:** `{level}`\n**Scóip:** {scope}\n**Taispeáint:** {display}\n\n_Úsáid:_ `/reasoning <none|minimal|low|medium|high|xhigh|max|ultra|reset|show|hide> [--global]`"
 
     display_on:                "ar ✓"
 
@@ -368,7 +402,17 @@ gateway:
 
     reset_done:                "🧠 ✓ Sárú réasúnaíochta seisiúin glanta; ag titim siar ar an gcumraíocht dhomhanda."
 
-    unknown_arg:               "⚠️ Argóint anaithnid: `{arg}`\n\n**Leibhéil bhailí:** none, minimal, low, medium, high, xhigh\n**Taispeáint:** show, hide\n**Coinnigh:** cuir `--global` leis chun sábháil thar an seisiún seo"
+    unknown_arg:               "⚠️ Argóint anaithnid: `{arg}`\n\n**Leibhéil bhailí:** none, minimal, low, medium, high, xhigh, max, ultra\n**Taispeáint:** show, hide\n**Coinnigh:** cuir `--global` leis chun sábháil thar an seisiún seo"
+
+    picker_title:              "🧠 **Socruithe Réasúnaíochta**\\n\\n**Iarracht:** `{level}`\\n**Scóip:** {scope}\\n**Taispeáint:** {display}\\n\\nRoghnaigh rogha:"
+
+    choice_none:               "none — díchumasaigh réasúnaíocht"
+
+    choice_reset:              "reset — glan sárú an tseisiúin"
+
+    choice_show:               "taispeáin réasúnaíocht sna freagraí"
+
+    choice_hide:               "folaigh réasúnaíocht ó na freagraí"
 
     set_global:                "🧠 ✓ Iarracht réasúnaíochta socraithe go `{effort}` (sábháilte sa chumraíocht)\n_(éifeachtach ón gcéad teachtaireacht eile)_"
 
@@ -452,6 +496,24 @@ gateway:
 
     db_unavailable:        "Níl bunachar sonraí na seisiún ar fáil."
 
+    parse_error:           "⚠️ Could not parse `/resume` arguments: {error}.
+
+Use quotes around titles with spaces, for example: `/resume \"Project A Plan\"`."
+
+    matrix_no_named_sessions: "No named sessions found for this Matrix room.
+
+Use `/title My Session` to name the current room session, `/resume --all` to list all Matrix sessions, or `/resume --cross-room <session name>` to explicitly cross room boundaries."
+
+    matrix_blocked_no_origin: "⚠️ Matrix /resume blocked: this named session has no recorded room origin, so Clawksis will not resume it inside the current room by default. Use `/resume --cross-room {name}` if you intentionally want to cross room boundaries."
+
+    matrix_blocked_other_room: "⚠️ Matrix /resume blocked: that session belongs to a different Matrix room ({room}). Use `/resume --cross-room {name}` if you intentionally want to resume it here."
+
+    matrix_cross_room_success: "⚠️ Cross-room resume: resumed **{title}** inside Matrix room **{room}**.
+
+Future messages in this room will use that transcript until `/reset` or another `/resume`.{msg_part}"
+
+    blocked_not_owner:     "⚠️ /resume blocked: '**{name}**' belongs to a different user or chat. You can only resume sessions from this chat."
+
     no_named_sessions:     "Níor aimsíodh aon seisiún ainmnithe.\nÚsáid `/title M'Ainm Seisiúin` chun do sheisiún reatha a ainmniú, ansin `/resume M'Ainm Seisiúin` chun filleadh air níos déanaí."
 
     list_header:           "📋 **Seisiúin Ainmnithe**\n"
@@ -481,16 +543,6 @@ gateway:
     resumed_many:          "↻ Seisiún **{title}** atosaithe ({count} teachtaireacht). Comhrá aischurtha."
 
     resumed_no_count:      "↻ Seisiún **{title}** atosaithe. Comhrá aischurtha."
-
-    parse_error:           "⚠️ Could not parse the command. Check your quotes and try again ({error})."
-
-    matrix_no_named_sessions: "No named sessions found in this Matrix room.\nUse `/title My Session` to name your current session, then `/resume My Session` to return to it later. Use `/resume --all` to list sessions from other rooms."
-
-    matrix_blocked_no_origin: "🚫 Resume blocked: could not confirm session '**{name}**' belongs to this Matrix room.\nUse `/resume --cross-room {name}` to override."
-
-    matrix_blocked_other_room: "🚫 Resume blocked: session '**{name}**' belongs to another Matrix room (**{room}**).\nUse `/resume --cross-room {name}` to override."
-
-    matrix_cross_room_success: "↻ Cross-room resume: **{title}** into **{room}**{msg_part}. Conversation restored."
 
 
 
@@ -526,6 +578,18 @@ gateway:
 
     header:                "📊 **Stádas Clawksis Gateway**"
 
+    matrix_scope_header:   "**Matrix scope:**"
+
+    matrix_scope_room:     "  room: {room}"
+
+    matrix_scope_room_id:  "  room_id: {room_id}"
+
+    matrix_scope_thread:   "  thread_id: {thread_id}"
+
+    matrix_scope_mode:     "  session_scope: {scope}"
+
+    matrix_scope_key:      "  session_key: {session_key}"
+
     session_id:            "**ID Seisiúin:** `{session_id}`"
 
     title:                 "**Teideal:** {title}"
@@ -533,6 +597,14 @@ gateway:
     created:               "**Cruthaithe:** {timestamp}"
 
     last_activity:         "**Gníomhaíocht is déanaí:** {timestamp}"
+
+    model:                 "**Model:** `{model}`"
+
+    model_provider:        "**Model:** `{model}` ({provider})"
+
+    context:               "**Context:** {used} / {total} ({pct}%)"
+
+    context_used:          "**Context:** ~{used} tokens"
 
     tokens:                "**Comharthaí:** {tokens}"
 
@@ -545,18 +617,6 @@ gateway:
     queued:                "**Tascanna i scuaine:** {count}"
 
     platforms:             "**Ardáin Cheangailte:** {platforms}"
-
-    matrix_scope_header:   "**Matrix scope:**"
-
-    matrix_scope_room:     "- room: {room}"
-
-    matrix_scope_room_id:  "- room_id: {room_id}"
-
-    matrix_scope_thread:   "- thread: {thread_id}"
-
-    matrix_scope_mode:     "- session_scope: {scope}"
-
-    matrix_scope_key:      "- session_key: {session_key}"
 
 
 
@@ -664,6 +724,26 @@ gateway:
 
     label_compressions:       "Dlúthuithe: {count}"
 
+    breakdown_header: "🧩 **Miondealú comhthéacs** _(measta)_"
+
+    breakdown_line: "• {label}: ~{count} ({pct}%)"
+
+    breakdown_cat_system_prompt: "Leid an chórais"
+
+    breakdown_cat_tool_definitions: "Sainmhínithe uirlisí"
+
+    breakdown_cat_rules: "Rialacha"
+
+    breakdown_cat_skills: "Scileanna"
+
+    breakdown_cat_mcp: "MCP"
+
+    breakdown_cat_subagent_definitions: "Sainmhínithe fo-ghníomhairí"
+
+    breakdown_cat_memory: "Cuimhne"
+
+    breakdown_cat_conversation: "Comhrá"
+
     header_session_info:      "📊 **Eolas Seisiúin**"
 
     label_messages:           "Teachtaireachtaí: {count}"
@@ -673,6 +753,16 @@ gateway:
     detailed_after_first:     "_(Úsáid mhionsonraithe ar fáil tar éis chéad fhreagra an ghníomhaire)_"
 
     no_data:                  "Níl aon sonraí úsáide ar fáil don seisiún seo."
+
+    unknown_subcommand:       "Fo-ordú /usage anaithnid: `{args}`. Bain triail as `/usage` nó `/usage reset [--force]`."
+
+    reset_wrong_provider:     "Níl athshocruithe teorann bainc ar fáil ach ar an soláthraí openai-codex. Athraigh le `/model` ar dtús."
+
+
+
+  credits:
+
+    not_logged_in:            "Níl tú logáilte isteach i Nous Portal. Logáil isteach chun d'iarmhéid creidmheasa a fheiceáil agus breis a chur leis."
 
 
 
@@ -687,6 +777,8 @@ gateway:
     mode_all:              "⚙️ Dul chun cinn uirlise: **GACH CEANN** — taispeántar gach glao uirlise (fad réamhamhairc: `display.tool_preview_length`, réamhshocrú 40)."
 
     mode_verbose:          "⚙️ Dul chun cinn uirlise: **BÉALSCAOILTE** — gach glao uirlise le hargóintí iomlána."
+
+    mode_log:              "⚙️ Dul chun cinn uirlise: **LOG** — ciúin sa chomhrá; scríobhtar glaonna uirlise chuig ~/.clawksis/logs/tool_calls.log."
 
     saved_suffix:          "_(sábháilte do **{platform}** — éifeachtach ón gcéad teachtaireacht eile)_"
 
@@ -721,6 +813,10 @@ gateway:
     label_voice_only:      "Ar (freagra gutha do theachtaireachtaí gutha)"
 
     label_all:             "TTS (freagra gutha do gach teachtaireacht)"
+
+    help:                  "{toggle}\n\n**Conas a oibríonn /voice**\n• `/voice on` — freagra gutha nuair a sheolann tú teachtaireacht gutha\n• `/voice tts` — freagra gutha do *gach* teachtaireacht\n• `/voice off` — ar ais go freagraí téacs amháin\n• `/voice status` — taispeáin an mód reatha\n• `/voice` (gan argóint) — scoránaigh go tapa idir air agus as{channels}"
+
+    help_channels:         "\n\n**Cainéil gutha bheo (Discord)**\n• Téigh isteach i gcainéal gutha ar dtús, ansin `/voice channel` — téim isteach, éistim agus labhraím mo fhreagraí\n• `/voice leave` — dícheangail ón gcainéal gutha"
 
 
 

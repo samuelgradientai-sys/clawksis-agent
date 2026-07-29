@@ -16,6 +16,14 @@ approval:
 
   prompt_short:    "      Seçim [b/o/R]: "
 
+  choose_smart_deny: "      [b]ir kez  |  [r]eddet"
+
+  prompt_smart_deny: "      Seçim [b/R]: "
+
+  smart_deny_once_inputs: "b,bir kez"
+
+  smart_deny_deny_inputs: "r,reddet"
+
   timeout:         "      ⏱ Zaman aşımı — komut reddedildi"
 
   allowed_once:    "      ✓ Bir kez izin verildi"
@@ -33,10 +41,6 @@ approval:
 
 
 gateway:
-
-  credits:
-
-    not_logged_in: "Nous Portal'a giriş yapmadınız — giriş yapmak için `/model` komutunu çalıştırın, ardından `/credits`."
 
   approval_expired: "⚠️ Onay süresi doldu (ajan artık beklemiyor). Ajanın tekrar denemesini isteyin."
 
@@ -182,6 +186,8 @@ gateway:
 
     nothing_to_do:         "Henüz sıkıştırılacak bir şey yok (transkript hâlâ tamamen korunan bağlam)."
 
+    aggressive_unsupported: "--aggressive desteklenmiyor; yalnızca son alışverişleri tutmak için '/compress here [N]' kullanın veya turları silmek için /undo kullanın."
+
     focus_line:            "Odak: \"{topic}\""
 
     summary_failed:        "⚠️ Özet oluşturma başarısız ({error}). {count} geçmiş mesaj kaldırılıp yer tutucuyla değiştirildi; önceki bağlam artık kurtarılamaz. auxiliary.compression model yapılandırmanızı kontrol edin."
@@ -218,6 +224,10 @@ gateway:
 
     denied_plural:         "❌ Komutlar reddedildi ({count} komut)."
 
+    denied_reason_singular: "❌ Komut reddedildi. Gerekçe ajana iletildi: \"{reason}\""
+
+    denied_reason_plural:  "❌ Komutlar reddedildi ({count} komut). Gerekçe ajana iletildi: \"{reason}\""
+
 
 
   fast:
@@ -239,6 +249,12 @@ gateway:
     status_fast:           "fast"
 
     status_normal:         "normal"
+
+    picker_title:          "⚡ **Priority Processing**\\n\\nMevcut mod: `{mode}`\\n\\nBir seçenek seçin:"
+
+    choice_fast:           "fast — Priority Processing açık"
+
+    choice_normal:         "normal — standart işleme"
 
 
 
@@ -304,6 +320,24 @@ gateway:
 
     no_output:             "(çıktı yok)"
 
+    wake:
+
+      completed:           "completed"
+
+      gave_up:             "gave up (retries exhausted)"
+
+      crashed:             "crashed (worker exited); dispatcher will retry"
+
+      timed_out:           "timed out; dispatcher will retry"
+
+      blocked:             "blocked; needs attention"
+
+      status_default:      "status changed"
+
+      status_joiner:       ", "
+
+      message:             "[kanban] Task {task_id} {status}.\nTitle: {title}\nAssignee: @{assignee}\nBoard: {board}\n\nCheck the result or decide the next step."
+
 
 
   personality:
@@ -346,7 +380,7 @@ gateway:
 
     scope_global:              "genel yapılandırma"
 
-    status:                    "🧠 **Akıl Yürütme Ayarları**\n\n**Güç:** `{level}`\n**Kapsam:** {scope}\n**Görüntüleme:** {display}\n\n_Kullanım:_ `/reasoning <none|minimal|low|medium|high|xhigh|reset|show|hide> [--global]`"
+    status:                    "🧠 **Akıl Yürütme Ayarları**\n\n**Güç:** `{level}`\n**Kapsam:** {scope}\n**Görüntüleme:** {display}\n\n_Kullanım:_ `/reasoning <none|minimal|low|medium|high|xhigh|max|ultra|reset|show|hide> [--global]`"
 
     display_on:                "açık ✓"
 
@@ -360,7 +394,17 @@ gateway:
 
     reset_done:                "🧠 ✓ Oturumun akıl yürütme geçersiz kılması temizlendi; genel yapılandırmaya geri dönülüyor."
 
-    unknown_arg:               "⚠️ Bilinmeyen argüman: `{arg}`\n\n**Geçerli seviyeler:** none, minimal, low, medium, high, xhigh\n**Görüntüleme:** show, hide\n**Kalıcı:** bu oturumun ötesinde kaydetmek için `--global` ekleyin"
+    unknown_arg:               "⚠️ Bilinmeyen argüman: `{arg}`\n\n**Geçerli seviyeler:** none, minimal, low, medium, high, xhigh, max, ultra\n**Görüntüleme:** show, hide\n**Kalıcı:** bu oturumun ötesinde kaydetmek için `--global` ekleyin"
+
+    picker_title:              "🧠 **Akıl Yürütme Ayarları**\\n\\n**Güç:** `{level}`\\n**Kapsam:** {scope}\\n**Görüntüleme:** {display}\\n\\nBir seçenek seçin:"
+
+    choice_none:               "none — akıl yürütmeyi kapat"
+
+    choice_reset:              "reset — oturum geçersiz kılmasını temizle"
+
+    choice_show:               "yanıtlarda akıl yürütmeyi göster"
+
+    choice_hide:               "yanıtlarda akıl yürütmeyi gizle"
 
     set_global:                "🧠 ✓ Akıl yürütme gücü `{effort}` olarak ayarlandı (yapılandırmaya kaydedildi)\n_(sonraki mesajda etkili)_"
 
@@ -444,6 +488,24 @@ gateway:
 
     db_unavailable:        "Oturum veritabanı kullanılamıyor."
 
+    parse_error:           "⚠️ Could not parse `/resume` arguments: {error}.
+
+Use quotes around titles with spaces, for example: `/resume \"Project A Plan\"`."
+
+    matrix_no_named_sessions: "No named sessions found for this Matrix room.
+
+Use `/title My Session` to name the current room session, `/resume --all` to list all Matrix sessions, or `/resume --cross-room <session name>` to explicitly cross room boundaries."
+
+    matrix_blocked_no_origin: "⚠️ Matrix /resume blocked: this named session has no recorded room origin, so Clawksis will not resume it inside the current room by default. Use `/resume --cross-room {name}` if you intentionally want to cross room boundaries."
+
+    matrix_blocked_other_room: "⚠️ Matrix /resume blocked: that session belongs to a different Matrix room ({room}). Use `/resume --cross-room {name}` if you intentionally want to resume it here."
+
+    matrix_cross_room_success: "⚠️ Cross-room resume: resumed **{title}** inside Matrix room **{room}**.
+
+Future messages in this room will use that transcript until `/reset` or another `/resume`.{msg_part}"
+
+    blocked_not_owner:     "⚠️ /resume blocked: '**{name}**' belongs to a different user or chat. You can only resume sessions from this chat."
+
     no_named_sessions:     "Adlandırılmış oturum bulunamadı.\nMevcut oturumu adlandırmak için `/title Oturumum`, daha sonra geri dönmek için `/resume Oturumum` kullanın."
 
     list_header:           "📋 **Adlandırılmış Oturumlar**\n"
@@ -473,16 +535,6 @@ gateway:
     resumed_many:          "↻ **{title}** oturumu sürdürüldü ({count} mesaj). Konuşma geri yüklendi."
 
     resumed_no_count:      "↻ **{title}** oturumu sürdürüldü. Konuşma geri yüklendi."
-
-    parse_error:           "⚠️ Could not parse the command. Check your quotes and try again ({error})."
-
-    matrix_no_named_sessions: "No named sessions found in this Matrix room.\nUse `/title My Session` to name your current session, then `/resume My Session` to return to it later. Use `/resume --all` to list sessions from other rooms."
-
-    matrix_blocked_no_origin: "🚫 Resume blocked: could not confirm session '**{name}**' belongs to this Matrix room.\nUse `/resume --cross-room {name}` to override."
-
-    matrix_blocked_other_room: "🚫 Resume blocked: session '**{name}**' belongs to another Matrix room (**{room}**).\nUse `/resume --cross-room {name}` to override."
-
-    matrix_cross_room_success: "↻ Cross-room resume: **{title}** into **{room}**{msg_part}. Conversation restored."
 
 
 
@@ -518,6 +570,18 @@ gateway:
 
     header:                "📊 **Clawksis Gateway Durumu**"
 
+    matrix_scope_header:   "**Matrix scope:**"
+
+    matrix_scope_room:     "  room: {room}"
+
+    matrix_scope_room_id:  "  room_id: {room_id}"
+
+    matrix_scope_thread:   "  thread_id: {thread_id}"
+
+    matrix_scope_mode:     "  session_scope: {scope}"
+
+    matrix_scope_key:      "  session_key: {session_key}"
+
     session_id:            "**Oturum kimliği:** `{session_id}`"
 
     title:                 "**Başlık:** {title}"
@@ -525,6 +589,14 @@ gateway:
     created:               "**Oluşturuldu:** {timestamp}"
 
     last_activity:         "**Son etkinlik:** {timestamp}"
+
+    model:                 "**Model:** `{model}`"
+
+    model_provider:        "**Model:** `{model}` ({provider})"
+
+    context:               "**Context:** {used} / {total} ({pct}%)"
+
+    context_used:          "**Context:** ~{used} tokens"
 
     tokens:                "**Token:** {tokens}"
 
@@ -537,18 +609,6 @@ gateway:
     queued:                "**Sıradaki devam:** {count}"
 
     platforms:             "**Bağlı platformlar:** {platforms}"
-
-    matrix_scope_header:   "**Matrix scope:**"
-
-    matrix_scope_room:     "- room: {room}"
-
-    matrix_scope_room_id:  "- room_id: {room_id}"
-
-    matrix_scope_thread:   "- thread: {thread_id}"
-
-    matrix_scope_mode:     "- session_scope: {scope}"
-
-    matrix_scope_key:      "- session_key: {session_key}"
 
 
 
@@ -656,6 +716,26 @@ gateway:
 
     label_compressions:       "Sıkıştırmalar: {count}"
 
+    breakdown_header: "🧩 **Bağlam dökümü** _(tahmini)_"
+
+    breakdown_line: "• {label}: ~{count} ({pct}%)"
+
+    breakdown_cat_system_prompt: "Sistem istemi"
+
+    breakdown_cat_tool_definitions: "Araç tanımları"
+
+    breakdown_cat_rules: "Kurallar"
+
+    breakdown_cat_skills: "Beceriler"
+
+    breakdown_cat_mcp: "MCP"
+
+    breakdown_cat_subagent_definitions: "Alt aracı tanımları"
+
+    breakdown_cat_memory: "Bellek"
+
+    breakdown_cat_conversation: "Konuşma"
+
     header_session_info:      "📊 **Oturum Bilgisi**"
 
     label_messages:           "Mesajlar: {count}"
@@ -665,6 +745,16 @@ gateway:
     detailed_after_first:     "_(Ayrıntılı kullanım, ilk ajan yanıtından sonra kullanılabilir)_"
 
     no_data:                  "Bu oturum için kullanım verisi yok."
+
+    unknown_subcommand:       "Bilinmeyen /usage alt komutu: `{args}`. `/usage` veya `/usage reset [--force]` deneyin."
+
+    reset_wrong_provider:     "Biriktirilen limit sıfırlamaları yalnızca openai-codex sağlayıcısında kullanılabilir. Önce `/model` ile geçiş yapın."
+
+
+
+  credits:
+
+    not_logged_in:            "Nous Portal'a giriş yapılmadı. Bakiyenizi görmek ve yükleme yapmak için giriş yapın."
 
 
 
@@ -679,6 +769,8 @@ gateway:
     mode_all:              "⚙️ Araç ilerlemesi: **ALL** — her araç çağrısı gösterilir (önizleme uzunluğu: `display.tool_preview_length`, varsayılan 40)."
 
     mode_verbose:          "⚙️ Araç ilerlemesi: **VERBOSE** — her araç çağrısı tüm argümanlarıyla gösterilir."
+
+    mode_log:              "⚙️ Araç ilerlemesi: **LOG** — sohbette sessiz; araç çağrıları ~/.clawksis/logs/tool_calls.log dosyasına yazılır."
 
     saved_suffix:          "_(**{platform}** için kaydedildi — sonraki mesajda geçerli olur)_"
 
@@ -713,6 +805,10 @@ gateway:
     label_voice_only:      "Açık (sesli mesajlara sesli yanıt)"
 
     label_all:             "TTS (tüm mesajlara sesli yanıt)"
+
+    help:                  "{toggle}\n\n**/voice nasıl çalışır**\n• `/voice on` — sesli mesaj gönderdiğinde sesli yanıt\n• `/voice tts` — *her* mesaja sesli yanıt\n• `/voice off` — yalnızca metin yanıtlarına dön\n• `/voice status` — geçerli modu göster\n• `/voice` (argümansız) — açık ve kapalı arasında hızlı geçiş{channels}"
+
+    help_channels:         "\n\n**Canlı ses kanalları (Discord)**\n• Önce bir ses kanalına katıl, sonra `/voice channel` — katılırım, dinlerim ve yanıtlarımı sesli söylerim\n• `/voice leave` — ses kanalından ayrıl"
 
 
 

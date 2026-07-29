@@ -16,6 +16,14 @@ approval:
 
   prompt_short:    "      선택 [o/s/D]: "
 
+  choose_smart_deny: "      [o]한 번  |  [d]거부"
+
+  prompt_smart_deny: "      선택 [o/D]: "
+
+  smart_deny_once_inputs: "o,once"
+
+  smart_deny_deny_inputs: "d,deny"
+
   timeout:         "      ⏱ 시간 초과 - 명령을 거부합니다"
 
   allowed_once:    "      ✓ 한 번 허용됨"
@@ -33,10 +41,6 @@ approval:
 
 
 gateway:
-
-  credits:
-
-    not_logged_in: "Nous Portal에 로그인되어 있지 않습니다 — `/model`을 실행하여 로그인한 다음 `/credits`를 실행하세요."
 
   approval_expired: "⚠️ 승인이 만료되었습니다 (에이전트가 더 이상 대기하지 않습니다). 에이전트에게 다시 시도하도록 요청하세요."
 
@@ -182,6 +186,8 @@ gateway:
 
     nothing_to_do:         "아직 압축할 내용이 없습니다 (대화 내용이 모두 보호된 컨텍스트입니다)."
 
+    aggressive_unsupported: "--aggressive는 지원되지 않습니다. '/compress here [N]'으로 최근 대화만 유지하거나 /undo로 턴을 삭제하세요."
+
     focus_line:            "초점: \"{topic}\""
 
     summary_failed:        "⚠️ 요약 생성에 실패했습니다 ({error}). 과거 메시지 {count}개가 제거되어 자리표시자로 대체되었으며, 이전 컨텍스트는 더 이상 복구할 수 없습니다. auxiliary.compression 모델 설정을 확인해 보세요."
@@ -218,6 +224,10 @@ gateway:
 
     denied_plural:         "❌ 명령이 거부되었습니다 ({count}개)."
 
+    denied_reason_singular: "❌ 명령이 거부되었습니다. 사유를 에이전트에 전달함: \"{reason}\""
+
+    denied_reason_plural:  "❌ 명령이 거부되었습니다 ({count}개). 사유를 에이전트에 전달함: \"{reason}\""
+
 
 
   fast:
@@ -239,6 +249,12 @@ gateway:
     status_fast:           "fast"
 
     status_normal:         "normal"
+
+    picker_title:          "⚡ **Priority Processing**\\n\\n현재 모드: `{mode}`\\n\\n옵션을 선택하세요:"
+
+    choice_fast:           "fast — Priority Processing 켜기"
+
+    choice_normal:         "normal — 표준 처리"
 
 
 
@@ -304,6 +320,24 @@ gateway:
 
     no_output:             "(출력 없음)"
 
+    wake:
+
+      completed:           "completed"
+
+      gave_up:             "gave up (retries exhausted)"
+
+      crashed:             "crashed (worker exited); dispatcher will retry"
+
+      timed_out:           "timed out; dispatcher will retry"
+
+      blocked:             "blocked; needs attention"
+
+      status_default:      "status changed"
+
+      status_joiner:       ", "
+
+      message:             "[kanban] Task {task_id} {status}.\nTitle: {title}\nAssignee: @{assignee}\nBoard: {board}\n\nCheck the result or decide the next step."
+
 
 
   personality:
@@ -346,7 +380,7 @@ gateway:
 
     scope_global:              "전역 설정"
 
-    status:                    "🧠 **추론 설정**\n\n**노력:** `{level}`\n**범위:** {scope}\n**표시:** {display}\n\n_사용법:_ `/reasoning <none|minimal|low|medium|high|xhigh|reset|show|hide> [--global]`"
+    status:                    "🧠 **추론 설정**\n\n**노력:** `{level}`\n**범위:** {scope}\n**표시:** {display}\n\n_사용법:_ `/reasoning <none|minimal|low|medium|high|xhigh|max|ultra|reset|show|hide> [--global]`"
 
     display_on:                "켜짐 ✓"
 
@@ -360,7 +394,17 @@ gateway:
 
     reset_done:                "🧠 ✓ 세션 추론 재정의가 해제되었습니다. 전역 설정으로 돌아갑니다."
 
-    unknown_arg:               "⚠️ 알 수 없는 인수: `{arg}`\n\n**유효한 수준:** none, minimal, low, medium, high, xhigh\n**표시:** show, hide\n**영구화:** 이 세션을 넘어 저장하려면 `--global`을 추가하세요"
+    unknown_arg:               "⚠️ 알 수 없는 인수: `{arg}`\n\n**유효한 수준:** none, minimal, low, medium, high, xhigh, max, ultra\n**표시:** show, hide\n**영구화:** 이 세션을 넘어 저장하려면 `--global`을 추가하세요"
+
+    picker_title:              "🧠 **추론 설정**\\n\\n**노력:** `{level}`\\n**범위:** {scope}\\n**표시:** {display}\\n\\n옵션을 선택하세요:"
+
+    choice_none:               "none — 추론 비활성화"
+
+    choice_reset:              "reset — 세션 재정의 초기화"
+
+    choice_show:               "응답에 추론 표시"
+
+    choice_hide:               "응답에서 추론 숨기기"
 
     set_global:                "🧠 ✓ 추론 노력이 `{effort}`(으)로 설정되었습니다 (설정에 저장됨)\n_(다음 메시지부터 적용됩니다)_"
 
@@ -444,6 +488,24 @@ gateway:
 
     db_unavailable:        "세션 데이터베이스를 사용할 수 없습니다."
 
+    parse_error:           "⚠️ Could not parse `/resume` arguments: {error}.
+
+Use quotes around titles with spaces, for example: `/resume \"Project A Plan\"`."
+
+    matrix_no_named_sessions: "No named sessions found for this Matrix room.
+
+Use `/title My Session` to name the current room session, `/resume --all` to list all Matrix sessions, or `/resume --cross-room <session name>` to explicitly cross room boundaries."
+
+    matrix_blocked_no_origin: "⚠️ Matrix /resume blocked: this named session has no recorded room origin, so Clawksis will not resume it inside the current room by default. Use `/resume --cross-room {name}` if you intentionally want to cross room boundaries."
+
+    matrix_blocked_other_room: "⚠️ Matrix /resume blocked: that session belongs to a different Matrix room ({room}). Use `/resume --cross-room {name}` if you intentionally want to resume it here."
+
+    matrix_cross_room_success: "⚠️ Cross-room resume: resumed **{title}** inside Matrix room **{room}**.
+
+Future messages in this room will use that transcript until `/reset` or another `/resume`.{msg_part}"
+
+    blocked_not_owner:     "⚠️ /resume blocked: '**{name}**' belongs to a different user or chat. You can only resume sessions from this chat."
+
     no_named_sessions:     "이름이 지정된 세션이 없습니다.\n현재 세션에 이름을 지정하려면 `/title 내 세션`을 사용하고, 나중에 `/resume 내 세션`으로 돌아오세요."
 
     list_header:           "📋 **이름이 지정된 세션**\n"
@@ -473,16 +535,6 @@ gateway:
     resumed_many:          "↻ **{title}** 세션 재개됨 (메시지 {count}개). 대화가 복원되었습니다."
 
     resumed_no_count:      "↻ **{title}** 세션 재개됨. 대화가 복원되었습니다."
-
-    parse_error:           "⚠️ Could not parse the command. Check your quotes and try again ({error})."
-
-    matrix_no_named_sessions: "No named sessions found in this Matrix room.\nUse `/title My Session` to name your current session, then `/resume My Session` to return to it later. Use `/resume --all` to list sessions from other rooms."
-
-    matrix_blocked_no_origin: "🚫 Resume blocked: could not confirm session '**{name}**' belongs to this Matrix room.\nUse `/resume --cross-room {name}` to override."
-
-    matrix_blocked_other_room: "🚫 Resume blocked: session '**{name}**' belongs to another Matrix room (**{room}**).\nUse `/resume --cross-room {name}` to override."
-
-    matrix_cross_room_success: "↻ Cross-room resume: **{title}** into **{room}**{msg_part}. Conversation restored."
 
 
 
@@ -518,6 +570,18 @@ gateway:
 
     header:                "📊 **Clawksis 게이트웨이 상태**"
 
+    matrix_scope_header:   "**Matrix scope:**"
+
+    matrix_scope_room:     "  room: {room}"
+
+    matrix_scope_room_id:  "  room_id: {room_id}"
+
+    matrix_scope_thread:   "  thread_id: {thread_id}"
+
+    matrix_scope_mode:     "  session_scope: {scope}"
+
+    matrix_scope_key:      "  session_key: {session_key}"
+
     session_id:            "**세션 ID:** `{session_id}`"
 
     title:                 "**제목:** {title}"
@@ -525,6 +589,14 @@ gateway:
     created:               "**생성됨:** {timestamp}"
 
     last_activity:         "**최종 활동:** {timestamp}"
+
+    model:                 "**Model:** `{model}`"
+
+    model_provider:        "**Model:** `{model}` ({provider})"
+
+    context:               "**Context:** {used} / {total} ({pct}%)"
+
+    context_used:          "**Context:** ~{used} tokens"
 
     tokens:                "**토큰:** {tokens}"
 
@@ -537,18 +609,6 @@ gateway:
     queued:                "**대기 중인 후속 작업:** {count}"
 
     platforms:             "**연결된 플랫폼:** {platforms}"
-
-    matrix_scope_header:   "**Matrix scope:**"
-
-    matrix_scope_room:     "- room: {room}"
-
-    matrix_scope_room_id:  "- room_id: {room_id}"
-
-    matrix_scope_thread:   "- thread: {thread_id}"
-
-    matrix_scope_mode:     "- session_scope: {scope}"
-
-    matrix_scope_key:      "- session_key: {session_key}"
 
 
 
@@ -656,6 +716,26 @@ gateway:
 
     label_compressions:       "압축: {count}"
 
+    breakdown_header: "🧩 **컨텍스트 분석** _(추정치)_"
+
+    breakdown_line: "• {label}: 약 {count} ({pct}%)"
+
+    breakdown_cat_system_prompt: "시스템 프롬프트"
+
+    breakdown_cat_tool_definitions: "도구 정의"
+
+    breakdown_cat_rules: "규칙"
+
+    breakdown_cat_skills: "스킬"
+
+    breakdown_cat_mcp: "MCP"
+
+    breakdown_cat_subagent_definitions: "서브에이전트 정의"
+
+    breakdown_cat_memory: "메모리"
+
+    breakdown_cat_conversation: "대화"
+
     header_session_info:      "📊 **세션 정보**"
 
     label_messages:           "메시지: {count}"
@@ -665,6 +745,16 @@ gateway:
     detailed_after_first:     "_(자세한 사용량은 첫 에이전트 응답 이후 확인할 수 있습니다)_"
 
     no_data:                  "이 세션에 사용 가능한 사용량 데이터가 없습니다."
+
+    unknown_subcommand:       "알 수 없는 /usage 하위 명령: `{args}`. `/usage` 또는 `/usage reset [--force]`를 사용해 보세요."
+
+    reset_wrong_provider:     "적립된 사용량 한도 초기화는 openai-codex 공급자에서만 사용할 수 있습니다. 먼저 `/model`로 전환하세요."
+
+
+
+  credits:
+
+    not_logged_in:            "Nous Portal에 로그인되어 있지 않습니다. 로그인하면 크레딧 잔액 확인 및 충전을 할 수 있습니다."
 
 
 
@@ -679,6 +769,8 @@ gateway:
     mode_all:              "⚙️ 도구 진행 상황: **ALL** — 모든 도구 호출이 표시됩니다 (미리보기 길이: `display.tool_preview_length`, 기본 40)."
 
     mode_verbose:          "⚙️ 도구 진행 상황: **VERBOSE** — 모든 도구 호출이 전체 인수와 함께 표시됩니다."
+
+    mode_log:              "⚙️ 도구 진행 상황: **LOG** — 채팅에는 표시되지 않으며 도구 호출이 ~/.clawksis/logs/tool_calls.log에 기록됩니다."
 
     saved_suffix:          "_(**{platform}**에 저장됨 — 다음 메시지부터 적용됩니다)_"
 
@@ -713,6 +805,10 @@ gateway:
     label_voice_only:      "켜짐 (음성 메시지에 음성으로 응답)"
 
     label_all:             "TTS (모든 메시지에 음성으로 응답)"
+
+    help:                  "{toggle}\n\n**/voice 사용법**\n• `/voice on` — 음성 메시지를 보내면 음성으로 답변\n• `/voice tts` — *모든* 메시지에 음성으로 답변\n• `/voice off` — 텍스트 전용 답변으로 복귀\n• `/voice status` — 현재 모드 표시\n• `/voice` (인자 없음) — 켜기와 끄기를 빠르게 전환{channels}"
+
+    help_channels:         "\n\n**라이브 음성 채널 (Discord)**\n• 먼저 음성 채널에 들어간 다음 `/voice channel` — 제가 참여해 듣고 음성으로 답변합니다\n• `/voice leave` — 음성 채널에서 연결 해제"
 
 
 

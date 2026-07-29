@@ -16,7 +16,7 @@ build-backend = "setuptools.build_meta"
 
 name = "clawksis-agent"
 
-version = "0.16.0"
+version = "0.19.0"
 
 description = "The self-improving AI agent — creates skills from experience, improves them during use, and runs anywhere"
 
@@ -88,6 +88,8 @@ dependencies = [
 
   "openai==2.24.0",
 
+  "certifi==2026.5.20",
+
   "python-dotenv==1.2.2",
 
   "fire==0.7.1",
@@ -124,9 +126,61 @@ dependencies = [
 
   "croniter==6.0.0",
 
+  # ``packaging`` is imported directly on three production paths but was never
+
+  # declared, so it only reached users transitively (pip/uv pull it for other
+
+  # tools). The slim official Docker image ships without it, where the
+
+  # try/except-ImportError fallbacks silently degrade: Hindsight's
+
+  # ``_meets_minimum_version`` disables update_mode='append' (#40503),
+
+  # tools/lazy_deps.py treats every version constraint as satisfied, and
+
+  # clawk_cli/main.py drops to naive requirement parsing. Pure-Python
+
+  # py3-none-any wheel, no compiled extensions — safe to ship everywhere.
+
+  # Pinned to the version already resolved in uv.lock (no resolution churn).
+
+  "packaging==26.0",
+
+  # Markdown -> HTML conversion for rich message delivery (Matrix
+
+  # `formatted_body`, and the `send_message` tool's HTML path). Now on the
+
+  # DEFAULT delivery path, not matrix-specific: without it both
+
+  # gateway/platforms/matrix.py and tools/send_message_tool.py silently fall
+
+  # back to plain text, so cron/agent deliveries render raw `##`/`**`/tables
+
+  # in clients like Element (see #32486). Pure-Python py3-none-any wheel
+
+  # (~108KB, no compiled extensions, no platform constraints), so unlike the
+
+  # matrix extra's `mautrix`/`python-olm` it's safe to ship everywhere — keeps
+
+  # it out of the lazy-install path that exists only for the heavy matrix deps.
+
+  "Markdown==3.10.2",
+
   # Skills Hub (GitHub App JWT auth — optional, only needed for bot identity)
 
-  "PyJWT[crypto]==2.12.1",  # CVE-2026-32597
+  "PyJWT[crypto]==2.13.0",  # PYSEC-2026-175/177/178/179
+
+  # urllib3 2.7.0 fixes GHSA-mf9v-mfxr-j63j (decompression-bomb bypass)
+
+  # and GHSA-qccp-gfcp-xxvc (header leak across origins).
+
+  "urllib3>=2.7.0,<3",
+
+  # cryptography is pulled in transitively by PyJWT[crypto]; pin it explicitly
+
+  # so the WeCom/Weixin crypto paths can't drift below the CVE-fixed floor.
+
+  "cryptography==46.0.7",  # CVE-2026-39892, CVE-2026-34073
 
   # Windows has no IANA tzdata shipped with the OS, so Python's ``zoneinfo``
 
@@ -152,24 +206,77 @@ dependencies = [
 
   "psutil==7.2.2",
 
+  # Browser CDP supervisor + browser_dialog import this directly. Keep core
+
+  # so browser tool discovery doesn't fail on lean installs.
+
+  "websockets==15.0.1",
+
   # .gitignore-aware file matching for desktop build stamp.
 
   "pathspec==1.1.1",
-
-  # Version parsing/comparison used on production paths: Hindsight version
-  # compare (plugins/memory/hindsight/__init__.py), lazy-install version
-  # constraints (tools/lazy_deps.py) and requirement parsing
-  # (clawk_cli/main.py). Declared core so it installs everywhere (incl. the
-  # slim Docker image) instead of arriving only transitively. See #40503.
-  "packaging==26.0",
 
   "fastapi>=0.104.0,<1",
 
   "uvicorn[standard]>=0.24.0,<1",
 
+  # Streaming multipart uploads for the dashboard file manager (NS-501).
+
+  # FastAPI's UploadFile/Form depend on python-multipart; it is NOT pulled in
+
+  # by fastapi itself, so the dashboard's multipart upload endpoint would 500
+
+  # without an explicit dependency here (and in the `web` extra below).
+
+  "python-multipart>=0.0.9,<1",
+
   "ptyprocess>=0.7.0,<1; sys_platform != 'win32'",
 
   "pywinpty>=2.0.0,<3; sys_platform == 'win32'",
+
+  # Image resize recovery for the vision tools. Pillow shrinks oversized images
+
+  # (>5 MB or >8000px) at embed time; without it the byte AND pixel-dimension
+
+  # shrink paths no-op, so an oversized image bakes into immutable history and
+
+  # bricks the session on Anthropic's non-retryable 400. Pure-wheel, no system
+
+  # libs required for the codecs we use, so it's safe to ship in the base
+
+  # install rather than gating it behind an extra + a mid-session lazy install
+
+  # (which deadlocked the CLI under prompt_toolkit — see #40490).
+
+  "Pillow==12.2.0",
+
+  # Windows log rotation. Stdlib ``RotatingFileHandler.doRollover()`` uses
+
+  # ``os.rename()`` which fails with ``PermissionError [WinError 32]`` on
+
+  # Windows whenever any other process holds an append-mode handle on
+
+  # ``agent.log`` (always the case in Clawksis — TUI, gateway, ``hy_memory``
+
+  # server, MCP servers, and on-demand CLI commands all log from separate
+
+  # processes), pinning ``agent.log`` at the 5 MiB threshold and spamming
+
+  # stderr on every emit (see #44873). ``concurrent-log-handler`` wraps the
+
+  # rename in a cross-process file lock (via ``portalocker``: pywin32 on
+
+  # Windows) so only one process rotates at a time. ``clawk_logging.py``
+
+  # aliases it ONLY on Windows — POSIX renames an open file fine, so stdlib
+
+  # already works there and managed-mode perms depend on its exact lifecycle.
+
+  # Hence the ``sys_platform == 'win32'`` marker: the dep (and its portalocker
+
+  # / pywin32 tree) ships only where it's actually used.
+
+  "concurrent-log-handler==0.9.29; sys_platform == 'win32'",
 
 ]
 
@@ -181,7 +288,7 @@ dependencies = [
 
 # OpenRouter or other aggregators).
 
-anthropic = ["anthropic==0.87.0"]
+anthropic = ["anthropic==0.87.0"]  # CVE-2026-34450, CVE-2026-34452
 
 # Web search backends — each only loaded when the user picks it as their
 
@@ -209,15 +316,15 @@ daytona = ["daytona==0.155.0"]
 
 hindsight = ["hindsight-client==0.6.1"]
 
-dev = ["debugpy==1.8.20", "pytest==9.0.2", "pytest-asyncio==1.3.0", "pytest-timeout==2.4.0", "mcp==1.26.0", "starlette==1.0.1", "ty==0.0.21", "ruff==0.15.10", "setuptools==82.0.1"]  # starlette: CVE-2026-48710
+dev = ["debugpy==1.8.20", "pytest==9.0.2", "pytest-asyncio==1.3.0", "pytest-timeout==2.4.0", "mcp==1.26.0", "starlette==1.0.1", "ty==0.0.21", "ruff==0.15.10", "setuptools==81.0.0"]  # starlette: CVE-2026-48710; setuptools: latest <82 (torch >=2.11 caps setuptools<82)
 
-messaging = ["python-telegram-bot[webhooks]==22.6", "discord.py[voice]==2.7.1", "aiohttp==3.13.4", "brotlicffi==1.2.0.1", "slack-bolt==1.27.0", "slack-sdk==3.40.1", "qrcode==7.4.2"]
+messaging = ["python-telegram-bot[webhooks]==22.6", "discord.py[voice]==2.7.1", "aiohttp==3.14.1", "brotlicffi==1.2.0.1", "slack-bolt==1.29.0", "slack-sdk==3.43.0", "qrcode==7.4.2"]  # aiohttp 3.14.1: CVE-2026-34513/34518/34519/34520/34525 + 34993(RCE)/47265
 
 cron = []  # croniter is now a core dependency; this extra kept for back-compat
 
-slack = ["slack-bolt==1.27.0", "slack-sdk==3.40.1", "aiohttp==3.13.4"]
+slack = ["slack-bolt==1.29.0", "slack-sdk==3.43.0", "aiohttp==3.14.1"]
 
-matrix = ["mautrix[encryption]==0.21.0", "Markdown==3.10.2", "aiosqlite==0.22.1", "asyncpg==0.31.0", "aiohttp-socks==0.11.0"]
+matrix = ["mautrix[encryption]==0.21.0", "aiosqlite==0.22.1", "asyncpg==0.31.0", "aiohttp-socks==0.11.0", "aiohttp==3.14.1"]  # aiohttp 3.14.1: CVE-2026-34993(RCE)/47265 + 34513/34518/34519/34520/34525 (mautrix/aiohttp-socks only cap aiohttp<4 / >=3.10, so pin the patched floor directly)
 
 # WeCom callback-mode adapter — parses untrusted XML POST bodies from
 
@@ -261,23 +368,33 @@ pty = [
 
 ]
 
-honcho = ["honcho-ai==2.0.1"]
+honcho = ["honcho-ai==2.2.0"]
 
-# Image resize recovery for the vision tools.  Pillow is a soft dependency:
+# Cloud memory providers — opt-in, lazy-installed via tools/lazy_deps.py
 
-# vision_tools / conversation_compression degrade gracefully without it (they
+# (memory.supermemory / memory.mem0) at first use. Exact pins MUST match the
 
-# log and skip the resize), but without it the byte AND pixel-dimension shrink
+# LAZY_DEPS pins (enforced by tests/test_project_metadata.py). Deliberately
 
-# paths silently no-op, so an oversized image (>5 MB or >8000px) bakes into
+# excluded from [all] like honcho/hindsight so a quarantined upstream release
 
-# immutable history and bricks the session on Anthropic's non-retryable 400.
+# can't break fresh installs.
 
-# Declared here so packagers (Nix, Homebrew) ship it with [all] and so
+supermemory = ["supermemory==3.50.0"]
 
-# `pip install clawksis-agent[vision]` / the lazy-install path can resolve it.
+mem0 = ["mem0ai==2.0.10"]
 
-vision = ["Pillow==12.2.0"]
+# Image resize recovery for the vision tools. Pillow is now a CORE dependency
+
+# (see the main `dependencies` list) since the byte/pixel shrink paths are on
+
+# the default vision-embed path and the mid-session lazy install deadlocked the
+
+# CLI under prompt_toolkit (#40490). This extra is kept as a no-op back-compat
+
+# alias so existing `pip install clawksis-agent[vision]` invocations still resolve.
+
+vision = []
 
 # CVE-2026-48710 (BadHost): Starlette is pulled transitively by mcp's
 
@@ -295,11 +412,13 @@ vision = ["Pillow==12.2.0"]
 
 mcp = ["mcp==1.26.0", "starlette==1.0.1"]  # starlette: CVE-2026-48710
 
-nemo-relay = ["nemo-relay==0.3"]
+nemo-relay = ["nemo-relay>=0.5,<1.0"]
 
-homeassistant = ["aiohttp==3.13.4"]
+homeassistant = ["aiohttp==3.14.1"]
 
-sms = ["aiohttp==3.13.4"]
+sms = ["aiohttp==3.14.1"]
+
+teams = ["microsoft-teams-apps==2.0.13.4", "aiohttp==3.14.1"]  # aiohttp 3.14.1: CVE-2026-34993(RCE)/47265 + 34513/34518/34519/34520/34525
 
 # Computer use — macOS background desktop control via cua-driver (MCP stdio).
 
@@ -332,6 +451,8 @@ acp = ["agent-client-protocol==0.9.0"]
 mistral = ["mistralai==2.4.8"]
 
 bedrock = ["boto3==1.42.89"]
+
+vertex = ["google-auth==2.55.1"]
 
 azure-identity = ["azure-identity==1.25.3"]
 
@@ -379,7 +500,7 @@ termux-all = [
 
 dingtalk = ["dingtalk-stream==0.24.3", "alibabacloud-dingtalk==2.2.42", "qrcode==7.4.2"]
 
-feishu = ["lark-oapi==1.5.3", "qrcode==7.4.2"]
+feishu = ["lark-oapi==1.6.8", "qrcode==7.4.2"]
 
 google = [
 
@@ -419,7 +540,7 @@ youtube = [
 
 # transitively and pre-1.0.1 is the vulnerable range. See the mcp extra above.
 
-web = ["fastapi==0.133.1", "uvicorn[standard]==0.41.0", "starlette==1.0.1"]
+web = ["fastapi==0.133.1", "uvicorn[standard]==0.41.0", "starlette==1.0.1", "python-multipart==0.0.27"]
 
 all = [
 
@@ -522,18 +643,31 @@ py-modules = ["run_agent", "model_tools", "toolsets", "batch_runner", "trajector
 locales = ["locales/*.yaml"]
 
 # Optional MCP catalog manifests. optional-mcps/ is a bare data directory (no
+
 # __init__.py), so it is neither a package (packages.find) nor package-data.
+
 # clawk_cli/mcp_catalog.py resolves the catalog via get_optional_mcps_dir() and
+
 # iterates optional-mcps/<name>/, so each entry needs its OWN data-files target
+
 # (data-files flattens every glob into its single target dir; a shared glob
+
 # would collapse all manifests into one folder and lose the per-MCP layout).
+
 # MANIFEST.in `graft optional-mcps` ships them in the sdist.
+
 # gradient-whatsapp also ships its server: the manifest's git-install clones this
+
 # repo, but the wheel copy keeps `clawk mcp catalog` self-describing offline.
+
 "optional-mcps/gradient-whatsapp" = [
+
     "optional-mcps/gradient-whatsapp/manifest.yaml",
+
     "optional-mcps/gradient-whatsapp/mcp_server.py",
+
     "optional-mcps/gradient-whatsapp/README.md",
+
 ]
 
 "optional-mcps/google-workspace" = ["optional-mcps/google-workspace/manifest.yaml"]
@@ -549,10 +683,15 @@ locales = ["locales/*.yaml"]
 [tool.setuptools.package-data]
 
 # Vendored models.dev registry snapshot — the offline-first floor for
+
 # model-capability lookups (agent/models_dev.py). Sealed installs (pip wheel,
+
 # Nix store venv, CI sandboxes) have no network and no disk cache on first run,
+
 # so without this the registry collapses to {} and every capability lookup
+
 # (context length, vision/tools support) silently degrades.
+
 agent = ["models_dev_snapshot.json"]
 
 clawk_cli = ["web_dist/**/*", "tui_dist/**/*", "scripts/install.sh", "scripts/install.ps1"]
@@ -604,6 +743,8 @@ markers = [
     "integration: marks tests requiring external services (API keys, Modal, etc.)",
 
     "real_concurrent_gate: opt out of the autouse stub that disables _detect_concurrent_clawk_instances",
+
+    "real_agent_prewarm: opt out of the autouse stub that disables the tui_gateway deferred agent pre-warm timer",
 
 ]
 

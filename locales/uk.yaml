@@ -16,6 +16,14 @@ approval:
 
   prompt_short:    "      Вибір [o/s/D]: "
 
+  choose_smart_deny: "      [o]один раз  |  [d]відхилити"
+
+  prompt_smart_deny: "      Вибір [o/D]: "
+
+  smart_deny_once_inputs: "o,once"
+
+  smart_deny_deny_inputs: "d,deny"
+
   timeout:         "      ⏱ Час очікування вичерпано — команду відхилено"
 
   allowed_once:    "      ✓ Дозволено один раз"
@@ -33,10 +41,6 @@ approval:
 
 
 gateway:
-
-  credits:
-
-    not_logged_in: "Ви не увійшли в Nous Portal — виконайте `/model`, щоб увійти, потім `/credits`."
 
   approval_expired: "⚠️ Час схвалення минув (агент більше не очікує). Попросіть агента спробувати ще раз."
 
@@ -182,6 +186,8 @@ gateway:
 
     nothing_to_do:         "Поки що немає що стискати (стенограма все ще є повністю захищеним контекстом)."
 
+    aggressive_unsupported: "--aggressive не підтримується; використовуйте '/compress here [N]', щоб зберегти лише останні обміни, або /undo, щоб видалити ходи."
+
     focus_line:            "Фокус: \"{topic}\""
 
     summary_failed:        "⚠️ Не вдалося згенерувати зведення ({error}). {count} історичних повідомлень було видалено та замінено заповнювачем; попередній контекст більше не можна відновити. Перевірте конфігурацію моделі auxiliary.compression."
@@ -218,6 +224,10 @@ gateway:
 
     denied_plural:         "❌ Команди відхилено ({count} команд)."
 
+    denied_reason_singular: "❌ Команду відхилено. Причину передано агентові: \"{reason}\""
+
+    denied_reason_plural:  "❌ Команди відхилено ({count} команд). Причину передано агентові: \"{reason}\""
+
 
 
   fast:
@@ -239,6 +249,12 @@ gateway:
     status_fast:           "fast"
 
     status_normal:         "normal"
+
+    picker_title:          "⚡ **Priority Processing**\\n\\nПоточний режим: `{mode}`\\n\\nОберіть варіант:"
+
+    choice_fast:           "fast — Priority Processing увімкнено"
+
+    choice_normal:         "normal — стандартна обробка"
 
 
 
@@ -304,6 +320,24 @@ gateway:
 
     no_output:             "(немає виводу)"
 
+    wake:
+
+      completed:           "completed"
+
+      gave_up:             "gave up (retries exhausted)"
+
+      crashed:             "crashed (worker exited); dispatcher will retry"
+
+      timed_out:           "timed out; dispatcher will retry"
+
+      blocked:             "blocked; needs attention"
+
+      status_default:      "status changed"
+
+      status_joiner:       ", "
+
+      message:             "[kanban] Task {task_id} {status}.\nTitle: {title}\nAssignee: @{assignee}\nBoard: {board}\n\nCheck the result or decide the next step."
+
 
 
   personality:
@@ -346,7 +380,7 @@ gateway:
 
     scope_global:              "глобальна конфігурація"
 
-    status:                    "🧠 **Налаштування мислення**\n\n**Зусилля:** `{level}`\n**Область:** {scope}\n**Показ:** {display}\n\n_Використання:_ `/reasoning <none|minimal|low|medium|high|xhigh|reset|show|hide> [--global]`"
+    status:                    "🧠 **Налаштування мислення**\n\n**Зусилля:** `{level}`\n**Область:** {scope}\n**Показ:** {display}\n\n_Використання:_ `/reasoning <none|minimal|low|medium|high|xhigh|max|ultra|reset|show|hide> [--global]`"
 
     display_on:                "увімкнено ✓"
 
@@ -360,7 +394,17 @@ gateway:
 
     reset_done:                "🧠 ✓ Перевизначення мислення для сеансу скинуто; повернення до глобальної конфігурації."
 
-    unknown_arg:               "⚠️ Невідомий аргумент: `{arg}`\n\n**Дійсні рівні:** none, minimal, low, medium, high, xhigh\n**Показ:** show, hide\n**Зберегти:** додайте `--global`, щоб зберегти поза цим сеансом"
+    unknown_arg:               "⚠️ Невідомий аргумент: `{arg}`\n\n**Дійсні рівні:** none, minimal, low, medium, high, xhigh, max, ultra\n**Показ:** show, hide\n**Зберегти:** додайте `--global`, щоб зберегти поза цим сеансом"
+
+    picker_title:              "🧠 **Налаштування мислення**\\n\\n**Зусилля:** `{level}`\\n**Область:** {scope}\\n**Показ:** {display}\\n\\nОберіть варіант:"
+
+    choice_none:               "none — вимкнути мислення"
+
+    choice_reset:              "reset — скинути перевизначення сесії"
+
+    choice_show:               "показувати мислення у відповідях"
+
+    choice_hide:               "приховувати мислення у відповідях"
 
     set_global:                "🧠 ✓ Зусилля мислення встановлено на `{effort}` (збережено в конфігурації)\n_(набуде чинності з наступного повідомлення)_"
 
@@ -444,6 +488,24 @@ gateway:
 
     db_unavailable:        "База даних сеансів недоступна."
 
+    parse_error:           "⚠️ Could not parse `/resume` arguments: {error}.
+
+Use quotes around titles with spaces, for example: `/resume \"Project A Plan\"`."
+
+    matrix_no_named_sessions: "No named sessions found for this Matrix room.
+
+Use `/title My Session` to name the current room session, `/resume --all` to list all Matrix sessions, or `/resume --cross-room <session name>` to explicitly cross room boundaries."
+
+    matrix_blocked_no_origin: "⚠️ Matrix /resume blocked: this named session has no recorded room origin, so Clawksis will not resume it inside the current room by default. Use `/resume --cross-room {name}` if you intentionally want to cross room boundaries."
+
+    matrix_blocked_other_room: "⚠️ Matrix /resume blocked: that session belongs to a different Matrix room ({room}). Use `/resume --cross-room {name}` if you intentionally want to resume it here."
+
+    matrix_cross_room_success: "⚠️ Cross-room resume: resumed **{title}** inside Matrix room **{room}**.
+
+Future messages in this room will use that transcript until `/reset` or another `/resume`.{msg_part}"
+
+    blocked_not_owner:     "⚠️ /resume blocked: '**{name}**' belongs to a different user or chat. You can only resume sessions from this chat."
+
     no_named_sessions:     "Іменованих сеансів не знайдено.\nВикористайте `/title Мій сеанс`, щоб назвати поточний сеанс, потім `/resume Мій сеанс`, щоб повернутися до нього."
 
     list_header:           "📋 **Іменовані сеанси**\n"
@@ -473,16 +535,6 @@ gateway:
     resumed_many:          "↻ Сеанс **{title}** відновлено ({count} повідомлень). Розмову відновлено."
 
     resumed_no_count:      "↻ Сеанс **{title}** відновлено. Розмову відновлено."
-
-    parse_error:           "⚠️ Could not parse the command. Check your quotes and try again ({error})."
-
-    matrix_no_named_sessions: "No named sessions found in this Matrix room.\nUse `/title My Session` to name your current session, then `/resume My Session` to return to it later. Use `/resume --all` to list sessions from other rooms."
-
-    matrix_blocked_no_origin: "🚫 Resume blocked: could not confirm session '**{name}**' belongs to this Matrix room.\nUse `/resume --cross-room {name}` to override."
-
-    matrix_blocked_other_room: "🚫 Resume blocked: session '**{name}**' belongs to another Matrix room (**{room}**).\nUse `/resume --cross-room {name}` to override."
-
-    matrix_cross_room_success: "↻ Cross-room resume: **{title}** into **{room}**{msg_part}. Conversation restored."
 
 
 
@@ -518,6 +570,18 @@ gateway:
 
     header:                "📊 **Стан Clawksis Gateway**"
 
+    matrix_scope_header:   "**Matrix scope:**"
+
+    matrix_scope_room:     "  room: {room}"
+
+    matrix_scope_room_id:  "  room_id: {room_id}"
+
+    matrix_scope_thread:   "  thread_id: {thread_id}"
+
+    matrix_scope_mode:     "  session_scope: {scope}"
+
+    matrix_scope_key:      "  session_key: {session_key}"
+
     session_id:            "**ID сесії:** `{session_id}`"
 
     title:                 "**Назва:** {title}"
@@ -525,6 +589,14 @@ gateway:
     created:               "**Створено:** {timestamp}"
 
     last_activity:         "**Остання активність:** {timestamp}"
+
+    model:                 "**Model:** `{model}`"
+
+    model_provider:        "**Model:** `{model}` ({provider})"
+
+    context:               "**Context:** {used} / {total} ({pct}%)"
+
+    context_used:          "**Context:** ~{used} tokens"
 
     tokens:                "**Токени:** {tokens}"
 
@@ -537,18 +609,6 @@ gateway:
     queued:                "**Черга продовжень:** {count}"
 
     platforms:             "**Підключені платформи:** {platforms}"
-
-    matrix_scope_header:   "**Matrix scope:**"
-
-    matrix_scope_room:     "- room: {room}"
-
-    matrix_scope_room_id:  "- room_id: {room_id}"
-
-    matrix_scope_thread:   "- thread: {thread_id}"
-
-    matrix_scope_mode:     "- session_scope: {scope}"
-
-    matrix_scope_key:      "- session_key: {session_key}"
 
 
 
@@ -656,6 +716,26 @@ gateway:
 
     label_compressions:       "Стиснень: {count}"
 
+    breakdown_header: "🧩 **Розбивка контексту** _(оцінка)_"
+
+    breakdown_line: "• {label}: ~{count} ({pct}%)"
+
+    breakdown_cat_system_prompt: "Системний промпт"
+
+    breakdown_cat_tool_definitions: "Визначення інструментів"
+
+    breakdown_cat_rules: "Правила"
+
+    breakdown_cat_skills: "Навички"
+
+    breakdown_cat_mcp: "MCP"
+
+    breakdown_cat_subagent_definitions: "Визначення субагентів"
+
+    breakdown_cat_memory: "Пам'ять"
+
+    breakdown_cat_conversation: "Розмова"
+
     header_session_info:      "📊 **Інформація про сеанс**"
 
     label_messages:           "Повідомлень: {count}"
@@ -665,6 +745,16 @@ gateway:
     detailed_after_first:     "_(Детальне використання доступне після першої відповіді агента)_"
 
     no_data:                  "Дані про використання для цього сеансу відсутні."
+
+    unknown_subcommand:       "Невідома підкоманда /usage: `{args}`. Спробуйте `/usage` або `/usage reset [--force]`."
+
+    reset_wrong_provider:     "Накопичені скидання лімітів доступні лише з провайдером openai-codex. Спочатку перемкніться через `/model`."
+
+
+
+  credits:
+
+    not_logged_in:            "Ви не ввійшли в Nous Portal. Увійдіть, щоб переглянути баланс кредитів і поповнити його."
 
 
 
@@ -679,6 +769,8 @@ gateway:
     mode_all:              "⚙️ Прогрес інструментів: **ALL** — показується кожен виклик інструмента (довжина попереднього перегляду: `display.tool_preview_length`, за замовчуванням 40)."
 
     mode_verbose:          "⚙️ Прогрес інструментів: **VERBOSE** — кожен виклик інструмента з повними аргументами."
+
+    mode_log:              "⚙️ Прогрес інструментів: **LOG** — тихо в чаті; виклики інструментів записуються до ~/.clawksis/logs/tool_calls.log."
 
     saved_suffix:          "_(збережено для **{platform}** — набуде чинності з наступного повідомлення)_"
 
@@ -713,6 +805,10 @@ gateway:
     label_voice_only:      "Увімкнено (голосова відповідь на голосові повідомлення)"
 
     label_all:             "TTS (голосова відповідь на всі повідомлення)"
+
+    help:                  "{toggle}\n\n**Як працює /voice**\n• `/voice on` — голосова відповідь, коли ви надсилаєте голосове повідомлення\n• `/voice tts` — голосова відповідь на *кожне* повідомлення\n• `/voice off` — повернутися до відповідей лише текстом\n• `/voice status` — показати поточний режим\n• `/voice` (без аргументу) — швидке перемикання між увімк і вимк{channels}"
+
+    help_channels:         "\n\n**Живі голосові канали (Discord)**\n• Спершу зайдіть у голосовий канал, потім `/voice channel` — я підключуся, слухатиму й відповідатиму голосом\n• `/voice leave` — від'єднатися від голосового каналу"
 
 
 

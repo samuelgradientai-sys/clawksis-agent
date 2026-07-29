@@ -87,12 +87,14 @@ def test_loopback_host_header_validation_still_enforced(client_loopback):
     ("127.0.0.1", True,  False),
     ("localhost", False, False),
     ("::1",       False, False),
-    # --insecure (allow_public=True) NO LONGER bypasses the gate on a public
-    # bind (June 2026 clawk-0day hardening). Non-loopback always requires auth.
-    ("0.0.0.0",   True,  True),
+    # Fork-specific: --insecure (allow_public=True) IS still the documented
+    # escape hatch here — ``should_require_auth`` returns
+    # ``(host not in loopback) and (not allow_public)``. Upstream dropped the
+    # hatch in the June 2026 hardening; the fork keeps it.
+    ("0.0.0.0",   True,  False),    # --insecure escape hatch
     ("0.0.0.0",   False, True),
     ("192.168.1.5", False, True),
-    ("10.0.0.1",  True,  True),     # allow_public ignored — LAN IP is public
+    ("10.0.0.1",  True,  False),    # --insecure escape hatch
     ("100.64.0.1", False, True),    # Tailscale CGNAT — treated as public
     ("clawksis-agent-prod-abc.fly.dev", False, True),
 ])
@@ -176,40 +178,35 @@ def test_start_server_loopback_sets_auth_required_false(monkeypatch):
     assert web_server.app.state.auth_required is False
 
 
-def test_start_server_insecure_public_no_longer_bypasses_gate(monkeypatch):
-    """``--insecure`` (allow_public=True) on a public host: gate now ENGAGES.
-
-    June 2026 hardening: --insecure no longer disables auth. With no providers
-    registered, the bind fails closed (SystemExit) and auth_required is True.
-    """
-    from clawk_cli.dashboard_auth import clear_providers
-    clear_providers()
+def test_start_server_insecure_public_sets_auth_required_false(monkeypatch):
+    """Fork-specific: ``--insecure`` (allow_public=True) on a public host keeps
+    the gate OFF. Upstream removed this escape hatch; the fork keeps it."""
     _stub_uvicorn_run(monkeypatch)
     web_server.app.state.auth_required = None
-    with pytest.raises(SystemExit):
-        web_server.start_server(
-            host="0.0.0.0", port=9119,
-            open_browser=False, allow_public=True,
-        )
-    assert web_server.app.state.auth_required is True
+    web_server.start_server(
+        host="0.0.0.0", port=9119,
+        open_browser=False, allow_public=True,
+    )
+    assert web_server.app.state.auth_required is False
 
 
 def test_start_server_public_without_insecure_records_auth_required(monkeypatch):
     """Public bind without --insecure: the gate engages and auth_required=True.
 
-    With no providers registered, this fails closed with SystemExit. The
-    flag-stashing happens BEFORE the exit so the rest of the system can
-    branch on it. (See task 3.5 tests below for the with-provider path.)
+    Fork-specific: with no providers registered but first-run setup available,
+    the server boots ANYWAY — the public /auth/setup page bootstraps the admin
+    login on first visit (the documented `clawk dashboard domain` flow).
+    Upstream fails closed with SystemExit here. The gate flag is still stashed
+    so the rest of the system can branch on it.
     """
     from clawk_cli.dashboard_auth import clear_providers
     clear_providers()
     _stub_uvicorn_run(monkeypatch)
     web_server.app.state.auth_required = None
-    with pytest.raises(SystemExit):
-        web_server.start_server(
-            host="0.0.0.0", port=9119,
-            open_browser=False, allow_public=False,
-        )
+    web_server.start_server(
+        host="0.0.0.0", port=9119,
+        open_browser=False, allow_public=False,
+    )
     assert web_server.app.state.auth_required is True
 
 
@@ -246,47 +243,26 @@ def test_start_server_gate_with_provider_proceeds_and_sets_proxy_headers(monkeyp
 
 
 def test_start_server_gate_without_provider_fails_closed(monkeypatch):
-    """No providers + gate would activate → SystemExit with a clear message."""
+    """Fork-specific: no providers + first-run setup unavailable → SystemExit,
+    clear message.
+
+    When setup IS available the server boots with the /auth/setup page (see
+    the with-setup test above); the fail-closed path only survives for the
+    half-configured case where no provider registered AND the first-run page
+    can't bootstrap a login.
+    """
     from clawk_cli.dashboard_auth import clear_providers
+    from clawk_cli.dashboard_auth import first_run
 
     clear_providers()
+    monkeypatch.setattr(first_run, "setup_available", lambda: False)
     _stub_uvicorn_run(monkeypatch)
     web_server.app.state.auth_required = None
-    with pytest.raises(SystemExit, match=r"no auth providers"):
+    with pytest.raises(SystemExit, match=r"setup page is unavailable"):
         web_server.start_server(
             host="0.0.0.0", port=9119,
             open_browser=False, allow_public=False,
         )
-
-
-def test_start_server_surfaces_nous_skip_reason_when_unconfigured(monkeypatch):
-    """When the bundled Nous plugin loaded but skipped registration (no
-    env vars set), the gate's fail-closed message should surface the
-    plugin's LAST_SKIP_REASON so the operator knows the config fix is
-    'set CLAWK_DASHBOARD_OAUTH_CLIENT_ID', not 'install a plugin'."""
-    from clawk_cli.dashboard_auth import clear_providers
-    from plugins.dashboard_auth import nous as nous_plugin
-
-    # Simulate the plugin running and skipping for "no client_id".
-    clear_providers()
-    _stub_uvicorn_run(monkeypatch)
-    monkeypatch.delenv("CLAWK_DASHBOARD_OAUTH_CLIENT_ID", raising=False)
-    monkeypatch.delenv("CLAWK_DASHBOARD_PORTAL_URL", raising=False)
-    from unittest.mock import MagicMock
-    nous_plugin.register(MagicMock())  # populates LAST_SKIP_REASON
-    assert "CLAWK_DASHBOARD_OAUTH_CLIENT_ID" in nous_plugin.LAST_SKIP_REASON
-
-    web_server.app.state.auth_required = None
-    with pytest.raises(SystemExit) as exc_info:
-        web_server.start_server(
-            host="0.0.0.0", port=9119,
-            open_browser=False, allow_public=False,
-        )
-    # The error message embeds the plugin's specific skip reason rather
-    # than the generic "Install the default Nous provider" boilerplate.
-    msg = str(exc_info.value)
-    assert "CLAWK_DASHBOARD_OAUTH_CLIENT_ID" in msg
-    assert "nous:" in msg
 
 
 def test_start_server_loopback_keeps_proxy_headers_off(monkeypatch):
@@ -299,21 +275,14 @@ def test_start_server_loopback_keeps_proxy_headers_off(monkeypatch):
     assert captured["kwargs"].get("proxy_headers") is False
 
 
-def test_start_server_insecure_public_engages_gate_and_fails_closed(monkeypatch):
-    """--insecure on a public host: gate engages now; no provider → fail closed.
-
-    Replaces the old "insecure keeps gate off" test. --insecure is a no-op for
-    auth as of the June 2026 hardening, so a public bind with no provider
-    refuses to start.
-    """
-    from clawk_cli.dashboard_auth import clear_providers
-
-    clear_providers()
-    _stub_uvicorn_run(monkeypatch)
+def test_start_server_insecure_keeps_proxy_headers_off(monkeypatch):
+    """Fork-specific: --insecure keeps the gate off, so proxy_headers stays
+    off too."""
+    captured = _stub_uvicorn_run(monkeypatch)
     web_server.app.state.auth_required = None
-    with pytest.raises(SystemExit):
-        web_server.start_server(
-            host="0.0.0.0", port=9119,
-            open_browser=False, allow_public=True,
-        )
-    assert web_server.app.state.auth_required is True
+    web_server.start_server(
+        host="0.0.0.0", port=9119,
+        open_browser=False, allow_public=True,
+    )
+    assert web_server.app.state.auth_required is False
+    assert captured["kwargs"].get("proxy_headers") is False

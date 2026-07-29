@@ -115,7 +115,6 @@ class TestResolveTaskProviderModel:
         [
             "anthropic",
             "minimax-oauth",
-            "nous",
             "openai-codex",
             "qwen-oauth",
             "xai-oauth",
@@ -1132,7 +1131,6 @@ class TestGetTextAuxiliaryClient:
         with patch("agent.auxiliary_client._resolve_custom_runtime",
                    return_value=("https://api.openai.com/v1", "sk-test", "codex_responses")), \
              patch("agent.auxiliary_client._read_nous_auth", return_value=None), \
-             patch("agent.auxiliary_client._resolve_nous_runtime_api", return_value=None), \
              patch("agent.auxiliary_client._read_main_model", return_value="gpt-5.3-codex"), \
              patch("agent.auxiliary_client.OpenAI") as mock_openai:
             client, model = get_text_auxiliary_client()
