@@ -4,14 +4,9 @@ from unittest.mock import patch, MagicMock
 
 from clawk_cli.nous_account import NousPortalAccountInfo
 from clawk_cli.models import (
-    OPENROUTER_MODELS,
-    fetch_openrouter_models,
-    model_ids,
-    detect_provider_for_model,
-    is_nous_free_tier,
-    partition_nous_models_by_tier,
-    check_nous_free_tier,
-    _FREE_TIER_CACHE_TTL,
+    OPENROUTER_MODELS, fetch_openrouter_models, model_ids, detect_provider_for_model,
+    is_nous_free_tier, partition_nous_models_by_tier,
+    check_nous_free_tier, _FREE_TIER_CACHE_TTL,
     union_with_portal_free_recommendations,
     union_with_portal_paid_recommendations,
 )
@@ -24,41 +19,33 @@ LIVE_OPENROUTER_MODELS = [
 ]
 
 
+
 class TestModelIds:
     def test_returns_non_empty_list(self):
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
             ids = model_ids()
         assert isinstance(ids, list)
         assert len(ids) > 0
 
     def test_ids_match_fetched_catalog(self):
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
             ids = model_ids()
         expected = [mid for mid, _ in LIVE_OPENROUTER_MODELS]
         assert ids == expected
 
     def test_all_ids_contain_provider_slash(self):
         """Model IDs should follow the provider/model format."""
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
             for mid in model_ids():
                 assert "/" in mid, f"Model ID '{mid}' missing provider/ prefix"
 
     def test_no_duplicate_ids(self):
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
             ids = model_ids()
         assert len(ids) == len(set(ids)), "Duplicate model IDs found"
+
+
+
 
 
 class TestOpenRouterModels:
@@ -83,7 +70,7 @@ class TestFetchOpenRouterModels:
                 return b'{"data":[{"id":"anthropic/claude-opus-4.8","pricing":{"prompt":"0.000015","completion":"0.000075"}},{"id":"qwen/qwen3.7-max","pricing":{"prompt":"0.000000325","completion":"0.00000195"}},{"id":"nvidia/nemotron-3-super-120b-a12b:free","pricing":{"prompt":"0","completion":"0"}}]}'
 
         monkeypatch.setattr(_models_mod, "_openrouter_catalog_cache", None)
-        with patch("clawk_cli.models.urllib.request.urlopen", return_value=_Resp()):
+        with patch("clawk_cli.models._urlopen_model_catalog_request", return_value=_Resp()):
             models = fetch_openrouter_models(force_refresh=True)
 
         assert models == [
@@ -92,11 +79,13 @@ class TestFetchOpenRouterModels:
             ("nvidia/nemotron-3-super-120b-a12b:free", "free"),
         ]
 
+
     def test_falls_back_to_static_snapshot_on_fetch_failure(self, monkeypatch):
         monkeypatch.setattr(_models_mod, "_openrouter_catalog_cache", None)
-        with patch(
-            "clawk_cli.models.urllib.request.urlopen", side_effect=OSError("boom")
-        ):
+        # Pin the remote manifest out too — otherwise the fallback silently
+        # depends on whatever the deployed catalog currently contains.
+        with patch("clawk_cli.model_catalog.get_curated_openrouter_models", return_value=None), \
+             patch("clawk_cli.models._urlopen_model_catalog_request", side_effect=OSError("boom")):
             models = fetch_openrouter_models(force_refresh=True)
 
         assert models == OPENROUTER_MODELS
@@ -108,7 +97,6 @@ class TestFetchOpenRouterModels:
         immediate runtime failures when the user selects it. Ported from
         Kilo-Org/kilocode#9068.
         """
-
         class _Resp:
             def __enter__(self):
                 return self
@@ -128,7 +116,7 @@ class TestFetchOpenRouterModels:
                     b'"supported_parameters":["temperature","response_format"]},'
                     b'{"id":"qwen/qwen3.7-max","pricing":{"prompt":"0.000000325","completion":"0.00000195"},'
                     b'"supported_parameters":["tools","temperature"]}'
-                    b"]}"
+                    b']}'
                 )
 
         # Include the image-only id in the curated list so it has a chance to be surfaced.
@@ -142,7 +130,10 @@ class TestFetchOpenRouterModels:
             ],
         )
         monkeypatch.setattr(_models_mod, "_openrouter_catalog_cache", None)
-        with patch("clawk_cli.models.urllib.request.urlopen", return_value=_Resp()):
+        with (
+            patch("clawk_cli.model_catalog.get_curated_openrouter_models", return_value=[]),
+            patch("clawk_cli.models._urlopen_model_catalog_request", return_value=_Resp()),
+        ):
             models = fetch_openrouter_models(force_refresh=True)
 
         ids = [mid for mid, _ in models]
@@ -159,7 +150,6 @@ class TestFetchOpenRouterModels:
         as 'unknown → allow' prevents the picker from silently emptying on
         those gateways.
         """
-
         class _Resp:
             def __enter__(self):
                 return self
@@ -173,11 +163,11 @@ class TestFetchOpenRouterModels:
                     b'{"data":['
                     b'{"id":"anthropic/claude-opus-4.8","pricing":{"prompt":"0.000015","completion":"0.000075"}},'
                     b'{"id":"qwen/qwen3.7-max","pricing":{"prompt":"0.000000325","completion":"0.00000195"}}'
-                    b"]}"
+                    b']}'
                 )
 
         monkeypatch.setattr(_models_mod, "_openrouter_catalog_cache", None)
-        with patch("clawk_cli.models.urllib.request.urlopen", return_value=_Resp()):
+        with patch("clawk_cli.models._urlopen_model_catalog_request", return_value=_Resp()):
             models = fetch_openrouter_models(force_refresh=True)
 
         ids = [mid for mid, _ in models]
@@ -190,118 +180,73 @@ class TestOpenRouterToolSupportHelper:
 
     def test_tools_in_supported_parameters(self):
         from clawk_cli.models import _openrouter_model_supports_tools
-
-        assert (
-            _openrouter_model_supports_tools({
-                "id": "x",
-                "supported_parameters": ["temperature", "tools"],
-            })
-            is True
-        )
+        assert _openrouter_model_supports_tools(
+            {"id": "x", "supported_parameters": ["temperature", "tools"]}
+        ) is True
 
     def test_tools_missing_from_supported_parameters(self):
         from clawk_cli.models import _openrouter_model_supports_tools
-
-        assert (
-            _openrouter_model_supports_tools({
-                "id": "x",
-                "supported_parameters": ["temperature", "response_format"],
-            })
-            is False
-        )
+        assert _openrouter_model_supports_tools(
+            {"id": "x", "supported_parameters": ["temperature", "response_format"]}
+        ) is False
 
     def test_supported_parameters_absent_is_permissive(self):
         """Missing field → allow (so older / non-OR gateways still work)."""
         from clawk_cli.models import _openrouter_model_supports_tools
-
         assert _openrouter_model_supports_tools({"id": "x"}) is True
 
     def test_supported_parameters_none_is_permissive(self):
         from clawk_cli.models import _openrouter_model_supports_tools
-
-        assert (
-            _openrouter_model_supports_tools({"id": "x", "supported_parameters": None})
-            is True
-        )
+        assert _openrouter_model_supports_tools({"id": "x", "supported_parameters": None}) is True
 
     def test_supported_parameters_malformed_is_permissive(self):
         """Malformed (non-list) value → allow rather than silently drop."""
         from clawk_cli.models import _openrouter_model_supports_tools
-
-        assert (
-            _openrouter_model_supports_tools({
-                "id": "x",
-                "supported_parameters": "tools,temperature",
-            })
-            is True
-        )
+        assert _openrouter_model_supports_tools(
+            {"id": "x", "supported_parameters": "tools,temperature"}
+        ) is True
 
     def test_non_dict_item_is_permissive(self):
         from clawk_cli.models import _openrouter_model_supports_tools
-
         assert _openrouter_model_supports_tools(None) is True
         assert _openrouter_model_supports_tools("anthropic/claude-opus-4.6") is True
 
     def test_empty_supported_parameters_list_drops_model(self):
         """Explicit empty list → no tools → drop."""
         from clawk_cli.models import _openrouter_model_supports_tools
-
-        assert (
-            _openrouter_model_supports_tools({"id": "x", "supported_parameters": []})
-            is False
-        )
+        assert _openrouter_model_supports_tools(
+            {"id": "x", "supported_parameters": []}
+        ) is False
 
 
 class TestFindOpenrouterSlug:
     def test_exact_match(self):
         from clawk_cli.models import _find_openrouter_slug
-
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
-            assert (
-                _find_openrouter_slug("anthropic/claude-opus-4.6")
-                == "anthropic/claude-opus-4.6"
-            )
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
+            assert _find_openrouter_slug("anthropic/claude-opus-4.6") == "anthropic/claude-opus-4.6"
 
     def test_bare_name_match(self):
         from clawk_cli.models import _find_openrouter_slug
-
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
             result = _find_openrouter_slug("claude-opus-4.6")
         assert result == "anthropic/claude-opus-4.6"
 
     def test_case_insensitive(self):
         from clawk_cli.models import _find_openrouter_slug
-
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
             result = _find_openrouter_slug("Anthropic/Claude-Opus-4.6")
         assert result is not None
 
     def test_unknown_returns_none(self):
         from clawk_cli.models import _find_openrouter_slug
-
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
             assert _find_openrouter_slug("totally-fake-model-xyz") is None
 
 
 class TestDetectProviderForModel:
     def test_anthropic_model_detected(self):
         """claude-opus-4-6 should resolve to anthropic provider."""
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
             result = detect_provider_for_model("claude-opus-4-6", "openai-codex")
         assert result is not None
         assert result[0] == "anthropic"
@@ -330,13 +275,8 @@ class TestDetectProviderForModel:
 
     def test_openrouter_slug_match(self):
         """Models in the OpenRouter catalog should be found."""
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
-            result = detect_provider_for_model(
-                "anthropic/claude-opus-4.6", "openai-codex"
-            )
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
+            result = detect_provider_for_model("anthropic/claude-opus-4.6", "openai-codex")
         assert result is not None
         assert result[0] == "openrouter"
         assert result[1] == "anthropic/claude-opus-4.6"
@@ -350,10 +290,7 @@ class TestDetectProviderForModel:
         ):
             monkeypatch.delenv(env_var, raising=False)
         """Bare model names should get mapped to full OpenRouter slugs."""
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
             result = detect_provider_for_model("claude-opus-4.6", "openai-codex")
         assert result is not None
         # Should find it on OpenRouter with full slug
@@ -361,26 +298,35 @@ class TestDetectProviderForModel:
 
     def test_unknown_model_returns_none(self):
         """Completely unknown model names should return None."""
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
-            assert (
-                detect_provider_for_model("nonexistent-model-xyz", "openai-codex")
-                is None
-            )
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
+            assert detect_provider_for_model("nonexistent-model-xyz", "openai-codex") is None
 
     def test_aggregator_not_suggested(self):
         """nous/openrouter should never be auto-suggested as target provider."""
-        with patch(
-            "clawk_cli.models.fetch_openrouter_models",
-            return_value=LIVE_OPENROUTER_MODELS,
-        ):
+        with patch("clawk_cli.models.fetch_openrouter_models", return_value=LIVE_OPENROUTER_MODELS):
             result = detect_provider_for_model("claude-opus-4-6", "openai-codex")
         assert result is not None
-        assert result[0] not in {
-            "nous",
-        }  # nous has claude models but shouldn't be suggested
+        assert result[0] not in {"nous",}  # nous has claude models but shouldn't be suggested
+
+    def test_custom_provider_not_overridden_by_static_catalog(self):
+        """When current provider is custom:*, a static-catalog match must NOT
+        override it — otherwise a model served by the user's own endpoint gets
+        misattributed to a native provider, rewriting model.provider (#48305).
+
+        `gpt-5.4` is in the static openai catalog; with current=custom:foo,
+        detection must return None instead of switching to openai.
+        """
+        assert detect_provider_for_model("gpt-5.4", "custom:foo") is None
+
+    def test_bare_custom_provider_not_overridden_by_static_catalog(self):
+        """Same protection for the bare 'custom' provider."""
+        assert detect_provider_for_model("gpt-5.4", "custom") is None
+
+    def test_non_custom_provider_detection_unaffected(self):
+        """The custom-provider guard must NOT change detection for non-custom
+        current providers — a static-catalog model still routes normally."""
+        result = detect_provider_for_model("gpt-5.4", "openrouter")
+        assert result is not None and result[0] == "openai"
 
 
 class TestIsNousFreeTier:
@@ -393,25 +339,13 @@ class TestIsNousFreeTier:
         assert is_nous_free_tier({"paid_service_access": {"allowed": False}}) is True
 
     def test_paid_service_access_paid_access_fallback(self):
-        assert (
-            is_nous_free_tier({"paid_service_access": {"paid_access": False}}) is True
-        )
+        assert is_nous_free_tier({"paid_service_access": {"paid_access": False}}) is True
 
     def test_paid_plus_tier(self):
-        assert (
-            is_nous_free_tier({
-                "subscription": {"plan": "Plus", "tier": 2, "monthly_charge": 20}
-            })
-            is False
-        )
+        assert is_nous_free_tier({"subscription": {"plan": "Plus", "tier": 2, "monthly_charge": 20}}) is False
 
     def test_free_tier_by_charge(self):
-        assert (
-            is_nous_free_tier({
-                "subscription": {"plan": "Free", "tier": 0, "monthly_charge": 0}
-            })
-            is True
-        )
+        assert is_nous_free_tier({"subscription": {"plan": "Free", "tier": 0, "monthly_charge": 0}}) is True
 
     def test_no_charge_field_not_free(self):
         """Missing monthly_charge defaults to not-free (don't block users)."""
@@ -443,10 +377,7 @@ class TestPartitionNousModelsByTier:
     def test_paid_tier_all_selectable(self):
         """Paid users get all models as selectable, none unavailable."""
         models = ["anthropic/claude-opus-4.6", "xiaomi/mimo-v2-pro"]
-        pricing = {
-            "anthropic/claude-opus-4.6": self._PAID,
-            "xiaomi/mimo-v2-pro": self._FREE,
-        }
+        pricing = {"anthropic/claude-opus-4.6": self._PAID, "xiaomi/mimo-v2-pro": self._FREE}
         sel, unav = partition_nous_models_by_tier(models, pricing, free_tier=False)
         assert sel == models
         assert unav == []
@@ -507,7 +438,7 @@ class TestUnionWithPortalFreeRecommendations:
         }
 
     def test_adds_portal_free_model_missing_from_curated(self):
-        """A Portal-advertised free model not in curated is prepended + priced free."""
+        """A Portal-advertised free model not in curated is appended + priced free."""
         curated = ["anthropic/claude-opus-4.6"]
         pricing = {"anthropic/claude-opus-4.6": self._PAID}
         with patch(
@@ -516,8 +447,9 @@ class TestUnionWithPortalFreeRecommendations:
         ):
             ids, p = union_with_portal_free_recommendations(curated, pricing, "")
 
-        assert ids[0] == "qwen/qwen3.6-plus"  # prepended
-        assert "anthropic/claude-opus-4.6" in ids
+        # Curated ("HA") models stay first; Portal-only picks follow.
+        assert ids[0] == "anthropic/claude-opus-4.6"
+        assert ids[-1] == "qwen/qwen3.6-plus"  # appended
         # Synthetic free pricing entry created
         assert p["qwen/qwen3.6-plus"] == self._FREE
         # Existing pricing untouched
@@ -605,7 +537,7 @@ class TestUnionWithPortalFreeRecommendations:
             },
         ):
             ids, p = union_with_portal_free_recommendations(curated, pricing, "")
-        assert ids == ["qwen/qwen3.6-plus", "a"]
+        assert ids == ["a", "qwen/qwen3.6-plus"]
         assert p["qwen/qwen3.6-plus"] == self._FREE
 
 
@@ -631,7 +563,7 @@ class TestUnionWithPortalPaidRecommendations:
         }
 
     def test_adds_portal_paid_model_missing_from_curated(self):
-        """A Portal-advertised paid model not in curated is prepended."""
+        """A Portal-advertised paid model not in curated is appended."""
         curated = ["anthropic/claude-opus-4.6"]
         pricing = {"anthropic/claude-opus-4.6": self._PAID}
         with patch(
@@ -640,8 +572,9 @@ class TestUnionWithPortalPaidRecommendations:
         ):
             ids, p = union_with_portal_paid_recommendations(curated, pricing, "")
 
-        assert ids[0] == "openai/gpt-5.4"  # prepended
-        assert "anthropic/claude-opus-4.6" in ids
+        # Curated ("HA") models stay first; Portal-only picks follow.
+        assert ids[0] == "anthropic/claude-opus-4.6"
+        assert ids[-1] == "openai/gpt-5.4"  # appended
         # Existing pricing untouched
         assert p["anthropic/claude-opus-4.6"] == self._PAID
 
@@ -730,12 +663,12 @@ class TestUnionWithPortalPaidRecommendations:
             },
         ):
             ids, p = union_with_portal_paid_recommendations(curated, pricing, "")
-        assert ids == ["openai/gpt-5.4", "a"]
+        assert ids == ["a", "openai/gpt-5.4"]
         # No synthetic entry — pricing is untouched.
         assert "openai/gpt-5.4" not in p
 
     def test_preserves_relative_order_of_new_paid_models(self):
-        """Multiple new paid models are prepended in payload order."""
+        """Multiple new paid models are appended in payload order, after curated."""
         curated = ["anthropic/claude-opus-4.6"]
         pricing = {"anthropic/claude-opus-4.6": self._PAID}
         with patch(
@@ -744,9 +677,9 @@ class TestUnionWithPortalPaidRecommendations:
         ):
             ids, _ = union_with_portal_paid_recommendations(curated, pricing, "")
         assert ids == [
+            "anthropic/claude-opus-4.6",
             "openai/gpt-5.4",
             "openai/gpt-5.5",
-            "anthropic/claude-opus-4.6",
         ]
 
 
@@ -788,10 +721,7 @@ class TestCheckNousFreeTierCache:
         assert mock_account.call_count == 1
 
         cached_result, cached_at = _models_mod._free_tier_cache
-        _models_mod._free_tier_cache = (
-            cached_result,
-            cached_at - _FREE_TIER_CACHE_TTL - 1,
-        )
+        _models_mod._free_tier_cache = (cached_result, cached_at - _FREE_TIER_CACHE_TTL - 1)
 
         result2 = check_nous_free_tier()
         assert mock_account.call_count == 2
@@ -846,7 +776,6 @@ class TestNousRecommendedModels:
     def _mock_urlopen(self, payload):
         """Return a context-manager mock mimicking urllib.request.urlopen()."""
         import json as _json
-
         response = MagicMock()
         response.read.return_value = _json.dumps(payload).encode()
         cm = MagicMock()
@@ -856,9 +785,8 @@ class TestNousRecommendedModels:
 
     def test_fetch_caches_per_portal_url(self):
         from clawk_cli.models import fetch_nous_recommended_models
-
         mock_cm = self._mock_urlopen(self._SAMPLE_PAYLOAD)
-        with patch("urllib.request.urlopen", return_value=mock_cm) as mock_urlopen:
+        with patch("clawk_cli.models._urlopen_model_catalog_request", return_value=mock_cm) as mock_urlopen:
             a = fetch_nous_recommended_models("https://portal.example.com")
             b = fetch_nous_recommended_models("https://portal.example.com")
         assert a == self._SAMPLE_PAYLOAD
@@ -867,34 +795,28 @@ class TestNousRecommendedModels:
 
     def test_fetch_cache_is_keyed_per_portal(self):
         from clawk_cli.models import fetch_nous_recommended_models
-
         mock_cm = self._mock_urlopen(self._SAMPLE_PAYLOAD)
-        with patch("urllib.request.urlopen", return_value=mock_cm) as mock_urlopen:
+        with patch("clawk_cli.models._urlopen_model_catalog_request", return_value=mock_cm) as mock_urlopen:
             fetch_nous_recommended_models("https://portal.example.com")
             fetch_nous_recommended_models("https://portal.staging-nousresearch.com")
         assert mock_urlopen.call_count == 2  # different portals → separate fetches
 
     def test_fetch_returns_empty_on_network_failure(self):
         from clawk_cli.models import fetch_nous_recommended_models
-
-        with patch("urllib.request.urlopen", side_effect=OSError("boom")):
+        with patch("clawk_cli.models._urlopen_model_catalog_request", side_effect=OSError("boom")):
             result = fetch_nous_recommended_models("https://portal.example.com")
         assert result == {}
 
     def test_fetch_force_refresh_bypasses_cache(self):
         from clawk_cli.models import fetch_nous_recommended_models
-
         mock_cm = self._mock_urlopen(self._SAMPLE_PAYLOAD)
-        with patch("urllib.request.urlopen", return_value=mock_cm) as mock_urlopen:
+        with patch("clawk_cli.models._urlopen_model_catalog_request", return_value=mock_cm) as mock_urlopen:
             fetch_nous_recommended_models("https://portal.example.com")
-            fetch_nous_recommended_models(
-                "https://portal.example.com", force_refresh=True
-            )
+            fetch_nous_recommended_models("https://portal.example.com", force_refresh=True)
         assert mock_urlopen.call_count == 2
 
     def test_get_aux_model_returns_vision_recommendation(self):
         from clawk_cli.models import get_nous_recommended_aux_model
-
         with patch(
             "clawk_cli.models.fetch_nous_recommended_models",
             return_value=self._SAMPLE_PAYLOAD,
@@ -905,11 +827,8 @@ class TestNousRecommendedModels:
 
     def test_get_aux_model_returns_compaction_recommendation(self):
         from clawk_cli.models import get_nous_recommended_aux_model
-
         payload = dict(self._SAMPLE_PAYLOAD)
-        payload["freeRecommendedCompactionModel"] = {
-            "modelName": "minimax/minimax-m2.7"
-        }
+        payload["freeRecommendedCompactionModel"] = {"modelName": "minimax/minimax-m2.7"}
         with patch(
             "clawk_cli.models.fetch_nous_recommended_models",
             return_value=payload,
@@ -919,7 +838,6 @@ class TestNousRecommendedModels:
 
     def test_get_aux_model_returns_none_when_field_null(self):
         from clawk_cli.models import get_nous_recommended_aux_model
-
         payload = dict(self._SAMPLE_PAYLOAD)
         payload["freeRecommendedCompactionModel"] = None
         with patch(
@@ -931,14 +849,12 @@ class TestNousRecommendedModels:
 
     def test_get_aux_model_returns_none_on_empty_payload(self):
         from clawk_cli.models import get_nous_recommended_aux_model
-
         with patch("clawk_cli.models.fetch_nous_recommended_models", return_value={}):
             assert get_nous_recommended_aux_model(vision=False, free_tier=True) is None
             assert get_nous_recommended_aux_model(vision=True, free_tier=False) is None
 
     def test_get_aux_model_returns_none_when_modelname_blank(self):
         from clawk_cli.models import get_nous_recommended_aux_model
-
         payload = {"freeRecommendedCompactionModel": {"modelName": "  "}}
         with patch(
             "clawk_cli.models.fetch_nous_recommended_models",
@@ -949,22 +865,13 @@ class TestNousRecommendedModels:
     def test_paid_tier_prefers_paid_recommendation(self):
         """Paid-tier users should get the paid model when it's populated."""
         from clawk_cli.models import get_nous_recommended_aux_model
-
         payload = {
-            "paidRecommendedCompactionModel": {
-                "modelName": "anthropic/claude-opus-4.7"
-            },
-            "freeRecommendedCompactionModel": {
-                "modelName": "google/gemini-3-flash-preview"
-            },
+            "paidRecommendedCompactionModel": {"modelName": "anthropic/claude-opus-4.7"},
+            "freeRecommendedCompactionModel": {"modelName": "google/gemini-3-flash-preview"},
             "paidRecommendedVisionModel": {"modelName": "openai/gpt-5.4"},
-            "freeRecommendedVisionModel": {
-                "modelName": "google/gemini-3-flash-preview"
-            },
+            "freeRecommendedVisionModel": {"modelName": "google/gemini-3-flash-preview"},
         }
-        with patch(
-            "clawk_cli.models.fetch_nous_recommended_models", return_value=payload
-        ):
+        with patch("clawk_cli.models.fetch_nous_recommended_models", return_value=payload):
             text = get_nous_recommended_aux_model(vision=False, free_tier=False)
             vision = get_nous_recommended_aux_model(vision=True, free_tier=False)
         assert text == "anthropic/claude-opus-4.7"
@@ -973,20 +880,13 @@ class TestNousRecommendedModels:
     def test_paid_tier_falls_back_to_free_when_paid_is_null(self):
         """If the Portal returns null for the paid field, fall back to free."""
         from clawk_cli.models import get_nous_recommended_aux_model
-
         payload = {
             "paidRecommendedCompactionModel": None,
-            "freeRecommendedCompactionModel": {
-                "modelName": "google/gemini-3-flash-preview"
-            },
+            "freeRecommendedCompactionModel": {"modelName": "google/gemini-3-flash-preview"},
             "paidRecommendedVisionModel": None,
-            "freeRecommendedVisionModel": {
-                "modelName": "google/gemini-3-flash-preview"
-            },
+            "freeRecommendedVisionModel": {"modelName": "google/gemini-3-flash-preview"},
         }
-        with patch(
-            "clawk_cli.models.fetch_nous_recommended_models", return_value=payload
-        ):
+        with patch("clawk_cli.models.fetch_nous_recommended_models", return_value=payload):
             text = get_nous_recommended_aux_model(vision=False, free_tier=False)
             vision = get_nous_recommended_aux_model(vision=True, free_tier=False)
         assert text == "google/gemini-3-flash-preview"
@@ -995,16 +895,11 @@ class TestNousRecommendedModels:
     def test_free_tier_never_uses_paid_recommendation(self):
         """Free-tier users must not get paid-only recommendations."""
         from clawk_cli.models import get_nous_recommended_aux_model
-
         payload = {
-            "paidRecommendedCompactionModel": {
-                "modelName": "anthropic/claude-opus-4.7"
-            },
+            "paidRecommendedCompactionModel": {"modelName": "anthropic/claude-opus-4.7"},
             "freeRecommendedCompactionModel": None,  # no free recommendation
         }
-        with patch(
-            "clawk_cli.models.fetch_nous_recommended_models", return_value=payload
-        ):
+        with patch("clawk_cli.models.fetch_nous_recommended_models", return_value=payload):
             model = get_nous_recommended_aux_model(vision=False, free_tier=True)
         # Free tier must return None — never leak the paid model.
         assert model is None
@@ -1012,22 +907,17 @@ class TestNousRecommendedModels:
     def test_auto_detects_tier_when_not_supplied(self):
         """Default behaviour: call check_nous_free_tier() to pick the tier."""
         from clawk_cli.models import get_nous_recommended_aux_model
-
         payload = {
             "paidRecommendedCompactionModel": {"modelName": "paid-model"},
             "freeRecommendedCompactionModel": {"modelName": "free-model"},
         }
         with (
-            patch(
-                "clawk_cli.models.fetch_nous_recommended_models", return_value=payload
-            ),
+            patch("clawk_cli.models.fetch_nous_recommended_models", return_value=payload),
             patch("clawk_cli.models.check_nous_free_tier", return_value=True),
         ):
             assert get_nous_recommended_aux_model(vision=False) == "free-model"
         with (
-            patch(
-                "clawk_cli.models.fetch_nous_recommended_models", return_value=payload
-            ),
+            patch("clawk_cli.models.fetch_nous_recommended_models", return_value=payload),
             patch("clawk_cli.models.check_nous_free_tier", return_value=False),
         ):
             assert get_nous_recommended_aux_model(vision=False) == "paid-model"
@@ -1035,18 +925,71 @@ class TestNousRecommendedModels:
     def test_tier_detection_error_defaults_to_paid(self):
         """If tier detection raises, assume paid so we don't downgrade silently."""
         from clawk_cli.models import get_nous_recommended_aux_model
-
         payload = {
             "paidRecommendedCompactionModel": {"modelName": "paid-model"},
             "freeRecommendedCompactionModel": {"modelName": "free-model"},
         }
         with (
-            patch(
-                "clawk_cli.models.fetch_nous_recommended_models", return_value=payload
-            ),
-            patch(
-                "clawk_cli.models.check_nous_free_tier",
-                side_effect=RuntimeError("boom"),
-            ),
+            patch("clawk_cli.models.fetch_nous_recommended_models", return_value=payload),
+            patch("clawk_cli.models.check_nous_free_tier", side_effect=RuntimeError("boom")),
         ):
             assert get_nous_recommended_aux_model(vision=False) == "paid-model"
+
+
+class TestCodexSoftAcceptPlausibilityGate:
+    """#45006 kernel (b): the openai-codex / xai-oauth hidden-model soft-accept
+    (#16172 / #19729) must only accept slugs that plausibly belong to that
+    provider's family. An undeclared, unrelated typed name (e.g. a local model
+    name) must be REJECTED with actionable --provider guidance instead of being
+    fake-accepted as a hidden Codex/Grok model (which would 400 on the next turn
+    and mislabel the provider as 'OpenAI Codex')."""
+
+    def test_unrelated_name_rejected_on_openai_codex(self):
+        from clawk_cli.models import validate_requested_model
+        r = validate_requested_model("qwen3.5-4b", "openai-codex")
+        assert r["accepted"] is False
+        assert r["persist"] is False
+        assert "--provider" in (r["message"] or "")
+
+    def test_unrelated_name_rejected_on_xai_oauth(self):
+        from clawk_cli.models import validate_requested_model
+        r = validate_requested_model("llama-3.1-8b", "xai-oauth")
+        assert r["accepted"] is False
+        assert "--provider" in (r["message"] or "")
+
+    def test_family_shaped_hidden_slug_still_soft_accepted_codex(self):
+        """#16172 intent preserved: a gpt-/codex-shaped unknown slug is still
+        soft-accepted (entitlement-gated hidden models)."""
+        from clawk_cli.models import validate_requested_model
+        r = validate_requested_model("gpt-5.9-codex-hidden", "openai-codex")
+        assert r["accepted"] is True
+        assert r["recognized"] is False
+
+    def test_family_shaped_hidden_slug_still_soft_accepted_xai(self):
+        from clawk_cli.models import validate_requested_model
+        r = validate_requested_model("grok-9-hidden", "xai-oauth")
+        assert r["accepted"] is True
+        assert r["recognized"] is False
+
+    def test_real_catalog_model_unaffected(self):
+        from clawk_cli.models import validate_requested_model
+        r = validate_requested_model("gpt-5.5", "openai-codex")
+        assert r["accepted"] is True
+        assert r["recognized"] is True
+
+
+class TestClaudeSonnet5InCuratedLists:
+    """Regression: Claude Sonnet 5 must appear in curated model lists (#55846)."""
+
+    def test_anthropic_native_list_includes_sonnet_5(self):
+        from clawk_cli.models import _PROVIDER_MODELS
+        assert "claude-sonnet-5" in _PROVIDER_MODELS["anthropic"]
+
+    def test_openrouter_fallback_includes_sonnet_5(self):
+        from clawk_cli.models import OPENROUTER_MODELS
+        ids = [mid for mid, _ in OPENROUTER_MODELS]
+        assert "anthropic/claude-sonnet-5" in ids
+
+    def test_nous_list_includes_sonnet_5(self):
+        from clawk_cli.models import _PROVIDER_MODELS
+        assert "anthropic/claude-sonnet-5" in _PROVIDER_MODELS["nous"]

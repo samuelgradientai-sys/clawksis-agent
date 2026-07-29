@@ -2,7 +2,6 @@
 
 Updated for the mautrix-python SDK (no more matrix-nio / nio imports).
 """
-
 import os
 import tempfile
 import types
@@ -14,14 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # Try importing mautrix; skip entire file if not available.
 try:
     import mautrix as _mautrix_probe
-
-    if not isinstance(_mautrix_probe, types.ModuleType) or not hasattr(
-        _mautrix_probe, "__file__"
-    ):
-        pytest.skip(
-            "mautrix in sys.modules is a mock, not the real package",
-            allow_module_level=True,
-        )
+    if not isinstance(_mautrix_probe, types.ModuleType) or not hasattr(_mautrix_probe, "__file__"):
+        pytest.skip("mautrix in sys.modules is a mock, not the real package", allow_module_level=True)
 except ImportError:
     pytest.skip("mautrix not installed", allow_module_level=True)
 
@@ -32,10 +25,18 @@ from gateway.platforms.base import MessageType
 # Adapter helpers
 # ---------------------------------------------------------------------------
 
-
 def _make_adapter():
-    """Create a MatrixAdapter with mocked config."""
-    from gateway.platforms.matrix import MatrixAdapter
+    """Create a MatrixAdapter with mocked config.
+
+    Pins ``require_mention: False`` so these media-detection tests are NOT
+    gated by the mention requirement. The adapter defaults require_mention to
+    True (falling back to the MATRIX_REQUIRE_MENTION env var), so without this
+    a group-room audio event with no @mention is dropped by
+    _resolve_message_context before dispatch — making the tests pass or fail
+    depending on leaked env state from other tests in the same shard. These
+    tests exercise voice/audio TYPE detection, not mention gating.
+    """
+    from plugins.platforms.matrix.adapter import MatrixAdapter
     from gateway.config import PlatformConfig
 
     config = PlatformConfig(
@@ -44,6 +45,7 @@ def _make_adapter():
         extra={
             "homeserver": "https://matrix.example.org",
             "user_id": "@bot:example.org",
+            "require_mention": False,
         },
     )
     adapter = MatrixAdapter(config)
@@ -109,7 +111,6 @@ def _make_state_store(member_count: int = 2):
 # Tests: MSC3245 Voice Detection
 # ---------------------------------------------------------------------------
 
-
 class TestMatrixVoiceMessageDetection:
     """Test that MSC3245 voice messages are detected and tagged correctly."""
 
@@ -118,16 +119,9 @@ class TestMatrixVoiceMessageDetection:
         self.adapter._user_id = "@bot:example.org"
         self.adapter._startup_ts = 0.0
         self.adapter._dm_rooms = {}
-        # Voice/audio messages can't carry an @mention, so require_mention would
-        # drop them in a non-DM room before the media handler runs. These tests
-        # cover the media handler (voice detection / caching / fallback), so
-        # disable mention gating to exercise it directly.
-        self.adapter._require_mention = False
         self.adapter._message_handler = AsyncMock()
         # Mock _mxc_to_http to return a fake HTTP URL
-        self.adapter._mxc_to_http = lambda url: (
-            f"https://matrix.example.org/_matrix/media/v3/download/{url[6:]}"
-        )
+        self.adapter._mxc_to_http = lambda url: f"https://matrix.example.org/_matrix/media/v3/download/{url[6:]}"
         # Mock client for authenticated download — download_media returns bytes directly
         self.adapter._client = MagicMock()
         self.adapter._client.download_media = AsyncMock(return_value=b"fake audio data")
@@ -151,9 +145,8 @@ class TestMatrixVoiceMessageDetection:
         await self.adapter._on_room_message(event)
 
         assert captured_event is not None, "No event was captured"
-        assert captured_event.message_type == MessageType.VOICE, (
+        assert captured_event.message_type == MessageType.VOICE, \
             f"Expected MessageType.VOICE, got {captured_event.message_type}"
-        )
 
     @pytest.mark.asyncio
     async def test_voice_message_has_local_path(self):
@@ -174,9 +167,8 @@ class TestMatrixVoiceMessageDetection:
         assert captured_event.media_urls is not None
         assert len(captured_event.media_urls) > 0
         # Should be a local path, not an HTTP URL
-        assert not captured_event.media_urls[0].startswith("http"), (
+        assert not captured_event.media_urls[0].startswith("http"), \
             f"media_urls should contain local path, got {captured_event.media_urls[0]}"
-        )
         # download_media is called with a ContentURI wrapping the mxc URL
         self.adapter._client.download_media.assert_awaited_once()
         assert captured_event.media_types == ["audio/ogg"]
@@ -197,9 +189,8 @@ class TestMatrixVoiceMessageDetection:
         await self.adapter._on_room_message(event)
 
         assert captured_event is not None
-        assert captured_event.message_type == MessageType.AUDIO, (
+        assert captured_event.message_type == MessageType.AUDIO, \
             f"Expected MessageType.AUDIO for non-voice, got {captured_event.message_type}"
-        )
 
     @pytest.mark.asyncio
     async def test_regular_audio_is_cached_locally(self):
@@ -225,9 +216,8 @@ class TestMatrixVoiceMessageDetection:
         assert captured_event is not None
         assert captured_event.media_urls is not None
         # Should be a local path, not an HTTP URL.
-        assert not captured_event.media_urls[0].startswith("http"), (
+        assert not captured_event.media_urls[0].startswith("http"), \
             f"Regular audio should be cached locally, got {captured_event.media_urls[0]}"
-        )
         self.adapter._client.download_media.assert_awaited_once()
         assert captured_event.media_types == ["audio/ogg"]
 
@@ -240,13 +230,8 @@ class TestMatrixVoiceCacheFallback:
         self.adapter._user_id = "@bot:example.org"
         self.adapter._startup_ts = 0.0
         self.adapter._dm_rooms = {}
-        # See TestMatrixVoiceMessageDetection.setup_method: media can't @mention,
-        # so disable mention gating to reach the media handler under test.
-        self.adapter._require_mention = False
         self.adapter._message_handler = AsyncMock()
-        self.adapter._mxc_to_http = lambda url: (
-            f"https://matrix.example.org/_matrix/media/v3/download/{url[6:]}"
-        )
+        self.adapter._mxc_to_http = lambda url: f"https://matrix.example.org/_matrix/media/v3/download/{url[6:]}"
         self.adapter._client = MagicMock()
         self.adapter._client.state_store = _make_state_store()
 
@@ -271,18 +256,15 @@ class TestMatrixVoiceCacheFallback:
         assert captured_event is not None
         assert captured_event.media_urls is not None
         # Should fall back to HTTP URL
-        assert captured_event.media_urls[0].startswith("http"), (
+        assert captured_event.media_urls[0].startswith("http"), \
             f"Should fall back to HTTP URL on cache failure, got {captured_event.media_urls[0]}"
-        )
 
     @pytest.mark.asyncio
     async def test_voice_cache_exception_falls_back_to_http_url(self):
         """Unexpected download exceptions should also fall back to HTTP URL."""
         event = _make_audio_event(is_voice=True)
 
-        self.adapter._client.download_media = AsyncMock(
-            side_effect=RuntimeError("boom")
-        )
+        self.adapter._client.download_media = AsyncMock(side_effect=RuntimeError("boom"))
 
         captured_event = None
 
@@ -296,15 +278,13 @@ class TestMatrixVoiceCacheFallback:
 
         assert captured_event is not None
         assert captured_event.media_urls is not None
-        assert captured_event.media_urls[0].startswith("http"), (
+        assert captured_event.media_urls[0].startswith("http"), \
             f"Should fall back to HTTP URL on exception, got {captured_event.media_urls[0]}"
-        )
 
 
 # ---------------------------------------------------------------------------
 # Tests: send_voice includes MSC3245 field
 # ---------------------------------------------------------------------------
-
 
 class TestMatrixSendVoiceMSC3245:
     """Test that send_voice includes MSC3245 field for native voice rendering."""
@@ -317,11 +297,7 @@ class TestMatrixSendVoiceMSC3245:
         self.upload_call = None
 
         async def mock_upload_media(data, mime_type=None, filename=None, **kwargs):
-            self.upload_call = {
-                "data": data,
-                "mime_type": mime_type,
-                "filename": filename,
-            }
+            self.upload_call = {"data": data, "mime_type": mime_type, "filename": filename}
             return "mxc://example.org/uploaded"
 
         self.adapter._client.upload_media = mock_upload_media
@@ -354,9 +330,8 @@ class TestMatrixSendVoiceMSC3245:
             )
 
             assert sent_content is not None, "No message was sent"
-            assert "org.matrix.msc3245.voice" in sent_content, (
+            assert "org.matrix.msc3245.voice" in sent_content, \
                 f"MSC3245 voice field missing from content: {sent_content.keys()}"
-            )
             assert sent_content["msgtype"] == "m.audio"
             assert sent_content["info"]["mimetype"] == "audio/ogg"
             assert self.upload_call is not None, "Expected upload_media() to be called"

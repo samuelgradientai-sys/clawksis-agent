@@ -76,9 +76,7 @@ def test_detect_concurrent_finds_other_clawk_process(_winp, tmp_path):
     other_pid = os.getpid() + 1
     procs = [
         _make_proc(other_pid, str(shim), "clawk.exe"),
-        _make_proc(
-            os.getpid() + 2, r"C:\\Windows\\System32\\notepad.exe", "notepad.exe"
-        ),
+        _make_proc(os.getpid() + 2, r"C:\\Windows\\System32\\notepad.exe", "notepad.exe"),
     ]
     fake_psutil = types.SimpleNamespace(process_iter=lambda attrs: iter(procs))
     with patch.dict(sys.modules, {"psutil": fake_psutil}):
@@ -94,13 +92,13 @@ def test_detect_concurrent_matches_case_insensitively(_winp, tmp_path):
     shim.write_bytes(b"")
 
     # Simulate the desktop spawning clawk.EXE (uppercase ext) from same path
-    upper = str(shim).replace("clawk.exe", "HERMES.EXE")
-    procs = [_make_proc(9999, upper, "HERMES.EXE")]
+    upper = str(shim).replace("clawk.exe", "CLAWKSIS.EXE")
+    procs = [_make_proc(9999, upper, "CLAWKSIS.EXE")]
     fake_psutil = types.SimpleNamespace(process_iter=lambda attrs: iter(procs))
     with patch.dict(sys.modules, {"psutil": fake_psutil}):
         result = cli_main._detect_concurrent_clawk_instances(scripts_dir)
 
-    assert result == [(9999, "HERMES.EXE")]
+    assert result == [(9999, "CLAWKSIS.EXE")]
 
 
 @patch.object(cli_main, "_is_windows", return_value=True)
@@ -381,9 +379,8 @@ def test_quarantine_retries_then_succeeds(_winp, tmp_path, monkeypatch):
 
     # Speed up the test: avoid actual sleeps in the backoff schedule.
     monkeypatch.setattr(cli_main, "_clawk_exe_shims", lambda d: [shim])
-    with (
-        patch.object(Path, "rename", flaky_rename),
-        patch("time.sleep", lambda *_a, **_k: None),
+    with patch.object(Path, "rename", flaky_rename), patch(
+        "time.sleep", lambda *_a, **_k: None
     ):
         pairs = cli_main._quarantine_running_clawk_exe(tmp_path)
 
@@ -408,11 +405,9 @@ def test_quarantine_falls_back_to_reboot_schedule(_winp, tmp_path, capsys, monke
         return True
 
     monkeypatch.setattr(cli_main, "_clawk_exe_shims", lambda d: [shim])
-    with (
-        patch.object(Path, "rename", always_fails),
-        patch.object(cli_main, "_schedule_replace_on_reboot", fake_schedule),
-        patch("time.sleep", lambda *_a, **_k: None),
-    ):
+    with patch.object(Path, "rename", always_fails), patch.object(
+        cli_main, "_schedule_replace_on_reboot", fake_schedule
+    ), patch("time.sleep", lambda *_a, **_k: None):
         pairs = cli_main._quarantine_running_clawk_exe(tmp_path)
 
     captured = capsys.readouterr().out
@@ -439,11 +434,9 @@ def test_quarantine_actionable_warning_when_everything_fails(
         raise OSError(32, "share violation")
 
     monkeypatch.setattr(cli_main, "_clawk_exe_shims", lambda d: [shim])
-    with (
-        patch.object(Path, "rename", always_fails),
-        patch.object(cli_main, "_schedule_replace_on_reboot", lambda *_a, **_k: False),
-        patch("time.sleep", lambda *_a, **_k: None),
-    ):
+    with patch.object(Path, "rename", always_fails), patch.object(
+        cli_main, "_schedule_replace_on_reboot", lambda *_a, **_k: False
+    ), patch("time.sleep", lambda *_a, **_k: None):
         pairs = cli_main._quarantine_running_clawk_exe(tmp_path)
 
     captured = capsys.readouterr().out
@@ -487,6 +480,13 @@ def test_pause_windows_gateways_for_update_stops_profile_and_unmapped_pids(
         return set()
 
     monkeypatch.setattr(cli_main, "_wait_for_windows_update_gateway_exit", fake_wait)
+    monkeypatch.setattr(
+        gateway_mod,
+        "_capture_gateway_argv",
+        lambda pid: ["pythonw.exe", "-m", "clawk_cli.main", "gateway", "run"]
+        if pid == 202
+        else None,
+    )
 
     terminated = []
     monkeypatch.setattr(
@@ -501,6 +501,12 @@ def test_pause_windows_gateways_for_update_stops_profile_and_unmapped_pids(
         "resume_needed": True,
         "profiles": {"work": 101},
         "unmapped_pids": [202],
+        "unmapped": [
+            {
+                "pid": 202,
+                "argv": ["pythonw.exe", "-m", "clawk_cli.main", "gateway", "run"],
+            }
+        ],
     }
     assert waited_for == [101]
     assert terminated == [(202, True)]
@@ -512,6 +518,9 @@ def test_pause_windows_gateways_for_update_stops_profile_and_unmapped_pids(
     captured = capsys.readouterr().out
     assert "Paused gateway profile(s): work" in captured
     assert "without profile mapping" in captured
+    # An unmapped PID whose argv we captured is respawnable, so we must NOT
+    # tell the user to restart it manually.
+    assert "Restart manually after update" not in captured
 
 
 @patch.object(cli_main, "_is_windows", return_value=True)
@@ -545,6 +554,163 @@ def test_resume_windows_gateways_after_update_relaunches_paused_profiles(
     )
 
 
+@patch.object(cli_main, "_is_windows", return_value=True)
+def test_resume_windows_gateways_after_update_respawns_unmapped_by_cmdline(
+    _winp,
+    monkeypatch,
+    capsys,
+):
+    """Unmapped gateways (no profile→PID-file mapping, e.g. a Scheduled Task)
+    are respawned by replaying the argv snapshotted before the force-kill."""
+    import clawk_cli.gateway as gateway_mod
+
+    by_cmdline = []
+    monkeypatch.setattr(
+        gateway_mod,
+        "launch_detached_gateway_restart_by_cmdline",
+        lambda old_pid, argv: by_cmdline.append((old_pid, argv)) or True,
+    )
+    monkeypatch.setattr(
+        gateway_mod,
+        "launch_detached_profile_gateway_restart",
+        lambda profile, old_pid: True,
+    )
+
+    scheduled_argv = ["pythonw.exe", "-m", "clawk_cli.main", "gateway", "run"]
+    token = {
+        "resume_needed": True,
+        "profiles": {},
+        "unmapped_pids": [7560],
+        "unmapped": [
+            # Respawnable — argv captured.
+            {"pid": 7560, "argv": scheduled_argv},
+            # Not respawnable — no argv (psutil missing / access denied).
+            {"pid": 9999, "argv": None},
+        ],
+    }
+
+    cli_main._resume_windows_gateways_after_update(token)
+
+    assert token["resume_needed"] is False
+    assert by_cmdline == [(7560, scheduled_argv)]
+    out = capsys.readouterr().out
+    assert "Restarting 1 unmapped Windows gateway process(es)" in out
+
+
+@patch.object(cli_main, "_is_windows", return_value=True)
+def test_pause_returns_cold_start_token_when_installed_but_none_running(
+    _winp,
+    monkeypatch,
+):
+    """No gateway running + autostart entry installed → cold-start token.
+
+    A gateway that died between updates (spawning terminal/TUI closed) leaves
+    nothing for the resume path to relaunch, but the installed autostart entry
+    is an explicit "I want a gateway" signal. The pause step must return a
+    token that tells resume to cold-start one.
+    """
+    import clawk_cli.gateway as gateway_mod
+    from clawk_cli import gateway_windows
+
+    monkeypatch.setattr(gateway_mod, "find_gateway_pids", lambda **_k: [])
+    monkeypatch.setattr(gateway_windows, "is_installed", lambda: True)
+
+    token = cli_main._pause_windows_gateways_for_update()
+
+    assert token == {
+        "resume_needed": True,
+        "profiles": {},
+        "unmapped_pids": [],
+        "unmapped": [],
+        "cold_start_if_installed": True,
+    }
+
+
+@patch.object(cli_main, "_is_windows", return_value=True)
+def test_pause_returns_none_when_nothing_running_and_not_installed(
+    _winp,
+    monkeypatch,
+):
+    """No gateway running + no autostart entry → no token (gateway-less user).
+
+    Users who deliberately run without a gateway must not get one forced on
+    them by an update.
+    """
+    import clawk_cli.gateway as gateway_mod
+    from clawk_cli import gateway_windows
+
+    monkeypatch.setattr(gateway_mod, "find_gateway_pids", lambda **_k: [])
+    monkeypatch.setattr(gateway_windows, "is_installed", lambda: False)
+
+    assert cli_main._pause_windows_gateways_for_update() is None
+
+
+@patch.object(cli_main, "_is_windows", return_value=True)
+def test_resume_cold_starts_gateway_when_token_requests_it(
+    _winp,
+    monkeypatch,
+    capsys,
+):
+    """cold_start_if_installed token + nothing running → fresh detached spawn."""
+    import clawk_cli.gateway as gateway_mod
+    from clawk_cli import gateway_windows
+
+    monkeypatch.setattr(gateway_mod, "find_gateway_pids", lambda **_k: [])
+    spawned = []
+    monkeypatch.setattr(
+        gateway_windows,
+        "_spawn_detached",
+        lambda: spawned.append(True) or 4242,
+    )
+
+    token = {
+        "resume_needed": True,
+        "profiles": {},
+        "unmapped_pids": [],
+        "unmapped": [],
+        "cold_start_if_installed": True,
+    }
+
+    cli_main._resume_windows_gateways_after_update(token)
+
+    assert token["resume_needed"] is False
+    assert spawned == [True]
+    assert "Starting Windows gateway after update (PID 4242)" in capsys.readouterr().out
+
+
+@patch.object(cli_main, "_is_windows", return_value=True)
+def test_resume_cold_start_skips_when_gateway_already_running(
+    _winp,
+    monkeypatch,
+    capsys,
+):
+    """Don't double-start: if a gateway came up between pause and resume
+    (e.g. the autostart entry fired), the cold-start must no-op."""
+    import clawk_cli.gateway as gateway_mod
+    from clawk_cli import gateway_windows
+
+    monkeypatch.setattr(gateway_mod, "find_gateway_pids", lambda **_k: [9001])
+    spawned = []
+    monkeypatch.setattr(
+        gateway_windows,
+        "_spawn_detached",
+        lambda: spawned.append(True) or 4242,
+    )
+
+    token = {
+        "resume_needed": True,
+        "profiles": {},
+        "unmapped_pids": [],
+        "unmapped": [],
+        "cold_start_if_installed": True,
+    }
+
+    cli_main._resume_windows_gateways_after_update(token)
+
+    assert spawned == []
+    assert "Starting Windows gateway after update" not in capsys.readouterr().out
+
+
 # ---------------------------------------------------------------------------
 # cmd_update integration — concurrent-instance gate
 # ---------------------------------------------------------------------------
@@ -566,16 +732,18 @@ def test_cmd_update_aborts_on_concurrent_instance(_winp, tmp_path, capsys):
         no_backup=True,
     )
 
-    with (
-        patch.object(cli_main, "_venv_scripts_dir", return_value=scripts_dir),
-        patch.object(
-            cli_main,
-            "_detect_concurrent_clawk_instances",
-            return_value=[(4242, "clawk.exe")],
-        ),
-        patch.object(cli_main, "_run_pre_update_backup") as mock_backup,
-        patch.object(cli_main, "_install_hangup_protection", return_value={}),
-        patch.object(cli_main, "_finalize_update_output"),
+    with patch.object(
+        cli_main, "_venv_scripts_dir", return_value=scripts_dir
+    ), patch.object(
+        cli_main,
+        "_detect_concurrent_clawk_instances",
+        return_value=[(4242, "clawk.exe")],
+    ), patch.object(
+        cli_main, "_run_pre_update_backup"
+    ) as mock_backup, patch.object(
+        cli_main, "_install_hangup_protection", return_value={}
+    ), patch.object(
+        cli_main, "_finalize_update_output"
     ):
         with pytest.raises(SystemExit) as excinfo:
             cli_main.cmd_update(args)
@@ -611,12 +779,16 @@ def test_cmd_update_force_bypasses_concurrent_check(_winp, tmp_path):
     # Short-circuit out of _cmd_update_impl via a sentinel raise immediately
     # AFTER the gate. _run_pre_update_backup is the first call after the gate.
     sentinel = RuntimeError("reached post-gate body")
-    with (
-        patch.object(cli_main, "_venv_scripts_dir", return_value=scripts_dir),
-        patch.object(cli_main, "_detect_concurrent_clawk_instances", detect),
-        patch.object(cli_main, "_run_pre_update_backup", side_effect=sentinel),
-        patch.object(cli_main, "_install_hangup_protection", return_value={}),
-        patch.object(cli_main, "_finalize_update_output"),
+    with patch.object(
+        cli_main, "_venv_scripts_dir", return_value=scripts_dir
+    ), patch.object(
+        cli_main, "_detect_concurrent_clawk_instances", detect
+    ), patch.object(
+        cli_main, "_run_pre_update_backup", side_effect=sentinel
+    ), patch.object(
+        cli_main, "_install_hangup_protection", return_value={}
+    ), patch.object(
+        cli_main, "_finalize_update_output"
     ):
         with pytest.raises(RuntimeError, match="reached post-gate body"):
             cli_main.cmd_update(args)

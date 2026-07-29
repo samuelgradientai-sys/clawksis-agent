@@ -29,7 +29,10 @@ def sample_repo(tmp_path: Path) -> Path:
 
     (repo / "src").mkdir()
     (repo / "src" / "main.py").write_text(
-        "def alpha():\n    return 'a'\n\ndef beta():\n    return 'b'\n",
+        "def alpha():\n"
+        "    return 'a'\n\n"
+        "def beta():\n"
+        "    return 'b'\n",
         encoding="utf-8",
     )
     (repo / "src" / "helper.py").write_text("VALUE = 1\n", encoding="utf-8")
@@ -40,7 +43,10 @@ def sample_repo(tmp_path: Path) -> Path:
     _git(repo, "commit", "-m", "initial")
 
     (repo / "src" / "main.py").write_text(
-        "def alpha():\n    return 'changed'\n\ndef beta():\n    return 'b'\n",
+        "def alpha():\n"
+        "    return 'changed'\n\n"
+        "def beta():\n"
+        "    return 'b'\n",
         encoding="utf-8",
     )
     (repo / "src" / "helper.py").write_text("VALUE = 2\n", encoding="utf-8")
@@ -299,9 +305,7 @@ def test_restricts_paths_to_allowed_root(tmp_path: Path):
     assert result.expanded
     assert "```\noutside\n```" not in result.message
     assert "inside" in result.message
-    assert any(
-        "outside the allowed workspace" in warning for warning in result.warnings
-    )
+    assert any("outside the allowed workspace" in warning for warning in result.warnings)
 
 
 def test_defaults_allowed_root_to_cwd(tmp_path: Path):
@@ -320,9 +324,7 @@ def test_defaults_allowed_root_to_cwd(tmp_path: Path):
 
     assert result.expanded
     assert "```\noutside\n```" not in result.message
-    assert any(
-        "outside the allowed workspace" in warning for warning in result.warnings
-    )
+    assert any("outside the allowed workspace" in warning for warning in result.warnings)
 
 
 @pytest.mark.asyncio
@@ -330,8 +332,9 @@ async def test_blocks_sensitive_home_and_clawk_paths(tmp_path: Path, monkeypatch
     from agent.context_references import preprocess_context_references_async
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
-    clawk_env = tmp_path / ".clawksis" / ".env"
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+
+    clawk_env = tmp_path / ".clawk" / ".env"
     clawk_env.parent.mkdir(parents=True)
     clawk_env.write_text("API_KEY=super-secret\n", encoding="utf-8")
 
@@ -340,7 +343,7 @@ async def test_blocks_sensitive_home_and_clawk_paths(tmp_path: Path, monkeypatch
     ssh_key.write_text("PRIVATE-KEY\n", encoding="utf-8")
 
     result = await preprocess_context_references_async(
-        "read @file:.clawksis/.env and @file:.ssh/id_rsa",
+        "read @file:.clawk/.env and @file:.ssh/id_rsa",
         cwd=tmp_path,
         allowed_root=tmp_path,
         context_length=100_000,
@@ -350,3 +353,95 @@ async def test_blocks_sensitive_home_and_clawk_paths(tmp_path: Path, monkeypatch
     assert "API_KEY=super-secret" not in result.message
     assert "PRIVATE-KEY" not in result.message
     assert any("sensitive credential" in warning for warning in result.warnings)
+
+
+@pytest.mark.asyncio
+async def test_blocks_canonical_read_denylist_credential_stores(tmp_path: Path, monkeypatch):
+    """@file expansion must honour the canonical read deny-list.
+
+    The narrow in-module list historically missed the real credential stores
+    (provider keys, OAuth tokens, MCP tokens, project-local .env). Because the
+    gateway routes untrusted remote message text through reference expansion,
+    a chat peer could otherwise attach `@file:~/.clawksis/auth.json` and read the
+    operator's keys into context. These must all be refused, with their secret
+    bodies kept out of the expanded message.
+    """
+    from agent.context_references import preprocess_context_references_async
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+
+    clawk_home = tmp_path / ".clawk"
+    (clawk_home).mkdir(parents=True)
+
+    auth_json = clawk_home / "auth.json"
+    auth_json.write_text('{"openai": "sk-AUTHJSON-SECRET"}\n', encoding="utf-8")
+
+    oauth = clawk_home / ".anthropic_oauth.json"
+    oauth.write_text('{"access_token": "OAUTH-SECRET"}\n', encoding="utf-8")
+
+    mcp_token = clawk_home / "mcp-tokens" / "github.json"
+    mcp_token.parent.mkdir(parents=True)
+    mcp_token.write_text('{"token": "MCP-TOKEN-SECRET"}\n', encoding="utf-8")
+
+    project_env = tmp_path / "project" / ".env"
+    project_env.parent.mkdir(parents=True)
+    project_env.write_text("DB_PASSWORD=ENV-SECRET\n", encoding="utf-8")
+
+    result = await preprocess_context_references_async(
+        "inspect @file:.clawk/auth.json and @file:.clawk/.anthropic_oauth.json "
+        "and @file:.clawk/mcp-tokens/github.json and @file:project/.env",
+        cwd=tmp_path,
+        allowed_root=tmp_path,
+        context_length=100_000,
+    )
+
+    assert result.expanded
+    for secret in (
+        "sk-AUTHJSON-SECRET",
+        "OAUTH-SECRET",
+        "MCP-TOKEN-SECRET",
+        "ENV-SECRET",
+    ):
+        assert secret not in result.message
+    assert sum("sensitive credential" in warning for warning in result.warnings) == 4
+
+
+@pytest.mark.asyncio
+async def test_canonical_guard_fails_closed_when_lookup_raises(tmp_path: Path, monkeypatch):
+    """If the canonical read guard raises, the reference must fail CLOSED.
+
+    The guard exists specifically to cover credential stores the narrow local
+    list misses (auth.json, ...). If get_read_block_error ever raised, silently
+    falling through to the local list would re-open that exact hole — and the
+    gateway feeds untrusted remote text here, so a chat peer could then attach
+    auth.json. The reference must be refused and the secret kept out of the
+    expanded message.
+    """
+    from agent.context_references import preprocess_context_references_async
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+
+    clawk_home = tmp_path / ".clawk"
+    clawk_home.mkdir(parents=True)
+    auth_json = clawk_home / "auth.json"
+    auth_json.write_text('{"openai": "sk-AUTHJSON-SECRET"}\n', encoding="utf-8")
+
+    def _boom(_path):
+        raise RuntimeError("guard resolution failed")
+
+    monkeypatch.setattr("agent.file_safety.get_read_block_error", _boom)
+
+    result = await preprocess_context_references_async(
+        "inspect @file:.clawk/auth.json",
+        cwd=tmp_path,
+        allowed_root=tmp_path,
+        context_length=100_000,
+    )
+
+    assert "sk-AUTHJSON-SECRET" not in result.message
+    assert any(
+        "credential deny-list" in warning or "sensitive credential" in warning
+        for warning in result.warnings
+    )

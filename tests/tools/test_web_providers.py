@@ -6,7 +6,6 @@ Covers:
 - Backward compatibility (web.backend still works as shared fallback)
 - Config keys merge correctly via DEFAULT_CONFIG
 """
-
 from __future__ import annotations
 
 import json
@@ -141,72 +140,50 @@ class TestPerCapabilityBackendSelection:
     def test_search_backend_overrides_generic(self, monkeypatch):
         from tools import web_tools
 
-        monkeypatch.setattr(
-            web_tools,
-            "_load_web_config",
-            lambda: {
-                "backend": "firecrawl",
-                "search_backend": "tavily",
-            },
-        )
+        monkeypatch.setattr(web_tools, "_load_web_config", lambda: {
+            "backend": "firecrawl",
+            "search_backend": "tavily",
+        })
         monkeypatch.setenv("TAVILY_API_KEY", "test-key")
         assert web_tools._get_search_backend() == "tavily"
 
     def test_extract_backend_overrides_generic(self, monkeypatch):
         from tools import web_tools
 
-        monkeypatch.setattr(
-            web_tools,
-            "_load_web_config",
-            lambda: {
-                "backend": "tavily",
-                "extract_backend": "exa",
-            },
-        )
+        monkeypatch.setattr(web_tools, "_load_web_config", lambda: {
+            "backend": "tavily",
+            "extract_backend": "exa",
+        })
         monkeypatch.setenv("EXA_API_KEY", "test-key")
         assert web_tools._get_extract_backend() == "exa"
 
     def test_falls_back_to_generic_backend_when_search_backend_empty(self, monkeypatch):
         from tools import web_tools
 
-        monkeypatch.setattr(
-            web_tools,
-            "_load_web_config",
-            lambda: {
-                "backend": "tavily",
-                "search_backend": "",
-            },
-        )
+        monkeypatch.setattr(web_tools, "_load_web_config", lambda: {
+            "backend": "tavily",
+            "search_backend": "",
+        })
         monkeypatch.setenv("TAVILY_API_KEY", "test-key")
         assert web_tools._get_search_backend() == "tavily"
 
-    def test_falls_back_to_generic_backend_when_extract_backend_empty(
-        self, monkeypatch
-    ):
+    def test_falls_back_to_generic_backend_when_extract_backend_empty(self, monkeypatch):
         from tools import web_tools
 
-        monkeypatch.setattr(
-            web_tools,
-            "_load_web_config",
-            lambda: {
-                "backend": "parallel",
-                "extract_backend": "",
-            },
-        )
+        monkeypatch.setattr(web_tools, "_load_web_config", lambda: {
+            "backend": "parallel",
+            "extract_backend": "",
+        })
         monkeypatch.setenv("PARALLEL_API_KEY", "test-key")
         assert web_tools._get_extract_backend() == "parallel"
 
     def test_search_backend_ignored_when_not_available(self, monkeypatch):
         from tools import web_tools
 
-        monkeypatch.setattr(
-            web_tools,
-            "_load_web_config",
-            lambda: {
-                "backend": "firecrawl",
-                "search_backend": "exa",  # set but no EXA_API_KEY
-            },
-        )
+        monkeypatch.setattr(web_tools, "_load_web_config", lambda: {
+            "backend": "firecrawl",
+            "search_backend": "exa",  # set but no EXA_API_KEY
+        })
         monkeypatch.delenv("EXA_API_KEY", raising=False)
         monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-key")
         # Should fall back to firecrawl since exa isn't configured
@@ -215,13 +192,9 @@ class TestPerCapabilityBackendSelection:
     def test_fully_backward_compatible_with_web_backend_only(self, monkeypatch):
         from tools import web_tools
 
-        monkeypatch.setattr(
-            web_tools,
-            "_load_web_config",
-            lambda: {
-                "backend": "tavily",
-            },
-        )
+        monkeypatch.setattr(web_tools, "_load_web_config", lambda: {
+            "backend": "tavily",
+        })
         monkeypatch.setenv("TAVILY_API_KEY", "test-key")
         # No search_backend or extract_backend set — both fall through
         assert web_tools._get_search_backend() == "tavily"
@@ -244,10 +217,9 @@ class TestDefaultConfig:
         assert "backend" in web
         assert "search_backend" in web
         assert "extract_backend" in web
-        # backend/extract default to empty (auto-detect); search defaults to
-        # the free DuckDuckGo backend so a fresh agent can search out of the box.
+        # All empty string by default (no override)
         assert web["backend"] == ""
-        assert web["search_backend"] == "ddgs"
+        assert web["search_backend"] == ""
         assert web["extract_backend"] == ""
 
 
@@ -271,9 +243,7 @@ class TestWebSearchUsesSearchBackend:
             return result
 
         monkeypatch.setattr(web_tools, "_get_search_backend", tracking_get_search)
-        monkeypatch.setattr(
-            web_tools, "_load_web_config", lambda: {"backend": "firecrawl"}
-        )
+        monkeypatch.setattr(web_tools, "_load_web_config", lambda: {"backend": "firecrawl"})
         monkeypatch.setenv("FIRECRAWL_API_KEY", "fake")
 
         # The function will fail at Firecrawl client level but we just
@@ -305,7 +275,6 @@ class TestUnconfiguredErrorEnvelopeParity:
         self._register_providers()
         yield
         from agent.web_search_registry import _reset_for_tests
-
         _reset_for_tests()
 
     def _clear_web_creds(self, monkeypatch):
@@ -398,7 +367,6 @@ class TestDispatchersTriggerPluginDiscovery:
 
         restore = self._clear_registry()
         try:
-
             class FakeFirecrawl(WebSearchProvider):
                 @property
                 def name(self) -> str:
@@ -416,13 +384,8 @@ class TestDispatchersTriggerPluginDiscovery:
 
                 async def extract(self, urls, format=None):
                     return [
-                        {
-                            "url": u,
-                            "title": "",
-                            "content": "ok",
-                            "raw_content": "ok",
-                            "metadata": {},
-                        }
+                        {"url": u, "title": "", "content": "ok",
+                         "raw_content": "ok", "metadata": {}}
                         for u in urls
                     ]
 
@@ -442,23 +405,21 @@ class TestDispatchersTriggerPluginDiscovery:
             # underlying ``clawk_cli.plugins._ensure_plugins_discovered`` so
             # the test stays valid even if the import inside the helper is
             # later moved to module scope or renamed.
-            monkeypatch.setattr(web_tools, "_ensure_web_plugins_loaded", mock_hook)
             monkeypatch.setattr(
-                web_tools,
-                "_load_web_config",
+                web_tools, "_ensure_web_plugins_loaded", mock_hook
+            )
+            monkeypatch.setattr(
+                web_tools, "_load_web_config",
                 lambda: {"extract_backend": "firecrawl"},
             )
             # Sanity: registry IS empty before the tool call.
             assert web_search_registry.get_provider("firecrawl") is None
 
-            result = json.loads(
-                asyncio.run(
-                    web_tools.web_extract_tool(
-                        ["https://example.com"],
-                        use_llm_processing=False,
-                    )
+            result = json.loads(asyncio.run(
+                web_tools.web_extract_tool(
+                    ["https://example.com"],
                 )
-            )
+            ))
 
             # The hook must have been called BEFORE the registry lookup —
             # that is the invariant under regression test. Without the
@@ -486,7 +447,6 @@ class TestDispatchersTriggerPluginDiscovery:
 
         restore = self._clear_registry()
         try:
-
             class FakeBrave(WebSearchProvider):
                 @property
                 def name(self) -> str:
@@ -503,29 +463,21 @@ class TestDispatchersTriggerPluginDiscovery:
                     return True
 
                 def search(self, query, limit=5):
-                    return {
-                        "success": True,
-                        "data": {
-                            "web": [
-                                {
-                                    "title": "ok",
-                                    "url": "https://x",
-                                    "description": "",
-                                    "position": 0,
-                                }
-                            ]
-                        },
-                    }
+                    return {"success": True, "data": {"web": [
+                        {"title": "ok", "url": "https://x", "description": "",
+                         "position": 0}
+                    ]}}
 
             def _register_fake() -> None:
                 if web_search_registry.get_provider("brave-free") is None:
                     web_search_registry.register_provider(FakeBrave())
 
             mock_hook = MagicMock(wraps=_register_fake)
-            monkeypatch.setattr(web_tools, "_ensure_web_plugins_loaded", mock_hook)
             monkeypatch.setattr(
-                web_tools,
-                "_load_web_config",
+                web_tools, "_ensure_web_plugins_loaded", mock_hook
+            )
+            monkeypatch.setattr(
+                web_tools, "_load_web_config",
                 lambda: {"search_backend": "brave-free"},
             )
             assert web_search_registry.get_provider("brave-free") is None
@@ -539,3 +491,134 @@ class TestDispatchersTriggerPluginDiscovery:
             assert web_search_registry.get_provider("brave-free") is not None
         finally:
             restore()
+
+
+class TestDisabledPluginDiagnostic:
+    """#40190 follow-up: when the configured web backend names a bundled
+    web plugin the user put in ``plugins.disabled``, the dispatcher must
+    tell the user to re-enable the plugin instead of the misleading
+    "No web extract provider configured. Set web.extract_backend to ..."
+    (they already set it correctly — the provider just isn't loaded).
+    """
+
+    def _clear_registry(self):
+        from agent import web_search_registry
+
+        with web_search_registry._lock:
+            original = dict(web_search_registry._providers)
+            web_search_registry._providers.clear()
+
+        def _restore():
+            with web_search_registry._lock:
+                web_search_registry._providers.clear()
+                web_search_registry._providers.update(original)
+
+        return _restore
+
+    class _FakeLoaded:
+        def __init__(self, enabled, error):
+            self.enabled = enabled
+            self.error = error
+
+    def _patch_manager(self, monkeypatch, plugins_map):
+        """Point ``get_plugin_manager()`` at a stub whose ``_plugins``
+        dict is ``plugins_map`` so ``_disabled_web_plugin_for`` sees the
+        simulated disabled/enabled state without touching real config."""
+        import clawk_cli.plugins as plugins_mod
+
+        class _StubMgr:
+            _plugins = plugins_map
+
+        monkeypatch.setattr(plugins_mod, "get_plugin_manager", lambda: _StubMgr())
+
+    def test_disabled_web_plugin_for_matches_by_key(self, monkeypatch):
+        from agent.web_search_registry import _disabled_web_plugin_for
+
+        self._patch_manager(monkeypatch, {
+            "web/firecrawl": self._FakeLoaded(False, "disabled via config"),
+            "web/ddgs": self._FakeLoaded(True, None),
+        })
+        assert _disabled_web_plugin_for("firecrawl") == "web/firecrawl"
+        # Enabled plugin is not a match
+        assert _disabled_web_plugin_for("ddgs") is None
+        # Unknown name is not a match
+        assert _disabled_web_plugin_for("nope") is None
+
+    def test_disabled_web_plugin_for_normalizes_hyphens(self, monkeypatch):
+        from agent.web_search_registry import _disabled_web_plugin_for
+
+        self._patch_manager(monkeypatch, {
+            "web/brave_free": self._FakeLoaded(False, "disabled via config"),
+        })
+        # config name uses a hyphen; plugin key uses an underscore
+        assert _disabled_web_plugin_for("brave-free") == "web/brave_free"
+
+    def test_disabled_web_plugin_for_ignores_non_disabled_errors(self, monkeypatch):
+        from agent.web_search_registry import _disabled_web_plugin_for
+
+        self._patch_manager(monkeypatch, {
+            # a plugin that failed to import is NOT "disabled via config"
+            "web/exa": self._FakeLoaded(False, "ImportError: boom"),
+        })
+        assert _disabled_web_plugin_for("exa") is None
+
+    def test_extract_tool_reports_disabled_plugin(self, monkeypatch):
+        import asyncio
+
+        from tools import web_tools
+
+        restore = self._clear_registry()
+        try:
+            monkeypatch.setattr(web_tools, "_ensure_web_plugins_loaded", lambda: None)
+            monkeypatch.setattr(
+                web_tools, "_load_web_config",
+                lambda: {"extract_backend": "firecrawl"},
+            )
+            import agent.web_search_registry as wsr
+            monkeypatch.setattr(
+                wsr, "_read_config_key",
+                lambda *path: "firecrawl" if path == ("web", "extract_backend") else None,
+            )
+            self._patch_manager(monkeypatch, {
+                "web/firecrawl": self._FakeLoaded(False, "disabled via config"),
+            })
+            result = json.loads(
+                asyncio.new_event_loop().run_until_complete(
+                    web_tools.web_extract_tool(["https://example.com"])
+                )
+            )
+            err = result["error"]
+            assert "disabled" in err
+            assert "web/firecrawl" in err
+            assert "clawk plugins enable" in err
+            # Must NOT tell them to set extract_backend (already set)
+            assert "Set web.extract_backend to firecrawl" not in err
+        finally:
+            restore()
+
+    def test_search_tool_reports_disabled_plugin(self, monkeypatch):
+        from tools import web_tools
+
+        restore = self._clear_registry()
+        try:
+            monkeypatch.setattr(web_tools, "_ensure_web_plugins_loaded", lambda: None)
+            monkeypatch.setattr(
+                web_tools, "_load_web_config",
+                lambda: {"search_backend": "firecrawl"},
+            )
+            import agent.web_search_registry as wsr
+            monkeypatch.setattr(
+                wsr, "_read_config_key",
+                lambda *path: "firecrawl" if path == ("web", "search_backend") else None,
+            )
+            self._patch_manager(monkeypatch, {
+                "web/firecrawl": self._FakeLoaded(False, "disabled via config"),
+            })
+            result = json.loads(web_tools.web_search_tool("hello", limit=1))
+            err = result["error"]
+            assert "disabled" in err
+            assert "web/firecrawl" in err
+            assert "No web search provider configured" not in err
+        finally:
+            restore()
+
