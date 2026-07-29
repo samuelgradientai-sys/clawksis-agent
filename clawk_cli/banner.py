@@ -233,12 +233,45 @@ def _check_via_rev(local_rev: str) -> Optional[int]:
     return 0 if upstream_rev == local_rev else UPDATE_AVAILABLE_NO_COUNT
 
 
+def _git_stdout(args: list[str], *, cwd: Path, timeout: int = 5) -> Optional[str]:
+    """Run a read-only git command and return trimmed stdout (None on failure)."""
+
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=str(cwd),
+        )
+
+    except Exception:
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    return (result.stdout or "").strip()
+
+
 def _check_via_local_git(repo_dir: Path) -> Optional[int]:
     """Count commits behind origin/main in a local checkout."""
 
+    shallow = _git_stdout(["rev-parse", "--is-shallow-repository"], cwd=repo_dir)
+
+    is_shallow = shallow == "true"
+
     try:
+        fetch_args = ["git", "fetch", "origin"]
+
+        if is_shallow:
+            # A shallow clone can't deepen implicitly; keep the fetch cheap.
+            fetch_args += ["--depth", "1"]
+
+        fetch_args.append("--quiet")
+
         subprocess.run(
-            ["git", "fetch", "origin", "--quiet"],
+            fetch_args,
             capture_output=True,
             timeout=10,
             cwd=str(repo_dir),
@@ -246,6 +279,19 @@ def _check_via_local_git(repo_dir: Path) -> Optional[int]:
 
     except Exception:
         pass  # Offline or timeout — use stale refs, that's fine
+
+    if is_shallow:
+        # No history to count against; only "same commit or not" is knowable.
+        head_rev = _git_stdout(["rev-parse", "HEAD"], cwd=repo_dir)
+
+        target_rev = _git_stdout(["rev-parse", "FETCH_HEAD"], cwd=repo_dir) or _git_stdout(
+            ["rev-parse", "origin/main"], cwd=repo_dir
+        )
+
+        if not head_rev or not target_rev:
+            return None
+
+        return 0 if head_rev == target_rev else UPDATE_AVAILABLE_NO_COUNT
 
     try:
         result = subprocess.run(
@@ -378,9 +424,9 @@ def check_for_updates() -> Optional[int]:
     # (branding.tsx, guarded on `typeof === 'number' && > 0`) show nothing.
 
     try:
-        from clawk_cli.config import detect_install_method
+        from clawk_cli.config import detect_install_method, get_project_root
 
-        if detect_install_method() == "docker":
+        if detect_install_method(get_project_root()) == "docker":
             return None
 
     except Exception:
@@ -895,6 +941,7 @@ def build_welcome_banner(
     session_id: str = None,
     get_toolset_for_tool=None,
     context_length: int = None,
+    provider: str = None,
 ):
     """Build and print a welcome banner with caduceus on left and info on right.
 
@@ -918,6 +965,12 @@ def build_welcome_banner(
 
         context_length: Model's context window size in tokens.
 
+        provider: Active provider id. When ``"moa"``, ``model`` is a MoA
+
+            preset name and the banner renders the aggregator instead of a
+
+            bare model slug.
+
     """
 
     from model_tools import check_tool_availability, TOOLSET_REQUIREMENTS
@@ -934,6 +987,21 @@ def build_welcome_banner(
     enabled_toolsets = enabled_toolsets or []
 
     _, unavailable_toolsets = check_tool_availability(quiet=True)
+
+    # check_tool_availability() walks the GLOBAL registry, so it reports
+
+    # toolsets this agent was never given (discord/feishu on a CLI session).
+
+    # Keep only what this platform actually enabled.
+
+    _enabled_ts = {str(t) for t in enabled_toolsets}
+
+    if _enabled_ts:
+        unavailable_toolsets = [
+            item
+            for item in unavailable_toolsets
+            if str(item.get("id", item.get("name", ""))) in _enabled_ts
+        ]
 
     disabled_tools = set()
 
@@ -994,23 +1062,65 @@ def build_welcome_banner(
 
     left_lines = ["", _hero, ""]
 
-    model_short = model.split("/")[-1] if "/" in model else model
+    if (provider or "").strip().lower() == "moa":
+        # `model` is a MoA preset name, not a slug — show preset + aggregator.
 
-    if model_short.endswith(".gguf"):
-        model_short = model_short[:-5]
+        preset_name = model
 
-    if len(model_short) > 28:
-        model_short = model_short[:25] + "..."
+        agg_label = ""
 
-    ctx_str = (
-        f" [dim {dim}]·[/] [dim {dim}]{_format_context_length(context_length)} context[/]"
-        if context_length
-        else ""
-    )
+        try:
+            from clawk_cli.config import load_config
 
-    left_lines.append(
-        f"[{accent}]{model_short}[/]{ctx_str} [dim {dim}]·[/] [dim {dim}]Clawksis[/]"
-    )
+            from clawk_cli.moa_config import normalize_moa_config
+
+            _moa = normalize_moa_config(load_config().get("moa") or {})
+
+            _preset = _moa.get("presets", {}).get(preset_name)
+
+            if _preset:
+                _agg = _preset.get("aggregator") or {}
+
+                _am = str(_agg.get("model") or "")
+
+                agg_label = _am.split("/")[-1] if "/" in _am else _am
+
+        except Exception:
+            agg_label = ""
+
+        if len(preset_name) > 28:
+            preset_name = preset_name[:25] + "..."
+
+        agg_str = f" [dim {dim}]·[/] [dim {dim}]agg {agg_label}[/]" if agg_label else ""
+
+        ctx_str = (
+            f" [dim {dim}]·[/] [dim {dim}]{_format_context_length(context_length)} context[/]"
+            if context_length
+            else ""
+        )
+
+        left_lines.append(
+            f"[{accent}]MoA: {preset_name}[/]{agg_str}{ctx_str} [dim {dim}]·[/] [dim {dim}]Clawksis[/]"
+        )
+
+    else:
+        model_short = model.split("/")[-1] if "/" in model else model
+
+        if model_short.endswith(".gguf"):
+            model_short = model_short[:-5]
+
+        if len(model_short) > 28:
+            model_short = model_short[:25] + "..."
+
+        ctx_str = (
+            f" [dim {dim}]·[/] [dim {dim}]{_format_context_length(context_length)} context[/]"
+            if context_length
+            else ""
+        )
+
+        left_lines.append(
+            f"[{accent}]{model_short}[/]{ctx_str} [dim {dim}]·[/] [dim {dim}]Clawksis[/]"
+        )
 
     if os.getenv("CLAWK_YOLO_MODE"):
         left_lines.append(
@@ -1153,24 +1263,62 @@ def build_welcome_banner(
 
     right_lines.append(f"[bold {accent}]Available Skills[/]")
 
-    skills_by_category = get_available_skills()
+    # With the `skills` toolset disabled the agent can't load any of them, so
 
-    total_skills = sum(len(s) for s in skills_by_category.values())
+    # advertising the on-disk catalog would be a lie.
 
-    if skills_by_category:
+    _skills_enabled = not _enabled_ts or "skills" in _enabled_ts
+
+    if _skills_enabled:
+        skills_by_category = get_available_skills()
+
+        total_skills = sum(len(s) for s in skills_by_category.values())
+
+    else:
+        skills_by_category = {}
+
+        total_skills = 0
+
+    _term_cols = shutil.get_terminal_size().columns
+
+    _right_col_width = max(int(_term_cols * 0.6) - 10, 30)
+
+    if not _skills_enabled:
+        right_lines.append(f"[dim {dim}]Skills toolset disabled[/]")
+
+    elif skills_by_category:
         for category in sorted(skills_by_category.keys()):
             skill_names = sorted(skills_by_category[category])
 
-            if len(skill_names) > 8:
-                display_names = skill_names[:8]
+            # Fill the available width instead of a fixed 8-item / 50-char cap.
 
-                skills_str = ", ".join(display_names) + f" +{len(skill_names) - 8} more"
+            _prefix_len = len(category) + 2
 
-            else:
-                skills_str = ", ".join(skill_names)
+            _avail = max(_right_col_width - _prefix_len, 20)
 
-            if len(skills_str) > 50:
-                skills_str = skills_str[:47] + "..."
+            parts, length = [], 0
+
+            for i, name in enumerate(skill_names):
+                _sep = ", " if parts else ""
+
+                _needed = len(_sep) + len(name)
+
+                _after = len(skill_names) - (i + 1)
+
+                _ind_len = len(f", +{_after} more") if _after > 0 else 0
+
+                if parts and length + _needed + _ind_len > _avail:
+                    remaining = len(skill_names) - len(parts)
+
+                    parts.append(f"+{remaining} more")
+
+                    break
+
+                parts.append(name)
+
+                length += _needed
+
+            skills_str = ", ".join(parts)
 
             right_lines.append(f"[dim {dim}]{category}:[/] [{text}]{skills_str}[/]")
 
@@ -1270,13 +1418,18 @@ def build_welcome_banner(
     # self-update, and issue triage don't behave correctly. Warn, don't block.
 
     try:
-        from clawk_cli.config import detect_install_method
+        from clawk_cli.config import (
+            detect_install_method,
+            format_unsupported_install_warning,
+            is_unsupported_install_method,
+            get_project_root,
+        )
 
-        if detect_install_method() == "pip":
+        _install_method = detect_install_method(get_project_root())
+
+        if is_unsupported_install_method(_install_method):
             right_lines.append(
-                "[bold yellow]⚠ pip install not officially supported[/]"
-                "[dim yellow] — exists for reasons other than user install; "
-                "expect instability and an inability to support issues[/]"
+                f"[bold yellow]⚠ {format_unsupported_install_warning(_install_method)}[/]"
             )
 
     except Exception:

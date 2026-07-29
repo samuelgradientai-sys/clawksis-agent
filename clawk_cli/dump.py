@@ -19,6 +19,38 @@ from clawk_constants import display_clawk_home
 from agent.skill_utils import is_excluded_skill_path
 
 
+def _dotenv_key_names() -> set[str]:
+    """Return the set of env-var names assigned a non-empty value in ~/.clawksis/.env.
+
+    The managed backends (launchd / systemd / the desktop-spawned ``serve``
+    process) load credentials from this file — NOT from an interactive shell's
+    exports. ``clawk debug share`` runs in a terminal, so ``os.getenv`` reflects
+    the shell's environment, which can include exported keys the managed backend
+    never sees. Comparing against this set lets the dump flag that mismatch (the
+    exact trap behind #48504-style "no web_search" reports: key exported in the
+    shell, absent from .env, invisible to the launchd backend).
+    """
+    try:
+        env_path = get_env_path()
+        text = env_path.read_text(encoding="utf-8", errors="ignore")
+    except (OSError, UnicodeError):
+        return set()
+
+    names: set[str] = set()
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.lower().startswith("export "):
+            line = line[len("export "):].lstrip()
+        name, _, value = line.partition("=")
+        name = name.strip()
+        # A bare `KEY=` (empty value) is effectively unset for the backend.
+        if name and value.strip().strip("'\""):
+            names.add(name)
+    return names
+
+
 def _get_git_commit(project_root: Path) -> str:
     """Return short git commit hash, or '(unknown)'.
 
@@ -32,9 +64,7 @@ def _get_git_commit(project_root: Path) -> str:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short=8", "HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=5,
+            capture_output=True, text=True, timeout=5,
             cwd=str(project_root),
         )
         if result.returncode == 0:
@@ -49,7 +79,6 @@ def _get_git_commit(project_root: Path) -> str:
     # stays cheap on non-dump code paths.
     try:
         from clawk_cli.build_info import get_build_sha
-
         baked = get_build_sha(short=8)
         if baked:
             return baked
@@ -57,6 +86,30 @@ def _get_git_commit(project_root: Path) -> str:
         pass
 
     return "(unknown)"
+
+
+def _get_git_commit_date(project_root: Path) -> str:
+    """Return the date the HEAD commit was authored (YYYY-MM-DD), or ''.
+
+    Resolves live via ``git log`` on source installs.  The published Docker
+    image excludes ``.git``, so this returns '' there — the dump line simply
+    drops the date suffix in that case (the baked SHA still identifies the
+    build).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%cd", "--date=short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+            cwd=str(project_root),
+        )
+        if result.returncode == 0:
+            value = result.stdout.strip()
+            if value:
+                return value
+    except Exception:
+        pass
+
+    return ""
 
 
 def _redact(value: str) -> str:
@@ -67,7 +120,6 @@ def _redact(value: str) -> str:
     ``clawk dump`` formats empty values as blank, not as ``"(not set)"``).
     """
     from agent.redact import mask_secret
-
     return mask_secret(value)
 
 
@@ -115,7 +167,9 @@ def _cron_summary(clawk_home: Path) -> str:
     if not jobs_file.exists():
         return "0"
     try:
-        with open(jobs_file, encoding="utf-8") as f:
+        # utf-8-sig: same dialect as cron/jobs.load_jobs — Windows editors
+        # may leave a UTF-8 BOM that plain utf-8 json.load rejects.
+        with open(jobs_file, encoding="utf-8-sig") as f:
             data = json.load(f)
         jobs = data.get("jobs", [])
         active = sum(1 for j in jobs if j.get("enabled", True))
@@ -158,12 +212,7 @@ def _get_model_and_provider(config: dict) -> tuple[str, str]:
     """Extract model and provider from config."""
     model_cfg = config.get("model", "")
     if isinstance(model_cfg, dict):
-        model = (
-            model_cfg.get("default")
-            or model_cfg.get("model")
-            or model_cfg.get("name")
-            or "(not set)"
-        )
+        model = model_cfg.get("default") or model_cfg.get("model") or model_cfg.get("name") or "(not set)"
         provider = model_cfg.get("provider") or "(auto)"
     elif isinstance(model_cfg, str):
         model = model_cfg or "(not set)"
@@ -176,7 +225,7 @@ def _get_model_and_provider(config: dict) -> tuple[str, str]:
 
 def _config_overrides(config: dict) -> dict[str, str]:
     """Find non-default config values worth reporting.
-
+    
     Returns a flat dict of dotpath -> value for interesting overrides.
     """
     from clawk_cli.config import DEFAULT_CONFIG
@@ -240,12 +289,12 @@ def run_dump(args):
     clawk_home = get_clawk_home()
 
     try:
-        from clawk_cli import __version__, __release_date__
+        from clawk_cli import __version__
     except ImportError:
         __version__ = "(unknown)"
-        __release_date__ = ""
 
     commit = _get_git_commit(project_root)
+    commit_date = _get_git_commit_date(project_root)
 
     try:
         config = load_config()
@@ -257,19 +306,32 @@ def run_dump(args):
     # Profile
     try:
         from clawk_cli.profiles import get_active_profile_name
-
         profile = get_active_profile_name() or "(default)"
     except Exception:
         profile = "(default)"
 
-    # Terminal backend
+    # Terminal backend — report the EFFECTIVE backend, not just config.yaml.
+    # ``terminal.backend`` in config.yaml is bridged to the TERMINAL_ENV env var,
+    # but a TERMINAL_ENV set directly in .env / the shell overrides config and is
+    # what terminal_tool actually uses (tools/terminal_tool.py reads TERMINAL_ENV).
+    # Reporting only the config value hides that override and sends users chasing
+    # the wrong cause when the agent runs in a docker/podman sandbox even though
+    # config says "local" (and vice-versa). run_dump() has already loaded .env,
+    # so os.environ reflects the real override here.
     terminal_cfg = config.get("terminal", {})
-    backend = terminal_cfg.get("backend", "local")
+    config_backend = terminal_cfg.get("backend", "local")
+    env_backend = (os.environ.get("TERMINAL_ENV") or "").strip().lower()
+    if env_backend and env_backend != str(config_backend).strip().lower():
+        backend = (
+            f"{env_backend}  (TERMINAL_ENV overrides config.yaml "
+            f"terminal.backend={config_backend})"
+        )
+    else:
+        backend = config_backend
 
     # OpenAI SDK version
     try:
         import openai
-
         openai_ver = openai.__version__
     except ImportError:
         openai_ver = "not installed"
@@ -279,10 +341,14 @@ def run_dump(args):
 
     lines = []
     lines.append("--- clawk dump ---")
+    # Identify the build by commit + the date that commit was made, resolved
+    # live via git.  __release_date__ (the package release date) is
+    # intentionally NOT shown here — it reads like a wall-clock timestamp and
+    # confuses support triage.  The commit date is the real "as-of" date.
     ver_str = f"{__version__}"
-    if __release_date__:
-        ver_str += f" ({__release_date__})"
     ver_str += f" [{commit}]"
+    if commit_date:
+        ver_str += f" ({commit_date})"
     lines.append(f"version:          {ver_str}")
     lines.append(f"os:               {os_info}")
     lines.append(f"python:           {sys.version.split()[0]}")
@@ -323,12 +389,21 @@ def run_dump(args):
         ("GITHUB_TOKEN", "github"),
     ]
 
+    dotenv_keys = _dotenv_key_names()
+
     for env_var, label in api_keys:
         val = os.getenv(env_var, "")
         if show_keys and val:
             display = _redact(val)
         else:
             display = "set" if val else "not set"
+        # Set in this (shell) process but absent from ~/.clawksis/.env: a managed
+        # backend (launchd/systemd/desktop `serve`) loads .env, not the login
+        # shell, so it likely can't see this key — even though the dump reads
+        # "set". Flag it so support doesn't chase a phantom "key is configured"
+        # (the actual cause of gated tools like web_search going missing).
+        if val and env_var not in dotenv_keys:
+            display += " (shell only — not in .env; managed/desktop backend may not see it)"
         # A credential added via `clawk auth add openrouter` lives in the
         # credential pool, not as an env var — surface it so the dump doesn't
         # misleadingly read "not set" while `clawk auth list` shows it (#42130).
@@ -347,17 +422,13 @@ def run_dump(args):
     lines.append("features:")
 
     toolsets = config.get("toolsets", ["clawk-cli"])
-    lines.append(
-        f"  toolsets:           {', '.join(toolsets) if toolsets else '(default)'}"
-    )
+    lines.append(f"  toolsets:           {', '.join(toolsets) if toolsets else '(default)'}")
     lines.append(f"  mcp_servers:        {_count_mcp_servers(config)}")
     lines.append(f"  memory_provider:    {_memory_provider(config)}")
     lines.append(f"  gateway:            {_gateway_status()}")
 
     platforms = _configured_platforms()
-    lines.append(
-        f"  platforms:          {', '.join(platforms) if platforms else 'none'}"
-    )
+    lines.append(f"  platforms:          {', '.join(platforms) if platforms else 'none'}")
     lines.append(f"  cron_jobs:          {_cron_summary(clawk_home)}")
     lines.append(f"  skills:             {_count_skills(clawk_home)}")
 
