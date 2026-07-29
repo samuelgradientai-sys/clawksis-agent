@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import html
 
-from clawk_cli.dashboard_auth import list_providers
+from clawk_cli.dashboard_auth import list_session_providers
 
 # Inline minimal CSS. The dashboard's full skin lives in the React
 # bundle, which we deliberately do NOT load here — the login page must
@@ -483,7 +483,7 @@ def render_login_html(*, next_path: str = "") -> str:
     validating ``next_path`` against the same-origin rules before we
     emit it; we still HTML-escape it as defence in depth.
     """
-    providers = list_providers()
+    providers = list_session_providers()
     if not providers:
         return _EMPTY_HTML
 

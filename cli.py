@@ -17549,6 +17549,65 @@ class ClawksisCLI(CLICommandsMixin):
 
     # ====================================================================
 
+    def _on_notice(self, notice) -> None:
+        """Encola un AgentNotice out-of-band para renderizarlo en el proximo
+        limite limpio.
+
+        Los notices se disparan desde adentro del turno; imprimirlos ahi corre
+        carrera con la respuesta en streaming y la linea queda enterrada bajo el
+        prompt. Por eso se ENCOLA aca y se vuelca en _flush_credit_notices(),
+        llamado justo despues de run_conversation. Fail-soft: nunca rompe el turno.
+        """
+
+        try:
+            text = getattr(notice, "text", "") or ""
+
+            if not text:
+                return
+
+            level = getattr(notice, "level", "info") or "info"
+
+            if not hasattr(self, "_pending_credit_notices"):
+                self._pending_credit_notices = []
+
+            self._pending_credit_notices.append((level, text))
+
+        except Exception:
+            pass
+
+    def _flush_credit_notices(self) -> None:
+        """Imprime los notices encolados como lineas coloreadas por nivel. Se
+        llama al final del turno (despues de run_conversation), donde _cprint
+        pinta limpio arriba del prompt."""
+
+        try:
+            pending = getattr(self, "_pending_credit_notices", None)
+
+            if not pending:
+                return
+
+            self._pending_credit_notices = []
+
+            for level, text in pending:
+                color = {
+                    "error": "\033[31m",
+                    "warn": "\033[33m",
+                    "success": "\033[32m",
+                    "info": _DIM,
+                }.get(level, _DIM)
+
+                _cprint(f"  {color}{text}{_RST}")
+
+        except Exception:
+            pass
+
+    def _on_notice_clear(self, key: str) -> None:
+        """Notice limpiado. El REPL imprime lineas (no hay slot persistente que
+        borrar), asi que es no-op para el renderizado; se mantiene para que el
+        callback de clear quede ligado simetricamente al de show."""
+
+        return
+
     def _on_tool_gen_start(self, tool_name: str) -> None:
         """Called when the model begins generating tool-call arguments.
 
@@ -19690,6 +19749,14 @@ class ClawksisCLI(CLICommandsMixin):
                     # response and nothing further.
                     if _one_turn_model_restore:
                         self._restore_model_runtime_snapshot(_one_turn_model_restore)
+
+                    # Vuelca los notices encolados durante el turno ahora que la
+
+                    # respuesta termino: en este limite _cprint pinta limpio
+
+                    # arriba del prompt en vez de quedar enterrado bajo el stream.
+
+                    self._flush_credit_notices()
 
                     # Clear thread-local callbacks so a reused thread doesn't
 

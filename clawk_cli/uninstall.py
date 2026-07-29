@@ -894,6 +894,15 @@ def run_uninstall(args):
 
     clawk_home = get_clawk_home()
 
+    if bool(getattr(args, "dry_run", False)):
+        _print_uninstall_dry_run(
+            project_root=project_root,
+            clawk_home=clawk_home,
+            full_uninstall=bool(getattr(args, "full", False)),
+        )
+
+        return
+
     # Detect named profiles when uninstalling from the default root —
 
     # offer to clean them up too instead of leaving zombie CLAWK_HOMEs
@@ -1133,6 +1142,52 @@ def run_uninstall(args):
         remove_profiles=remove_profiles,
         named_profiles=named_profiles,
     )
+
+
+def _print_uninstall_dry_run(
+    *, project_root: Path, clawk_home: Path, full_uninstall: bool
+) -> None:
+    """Print the uninstall plan without stopping services or deleting files."""
+
+    print()
+
+    print(
+        color(
+            "Dry run: no files, services, or environment entries will be changed.",
+            Colors.CYAN,
+            Colors.BOLD,
+        )
+    )
+
+    print()
+
+    print(color("Would inspect/remove:", Colors.YELLOW, Colors.BOLD))
+
+    print("  • Gateway services and standalone gateway processes")
+
+    print("  • Clawksis PATH entries from shell configs / Windows User PATH")
+
+    print("  • Clawksis wrapper scripts and Clawksis-managed node/npm/npx symlinks")
+
+    print("  • Desktop Chat GUI artifacts")
+
+    print(f"  • Code checkout: {project_root}")
+
+    if full_uninstall:
+        print(f"  • Clawksis config/data: {clawk_home}")
+
+        if _is_default_clawk_home(clawk_home):
+            profiles = _discover_named_profiles()
+
+            if profiles:
+                print("  • Named profiles (interactive uninstall asks before removing):")
+
+                for prof in profiles:
+                    print(f"    - {prof.name}: {prof.path}")
+    else:
+        print(f"  • Keep Clawksis config/data: {clawk_home}")
+
+    print()
 
 
 def _perform_uninstall(

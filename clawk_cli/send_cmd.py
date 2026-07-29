@@ -279,6 +279,15 @@ def _load_clawk_env() -> None:
     except Exception:
         pass
 
+    # Managed scope: overlay administrator-pinned values before bridging to env,
+    # so a managed top-level scalar wins here too. Fail-open via the helper.
+    try:
+        from clawk_cli import managed_scope
+
+        raw = managed_scope.apply_managed_overlay(raw if isinstance(raw, dict) else {})
+    except Exception:
+        pass
+
     if not isinstance(raw, dict):
         return
 

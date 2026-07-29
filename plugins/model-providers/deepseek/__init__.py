@@ -115,7 +115,7 @@ class DeepSeekProfile(ProviderProfile):
         if not enabled:
             return extra_body, top_level
 
-        # Effort mapping.  Pass low/medium/high through; xhigh/max → max.
+        # Effort mapping. Pass low/medium/high through; stronger levels → max.
 
         # When no effort is set we omit reasoning_effort so DeepSeek applies
 
@@ -124,7 +124,7 @@ class DeepSeekProfile(ProviderProfile):
         if isinstance(reasoning_config, dict):
             effort = (reasoning_config.get("effort") or "").strip().lower()
 
-            if effort in {"xhigh", "max"}:
+            if effort in {"xhigh", "max", "ultra"}:
                 top_level["reasoning_effort"] = "max"
 
             elif effort in {"low", "medium", "high"}:

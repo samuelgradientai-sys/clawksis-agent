@@ -66,6 +66,8 @@ from urllib.parse import quote
 
 from agent.memory_provider import MemoryProvider
 
+from agent.file_safety import raise_if_read_blocked
+
 from tools.registry import tool_error
 
 
@@ -1193,6 +1195,11 @@ class RetainDBMemoryProvider(MemoryProvider):
 
             if not path_obj.exists():
                 return {"error": f"File not found: {local_path}"}
+
+            try:
+                raise_if_read_blocked(str(path_obj))
+            except ValueError as exc:
+                return {"error": str(exc)}
 
             data = path_obj.read_bytes()
 

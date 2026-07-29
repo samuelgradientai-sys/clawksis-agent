@@ -4,7 +4,8 @@ The gateway is a single long-lived process; its ``sys.modules`` is frozen at
 boot. If the checkout is updated underneath it (a manual ``git pull``, or the
 window before ``clawk update``'s graceful restart fires), a first-time lazy
 import on a new code path can resolve a freshly-pulled consumer module against a
-stale cached dependency -> ImportError.
+stale cached dependency -> ImportError (see
+``tests/test_stale_utils_module_import.py`` for the exact failure).
 
 We snapshot the checkout revision at gateway startup and compare on demand, so
 risky callers (e.g. ``/model`` switching) can refuse with a clear "restart the

@@ -91,6 +91,10 @@ class AuditEvent(enum.Enum):
 
     WS_TICKET_REJECTED = "ws_ticket_rejected"
 
+    TOKEN_AUTH_SUCCESS = "token_auth_success"
+
+    TOKEN_AUTH_FAILURE = "token_auth_failure"
+
 
 def _resolve_log_path() -> Path:
     """``$CLAWK_HOME/logs/dashboard-auth.log`` with the standard fallback.

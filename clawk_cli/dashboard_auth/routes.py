@@ -52,6 +52,7 @@ from pydantic import BaseModel
 from clawk_cli.dashboard_auth import (
     get_provider,
     list_providers,
+    list_session_providers,
 )
 
 from clawk_cli.dashboard_auth.audit import AuditEvent, audit_log
@@ -65,6 +66,7 @@ from clawk_cli.dashboard_auth.base import (
 from clawk_cli.dashboard_auth.cookies import (
     clear_pkce_cookie,
     clear_session_cookies,
+    clear_sso_attempt_cookie,
     detect_https,
     read_pkce_cookie,
     read_session_cookies,
@@ -247,7 +249,7 @@ async def login_page(request: Request) -> HTMLResponse:
 @router.get("/api/auth/providers", name="auth_providers")
 async def api_auth_providers() -> Any:
 
-    providers = list_providers()
+    providers = list_session_providers()
 
     if not providers:
         # Q13: fail-closed when zero providers are registered.
@@ -286,6 +288,24 @@ async def auth_login(request: Request, provider: str, next: str = ""):
             status_code=404,
             detail=f"Unknown provider: {provider!r}",
         )
+
+    if not getattr(p, "supports_session", True):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Provider does not support interactive login: {provider!r}",
+        )
+
+    if getattr(p, "supports_password", False):
+        from urllib.parse import quote
+
+        safe_next = _validate_post_login_target(next)
+
+        login_url = f"{_prefix(request)}/login"
+
+        if safe_next:
+            login_url = f"{login_url}?next={quote(safe_next, safe='')}"
+
+        return RedirectResponse(url=login_url, status_code=302)
 
     try:
         ls = p.start_login(redirect_uri=_redirect_uri(request))
@@ -500,9 +520,12 @@ async def auth_callback(
         access_token_expires_in=expires_in,
         use_https=detect_https(request),
         prefix=_prefix(request),
+        provider=session.provider,
     )
 
     clear_pkce_cookie(resp, prefix=_prefix(request))
+
+    clear_sso_attempt_cookie(resp, prefix=_prefix(request))
 
     return resp
 
@@ -773,6 +796,7 @@ async def auth_password_login(request: Request, body: _PasswordLoginBody):
         access_token_expires_in=expires_in,
         use_https=detect_https(request),
         prefix=_prefix(request),
+        provider=session.provider,
     )
 
     return resp
@@ -879,6 +903,7 @@ async def auth_setup(request: Request, body: _SetupBody):
         access_token_expires_in=expires_in,
         use_https=detect_https(request),
         prefix=_prefix(request),
+        provider=session.provider,
     )
 
     return resp
@@ -970,7 +995,8 @@ async def api_auth_ws_ticket(request: Request):
 
     gated mode the SPA POSTs this endpoint to get a ``?ticket=`` value to
 
-    append to ``/api/pty``, ``/api/ws``, ``/api/pub``, or ``/api/events``.
+    append to ``/api/pty``, ``/api/console``, ``/api/ws``, ``/api/pub``, or
+    ``/api/events``.
 
 
 
