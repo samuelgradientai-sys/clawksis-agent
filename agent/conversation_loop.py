@@ -625,12 +625,14 @@ def _get_continuation_prompt(
 
 def run_conversation(
     agent,
-    user_message: str,
+    user_message: Any,
     system_message: str = None,
     conversation_history: List[Dict[str, Any]] = None,
     task_id: str = None,
     stream_callback: Optional[callable] = None,
-    persist_user_message: Optional[str] = None,
+    persist_user_message: Optional[Any] = None,
+    persist_user_timestamp: Optional[float] = None,
+    moa_config: Optional[dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
 
@@ -660,6 +662,22 @@ def run_conversation(
 
             synthetic prefixes.
 
+        persist_user_timestamp: Optional platform event timestamp (epoch
+
+            seconds) to store as metadata on that persisted user message.
+
+            Consumed by ``AIAgent._apply_persist_user_message_override`` and
+
+            ``_persist_session`` via ``agent._persist_user_message_timestamp``.
+
+        moa_config: Optional per-turn Mixture-of-Agents preset. When set, the
+
+            configured reference models are fanned out once and their
+
+            aggregated guidance is appended to the API copy of the last user
+
+            message before the main model is called.
+
                 or queuing follow-up prefetch work.
 
 
@@ -669,6 +687,33 @@ def run_conversation(
         Dict: Complete conversation result with final response and message history
 
     """
+
+    # ── MoA one-shot decoding ──
+
+    # ``/moa <prompt>`` encodes the preset inside the user message so that
+
+    # transports which cannot carry structured kwargs (gateway events, TUI
+
+    # slash dispatch) still reach this turn.  Decode it here when the caller
+
+    # did not pass ``moa_config`` explicitly.
+
+    if moa_config is None:
+        try:
+            from clawk_cli.moa_config import decode_moa_turn
+
+            _decoded_message, _decoded_moa_config = decode_moa_turn(user_message)
+
+            if _decoded_moa_config is not None:
+                user_message = _decoded_message
+
+                moa_config = _decoded_moa_config
+
+                if persist_user_message is None:
+                    persist_user_message = _decoded_message
+
+        except Exception:
+            pass
 
     # Guard stdio against OSError from broken pipes (systemd/headless/daemon).
 
@@ -749,6 +794,16 @@ def run_conversation(
     agent._persist_user_message_idx = None
 
     agent._persist_user_message_override = persist_user_message
+
+    # Platform event time for the persisted user row (metadata, never content).
+
+    # Assigned unconditionally so a previous turn's timestamp cannot leak into
+
+    # this one.  Read back by ``AIAgent._apply_persist_user_message_override``
+
+    # and ``AIAgent._persist_session`` (run_agent.py).
+
+    agent._persist_user_message_timestamp = persist_user_timestamp
 
     # Generate unique task_id if not provided to isolate VMs between concurrent tasks
 
@@ -1706,6 +1761,71 @@ def run_conversation(
             api_messages = [
                 {"role": "system", "content": effective_system}
             ] + api_messages
+
+        # ── Mixture of Agents (per-turn one-shot) ──
+
+        # Fan out to the preset's reference models, synthesize their advice with
+
+        # the aggregator model, and append the result to the API copy of the
+
+        # last user message.  API-call-time only: the persisted transcript keeps
+
+        # the clean user text, so nothing leaks into resumed history.
+
+        # Advisor/aggregator calls go through auxiliary_client.call_llm, whose
+
+        # token usage is already recorded by the aux accounting context that
+
+        # ``AIAgent.run_conversation`` installs around this call.
+
+        if moa_config:
+            try:
+                from agent.message_content import flatten_message_text as _flatten_mt
+                from agent.moa_loop import _preset_temperature, aggregate_moa_context
+
+                _moa_context = aggregate_moa_context(
+                    user_prompt=(
+                        original_user_message
+                        if isinstance(original_user_message, str)
+                        # Multimodal / decorated content list: extract the
+                        # visible text instead of str()-ing a Python repr of
+                        # the parts (which would leak base64 image payloads
+                        # into the aggregator prompt).
+                        else _flatten_mt(original_user_message)
+                    ),
+                    api_messages=api_messages,
+                    reference_models=moa_config.get("reference_models") or [],
+                    aggregator=moa_config.get("aggregator") or {},
+                    temperature=_preset_temperature(
+                        moa_config, "reference_temperature"
+                    ),
+                    aggregator_temperature=_preset_temperature(
+                        moa_config, "aggregator_temperature"
+                    ),
+                    max_tokens=moa_config.get("reference_max_tokens"),
+                )
+
+                if _moa_context:
+                    for _msg in reversed(api_messages):
+                        if _msg.get("role") == "user":
+                            _base = _msg.get("content", "")
+
+                            if isinstance(_base, str):
+                                _msg["content"] = _base + "\n\n" + _moa_context
+
+                            elif isinstance(_base, list):
+                                # Multimodal user turn (text + image parts):
+                                # append the MoA context as a trailing text
+                                # part instead of silently dropping it.
+                                _msg["content"] = [
+                                    *_base,
+                                    {"type": "text", "text": "\n\n" + _moa_context},
+                                ]
+
+                            break
+
+            except Exception as _moa_exc:
+                logger.warning("MoA context aggregation failed: %s", _moa_exc)
 
         # Inject ephemeral prefill messages right after the system prompt
 
