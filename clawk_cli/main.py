@@ -17082,7 +17082,20 @@ def _cmd_update_pip(args):
 
     update_managed_uv()
 
-    uv, _fresh_bootstrap = ensure_uv()
+    # ``ensure_uv()`` tiene contrato distinto por plataforma a proposito: en
+    # POSIX devuelve un _UvResult desempaquetable como (path, fresh_bootstrap),
+    # pero en Windows devuelve un str plano (un _UvResult ahi romperia
+    # subprocess.list2cmdline). Desempaquetar a ciegas hacia estallar `clawk
+    # update` en Windows con "too many values to unpack". Se normaliza igual
+    # que el resto de los call sites.
+    _uv_result = ensure_uv()
+
+    if isinstance(_uv_result, (list, tuple)):
+        uv = _uv_result[0] if _uv_result else None
+        _fresh_bootstrap = _uv_result[1] if len(_uv_result) > 1 else False
+    else:
+        uv = _uv_result
+        _fresh_bootstrap = False
 
     in_venv = sys.prefix != sys.base_prefix
 
