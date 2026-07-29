@@ -137,6 +137,7 @@ def test_production_code_contains_hydration_block():
     Either module counts so the guard tolerates legitimate relocation
     within the turn subsystem.
     """
+    import re
     from pathlib import Path
 
     repo = Path(__file__).resolve().parents[2]
@@ -149,7 +150,10 @@ def test_production_code_contains_hydration_block():
         "Hydration comment missing from the turn subsystem "
         "(conversation_loop.py / turn_context.py)"
     )
+    # Collapse whitespace so the guard survives the formatter wrapping the
+    # assignment across lines (``= (\n    prior_user_turns % ...\n)``).
+    flat = re.sub(r"[\s()]+", " ", turn_src)
     assert (
         "agent._turns_since_memory = prior_user_turns % agent._memory_nudge_interval"
-        in turn_src
+        in flat
     ), "Hydration modulo assignment missing from the turn subsystem"

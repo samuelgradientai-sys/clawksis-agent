@@ -7159,7 +7159,7 @@ def _save_anthropic_oauth_creds(
 
     from agent.anthropic_adapter import _get_clawk_oauth_file
 
-    _CLAWK_OAUTH_FILE = _get_clawk_oauth_file()
+    oauth_file = _get_clawk_oauth_file()
 
     payload = {
         "accessToken": access_token,
@@ -7167,35 +7167,21 @@ def _save_anthropic_oauth_creds(
         "expiresAt": expires_at_ms,
     }
 
-    _CLAWK_OAUTH_FILE.parent.mkdir(parents=True, exist_ok=True)
+    # atomic_json_write creates the temp with mode 0o600 (via mkstemp) *before*
 
-    tmp_path = _CLAWK_OAUTH_FILE.with_name(
-        f"{_CLAWK_OAUTH_FILE.name}.tmp.{os.getpid()}.{secrets.token_hex(8)}"
-    )
+    # any content is written, then fsyncs and atomically replaces the target.
 
-    try:
-        with tmp_path.open("w", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, indent=2))
+    # The previous os.replace + post-hoc chmod left a TOCTOU window in which the
 
-            handle.flush()
+    # OAuth token file was world-readable at the default umask (0o644 on most
 
-            os.fsync(handle.fileno())
+    # hosts) between the rename and the chmod. atomic_json_write also preserves
 
-        os.replace(tmp_path, _CLAWK_OAUTH_FILE)
+    # the existing file's owner and cleans up its temp on failure.
 
-        try:
-            _CLAWK_OAUTH_FILE.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    from utils import atomic_json_write
 
-        except OSError:
-            pass
-
-    finally:
-        try:
-            if tmp_path.exists():
-                tmp_path.unlink()
-
-        except OSError:
-            pass
+    atomic_json_write(oauth_file, payload, indent=2, mode=0o600)
 
     # Best-effort credential-pool insert. Failure here doesn't invalidate
 

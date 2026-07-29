@@ -15,6 +15,8 @@ import json
 
 import os
 
+from pathlib import Path
+
 
 import pytest
 
@@ -307,15 +309,21 @@ class TestRunJobProfileContext:
 
         monkeypatch.setenv("CLAWK_CRON_TIMEOUT", "0")
 
-        import dotenv
+        # run_job re-reads the env through clawk_cli.env_loader.load_clawk_dotenv
+        # (not a bare dotenv.load_dotenv) so external secret sources are
+        # re-resolved per run — hook that instead.
 
-        def fake_load_dotenv(path, *_a, **_kw):
+        import clawk_cli.env_loader as env_loader
 
-            observed.setdefault("dotenv_paths", []).append(str(path))
+        def fake_load_clawk_dotenv(*, clawk_home=None, project_env=None):
 
-            return True
+            env_path = Path(clawk_home or ".") / ".env"
 
-        monkeypatch.setattr(dotenv, "load_dotenv", fake_load_dotenv)
+            observed.setdefault("dotenv_paths", []).append(str(env_path))
+
+            return [env_path]
+
+        monkeypatch.setattr(env_loader, "load_clawk_dotenv", fake_load_clawk_dotenv)
 
     def test_run_job_sets_and_restores_profile_home(
         self, isolated_cron_profile_home, monkeypatch
@@ -364,7 +372,7 @@ class TestRunJobProfileContext:
         self, isolated_cron_profile_home, monkeypatch
     ):
 
-        import dotenv
+        import clawk_cli.env_loader as env_loader
 
         import cron.scheduler as sched
 
@@ -378,9 +386,11 @@ class TestRunJobProfileContext:
 
         monkeypatch.delenv("CLAWK_PROFILE_TEST_ONLY", raising=False)
 
-        def fake_load_dotenv(path, *_a, **_kw):
+        def fake_load_clawk_dotenv(*, clawk_home=None, project_env=None):
 
-            observed.setdefault("dotenv_paths", []).append(str(path))
+            env_path = Path(clawk_home or ".") / ".env"
+
+            observed.setdefault("dotenv_paths", []).append(str(env_path))
 
             os.environ["CLAWK_PROFILE_TEST_SHARED"] = "profile-value"
 
@@ -388,9 +398,9 @@ class TestRunJobProfileContext:
 
             os.environ["CLAWK_CRON_TIMEOUT"] = "123"
 
-            return True
+            return [env_path]
 
-        monkeypatch.setattr(dotenv, "load_dotenv", fake_load_dotenv)
+        monkeypatch.setattr(env_loader, "load_clawk_dotenv", fake_load_clawk_dotenv)
 
         job = {
             "id": "env-profile",
@@ -585,7 +595,7 @@ class TestTickProfilePartition:
 
         order_lock = threading.Lock()
 
-        def fake_run_job(job):
+        def fake_run_job(job, **_kwargs):
 
             with order_lock:
                 calls.append((job["id"], threading.current_thread().name))

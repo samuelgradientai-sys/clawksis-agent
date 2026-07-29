@@ -7391,6 +7391,9 @@ def get_auth_status(provider_id: Optional[str] = None) -> Dict[str, Any]:
         return get_xai_oauth_auth_status()
     if target == "qwen-oauth":
         return get_qwen_auth_status()
+    # Fork-only provider (upstream deleted it); keep it dispatchable.
+    if target == "google-gemini-cli":
+        return get_gemini_oauth_auth_status()
     if target == "minimax-oauth":
         return get_minimax_oauth_auth_status()
     if target == "copilot-acp":

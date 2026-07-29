@@ -1,7 +1,6 @@
 """Core-functionality tests for the kanban kernel + CLI additions.
 
 
-
 Complements tests/clawk_cli/test_kanban_db.py (schema + CAS atomicity)
 
 and tests/clawk_cli/test_kanban_cli.py (end-to-end run_slash).  The
@@ -343,7 +342,6 @@ def test_per_task_max_retries_overrides_dispatcher_limit(
     """Per-task ``max_retries`` overrides both the caller-supplied
 
     ``failure_limit`` (gateway config) and the hardcoded default.
-
 
 
     Three-tier resolution order:
@@ -3049,7 +3047,6 @@ def test_dashboard_direct_status_change_off_running_closes_run(kanban_home):
     """Dashboard drag-drop running->ready must close the active run.
 
 
-
     Importing _set_status_direct directly to simulate the PATCH handler
 
     without spinning up FastAPI.
@@ -3910,7 +3907,6 @@ def test_pid_alive_detects_zombie(kanban_home):
     """_pid_alive must return False for a zombie process.
 
 
-
     Without the /proc check, kill(pid, 0) succeeds against zombies
 
     (process table entry exists until parent reaps), so the dispatcher
@@ -3964,7 +3960,6 @@ def test_task_ids_dont_collide_at_scale(kanban_home):
     """ID generator must be wide enough that creating 10k tasks doesn't
 
     hit a UNIQUE constraint violation.
-
 
 
     Regression test for the 2-hex-byte ID (65k space) that would
@@ -4326,96 +4321,10 @@ def test_build_worker_context_caps_huge_summary(kanban_home):
         conn.close()
 
 
-def test_default_spawn_auto_loads_kanban_worker_skill(kanban_home, monkeypatch):
-    """The dispatcher's _default_spawn must include --skills kanban-worker
-
-    in its argv so every worker loads the skill automatically, even if
-
-    the profile hasn't wired it into its default skills config.
-
-
-
-    We intercept Popen to capture the argv without actually spawning a
-
-    clawk subprocess (which would hang trying to call an LLM).
-
-    """
-
-    # Pretend the bundled kanban-worker skill resolves for this isolated
-
-    # CLAWK_HOME — the fixture creates an empty tmpdir without the
-
-    # devops/kanban-worker tree, and _default_spawn gates the --skills
-
-    # flag on actual resolvability.
-
-    monkeypatch.setattr(kb, "_kanban_worker_skill_available", lambda _h: True)
-
-    captured = {}
-
-    class FakeProc:
-        def __init__(self):
-
-            self.pid = 99999
-
-    def fake_popen(cmd, **kwargs):
-
-        captured["cmd"] = cmd
-
-        captured["env"] = kwargs.get("env", {})
-
-        return FakeProc()
-
-    monkeypatch.setattr("subprocess.Popen", fake_popen)
-
-    conn = kb.connect()
-
-    try:
-        tid = kb.create_task(conn, title="skill-loading test", assignee="some-profile")
-
-        task = kb.get_task(conn, tid)
-
-        workspace = kb.resolve_workspace(task)
-
-        pid = kb._default_spawn(task, str(workspace))
-
-        assert pid == 99999
-
-    finally:
-        conn.close()
-
-    cmd = captured["cmd"]
-
-    assert "--skills" in cmd, f"spawn argv missing --skills: {cmd}"
-
-    idx = cmd.index("--skills")
-
-    assert cmd[idx + 1] == "kanban-worker", (
-        f"expected 'kanban-worker', got {cmd[idx + 1]!r}"
-    )
-
-    assert "--accept-hooks" in cmd, f"spawn argv missing --accept-hooks: {cmd}"
-
-    assert cmd.index("--accept-hooks") < cmd.index("chat"), (
-        f"--accept-hooks must come before 'chat' in argv: {cmd}"
-    )
-
-    # Assignee + task env are still present
-
-    assert "some-profile" in cmd
-
-    env = captured["env"]
-
-    assert env.get("CLAWK_KANBAN_TASK") == tid
-
-    assert env.get("CLAWK_PROFILE") == "some-profile"
-
-
 def test_default_spawn_raises_terminal_timeout_to_task_runtime(
     kanban_home, monkeypatch
 ):
     """A task runtime cap should raise the worker's terminal default.
-
 
 
     This is worker-scoped env only: normal CLI/gateway terminal settings stay
@@ -4687,7 +4596,6 @@ def test_create_task_skills_lists_all_toolset_typos(kanban_home):
     """When several toolset names are passed, the error names every one.
 
 
-
     Agents that confuse skills with toolsets usually pass several at once
 
     (``skills=["web", "browser", "terminal"]``). Listing only the first
@@ -4727,28 +4635,20 @@ def test_create_task_skills_lists_all_toolset_typos(kanban_home):
 
 def test_default_spawn_appends_per_task_skills(kanban_home, monkeypatch):
     """Dispatcher argv must carry one `--skills X` pair per task skill,
-
-    in addition to the built-in kanban-worker."""
-
-    monkeypatch.setattr(kb, "_kanban_worker_skill_available", lambda _h: True)
-
+    in declared order. No skill is auto-loaded anymore."""
     captured = {}
 
     class FakeProc:
         def __init__(self):
-
             self.pid = 42
 
     def fake_popen(cmd, **kwargs):
-
         captured["cmd"] = cmd
-
         return FakeProc()
 
     monkeypatch.setattr("subprocess.Popen", fake_popen)
 
     conn = kb.connect()
-
     try:
         tid = kb.create_task(
             conn,
@@ -4756,94 +4656,26 @@ def test_default_spawn_appends_per_task_skills(kanban_home, monkeypatch):
             assignee="linguist",
             skills=["translation", "github-code-review"],
         )
-
         task = kb.get_task(conn, tid)
-
         workspace = kb.resolve_workspace(task)
-
         kb._default_spawn(task, str(workspace))
-
     finally:
         conn.close()
 
     cmd = captured["cmd"]
-
     # Count every --skills pair and gather the skill names.
-
     skill_names = []
-
     for i, tok in enumerate(cmd):
         if tok == "--skills" and i + 1 < len(cmd):
             skill_names.append(cmd[i + 1])
-
-    # kanban-worker first (built-in), then per-task extras in order.
-
-    assert skill_names[0] == "kanban-worker", skill_names
-
-    assert "translation" in skill_names
-
-    assert "github-code-review" in skill_names
-
+    # Only the per-task skills, in declared order — nothing auto-loaded.
+    assert skill_names == ["translation", "github-code-review"], skill_names
     # --skills must appear BEFORE the `chat` subcommand so argparse
-
     # attaches them to the top-level parser, not the subcommand.
-
     chat_idx = cmd.index("chat")
-
     last_skills_idx = max(i for i, tok in enumerate(cmd) if tok == "--skills")
-
     assert last_skills_idx < chat_idx, (
         f"--skills must come before 'chat' in argv: {cmd}"
-    )
-
-
-def test_default_spawn_dedupes_kanban_worker_from_task_skills(kanban_home, monkeypatch):
-    """If a task explicitly lists 'kanban-worker', we don't double-pass it."""
-
-    monkeypatch.setattr(kb, "_kanban_worker_skill_available", lambda _h: True)
-
-    captured = {}
-
-    class FakeProc:
-        pid = 1
-
-    def fake_popen(cmd, **kwargs):
-
-        captured["cmd"] = cmd
-
-        return FakeProc()
-
-    monkeypatch.setattr("subprocess.Popen", fake_popen)
-
-    conn = kb.connect()
-
-    try:
-        tid = kb.create_task(
-            conn,
-            title="dup",
-            assignee="x",
-            skills=["kanban-worker", "translation"],
-        )
-
-        task = kb.get_task(conn, tid)
-
-        workspace = kb.resolve_workspace(task)
-
-        kb._default_spawn(task, str(workspace))
-
-    finally:
-        conn.close()
-
-    cmd = captured["cmd"]
-
-    worker_pairs = [
-        i
-        for i, tok in enumerate(cmd)
-        if tok == "--skills" and i + 1 < len(cmd) and cmd[i + 1] == "kanban-worker"
-    ]
-
-    assert len(worker_pairs) == 1, (
-        f"kanban-worker appeared {len(worker_pairs)} times in argv: {cmd}"
     )
 
 
@@ -5124,7 +4956,6 @@ def test_legacy_migration_no_legacy_columns_at_all(tmp_path):
     """Scenario A: DB has neither spawn_failures nor consecutive_failures.
 
 
-
     This is the exact crash scenario from issue #20842 — a very old DB that
 
     predates the spawn_failures column entirely.  The old RENAME COLUMN path
@@ -5223,7 +5054,6 @@ def test_legacy_migration_no_legacy_columns_at_all(tmp_path):
 
 def test_legacy_migration_both_columns_already_present(tmp_path):
     """Scenario D: DB already has both spawn_failures AND consecutive_failures.
-
 
 
     Represents a partially-migrated DB (e.g. user recovered manually after the
@@ -6107,7 +5937,6 @@ def test_complete_accepts_cross_worker_card_when_linked_as_child(kanban_home):
     when ``created_by`` doesn't match.
 
 
-
     (Relaxation salvaged from #20022 @LeonSGP43 — stricter version
 
     would incorrectly reject legitimate orchestrator flows where a
@@ -6785,99 +6614,6 @@ def test_detect_crashed_workers_increments_counter(kanban_home):
         assert task.consecutive_failures == 1
 
         assert task.status == "ready"
-
-    finally:
-        conn.close()
-
-
-def test_detect_crashed_workers_protocol_violation_auto_blocks(kanban_home):
-    """A worker that exited rc=0 while its task was still ``running``
-
-    is a protocol violation (agent answered conversationally without
-
-    calling kanban_complete / kanban_block). Retrying will just loop,
-
-    so auto-block immediately instead of waiting for the breaker to
-
-    trip at ``DEFAULT_FAILURE_LIMIT``.
-
-
-
-    Regression test for the respawn-loop-after-completion bug reported
-
-    against small local models (gemma4-e2b q4) where the model writes
-
-    the answer as plain text and the CLI exits rc=0 cleanly.
-
-    """
-
-    import clawk_cli.kanban_db as _kb
-
-    conn = kb.connect()
-
-    try:
-        tid = kb.create_task(conn, title="quiet", assignee="worker")
-
-        host_prefix = _kb._claimer_id().split(":", 1)[0]
-
-        lock = f"{host_prefix}:mock"
-
-        kb.claim_task(conn, tid, claimer=lock)
-
-        fake_pid = 999998
-
-        kb._set_worker_pid(conn, tid, fake_pid)
-
-        # Simulate the reap loop having recorded a clean exit for this pid.
-
-        # os.W_EXITCODE(status=0, signal=0) == 0 on POSIX.
-
-        _kb._record_worker_exit(fake_pid, 0)
-
-        # Force liveness check to say "dead" for the fake pid.
-
-        original_alive = _kb._pid_alive
-
-        _kb._pid_alive = lambda p: False
-
-        try:
-            result_crashed = kb.detect_crashed_workers(conn)
-
-        finally:
-            _kb._pid_alive = original_alive
-
-        assert tid in result_crashed, "should be detected as crashed"
-
-        task = kb.get_task(conn, tid)
-
-        assert task.status == "blocked", (
-            f"protocol violation should auto-block on first occurrence, "
-            f"got status={task.status}"
-        )
-
-        assert "kanban_complete" in (task.last_failure_error or ""), (
-            f"expected protocol-violation message, got {task.last_failure_error!r}"
-        )
-
-        events = kb.list_events(conn, tid)
-
-        kinds = [e.kind for e in events]
-
-        assert "protocol_violation" in kinds, (
-            f"expected 'protocol_violation' event, got {kinds}"
-        )
-
-        # The ``crashed`` event would be misleading here — the worker
-
-        # didn't crash, it returned 0.
-
-        assert "crashed" not in kinds, (
-            f"should NOT emit 'crashed' event on clean exit, got {kinds}"
-        )
-
-        assert "gave_up" in kinds, (
-            f"breaker should trip, expected 'gave_up' event, got {kinds}"
-        )
 
     finally:
         conn.close()

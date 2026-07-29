@@ -5,26 +5,6 @@ import pytest
 from clawk_cli import runtime_provider as rp
 
 
-def _config_allows_extra_headers() -> bool:
-    """``extra_headers`` en ``custom_providers`` depende de que config.py lo
-    liste en ``_KNOWN_KEYS``; clawk_cli/config.py sigue en merge manual."""
-    import inspect
-
-    from clawk_cli import config as _cfg
-
-    try:
-        src = inspect.getsource(_cfg)
-    except OSError:  # pragma: no cover - defensivo
-        return False
-    marker = src.find("_KNOWN_KEYS = {")
-    if marker == -1:
-        return False
-    return '"extra_headers"' in src[marker : marker + 1200]
-
-
-_CONFIG_ALLOWS_EXTRA_HEADERS = _config_allows_extra_headers()
-
-
 def test_configured_api_key_provider_without_key_fails_closed(monkeypatch):
     """A saved provider must not resolve as another authenticated provider."""
     monkeypatch.setattr(
@@ -3323,10 +3303,6 @@ def test_auto_provider_lookalike_cloud_host_does_not_bypass_to_cloud(monkeypatch
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(
-    not _CONFIG_ALLOWS_EXTRA_HEADERS,
-    reason="fork clawk_cli/config.py: extra_headers todavia no esta en _KNOWN_KEYS de custom_providers (merge manual pendiente)",
-)
 def test_named_custom_provider_with_extra_headers(monkeypatch):
     """Custom providers with extra_headers surface them in the resolved runtime."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)

@@ -232,6 +232,15 @@ class TestHTTP413Compression:
         mock_compress.assert_called_once()
         assert result["completed"] is True
 
+    @pytest.mark.skip(
+        reason="Fork does not port upstream's vision-payload eviction inside the "
+        "413 retry path. The fork's bounded conversation_loop gates 413 retries "
+        "solely on message-count reduction (len(messages) < original_len), backed by "
+        "the fork's semantic-no-op detection in agent/conversation_compression.py; "
+        "it never falls through to _try_strip_image_parts_from_tool_messages() for "
+        "413. Porting that means reworking the 413 handler, which this sync "
+        "deliberately left alone."
+    )
     def test_413_strips_vision_payloads_when_compression_cannot_reduce_messages(
         self, agent
     ):
@@ -534,6 +543,15 @@ class TestHTTP413Compression:
         assert result.get("partial") is True
         assert "413" in result["error"]
 
+    @pytest.mark.skip(
+        reason="Fork does not port upstream's token-based 413 progress gate "
+        "(#39550/#23767). The fork's bounded conversation_loop keeps the "
+        "message-count gate (len(messages) < original_len), which pairs with the "
+        "fork's semantic-no-op detection in agent/conversation_compression.py "
+        "(len(returned) == len(input) means no progress), so a same-count / "
+        "fewer-tokens compression is still terminal. Re-estimating tokens here "
+        "would change the semantics of that no-op guard."
+    )
     def test_413_retries_on_token_only_compression(self, agent):
         """Same message COUNT but fewer TOKENS must count as progress and retry.
 

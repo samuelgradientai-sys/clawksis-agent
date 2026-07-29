@@ -389,9 +389,14 @@ class TestCmdUpdateBranchFallback:
 
         # otherwise long downloads look like a hang (#18840).
 
+        # ``_run_npm_install_deterministic`` pins ``--include=dev`` on every
+        # ``npm ci`` so a production NODE_ENV in the environment can't drop the
+        # devDependencies the TUI/web builds need.
+
         root_flags = [
             "/usr/bin/npm",
             "ci",
+            "--include=dev",
             "--no-fund",
             "--no-audit",
             "--progress=false",
@@ -401,6 +406,7 @@ class TestCmdUpdateBranchFallback:
         ws_flags = [
             "/usr/bin/npm",
             "ci",
+            "--include=dev",
             "--no-fund",
             "--no-audit",
             "--progress=false",
@@ -425,7 +431,10 @@ class TestCmdUpdateBranchFallback:
 
         ui_tui_build = (["/usr/bin/npm", "run", "build"], PROJECT_ROOT / "ui-tui")
 
-        ci_install = (["/usr/bin/npm", "ci", "--silent"], PROJECT_ROOT)
+        ci_install = (
+            ["/usr/bin/npm", "ci", "--include=dev", "--silent"],
+            PROJECT_ROOT,
+        )
 
         other_npm = npm_calls[2:]
 

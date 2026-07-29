@@ -940,6 +940,22 @@ class TestWorktreeSymlinkFallback:
 # ---------------------------------------------------------------------------
 
 
+def _gateway_watcher_block(text: str) -> str:
+    """Return the inlined respawn-watcher payload source from gateway.py.
+
+    Formatting-agnostic: ``ruff format`` (preview mode) rewrites
+    ``textwrap.dedent(...).strip().format(...)`` into a multi-line fluent
+    chain, so the block cannot be located by an exact
+    ``watcher = textwrap.dedent(`` literal.  Anchor on the assignment and on
+    the ``watcher_argv`` list that immediately follows it instead.
+    """
+    start = text.find("watcher = ")
+    assert start != -1, "watcher block not found in gateway.py"
+    end = text.find("watcher_argv = [", start)
+    assert end != -1, "watcher block end not found"
+    return text[start:end]
+
+
 class TestGatewayDetachedWatcherWindowsFlags:
     """launch_detached_profile_gateway_restart and the in-gateway update
     launcher must use CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS on
@@ -981,12 +997,7 @@ class TestGatewayDetachedWatcherWindowsFlags:
         """
         root = Path(__file__).resolve().parents[2]
         text = (root / "clawk_cli" / "gateway.py").read_text(encoding="utf-8")
-        marker = "watcher = textwrap.dedent("
-        idx = text.find(marker)
-        assert idx != -1, "watcher block not found in gateway.py"
-        end = text.find(").strip()", idx)
-        assert end != -1, "watcher block end not found"
-        block = text[idx:end]
+        block = _gateway_watcher_block(text)
         assert "from clawk_cli._subprocess_compat import" in block
         assert "windows_detach_flags" in block
         assert "windows_detach_flags()" in block, (
@@ -1030,10 +1041,7 @@ class TestGatewayDetachedWatcherWindowsFlags:
         # And the inlined watcher's respawn must also handle the denial —
         # check the symbol is referenced INSIDE the watcher block (not
         # just at module scope).
-        marker = "watcher = textwrap.dedent("
-        idx = text.find(marker)
-        end = text.find(").strip()", idx)
-        block = text[idx:end]
+        block = _gateway_watcher_block(text)
         assert "except OSError" in block
         assert "windows_detach_flags_without_breakaway()" in block, (
             "Inlined respawn must catch OSError on the breakaway-denied "
@@ -1067,10 +1075,7 @@ class TestGatewayDetachedWatcherWindowsFlags:
             "gateway_windows.windowless_gateway_restart_spec so the gateway "
             "comes back as windowless pythonw.exe, not console python.exe."
         )
-        marker = "watcher = textwrap.dedent("
-        idx = text.find(marker)
-        end = text.find(".strip()", idx)
-        block = text[idx:end]
+        block = _gateway_watcher_block(text)
         # The inlined respawn must apply the cwd + env overlay the base
         # interpreter needs — without them the windowless pythonw can't
         # import clawk_cli.

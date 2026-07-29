@@ -168,7 +168,15 @@ def test_banner_warns_on_pip_install(tmp_path):
 
     assert "officially" in out
 
-    assert "instability" in out
+    # The wording now lives in the shared ``format_unsupported_install_warning``
+    # helper (reused by the banner, session.info and ``clawk update``), so
+    # assert against that instead of a hardcoded phrase that can drift.
+
+    from clawk_cli.config import format_unsupported_install_warning
+
+    assert "no longer an officially supported platform" in out
+
+    assert format_unsupported_install_warning("pip").split(".")[0] in out
 
 
 def test_banner_no_pip_warning_on_git_install(tmp_path):

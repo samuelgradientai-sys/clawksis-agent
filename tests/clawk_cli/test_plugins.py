@@ -371,7 +371,7 @@ class TestPluginDiscovery:
         project_dir.mkdir()
         monkeypatch.chdir(project_dir)
         monkeypatch.setenv("CLAWK_ENABLE_PROJECT_PLUGINS", "true")
-        plugins_dir = project_dir / ".clawk" / "plugins"
+        plugins_dir = project_dir / ".clawksis" / "plugins"
         _make_plugin_dir(plugins_dir, "proj_plugin")
 
         mgr = PluginManager()
@@ -385,7 +385,7 @@ class TestPluginDiscovery:
         project_dir = tmp_path / "project"
         project_dir.mkdir()
         monkeypatch.chdir(project_dir)
-        plugins_dir = project_dir / ".clawk" / "plugins"
+        plugins_dir = project_dir / ".clawksis" / "plugins"
         _make_plugin_dir(plugins_dir, "proj_plugin")
 
         mgr = PluginManager()

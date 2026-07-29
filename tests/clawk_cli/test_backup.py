@@ -2403,8 +2403,13 @@ class TestPreUpdateBackup:
 
 class TestRunPreUpdateBackup:
     """Tests for the ``_run_pre_update_backup`` wrapper in main.py —
-    covers the consolidated off/quick/full mode gate, CLI flags, and
-    user-facing output."""
+    covers config gate, ``--no-backup`` flag, and user-facing output.
+
+    NOTE: this fork's main.py keeps the zip-only hook (off by default,
+    ``--backup`` opts in for one run) and takes the quick state snapshot
+    separately later in the update flow, so there is no off/quick/full mode
+    gate and no snapshot id to return.
+    """
 
     @pytest.fixture
     def clawk_home(self, tmp_path, monkeypatch):
@@ -2422,7 +2427,7 @@ class TestRunPreUpdateBackup:
         return root
 
     @staticmethod
-    def _set_mode(clawk_home, value):
+    def _write_mode(clawk_home, value):
         import yaml
 
         (clawk_home / "config.yaml").write_text(
@@ -2442,139 +2447,67 @@ class TestRunPreUpdateBackup:
         d = clawk_home / "backups"
         return list(d.glob("pre-update-*.zip")) if d.exists() else []
 
-    @staticmethod
-    def _snaps(clawk_home):
-        d = clawk_home / "state-snapshots"
-        return [p for p in d.iterdir() if p.is_dir()] if d.exists() else []
-
-    def test_default_creates_quick_snapshot_only(self, clawk_home, capsys):
-        """With no config, the default mode is ``quick``: a state snapshot is
-        created but NOT the full zip."""
+    def test_backup_flag_creates_backup(self, clawk_home, capsys):
+        """--backup forces the pre-update backup for one run even when config is off."""
         from clawk_cli.main import _run_pre_update_backup
 
-        snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
+        _run_pre_update_backup(Namespace(no_backup=False, backup=True))
         out = capsys.readouterr().out
-        assert snap_id is not None
-        assert "Pre-update snapshot" in out
-        assert "Creating pre-update backup" not in out
-        assert self._snaps(clawk_home)
-        assert not self._zips(clawk_home)
-
-    def test_backup_flag_forces_full(self, clawk_home, capsys):
-        """--backup forces the full zip (plus quick snapshot) for one run."""
-        from clawk_cli.main import _run_pre_update_backup
-
-        snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=True))
-        out = capsys.readouterr().out
-        assert snap_id is not None
-        assert "Pre-update snapshot" in out
         assert "Creating pre-update backup" in out
         assert "Saved:" in out
+        assert "Restore:" in out
         assert "clawk import" in out
+        assert "Disable:" in out
         assert len(self._zips(clawk_home)) == 1
 
-    def test_no_backup_flag_skips_everything(self, clawk_home, capsys):
-        """--no-backup skips BOTH the quick snapshot and the zip."""
+    def test_default_disabled_is_silent(self, clawk_home, capsys):
+        """With the default-off config and no --backup flag, the hook is silent
+        and creates no backup.  This is the common case for every update."""
         from clawk_cli.main import _run_pre_update_backup
 
-        snap_id = _run_pre_update_backup(Namespace(no_backup=True, backup=False))
-        out = capsys.readouterr().out
-        assert snap_id is None
-        assert "skipped (--no-backup)" in out
-        assert "Pre-update snapshot" not in out
-        assert not self._snaps(clawk_home)
-        assert not self._zips(clawk_home)
-
-    def test_config_off_disables_everything_silently(self, clawk_home, capsys):
-        """pre_update_backup: off — an explicit opt-out disables the quick
-        snapshot too (it previously ran unconditionally), with no output."""
-        self._set_mode(clawk_home, "off")
-        from clawk_cli.main import _run_pre_update_backup
-
-        snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
-        out = capsys.readouterr().out
-        assert snap_id is None
-        assert out == ""
-        assert not self._snaps(clawk_home)
-        assert not self._zips(clawk_home)
-
-    def test_legacy_false_maps_to_off(self, clawk_home, capsys):
-        """Legacy boolean ``false`` (the old zip opt-out) now means off."""
-        self._set_mode(clawk_home, False)
-        from clawk_cli.main import _run_pre_update_backup
-
-        snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
-        assert snap_id is None
+        _run_pre_update_backup(Namespace(no_backup=False, backup=False))
         assert capsys.readouterr().out == ""
-        assert not self._snaps(clawk_home)
         assert not self._zips(clawk_home)
 
-    def test_legacy_true_maps_to_full(self, clawk_home, capsys):
-        """Legacy boolean ``true`` (the old always-zip opt-in) means full."""
-        self._set_mode(clawk_home, True)
+    def test_no_backup_flag_skips(self, clawk_home, capsys):
         from clawk_cli.main import _run_pre_update_backup
 
-        snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
+        _run_pre_update_backup(Namespace(no_backup=True, backup=False))
         out = capsys.readouterr().out
-        assert snap_id is not None
+        assert "skipped (--no-backup)" in out
+        assert "Creating pre-update backup" not in out
+        assert not self._zips(clawk_home)
+
+    def test_config_enabled_creates_backup(self, clawk_home, capsys):
+        """Users who explicitly set updates.pre_update_backup: true still get
+        a backup on every update — this is the opt-in legacy behavior."""
+        self._write_mode(clawk_home, True)
+        from clawk_cli.main import _run_pre_update_backup
+
+        _run_pre_update_backup(Namespace(no_backup=False, backup=False))
+        out = capsys.readouterr().out
         assert "Creating pre-update backup" in out
         assert "Saved:" in out
         assert len(self._zips(clawk_home)) == 1
 
-    def test_config_full_mode(self, clawk_home, capsys):
-        self._set_mode(clawk_home, "full")
+    def test_config_disabled_is_silent(self, clawk_home, capsys):
+        """Explicit pre_update_backup: false behaves the same as the default —
+        silent no-op, no message spam."""
+        self._write_mode(clawk_home, False)
         from clawk_cli.main import _run_pre_update_backup
 
-        snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
-        out = capsys.readouterr().out
-        assert snap_id is not None
-        assert "Pre-update snapshot" in out
-        assert "Creating pre-update backup" in out
-        assert len(self._zips(clawk_home)) == 1
-
-    def test_config_quick_mode(self, clawk_home, capsys):
-        self._set_mode(clawk_home, "quick")
-        from clawk_cli.main import _run_pre_update_backup
-
-        snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
-        out = capsys.readouterr().out
-        assert snap_id is not None
-        assert "Pre-update snapshot" in out
-        assert "Creating pre-update backup" not in out
+        _run_pre_update_backup(Namespace(no_backup=False, backup=False))
+        assert capsys.readouterr().out == ""
         assert not self._zips(clawk_home)
 
-    def test_unknown_mode_falls_back_to_quick(self, clawk_home, capsys):
-        self._set_mode(clawk_home, "bogus-mode")
+    def test_cli_flag_overrides_enabled_config(self, clawk_home, capsys):
+        """--no-backup wins even when config says pre_update_backup: true."""
+        self._write_mode(clawk_home, True)
         from clawk_cli.main import _run_pre_update_backup
 
-        snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=False))
-        out = capsys.readouterr().out
-        assert snap_id is not None
-        assert "Pre-update snapshot" in out
+        _run_pre_update_backup(Namespace(no_backup=True, backup=False))
+        assert "skipped (--no-backup)" in capsys.readouterr().out
         assert not self._zips(clawk_home)
-
-    def test_no_backup_flag_overrides_full_config(self, clawk_home, capsys):
-        """--no-backup wins even when config says full."""
-        self._set_mode(clawk_home, "full")
-        from clawk_cli.main import _run_pre_update_backup
-
-        snap_id = _run_pre_update_backup(Namespace(no_backup=True, backup=False))
-        out = capsys.readouterr().out
-        assert snap_id is None
-        assert "skipped (--no-backup)" in out
-        assert not self._snaps(clawk_home)
-        assert not self._zips(clawk_home)
-
-    def test_backup_flag_overrides_off_config(self, clawk_home, capsys):
-        """--backup wins over config off for a single run."""
-        self._set_mode(clawk_home, "off")
-        from clawk_cli.main import _run_pre_update_backup
-
-        snap_id = _run_pre_update_backup(Namespace(no_backup=False, backup=True))
-        out = capsys.readouterr().out
-        assert snap_id is not None
-        assert "Creating pre-update backup" in out
-        assert len(self._zips(clawk_home)) == 1
 
 
 # ---------------------------------------------------------------------------

@@ -141,7 +141,11 @@ def test_check_for_updates_expired_cache(tmp_path, monkeypatch):
 
     assert result == 5
 
-    assert mock_run.call_count == 2  # git fetch + git rev-list
+    # _check_via_local_git first probes `rev-parse --is-shallow-repository` so a
+    # shallow clone gets a `--depth 1` fetch instead of an implicit deepen, then
+    # fetches, then counts: 3 git invocations on the normal (non-shallow) path.
+
+    assert mock_run.call_count == 3  # rev-parse --is-shallow + fetch + rev-list
 
 
 def test_check_for_updates_no_git_dir(tmp_path, monkeypatch):

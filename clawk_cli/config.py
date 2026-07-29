@@ -1891,6 +1891,20 @@ DEFAULT_CONFIG = {
             "timeout": 30,
             "extra_body": {},
         },
+        # Memory query rewrite — turn a raw turn into a retrieval query before
+        # hitting the memory backend. Invoked by plugins/memory/query_rewrite.py
+        # (``TASK_KEY = "memory_query_rewrite"``), which documents itself as
+        # tunable via ``auxiliary.memory_query_rewrite``; without an entry here
+        # the ``clawk model`` aux menu offered the task but the config-backed
+        # provider/timeout overrides silently did nothing.
+        "memory_query_rewrite": {
+            "provider": "auto",
+            "model": "",
+            "base_url": "",
+            "api_key": "",
+            "timeout": 8,
+            "extra_body": {},
+        },
         # Triage specifier — flesh out a rough one-liner in the Kanban
         # Triage column into a concrete spec, then promote it to ``todo``.
         # Invoked by ``clawk kanban specify`` (single id or --all). Set a
@@ -4707,15 +4721,39 @@ def _normalize_custom_provider_entry(
     elif isinstance(models, list) and models:
         # Hand-edited configs (and older Clawksis versions) write ``models`` as
 
-        # a plain list of model ids. Preserve them by converting to the dict
+        # a plain list of model ids, or as ``[{id: ..., context_length: ...}]``
 
-        # shape downstream code expects; otherwise normalize silently drops
+        # rows. Preserve both by converting to the dict shape downstream code
 
-        # the list and /model shows the provider with (0) models.
+        # expects; otherwise normalize silently drops the list and /model
 
-        normalized["models"] = {
-            str(m): {} for m in models if isinstance(m, str) and m.strip()
-        }
+        # shows the provider with (0) models.
+
+        normalized_models: Dict[str, Any] = {}
+
+        for item in models:
+            if isinstance(item, str) and item.strip():
+                normalized_models[item.strip()] = {}
+
+                continue
+
+            if not isinstance(item, dict):
+                continue
+
+            model_id = item.get("id")
+
+            if not isinstance(model_id, str) or not model_id.strip():
+                model_id = item.get("name")
+
+            if not isinstance(model_id, str) or not model_id.strip():
+                continue
+
+            normalized_models[model_id.strip()] = {
+                k: v for k, v in item.items() if k not in {"id", "name"}
+            }
+
+        if normalized_models:
+            normalized["models"] = normalized_models
 
     context_length = entry.get("context_length")
 
@@ -4736,6 +4774,36 @@ def _normalize_custom_provider_entry(
 
     if isinstance(extra_body, dict):
         normalized["extra_body"] = dict(extra_body)
+
+    # Per-provider extra HTTP headers (proxies, gateways, custom auth).
+
+    # SECURITY: values may carry credentials (e.g. CF-Access-Client-Secret) —
+
+    # never log them anywhere downstream.
+
+    normalized_headers = normalize_extra_headers(entry.get("extra_headers"))
+
+    if normalized_headers:
+        normalized["extra_headers"] = normalized_headers
+
+    # TLS overrides. ``get_custom_provider_tls_settings`` reads these off the
+
+    # *normalized* view, so dropping them here silently disabled a configured
+
+    # private CA / verify override for every legacy ``custom_providers`` entry.
+
+    ssl_ca_cert = entry.get("ssl_ca_cert")
+
+    if isinstance(ssl_ca_cert, str) and ssl_ca_cert.strip():
+        normalized["ssl_ca_cert"] = ssl_ca_cert.strip()
+
+    ssl_verify = entry.get("ssl_verify")
+
+    if isinstance(ssl_verify, bool):
+        normalized["ssl_verify"] = ssl_verify
+
+    elif isinstance(ssl_verify, str) and ssl_verify.strip():
+        normalized["ssl_verify"] = ssl_verify.strip()
 
     return normalized
 
@@ -8499,7 +8567,9 @@ TERMINAL_CONFIG_ENV_MAP = {
     "container_persistent": "TERMINAL_CONTAINER_PERSISTENT",
     "docker_volumes": "TERMINAL_DOCKER_VOLUMES",
     "docker_env": "TERMINAL_DOCKER_ENV",
+    "docker_extra_args": "TERMINAL_DOCKER_EXTRA_ARGS",
     "docker_mount_cwd_to_workspace": "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE",
+    "docker_network": "TERMINAL_DOCKER_NETWORK",
     "docker_run_as_host_user": "TERMINAL_DOCKER_RUN_AS_HOST_USER",
     "docker_persist_across_processes": "TERMINAL_DOCKER_PERSIST_ACROSS_PROCESSES",
     "docker_orphan_reaper": "TERMINAL_DOCKER_ORPHAN_REAPER",

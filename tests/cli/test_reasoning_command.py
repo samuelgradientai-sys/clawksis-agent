@@ -65,8 +65,9 @@ class TestParseReasoningConfig(unittest.TestCase):
         self.assertIsNone(self._parse("  "))
 
     def test_unknown_returns_none(self):
-
-        self.assertIsNone(self._parse("ultra"))
+        # NOTE: "ultra" and "max" became *valid* efforts upstream
+        # (clawk_constants.VALID_REASONING_EFFORTS), so they no longer belong
+        # in the unknown set.
 
         self.assertIsNone(self._parse("turbo"))
 

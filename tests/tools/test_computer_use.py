@@ -4251,7 +4251,7 @@ class TestSessionLifecycle:
         # clawk-{12 hex chars} — short enough to surface in logs
         # without being a privacy hazard, unique enough for concurrent runs.
         assert backend._session_id.startswith("clawk-")
-        assert len(backend._session_id) == 7 + 12
+        assert len(backend._session_id) == len("clawk-") + 12
 
     def test_session_id_unique_per_backend(self):
         from tools.computer_use.cua_backend import CuaDriverBackend
@@ -4694,8 +4694,16 @@ class TestStartupTimeoutPhaseDetail:
         import asyncio
         from unittest.mock import patch as _patch
 
+        # _start_lifecycle_locked() rebinds ``_ready_event`` to a fresh
+        # Event, so patching the instance above would never be consulted
+        # and the test would really block for the full 30s timeout.  Patch
+        # the factory so the newly created event reports "never ready".
+        class _NeverReady(threading.Event):
+            def wait(self, timeout=None):  # type: ignore[override]
+                return False
+
         with (
-            _patch.object(session._ready_event, "wait", return_value=False),
+            _patch.object(threading, "Event", _NeverReady),
             _patch.object(
                 asyncio, "run_coroutine_threadsafe", return_value=MagicMock()
             ),
@@ -4727,8 +4735,14 @@ class TestStartupTimeoutPhaseDetail:
         fake_bridge._loop = MagicMock()
         session._bridge = fake_bridge
 
+        # See the sibling test: the method rebinds _ready_event, so the
+        # factory has to be patched or the wait really takes 30s.
+        class _NeverReady(threading.Event):
+            def wait(self, timeout=None):  # type: ignore[override]
+                return False
+
         with (
-            _patch.object(session._ready_event, "wait", return_value=False),
+            _patch.object(threading, "Event", _NeverReady),
             _patch.object(
                 asyncio, "run_coroutine_threadsafe", return_value=MagicMock()
             ),

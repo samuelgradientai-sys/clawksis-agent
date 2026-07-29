@@ -33,6 +33,8 @@ import json
 
 import stat
 
+import sys
+
 import time
 
 from pathlib import Path
@@ -334,6 +336,10 @@ class TestCredentialIo:
 
         assert loaded.project_id == "proj-abc"
 
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"),
+        reason="POSIX mode bits not enforced on Windows",
+    )
     def test_save_uses_0600_permissions(self):
 
         from agent.google_oauth import _credentials_path, save_credentials

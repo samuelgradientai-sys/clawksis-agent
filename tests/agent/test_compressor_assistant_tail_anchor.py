@@ -43,6 +43,8 @@ Pinned here:
 
 from __future__ import annotations
 
+import re
+
 from unittest.mock import patch
 
 import pytest
@@ -562,14 +564,18 @@ class TestSourceGuardrail:
     def test_anchor_called_after_user_anchor(self, source):
         """The two anchors must run in sequence; reversing or skipping
         one drops the corresponding side of the guarantee."""
-        user_call = (
-            "self._ensure_last_user_message_in_tail(messages, cut_idx, head_end)"
-        )
-        asst_call = (
-            "self._ensure_last_assistant_message_in_tail(messages, cut_idx, head_end)"
-        )
-        user_idx = source.find(user_call)
-        asst_idx = source.find(asst_call)
+
+        # Match across the formatter's line wrapping: the assistant call is
+        # long enough that black splits it over three lines.
+        def _find(name: str) -> int:
+            match = re.search(
+                rf"self\.{name}\(\s*messages,\s*cut_idx,\s*head_end,?\s*\)",
+                source,
+            )
+            return match.start() if match else -1
+
+        user_idx = _find("_ensure_last_user_message_in_tail")
+        asst_idx = _find("_ensure_last_assistant_message_in_tail")
         assert user_idx >= 0 and asst_idx >= 0
         assert asst_idx > user_idx, (
             "The assistant anchor must come AFTER the user anchor in "

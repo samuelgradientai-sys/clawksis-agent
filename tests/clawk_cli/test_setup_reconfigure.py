@@ -258,12 +258,19 @@ class TestFreshInstall:
     called ``_run_first_time_quick_setup``) was removed — first run now goes
     straight to provider selection and runs every section. See commit
     "sacar el Quick Setup de Nous -> primer arranque es BYOK".
+
+    The one prompt that survives on first run is Full setup vs Blank Slate
+    (``prompt_choice`` -> ``setup_mode``); index 0 is Full setup, so these
+    tests pin it to 0 and assert the full BYOK flow still runs end to end.
+    Blank Slate itself is covered by its own tests.
     """
 
     def _run_fresh(self, args):
         with ExitStack() as stack:
             m = _enter_fresh_install_patches(
                 stack,
+                prompt=("clawk_cli.setup.prompt_choice", {"return_value": 0}),
+                blank="clawk_cli.setup._run_blank_slate_setup",
                 first="clawk_cli.setup._run_first_time_quick_setup",
                 model="clawk_cli.setup.setup_model_provider",
                 terminal="clawk_cli.setup.setup_terminal_backend",
@@ -284,6 +291,12 @@ class TestFreshInstall:
     def _assert_full_setup(self, m):
         # The removed Nous "Quick Setup" first-run shortcut must NOT run.
         m["first"].assert_not_called()
+
+        # Full-vs-Blank-Slate is the only first-run prompt, and answering
+        # "Full setup" must not divert into the Blank Slate path.
+        m["prompt"].assert_called_once()
+
+        m["blank"].assert_not_called()
 
         # Full setup runs every section exactly once.
         m["model"].assert_called_once()

@@ -871,6 +871,14 @@ class TestGetHonchoClient:
         mock_h3.assert_called_once()
         assert mock_h3.call_args.kwargs["timeout"] == 300.0
 
+    @pytest.mark.skip(
+        reason="Managed-scope config.yaml merging (CLAWK_MANAGED_DIR) is not "
+        "adopted: clawk_cli/config.py is still a fork divergence "
+        "(tools/upstream/pending/clawk_cli__config.py.theirs has the 22 "
+        "managed_scope call sites, the fork's load_config does not), so "
+        "load_config_readonly never sees the managed honcho.timeout. Unskip "
+        "when config.py is merged."
+    )
     @pytest.mark.skipif(
         not importlib.util.find_spec("honcho"), reason="honcho SDK not installed"
     )

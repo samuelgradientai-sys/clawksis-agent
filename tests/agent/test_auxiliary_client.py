@@ -3602,7 +3602,10 @@ class TestAuxiliaryTaskExtraBody:
         reasoning_effort key — per-slot preset config is the only surface."""
         from clawk_cli.config import DEFAULT_CONFIG
 
-        assert "reasoning_effort" not in DEFAULT_CONFIG["auxiliary"][moa_task]
+        # The MoA tasks have no shipped ``auxiliary`` block (neither fork nor
+        # upstream ship one) — the invariant is that they never grow a
+        # ``reasoning_effort`` key if one is ever added.
+        assert "reasoning_effort" not in DEFAULT_CONFIG["auxiliary"].get(moa_task, {})
 
     def test_anthropic_aux_client_forwards_extra_body_reasoning(self):
         """_AnthropicCompletionsAdapter passes extra_body.reasoning into

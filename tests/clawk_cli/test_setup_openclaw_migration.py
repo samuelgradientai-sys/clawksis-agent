@@ -858,6 +858,21 @@ class TestSetupWizardSkipsConfiguredSections:
 
             return True
 
+        # First run now opens with a Full-vs-Blank-Slate choice. Answer "Full
+
+        # setup" (index 0) — Blank Slate short-circuits the wizard and
+
+        # force-runs the provider section, which is exactly what this test
+
+        # asserts must be skipped. Any other prompt_choice keeps its old answer.
+
+        def choice_side(question, *args, **kwargs):
+
+            if "set up Clawksis" in question:
+                return 0
+
+            return 1
+
         reloaded_config = {"model": "openai/gpt-4"}
 
         # _platform_status (called by the gateway summary path) reads env
@@ -885,7 +900,7 @@ class TestSetupWizardSkipsConfiguredSections:
             patch.object(setup_mod, "is_interactive_stdin", return_value=True),
             patch("clawk_cli.auth.get_active_provider", return_value=None),
             patch("builtins.input", return_value=""),
-            patch.object(setup_mod, "prompt_choice", return_value=1),
+            patch.object(setup_mod, "prompt_choice", side_effect=choice_side),
             # Migration succeeds and flips the env_side flag
             patch.object(
                 setup_mod,

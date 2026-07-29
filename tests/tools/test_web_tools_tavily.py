@@ -221,6 +221,10 @@ class TestWebSearchTavily:
 
         with (
             patch("tools.web_tools._get_backend", return_value="tavily"),
+            # web_search_tool resolves the backend through
+            # _get_search_backend(), which honours the fork's ddgs default
+            # — without this the test issues a live DuckDuckGo request.
+            patch("tools.web_tools._get_search_backend", return_value="tavily"),
             patch.dict(os.environ, {"TAVILY_API_KEY": "tvly-test"}),
             patch("tools.web_tools.httpx.post", return_value=mock_response),
             patch("tools.interrupt.is_interrupted", return_value=False),
@@ -264,6 +268,7 @@ class TestWebExtractTavily:
 
         with (
             patch("tools.web_tools._get_backend", return_value="tavily"),
+            patch("tools.web_tools._get_extract_backend", return_value="tavily"),
             patch.dict(os.environ, {"TAVILY_API_KEY": "tvly-test"}),
             patch("tools.web_tools.httpx.post", return_value=mock_response),
         ):

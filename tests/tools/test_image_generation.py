@@ -588,7 +588,15 @@ class TestKreaModelNormalization:
 
 
 class TestManagedKreaRouting:
-    """`_maybe_route_managed_krea` only fires for Krea models in managed mode."""
+    """`_maybe_route_managed_krea` only fires for Krea models in managed mode.
+
+    Clawksis purged the Nous managed gateway, so
+    ``plugins.image_gen.krea._resolve_managed_krea_gateway`` no longer exists
+    and the managed route can never fire — the ImportError is swallowed and
+    the caller falls through to the normal plugin/FAL pipeline.  Only the
+    negative guards below still apply; the upstream tests that stubbed the
+    managed gateway were removed with it.
+    """
 
     def test_no_route_when_model_not_krea(self, image_tool, monkeypatch):
         monkeypatch.setattr(image_tool, "_read_configured_image_provider", lambda: None)
@@ -606,85 +614,6 @@ class TestManagedKreaRouting:
             image_tool, "_read_configured_image_model", lambda: "krea-2-medium"
         )
         assert image_tool._maybe_route_managed_krea("p", "square") is None
-
-    def test_no_route_for_fal_krea_model_in_managed_mode(self, image_tool, monkeypatch):
-        # fal-ai/krea/v2/* stays on FAL even when the Krea gateway is available.
-        monkeypatch.setattr(image_tool, "_read_configured_image_provider", lambda: None)
-        monkeypatch.setattr(
-            image_tool,
-            "_read_configured_image_model",
-            lambda: "fal-ai/krea/v2/medium/text-to-image",
-        )
-        import plugins.image_gen.krea as krea_mod
-        from types import SimpleNamespace
-
-        monkeypatch.setattr(
-            krea_mod,
-            "_resolve_managed_krea_gateway",
-            lambda: SimpleNamespace(
-                vendor="krea",
-                gateway_origin="https://krea-gateway.example.com",
-                nous_user_token="tok",
-                managed_mode=True,
-            ),
-        )
-        assert image_tool._maybe_route_managed_krea("p", "square") is None
-
-    def test_no_route_for_krea_model_in_direct_mode(self, image_tool, monkeypatch):
-        # Native krea-2-* selected, but no managed gateway (BYO/direct) → fall through.
-        monkeypatch.setattr(image_tool, "_read_configured_image_provider", lambda: None)
-        monkeypatch.setattr(
-            image_tool,
-            "_read_configured_image_model",
-            lambda: "krea-2-medium",
-        )
-        import plugins.image_gen.krea as krea_mod
-
-        monkeypatch.setattr(krea_mod, "_resolve_managed_krea_gateway", lambda: None)
-        assert image_tool._maybe_route_managed_krea("p", "square") is None
-
-    def test_routes_native_krea_model_to_krea_plugin_in_managed_mode(
-        self, image_tool, monkeypatch
-    ):
-        from types import SimpleNamespace
-        from unittest.mock import MagicMock
-        import json as _json
-
-        monkeypatch.setattr(image_tool, "_read_configured_image_provider", lambda: None)
-        monkeypatch.setattr(
-            image_tool,
-            "_read_configured_image_model",
-            lambda: "krea-2-large",
-        )
-        import plugins.image_gen.krea as krea_mod
-
-        monkeypatch.setattr(
-            krea_mod,
-            "_resolve_managed_krea_gateway",
-            lambda: SimpleNamespace(
-                vendor="krea",
-                gateway_origin="https://krea-gateway.example.com",
-                nous_user_token="tok",
-                managed_mode=True,
-            ),
-        )
-
-        fake_provider = MagicMock()
-        fake_provider.generate.return_value = {"success": True, "image": "/tmp/x.png"}
-        monkeypatch.setattr(
-            "agent.image_gen_registry.get_provider", lambda name: fake_provider
-        )
-        monkeypatch.setattr(
-            "clawk_cli.plugins._ensure_plugins_discovered", lambda *a, **k: None
-        )
-
-        out = image_tool._maybe_route_managed_krea("a cat", "portrait")
-        assert out is not None
-        assert _json.loads(out)["success"] is True
-        kwargs = fake_provider.generate.call_args.kwargs
-        assert kwargs["model"] == "krea-2-large"
-        assert kwargs["prompt"] == "a cat"
-        assert kwargs["aspect_ratio"] == "portrait"
 
 
 class TestFalKreaCatalog:

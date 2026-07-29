@@ -306,7 +306,7 @@ def test_dashboard_select_filters_use_sdk_value_change_handler():
 
     bundle = repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
 
-    js = bundle.read_text()
+    js = bundle.read_text(encoding="utf-8")
 
     assert "function selectChangeHandler(setter)" in js
 
@@ -338,7 +338,7 @@ def test_dashboard_client_side_filtering_includes_tenant_filter():
 
     bundle = repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
 
-    js = bundle.read_text()
+    js = bundle.read_text(encoding="utf-8")
 
     assert "if (tenantFilter && t.tenant !== tenantFilter) return false;" in js
 
@@ -362,7 +362,7 @@ def test_dashboard_initial_board_uses_backend_current_when_unpinned():
 
     bundle = repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
 
-    js = bundle.read_text()
+    js = bundle.read_text(encoding="utf-8")
 
     assert "useState(() => readSelectedBoard() || null)" in js
 
@@ -1523,7 +1523,7 @@ def test_dashboard_done_actions_prompt_for_completion_summary():
 
     bundle = (
         repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     assert "withCompletionSummary" in bundle
 
@@ -1551,7 +1551,7 @@ def test_dashboard_surfaces_ready_blocked_error_inline():
 
     bundle = (
         repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     # Helper that strips ``"409: {\"detail\":\"…\"}"`` down to the
 
@@ -1598,7 +1598,7 @@ def test_dashboard_dependency_selects_use_value_change_handler():
 
     bundle = (
         repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     parent_select = (
         "value: newParent,\n"
@@ -3113,16 +3113,14 @@ def _patch_specifier_response(monkeypatch, *, content, model="test-model"):
 
     resp.choices[0].message.content = content
 
-    fake_client = MagicMock()
+    # specify_task routes through call_llm now (#35566) — mock it directly
+    # instead of get_text_auxiliary_client, which it no longer calls.
 
-    fake_client.chat.completions.create = MagicMock(return_value=resp)
+    fake_call = MagicMock(return_value=resp)
 
-    monkeypatch.setattr(
-        "agent.auxiliary_client.get_text_auxiliary_client",
-        lambda *a, **kw: (fake_client, model),
-    )
+    monkeypatch.setattr("agent.auxiliary_client.call_llm", fake_call)
 
-    return fake_client
+    return fake_call
 
 
 def test_specify_happy_path(client, monkeypatch):
@@ -3203,12 +3201,14 @@ def test_specify_no_aux_client_surfaces_reason(client, monkeypatch):
         json={"title": "rough", "triage": True},
     ).json()["task"]
 
-    # Simulate "no auxiliary client configured".
+    # Simulate "no auxiliary client configured" — call_llm raises when no
 
-    monkeypatch.setattr(
-        "agent.auxiliary_client.get_text_auxiliary_client",
-        lambda *a, **kw: (None, ""),
-    )
+    # provider resolves (#35566 routing).
+
+    def _no_provider(**kwargs):
+        raise RuntimeError("No LLM provider configured")
+
+    monkeypatch.setattr("agent.auxiliary_client.call_llm", _no_provider)
 
     r = client.post(
         f"/api/plugins/kanban/tasks/{t['id']}/specify",
@@ -3221,7 +3221,9 @@ def test_specify_no_aux_client_surfaces_reason(client, monkeypatch):
 
     assert body["ok"] is False
 
-    assert "auxiliary client" in body["reason"]
+    # call_llm's no-provider RuntimeError surfaces via the LLM-error branch.
+
+    assert "LLM error" in body["reason"]
 
     # Task must stay in triage — nothing was touched.
 
@@ -3285,7 +3287,7 @@ def test_dashboard_requests_default_board_explicitly():
 
     dist = (
         repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     assert "SDK.fetchJSON(withBoard(`${API}/config`, board))" in dist
 
@@ -3303,7 +3305,7 @@ def test_dashboard_search_includes_body_and_result():
 
     dist = (
         repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     assert 't.body || ""' in dist
 
@@ -3319,7 +3321,7 @@ def test_dashboard_bulk_actions_include_reclaim_first():
 
     dist = (
         repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     assert "reclaim_first: reclaimFirst" in dist
 
@@ -3339,7 +3341,7 @@ def test_dashboard_shift_click_range_selection_exists():
 
     dist = (
         repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     assert "function toggleRange" in dist or "const toggleRange =" in dist
 
@@ -3355,7 +3357,7 @@ def test_dashboard_multi_move_bulk_exists():
 
     dist = (
         repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     assert "onMoveSelected" in dist
 
@@ -3371,11 +3373,11 @@ def test_dashboard_failed_card_highlight_class_exists():
 
     js = (
         repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "index.js"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     css = (
         repo_root / "plugins" / "kanban" / "dashboard" / "dist" / "style.css"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     assert "clawk-kanban-card--failed" in js
 

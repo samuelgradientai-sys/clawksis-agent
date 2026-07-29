@@ -1502,7 +1502,7 @@ class TestClawkHomeIsolation:
             # falls back to the account database; compute expected under the
             # same environment instead of after patch.dict restores HOME.
             os.environ.pop("CLAWK_HOME", None)
-            expected = os.path.join(os.path.expanduser("~"), ".clawk")
+            expected = os.path.join(os.path.expanduser("~"), ".clawksis")
             result = _get_clawk_home()
         assert result == expected
 
