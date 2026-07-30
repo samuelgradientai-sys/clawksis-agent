@@ -2410,8 +2410,8 @@ class TestSystemUnitRefreshSyncsClawkHome:
     ):
         root_home = tmp_path / "root"
         alice_home = tmp_path / "alice"
-        root_clawk = root_home / ".clawk"
-        alice_clawk = alice_home / ".clawk"
+        root_clawk = root_home / ".clawksis"
+        alice_clawk = alice_home / ".clawksis"
         root_clawk.mkdir(parents=True)
         alice_clawk.mkdir(parents=True)
         (root_clawk / "config.yaml").write_text(
@@ -2926,7 +2926,7 @@ class TestProfileArg:
 
     def test_named_profile_under_target_user_root_returns_flag(self, tmp_path):
         """System installs generated under sudo must compare against target user's root."""
-        target_root = tmp_path / "home" / "alice" / ".clawk"
+        target_root = tmp_path / "home" / "alice" / ".clawksis"
         profile_dir = target_root / "profiles" / "mybot"
         profile_dir.mkdir(parents=True)
 
@@ -2983,7 +2983,7 @@ class TestProfileArg:
         """sudo system install must keep the target user's named profile in ExecStart."""
         root_home = tmp_path / "root"
         target_home = tmp_path / "home" / "alice"
-        root_profile = root_home / ".clawk" / "profiles" / "mybot"
+        root_profile = root_home / ".clawksis" / "profiles" / "mybot"
         root_profile.mkdir(parents=True)
 
         monkeypatch.setattr(Path, "home", lambda: root_home)
@@ -2999,7 +2999,7 @@ class TestProfileArg:
 
         assert "ExecStart=" in unit
         assert "--profile mybot gateway run" in unit
-        assert f"CLAWK_HOME={target_home / '.clawk' / 'profiles' / 'mybot'}" in unit
+        assert f"CLAWK_HOME={target_home / '.clawksis' / 'profiles' / 'mybot'}" in unit
 
     def test_launchd_plist_includes_profile(self, tmp_path, monkeypatch):
         """generate_launchd_plist should include --profile in ProgramArguments for named profiles."""
@@ -3055,10 +3055,10 @@ class TestRemapPathForUser:
         monkeypatch.setattr(Path, "home", lambda: tmp_path / "root")
         (tmp_path / "root").mkdir()
         result = gateway_cli._remap_path_for_user(
-            str(tmp_path / "root" / ".clawk" / "clawksis-agent"),
+            str(tmp_path / "root" / ".clawksis" / "clawksis-agent"),
             str(tmp_path / "alice"),
         )
-        assert result == str(tmp_path / "alice" / ".clawk" / "clawksis-agent")
+        assert result == str(tmp_path / "alice" / ".clawksis" / "clawksis-agent")
 
     def test_keeps_system_path_unchanged(self, monkeypatch, tmp_path):
         monkeypatch.setattr(Path, "home", lambda: tmp_path / "root")
@@ -3071,7 +3071,7 @@ class TestRemapPathForUser:
     def test_noop_when_same_user(self, monkeypatch, tmp_path):
         monkeypatch.setattr(Path, "home", lambda: tmp_path / "alice")
         (tmp_path / "alice").mkdir()
-        original = str(tmp_path / "alice" / ".clawk" / "clawksis-agent")
+        original = str(tmp_path / "alice" / ".clawksis" / "clawksis-agent")
         result = gateway_cli._remap_path_for_user(original, str(tmp_path / "alice"))
         assert result == original
 
@@ -3082,7 +3082,7 @@ class TestSystemUnitPathRemapping:
     def test_system_unit_has_no_root_paths(self, monkeypatch, tmp_path):
         root_home = tmp_path / "root"
         root_home.mkdir()
-        project = root_home / ".clawk" / "clawksis-agent"
+        project = root_home / ".clawksis" / "clawksis-agent"
         project.mkdir(parents=True)
         venv_bin = project / "venv" / "bin"
         venv_bin.mkdir(parents=True)
@@ -3091,8 +3091,10 @@ class TestSystemUnitPathRemapping:
         target_home = "/home/alice"
 
         monkeypatch.setattr(Path, "home", lambda: root_home)
-        monkeypatch.setenv("CLAWK_HOME", str(root_home / ".clawk"))
-        monkeypatch.setattr(gateway_cli, "get_clawk_home", lambda: root_home / ".clawk")
+        monkeypatch.setenv("CLAWK_HOME", str(root_home / ".clawksis"))
+        monkeypatch.setattr(
+            gateway_cli, "get_clawk_home", lambda: root_home / ".clawksis"
+        )
         monkeypatch.setattr(gateway_cli, "PROJECT_ROOT", project)
         monkeypatch.setattr(gateway_cli, "_detect_venv_dir", lambda: project / "venv")
         monkeypatch.setattr(
@@ -3996,7 +3998,7 @@ class TestServiceWorkingDirIsStable:
 
     def test_stable_working_dir_falls_back_to_project_root(self, tmp_path, monkeypatch):
         # CLAWK_HOME points somewhere that does not exist -> fall back.
-        missing = tmp_path / "does-not-exist" / ".clawk"
+        missing = tmp_path / "does-not-exist" / ".clawksis"
         monkeypatch.setattr(gateway_cli, "get_clawk_home", lambda: missing)
         assert gateway_cli._stable_service_working_dir() == str(
             gateway_cli.PROJECT_ROOT
