@@ -16,8 +16,35 @@ from fastapi.testclient import TestClient
 from clawk_cli import web_server
 
 
+class _NoPlatformsConfig:
+    """Minimal stand-in for the gateway config used by ``/api/status``."""
+
+    @staticmethod
+    def get_connected_platforms():
+        return []
+
+
 @pytest.fixture
-def client_loopback():
+def client_loopback(monkeypatch):
+    # ``/api/status`` calls ``load_gateway_config()``, and its env-override
+    # pass resolves EVERY platform plugin -- telegram pulls in
+    # python-telegram-bot -> tornado, plus discord/slack/lark/... That cold
+    # import cascade is ~8s of CPU on an idle machine; on a CI runner with
+    # one pytest process per test file competing for cores it blew the 30s
+    # pytest-timeout budget, so whichever test touched the endpoint FIRST
+    # died of a "Timeout (>30.0s)" that had nothing to do with what it
+    # asserts. Stub the config load: this file is about the auth gate, not
+    # about gateway configuration, and ``get_status`` already treats the
+    # call as best-effort (it is wrapped in try/except). Bumping the timeout
+    # would only move the flake.
+    import gateway.config as gateway_config
+
+    monkeypatch.setattr(
+        gateway_config,
+        "load_gateway_config",
+        lambda *a, **kw: _NoPlatformsConfig(),
+    )
+
     # Pin the bound-host state for host_header_middleware so requests with
     # default Host: testclient pass the DNS-rebinding check.  TestClient
     # sends Host: testserver by default, but our middleware accepts the

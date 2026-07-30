@@ -1777,6 +1777,21 @@ def _profile_suffix() -> str:
     return hashlib.sha256(str(home).encode()).hexdigest()[:8]
 
 
+def _default_clawk_home_dirname() -> str:
+    """Return the *name* of the platform-native Clawksis home directory.
+
+    ``.clawksis`` on POSIX, ``clawk`` on native Windows.  Always DERIVE the
+    name from :func:`_get_platform_default_clawk_home` instead of hardcoding
+    it: the rebrand moved the home from ``.clawk`` to ``.clawksis`` and every
+    literal left behind silently broke a path comparison (see
+    :func:`_profile_arg_for_target_user` and
+    :func:`_clawk_home_for_target_user`).
+    """
+    from clawk_constants import _get_platform_default_clawk_home
+
+    return _get_platform_default_clawk_home().name
+
+
 def _profile_arg(
     clawk_home: str | None = None, default_root: str | Path | None = None
 ) -> str:
@@ -1817,8 +1832,18 @@ def _profile_arg(
 
 
 def _profile_arg_for_target_user(clawk_home: str, target_home_dir: str) -> str:
-    """Return the profile arg for a system service running as another user."""
-    target_root = Path(target_home_dir) / ".clawk"
+    """Return the profile arg for a system service running as another user.
+
+    ``clawk_home`` already points at the TARGET user's home (it comes out of
+    :func:`_clawk_home_for_target_user`), so the root it must be compared
+    against is the target user's — not the caller's.  The directory name was
+    hardcoded to ``.clawk`` after the rebrand to ``.clawksis``, so the
+    ``relative_to`` below always raised and the fallback compared against the
+    *invoking* user's root (root's, under sudo).  Net effect:
+    ``clawk gateway install --system`` dropped ``--profile <name>`` from
+    ExecStart and the system unit booted the default profile instead.
+    """
+    target_root = Path(target_home_dir) / _default_clawk_home_dirname()
     try:
         Path(clawk_home).resolve().relative_to(target_root.resolve())
         return _profile_arg(clawk_home, default_root=target_root)
@@ -2652,8 +2677,8 @@ def _remap_path_for_user(path: str, target_home_dir: str) -> str:
     If *path* lives under ``Path.home()`` the corresponding prefix is swapped
     to *target_home_dir*; otherwise the path is returned unchanged.
 
-      /root/.clawk/clawksis-agent  -> /home/alice/.clawk/clawksis-agent
-      /opt/clawksis                 -> /opt/clawksis  (kept as-is)
+      /root/.clawksis/clawksis-agent -> /home/alice/.clawksis/clawksis-agent
+      /opt/clawksis                  -> /opt/clawksis  (kept as-is)
 
     Note: this function intentionally does NOT resolve symlinks. A venv's
     ``bin/python`` is typically a symlink to the base interpreter (e.g. a
@@ -2677,8 +2702,8 @@ def _clawk_home_for_target_user(target_home_dir: str) -> str:
 
     When installing a system service via sudo, get_clawk_home() resolves to
     root's home.  This translates it to the target user's equivalent path:
-      /root/.clawk                    → /home/alice/.clawk
-      /root/.clawk/profiles/coder     → /home/alice/.clawk/profiles/coder
+      /root/.clawksis                 → /home/alice/.clawksis
+      /root/.clawksis/profiles/coder  → /home/alice/.clawksis/profiles/coder
       /opt/custom-clawk               → /opt/custom-clawk  (kept as-is)
     """
     current_clawk_raw = os.environ.get("CLAWK_HOME", "").strip()
@@ -2693,9 +2718,7 @@ def _clawk_home_for_target_user(target_home_dir: str) -> str:
     # habian quedado en ``.clawk``, asi que la comparacion de abajo nunca
     # coincidia y `clawk gateway install --system` horneaba el CLAWK_HOME de
     # root en el unit en lugar de remapearlo al usuario objetivo.
-    from clawk_constants import _get_platform_default_clawk_home
-
-    _home_dir_name = _get_platform_default_clawk_home().name
+    _home_dir_name = _default_clawk_home_dirname()
 
     current_default = Path.home() / _home_dir_name
     target_default = Path(target_home_dir) / _home_dir_name
