@@ -65,6 +65,14 @@ export type {
   UsageModelData
 } from '@clawk/shared/billing'
 
+export interface CreditsViewResponse {
+  balance_lines: string[]
+  depleted: boolean
+  identity_line: string | null
+  logged_in: boolean
+  topup_url: string | null
+}
+
 export type CommandDispatchResponse =
   | { output?: string; type: 'exec' | 'plugin' }
   | { target: string; type: 'alias' }
