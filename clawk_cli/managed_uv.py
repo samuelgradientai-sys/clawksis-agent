@@ -127,12 +127,17 @@ class _UvResult(str):
         return iter(((str(self) or None), self.fresh_bootstrap))
 
 
-def _ensure_uv_path() -> Optional[str]:
-    """Resolve the managed uv path, installing it if necessary (plain ``str``/``None``)."""
+def _ensure_uv_path() -> tuple[Optional[str], bool]:
+    """Resolve la ruta del uv gestionado, instalandolo si hace falta.
+
+    Devuelve ``(path|None, fresh_bootstrap)``. El segundo elemento indica si
+    esta llamada tuvo que instalar uv (lo consume ``_UvResult`` para el
+    contrato de 2 valores); antes se perdia y ``fresh`` siempre salia False.
+    """
     existing = resolve_uv()
 
     if existing:
-        return existing
+        return existing, False
 
     target = managed_uv_path()
 
@@ -148,7 +153,7 @@ def _ensure_uv_path() -> Optional[str]:
 
         print(f"  ✗ Failed to install managed uv: {exc}")
 
-        return None
+        return None, False
 
     # Verify
 
@@ -167,7 +172,7 @@ def _ensure_uv_path() -> Optional[str]:
     else:
         print("  ✗ Managed uv install appeared to succeed but binary not found")
 
-    return result
+    return result, True
 
 
 def ensure_uv():
@@ -193,12 +198,12 @@ def ensure_uv():
     On failure the result is falsy — never raises — so callers can fall back to
     pip gracefully.
     """
-    result = _ensure_uv_path()
+    result, fresh_bootstrap = _ensure_uv_path()
     if platform.system() == "Windows":
         # See docstring: a str subclass with an overridden __iter__ is unsafe as
         # a Windows subprocess argument. Hand back the plain path (or None).
         return result
-    return _UvResult(result)
+    return _UvResult(result, fresh_bootstrap)
 
 
 def update_managed_uv() -> Optional[str]:

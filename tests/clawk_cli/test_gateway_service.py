@@ -452,13 +452,13 @@ class TestTempHomeServiceDefinitionGuard:
         )
 
     def test_accepts_real_home(self):
-        unit = '[Service]\nEnvironment="CLAWK_HOME=/home/alice/.clawk"\n'
+        unit = '[Service]\nEnvironment="CLAWK_HOME=/home/alice/.clawksis"\n'
         assert gateway_cli._temp_home_in_service_definition(unit) is None
 
     def test_accepts_macos_real_home_plist(self):
         plist = (
             "<dict>\n  <key>CLAWK_HOME</key>\n"
-            "  <string>/Users/alice/.clawk</string>\n</dict>\n"
+            "  <string>/Users/alice/.clawksis</string>\n</dict>\n"
         )
         assert gateway_cli._temp_home_in_service_definition(plist) is None
 
@@ -469,7 +469,7 @@ class TestTempHomeServiceDefinitionGuard:
     def test_tmp_prefixed_non_temp_path_is_accepted(self):
         # /tmpfs-data is NOT under /tmp — prefix matching must be
         # component-wise, not string startswith.
-        unit = '[Service]\nEnvironment="CLAWK_HOME=/tmpfs-data/.clawk"\n'
+        unit = '[Service]\nEnvironment="CLAWK_HOME=/tmpfs-data/.clawksis"\n'
         assert gateway_cli._temp_home_in_service_definition(unit) is None
 
 
@@ -567,7 +567,9 @@ class TestGeneratedSystemdUnits:
         # systemd_unit_is_current() perpetually false and forcing a
         # daemon-reload restart loop on every boot.
         local_bin = tmp_path / ".local" / "bin"
-        profile_node_bin = tmp_path / ".clawk" / "profiles" / "jarvis" / "node" / "bin"
+        profile_node_bin = (
+            tmp_path / ".clawksis" / "profiles" / "jarvis" / "node" / "bin"
+        )
         local_bin.mkdir(parents=True)
         profile_node_bin.mkdir(parents=True)
         real_node = profile_node_bin / "node"
@@ -591,7 +593,9 @@ class TestGeneratedSystemdUnits:
     ):
         # Same #48700 regression for the macOS twin generate_launchd_plist().
         local_bin = tmp_path / ".local" / "bin"
-        profile_node_bin = tmp_path / ".clawk" / "profiles" / "jarvis" / "node" / "bin"
+        profile_node_bin = (
+            tmp_path / ".clawksis" / "profiles" / "jarvis" / "node" / "bin"
+        )
         local_bin.mkdir(parents=True)
         profile_node_bin.mkdir(parents=True)
         real_node = profile_node_bin / "node"
@@ -642,7 +646,7 @@ class TestGeneratedSystemdUnits:
         monkeypatch.setattr(
             gateway_cli,
             "_clawk_home_for_target_user",
-            lambda home: "/home/alice/.clawk",
+            lambda home: "/home/alice/.clawksis",
         )
         monkeypatch.setenv("PATH", "/usr/local/bin:/mnt/c/WINDOWS/system32")
         monkeypatch.setattr(gateway_cli.shutil, "which", lambda cmd: None)
@@ -791,7 +795,7 @@ class TestLaunchdServiceRecovery:
             "generate_launchd_plist",
             lambda: (
                 "<plist>--replace\n<key>CLAWK_HOME</key>"
-                "<string>/Users/alice/.clawk</string></plist>"
+                "<string>/Users/alice/.clawksis</string></plist>"
             ),
         )
 
@@ -834,7 +838,7 @@ class TestLaunchdServiceRecovery:
             "generate_launchd_plist",
             lambda: (
                 "<plist>--replace\n<key>CLAWK_HOME</key>"
-                "<string>/Users/alice/.clawk</string></plist>"
+                "<string>/Users/alice/.clawksis</string></plist>"
             ),
         )
         # Pretend the gateway is running and that we ARE inside its tree.
@@ -890,7 +894,7 @@ class TestLaunchdServiceRecovery:
             "generate_launchd_plist",
             lambda: (
                 "<plist>--replace\n<key>CLAWK_HOME</key>"
-                "<string>/Users/alice/.clawk</string></plist>"
+                "<string>/Users/alice/.clawksis</string></plist>"
             ),
         )
         # Gateway running, but we are NOT inside its tree.
@@ -1254,7 +1258,7 @@ class TestLaunchdServiceRecovery:
             "generate_launchd_plist",
             lambda: (
                 "<plist><key>CLAWK_HOME</key>"
-                "<string>/Users/alice/.clawk</string></plist>"
+                "<string>/Users/alice/.clawksis</string></plist>"
             ),
         )
 
@@ -2348,13 +2352,13 @@ class TestSystemUnitClawkHome:
 
         unit = gateway_cli.generate_systemd_unit(system=True, run_as_user="alice")
 
-        assert "CLAWK_HOME=/home/alice/.clawk" in unit
-        assert "/root/.clawk" not in unit
+        assert "CLAWK_HOME=/home/alice/.clawksis" in unit
+        assert "/root/.clawksis" not in unit
 
     def test_system_unit_remaps_profile_to_target_user(self, monkeypatch):
         # Simulate sudo with a profile: CLAWK_HOME was resolved under root
         monkeypatch.setattr(Path, "home", staticmethod(lambda: Path("/root")))
-        monkeypatch.setenv("CLAWK_HOME", "/root/.clawk/profiles/coder")
+        monkeypatch.setenv("CLAWK_HOME", "/root/.clawksis/profiles/coder")
         monkeypatch.setattr(
             gateway_cli,
             "_system_service_identity",
@@ -2368,7 +2372,7 @@ class TestSystemUnitClawkHome:
 
         unit = gateway_cli.generate_systemd_unit(system=True, run_as_user="alice")
 
-        assert "CLAWK_HOME=/home/alice/.clawk/profiles/coder" in unit
+        assert "CLAWK_HOME=/home/alice/.clawksis/profiles/coder" in unit
         assert "/root/" not in unit
 
     def test_system_unit_preserves_custom_clawk_home(self, monkeypatch):
@@ -2399,7 +2403,7 @@ class TestSystemUnitClawkHome:
 
 
 class TestSystemUnitRefreshSyncsClawkHome:
-    """sudo system refresh must not flip TimeoutStopSec via /root/.clawk."""
+    """sudo system refresh must not flip TimeoutStopSec via /root/.clawksis."""
 
     def test_refresh_adopts_unit_clawk_home_before_rewriting(
         self, tmp_path, monkeypatch
@@ -2559,14 +2563,14 @@ class TestClawkHomeForTargetUser:
         monkeypatch.delenv("CLAWK_HOME", raising=False)
 
         result = gateway_cli._clawk_home_for_target_user("/home/alice")
-        assert result == "/home/alice/.clawk"
+        assert result == "/home/alice/.clawksis"
 
     def test_remaps_profile_path(self, monkeypatch):
         monkeypatch.setattr(Path, "home", staticmethod(lambda: Path("/root")))
-        monkeypatch.setenv("CLAWK_HOME", "/root/.clawk/profiles/coder")
+        monkeypatch.setenv("CLAWK_HOME", "/root/.clawksis/profiles/coder")
 
         result = gateway_cli._clawk_home_for_target_user("/home/alice")
-        assert result == "/home/alice/.clawk/profiles/coder"
+        assert result == "/home/alice/.clawksis/profiles/coder"
 
     def test_keeps_custom_path(self, monkeypatch):
         monkeypatch.setattr(Path, "home", staticmethod(lambda: Path("/root")))
@@ -2580,7 +2584,7 @@ class TestClawkHomeForTargetUser:
         monkeypatch.delenv("CLAWK_HOME", raising=False)
 
         result = gateway_cli._clawk_home_for_target_user("/home/alice")
-        assert result == "/home/alice/.clawk"
+        assert result == "/home/alice/.clawksis"
 
 
 class TestGeneratedUnitUsesDetectedVenv:
@@ -2904,7 +2908,7 @@ class TestProfileArg:
 
     def test_default_clawk_home_returns_empty(self, tmp_path, monkeypatch):
         """Default ~/.clawksis should not produce a --profile flag."""
-        clawk_home = tmp_path / ".clawk"
+        clawk_home = tmp_path / ".clawksis"
         clawk_home.mkdir()
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -2913,10 +2917,10 @@ class TestProfileArg:
 
     def test_named_profile_returns_flag(self, tmp_path, monkeypatch):
         """~/.clawksis/profiles/mybot should return '--profile mybot'."""
-        profile_dir = tmp_path / ".clawk" / "profiles" / "mybot"
+        profile_dir = tmp_path / ".clawksis" / "profiles" / "mybot"
         profile_dir.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         result = gateway_cli._profile_arg(str(profile_dir))
         assert result == "--profile mybot"
 
@@ -2935,31 +2939,31 @@ class TestProfileArg:
         custom_home = tmp_path / "custom" / "clawk"
         custom_home.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         result = gateway_cli._profile_arg(str(custom_home))
         assert result == ""
 
     def test_nested_profile_path_returns_empty(self, tmp_path, monkeypatch):
         """~/.clawksis/profiles/mybot/subdir should NOT match — too deep."""
-        nested = tmp_path / ".clawk" / "profiles" / "mybot" / "subdir"
+        nested = tmp_path / ".clawksis" / "profiles" / "mybot" / "subdir"
         nested.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         result = gateway_cli._profile_arg(str(nested))
         assert result == ""
 
     def test_invalid_profile_name_returns_empty(self, tmp_path, monkeypatch):
         """Profile names with invalid chars should not match the regex."""
-        bad_profile = tmp_path / ".clawk" / "profiles" / "My Bot!"
+        bad_profile = tmp_path / ".clawksis" / "profiles" / "My Bot!"
         bad_profile.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
+        monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawksis"))
         result = gateway_cli._profile_arg(str(bad_profile))
         assert result == ""
 
     def test_systemd_unit_includes_profile(self, tmp_path, monkeypatch):
         """generate_systemd_unit should include --profile in ExecStart for named profiles."""
-        profile_dir = tmp_path / ".clawk" / "profiles" / "mybot"
+        profile_dir = tmp_path / ".clawksis" / "profiles" / "mybot"
         profile_dir.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         monkeypatch.setenv("CLAWK_HOME", str(profile_dir))
@@ -2999,7 +3003,7 @@ class TestProfileArg:
 
     def test_launchd_plist_includes_profile(self, tmp_path, monkeypatch):
         """generate_launchd_plist should include --profile in ProgramArguments for named profiles."""
-        profile_dir = tmp_path / ".clawk" / "profiles" / "mybot"
+        profile_dir = tmp_path / ".clawksis" / "profiles" / "mybot"
         profile_dir.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         monkeypatch.setenv("CLAWK_HOME", str(profile_dir))
@@ -3019,7 +3023,7 @@ class TestProfileArg:
     def test_launchd_plist_path_uses_real_user_home_not_profile_home(
         self, tmp_path, monkeypatch
     ):
-        profile_dir = tmp_path / ".clawk" / "profiles" / "orcha"
+        profile_dir = tmp_path / ".clawksis" / "profiles" / "orcha"
         profile_dir.mkdir(parents=True)
         machine_home = tmp_path / "machine-home"
         machine_home.mkdir()
@@ -3110,8 +3114,8 @@ class TestSystemUnitPathRemapping:
         # always exists) — NOT the source checkout under it. Pinning cwd to the
         # checkout is the rot bug fixed alongside this: a relocated/removed
         # checkout would crash-loop the unit on CHDIR (status=200).
-        assert "WorkingDirectory=/home/alice/.clawk" in unit
-        assert "WorkingDirectory=/home/alice/.clawk/clawksis-agent" not in unit
+        assert "WorkingDirectory=/home/alice/.clawksis" in unit
+        assert "WorkingDirectory=/home/alice/.clawksis/clawksis-agent" not in unit
 
 
 class TestDockerAwareGateway:
@@ -3985,7 +3989,7 @@ class TestServiceWorkingDirIsStable:
     """
 
     def test_stable_working_dir_uses_clawk_home(self, tmp_path, monkeypatch):
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         monkeypatch.setattr(gateway_cli, "get_clawk_home", lambda: home)
         assert Path(gateway_cli._stable_service_working_dir()) == home.resolve()
@@ -4001,7 +4005,7 @@ class TestServiceWorkingDirIsStable:
     def test_user_unit_workingdirectory_is_clawk_home_not_checkout(
         self, tmp_path, monkeypatch
     ):
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         monkeypatch.setattr(gateway_cli, "get_clawk_home", lambda: home)
         unit = gateway_cli.generate_systemd_unit(system=False)
@@ -4015,7 +4019,7 @@ class TestServiceWorkingDirIsStable:
     def test_launchd_workingdirectory_is_clawk_home(self, tmp_path, monkeypatch):
         import re
 
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         monkeypatch.setattr(gateway_cli, "get_clawk_home", lambda: home)
         plist = gateway_cli.generate_launchd_plist()
@@ -4032,7 +4036,7 @@ class TestServiceWorkingDirIsStable:
         causes the old instance to exit cleanly).  Switching to the scalar
         ``<key>KeepAlive</key><true/>`` makes launchd restart regardless of exit code.
         """
-        home = tmp_path / ".clawk"
+        home = tmp_path / ".clawksis"
         home.mkdir()
         monkeypatch.setattr(gateway_cli, "get_clawk_home", lambda: home)
         plist = gateway_cli.generate_launchd_plist()

@@ -2688,8 +2688,17 @@ def _clawk_home_for_target_user(target_home_dir: str) -> str:
     # Keep explicit custom paths lexical. Resolving a non-existent custom path
     # can rewrite it through host-specific path mappings, which would bake a
     # different CLAWK_HOME into the generated service unit.
-    current_default = Path.home() / ".clawk"
-    target_default = Path(target_home_dir) / ".clawk"
+    # El nombre del directorio se DERIVA del default de la plataforma en vez de
+    # hardcodearse: el rebrand movio el home a ``.clawksis`` y estas dos lineas
+    # habian quedado en ``.clawk``, asi que la comparacion de abajo nunca
+    # coincidia y `clawk gateway install --system` horneaba el CLAWK_HOME de
+    # root en el unit en lugar de remapearlo al usuario objetivo.
+    from clawk_constants import _get_platform_default_clawk_home
+
+    _home_dir_name = _get_platform_default_clawk_home().name
+
+    current_default = Path.home() / _home_dir_name
+    target_default = Path(target_home_dir) / _home_dir_name
 
     # Default ~/.clawksis → remap to target user's default
     if current_clawk == current_default:
