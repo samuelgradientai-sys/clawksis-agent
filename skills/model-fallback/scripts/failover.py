@@ -83,9 +83,13 @@ def detect_providers(env: dict) -> list[dict]:
 
 
 def load_yaml(path: Path):
+    """Load a YAML file, returning empty dict on any error."""
     import yaml
 
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
 
 
 def current_model(cfg: dict) -> str:
@@ -112,7 +116,7 @@ def pool_status(provider: str):
         if not pool.has_credentials():
             return None
         return len(pool.entries())
-    except Exception:
+    except (ImportError, AttributeError, OSError):
         return None
 
 
@@ -244,10 +248,7 @@ def main() -> int:
         return 0
 
     # --- audit (read-only) ---
-    try:
-        cfg = load_yaml(config_path) if config_path.exists() else {}
-    except Exception:
-        cfg = {}
+    cfg = load_yaml(config_path) if config_path.exists() else {}
     model = current_model(cfg)
     chain = current_chain(cfg)
 
