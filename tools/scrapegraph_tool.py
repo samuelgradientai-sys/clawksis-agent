@@ -41,9 +41,13 @@ _DEFAULT_PROMPT = (
 
 def _normalize_urls(args: dict) -> list[str]:
     urls: list[str] = []
-    single = (args.get("url") or "").strip()
-    if single:
-        urls.append(single)
+    single = args.get("url")
+    # The schema declares `url` as a string, but a sloppy call may pass an
+    # int/dict/list — that used to crash with AttributeError (`.strip()` on a
+    # non-str). Treat non-strings as absent so the handler reports a clean
+    # "url required" error instead of blowing up.
+    if isinstance(single, str) and single.strip():
+        urls.append(single.strip())
     many = args.get("urls")
     if isinstance(many, list):
         urls.extend(str(u).strip() for u in many if str(u).strip())
@@ -78,7 +82,9 @@ async def _handle_scrapegraph(args, **kw):
     if not urls:
         return tool_result(ok=False, error="Either `url` or `urls` is required.")
 
-    prompt = (args.get("prompt") or "").strip() or _DEFAULT_PROMPT
+    raw_prompt = args.get("prompt")
+    prompt = raw_prompt.strip() if isinstance(raw_prompt, str) else ""
+    prompt = prompt or _DEFAULT_PROMPT
     schema = _coerce_schema(args.get("output_schema"))
     render_js = args.get("render_js")
     headless = True if render_js is None else bool(render_js)

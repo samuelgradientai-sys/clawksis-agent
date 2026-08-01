@@ -322,6 +322,28 @@ class TestRegistration:
 OK_CONTENT = "# Hello World\n" * 30  # ~420 chars — passes empty gate
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# _as_str — schema-violation hardening
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestAsStr:
+    """Non-string args must never crash the handler (`.strip()` on an int used
+    to raise AttributeError mid-dispatch)."""
+
+    def test_coerces_string(self):
+        assert st._as_str("  hi  ") == "hi"
+        assert st._as_str("") == ""
+        assert st._as_str("  ") == ""
+
+    def test_non_string_returns_empty(self):
+        assert st._as_str(None) == ""
+        assert st._as_str(42) == ""
+        assert st._as_str(["a"]) == ""
+        assert st._as_str({"a": 1}) == ""
+        assert st._as_str(0) == ""
+
+
 class TestHandleScrape:
     """Test the tool handler logic (subprocess mocked)."""
 
@@ -329,6 +351,32 @@ class TestHandleScrape:
         res = _run_tool(st._handle_scrape({}))
         assert res["ok"] is False
         assert "url" in res["error"].lower()
+
+    def test_non_string_url_does_not_crash(self, monkeypatch):
+        """Schema-violating `url` values (int/dict/list) must yield a clean
+        'url required' error, not an AttributeError."""
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", lambda *a, **k: (True, OK_CONTENT, ""))
+
+        for bad in (42, ["a.com"], {"a": 1}):
+            res = _run_tool(st._handle_scrape({"url": bad}))
+            assert res["ok"] is False
+            assert "url" in res["error"].lower()
+
+    def test_non_string_mode_format_defaults(self, monkeypatch):
+        """Non-string `mode`/`format` fall back to auto/markdown, not crash."""
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", lambda *a, **k: (True, OK_CONTENT, ""))
+
+        res = _run_tool(st._handle_scrape({"url": "https://example.com", "mode": 7}))
+        assert res["ok"] is True
+        assert res["format"] == "markdown"
+
+        res2 = _run_tool(
+            st._handle_scrape({"url": "https://example.com", "format": ["md"]})
+        )
+        assert res2["ok"] is True
+        assert res2["format"] == "markdown"
 
     def test_scheme_normalisation(self, monkeypatch):
         """A bare domain gets https:// prepended."""

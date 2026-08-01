@@ -241,6 +241,42 @@ def test_normalize_urls_mixed_scheme():
     assert out == ["http://old.site.com"]
 
 
+def test_normalize_urls_non_string_url_does_not_crash():
+    """Schema-violating non-string `url` values (int/dict/list) used to raise
+    AttributeError; they must be treated as absent, not crash the handler."""
+    from tools.scrapegraph_tool import _normalize_urls
+
+    assert _normalize_urls({"url": 42}) == []
+    assert _normalize_urls({"url": {"a": 1}}) == []
+    assert _normalize_urls({"url": ["a.com"]}) == []
+    assert _normalize_urls({"url": 42, "urls": ["b.com"]}) == ["https://b.com"]
+
+
+def test_normalize_urls_none_url():
+    from tools.scrapegraph_tool import _normalize_urls
+
+    assert _normalize_urls({"url": None}) == []
+    assert _normalize_urls({"url": None, "urls": ["https://a.com"]}) == [
+        "https://a.com"
+    ]
+
+
+def test_handler_non_string_prompt_uses_default(monkeypatch):
+    """A non-string `prompt` must fall back to the default, not crash."""
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    captured = {}
+
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
+        captured["prompt"] = prompt
+        return {"ok": True}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake)
+    res = _run_tool(_handle_scrapegraph({"url": "https://x.com", "prompt": 42}))
+    assert res["ok"] is True
+    assert "main, useful content" in captured["prompt"]
+
+
 # ── clamp_timeout helper ─────────────────────────────────────────────────────
 
 
@@ -534,6 +570,20 @@ def test_stringify_prefers_known_keys():
     assert _stringify({"content": "hello"}) == "hello"
     assert _stringify("raw") == "raw"
     assert "k" in _stringify({"k": "v"})  # falls back to JSON dump
+
+
+def test_stringify_handles_list_results():
+    """scrapegraphai sometimes wraps results in a list — join their string
+    forms instead of dumping an ugly Python repr."""
+    from plugins.web.scrapegraphai.provider import _stringify
+
+    assert _stringify([{"content": "first"}, {"content": "second"}]) == (
+        "first\n\nsecond"
+    )
+    assert _stringify(["raw", "text"]) == "raw\n\ntext"
+    assert _stringify([{}, []]) == ""
+    assert "k" in _stringify([{"k": "v"}])  # per-item JSON dump fallback
+    assert _stringify(None) == ""
 
 
 # ── extract-backend prioritisation over 3rd-party ───────────────────────────

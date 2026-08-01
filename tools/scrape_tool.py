@@ -35,7 +35,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from tools.registry import registry, tool_result
 
@@ -141,6 +141,17 @@ def _resolve_proxy(arg_proxy: Optional[str]) -> Optional[str]:
     return None
 
 
+def _as_str(value: Any) -> str:
+    """Return ``value`` stripped if it's a str, else ''.
+
+    The schema declares url/mode/format/... as strings, but a sloppy call may
+    pass an int/dict/list — that used to crash with AttributeError (``.strip()``
+    on a non-str). Non-strings are treated as absent so the handler defaults or
+    errors cleanly instead of blowing up mid-dispatch.
+    """
+    return value.strip() if isinstance(value, str) else ""
+
+
 def _classify(content: str) -> str:
     """'ok' | 'antibot' | 'ip_block' | 'empty' for the given page content."""
     stripped = content.strip()
@@ -224,20 +235,20 @@ def _run_one(
 
 
 async def _handle_scrape(args, **kw):
-    url = (args.get("url") or "").strip()
+    url = _as_str(args.get("url"))
     if not url:
         return tool_result(ok=False, error="`url` is required.")
     if not url.lower().startswith(("http://", "https://")):
         url = "https://" + url
 
-    mode = (args.get("mode") or "auto").strip().lower()
+    mode = (_as_str(args.get("mode")) or "auto").lower()
     if mode not in ("auto", "get", "fetch", "stealthy"):
         mode = "auto"
-    fmt = (args.get("format") or "markdown").strip().lower()
+    fmt = (_as_str(args.get("format")) or "markdown").lower()
     ext = _FORMAT_EXT.get(fmt, ".md")
-    css_selector = (args.get("css_selector") or "").strip() or None
-    wait_selector = (args.get("wait_selector") or "").strip() or None
-    proxy = _resolve_proxy((args.get("proxy") or "").strip() or None)
+    css_selector = _as_str(args.get("css_selector")) or None
+    wait_selector = _as_str(args.get("wait_selector")) or None
+    proxy = _resolve_proxy(_as_str(args.get("proxy")) or None)
 
     # User-provided timeout per-mode override. Clamped to [10, 300]
     # by the shared clamp_timeout() helper (reused by scrapegraph tools too).

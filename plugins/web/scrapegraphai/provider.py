@@ -31,6 +31,10 @@ def _stringify(data: Any) -> str:
     if isinstance(data, str):
         return data
     if isinstance(data, dict):
+        # An empty dict means scrapegraphai extracted nothing — treat as empty
+        # content instead of leaking a "{}" JSON blob to the caller.
+        if not data:
+            return ""
         # Common shapes: {"content": "..."} / {"markdown": "..."} / {"text": "..."}
         for key in ("content", "markdown", "text", "result", "answer"):
             val = data.get(key)
@@ -40,6 +44,15 @@ def _stringify(data: Any) -> str:
             return json.dumps(data, ensure_ascii=False, indent=2, default=str)
         except (TypeError, ValueError):
             return str(data)
+    if isinstance(data, (list, tuple)):
+        # scrapegraphai sometimes wraps results in a list of items; join their
+        # string forms instead of dumping an ugly Python repr.
+        parts: list[str] = []
+        for item in data:
+            s = item if isinstance(item, str) else _stringify(item)
+            if s and s.strip():
+                parts.append(s.strip())
+        return "\n\n".join(parts)
     return str(data)
 
 
