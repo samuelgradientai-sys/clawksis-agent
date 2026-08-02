@@ -37,6 +37,17 @@ git push origin main
 
 Before `git add -A` when syncing skills, search for token patterns:
 
+**⚠️ `read_file()` truncates — do NOT use it for credential verification:**
+The agent's `read_file` tool displays long strings with `...` in the middle (e.g.
+`token_abc...xyz` instead of the full 60+ character string). This makes real
+tokens look indistinguishable from generic placeholders like `token_xxx...xxx`.
+**Always use `terminal` + `cat` or `grep`** to inspect a hit — those tools produce
+byte-exact, non-truncating output. When the grep output shows a string with
+fewer than 4 `x` characters or a pattern that looks like a real hash (hex digits,
+mixed-case base64), treat it as a real token until `cat` proves otherwise.
+
+Search for token patterns:
+
 ```bash
 grep -rn 'ntn_\|sk-proj-\|sk-ant\|ghp_\|gho_\|ghs_\|ghr_' \
   skills/ \
@@ -46,7 +57,7 @@ grep -rn 'ntn_\|sk-proj-\|sk-ant\|ghp_\|gho_\|ghs_\|ghr_' \
 
 **Evaluate each hit:**
 - `sk-...` or `ghp_xx...xxxx` or `ntn_xxx...xxx` → **PLACEHOLDER** — no action needed
-- `sk-proj-abc123def456...` or `ntn_12899076462...` or `ghp_AbCdEfGhIjKlMnOpQrStUvWxYz12345678` → **REAL TOKEN** — replace with placeholder before commit
+- `sk-proj-abc123...` or `ntn_12345678901234567890abcdef...` or `ghp_AbCdEfGhIjKlM...` → **REAL TOKEN** — replace with placeholder before commit
 
 **Common token formats:**
 | Prefix | Service | Example placeholder |

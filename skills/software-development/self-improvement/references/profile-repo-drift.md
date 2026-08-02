@@ -97,6 +97,21 @@ El perfil tenía contenido valioso — pitfalls descubiertos en uso real (uso de
 en el repo pero el archivo mismo no existir. La verificación con `find` o el bucle `grep` del
 paso 3 de detección atrapa estos casos.
 
+### 28 jul 2026 — Self-improvement meta-drift
+
+| Skill | Perfil | Repo | Diferencia |
+|---|---|---|---|
+| `self-improvement` | v1.7 con efficiency tip + real session example en drift check | v1.7 sin esas secciones | +2 líneas (phrasing más explícito) + párrafo completo de efficiency tip con ejemplo real (`dcd5a590`) |
+| `scrapegraphai` | v1.7 en sync | v1.7 en sync | Sin deriva ✅ |
+| `scrapling` | v0.4.9 en sync | v0.4.9 en sync | Sin deriva ✅ |
+
+**Lección (meta-drift):** La skill que te dice cómo detectar deriva (`self-improvement`) puede
+ella misma tener deriva. Cuando cargas `self-improvement` al inicio de una sesión de
+auto-mejora, verifica su SKILL.md contra el repo de inmediato — si la copia del repo está
+desactualizada, el propio proceso se ejecuta con instrucciones incompletas. Este es el caso más
+importante de drift porque afecta la calidad de todas las auto-mejoras subsiguientes. El drift
+check debe incluir todas las skills cargadas en la sesión, incluida la que gobierna el proceso.
+
 ## Por qué ocurre
 
 `skill_manage(action='edit'/'patch'/'create'/'write_file')` escribe en `~/.clawksis/skills/<cat>/<name>/` (el perfil). El repo en `/usr/local/lib/clawksis-agent/skills/<cat>/<name>/` no se actualiza automáticamente. Si alguien hace `clawk update` o clona fresh, la copia del repo sobreescribe el perfil — y las mejoras se pierden.
