@@ -1,7 +1,7 @@
 ---
 name: scrapegraphai
 description: "Extract structured data from web pages using ScrapeGraphAI + the agent's own LLM — no paid scraping API. Use when you need structured JSON from a page (tables, prices, listings, contacts, specs) described in plain language, and prefer local infra over Firecrawl/Browserbase. ES: extraer datos estructurados de una página web, convertir HTML a JSON, scraping con IA sin API paga."
-version: "1.5"
+version: "1.6"
 metadata:
   openclaw:
     emoji: "🧩"
@@ -57,16 +57,17 @@ python -m playwright install chromium  # only needed for JS-heavy pages
 
 ## ❗ Critical: `render_js` and headless mode
 
-The code maps `render_js` to `headless` as follows:
+The code maps `render_js` to `headless` as follows (v1.6+ — non-bool values are
+treated as absent, they no longer go through `bool()` coercion):
 
 ```python
-headless = True if render_js is None else bool(render_js)
+headless = _as_bool(render_js, default=True)  # only real bools pass through
 ```
 
 | `render_js` | `headless` | Behaviour |
 |---|---|---|
-| not provided / `true` | `true` | ✅ Headless Chromium — works everywhere |
-| `false` | `false` | ❌ **Headed mode** — requires X server (fails on headless servers) |
+| not provided / `true` / any non-bool (`""`, `0`, `"false"`, ...) | `true` | ✅ Headless Chromium — works everywhere. Non-bools log a warning (`non-boolean render_js=...`) and fall back to headless so a sloppy model call can never flip into headed mode. |
+| `false` (real boolean) | `false` | ❌ **Headed mode** — requires X server (fails on headless servers) |
 
 **On a headless server (no screen / X server):** NEVER pass `render_js=false`. The error looks like:
 ```

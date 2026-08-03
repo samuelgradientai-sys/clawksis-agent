@@ -39,6 +39,28 @@ _DEFAULT_PROMPT = (
 )
 
 
+def _as_bool(value: Any, *, default: bool = True) -> bool:
+    """Coerce a raw arg to a bool, falling back to ``default`` for non-bools.
+
+    The schema declares `render_js` as a boolean, but a sloppy call may pass a
+    string/int (e.g. "false", "", 0). ``bool("")`` and ``bool(0)`` are ``False``,
+    which would silently flip the tool into HEADED browser mode on a headless
+    server and crash with "Missing X server or $DISPLAY". Only real booleans are
+    meaningful; anything else (str, int, list, None) falls back to ``default``
+    (True = headless, the safe mode everywhere). A warning is logged for
+    non-None non-bools so the misuse is visible instead of silent.
+    """
+    if isinstance(value, bool):
+        return value
+    if value is not None:
+        logger.warning(
+            "scrapegraph: non-boolean render_js=%r treated as %s (headless)",
+            value,
+            default,
+        )
+    return default
+
+
 def _normalize_urls(args: dict) -> list[str]:
     urls: list[str] = []
     single = args.get("url")
@@ -87,7 +109,7 @@ async def _handle_scrapegraph(args, **kw):
     prompt = prompt or _DEFAULT_PROMPT
     schema = _coerce_schema(args.get("output_schema"))
     render_js = args.get("render_js")
-    headless = True if render_js is None else bool(render_js)
+    headless = _as_bool(render_js, default=True)
     raw_timeout = args.get("timeout")
     timeout = clamp_timeout(raw_timeout)
 

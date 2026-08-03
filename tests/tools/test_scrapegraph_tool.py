@@ -277,6 +277,65 @@ def test_handler_non_string_prompt_uses_default(monkeypatch):
     assert "main, useful content" in captured["prompt"]
 
 
+# ── render_js / headless hardening ──────────────────────────────────────────
+
+
+def test_handler_non_bool_render_js_stays_headless(monkeypatch, caplog):
+    """A sloppy non-bool `render_js` ("" / 0 / "false") must NOT flip the tool
+    into headed mode — bool("") and bool(0) are False, which would crash on
+    headless servers with "Missing X server or $DISPLAY". Non-bools fall back
+    to headless=True and log a warning so the misuse is visible."""
+    import logging
+
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    caplog.set_level(logging.WARNING)
+    captured = {}
+
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
+        captured["headless"] = headless
+        return {"ok": True}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake)
+    for bad in ("", 0, "false", [], {}):
+        res = _run_tool(_handle_scrapegraph({"url": "https://x.com", "render_js": bad}))
+        assert res["ok"] is True, f"render_js={bad!r} must not crash"
+        assert captured["headless"] is True, f"render_js={bad!r} must stay headless"
+    assert "non-boolean render_js" in caplog.text
+
+
+def test_handler_bool_render_js_respected(monkeypatch):
+    """Real booleans pass through: True → headless, False → headed (respected)."""
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    captured = {}
+
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
+        captured["headless"] = headless
+        return {"ok": True}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake)
+    _run_tool(_handle_scrapegraph({"url": "https://x.com", "render_js": True}))
+    assert captured["headless"] is True
+    _run_tool(_handle_scrapegraph({"url": "https://x.com", "render_js": False}))
+    assert captured["headless"] is False
+
+
+def test_handler_render_js_missing_defaults_headless(monkeypatch):
+    """No `render_js` arg → headless=True (the documented default)."""
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    captured = {}
+
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
+        captured["headless"] = headless
+        return {"ok": True}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake)
+    _run_tool(_handle_scrapegraph({"url": "https://x.com"}))
+    assert captured["headless"] is True
+
+
 # ── clamp_timeout helper ─────────────────────────────────────────────────────
 
 
