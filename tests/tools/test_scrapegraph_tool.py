@@ -261,6 +261,30 @@ def test_normalize_urls_none_url():
     ]
 
 
+def test_normalize_urls_skips_non_string_items_in_list():
+    """Non-string items inside `urls` (None/int/dict/list — schema-violating
+    sloppy calls) used to be str()-coerced into garbage URLs like
+    "https://None" or "https://{'a': 1}" that only failed later with obscure
+    errors. They must be skipped, keeping only real string URLs."""
+    from tools.scrapegraph_tool import _normalize_urls
+
+    out = _normalize_urls({
+        "urls": [42, None, {"a": 1}, ["x"], "b.com", "  c.com  ", 0],
+    })
+    assert out == ["https://b.com", "https://c.com"]
+
+
+def test_normalize_urls_mixed_valid_and_junk():
+    """Valid `url` + `urls` with junk items: junk dropped, valid kept, no crash."""
+    from tools.scrapegraph_tool import _normalize_urls
+
+    out = _normalize_urls({
+        "url": "https://a.com",
+        "urls": [None, "", "https://b.com", {"bad": 1}],
+    })
+    assert out == ["https://a.com", "https://b.com"]
+
+
 def test_handler_non_string_prompt_uses_default(monkeypatch):
     """A non-string `prompt` must fall back to the default, not crash."""
     from tools.scrapegraph_tool import _handle_scrapegraph

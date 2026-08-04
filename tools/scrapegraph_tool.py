@@ -72,7 +72,14 @@ def _normalize_urls(args: dict) -> list[str]:
         urls.append(single.strip())
     many = args.get("urls")
     if isinstance(many, list):
-        urls.extend(str(u).strip() for u in many if str(u).strip())
+        for u in many:
+            # Only real strings are meaningful URLs. str()-coercing garbage
+            # (None, ints, dicts, lists) would fabricate URLs like
+            # "https://None" or "https://{'a': 1}" that only fail later with
+            # obscure errors — and burn LLM tokens on a doomed extraction.
+            # Skip non-strings entirely (schema-violating sloppy calls).
+            if isinstance(u, str) and u.strip():
+                urls.append(u.strip())
     # De-dupe, preserve order, and normalise scheme.
     seen: set[str] = set()
     out: list[str] = []
