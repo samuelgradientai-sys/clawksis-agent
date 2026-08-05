@@ -1,7 +1,7 @@
 ---
 name: self-improvement
 description: "Autonomous self-improvement of Clawksis via daily cron jobs — scan skills/tools/MCPs for issues, implement fixes, deploy to main, and run clawk update. USE THIS when setting up or maintaining improvement crons, or when the user says 'mejórate solo', 'auto-mejora', 'improve yourself', 'hazte mejor'. ES: mejora automática del agente, auto-mejora diaria, cron de mejora, optimización autónoma."
-version: "1.9"
+version: "1.10"
 metadata:
   openclaw:
     emoji: "🔄"
@@ -139,6 +139,7 @@ git push origin main
 **⚠️ Pitfalls:**
 
 - **Push rejected (remote ahead):** If `git push` fails with "Updates were rejected because the remote contains work", the remote has new commits. Fix: `git pull --rebase origin main` then push again. `--rebase` keeps the commit history linear and avoids a merge commit polluting the log.
+- **Unrelated working-tree changes (orphan lockfile):** Before `git add -A`, run `git status --short`. If the tree holds modifications you didn't make (real example: `uv.lock` rewritten by another session adding mem0ai/qdrant/supermemory deps with NO `pyproject.toml` change), `git add -A` sweeps them into your commit. Add ONLY the files you touched (`git add <file>...`) and leave the rest dirty. Sanity check: when `uv.lock` is modified but `git diff pyproject.toml` is empty, the change is orphaned — don't commit it.
 - **`clawk update` is hardline-blocked from the agent:** The agent CANNOT run `clawk update` because it restarts the gateway (self-termination). The command is on the unconditional blocklist. Instead, just `git push origin main` — the changes are picked up on the next gateway restart (scheduled or manual). A push to main is sufficient deployment.
 - **The blocklist also fires on shell text, not just the command:** the hardline scanner matches the *string* `clawk update` anywhere in a shell command. Even `grep -o "clawk update.*" file` or `history | grep clawk` gets blocked with the same "BLOCKED (hardline)" error. Do NOT put the literal text in any `terminal()` command — use the `search_files` tool or a `python3 -c` script instead (the blocklist does not scan tool arguments or Python code, only shell commands).
 - **`clawk update` says "Already up to date!":** This is normal when the repo branch is already at the latest commit (e.g. you just pushed). The command checks out the current HEAD and installs it — if HEAD doesn't change, the message is just cosmetic. Verify with `git log --oneline -1` to confirm your commit is HEAD.
@@ -220,6 +221,8 @@ Deliver to the user in Spanish:
 | Empty/failing test file | Add a basic test or fix the existing one. See `references/tool-test-patterns.md` for proven patterns for async tool handlers. |
 | `time.sleep(N)` without comment | Add a comment explaining why the sleep is needed |
 | **Non-string arg crashes `.strip()` parsing** | Handlers doing `(args.get("x") or "").strip()` raise `AttributeError` when the model passes an int/dict/list for a schema-string param (`url`, `prompt`, `mode`, ...). Fix: isinstance guard or a small `_as_str()` helper; treat non-strings as absent → clean "required" error. See `references/input-validation-hardening.md` (real commit `999faecb`). |
+| **Non-bool arg silently flips `bool()` coercion** | `bool("")`/`bool(0)` → `False`, `bool("false")` → `True` — a sloppy non-bool for a schema-bool param (`render_js`, flags) silently ENABLES the wrong code path instead of crashing (real example: `bool("")` → `headless=False` → headed browser → "Missing X server" on headless servers). Worse than a crash: silent. Fix: `_as_bool(value, default)` helper — only real bools pass through, non-bools fall to the safe default + warning log. Scan for `bool(args.get(...))` / `True if X is None else bool(X)` patterns. See `references/input-validation-hardening.md` (real commit `08bfa16d`). |
+| **Non-string items INSIDE a list arg (garbage fabrication)** | Handlers that `str()`-coerce list items (`urls.extend(str(u) for u in many)`) fabricate GARBAGE values from schema-violating items: `None`→`"https://None"`, `42`→`"https://42"`, `{"a":1}`→`"https://{'a': 1}"`. No crash — but the garbage goes straight into expensive downstream calls (LLM extraction) and fails with obscure errors, burning tokens. Worse than a crash: silent. Fix: `isinstance(u, str)` filter — skip non-strings, keep only real strings (after strip). Scan for `str(u)` / generator coercions over list-typed args (`urls`, `items`, `ids`, ...). See `references/input-validation-hardening.md` (real commit `03b2f0c6`). |
 | **Skill docs vs code mismatch** | Compare a loaded skill's parameter table / examples / error table against the actual tool code. A parameter documented in `SKILL.md` but missing from the tool's schema or handler is a concrete, self-contained fix — implement it. See the v1.2→v1.3 `scrapegraphai` update for a real example. |
 | **Profile skill vs repo skill drift** | Loaded skill's profile copy is ahead of the repo copy. Check **both** `SKILL.md` (``diff``) and support files (``diff <(find …) <(find …)``, especially `references/`). Sync all missing/ahead files profile → repo and commit. This is a low-risk, high-value improvement that prevents stale docs from being restored on next `clawk update`. See `references/profile-repo-drift.md` for the full workflow. **⚠️ Verify the profile is REALLY ahead first** — cosmetic diffs (quote style, line wrapping) mean the repo was deliberately ruff-formatted; syncing those would revert the format pass. Count diff direction (`grep -c '^<'` vs `'^>'`) and check `git log -- <skill_dir>` for format commits before syncing any file (see Fase 2 step 4). |
 | **Duplicated code across tool + provider files that share a common module** | When tool code and its backend provider copy-paste the same block (e.g. timeout clamping in `scrapegraph_tool.py` vs `plugins/web/scrapegraphai/provider.py`), extract to a shared function in the common module. Search by: notice a pattern in one file → `search_files()` for similar patterns across related files → verify with line-by-line comparison. See `references/finding-dry-violations.md` for the Variant A pattern (same-domain). |
@@ -247,7 +250,9 @@ example: the 23-test `TestRunOne` class, commit `5fc6bd15`).
 See `references/finding-dry-violations.md` for the DRY-violation pattern — detecting
 duplicated code across tool/provider files that share a common module, with the real
 `clamp_timeout()` extraction (commit `0d20c552`) as the example.
-See `references/input-validation-hardening.md` for the non-string-args crash pattern
-(`(args.get("x") or "").strip()` → AttributeError) and the `_as_str()` / isinstance-guard
-fix, plus result-shape hardening in `_stringify()` (list results, empty dict) — real
-example: commit `999faecb`.
+See `references/input-validation-hardening.md` for the input-validation pattern FAMILY
+on tool handlers: non-string args for string params (`_as_str()` / isinstance guard,
+commit `999faecb`), non-bool args for bool params (`_as_bool()`, commit `08bfa16d`),
+non-string items inside list args (str()-coercion fabricates garbage URLs like
+"https://None" → isinstance filter, commit `03b2f0c6`), plus result-shape hardening
+in `_stringify()` (list results, empty dict).

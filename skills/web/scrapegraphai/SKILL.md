@@ -1,7 +1,7 @@
 ---
 name: scrapegraphai
 description: "Extract structured data from web pages using ScrapeGraphAI + the agent's own LLM — no paid scraping API. Use when you need structured JSON from a page (tables, prices, listings, contacts, specs) described in plain language, and prefer local infra over Firecrawl/Browserbase. ES: extraer datos estructurados de una página web, convertir HTML a JSON, scraping con IA sin API paga."
-version: "1.6"
+version: "1.7"
 metadata:
   openclaw:
     emoji: "🧩"
@@ -142,11 +142,14 @@ Tests cover:
 - `_normalize_urls` — 7 tests: empty input, scheme default, https preserved,
   dedup, order preservation, empty-string filtering, mixed scheme
 - Timeout clamping — min 10s, max 300s, invalid → None, valid value passes through
-- Error classification — 5 branches: X server, auth/401, rate-limit/429,
-  invalid-JSON parsing, generic fallback
-- **Shared ``classify_scrapegraph_error()``** — 6 tests: all 5 branches + TimeoutError generic fallback
+- Error classification — 7 branches: X server, auth/401, rate-limit/429,
+  HTTP status (403/404/5xx), invalid-JSON parsing, network/DNS/TLS, generic fallback
+- **Shared ``classify_scrapegraph_error()``** — 13 tests: all 7 branches + TimeoutError
+  + string-based network timeouts + graph-execution timeout
 - Handler success/error/unavailable paths (single + multi-URL), including
   TimeoutError handling introduced in v1.3
+- Lazy install runs in a worker thread (``asyncio.to_thread``) — the first-use
+  pip install (30-60s) never blocks the event loop (v1.7)
 - Web extract backend (per-URL error isolation, result shaping, **error classification**,
   **timeout passthrough + clamping**)
 - Backend prioritisation (scrapegraph vs 3rd-party)
@@ -154,7 +157,7 @@ Tests cover:
 ### 6. Error classification (shared — tool + backend)
 
 Since commit `cb5a6c7f`, errors are **classified** by the shared function
-``tools.scrapegraph_common.classify_scrapegraph_error()`` into 6 categories
+``tools.scrapegraph_common.classify_scrapegraph_error()`` into 8 categories
 and surfaced as clean, actionable messages instead of raw exception dumps.
 Both the native ``scrapegraph`` tool **and** the ``web_extract`` backend
 use this classifier (v1.4), so error messages are consistent regardless of
@@ -166,12 +169,22 @@ which surface calls scrapegraphai:
 | HTTP 401 / Unauthorized | "Check auxiliary_text model credentials, or set OPENAI_API_KEY." |
 | HTTP 429 / RateLimitError | "Model is rate-limited. Retry later or switch models." |
 | TimeoutError (`asyncio.wait_for`) | "The LLM extraction timed out. Increase the `timeout` parameter or try a simpler prompt." |
+| HTTP status error (403/404/5xx, forbidden) | "The page returned an HTTP error — wrong URL, removed page, or the site blocking automated access. Use the `scrape` tool (Scrapling) to bypass." |
+| Network / DNS / TLS failure | "Network error reaching the page — DNS, connection, TLS, or network-level timeout. Verify the URL or use the `scrape` tool." |
 | Invalid JSON output / parse failure | "Try a more specific prompt or use the `scrape` tool." |
 | Any other error | Generic safe message — no paths or exception internals leaked. |
 
 The provider also now respects the ``timeout`` parameter from ``web_extract`` kwargs (v1.4).
 If ``web_extract`` passes a ``timeout``, it's clamped to [10, 300] and forwarded to
 ``extract_structured()``.
+
+Since v1.7, the lazy install (``ensure_installed()``) inside
+``extract_structured()`` / ``extract_many()`` runs in a worker thread via
+``asyncio.to_thread`` — the first-use pip install (30-60s) no longer blocks the
+event loop. Classification order matters: auth/rate-limit/timeout-type checks
+run before the broader HTTP-status and network keyword families, so a 429 is
+never misread as a generic HTTP error and a real ``TimeoutError`` from our own
+``asyncio.wait_for`` is never misread as a network timeout.
 
 ### 7. ✅ `except Exception:` narrowing — complete
 

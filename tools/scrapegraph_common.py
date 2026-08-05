@@ -194,14 +194,19 @@ def clamp_timeout(raw_timeout: Any) -> int | None:
 def classify_scrapegraph_error(exc: Exception) -> str:
     """Return a user-friendly error hint based on the exception type/message.
 
-    Classifies extraction errors into 6 categories (X server, auth, rate-limit,
-    timeout, parsing, generic) so callers can surface actionable messages
-    instead of raw exception dumps. Both the native tool handler and the
-    web-extract backend use this for consistent user-facing errors.
+    Classifies extraction errors into 8 categories (X server, auth, rate-limit,
+    HTTP status, timeout, network, parsing, generic) so callers can surface
+    actionable messages instead of raw exception dumps. Both the native tool
+    handler and the web-extract backend use this for consistent user-facing
+    errors.
 
     The classification is based on type checking (isinstance) for built-in
     exception types and keyword matching of the lowercased exception string
     for everything else — no internal paths or sensitive details are leaked.
+    Order matters: more specific checks (auth, rate-limit, timeout type) run
+    before broader keyword families (HTTP status, network) so a 429 is never
+    misread as a generic HTTP error, and a real ``TimeoutError`` from our own
+    ``asyncio.wait_for`` is never misread as a network timeout.
     """
     exc_msg = str(exc).lower()
 
@@ -240,14 +245,73 @@ def classify_scrapegraph_error(exc: Exception) -> str:
             "The model is rate-limited. Retry later or configure a "
             "different model with higher rate limits."
         )
-    # 4) TimeoutError — LLM extraction took too long (asyncio.wait_for)
-    if isinstance(exc, TimeoutError):
+    # 4) HTTP status errors — page-level: wrong URL, removed page, or the
+    # site blocking automated access (checked before network so e.g. a
+    # Cloudflare 403 is not misread as a connectivity problem).
+    if any(
+        kw in exc_msg
+        for kw in (
+            "403",
+            "404",
+            "500",
+            "502",
+            "503",
+            "http error",
+            "status code",
+            "bad gateway",
+            "forbidden",
+            "page not found",
+            "service unavailable",
+        )
+    ):
+        return (
+            "The page returned an HTTP error (e.g. 403/404/5xx) — the URL "
+            "may be wrong or the page removed, or the site is blocking "
+            "automated access. Verify the URL, or use the `scrape` tool "
+            "(Scrapling) which bypasses anti-bot protections."
+        )
+    # 5) TimeoutError — LLM extraction took too long (asyncio.wait_for);
+    # also catches scrapegraphai's own graph-execution timeout message.
+    if isinstance(exc, TimeoutError) or "graph execution timed out" in exc_msg:
         return (
             "The LLM extraction timed out. This can happen on large pages "
             "or when the model is slow. Increase the `timeout` parameter "
             "(max 300s) or try a simpler prompt."
         )
-    # 5) Output parsing (LLM returned bad JSON)
+    # 6) Network / DNS / TLS — unreachable page, connection reset, SSL
+    # failures, network-level timeouts (NOT our own wait_for TimeoutError,
+    # which is caught by the isinstance check above).
+    if any(
+        kw in exc_msg
+        for kw in (
+            "getaddrinfo",
+            "name or service not known",
+            "nodename nor servname",
+            "temporary failure in name resolution",
+            "connection refused",
+            "connection reset",
+            "connection aborted",
+            "connection closed",
+            "failed to establish",
+            "max retries exceeded",
+            "network unreachable",
+            "dns resolution",
+            "ssl",
+            "certificate verify failed",
+            "tls",
+            "read timed out",
+            "connect timed out",
+            "timed out",
+            "timeout occurred",
+        )
+    ):
+        return (
+            "Network error reaching the page — DNS, connection, TLS, or a "
+            "network-level timeout. The site may be down or blocking "
+            "automated access. Verify the URL, check connectivity, or use "
+            "the `scrape` tool (Scrapling) for anti-bot pages."
+        )
+    # 7) Output parsing (LLM returned bad JSON)
     if any(
         kw in exc_msg
         for kw in ("invalid json output", "output_parsing_failure", "parsing")
@@ -257,7 +321,7 @@ def classify_scrapegraph_error(exc: Exception) -> str:
             "prompt with fewer fields, or use the `scrape` tool "
             "(Scrapling) for raw page content instead."
         )
-    # 6) Generic fallback — safe, no internal details leaked
+    # 8) Generic fallback — safe, no internal details leaked
     return (
         "ScrapeGraphAI extraction failed. Could be a network error, "
         "model overload, or page issue. Try: using `scrape` "
@@ -280,11 +344,17 @@ async def extract_structured(
     ``schema`` (a pydantic model or JSON-schema dict) yields structured output.
     Runs the blocking graph in a worker thread so the event loop is never stalled.
 
+    The lazy install (``ensure_installed``) also runs in a worker thread — on
+    first use it can pip-install scrapegraphai for 30-60s, and doing that
+    synchronously in the coroutine would freeze the whole event loop.
+
     When ``timeout`` is set (seconds), the extraction is cancelled if it takes
     longer — useful for slow pages or overloaded models. Pass a value between
     10 and 300.
     """
-    ensure_installed()
+    # Lazy install (pip) can take 30-60s on first use — run it in a worker
+    # thread so it never stalls the event loop (and can't delay other tasks).
+    await asyncio.to_thread(ensure_installed)
     cfg = graph_config(headless=headless, overrides=overrides)
     coro = asyncio.to_thread(_run_smart, source, prompt, schema, cfg)
     if timeout is not None:
@@ -302,7 +372,9 @@ async def extract_many(
     timeout: Optional[int] = None,
 ) -> Any:
     """Extract from MULTIPLE sources with one prompt (SmartScraperMultiGraph)."""
-    ensure_installed()
+    # Same as extract_structured: lazy install runs in a worker thread so the
+    # first-use pip install never blocks the event loop.
+    await asyncio.to_thread(ensure_installed)
     cfg = graph_config(headless=headless, overrides=overrides)
     coro = asyncio.to_thread(_run_multi, sources, prompt, schema, cfg)
     if timeout is not None:

@@ -581,6 +581,118 @@ def test_classify_timeout_error():
     assert "simpler" in hint
 
 
+def test_classify_http_status():
+    """HTTP status errors (404/5xx) are page-level, classified specifically."""
+    hint = sgc.classify_scrapegraph_error(RuntimeError("HTTP 404 Not Found"))
+    assert "http error" in hint.lower()
+    hint = sgc.classify_scrapegraph_error(RuntimeError("503 Service Unavailable"))
+    assert "http error" in hint.lower()
+
+
+def test_classify_http_forbidden_is_not_network():
+    """A Cloudflare-style 403 is a page-level HTTP error, not a network one."""
+    hint = sgc.classify_scrapegraph_error(
+        RuntimeError("403 Forbidden - Access denied by Cloudflare")
+    )
+    assert "http error" in hint.lower()
+    assert "network error" not in hint.lower()
+
+
+def test_classify_network_dns():
+    """DNS failures (getaddrinfo / name resolution) get the network hint."""
+    hint = sgc.classify_scrapegraph_error(
+        RuntimeError("getaddrinfo failed: Name or service not known")
+    )
+    assert "network error" in hint.lower()
+    assert "dns" in hint.lower()
+
+
+def test_classify_network_connection():
+    hint = sgc.classify_scrapegraph_error(ConnectionError("Connection refused"))
+    assert "network error" in hint.lower()
+
+
+def test_classify_network_timeout_message():
+    """A string-based network timeout (NOT a TimeoutError instance) maps to
+    the network category, not the LLM-extraction-timeout hint."""
+    hint = sgc.classify_scrapegraph_error(
+        RuntimeError("Read timed out after 30 seconds")
+    )
+    assert "network error" in hint.lower()
+    assert "simpler prompt" not in hint
+
+
+def test_classify_real_timeout_beats_network_keywords():
+    """A real TimeoutError still maps to the LLM-extraction hint even though
+    its message contains 'timed out' (a network keyword)."""
+    hint = sgc.classify_scrapegraph_error(TimeoutError("timed out"))
+    assert "Increase" in hint
+    assert "network error" not in hint.lower()
+
+
+def test_classify_graph_execution_timeout_message():
+    """scrapegraphai's own 'graph execution timed out' message maps to the
+    LLM-extraction timeout hint, not the network category."""
+    hint = sgc.classify_scrapegraph_error(
+        RuntimeError("The graph execution timed out after 60 seconds")
+    )
+    assert "Increase" in hint
+
+
+# ── Lazy install must not block the event loop ──────────────────────────────
+
+
+def test_extract_structured_install_runs_in_worker_thread(monkeypatch):
+    """The lazy install (ensure_installed) must run through asyncio.to_thread
+    so the first-use 30-60s pip install never freezes the event loop."""
+    import tools.scrapegraph_common as sgc
+
+    install_fn = lambda: None  # noqa: E731 — stands in for ensure_installed
+    run_fn = lambda *a, **k: {"ok": True}  # noqa: E731 — stands in for _run_smart
+    calls: list[object] = []
+    real_to_thread = asyncio.to_thread
+
+    async def _spy_to_thread(fn, *a, **k):
+        calls.append(fn)
+        return await real_to_thread(fn, *a, **k)
+
+    monkeypatch.setattr(asyncio, "to_thread", _spy_to_thread)
+    monkeypatch.setattr(sgc, "ensure_installed", install_fn)
+    monkeypatch.setattr(sgc, "_run_smart", run_fn)
+    monkeypatch.setattr(sgc, "graph_config", lambda **k: {"llm": {}, "headless": True})
+
+    res = _run(sgc.extract_structured("https://x.com", "test prompt"))
+    assert res == {"ok": True}
+    # install ran FIRST, inside a worker thread (asyncio.to_thread), never
+    # synchronously on the event loop.
+    assert calls[0] is install_fn
+    assert run_fn in calls
+
+
+def test_extract_many_install_runs_in_worker_thread(monkeypatch):
+    """Same guarantee for the multi-source path."""
+    import tools.scrapegraph_common as sgc
+
+    install_fn = lambda: None  # noqa: E731
+    run_fn = lambda *a, **k: [{"ok": True}]  # noqa: E731
+    calls: list[object] = []
+    real_to_thread = asyncio.to_thread
+
+    async def _spy_to_thread(fn, *a, **k):
+        calls.append(fn)
+        return await real_to_thread(fn, *a, **k)
+
+    monkeypatch.setattr(asyncio, "to_thread", _spy_to_thread)
+    monkeypatch.setattr(sgc, "ensure_installed", install_fn)
+    monkeypatch.setattr(sgc, "_run_multi", run_fn)
+    monkeypatch.setattr(sgc, "graph_config", lambda **k: {"llm": {}, "headless": True})
+
+    res = _run(sgc.extract_many(["https://a.com", "https://b.com"], "p"))
+    assert res == [{"ok": True}]
+    assert calls[0] is install_fn
+    assert run_fn in calls
+
+
 # ── web_extract backend ─────────────────────────────────────────────────────
 
 

@@ -48,8 +48,11 @@ prompt = prompt or _DEFAULT_PROMPT
 
 Non-string `url` values are treated as **absent** (→ clean "url required"
 error), NOT coerced via `str()` — coercing would send nonsense like
-"https://42" to the fetcher. The `urls` LIST branch keeps its pre-existing
-`str(u)` coercion (documented behavior, covered by tests).
+"https://42" to the fetcher.
+
+⚠️ **The `urls` LIST branch did keep `str(u)` coercion at first — that was a
+mistake, removed in commit `03b2f0c6`.** See the section below; str()-coercing
+list items fabricates silent garbage URLs.
 
 ## Tests to add
 
@@ -83,6 +86,90 @@ The same commit hardened `_stringify()` in the scrapegraph provider:
   for dict items.
 - **Empty dict:** `{}` means "nothing extracted" → return `""` so web_extract
   treats it as missing content instead of leaking a `{}` JSON blob.
+
+## Sibling hazard: `bool()` coercion of boolean args (`_as_bool` pattern)
+
+Real example: commit `08bfa16d` — auto-mejora on `tools/scrapegraph_tool.py`.
+
+**Why it's worse than the `.strip()` crash:** `bool()` never raises — it
+*silently flips*. `bool("")` and `bool(0)` are `False`; `bool("false")` is
+`True`. A sloppy non-bool for a schema-bool param (`render_js`, any flag)
+quietly enables the wrong code path instead of failing loudly:
+
+- `headless = True if render_js is None else bool(render_js)` with
+  `render_js=""` / `0` / `[]` → `headless=False` → **headed browser mode on a
+  headless server** → runtime crash `Missing X server or $DISPLAY` deep in the
+  pipeline, with a confusing error that doesn't point at the arg.
+- `render_js="false"` → `True` → intent silently ignored.
+
+**The fix — `_as_bool(value, default)` helper (one per file, same style as
+`_as_str`):**
+
+```python
+def _as_bool(value: Any, *, default: bool = True) -> bool:
+    """Coerce a raw arg to a bool, falling back to ``default`` for non-bools."""
+    if isinstance(value, bool):
+        return value
+    if value is not None:
+        logger.warning(
+            "scrapegraph: non-boolean render_js=%r treated as %s (headless)",
+            value, default,
+        )
+    return default
+```
+
+Only real booleans pass through; everything else (str, int, list, None) falls
+back to the SAFE default (headless=True) and logs a warning so the misuse is
+visible instead of silent. Real `False` stays respected — that's the documented
+way to request headed mode (and the classifier gives a clean "no display
+server" error if it's wrong for the host).
+
+Tests: handler-level loop over `("", 0, "false", [], {})` asserting
+`headless is True` + warning text in `caplog`; bool passthrough
+(`True`→headless, `False`→headed); missing arg → default. (58 passed in
+`tests/tools/test_scrapegraph_tool.py` after the change.)
+
+## Sibling hazard #2: non-string items INSIDE a list arg (`isinstance` filter)
+
+Real example: commit `03b2f0c6` — auto-mejora on `tools/scrapegraph_tool.py`.
+
+**The failure mode is garbage fabrication, not a crash.** Handlers that
+str()-coerce list items — `urls.extend(str(u).strip() for u in many if str(u).strip())`
+— turn schema-violating items into *plausible-looking nonsense*:
+
+```
+{"urls": [42, None, {"a": 1}, ["x"], "b.com"]}
+  → ["https://42", "https://None", "https://{'a': 1}", "https://['x']", "https://b.com"]
+```
+
+No exception is raised, so nothing fails loudly — the garbage URLs go straight
+into the expensive downstream call (LLM-powered extraction) and fail there with
+obscure errors, burning LLM tokens on extractions that were doomed from the
+start. **Worse than a crash: silent, and it costs money.**
+
+**The fix — `isinstance(u, str)` filter, skip non-strings entirely:**
+
+```python
+many = args.get("urls")
+if isinstance(many, list):
+    for u in many:
+        if isinstance(u, str) and u.strip():
+            urls.append(u.strip())
+```
+
+Same principle as `_as_str()`: never coerce, treat schema-violating values as
+absent. Applies to ANY list-typed tool arg (`urls`, `items`, `ids`, ...).
+
+**Scanning heuristic:** look for `str(x)` inside a list comprehension/generator
+over a tool arg, or `map(str, ...)`. If the schema says `items: {type: string}`
+but the code coerces with `str()` instead of filtering, that's this bug.
+
+Tests added: `test_normalize_urls_skips_non_string_items_in_list`
+(`{"urls": [42, None, {"a": 1}, ["x"], "b.com", "  c.com  ", 0]}` →
+`["https://b.com", "https://c.com"]`) and
+`test_normalize_urls_mixed_valid_and_junk` (valid `url` + junk items in
+`urls` → junk dropped, valid kept). 60 passed in
+`tests/tools/test_scrapegraph_tool.py` after the change.
 
 ## Verification
 

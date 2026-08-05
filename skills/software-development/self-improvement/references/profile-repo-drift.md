@@ -112,6 +112,20 @@ desactualizada, el propio proceso se ejecuta con instrucciones incompletas. Este
 importante de drift porque afecta la calidad de todas las auto-mejoras subsiguientes. El drift
 check debe incluir todas las skills cargadas en la sesión, incluida la que gobierna el proceso.
 
+### 2 ago 2026 — Drift cosmético: no todo drift es "perfil adelante"
+
+| Skill | Perfil | Repo | Acción |
+|---|---|---|---|
+| `scrapling` | comillas simples en ejemplos de código | comillas dobles (pasó por `ruff format`) | ❌ NO sincronizar — diff 100% estilo |
+| `self-improvement` | v1.8 | v1.5 | ✅ Sincronizado (SKILL.md + `github-secret-scanning.md` + `profile-repo-drift.md` + `input-validation-hardening.md` nuevo) |
+
+**Diagnóstico (antes de sincronizar cualquier archivo con drift):**
+1. **Dirección del diff:** `diff <perfil> <repo> | grep -c '^<'` vs `grep -c '^>'`. Si el repo tiene muchas más líneas `>`, probablemente es formateo, no contenido.
+2. **Leer el diff real:** ¿solo comillas/espacios/line-wrapping? → skip. ¿Secciones nuevas, párrafos extra, archivos que faltan en el repo? → sync.
+3. **Git log del directorio de la skill:** `git log --oneline -- skills/<cat>/<name>/`. Un commit tipo "ruff format sobre las references" / "sanea formato" (ej. `d7e6d899`) indica que el repo es la copia formateada *intencionalmente* — sincronizar perfil → repo la revertiría.
+
+**Lección:** `diff -rq` solo dice "hay diferencias", no "el perfil está adelante". El sesgo natural es asumir que el perfil (que recibe `skill_manage`) es la copia autoritativa — pero cuando el repo pasó por una pasada de formateo deliberada, la dirección se invierte para los archivos afectados. Flujo correcto: verificar dirección + leer el diff + chequear git log, y sincronizar solo los archivos con contenido real adelante.
+
 ## Por qué ocurre
 
 `skill_manage(action='edit'/'patch'/'create'/'write_file')` escribe en `~/.clawksis/skills/<cat>/<name>/` (el perfil). El repo en `/usr/local/lib/clawksis-agent/skills/<cat>/<name>/` no se actualiza automáticamente. Si alguien hace `clawk update` o clona fresh, la copia del repo sobreescribe el perfil — y las mejoras se pierden.
