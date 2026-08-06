@@ -113,7 +113,8 @@ def _as_bool(value: Any, *, default: bool = True) -> bool:
     if value is not None:
         logger.warning(
             "scrapegraph: non-boolean render_js=%r treated as %s (headless)",
-            value, default,
+            value,
+            default,
         )
     return default
 ```

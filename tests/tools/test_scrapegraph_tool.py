@@ -671,7 +671,18 @@ def test_classify_graph_execution_timeout_message():
 def test_looks_like_empty_result_string_sentinels():
     """scrapegraphai "succeeds" with NA/N-A/None sentinels when it fails to
     structurally parse a page — those must be flagged as empty."""
-    for bad in ("NA", "na", "N/A", "n/a", "n.a.", "None", "null", "nan", "{}", "  NA  "):
+    for bad in (
+        "NA",
+        "na",
+        "N/A",
+        "n/a",
+        "n.a.",
+        "None",
+        "null",
+        "nan",
+        "{}",
+        "  NA  ",
+    ):
         assert sgc.looks_like_empty_result(bad) is True, f"{bad!r} must be empty"
     assert sgc.looks_like_empty_result("") is True
     assert sgc.looks_like_empty_result(None) is True
