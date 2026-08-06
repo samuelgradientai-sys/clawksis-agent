@@ -241,6 +241,32 @@ def test_normalize_urls_mixed_scheme():
     assert out == ["http://old.site.com"]
 
 
+def test_normalize_urls_skips_non_http_schemes():
+    """ftp:/mailto:/javascript:/data:/file: URLs are not fetchable by
+    scrapegraphai — they used to be mangled into "https://ftp://..." garbage
+    that only failed later with obscure errors. They must be skipped."""
+    from tools.scrapegraph_tool import _normalize_urls
+
+    out = _normalize_urls({
+        "url": "ftp://files.example.com/x.zip",
+        "urls": [
+            "mailto:boss@example.com",
+            "javascript:void(0)",
+            "data:text/html;base64,PGI+",
+            "file:///etc/passwd",
+            "https://good.example.com",
+        ],
+    })
+    assert out == ["https://good.example.com"]
+
+    # Uppercase scheme is still recognised as non-http(s) and skipped.
+    assert _normalize_urls({"url": "FTP://x.com"}) == []
+
+    # host:port is NOT a scheme — it must keep the https:// treatment.
+    out = _normalize_urls({"urls": ["example.com:8080/path", "git+ssh://x@y/z"]})
+    assert out == ["https://example.com:8080/path"]
+
+
 def test_normalize_urls_non_string_url_does_not_crash():
     """Schema-violating non-string `url` values (int/dict/list) used to raise
     AttributeError; they must be treated as absent, not crash the handler."""
@@ -639,6 +665,102 @@ def test_classify_graph_execution_timeout_message():
     assert "Increase" in hint
 
 
+# ── Empty-result ("NA") detection ───────────────────────────────────────────
+
+
+def test_looks_like_empty_result_string_sentinels():
+    """scrapegraphai "succeeds" with NA/N-A/None sentinels when it fails to
+    structurally parse a page — those must be flagged as empty."""
+    for bad in ("NA", "na", "N/A", "n/a", "n.a.", "None", "null", "nan", "{}", "  NA  "):
+        assert sgc.looks_like_empty_result(bad) is True, f"{bad!r} must be empty"
+    assert sgc.looks_like_empty_result("") is True
+    assert sgc.looks_like_empty_result(None) is True
+
+
+def test_looks_like_empty_result_real_content_kept():
+    """Real text is never mistaken for a failure sentinel."""
+    for good in ("The page loads fine", "NA means North America", "a", "NaN handling"):
+        assert sgc.looks_like_empty_result(good) is False, f"{good!r} must be kept"
+    assert sgc.looks_like_empty_result(42) is False
+    assert sgc.looks_like_empty_result(9.99) is False
+    assert sgc.looks_like_empty_result(True) is False
+
+
+def test_looks_like_empty_result_dict_shapes():
+    """Dict is empty when every value is a sentinel; partial extractions are
+    kept so real data is never discarded."""
+    assert sgc.looks_like_empty_result({}) is True
+    assert sgc.looks_like_empty_result({"content": "NA"}) is True
+    assert sgc.looks_like_empty_result({"content": ""}) is True
+    assert sgc.looks_like_empty_result({"title": "NA", "body": "NA"}) is True
+    assert sgc.looks_like_empty_result({"content": None}) is True
+    # Partial results (any real value) are kept.
+    assert sgc.looks_like_empty_result({"title": "NA", "body": "real text"}) is False
+    assert sgc.looks_like_empty_result({"price": 9.99}) is False
+    assert sgc.looks_like_empty_result({"content": "real content"}) is False
+
+
+def test_looks_like_empty_result_list_shapes():
+    assert sgc.looks_like_empty_result([]) is True
+    assert sgc.looks_like_empty_result(["NA"]) is True
+    assert sgc.looks_like_empty_result([{"content": "N/A"}]) is True
+    assert sgc.looks_like_empty_result(["NA", "real"]) is False
+    assert sgc.looks_like_empty_result([{"content": "real"}]) is False
+
+
+def test_handler_empty_result_string_returns_scrape_hint(monkeypatch):
+    """A bare "NA" result used to come back as ok=True with extracted='"NA"'.
+    It must now be an actionable error pointing at the `scrape` tool."""
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    async def _fake(*a, **k):
+        return "NA"
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake)
+    res = _run_tool(_handle_scrapegraph({"url": "https://x.com"}))
+    assert res["ok"] is False
+    assert "`scrape` tool" in res["error"] or "Scrapling" in res["error"]
+
+
+def test_handler_empty_dict_result_returns_scrape_hint(monkeypatch):
+    """The documented failure shape {"content": "NA"} must not be a success."""
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    async def _fake(*a, **k):
+        return {"content": "NA"}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake)
+    res = _run_tool(_handle_scrapegraph({"url": "https://x.com"}))
+    assert res["ok"] is False
+    assert "no useful content" in res["error"]
+
+
+def test_handler_partial_result_stays_success(monkeypatch):
+    """A partial extraction (some real data) must still be returned as ok=True."""
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    async def _fake(*a, **k):
+        return {"title": "NA", "body": "real content here"}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake)
+    res = _run_tool(_handle_scrapegraph({"url": "https://x.com"}))
+    assert res["ok"] is True
+    assert "real content here" in res["extracted"]
+
+
+def test_handler_multi_empty_result_returns_scrape_hint(monkeypatch):
+    """Multi-source path flags empty results too."""
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    async def _fake(*a, **k):
+        return [{"content": "NA"}]
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_many", _fake)
+    res = _run_tool(_handle_scrapegraph({"urls": ["https://a.com", "https://b.com"]}))
+    assert res["ok"] is False
+    assert "`scrape` tool" in res["error"] or "Scrapling" in res["error"]
+
+
 # ── Lazy install must not block the event loop ──────────────────────────────
 
 
@@ -757,6 +879,20 @@ def test_backend_extract_timeout_clamps(monkeypatch):
     monkeypatch.setattr("tools.scrapegraph_common.extract_structured", _fake)
     _run(p.extract(["https://a.com"], timeout=999))
     assert captured["timeout"] == 300
+
+
+def test_backend_extract_empty_result_hint(monkeypatch):
+    """A "NA" sentinel result must yield an actionable hint, not "NA" content."""
+    p = ScrapegraphWebProvider()
+
+    async def _fake(source, prompt, *, schema=None, headless=True, timeout=None):
+        return {"content": "NA"}
+
+    monkeypatch.setattr("tools.scrapegraph_common.extract_structured", _fake)
+    out = _run(p.extract(["https://a.com"]))
+    assert out[0]["content"] == ""
+    assert "scrape" in out[0]["error"].lower()
+    assert "NA" not in out[0]["content"]
 
 
 def test_stringify_prefers_known_keys():

@@ -191,6 +191,45 @@ def clamp_timeout(raw_timeout: Any) -> int | None:
         return None
 
 
+# Values scrapegraphai's LLM-driven extraction returns when it FAILED to
+# structurally parse a page. It rarely raises — it answers with a sentinel
+# like ``"NA"`` / ``"N/A"`` or ``{"content": "NA"}`` instead, which callers
+# must recognise or the agent burns a turn reading garbage.
+_EMPTY_RESULT_SENTINELS = frozenset(
+    {"", "na", "n/a", "n.a.", "none", "null", "nan", "{}"}
+)
+
+
+def looks_like_empty_result(data: Any) -> bool:
+    """True when a scrapegraphai result carries no usable content.
+
+    ScrapeGraphAI's extraction frequently *succeeds* with a failure sentinel
+    (``"NA"``, ``"N/A"``, ``{"content": "NA"}``, empty dict) instead of
+    raising. Callers use this to surface an actionable "use the `scrape` tool"
+    error instead of handing the agent a fake-success ``"NA"`` blob.
+
+    Deliberately conservative to avoid discarding real partial extractions:
+    a dict/list only counts as empty when **every** non-None string value is a
+    sentinel. ``{"content": "NA"}`` → empty, but ``{"title": "NA", "body":
+    "real text"}`` or ``{"price": 9.99}`` → kept.
+    """
+    if data is None:
+        return True
+    if isinstance(data, str):
+        return data.strip().lower() in _EMPTY_RESULT_SENTINELS
+    if isinstance(data, dict):
+        values = [v for v in data.values() if v is not None]
+        if not values:
+            return True
+        return all(
+            isinstance(v, str) and v.strip().lower() in _EMPTY_RESULT_SENTINELS
+            for v in values
+        )
+    if isinstance(data, (list, tuple)):
+        return all(looks_like_empty_result(item) for item in data)
+    return False
+
+
 def classify_scrapegraph_error(exc: Exception) -> str:
     """Return a user-friendly error hint based on the exception type/message.
 

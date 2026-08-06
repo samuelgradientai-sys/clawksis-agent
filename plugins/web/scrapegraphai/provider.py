@@ -99,6 +99,7 @@ class ScrapegraphWebProvider(WebSearchProvider):
             clamp_timeout,
             classify_scrapegraph_error,
             extract_structured,
+            looks_like_empty_result,
         )
 
         try:
@@ -121,6 +122,21 @@ class ScrapegraphWebProvider(WebSearchProvider):
                 data = await extract_structured(
                     url, _EXTRACT_PROMPT, headless=True, timeout=timeout
                 )
+                # scrapegraphai "succeeds" with a failure sentinel ("NA",
+                # {"content": "NA"}, empty dict) instead of raising — surface
+                # an actionable hint rather than empty/"NA" content.
+                if looks_like_empty_result(data):
+                    results.append({
+                        "url": url,
+                        "title": "",
+                        "content": "",
+                        "error": (
+                            "ScrapeGraphAI returned no useful content — use "
+                            "the `scrape` tool (Scrapling) for raw content "
+                            "from this page."
+                        ),
+                    })
+                    continue
                 content = _stringify(data)
                 results.append({
                     "url": url,

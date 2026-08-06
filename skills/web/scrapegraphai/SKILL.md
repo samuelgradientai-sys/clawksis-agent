@@ -1,7 +1,7 @@
 ---
 name: scrapegraphai
 description: "Extract structured data from web pages using ScrapeGraphAI + the agent's own LLM — no paid scraping API. Use when you need structured JSON from a page (tables, prices, listings, contacts, specs) described in plain language, and prefer local infra over Firecrawl/Browserbase. ES: extraer datos estructurados de una página web, convertir HTML a JSON, scraping con IA sin API paga."
-version: "1.7"
+version: "1.8"
 metadata:
   openclaw:
     emoji: "🧩"
@@ -36,6 +36,8 @@ Two surfaces use this module:
 | **`scrape` / Scrapling** | **Raw content** — "fetch this page as markdown", anti-bot bypass (Cloudflare), spiders/crawlers | ✅ Falls back when scrapegraph returns `"NA"` or `"Invalid json output"` |
 
 **⚠️ Common trap:** scrapegraph often fails on **long-form articles** (1000+ words), returning `"NA"` content. Don't burn tokens retrying — switch to `scrape` immediately. The LLM can't structurally parse dense text. Don't keep retrying — fall back to `scrape(url, mode="auto")` for raw markdown. See `references/scrapling-fallback.md` for the full decision tree and real examples.
+
+**v1.8 — the code now detects this for you:** when the extraction comes back as a failure sentinel (`"NA"`, `"N/A"`, `{"content": "NA"}`, empty dict), the `scrapegraph` tool returns `ok: false` with an actionable "use the `scrape` tool (Scrapling)" error instead of a fake-success `"NA"` blob — and the `web_extract` backend returns empty content + the same hint. Partial extractions (`{"title": "NA", "body": "real text"}`) are deliberately **kept**. So: if you see `ok: false` with that message, don't retry scrapegraph — go straight to `scrape`.
 
 **The library auto-installs on first use** (lazy deps via `tools.lazy_deps`). If lazy install is disabled, run manually:
 
@@ -139,8 +141,10 @@ Tests cover:
 - Tool registration + schema shape (including ``timeout`` parameter)
 - LLM config builder (auxiliary client, env fallback)
 - `_coerce_schema` helper — None, dict, valid/invalid JSON strings, non-string types
-- `_normalize_urls` — 7 tests: empty input, scheme default, https preserved,
-  dedup, order preservation, empty-string filtering, mixed scheme
+- `_normalize_urls` — 9 tests: empty input, scheme default, https preserved,
+  dedup, order preservation, empty-string filtering, mixed scheme,
+  non-string junk skipped, **non-http(s) schemes skipped** (`ftp:`/`mailto:`/
+  `javascript:`/`data:`/`file:`, incl. `host:port` NOT treated as a scheme)
 - Timeout clamping — min 10s, max 300s, invalid → None, valid value passes through
 - Error classification — 7 branches: X server, auth/401, rate-limit/429,
   HTTP status (403/404/5xx), invalid-JSON parsing, network/DNS/TLS, generic fallback
@@ -148,6 +152,9 @@ Tests cover:
   + string-based network timeouts + graph-execution timeout
 - Handler success/error/unavailable paths (single + multi-URL), including
   TimeoutError handling introduced in v1.3
+- **Empty-result detection (v1.8)** — ``looks_like_empty_result()`` sentinel
+  strings/dicts/lists, real content kept, partial extractions kept; handler +
+  multi-source + web_extract backend return the "use `scrape`" hint on `"NA"`
 - Lazy install runs in a worker thread (``asyncio.to_thread``) — the first-use
   pip install (30-60s) never blocks the event loop (v1.7)
 - Web extract backend (per-URL error isolation, result shaping, **error classification**,
@@ -204,6 +211,35 @@ to their specific exception types (v1.2):
 The only remaining broad catch in `extract()` (per-URL error isolation) is
 intentional — it prevents a single URL failure from aborting the whole batch.
 
+### 8. Empty-result ("NA") detection — the failure that doesn't raise
+
+scrapegraphai rarely raises when it fails to structurally parse a page — it
+**succeeds** with a sentinel (`"NA"`, `"N/A"`, `{"content": "NA"}`, empty dict).
+Before v1.8 that came back as `ok: true` with `extracted: '"NA"'` and the agent
+burned a turn reading garbage.
+
+Since v1.8, the shared helper
+``tools.scrapegraph_common.looks_like_empty_result()`` flags these results and:
+
+| Surface | Behaviour on sentinel result |
+|---|---|
+| `scrapegraph` tool | `ok: false` + "Use the `scrape` tool (Scrapling) for raw page content instead." |
+| `web_extract` backend | empty content + the same hint as a per-URL error |
+
+Detection is deliberately **conservative**: a dict/list only counts as empty
+when *every* non-None string value is a sentinel. `{"content": "NA"}` → empty,
+but `{"title": "NA", "body": "real text"}` and `{"price": 9.99}` → kept. If the
+tool now says `ok: false` with that message, don't retry scrapegraph — fall
+back to `scrape(url, mode="auto")` (see `references/scrapling-fallback.md`).
+
+### 9. Non-http(s) URLs are skipped, not mangled
+
+`_normalize_urls()` used to prepend `https://` to *any* bare string, so
+`ftp://x`, `mailto:a@b`, `javascript:void(0)` and `data:` URLs became
+`https://ftp://x`-style garbage that failed later with obscure errors (v1.8).
+Now URLs with a non-http(s) scheme are skipped with a debug log; bare hosts and
+`host:port` forms (`example.com:8080`) keep the `https://` treatment.
+
 ## Verifying it works
 
 ```python
@@ -245,7 +281,7 @@ Expected output (with `render_js` omitted or `true`):
 
 | File | Purpose |
 |---|---|
-| `tools/scrapegraph_common.py` | Shared helpers: install, patch, LLM config, graph runners, error classifier |
-| `tools/scrapegraph_tool.py` | Agent tool registration + handler (uses shared classifier) |
-| `plugins/web/scrapegraphai/provider.py` | `web_extract` backend (shared classifier + timeout passthrough) |
-| `tests/tools/test_scrapegraph_tool.py` | Tests (44 tests, all pass) |
+| `tools/scrapegraph_common.py` | Shared helpers: install, patch, LLM config, graph runners, error classifier, empty-result ("NA") detection |
+| `tools/scrapegraph_tool.py` | Agent tool registration + handler (uses shared classifier + empty-result detection, filters non-http(s) URLs) |
+| `plugins/web/scrapegraphai/provider.py` | `web_extract` backend (shared classifier + timeout passthrough + empty-result hint) |
+| `tests/tools/test_scrapegraph_tool.py` | Tests (79 tests, all pass) |

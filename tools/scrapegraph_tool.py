@@ -29,6 +29,7 @@ from tools.scrapegraph_common import (
     classify_scrapegraph_error,
     extract_many,
     extract_structured,
+    looks_like_empty_result,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,42 @@ _MAX_RESULT_CHARS = 30000
 _DEFAULT_PROMPT = (
     "Extract the main, useful content of this page as clean structured data."
 )
+
+# Colon-only schemes (no "//") that scrapegraphai can never fetch. Anything
+# else — including no scheme at all, or a "host:port" like example.com:8080 —
+# is treated as a bare host and gets https:// prepended as before.
+_NON_HTTP_SCHEMES = frozenset(
+    {
+        "mailto",
+        "javascript",
+        "data",
+        "tel",
+        "sms",
+        "file",
+        "about",
+        "blob",
+        "view-source",
+        "chrome",
+        "chrome-extension",
+        "vscode",
+        "ftp",
+        "ws",
+        "wss",
+    }
+)
+
+
+def _is_non_http_scheme(url: str) -> bool:
+    """True when ``url`` carries a scheme that isn't http(s).
+
+    ``ftp://x`` / ``git+ssh://y`` (hierarchical schemes) are caught by the
+    ``://`` check; ``mailto:`` / ``javascript:`` / ``data:`` etc. (colon-only)
+    are caught by the allowlist. A bare host or ``host:port`` (``a.com``,
+    ``example.com:8080``) has no recognised scheme and returns False.
+    """
+    if "://" in url:
+        return not url.lower().startswith(("http://", "https://"))
+    return url.split(":", 1)[0].lower() in _NON_HTTP_SCHEMES
 
 
 def _as_bool(value: Any, *, default: bool = True) -> bool:
@@ -69,7 +106,15 @@ def _normalize_urls(args: dict) -> list[str]:
     # non-str). Treat non-strings as absent so the handler reports a clean
     # "url required" error instead of blowing up.
     if isinstance(single, str) and single.strip():
-        urls.append(single.strip())
+        single = single.strip()
+        # A URL with a non-http(s) scheme (ftp:, mailto:, javascript:,
+        # data:, file:, ...) is not something scrapegraphai can fetch —
+        # prepending "https://" would fabricate "https://ftp://..." that
+        # fails later with an obscure error. Skip it instead.
+        if _is_non_http_scheme(single):
+            logger.debug("scrapegraph: skipping non-http(s) URL %r", single)
+        else:
+            urls.append(single)
     many = args.get("urls")
     if isinstance(many, list):
         for u in many:
@@ -79,7 +124,15 @@ def _normalize_urls(args: dict) -> list[str]:
             # obscure errors — and burn LLM tokens on a doomed extraction.
             # Skip non-strings entirely (schema-violating sloppy calls).
             if isinstance(u, str) and u.strip():
-                urls.append(u.strip())
+                u = u.strip()
+                # A URL with a non-http(s) scheme (ftp:, mailto:, javascript:,
+                # data:, file:, ...) is not something scrapegraphai can fetch —
+                # prepending "https://" would fabricate "https://ftp://..." that
+                # fails later with an obscure error. Skip it instead.
+                if _is_non_http_scheme(u):
+                    logger.debug("scrapegraph: skipping non-http(s) URL %r", u)
+                    continue
+                urls.append(u)
     # De-dupe, preserve order, and normalise scheme.
     seen: set[str] = set()
     out: list[str] = []
@@ -141,6 +194,24 @@ async def _handle_scrapegraph(args, **kw):
         logger.warning("scrapegraph extraction failed: %s", exc)
         hint = classify_scrapegraph_error(exc)
         return tool_result(ok=False, urls=urls, error=hint)
+
+    # scrapegraphai "succeeds" with a failure sentinel ("NA", {"content": "NA"},
+    # empty dict) when the LLM can't structurally parse the page — it does not
+    # raise. Surface that as an actionable error pointing at `scrape` instead of
+    # returning ok=True with a fake-success "NA" blob the agent would burn a
+    # turn reading (long articles, JS-heavy and anti-bot pages are the usual
+    # triggers — see skills/web/scrapegraphai/references/scrapling-fallback.md).
+    if looks_like_empty_result(data):
+        return tool_result(
+            ok=False,
+            urls=urls,
+            error=(
+                "ScrapeGraphAI returned no useful content (it couldn't "
+                "structurally parse the page — typical on long articles, "
+                "JS-heavy or anti-bot pages). Use the `scrape` tool "
+                "(Scrapling) for raw page content instead."
+            ),
+        )
 
     try:
         rendered = json.dumps(data, ensure_ascii=False, indent=2, default=str)

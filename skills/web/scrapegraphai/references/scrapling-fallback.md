@@ -1,5 +1,10 @@
 # Scrapling fallback: when scrapegraph returns "NA" or "Invalid json output"
 
+> **v1.8:** the tool now flags `"NA"` / `{"content": "NA"}` / empty results
+> automatically — it returns `ok: false` with a "use the `scrape` tool"
+> message instead of a fake-success blob. When you see that error (or the
+> shapes below), follow this decision table.
+
 ## Symptom
 
 `scrapegraph` returns `"NA"`, `"Invalid json output"`, or empty content even though the page is reachable:
