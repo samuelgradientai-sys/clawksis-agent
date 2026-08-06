@@ -42,25 +42,23 @@ _DEFAULT_PROMPT = (
 # Colon-only schemes (no "//") that scrapegraphai can never fetch. Anything
 # else — including no scheme at all, or a "host:port" like example.com:8080 —
 # is treated as a bare host and gets https:// prepended as before.
-_NON_HTTP_SCHEMES = frozenset(
-    {
-        "mailto",
-        "javascript",
-        "data",
-        "tel",
-        "sms",
-        "file",
-        "about",
-        "blob",
-        "view-source",
-        "chrome",
-        "chrome-extension",
-        "vscode",
-        "ftp",
-        "ws",
-        "wss",
-    }
-)
+_NON_HTTP_SCHEMES = frozenset({
+    "mailto",
+    "javascript",
+    "data",
+    "tel",
+    "sms",
+    "file",
+    "about",
+    "blob",
+    "view-source",
+    "chrome",
+    "chrome-extension",
+    "vscode",
+    "ftp",
+    "ws",
+    "wss",
+})
 
 
 def _is_non_http_scheme(url: str) -> bool:

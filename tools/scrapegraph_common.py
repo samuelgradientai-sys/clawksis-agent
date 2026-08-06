@@ -195,9 +195,16 @@ def clamp_timeout(raw_timeout: Any) -> int | None:
 # structurally parse a page. It rarely raises — it answers with a sentinel
 # like ``"NA"`` / ``"N/A"`` or ``{"content": "NA"}`` instead, which callers
 # must recognise or the agent burns a turn reading garbage.
-_EMPTY_RESULT_SENTINELS = frozenset(
-    {"", "na", "n/a", "n.a.", "none", "null", "nan", "{}"}
-)
+_EMPTY_RESULT_SENTINELS = frozenset({
+    "",
+    "na",
+    "n/a",
+    "n.a.",
+    "none",
+    "null",
+    "nan",
+    "{}",
+})
 
 
 def looks_like_empty_result(data: Any) -> bool:
