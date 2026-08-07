@@ -105,8 +105,14 @@ If any skill was loaded this session (via `skill_view()` or user invocation), ve
 
 **Always run tests after editing:**
 ```bash
-cd /usr/local/lib/clawksis-agent && uv run pytest tests/tools/test_<name>.py -v
+cd /usr/local/lib/clawksis-agent
+uv sync --all-extras   # ← REQUIRED first: the base venv only has runtime deps.
+                       # pytest/pytest-asyncio live in the `dev` extra — without
+                       # this sync, `uv run pytest` fails with "No module named
+                       # pytest" (real 6 ago 2026 run). CI does the same sync.
+uv run python -m pytest tests/tools/test_<name>.py -q
 ```
+Then run related files that import what you touched (search `tests/` for the module name) — e.g. the scrapegraphai provider is also exercised by `tests/plugins/web/test_web_search_provider_plugins.py` and `tests/test_toolsets.py`.
 
 If tests fail, fix until green. If the fix is too complex, revert with `git checkout -- <file>`.
 
@@ -129,13 +135,19 @@ Use `caplog` (built-in pytest fixture) + `patch.dict("os.environ", {}, clear=Tru
 
 ```bash
 cd /usr/local/lib/clawksis-agent
+git remote -v   # ← verificar que origin sea HTTPS, NO ssh-origin (deploy key read-only)
+git status      # ← revisar qué hay pendiente antes de stagear
 git add -A
 git commit -m "auto-mejora: <descripción breve del cambio>"
+git pull origin main   # ← sincronizar ANTES del push (o git pull --rebase)
 git push origin main
+git status      # ← confirmar que TODO quedó en verde y limpio
 # clawk update is NOT run here — it's hardline-blocked from the agent
 # (restarts the gateway = self-termination). A push to main is sufficient;
 # changes are picked up on the next gateway restart (scheduled or manual).
 ```
+
+**Regla de Samuel: TODO lo que se suba debe quedar en VERDE, nunca con X.** Ver el `git-push-hygiene` skill para el workflow completo (`.gitignore` para backups, `ruff format` antes de push para que el CI no falle, y debug de push con llave read-only / remote equivocado).
 
 **⚠️ Pitfalls:**
 
@@ -149,6 +161,20 @@ git push origin main
 - **`patch()` rejects backslash-escaped quotes ("escape-drift"):** If old_string/new_string contain `\"` (backslash-escaped double quotes) — a common serialization artifact when hand-writing tool calls — the patch fails with "Escape-drift detected: old_string and new_string contain the literal sequence '\"' but the matched region of the file does not." **Fix:** re-pass the strings with PLAIN unescaped quotes (`"` not `\"`). This happens most when patching Python files full of string literals; just type the quotes bare.
 - **Backticks in `git commit -m` cause shell errors:** When the commit message contains backticks (`` ` ``), bash interprets them as command substitution before passing the string to `git`. This causes syntax errors or corrupts the commit message. **Fix:** use single quotes around the message (`git commit -m '...'`) instead of double quotes, or avoid backticks in the message entirely — put the detailed description in the commit body (`git commit -m "title" -m "body"`) where backticks are harmless.
 - **Profile skill vs repo skill drift:** When you modify a skill's SKILL.md via `skill_manage`, it updates `~/.clawksis/skills/<category>/<name>/SKILL.md` (the profile copy). But the repo may also have a copy at `skills/<category>/<name>/SKILL.md`. If the repo copy is stale, `clawk update` on another machine or a fresh clone would restore the stale version. **Check both paths after updating a skill and sync by writing the profile's updated content to the repo path, then committing.**
+- **Repo skill edits don't reach the LIVE profile — `sync_skills()` `user_modified` guard:** after committing a bundled-skill doc change to the repo (e.g. `skills/web/scrapegraphai/SKILL.md` → v1.8), the running profile's copy at `~/.clawksis/skills/...` stays stale: `tools.skills_sync.sync_skills()` deliberately refuses to overwrite skills whose on-disk hash diverged from the manifest baseline (it reports them as `user_modified`), so your committed content never lands in the copy the runtime actually loads. **Fix — direct copy + manifest re-baseline (repo → profile):**
+  ```python
+  import shutil
+  from pathlib import Path
+  from tools.skills_sync import _read_manifest, _write_manifest, _dir_hash
+
+  src, dest = Path("skills/<cat>/<name>"), Path.home() / ".clawksis/skills/<cat>/<name>"
+  for f in ["SKILL.md", "references/scrapling-fallback.md"]:  # every file you touched
+      shutil.copy2(src / f, dest / f)
+  m = _read_manifest()
+  m["<name>"] = _dir_hash(dest)
+  _write_manifest(m)  # re-baseline
+  ```
+  Verify: `sync_skills(quiet=True)` must no longer list the skill under `user_modified`. This is the only reliable way to push a committed skill-doc update to the live agent before the next gateway restart. See `references/deploy-profile-sync.md`.
 - **Push rejected — secret in commit:** GitHub push protection scans for API keys, tokens, and credentials. If `git push` is rejected with "Push cannot contain secrets", the commit contains a real credential (often in a skill file's example config). **Fix:**
   1. Identify the file from the error: `remote: path: skills/<cat>/<name>/SKILL.md:NN`
   2. Read the line and replace the real token with a placeholder (e.g. `ntn_your_token_here` for Notion, `***` for OpenAI-style)
@@ -224,6 +250,8 @@ Deliver to the user in Spanish:
 | **Non-string arg crashes `.strip()` parsing** | Handlers doing `(args.get("x") or "").strip()` raise `AttributeError` when the model passes an int/dict/list for a schema-string param (`url`, `prompt`, `mode`, ...). Fix: isinstance guard or a small `_as_str()` helper; treat non-strings as absent → clean "required" error. See `references/input-validation-hardening.md` (real commit `999faecb`). |
 | **Non-bool arg silently flips `bool()` coercion** | `bool("")`/`bool(0)` → `False`, `bool("false")` → `True` — a sloppy non-bool for a schema-bool param (`render_js`, flags) silently ENABLES the wrong code path instead of crashing (real example: `bool("")` → `headless=False` → headed browser → "Missing X server" on headless servers). Worse than a crash: silent. Fix: `_as_bool(value, default)` helper — only real bools pass through, non-bools fall to the safe default + warning log. Scan for `bool(args.get(...))` / `True if X is None else bool(X)` patterns. See `references/input-validation-hardening.md` (real commit `08bfa16d`). |
 | **Non-string items INSIDE a list arg (garbage fabrication)** | Handlers that `str()`-coerce list items (`urls.extend(str(u) for u in many)`) fabricate GARBAGE values from schema-violating items: `None`→`"https://None"`, `42`→`"https://42"`, `{"a":1}`→`"https://{'a': 1}"`. No crash — but the garbage goes straight into expensive downstream calls (LLM extraction) and fails with obscure errors, burning tokens. Worse than a crash: silent. Fix: `isinstance(u, str)` filter — skip non-strings, keep only real strings (after strip). Scan for `str(u)` / generator coercions over list-typed args (`urls`, `items`, `ids`, ...). See `references/input-validation-hardening.md` (real commit `03b2f0c6`). |
+| **LLM-driven extractor "succeeds" with a failure sentinel** | scrapegraphai-style tools rarely raise on failure — they return `"NA"` / `"N/A"` / `{"content": "NA"}` / empty dict, which a naive handler surfaces as `ok: true` and the agent burns a turn reading garbage (docs said "fall back to `scrape`" but the code never enforced it). Fix: shared `looks_like_empty_result()` helper — **conservative**: a dict/list only counts as empty when EVERY non-None string value is a sentinel (`{"content": "NA"}` → empty; `{"title": "NA", "body": "real"}` → kept). On sentinel: `ok: false` + actionable "use the `scrape` tool" hint in BOTH the tool handler and the web_extract backend. Real commit `9e150b5e`. See `references/empty-result-sentinels.md`. |
+| **URL normalization mangles non-http(s) schemes** | Prepending `https://` to any bare string fabricates `https://ftp://...` garbage from `ftp:`, `mailto:`, `javascript:`, `data:`, `file:` URLs that fails later with obscure errors. Fix: scheme filter BEFORE the prefix — but `"://" in url` alone MISSES colon-only schemes (`mailto:a@b`, `javascript:void(0)`) and a naive `^scheme:` regex MISREADS host:port (`example.com:8080` → treated as scheme "example.com"). Working helper: `://` present → reject unless http(s); no `://` → reject only well-known colon-only schemes (allowlist: mailto/javascript/data/tel/sms/file/about/blob/...). Real commit `9e150b5e`. See `references/empty-result-sentinels.md`. |
 | **Skill docs vs code mismatch** | Compare a loaded skill's parameter table / examples / error table against the actual tool code. A parameter documented in `SKILL.md` but missing from the tool's schema or handler is a concrete, self-contained fix — implement it. See the v1.2→v1.3 `scrapegraphai` update for a real example. |
 | **Profile skill vs repo skill drift** | Loaded skill's profile copy is ahead of the repo copy. Check **both** `SKILL.md` (``diff``) and support files (``diff <(find …) <(find …)``, especially `references/`). Sync all missing/ahead files profile → repo and commit. This is a low-risk, high-value improvement that prevents stale docs from being restored on next `clawk update`. See `references/profile-repo-drift.md` for the full workflow. **⚠️ Verify the profile is REALLY ahead first** — cosmetic diffs (quote style, line wrapping) mean the repo was deliberately ruff-formatted; syncing those would revert the format pass. Count diff direction (`grep -c '^<'` vs `'^>'`) and check `git log -- <skill_dir>` for format commits before syncing any file (see Fase 2 step 4). |
 | **Duplicated code across tool + provider files that share a common module** | When tool code and its backend provider copy-paste the same block (e.g. timeout clamping in `scrapegraph_tool.py` vs `plugins/web/scrapegraphai/provider.py`), extract to a shared function in the common module. Search by: notice a pattern in one file → `search_files()` for similar patterns across related files → verify with line-by-line comparison. See `references/finding-dry-violations.md` for the Variant A pattern (same-domain). |
@@ -257,3 +285,10 @@ commit `999faecb`), non-bool args for bool params (`_as_bool()`, commit `08bfa16
 non-string items inside list args (str()-coercion fabricates garbage URLs like
 "https://None" → isinstance filter, commit `03b2f0c6`), plus result-shape hardening
 in `_stringify()` (list results, empty dict).
+See `references/empty-result-sentinels.md` for the failure-sentinel detection pattern
+(`looks_like_empty_result()`, conservative all-values rule, tool + backend surfaces)
+and the non-http(s) URL scheme filter (`_is_non_http_scheme()`, colon-only schemes
+vs `host:port`) — real example: the v1.8 `scrapegraph` update (commit `9e150b5e`).
+See `references/deploy-profile-sync.md` for pushing a committed bundled-skill edit to
+the LIVE profile past `sync_skills()`'s `user_modified` guard (direct copy + manifest
+re-baseline via `_read_manifest`/`_write_manifest`/`_dir_hash`).
