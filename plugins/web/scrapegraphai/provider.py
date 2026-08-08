@@ -36,10 +36,26 @@ def _stringify(data: Any) -> str:
         if not data:
             return ""
         # Common shapes: {"content": "..."} / {"markdown": "..."} / {"text": "..."}
-        for key in ("content", "markdown", "text", "result", "answer"):
-            val = data.get(key)
+        for key in (
+            "content",
+            "markdown",
+            "text",
+            "result",
+            "answer",
+            "data",
+            "response",
+            "output",
+            "body",
+        ):
+            if key not in data:
+                continue
+            val = data[key]
             if isinstance(val, str) and val.strip():
                 return val
+            if isinstance(val, (dict, list)):
+                nested = _stringify(val)
+                if nested and nested.strip():
+                    return nested
         try:
             return json.dumps(data, ensure_ascii=False, indent=2, default=str)
         except (TypeError, ValueError):

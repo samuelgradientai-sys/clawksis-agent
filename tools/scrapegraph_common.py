@@ -204,6 +204,17 @@ _EMPTY_RESULT_SENTINELS = frozenset({
     "null",
     "nan",
     "{}",
+    # Common LLM "I couldn't extract anything" phrasings (v1.9).
+    "no content",
+    "no data",
+    "no result",
+    "no results",
+    "no text",
+    "nothing",
+    "not found",
+    "empty",
+    "nil",
+    "undefined",
 })
 
 
@@ -216,9 +227,11 @@ def looks_like_empty_result(data: Any) -> bool:
     error instead of handing the agent a fake-success ``"NA"`` blob.
 
     Deliberately conservative to avoid discarding real partial extractions:
-    a dict/list only counts as empty when **every** non-None string value is a
-    sentinel. ``{"content": "NA"}`` → empty, but ``{"title": "NA", "body":
-    "real text"}`` or ``{"price": 9.99}`` → kept.
+    a dict/list only counts as empty when **every** contained value is empty,
+    checked recursively (v1.9) so nested shapes like
+    ``{"content": {"answer": "NA"}}`` or ``{"data": [{"content": "N/A"}]}``
+    are caught too. ``{"title": "NA", "body": "real text"}`` or
+    ``{"price": 9.99}`` → kept.
     """
     if data is None:
         return True
@@ -228,10 +241,9 @@ def looks_like_empty_result(data: Any) -> bool:
         values = [v for v in data.values() if v is not None]
         if not values:
             return True
-        return all(
-            isinstance(v, str) and v.strip().lower() in _EMPTY_RESULT_SENTINELS
-            for v in values
-        )
+        # Recurse into every value: a dict is empty when each value is empty
+        # (sentinel string, empty nested dict/list, or an empty sub-result).
+        return all(looks_like_empty_result(v) for v in values)
     if isinstance(data, (list, tuple)):
         return all(looks_like_empty_result(item) for item in data)
     return False
@@ -240,19 +252,20 @@ def looks_like_empty_result(data: Any) -> bool:
 def classify_scrapegraph_error(exc: Exception) -> str:
     """Return a user-friendly error hint based on the exception type/message.
 
-    Classifies extraction errors into 8 categories (X server, auth, rate-limit,
-    HTTP status, timeout, network, parsing, generic) so callers can surface
-    actionable messages instead of raw exception dumps. Both the native tool
-    handler and the web-extract backend use this for consistent user-facing
-    errors.
+    Classifies extraction errors into 9 categories (X server, auth, quota,
+    rate-limit, HTTP status, timeout, network, parsing, generic) so callers
+    can surface actionable messages instead of raw exception dumps. Both the
+    native tool handler and the web-extract backend use this for consistent
+    user-facing errors.
 
     The classification is based on type checking (isinstance) for built-in
     exception types and keyword matching of the lowercased exception string
     for everything else — no internal paths or sensitive details are leaked.
-    Order matters: more specific checks (auth, rate-limit, timeout type) run
-    before broader keyword families (HTTP status, network) so a 429 is never
-    misread as a generic HTTP error, and a real ``TimeoutError`` from our own
-    ``asyncio.wait_for`` is never misread as a network timeout.
+    Order matters: more specific checks (auth, quota, rate-limit, timeout
+    type) run before broader keyword families (HTTP status, network) so a
+    429 from exhausted credits is not misread as a plain rate limit, and a
+    real ``TimeoutError`` from our own ``asyncio.wait_for`` is never misread
+    as a network timeout.
     """
     exc_msg = str(exc).lower()
 
@@ -282,7 +295,33 @@ def classify_scrapegraph_error(exc: Exception) -> str:
             "Check auxiliary_text model credentials, or set "
             "OPENAI_API_KEY / OPENROUTER_API_KEY in the environment."
         )
-    # 3) Rate limit
+    # 3) Quota / billing — model credits exhausted or billing inactive
+    # (OpenAI "insufficient_quota" / 402, Anthropic "billing_not_active",
+    # OpenRouter "Insufficient Credits", ...). MUST run before the rate-limit
+    # family: quota errors often carry a "429" status code too, but retrying
+    # will not help — the fix is checking billing or switching models.
+    if any(
+        kw in exc_msg
+        for kw in (
+            "insufficient_quota",
+            "billing_not_active",
+            "insufficient credits",
+            "out of credits",
+            "credit balance",
+            "payment required",
+            "402",
+            "quota",
+            "billing",
+            "max monthly spend",
+        )
+    ):
+        return (
+            "The LLM model used by ScrapeGraphAI has run out of credits or "
+            "its billing is inactive (quota/billing error). Check the "
+            "provider balance or switch to a different model — retrying "
+            "will not help."
+        )
+    # 4) Rate limit
     if any(
         kw in exc_msg
         for kw in ("429", "ratelimiterror", "rate_limit", "too many requests")
@@ -291,7 +330,7 @@ def classify_scrapegraph_error(exc: Exception) -> str:
             "The model is rate-limited. Retry later or configure a "
             "different model with higher rate limits."
         )
-    # 4) HTTP status errors — page-level: wrong URL, removed page, or the
+    # 5) HTTP status errors — page-level: wrong URL, removed page, or the
     # site blocking automated access (checked before network so e.g. a
     # Cloudflare 403 is not misread as a connectivity problem).
     if any(
@@ -316,7 +355,7 @@ def classify_scrapegraph_error(exc: Exception) -> str:
             "automated access. Verify the URL, or use the `scrape` tool "
             "(Scrapling) which bypasses anti-bot protections."
         )
-    # 5) TimeoutError — LLM extraction took too long (asyncio.wait_for);
+    # 6) TimeoutError — LLM extraction took too long (asyncio.wait_for);
     # also catches scrapegraphai's own graph-execution timeout message.
     if isinstance(exc, TimeoutError) or "graph execution timed out" in exc_msg:
         return (
@@ -324,7 +363,7 @@ def classify_scrapegraph_error(exc: Exception) -> str:
             "or when the model is slow. Increase the `timeout` parameter "
             "(max 300s) or try a simpler prompt."
         )
-    # 6) Network / DNS / TLS — unreachable page, connection reset, SSL
+    # 7) Network / DNS / TLS — unreachable page, connection reset, SSL
     # failures, network-level timeouts (NOT our own wait_for TimeoutError,
     # which is caught by the isinstance check above).
     if any(
@@ -357,7 +396,7 @@ def classify_scrapegraph_error(exc: Exception) -> str:
             "automated access. Verify the URL, check connectivity, or use "
             "the `scrape` tool (Scrapling) for anti-bot pages."
         )
-    # 7) Output parsing (LLM returned bad JSON)
+    # 8) Output parsing (LLM returned bad JSON)
     if any(
         kw in exc_msg
         for kw in ("invalid json output", "output_parsing_failure", "parsing")
@@ -367,7 +406,7 @@ def classify_scrapegraph_error(exc: Exception) -> str:
             "prompt with fewer fields, or use the `scrape` tool "
             "(Scrapling) for raw page content instead."
         )
-    # 8) Generic fallback — safe, no internal details leaked
+    # 9) Generic fallback — safe, no internal details leaked
     return (
         "ScrapeGraphAI extraction failed. Could be a network error, "
         "model overload, or page issue. Try: using `scrape` "

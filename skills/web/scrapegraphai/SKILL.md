@@ -1,7 +1,7 @@
 ---
 name: scrapegraphai
 description: "Extract structured data from web pages using ScrapeGraphAI + the agent's own LLM — no paid scraping API. Use when you need structured JSON from a page (tables, prices, listings, contacts, specs) described in plain language, and prefer local infra over Firecrawl/Browserbase. ES: extraer datos estructurados de una página web, convertir HTML a JSON, scraping con IA sin API paga."
-version: "1.8"
+version: "1.9"
 metadata:
   openclaw:
     emoji: "🧩"
@@ -38,6 +38,8 @@ Two surfaces use this module:
 **⚠️ Common trap:** scrapegraph often fails on **long-form articles** (1000+ words), returning `"NA"` content. Don't burn tokens retrying — switch to `scrape` immediately. The LLM can't structurally parse dense text. Don't keep retrying — fall back to `scrape(url, mode="auto")` for raw markdown. See `references/scrapling-fallback.md` for the full decision tree and real examples.
 
 **v1.8 — the code now detects this for you:** when the extraction comes back as a failure sentinel (`"NA"`, `"N/A"`, `{"content": "NA"}`, empty dict), the `scrapegraph` tool returns `ok: false` with an actionable "use the `scrape` tool (Scrapling)" error instead of a fake-success `"NA"` blob — and the `web_extract` backend returns empty content + the same hint. Partial extractions (`{"title": "NA", "body": "real text"}`) are deliberately **kept**. So: if you see `ok: false` with that message, don't retry scrapegraph — go straight to `scrape`.
+
+**v1.9 — detection is now recursive and covers more LLM "nothing found" phrasings:** sentinels added (`"no content"`, `"no data"`, `"not found"`, `"nothing"`, `"empty"`, `"nil"`, `"undefined"`, ...) and nested shapes like `{"content": {"answer": "NA"}}` or `{"data": [{"content": "N/A"}]}` are caught too — anything whose values are *all* empty at *any* depth is empty; any real value anywhere keeps the result.
 
 **The library auto-installs on first use** (lazy deps via `tools.lazy_deps`). If lazy install is disabled, run manually:
 
@@ -146,15 +148,16 @@ Tests cover:
   non-string junk skipped, **non-http(s) schemes skipped** (`ftp:`/`mailto:`/
   `javascript:`/`data:`/`file:`, incl. `host:port` NOT treated as a scheme)
 - Timeout clamping — min 10s, max 300s, invalid → None, valid value passes through
-- Error classification — 7 branches: X server, auth/401, rate-limit/429,
+- Error classification — 8 branches: X server, auth/401, quota/billing, rate-limit/429,
   HTTP status (403/404/5xx), invalid-JSON parsing, network/DNS/TLS, generic fallback
-- **Shared ``classify_scrapegraph_error()``** — 13 tests: all 7 branches + TimeoutError
-  + string-based network timeouts + graph-execution timeout
+- **Shared ``classify_scrapegraph_error()``** — 14 tests: all 8 branches + TimeoutError
+  + string-based network timeouts + graph-execution timeout + quota-over-429 precedence
 - Handler success/error/unavailable paths (single + multi-URL), including
   TimeoutError handling introduced in v1.3
-- **Empty-result detection (v1.8)** — ``looks_like_empty_result()`` sentinel
-  strings/dicts/lists, real content kept, partial extractions kept; handler +
-  multi-source + web_extract backend return the "use `scrape`" hint on `"NA"`
+- **Empty-result detection (v1.8/v1.9)** — ``looks_like_empty_result()`` sentinel
+  strings/dicts/lists, real content kept, partial extractions kept, **nested
+  dict/list recursion** (v1.9); handler + multi-source + web_extract backend
+  return the "use `scrape`" hint on `"NA"`
 - Lazy install runs in a worker thread (``asyncio.to_thread``) — the first-use
   pip install (30-60s) never blocks the event loop (v1.7)
 - Web extract backend (per-URL error isolation, result shaping, **error classification**,
@@ -164,7 +167,7 @@ Tests cover:
 ### 6. Error classification (shared — tool + backend)
 
 Since commit `cb5a6c7f`, errors are **classified** by the shared function
-``tools.scrapegraph_common.classify_scrapegraph_error()`` into 8 categories
+``tools.scrapegraph_common.classify_scrapegraph_error()`` into 9 categories
 and surfaced as clean, actionable messages instead of raw exception dumps.
 Both the native ``scrapegraph`` tool **and** the ``web_extract`` backend
 use this classifier (v1.4), so error messages are consistent regardless of
@@ -174,6 +177,7 @@ which surface calls scrapegraphai:
 |---|---|
 | No display server / `render_js=false` | "No display server. Omit `render_js` or set it to `true`." |
 | HTTP 401 / Unauthorized | "Check auxiliary_text model credentials, or set OPENAI_API_KEY." |
+| Quota / billing exhausted (`insufficient_quota`, 402, `billing_not_active`, "Insufficient Credits") | "Model is out of credits / billing inactive. Check the provider balance or switch models — retrying won't help." (v1.9) |
 | HTTP 429 / RateLimitError | "Model is rate-limited. Retry later or switch models." |
 | TimeoutError (`asyncio.wait_for`) | "The LLM extraction timed out. Increase the `timeout` parameter or try a simpler prompt." |
 | HTTP status error (403/404/5xx, forbidden) | "The page returned an HTTP error — wrong URL, removed page, or the site blocking automated access. Use the `scrape` tool (Scrapling) to bypass." |
@@ -188,10 +192,11 @@ If ``web_extract`` passes a ``timeout``, it's clamped to [10, 300] and forwarded
 Since v1.7, the lazy install (``ensure_installed()``) inside
 ``extract_structured()`` / ``extract_many()`` runs in a worker thread via
 ``asyncio.to_thread`` — the first-use pip install (30-60s) no longer blocks the
-event loop. Classification order matters: auth/rate-limit/timeout-type checks
-run before the broader HTTP-status and network keyword families, so a 429 is
-never misread as a generic HTTP error and a real ``TimeoutError`` from our own
-``asyncio.wait_for`` is never misread as a network timeout.
+event loop. Classification order matters: auth/quota/rate-limit/timeout-type
+checks run before the broader HTTP-status and network keyword families, so a
+429 from exhausted credits is not misread as a plain rate limit (v1.9), a 429
+is never misread as a generic HTTP error, and a real ``TimeoutError`` from our
+own ``asyncio.wait_for`` is never misread as a network timeout.
 
 ### 7. ✅ `except Exception:` narrowing — complete
 
@@ -227,8 +232,12 @@ Since v1.8, the shared helper
 | `web_extract` backend | empty content + the same hint as a per-URL error |
 
 Detection is deliberately **conservative**: a dict/list only counts as empty
-when *every* non-None string value is a sentinel. `{"content": "NA"}` → empty,
-but `{"title": "NA", "body": "real text"}` and `{"price": 9.99}` → kept. If the
+when *every* contained value is empty, checked **recursively** (v1.9) so
+nested shapes like `{"content": {"answer": "NA"}}` or `{"data": [{"content": "N/A"}]}`
+are caught too. The sentinel list also covers common LLM "couldn't extract
+anything" phrasings: `"no content"`, `"no data"`, `"not found"`, `"nothing"`,
+`"empty"`, `"nil"`, `"undefined"`, ... `{"content": "NA"}` → empty, but
+`{"title": "NA", "body": "real text"}` and `{"price": 9.99}` → kept. If the
 tool now says `ok: false` with that message, don't retry scrapegraph — fall
 back to `scrape(url, mode="auto")` (see `references/scrapling-fallback.md`).
 

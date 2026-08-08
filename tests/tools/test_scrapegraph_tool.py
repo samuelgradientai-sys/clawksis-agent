@@ -588,6 +588,25 @@ def test_classify_rate_limit():
     assert "rate-limited" in hint
 
 
+def test_classify_quota_billing():
+    """Quota/billing errors get their own hint (v1.9) — retrying won't help."""
+    hint = sgc.classify_scrapegraph_error(
+        RuntimeError("Error code: 429 - {'error': {'code': 'insufficient_quota'}}")
+    )
+    assert "out of credits" in hint
+    assert "retrying" in hint
+    assert "rate-limited" not in hint  # NOT misread as a plain rate limit
+    assert sgc.classify_scrapegraph_error(
+        RuntimeError("billing_not_active for the project")
+    ).startswith("The LLM model used by ScrapeGraphAI")
+    assert "balance" in sgc.classify_scrapegraph_error(
+        RuntimeError("Insufficient Credits on OpenRouter")
+    )
+    assert "balance" in sgc.classify_scrapegraph_error(
+        RuntimeError("402 Payment Required")
+    )
+
+
 def test_classify_invalid_json():
     hint = sgc.classify_scrapegraph_error(RuntimeError("Invalid json output from LLM"))
     assert "malformed" in hint
@@ -682,6 +701,17 @@ def test_looks_like_empty_result_string_sentinels():
         "nan",
         "{}",
         "  NA  ",
+        # v1.9: common LLM "couldn't extract anything" phrasings
+        "no content",
+        "No Data",
+        "no result",
+        "no results",
+        "no text",
+        "NOTHING",
+        "not found",
+        "EMPTY",
+        "nil",
+        "undefined",
     ):
         assert sgc.looks_like_empty_result(bad) is True, f"{bad!r} must be empty"
     assert sgc.looks_like_empty_result("") is True
@@ -717,6 +747,33 @@ def test_looks_like_empty_result_list_shapes():
     assert sgc.looks_like_empty_result([{"content": "N/A"}]) is True
     assert sgc.looks_like_empty_result(["NA", "real"]) is False
     assert sgc.looks_like_empty_result([{"content": "real"}]) is False
+
+
+def test_looks_like_empty_result_nested_shapes():
+    """Nested dict/list values are checked recursively (v1.9): an all-sentinel
+    nested result is empty, a nested result with any real value is kept."""
+    # Nested dict of dicts — previously kept as "real content" garbage.
+    assert sgc.looks_like_empty_result({"content": {"answer": "NA"}}) is True
+    assert sgc.looks_like_empty_result({"data": {"result": "N/A"}}) is True
+    # Nested list-of-dicts inside a dict.
+    assert sgc.looks_like_empty_result({"data": [{"content": "N/A"}]}) is True
+    assert sgc.looks_like_empty_result({"data": []}) is True
+    assert sgc.looks_like_empty_result({"data": [{}]}) is True
+    # Deeply nested mixed shapes.
+    assert (
+        sgc.looks_like_empty_result({
+            "content": [{"answer": "none"}, {"answer": "null"}]
+        })
+        is True
+    )
+    # Any real value at ANY depth keeps the result.
+    assert sgc.looks_like_empty_result({"content": {"answer": "real"}}) is False
+    assert sgc.looks_like_empty_result({"data": [{"content": "real"}]}) is False
+    assert (
+        sgc.looks_like_empty_result({"data": [{"content": "NA"}, {"content": "real"}]})
+        is False
+    )
+    assert sgc.looks_like_empty_result({"content": {"price": 9.99}}) is False
 
 
 def test_handler_empty_result_string_returns_scrape_hint(monkeypatch):
@@ -926,6 +983,26 @@ def test_stringify_handles_list_results():
     assert _stringify([{}, []]) == ""
     assert "k" in _stringify([{"k": "v"}])  # per-item JSON dump fallback
     assert _stringify(None) == ""
+
+
+def test_stringify_extra_keys_and_nested_values():
+    """v1.9: data/response/output/body keys are honoured, and dict/list values
+    under a known key are stringified recursively instead of JSON-dumped."""
+    from plugins.web.scrapegraphai.provider import _stringify
+
+    assert _stringify({"data": "payload"}) == "payload"
+    assert _stringify({"response": "resp"}) == "resp"
+    assert _stringify({"output": "out"}) == "out"
+    assert _stringify({"body": "body text"}) == "body text"
+    # Nested dict under a known key.
+    assert _stringify({"data": {"content": "nested"}}) == "nested"
+    assert _stringify({"data": {"answer": "deep answer"}}) == "deep answer"
+    # Nested list under a known key.
+    assert _stringify({"data": [{"content": "first"}, {"content": "second"}]}) == (
+        "first\n\nsecond"
+    )
+    # Empty nested value under a known key → falls through to JSON dump.
+    assert "k" in _stringify({"data": {}, "k": "v"})
 
 
 # ── extract-backend prioritisation over 3rd-party ───────────────────────────
