@@ -245,6 +245,28 @@ class TestClassify:
             st._classify("This is a real article with lots of content. " * 20) == "ok"
         )
 
+    # ── min_useful_chars override (css_selector path) ───────────────
+
+    def test_short_content_default_gate_is_empty(self):
+        """A 12-char fragment is 'empty' under the default 200-char gate."""
+        assert st._classify("Price: $9.99") == "empty"
+
+    def test_short_content_lowered_gate_is_ok(self):
+        """With min_useful_chars=1 the same fragment is real content."""
+        assert st._classify("Price: $9.99", min_useful_chars=1) == "ok"
+
+    def test_lowered_gate_still_flags_strong_ip_block(self):
+        """Strong block phrases fire even with the lowered gate (any size)."""
+        assert st._classify("Too many requests", min_useful_chars=1) == "ip_block"
+
+    def test_lowered_gate_still_flags_weak_ip_block_on_short_page(self):
+        """Weak phrases still count as a block on a short page."""
+        assert st._classify("Access denied", min_useful_chars=1) == "ip_block"
+
+    def test_lowered_gate_keeps_empty_for_blank(self):
+        """Blank content is empty regardless of the gate."""
+        assert st._classify("   ", min_useful_chars=1) == "empty"
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Constants
@@ -392,6 +414,61 @@ class TestHandleScrape:
         res = _run_tool(st._handle_scrape({"url": "https://example.com"}))
         assert res["ok"] is False
         assert "Scrapling is not installed" in res["error"]
+
+    def test_css_selector_short_content_is_ok(self, monkeypatch):
+        """A css_selector extraction that returns a short fragment (e.g. a
+        price) must be reported as ok, NOT as 'No content' — the lowered
+        empty gate treats short selector matches as real results."""
+        calls = []
+
+        def tracking_run(base, subcmd, *rest):
+            calls.append(subcmd)
+            return (True, "Price: $9.99", "")
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", tracking_run)
+
+        res = _run_tool(
+            st._handle_scrape({"url": "https://example.com", "css_selector": ".price"})
+        )
+        assert res["ok"] is True
+        assert res["status"] == "ok"
+        assert res["content"] == "Price: $9.99"
+        # One attempt is enough — the fragment classified as ok stops the ladder.
+        assert calls == ["get"]
+
+    def test_css_selector_short_ip_block_still_blocked(self, monkeypatch):
+        """Even with a css_selector, a short 'Access denied' fragment must
+        still be flagged ip_block (weak phrases count on short pages)."""
+        calls = []
+
+        def tracking_run(base, subcmd, *rest):
+            calls.append(subcmd)
+            return (True, "Access denied", "")
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", tracking_run)
+
+        res = _run_tool(
+            st._handle_scrape({"url": "https://example.com", "css_selector": ".error"})
+        )
+        assert res["ok"] is False
+        assert res["reason"] == "ip_block"
+        assert len(calls) == 1
+
+    def test_css_selector_empty_content_still_no_content(self, monkeypatch):
+        """A css_selector that matches nothing must still report No content."""
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", lambda *a, **k: (True, "", ""))
+
+        res = _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "css_selector": ".missing",
+            })
+        )
+        assert res["ok"] is False
+        assert "No content" in res["error"]
 
     def test_ladder_stops_on_ok(self, monkeypatch):
         """When the first mode succeeds, don't try the rest."""

@@ -66,6 +66,10 @@ _FORMAT_EXT = {"markdown": ".md", "text": ".txt", "html": ".html"}
 
 # Content shorter than this (after strip) is treated as "empty/blocked".
 _MIN_USEFUL_CHARS = 200
+# When the caller passes a css_selector, the extracted fragment is *supposed*
+# to be short (a single price, title, phone...). Lower the empty gate to 1
+# char so a legitimately small match isn't reported as "No content".
+_MIN_USEFUL_CHARS_WITH_SELECTOR = 1
 _MAX_RESULT_CHARS = 30000
 # A genuine block/challenge page is short and template-y. Above this size we
 # assume real content even if it happens to mention "captcha"/"forbidden" in the
@@ -152,8 +156,21 @@ def _as_str(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def _classify(content: str) -> str:
-    """'ok' | 'antibot' | 'ip_block' | 'empty' for the given page content."""
+def _classify(
+    content: str,
+    *,
+    min_useful_chars: int = _MIN_USEFUL_CHARS,
+    block_page_max_chars: int = _BLOCK_PAGE_MAX_CHARS,
+) -> str:
+    """'ok' | 'antibot' | 'ip_block' | 'empty' for the given page content.
+
+    ``min_useful_chars`` / ``block_page_max_chars`` are injectable so callers
+    can lower the empty gate when the content is *supposed* to be short — e.g.
+    a ``css_selector`` extraction that targets a single price/title/phone
+    legitimately returns well under the 200-char default, and marking that
+    "empty" is a false negative that makes the tool report "No content" even
+    though the selector matched.
+    """
     stripped = content.strip()
     head = stripped[:2000].lower()
     # Strong phrases are real block/challenge pages at ANY size — check before
@@ -163,11 +180,11 @@ def _classify(content: str) -> str:
     if any(m in head for m in _ANTIBOT_STRONG):
         return "antibot"
     n = len(stripped)
-    if n < _MIN_USEFUL_CHARS:
+    if n < min_useful_chars:
         return "empty"
     # Ambiguous words only count as a block on a short, template-y page — a long
     # page that merely mentions "captcha"/"forbidden" is real content.
-    if n <= _BLOCK_PAGE_MAX_CHARS:
+    if n <= block_page_max_chars:
         if any(m in head for m in _IP_BLOCK_WEAK):
             return "ip_block"
         if any(m in head for m in _ANTIBOT_WEAK):
@@ -293,7 +310,13 @@ async def _handle_scrape(args, **kw):
             timeout_s,
         )
         last_stderr = stderr or last_stderr
-        status = _classify(content) if content else "empty"
+        # A css_selector targets a specific fragment — a short match is a real
+        # result, not an empty page. Use the lowered empty gate so e.g. a
+        # "$9.99" price extraction isn't reported as "No content".
+        min_chars = (
+            _MIN_USEFUL_CHARS_WITH_SELECTOR if css_selector else _MIN_USEFUL_CHARS
+        )
+        status = _classify(content, min_useful_chars=min_chars) if content else "empty"
         attempts.append(f"{m}:{status if content else 'failed'}")
         if content and len(content.strip()) > len(best_content.strip()):
             best_content, best_status = content, status
