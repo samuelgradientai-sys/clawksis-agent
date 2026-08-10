@@ -1,9 +1,10 @@
-# Failure-sentinel detection + non-http(s) URL scheme filter
+# Failure-sentinel detection + non-http(s) URL scheme filter + quota classifier
 
-Two hardening patterns from the v1.8 `scrapegraph` update (commit `9e150b5e`,
-6 ago 2026). Both are "silent failure" fixes: no exception, no crash — just
-garbage that the agent wastes a turn reading or that fails later with obscure
-errors.
+Three hardening patterns from the `scrapegraph` updates: v1.8 (commit `9e150b5e`,
+6 ago 2026) and v1.9 (commit `399589a2` — recursive detection, expanded
+sentinels, quota/billing classifier family). All are "silent failure" fixes: no
+exception, no crash — just garbage that the agent wastes a turn reading or that
+fails later with obscure errors.
 
 ## Pattern A — LLM-driven extractors "succeed" with a failure sentinel
 
@@ -17,7 +18,7 @@ agent burned a full turn interpreting garbage before ever reaching the
 documented fallback. **The docs described the desired behaviour; the code
 didn't enforce it.**
 
-### The fix — shared conservative sentinel check
+### The fix — shared conservative sentinel check (recursive since v1.9)
 
 `tools/scrapegraph_common.looks_like_empty_result(data)`:
 
@@ -31,6 +32,17 @@ _EMPTY_RESULT_SENTINELS = frozenset({
     "null",
     "nan",
     "{}",
+    # v1.9: common LLM "couldn't extract anything" phrasings
+    "no content",
+    "no data",
+    "no result",
+    "no results",
+    "no text",
+    "nothing",
+    "not found",
+    "empty",
+    "nil",
+    "undefined",
 })
 
 
@@ -43,10 +55,8 @@ def looks_like_empty_result(data):
         values = [v for v in data.values() if v is not None]
         if not values:
             return True
-        return all(
-            isinstance(v, str) and v.strip().lower() in _EMPTY_RESULT_SENTINELS
-            for v in values
-        )
+        # v1.9: recurse — a dict is empty when every value is empty
+        return all(looks_like_empty_result(v) for v in values)
     if isinstance(data, (list, tuple)):
         return all(looks_like_empty_result(item) for item in data)
     return False
@@ -54,8 +64,13 @@ def looks_like_empty_result(data):
 
 **The conservative rule is the whole point** (don't discard real data):
 - `{"content": "NA"}` → empty (every value is a sentinel)
+- `{"content": {"answer": "NA"}}` → **empty since v1.9** (nested dict recursion;
+  previously slipped through as "real content" garbage)
+- `{"data": [{"content": "N/A"}]}` → empty (nested list-of-dicts)
+- `{"data": []}` → empty; `{"data": [{}]}` → empty
 - `{"title": "NA", "body": "real text"}` → **kept** (partial extraction)
-- `{"price": 9.99}` → kept (non-string values break the all-sentinel check)
+- `{"price": 9.99}` → kept; `{"content": {"price": 9.99}}` → kept (any real
+  value at ANY depth keeps the result)
 - `["NA", "real"]` → kept
 
 Both surfaces call it: the `scrapegraph` tool handler returns `ok: false` +
@@ -66,7 +81,10 @@ Both surfaces call it: the `scrapegraph` tool handler returns `ok: false` +
 
 Any tool wrapping an LLM-driven extractor where a "no useful content" answer
 is a plausible *success* payload. Check for handlers that `json.dumps`/render
-results unconditionally without a content sanity check.
+results unconditionally without a content sanity check. When the extractor can
+return nested shapes, make the check recursive like v1.9 — a flat
+"every non-None string value is a sentinel" check misses
+`{"content": {"answer": "NA"}}`.
 
 ## Pattern B — URL normalization mangles non-http(s) schemes
 
@@ -116,10 +134,37 @@ is caught by the `://` branch. Applied to BOTH the single `url` and the `urls`
 list paths, with a `logger.debug` on skip. Uppercase schemes are handled via
 `.lower()`.
 
-## Tests added (10)
+## Pattern C — quota/billing errors misread as rate limits (v1.9)
 
-- `looks_like_empty_result`: sentinel strings, real text kept, dict shapes,
-  partial kept, list shapes, non-strings (`42`, `9.99`, `True`) kept
+### Symptom
+
+OpenAI-compatible endpoints answer exhausted credits with
+`Error code: 429 - {'error': {'code': 'insufficient_quota'}}` — the message
+contains BOTH `429` and quota keywords. A classifier that checks the
+rate-limit family (`"429"`, `"ratelimiterror"`, ...) first tells the user
+"retry later", which is wrong: retrying an exhausted account never helps.
+
+### The fix — dedicated family BEFORE rate-limit
+
+`classify_scrapegraph_error()` gained family #3 (after auth, before
+rate-limit): keywords `insufficient_quota`, `billing_not_active`,
+`insufficient credits`, `out of credits`, `credit balance`, `payment
+required`, `402`, `quota`, `billing`, `max monthly spend` → hint: "out of
+credits / billing inactive — check provider balance or switch models;
+retrying will not help." Order matters: quota errors often carry `429`, so
+the quota check MUST precede the `429`/rate-limit family. The classifier went
+from 8 to 9 categories (docstring and SKILL.md table updated accordingly).
+
+## Tests added (10 → 13, v1.9)
+
+- `looks_like_empty_result`: sentinel strings (incl. the 10 new v1.9
+  phrasings), real text kept, dict shapes, partial kept, list shapes,
+  non-strings (`42`, `9.99`, `True`) kept, **nested shapes** (dict-of-dicts,
+  list-of-dicts in a dict, `{"data": []}`, `{"data": [{}]}`, deep mixed,
+  any-real-value-at-any-depth kept)
+- `classify_scrapegraph_error`: `test_classify_quota_billing` asserts
+  quota-over-429 precedence (`"rate-limited" not in hint` when the message
+  carries both `429` and `insufficient_quota`)
 - handler: bare `"NA"` → `ok: false` + scrape hint; `{"content": "NA"}` →
   `ok: false`; partial `{"title": "NA", "body": "..."}` → `ok: true`;
   multi-source path flags empty too
@@ -127,6 +172,7 @@ list paths, with a `logger.debug` on skip. Uppercase schemes are handled via
 - `_normalize_urls`: ftp/mailto/javascript/data/file skipped, uppercase
   `FTP://` skipped, `host:port` and `git+ssh://` handled correctly
 
-Result: 79 passed in `tests/tools/test_scrapegraph_tool.py` (+10), plus 77 in
-the related `tests/plugins/web/test_web_search_provider_plugins.py` +
-`tests/test_toolsets.py`.
+Result: 82 passed in `tests/tools/test_scrapegraph_tool.py` (79 → 82, +3
+v1.9 tests), 255 passed across the related web test files
+(`test_web_tools_config.py`, `test_web_tools_truncate.py`, `test_scrape_tool.py`,
+`test_scrapegraph_tool.py`, `test_web_extract_robustness.py`).

@@ -1,7 +1,7 @@
 ---
 name: self-improvement
 description: "Autonomous self-improvement of Clawksis via daily cron jobs — scan skills/tools/MCPs for issues, implement fixes, deploy to main, and run clawk update. USE THIS when setting up or maintaining improvement crons, or when the user says 'mejórate solo', 'auto-mejora', 'improve yourself', 'hazte mejor'. ES: mejora automática del agente, auto-mejora diaria, cron de mejora, optimización autónoma."
-version: "1.10"
+version: "1.11"
 metadata:
   openclaw:
     emoji: "🔄"
@@ -147,6 +147,36 @@ git status      # ← confirmar que TODO quedó en verde y limpio
 # changes are picked up on the next gateway restart (scheduled or manual).
 ```
 
+**⚠️ Verifying CI after push — check-runs, not the classic status endpoint:**
+the cron prompt's rule 9 says to poll `commits/main/status` until `success`, but
+that endpoint can report `state: pending` with `total_count: 0` **forever** when
+the repo reports via GitHub Actions **check-runs** — even with every check
+green (real run: commit `d8f1ac1f`, all 9 check-runs `success`, yet `/status`
+stayed `pending`). Query `/commits/<sha>/check-runs` instead: green = every
+check-run `completed` + `conclusion: success`. `/actions/runs` is the
+definitive run-level signal (compare `created_at` vs `updated_at` to confirm a
+slow run is progressing, not stuck). Budget ~20-25 min for the Tests jobs (real
+CI run: ~21 min; a single 600s terminal call is NOT enough — chunk the poll).
+Full commands + skill-doc smoke tests: `references/ci-status-verification.md`.
+
+**⚠️ Root cause when combined status stays `pending` despite green Actions —
+check `check-suites`, not just `check-runs`:** the combined `/commits/<sha>/status`
+state aggregates ALL check suites, including third-party apps. If the repo has
+a Vercel (or similar) integration whose suite sits in `queued` forever, the
+combined state is `pending` no matter how green GitHub Actions is — and this is
+a **pre-existing condition, not something your push caused** (real run: commit
+`399589a2`, all 9 Actions check-runs `success` + CI workflow `completed/success`,
+combined still `pending`; the previous commit `d8f1ac1f` showed the identical
+stuck-Vercel-`queued` state). Diagnostic:
+```bash
+curl -s -H "Authorization: token $TOKEN" \
+  "https://api.github.com/repos/<owner>/<repo>/commits/<sha>/check-suites" \
+  | python3 -c "import json,sys; [print(s['id'], s['status'], s['conclusion'], (s.get('app') or {}).get('name')) for s in json.load(sys.stdin).get('check_suites',[])]"
+```
+A GitHub Actions suite `completed`/`success` + a third-party suite `queued`
+means: report CI green, note the Vercel queue as pre-existing, do NOT block the
+deploy on it.
+
 **Regla de Samuel: TODO lo que se suba debe quedar en VERDE, nunca con X.** Ver el `git-push-hygiene` skill para el workflow completo (`.gitignore` para backups, `ruff format` antes de push para que el CI no falle, y debug de push con llave read-only / remote equivocado).
 
 **⚠️ Pitfalls:**
@@ -158,6 +188,7 @@ git status      # ← confirmar que TODO quedó en verde y limpio
 - **`clawk update` says "Already up to date!":** This is normal when the repo branch is already at the latest commit (e.g. you just pushed). The command checks out the current HEAD and installs it — if HEAD doesn't change, the message is just cosmetic. Verify with `git log --oneline -1` to confirm your commit is HEAD.
 - **Clawksis profile matters:** `clawk update` updates the active profile's codebase. If running as a cron, ensure `--profile default` or the correct profile is active.
 - **`patch()` with multi-line content can leave duplicates:** When the old_string spans multiple lines (especially around comments with inconsistent line wrapping), `patch()`'s fuzzy matcher may match partially and insert your new_string while leaving some of the old lines behind. You end up with a duplicate. **Always verify the patched region immediately after the call**, and be ready to apply a second cleanup `patch()` to remove any leftover lines. Read the affected lines back with `read_file()` before moving on — don't rely on the success message alone.
+- **`patch()` prefix-fragment match can splice leftover text onto your inserted line:** the fuzzy matcher also matches a SHORT old_string that is a *prefix fragment* of a longer existing line, replacing only the matched prefix and leaving the rest of the original line appended to your new content (real run, commit `399589a2`: old_string ending in `...message, do` matched a line ending `...message, don't retry... go straight to \`scrape\`.`, producing `keeps the result.n't retry scrapegraph — go straight to \`scrape\`.` inside the new paragraph — a corrupted doc line that looked plausible at a glance). The diff view even shows the spliced text on the `+` line. **Fix:** after any patch, `read_file()` the exact patched lines (not just the diff) and look for leftover fragments of the original text glued to the end of your insertions.
 - **`patch()` rejects backslash-escaped quotes ("escape-drift"):** If old_string/new_string contain `\"` (backslash-escaped double quotes) — a common serialization artifact when hand-writing tool calls — the patch fails with "Escape-drift detected: old_string and new_string contain the literal sequence '\"' but the matched region of the file does not." **Fix:** re-pass the strings with PLAIN unescaped quotes (`"` not `\"`). This happens most when patching Python files full of string literals; just type the quotes bare.
 - **Backticks in `git commit -m` cause shell errors:** When the commit message contains backticks (`` ` ``), bash interprets them as command substitution before passing the string to `git`. This causes syntax errors or corrupts the commit message. **Fix:** use single quotes around the message (`git commit -m '...'`) instead of double quotes, or avoid backticks in the message entirely — put the detailed description in the commit body (`git commit -m "title" -m "body"`) where backticks are harmless.
 - **Profile skill vs repo skill drift:** When you modify a skill's SKILL.md via `skill_manage`, it updates `~/.clawksis/skills/<category>/<name>/SKILL.md` (the profile copy). But the repo may also have a copy at `skills/<category>/<name>/SKILL.md`. If the repo copy is stale, `clawk update` on another machine or a fresh clone would restore the stale version. **Check both paths after updating a skill and sync by writing the profile's updated content to the repo path, then committing.**
@@ -239,7 +270,7 @@ Deliver to the user in Spanish:
 
 | Signal | What to do |
 |---|---|
-| `except Exception:` with `str(exc)` in response | Replace with error classifier (detect browser/auth/rate-limit/parse/generic errors and return **user-safe** hints) OR narrow to specific types. See the `except-exception-narrowing` skill for the general pattern with a type-by-type table and logging levels. |
+| `except Exception:` with `str(exc)` in response | Replace with error classifier (detect browser/auth/**quota-billing**/rate-limit/HTTP-status/timeout/network/parse/generic errors and return **user-safe** hints) OR narrow to specific types. **v1.9 addition:** the quota/billing family (`insufficient_quota`, `402`, `billing_not_active`, "Insufficient Credits", ...) must run BEFORE the rate-limit family — quota errors often carry a `429` status code, but the fix is checking balance/switching models, not retrying. See the `except-exception-narrowing` skill for the general pattern with a type-by-type table and logging levels. |
 | `# TODO` / `# FIXME` | Address it if the fix is small and safe |
 | `return None` silently on error | Log the error before returning |
 | Function > 100 lines | Extract a helper with a clear name |
@@ -250,7 +281,8 @@ Deliver to the user in Spanish:
 | **Non-string arg crashes `.strip()` parsing** | Handlers doing `(args.get("x") or "").strip()` raise `AttributeError` when the model passes an int/dict/list for a schema-string param (`url`, `prompt`, `mode`, ...). Fix: isinstance guard or a small `_as_str()` helper; treat non-strings as absent → clean "required" error. See `references/input-validation-hardening.md` (real commit `999faecb`). |
 | **Non-bool arg silently flips `bool()` coercion** | `bool("")`/`bool(0)` → `False`, `bool("false")` → `True` — a sloppy non-bool for a schema-bool param (`render_js`, flags) silently ENABLES the wrong code path instead of crashing (real example: `bool("")` → `headless=False` → headed browser → "Missing X server" on headless servers). Worse than a crash: silent. Fix: `_as_bool(value, default)` helper — only real bools pass through, non-bools fall to the safe default + warning log. Scan for `bool(args.get(...))` / `True if X is None else bool(X)` patterns. See `references/input-validation-hardening.md` (real commit `08bfa16d`). |
 | **Non-string items INSIDE a list arg (garbage fabrication)** | Handlers that `str()`-coerce list items (`urls.extend(str(u) for u in many)`) fabricate GARBAGE values from schema-violating items: `None`→`"https://None"`, `42`→`"https://42"`, `{"a":1}`→`"https://{'a': 1}"`. No crash — but the garbage goes straight into expensive downstream calls (LLM extraction) and fails with obscure errors, burning tokens. Worse than a crash: silent. Fix: `isinstance(u, str)` filter — skip non-strings, keep only real strings (after strip). Scan for `str(u)` / generator coercions over list-typed args (`urls`, `items`, `ids`, ...). See `references/input-validation-hardening.md` (real commit `03b2f0c6`). |
-| **LLM-driven extractor "succeeds" with a failure sentinel** | scrapegraphai-style tools rarely raise on failure — they return `"NA"` / `"N/A"` / `{"content": "NA"}` / empty dict, which a naive handler surfaces as `ok: true` and the agent burns a turn reading garbage (docs said "fall back to `scrape`" but the code never enforced it). Fix: shared `looks_like_empty_result()` helper — **conservative**: a dict/list only counts as empty when EVERY non-None string value is a sentinel (`{"content": "NA"}` → empty; `{"title": "NA", "body": "real"}` → kept). On sentinel: `ok: false` + actionable "use the `scrape` tool" hint in BOTH the tool handler and the web_extract backend. Real commit `9e150b5e`. See `references/empty-result-sentinels.md`. |
+| **LLM-driven extractor "succeeds" with a failure sentinel** | scrapegraphai-style tools rarely raise on failure — they return `"NA"` / `"N/A"` / `{"content": "NA"}` / empty dict, which a naive handler surfaces as `ok: true` and the agent burns a turn reading garbage (docs said "fall back to `scrape`" but the code never enforced it). Fix: shared `looks_like_empty_result()` helper — **conservative**: a dict/list only counts as empty when EVERY contained value is empty, checked **recursively** (v1.9: `{"content": {"answer": "NA"}}` and `{"data": [{"content": "N/A"}]}` are caught; `{"title": "NA", "body": "real"}` and `{"price": 9.99}` kept). Sentinel list also covers LLM "couldn't extract anything" phrasings: `"no content"`, `"no data"`, `"not found"`, `"nothing"`, `"empty"`, `"nil"`, `"undefined"` (v1.9, commit `399589a2`). On sentinel: `ok: false` + actionable "use the `scrape` tool" hint in BOTH the tool handler and the web_extract backend. Real commits `9e150b5e` (v1.8) + `399589a2` (v1.9). See `references/empty-result-sentinels.md`. |
+| **Uniform content-length gate rejects short-but-valid output** | A single "min useful chars" threshold (e.g. `_MIN_USEFUL_CHARS = 200`) applied to ALL modes produces false negatives when a mode legitimately returns short content. Real case (v1.10, commit `20acf00b`): `scrape` with a `css_selector` targeting a price/title/phone returns `"Price: $9.99"` (12 chars) → classified `"empty"` → tool burned the whole get→fetch→stealthy ladder and reported "No content returned" although the selector matched. Fix pattern: make the gate **context-aware** — `_classify(content, min_useful_chars=...)` with injectable thresholds; selector-targeted extraction uses `_MIN_USEFUL_CHARS_WITH_SELECTOR = 1` (any non-blank match is a result), unfiltered extraction keeps 200. **Critical invariant:** block-phrase detection (strong: `too many requests`/`you have been blocked`... weak-on-short-pages: `access denied`/`403`/`captcha`...) must fire at ANY size — a selector-extracted `"Access denied"` is `ip_block`, not `ok`. Scan for: one hardcoded length constant shared by all code paths, `if len(x) < N: return empty` without per-mode awareness. See `references/content-length-gate-pattern.md`. |
 | **URL normalization mangles non-http(s) schemes** | Prepending `https://` to any bare string fabricates `https://ftp://...` garbage from `ftp:`, `mailto:`, `javascript:`, `data:`, `file:` URLs that fails later with obscure errors. Fix: scheme filter BEFORE the prefix — but `"://" in url` alone MISSES colon-only schemes (`mailto:a@b`, `javascript:void(0)`) and a naive `^scheme:` regex MISREADS host:port (`example.com:8080` → treated as scheme "example.com"). Working helper: `://` present → reject unless http(s); no `://` → reject only well-known colon-only schemes (allowlist: mailto/javascript/data/tel/sms/file/about/blob/...). Real commit `9e150b5e`. See `references/empty-result-sentinels.md`. |
 | **Skill docs vs code mismatch** | Compare a loaded skill's parameter table / examples / error table against the actual tool code. A parameter documented in `SKILL.md` but missing from the tool's schema or handler is a concrete, self-contained fix — implement it. See the v1.2→v1.3 `scrapegraphai` update for a real example. |
 | **Profile skill vs repo skill drift** | Loaded skill's profile copy is ahead of the repo copy. Check **both** `SKILL.md` (``diff``) and support files (``diff <(find …) <(find …)``, especially `references/`). Sync all missing/ahead files profile → repo and commit. This is a low-risk, high-value improvement that prevents stale docs from being restored on next `clawk update`. See `references/profile-repo-drift.md` for the full workflow. **⚠️ Verify the profile is REALLY ahead first** — cosmetic diffs (quote style, line wrapping) mean the repo was deliberately ruff-formatted; syncing those would revert the format pass. Count diff direction (`grep -c '^<'` vs `'^>'`) and check `git log -- <skill_dir>` for format commits before syncing any file (see Fase 2 step 4). |
@@ -286,9 +318,20 @@ non-string items inside list args (str()-coercion fabricates garbage URLs like
 "https://None" → isinstance filter, commit `03b2f0c6`), plus result-shape hardening
 in `_stringify()` (list results, empty dict).
 See `references/empty-result-sentinels.md` for the failure-sentinel detection pattern
-(`looks_like_empty_result()`, conservative all-values rule, tool + backend surfaces)
-and the non-http(s) URL scheme filter (`_is_non_http_scheme()`, colon-only schemes
-vs `host:port`) — real example: the v1.8 `scrapegraph` update (commit `9e150b5e`).
+(`looks_like_empty_result()`, conservative all-values rule — **recursive since
+v1.9** — tool + backend surfaces), the non-http(s) URL scheme filter
+(`_is_non_http_scheme()`, colon-only schemes vs `host:port`), and the
+quota/billing error family in `classify_scrapegraph_error()` (must precede
+rate-limit since quota errors carry `429`) — real examples: v1.8 commit
+`9e150b5e`, v1.9 commit `399589a2`.
+See `references/content-length-gate-pattern.md` for the companion **numeric**
+gate pattern: a uniform "min useful chars" threshold rejecting short-but-valid
+output (css_selector fragment extraction reported "No content"), fixed v1.10
+commit `20acf00b` by making the gate context-aware while block-phrase
+detection keeps firing at any size.
 See `references/deploy-profile-sync.md` for pushing a committed bundled-skill edit to
 the LIVE profile past `sync_skills()`'s `user_modified` guard (direct copy + manifest
 re-baseline via `_read_manifest`/`_write_manifest`/`_dir_hash`).
+See `references/ci-status-verification.md` for verifying CI after a push via check-runs
+(when `/commits/<sha>/status` hangs at `pending` with `total_count: 0` despite green
+Actions) — real example: commit `d8f1ac1f`, plus smoke tests for skill-doc changes.
