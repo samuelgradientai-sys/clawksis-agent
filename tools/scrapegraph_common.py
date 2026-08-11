@@ -223,6 +223,22 @@ _EMPTY_RESULT_SENTINELS = frozenset({
     "empty",
     "nil",
     "undefined",
+    # v1.10: placeholder family — LLMs answer with a dash/dot/ellipsis or a
+    # "not available" phrasing when they could not find the field at all
+    # (common in table/listing extractions: {"price": "-"}). A whole result
+    # made of these carries no usable content; partial extractions that mix
+    # them with real values are still kept (see looks_like_empty_result).
+    "-",
+    "–",
+    "—",
+    ".",
+    "..",
+    "...",
+    "…",
+    "not available",
+    "no info",
+    "no information",
+    "no value",
 })
 
 

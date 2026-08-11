@@ -722,10 +722,45 @@ def test_looks_like_empty_result_string_sentinels():
         "EMPTY",
         "nil",
         "undefined",
+        # v1.10: placeholder family — dash/dot/ellipsis and "not available"
+        # phrasings LLMs emit when they could not find the field.
+        "-",
+        "–",
+        "—",
+        ".",
+        "..",
+        "...",
+        "…",
+        "  —  ",
+        "not available",
+        "No Info",
+        "no information",
+        "NO VALUE",
     ):
         assert sgc.looks_like_empty_result(bad) is True, f"{bad!r} must be empty"
     assert sgc.looks_like_empty_result("") is True
     assert sgc.looks_like_empty_result(None) is True
+
+
+def test_looks_like_empty_result_placeholders_partial_kept():
+    """A placeholder marks a field as missing, but only ALL-placeholder results
+    are empty — a result mixing a dash with a real value is kept (v1.10)."""
+    # Whole results made of placeholders → empty.
+    assert sgc.looks_like_empty_result({"price": "-"}) is True
+    assert sgc.looks_like_empty_result({"answer": "…"}) is True
+    assert sgc.looks_like_empty_result([{"name": "-"}, {"name": "—"}]) is True
+    assert sgc.looks_like_empty_result({"data": {"price": "."}}) is True
+    assert sgc.looks_like_empty_result({"status": "not available"}) is True
+    # Any real value anywhere keeps the result.
+    assert sgc.looks_like_empty_result({"price": "-", "title": "Real"}) is False
+    assert sgc.looks_like_empty_result({"name": "—", "count": 3}) is False
+    assert (
+        sgc.looks_like_empty_result({"data": [{"price": "-"}, {"price": 9.99}]})
+        is False
+    )
+    # Real single-char values that are NOT placeholders stay real data.
+    assert sgc.looks_like_empty_result("a") is False
+    assert sgc.looks_like_empty_result("?") is False
 
 
 def test_looks_like_empty_result_real_content_kept():
