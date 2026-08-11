@@ -422,6 +422,16 @@ def test_clamp_timeout_invalid():
     assert sgc.clamp_timeout({}) is None
 
 
+def test_clamp_timeout_bool_treated_as_absent():
+    """bool is an int subclass — without the guard, `timeout=False` (0) would
+    clamp to the 10s minimum and silently ENABLE an extraction timeout the
+    caller meant to disable; `timeout=True` (1) would too. Bools carry no
+    timeout value: treat them as absent (same sloppy-call defence as _as_bool).
+    """
+    assert sgc.clamp_timeout(True) is None
+    assert sgc.clamp_timeout(False) is None
+
+
 def test_clamp_timeout_float():
     """Float is truncated to int via int()."""
     assert sgc.clamp_timeout(45.7) == 45

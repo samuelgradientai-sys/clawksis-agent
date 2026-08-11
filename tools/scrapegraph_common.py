@@ -182,8 +182,16 @@ def clamp_timeout(raw_timeout: Any) -> int | None:
     Accepts int, float, or string. Returns ``None`` when the input is None
     or cannot be coerced to int. This centralises the clamping logic so both
     the native tool handler and the web-extract backend stay in sync.
+
+    ``bool`` values (a subclass of ``int``) are treated as absent: without
+    this guard ``int(False)`` == 0 would clamp to the 10s minimum and
+    silently *enable* an extraction timeout a sloppy ``timeout=False`` call
+    meant to disable. Same philosophy as ``_as_bool`` in the tool handler —
+    a type that carries no meaningful value falls back to the default.
     """
     if raw_timeout is None:
+        return None
+    if isinstance(raw_timeout, bool):
         return None
     try:
         return max(10, min(300, int(raw_timeout)))
