@@ -165,6 +165,11 @@ class TestClassify:
             "you have been blocked",
             "verify you are human",
             "select all squares containing",
+            "Attention Required",
+            "error 1020",
+            "used Cloudflare to deny access",
+            "request has been blocked",
+            "your IP address has been blocked",
         ],
     )
     def test_ip_block_strong_short(self, phrase):
@@ -172,6 +177,21 @@ class TestClassify:
 
     def test_ip_block_strong_long(self):
         assert st._classify(_large_page("Too Many Requests")) == "ip_block"
+
+    def test_ip_block_cloudflare_1020_long(self):
+        """Cloudflare's real 1020 block page is long-ish and must be flagged
+        ip_block (not returned as content) even past the short-page gate."""
+        html = (
+            "<html><head><title>Attention Required! | Cloudflare</title></head>"
+            "<body><h1>Error 1010</h1><h1>Access denied</h1>"
+            "<p>This website is using a security service to protect itself"
+            " from online attacks. The action you just performed triggered"
+            " the security solution. There are several actions that could"
+            " trigger this block including submitting a certain word or"
+            " phrase, a SQL command or malformed data.</p>"
+            "<p>Ray ID: 8b-a1e</p></body></html>"
+        )
+        assert st._classify(html) == "ip_block"
 
     # ── IP block (weak — only on SHORT pages) ───────────────────────
 

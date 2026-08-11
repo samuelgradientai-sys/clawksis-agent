@@ -86,6 +86,17 @@ _IP_BLOCK_STRONG = (
     "you have been blocked",
     "verify you are human",
     "select all squares containing",
+    # Cloudflare / Imperva WAF block pages — the IP is denied access, so no
+    # stealthier browser helps (v1.11). "attention required" is the title of
+    # Cloudflare's error 1020 page; "used cloudflare to deny access" is its
+    # body; "request has been blocked" is Imperva's block template.
+    "attention required",  # Cloudflare "Attention Required!" (error 1020)
+    "error 1020",  # Cloudflare: access denied for this IP
+    "used cloudflare to deny access",  # "…used Cloudflare to deny access"
+    "request has been blocked",  # Imperva WAF block page
+    "your ip has been blocked",
+    "your ip address has been blocked",
+    "ip address has been blocked",
 )
 # Ambiguous block words — only count as a block on a SHORT page.
 _IP_BLOCK_WEAK = (

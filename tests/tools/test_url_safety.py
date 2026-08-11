@@ -9,6 +9,8 @@ from tools.url_safety import (
     is_always_blocked_url,
     normalize_url_for_request,
     redirect_target_from_response,
+    sensitive_query_param_name,
+    has_sensitive_query_params,
     _is_blocked_ip,
     _global_allow_private_urls,
     _reset_allow_private_cache,
@@ -906,3 +908,79 @@ class TestRedirectTargetFromResponse:
     def test_no_location_no_next_request_returns_none(self):
         resp = _FakeResponse(is_redirect=True)
         assert redirect_target_from_response(resp) is None
+
+
+class TestSensitiveQueryParams:
+    """Tests for credential-redaction of URL query params before handing
+    URLs to third-party fetch/browser backends (SSRF-adjacent exfil guard)."""
+
+    @pytest.mark.parametrize(
+        "url,name",
+        [
+            ("https://example.com/callback?token=opaque-code", "token"),
+            ("https://example.com/auth?access_token=abc", "access_token"),
+            ("https://example.com/x?api_key=sk-123", "api_key"),
+            ("https://example.com/x?apikey=abc&q=1", "apikey"),
+            ("https://example.com/x?auth_token=xyz", "auth_token"),
+            ("https://example.com/x?client_secret=abc", "client_secret"),
+            ("https://example.com/x?signature=deadbeef", "signature"),
+            ("https://example.com/x?jwt=eyJhbGci", "jwt"),
+            ("https://example.com/x?password=hunter2", "password"),
+            ("https://example.com/x?secret=abc", "secret"),
+            ("https://example.com/s3?X-Amz-Signature=hex", "X-Amz-Signature"),
+            ("https://example.com/s3?x-amz-signature=hex", "x-amz-signature"),
+            (
+                "https://example.com/x?key=1&session_id=abc",
+                "session_id",
+            ),
+        ],
+    )
+    def test_detects_sensitive_param(self, url, name):
+        assert sensitive_query_param_name(url) == name
+        assert has_sensitive_query_params(url) is True
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://example.com/search?q=hello&lang=es",
+            "https://example.com/promo?code=SAVE10",
+            "https://example.com/x?key=normal-facet",
+            "https://example.com/x?auth=normal&page=2",
+            "https://example.com/x?session=metric",
+            "https://example.com/x?secretive=word",  # prefix match is exact, not substring
+            "https://example.com/",  # no query
+            "https://example.com?foo",  # query key with no value, non-sensitive
+            "ftp://example.com?token=x",  # non-http scheme
+        ],
+    )
+    def test_ignores_non_sensitive_or_absent(self, url):
+        assert sensitive_query_param_name(url) is None
+        assert has_sensitive_query_params(url) is False
+
+    def test_sensitive_param_with_empty_value_not_flagged(self):
+        # Opaque magic links may carry empty params; keep_blank_values is set,
+        # but empty values are intentionally not flagged as credential-bearing.
+        assert sensitive_query_param_name("https://example.com/x?token=") is None
+        assert has_sensitive_query_params("https://example.com/x?token=") is False
+
+    def test_first_sensitive_param_is_returned(self):
+        url = "https://example.com/cb?state=x&signature=abc&token=def"
+        assert sensitive_query_param_name(url) == "signature"
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            None,
+            "",
+            "  ",
+            "not a url at all",
+            "file:///etc/passwd?token=x",  # non-http scheme still ignored
+        ],
+    )
+    def test_malformed_inputs_return_none(self, url):
+        assert sensitive_query_param_name(url) is None
+        assert has_sensitive_query_params(url) is False
+
+    def test_https_only_with_fragment_after_query(self):
+        url = "https://example.com/cb?token=abc#section"
+        assert sensitive_query_param_name(url) == "token"
