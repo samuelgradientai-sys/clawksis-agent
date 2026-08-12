@@ -742,6 +742,41 @@ def test_looks_like_empty_result_string_sentinels():
     assert sgc.looks_like_empty_result(None) is True
 
 
+def test_looks_like_empty_result_punctuated_sentinels():
+    """v1.12: LLMs punctuate their failure sentinels — 'N/A.', 'none.',
+    'not available.', '...' — so a trailing full stop must not turn an empty
+    sentinel into 'real content'. The lone '.' family stays a sentinel too."""
+    for bad in (
+        "N/A.",
+        "n/a.",
+        "none.",
+        "null.",
+        "nan.",
+        "No Data.",
+        "no content.",
+        "no result.",
+        "not found.",
+        "nothing.",
+        "empty.",
+        "nil.",
+        "undefined.",
+        "-.",
+        "not available.",
+        "no info.",
+        "no information.",
+        "no value.",
+    ):
+        assert sgc.looks_like_empty_result(bad) is True, f"{bad!r} must be empty"
+    # Dotted sentinels survive the trailing-'.' trim.
+    for bad in (".", "..", "...", "…"):
+        assert sgc.looks_like_empty_result(bad) is True, f"{bad!r} must be empty"
+    # Real content with a period is still kept — never discarded.
+    for good in ("Real content.", "N/A and here's the note", "price is 9.99."):
+        assert sgc.looks_like_empty_result(good) is False, f"{good!r} must be kept"
+    assert sgc.looks_like_empty_result({"price": "N/A."}) is True
+    assert sgc.looks_like_empty_result({"price": "N/A.", "title": "Real"}) is False
+
+
 def test_looks_like_empty_result_placeholders_partial_kept():
     """A placeholder marks a field as missing, but only ALL-placeholder results
     are empty — a result mixing a dash with a real value is kept (v1.10)."""

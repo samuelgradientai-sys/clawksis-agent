@@ -260,7 +260,18 @@ def looks_like_empty_result(data: Any) -> bool:
     if data is None:
         return True
     if isinstance(data, str):
-        return data.strip().lower() in _EMPTY_RESULT_SENTINELS
+        # LLMs punctuate their failure sentinels: "N/A.", "none.", "not
+        # available." all carry zero info yet differ from the exact sentinel
+        # tokens by a trailing full stop only. Try the exact (trimmed) token
+        # first — that keeps the "." family (v1.10) and "n.a." intact — then
+        # the trailing-dot-stripped form, so punctuated sentinels are caught
+        # without ever discarding real content (no genuine answer is a bare
+        # sentinel + ".").
+        normalized = data.strip().lower()
+        return (
+            normalized in _EMPTY_RESULT_SENTINELS
+            or normalized.rstrip(".") in _EMPTY_RESULT_SENTINELS
+        )
     if isinstance(data, dict):
         values = [v for v in data.values() if v is not None]
         if not values:
