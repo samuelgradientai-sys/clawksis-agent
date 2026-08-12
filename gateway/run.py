@@ -13238,10 +13238,48 @@ class GatewayRunner(
                 # compression.hygiene_hard_message_limit.
                 # (#2153)
                 _HARD_MSG_LIMIT = _hyg_hard_msg_limit
-                _needs_compress = (
-                    _approx_tokens >= _compress_token_threshold
-                    or _msg_count >= _HARD_MSG_LIMIT
-                )
+                _token_triggered = _approx_tokens >= _compress_token_threshold
+                _count_triggered = _msg_count >= _HARD_MSG_LIMIT
+                _needs_compress = _token_triggered or _count_triggered
+
+                # Count-triggered refire guard.  The compactor's verbatim tail
+                # is token-budgeted, so on large-context models a compaction can
+                # succeed while leaving the message COUNT above the hard limit.
+                # Without this guard the count trigger refires on EVERY inbound
+                # message, blocking each turn for the full (minutes-long)
+                # summarization — the user experiences a frozen bot.  Once a
+                # compaction has been observed to leave the count at/above the
+                # limit, suppress count-only retries until the session grows
+                # enough that another pass has new material to fold.  The token
+                # trigger is a real safety valve and is never suppressed.
+                _HYG_COUNT_REFIRE_GROWTH = 25
+                if not hasattr(self, "_hygiene_count_guard"):
+                    self._hygiene_count_guard: dict[str, int] = {}
+                if not _count_triggered:
+                    # Session observed below the limit again (manual /compress,
+                    # /reset relink, etc.) — drop any stale ineffectiveness
+                    # marker so a future legitimate trigger isn't suppressed.
+                    self._hygiene_count_guard.pop(session_entry.session_id, None)
+                elif not _token_triggered:
+                    _guard_count = self._hygiene_count_guard.get(
+                        session_entry.session_id
+                    )
+                    if (
+                        _guard_count is not None
+                        and _msg_count <= _guard_count + _HYG_COUNT_REFIRE_GROWTH
+                    ):
+                        logger.info(
+                            "Session hygiene: skipping count-triggered compression "
+                            "for session %s — a previous pass left %s messages "
+                            "(limit %s) and the session has not grown by %s since; "
+                            "retrying would block the turn without shrinking the "
+                            "transcript",
+                            session_entry.session_id,
+                            _guard_count,
+                            _HARD_MSG_LIMIT,
+                            _HYG_COUNT_REFIRE_GROWTH,
+                        )
+                        _needs_compress = False
 
                 if _needs_compress:
                     logger.info(
@@ -13324,6 +13362,85 @@ class GatewayRunner(
                                     # would end the live gateway session row.
                                     _hyg_agent._end_session_on_close = False
                                     _hyg_agent._print_fn = lambda *a, **kw: None
+
+                                    # Count-triggered passes must actually shrink
+                                    # the message COUNT, not just tokens.  The
+                                    # compactor's verbatim tail is budgeted at
+                                    # summary_target_ratio × context, which on a
+                                    # large-context model (1M ⇒ ~200K tokens)
+                                    # preserves hundreds of messages verbatim —
+                                    # the fold never gets below the hard limit
+                                    # and the trigger refires forever.  Cap the
+                                    # tail budget to roughly an eighth of the
+                                    # hard limit in messages (at current average
+                                    # message size) so the summarized middle
+                                    # covers the bulk of the transcript.  Only
+                                    # ever lowers the budget, never raises it.
+                                    if _count_triggered:
+                                        _comp_eng = getattr(
+                                            _hyg_agent, "context_compressor", None
+                                        )
+                                        if _comp_eng is not None and hasattr(
+                                            _comp_eng, "tail_token_budget"
+                                        ):
+                                            _avg_msg_tokens = max(
+                                                1,
+                                                int(_approx_tokens)
+                                                // max(1, _msg_count),
+                                            )
+                                            _tail_msgs_target = max(
+                                                24, _HARD_MSG_LIMIT // 8
+                                            )
+                                            _capped_budget = (
+                                                _avg_msg_tokens * _tail_msgs_target
+                                            )
+                                            try:
+                                                if _capped_budget < int(
+                                                    _comp_eng.tail_token_budget
+                                                ):
+                                                    _comp_eng.tail_token_budget = (
+                                                        _capped_budget
+                                                    )
+                                                    logger.info(
+                                                        "Session hygiene: count-"
+                                                        "triggered — capping verbatim "
+                                                        "tail budget to ~%s tokens "
+                                                        "(≈%s messages) so compaction "
+                                                        "reduces the message count",
+                                                        f"{_capped_budget:,}",
+                                                        _tail_msgs_target,
+                                                    )
+                                            except (TypeError, ValueError):
+                                                pass
+
+                                    # The summarization below BLOCKS this turn
+                                    # and can take minutes on a large transcript.
+                                    # Silence here reads as a frozen bot, so for
+                                    # genuinely large sessions tell the user
+                                    # what is happening before we start.  Small
+                                    # sessions compress in seconds and stay
+                                    # silent.
+                                    if _approx_tokens >= 40_000 or _msg_count >= 150:
+                                        try:
+                                            _busy_adapter = self._adapter_for_source(
+                                                source
+                                            )
+                                            if _busy_adapter and source.chat_id:
+                                                await _busy_adapter.send(
+                                                    source.chat_id,
+                                                    "🧹 Compacting a large session "
+                                                    f"history ({_msg_count} messages) "
+                                                    "before replying — this can take "
+                                                    "a minute or two. Use /reset if "
+                                                    "you'd rather start a fresh "
+                                                    "session.",
+                                                    metadata=_hyg_meta,
+                                                )
+                                        except Exception as _busy_err:
+                                            logger.debug(
+                                                "Failed to deliver hygiene-compression notice: %s",
+                                                _busy_err,
+                                            )
 
                                     loop = asyncio.get_running_loop()
                                     _compressed, _ = await loop.run_in_executor(
@@ -13419,7 +13536,8 @@ class GatewayRunner(
                                         logger.warning(
                                             "Gateway hygiene compression for session %s "
                                             "did not rotate or compact in place "
-                                            "(no session_db on the hygiene agent) — "
+                                            "(no session_db on the hygiene agent, or a "
+                                            "concurrent compression held the lock) — "
                                             "preserving the original transcript instead "
                                             "of overwriting it with the summary (#21301).",
                                             session_entry.session_id,
@@ -13433,6 +13551,33 @@ class GatewayRunner(
                                         f"{_approx_tokens:,}",
                                         f"{_new_tokens:,}",
                                     )
+
+                                    # Record (or clear) the count-trigger refire
+                                    # guard under the CURRENT session id — if the
+                                    # pass rotated, that is the id the next turn
+                                    # will load.  An ineffective pass (count still
+                                    # at/above the limit) must not be repeated on
+                                    # every message; see the guard at the trigger
+                                    # site above.
+                                    if _count_triggered:
+                                        if _new_count >= _HARD_MSG_LIMIT:
+                                            self._hygiene_count_guard[
+                                                session_entry.session_id
+                                            ] = _new_count
+                                            logger.warning(
+                                                "Session hygiene: compaction left %s "
+                                                "messages (still ≥ hard limit %s) — "
+                                                "suppressing count-triggered retries "
+                                                "until the session grows by %s "
+                                                "messages",
+                                                _new_count,
+                                                _HARD_MSG_LIMIT,
+                                                _HYG_COUNT_REFIRE_GROWTH,
+                                            )
+                                        else:
+                                            self._hygiene_count_guard.pop(
+                                                session_entry.session_id, None
+                                            )
 
                                     if _new_tokens >= _warn_token_threshold:
                                         logger.warning(

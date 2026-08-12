@@ -1213,3 +1213,297 @@ async def test_session_hygiene_default_hard_message_limit_does_not_fire_at_12_me
     assert FakeCompressAgent.last_instance is None, (
         "Compression should NOT fire at 12 messages with default hard_limit=5000"
     )
+
+
+# ---------------------------------------------------------------------------
+# Count-trigger freeze fix: refire guard, tail-budget cap, busy notice
+#
+# Incident shape (2026-08-12): a 560-message / ~309K-token Telegram session
+# with hygiene_hard_message_limit=400 on a 1M-context model.  Every inbound
+# message count-triggered a blocking multi-minute summarization whose
+# token-budgeted tail preserved ~500 messages verbatim, so the count never
+# dropped below the limit and the compression refired on EVERY message —
+# the user experienced a frozen bot until /stop.
+# ---------------------------------------------------------------------------
+
+
+def _build_count_trigger_runner(gateway_run, adapter, history, session_id="sess-1"):
+    """Shared runner scaffold for the count-trigger tests below."""
+    runner = object.__new__(gateway_run.GatewayRunner)
+    runner.config = GatewayConfig(
+        platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="fake-token")}
+    )
+    runner.adapters = {Platform.TELEGRAM: adapter}
+    runner._voice_mode = {}
+    runner.hooks = SimpleNamespace(emit=AsyncMock(), loaded_hooks=False)
+    runner.session_store = MagicMock()
+    runner.session_store.get_or_create_session.return_value = SessionEntry(
+        session_key="agent:main:telegram:private:12345",
+        session_id=session_id,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        platform=Platform.TELEGRAM,
+        chat_type="private",
+    )
+    runner.session_store.load_transcript.return_value = history
+    runner.session_store.has_any_sessions.return_value = True
+    runner.session_store.rewrite_transcript = MagicMock()
+    runner.session_store.append_to_transcript = MagicMock()
+    runner._running_agents = {}
+    runner._pending_messages = {}
+    runner._pending_approvals = {}
+    runner._session_db = None
+    runner._is_user_authorized = lambda _source: True
+    runner._set_session_env = lambda _context: None
+    runner._run_agent = AsyncMock(
+        return_value={
+            "final_response": "ok",
+            "messages": [],
+            "tools": [],
+            "history_offset": 0,
+            "last_prompt_tokens": 0,
+        }
+    )
+    return runner
+
+
+def _count_trigger_event():
+    return MessageEvent(
+        text="hello",
+        source=SessionSource(
+            platform=Platform.TELEGRAM,
+            chat_id="12345",
+            chat_type="private",
+            user_id="12345",
+        ),
+        message_id="1",
+    )
+
+
+def _install_count_trigger_env(monkeypatch, tmp_path, gateway_run, hard_limit=50):
+    """config.yaml with a low hard limit + huge context so ONLY count fires."""
+    fake_dotenv = types.ModuleType("dotenv")
+    fake_dotenv.load_dotenv = lambda *args, **kwargs: None
+    monkeypatch.setitem(sys.modules, "dotenv", fake_dotenv)
+    (tmp_path / "config.yaml").write_text(
+        "compression:\n  enabled: true\n"
+        f"  hygiene_hard_message_limit: {hard_limit}\n"
+    )
+    monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"}
+    )
+    monkeypatch.setattr(
+        "agent.model_metadata.get_model_context_length",
+        lambda *_args, **_kwargs: 1_000_000,
+    )
+
+
+@pytest.mark.asyncio
+async def test_count_trigger_ineffective_compaction_suppresses_refire(
+    monkeypatch, tmp_path
+):
+    """An ineffective count-triggered pass must NOT refire on the next message.
+
+    The fake compressor neither rotates nor compacts in place, so the
+    observed post-compression count equals the pre-compression count (≥
+    limit).  The second message must skip compression entirely instead of
+    blocking the turn again.
+    """
+
+    class IneffectiveCompressAgent:
+        calls = 0
+
+        def __init__(self, **kwargs):
+            self.session_id = kwargs.get("session_id", "fake-session")
+            self.compression_in_place = False
+            self._print_fn = None
+            self.shutdown_memory_provider = MagicMock()
+            self.close = MagicMock()
+
+        def _compress_context(self, messages, *_args, **_kwargs):
+            type(self).calls += 1
+            return (list(messages), None)
+
+    fake_run_agent = types.ModuleType("run_agent")
+    fake_run_agent.AIAgent = IneffectiveCompressAgent
+    monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+
+    gateway_run = importlib.import_module("gateway.run")
+    _install_count_trigger_env(monkeypatch, tmp_path, gateway_run, hard_limit=50)
+
+    adapter = HygieneCaptureAdapter()
+    history = _make_history(60, content_size=40)
+    runner = _build_count_trigger_runner(gateway_run, adapter, history)
+
+    assert await runner._handle_message(_count_trigger_event()) == "ok"
+    assert IneffectiveCompressAgent.calls == 1
+    # The ineffective pass is recorded under the session id.
+    assert runner._hygiene_count_guard.get("sess-1") == 60
+
+    # Second message on the same (unchanged) session: guard suppresses the
+    # refire — the turn is NOT blocked by another summarization.
+    assert await runner._handle_message(_count_trigger_event()) == "ok"
+    assert IneffectiveCompressAgent.calls == 1
+
+    # A 60-message / tiny-token session is below the busy-notice gate:
+    # nothing was sent to the user.
+    assert adapter.sent == []
+
+
+@pytest.mark.asyncio
+async def test_count_trigger_effective_compaction_leaves_no_guard(
+    monkeypatch, tmp_path
+):
+    """A pass that rotates and shrinks below the limit records no guard."""
+
+    class RotatingCompressAgent:
+        calls = 0
+
+        def __init__(self, **kwargs):
+            self.session_id = kwargs.get("session_id", "fake-session")
+            self.compression_in_place = False
+            self._print_fn = None
+            self.shutdown_memory_provider = MagicMock()
+            self.close = MagicMock()
+
+        def _compress_context(self, messages, *_args, **_kwargs):
+            type(self).calls += 1
+            self.session_id = f"{self.session_id}_compressed"
+            return ([{"role": "assistant", "content": "compressed"}], None)
+
+    fake_run_agent = types.ModuleType("run_agent")
+    fake_run_agent.AIAgent = RotatingCompressAgent
+    monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+
+    gateway_run = importlib.import_module("gateway.run")
+    _install_count_trigger_env(monkeypatch, tmp_path, gateway_run, hard_limit=50)
+    monkeypatch.setenv("TELEGRAM_HOME_CHANNEL", "795544298")
+
+    adapter = HygieneCaptureAdapter()
+    history = _make_history(60, content_size=40)
+    runner = _build_count_trigger_runner(gateway_run, adapter, history)
+
+    assert await runner._handle_message(_count_trigger_event()) == "ok"
+    assert RotatingCompressAgent.calls == 1
+    assert runner._hygiene_count_guard == {}
+
+
+@pytest.mark.asyncio
+async def test_token_trigger_is_never_suppressed_by_count_guard(
+    monkeypatch, tmp_path
+):
+    """The token threshold is a real safety valve: a stale count-guard entry
+    must not stop token-triggered compression."""
+
+    class TokenCompressAgent:
+        calls = 0
+
+        def __init__(self, **kwargs):
+            self.session_id = kwargs.get("session_id", "fake-session")
+            self.compression_in_place = False
+            self._print_fn = None
+            self.shutdown_memory_provider = MagicMock()
+            self.close = MagicMock()
+
+        def _compress_context(self, messages, *_args, **_kwargs):
+            type(self).calls += 1
+            return (list(messages), None)
+
+    fake_dotenv = types.ModuleType("dotenv")
+    fake_dotenv.load_dotenv = lambda *args, **kwargs: None
+    monkeypatch.setitem(sys.modules, "dotenv", fake_dotenv)
+    fake_run_agent = types.ModuleType("run_agent")
+    fake_run_agent.AIAgent = TokenCompressAgent
+    monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+
+    gateway_run = importlib.import_module("gateway.run")
+    monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"}
+    )
+    # Tiny context → 6 short messages exceed the token threshold.
+    monkeypatch.setattr(
+        "agent.model_metadata.get_model_context_length",
+        lambda *_args, **_kwargs: 100,
+    )
+
+    adapter = HygieneCaptureAdapter()
+    history = _make_history(6, content_size=400)
+    runner = _build_count_trigger_runner(gateway_run, adapter, history)
+    # Stale guard entry from an earlier count-triggered incident.
+    runner._hygiene_count_guard = {"sess-1": 6}
+
+    assert await runner._handle_message(_count_trigger_event()) == "ok"
+    assert TokenCompressAgent.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_count_trigger_caps_compressor_tail_budget(monkeypatch, tmp_path):
+    """Count-triggered passes cap the verbatim-tail token budget so the fold
+    actually reduces the message COUNT (a 1M-context default tail of ~200K
+    tokens preserves hundreds of messages and never gets below the limit)."""
+
+    class BudgetCaptureAgent:
+        last_instance = None
+
+        def __init__(self, **kwargs):
+            self.session_id = kwargs.get("session_id", "fake-session")
+            self.compression_in_place = False
+            self._print_fn = None
+            self.context_compressor = SimpleNamespace(tail_token_budget=999_999)
+            self.shutdown_memory_provider = MagicMock()
+            self.close = MagicMock()
+            type(self).last_instance = self
+
+        def _compress_context(self, messages, *_args, **_kwargs):
+            return (list(messages), None)
+
+    fake_run_agent = types.ModuleType("run_agent")
+    fake_run_agent.AIAgent = BudgetCaptureAgent
+    monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+
+    gateway_run = importlib.import_module("gateway.run")
+    _install_count_trigger_env(monkeypatch, tmp_path, gateway_run, hard_limit=50)
+
+    adapter = HygieneCaptureAdapter()
+    history = _make_history(60, content_size=40)
+    runner = _build_count_trigger_runner(gateway_run, adapter, history)
+
+    assert await runner._handle_message(_count_trigger_event()) == "ok"
+    agent = BudgetCaptureAgent.last_instance
+    assert agent is not None
+    assert 0 < agent.context_compressor.tail_token_budget < 999_999
+
+
+@pytest.mark.asyncio
+async def test_large_session_hygiene_sends_busy_notice(monkeypatch, tmp_path):
+    """For a genuinely large session the user is told the bot is compacting
+    (silence during a minutes-long blocking pass reads as a frozen bot)."""
+
+    class NoticeCompressAgent:
+        def __init__(self, **kwargs):
+            self.session_id = kwargs.get("session_id", "fake-session")
+            self.compression_in_place = False
+            self._print_fn = None
+            self.shutdown_memory_provider = MagicMock()
+            self.close = MagicMock()
+
+        def _compress_context(self, messages, *_args, **_kwargs):
+            return (list(messages), None)
+
+    fake_run_agent = types.ModuleType("run_agent")
+    fake_run_agent.AIAgent = NoticeCompressAgent
+    monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+
+    gateway_run = importlib.import_module("gateway.run")
+    _install_count_trigger_env(monkeypatch, tmp_path, gateway_run, hard_limit=50)
+
+    adapter = HygieneCaptureAdapter()
+    # ≥150 messages crosses the busy-notice gate even with tiny tokens.
+    history = _make_history(160, content_size=40)
+    runner = _build_count_trigger_runner(gateway_run, adapter, history)
+
+    assert await runner._handle_message(_count_trigger_event()) == "ok"
+    notices = [s for s in adapter.sent if "Compacting a large session" in s["content"]]
+    assert len(notices) == 1
