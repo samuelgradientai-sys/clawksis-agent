@@ -141,6 +141,15 @@ def _extract_docx(path: str) -> str:
 
 def _extract_xlsx(path: str) -> str:
     try:
+        size = Path(path).stat().st_size
+        if size > MAX_XLSX_BYTES:
+            raise ExtractionError(
+                f"XLSX too large: {size} bytes exceeds {MAX_XLSX_BYTES}"
+            )
+    except FileNotFoundError as exc:
+        raise ExtractionError(str(exc)) from exc
+
+    try:
         with zipfile.ZipFile(path) as zf:
             names = set(zf.namelist())
             shared = _shared_strings(zf, names)

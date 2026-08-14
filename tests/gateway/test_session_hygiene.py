@@ -1286,8 +1286,7 @@ def _install_count_trigger_env(monkeypatch, tmp_path, gateway_run, hard_limit=50
     fake_dotenv.load_dotenv = lambda *args, **kwargs: None
     monkeypatch.setitem(sys.modules, "dotenv", fake_dotenv)
     (tmp_path / "config.yaml").write_text(
-        "compression:\n  enabled: true\n"
-        f"  hygiene_hard_message_limit: {hard_limit}\n"
+        f"compression:\n  enabled: true\n  hygiene_hard_message_limit: {hard_limit}\n"
     )
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     monkeypatch.setattr(
@@ -1390,9 +1389,7 @@ async def test_count_trigger_effective_compaction_leaves_no_guard(
 
 
 @pytest.mark.asyncio
-async def test_token_trigger_is_never_suppressed_by_count_guard(
-    monkeypatch, tmp_path
-):
+async def test_token_trigger_is_never_suppressed_by_count_guard(monkeypatch, tmp_path):
     """The token threshold is a real safety valve: a stale count-guard entry
     must not stop token-triggered compression."""
 

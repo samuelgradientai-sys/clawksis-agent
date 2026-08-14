@@ -292,6 +292,21 @@ class TestXlsxExtraction(unittest.TestCase):
         with self.assertRaises(ExtractionError):
             extract_document_text(p)
 
+    def test_oversized_xlsx_raises(self):
+        import tools.read_extract as mod
+
+        p = os.path.join(self.tmp, "big.xlsx")
+        self._build(p)
+        size = os.path.getsize(p)
+
+        original = mod.MAX_XLSX_BYTES
+        mod.MAX_XLSX_BYTES = size - 1  # force the file to exceed the limit
+        try:
+            with self.assertRaises(ExtractionError):
+                extract_document_text(p)
+        finally:
+            mod.MAX_XLSX_BYTES = original
+
 
 # ---------------------------------------------------------------------------
 # read_file_tool integration
