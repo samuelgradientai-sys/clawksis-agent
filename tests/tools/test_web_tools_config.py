@@ -1121,3 +1121,103 @@ class TestSiblingProvidersEnvResolution:
             from agent.web_search_provider import get_provider_env
 
             assert get_provider_env("WSP_TEST_UNSET_KEY") == ""
+
+
+class TestEnvValueResolution:
+    """Tests for ``_env_value()`` — the config-aware env resolver used by
+    backend selection and ``check_web_api_key()``.
+
+    Covers the graceful-degradation contract: whatever the config layer does
+    (value, None, or a raised exception), ``_env_value`` must never raise and
+    must fall back to process env / empty string. Regression for the silent
+    ``except Exception`` that swallowed errors with no log line.
+    """
+
+    ENV_KEY = "WSP_ENV_VALUE_UNUSED_KEY"
+
+    def setup_method(self):
+        os.environ.pop(self.ENV_KEY, None)
+
+    def teardown_method(self):
+        os.environ.pop(self.ENV_KEY, None)
+
+    def test_uses_config_value_when_present(self):
+        """Config-layer value wins even if process env is also set."""
+        from tools.web_tools import _env_value
+
+        with (
+            patch("clawk_cli.config.get_env_value", return_value="  conf-val  "),
+            patch.dict(os.environ, {self.ENV_KEY: "proc-val"}, clear=False),
+        ):
+            assert _env_value(self.ENV_KEY) == "conf-val"
+
+    def test_falls_back_to_process_env_when_config_none(self):
+        """None from config → process env value used."""
+        from tools.web_tools import _env_value
+
+        with (
+            patch("clawk_cli.config.get_env_value", return_value=None),
+            patch.dict(os.environ, {self.ENV_KEY: "  proc-val  "}, clear=False),
+        ):
+            assert _env_value(self.ENV_KEY) == "proc-val"
+
+    def test_falls_back_to_empty_when_nothing_set(self):
+        from tools.web_tools import _env_value
+
+        with patch("clawk_cli.config.get_env_value", return_value=None):
+            assert _env_value(self.ENV_KEY) == ""
+
+    def test_config_raising_degrades_gracefully(self):
+        """Regression: a raising config layer must not propagate — fall back
+        to process env (and log, rather than silently swallowing)."""
+        from tools.web_tools import _env_value
+
+        with (
+            patch(
+                "clawk_cli.config.get_env_value",
+                side_effect=RuntimeError("config broken"),
+            ),
+            patch.dict(os.environ, {self.ENV_KEY: "proc-val"}, clear=False),
+        ):
+            assert _env_value(self.ENV_KEY) == "proc-val"
+
+
+class TestLoadWebConfig:
+    """Tests for ``_load_web_config()``.
+
+    Guarantees the ``-> dict`` contract (never None) and graceful fallback to
+    ``{}`` when the config layer is unavailable or raises.
+    """
+
+    def test_returns_dict_when_config_healthy(self):
+        from tools.web_tools import _load_web_config
+
+        with patch(
+            "clawk_cli.config.load_config",
+            return_value={"web": {"backend": "tavily"}},
+        ):
+            assert _load_web_config() == {"backend": "tavily"}
+
+    def test_returns_empty_dict_when_web_section_null(self):
+        """YAML ``web:`` with no body → load_config().get('web') is None → {}"""
+        from tools.web_tools import _load_web_config
+
+        with patch("clawk_cli.config.load_config", return_value={"web": None}):
+            assert _load_web_config() == {}
+
+    def test_returns_empty_dict_when_config_missing_web(self):
+        from tools.web_tools import _load_web_config
+
+        with patch("clawk_cli.config.load_config", return_value={"other": 1}):
+            assert _load_web_config() == {}
+
+    def test_config_missing_module_degrades_gracefully(self):
+        """Regression: load_config raising (missing clawk_cli.config, corrupt
+        YAML) must yield {} with a log rather than crashing the caller."""
+        from tools.web_tools import _load_web_config
+
+        with patch(
+            "clawk_cli.config.load_config",
+            side_effect=RuntimeError("no clawk_cli.config"),
+        ):
+            assert _load_web_config() == {}

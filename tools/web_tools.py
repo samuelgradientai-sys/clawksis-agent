@@ -157,7 +157,10 @@ def _env_value(name: str) -> str:
         from clawk_cli.config import get_env_value
 
         val = get_env_value(name)
-    except Exception:
+    except Exception as exc:
+        logger.debug(
+            "get_env_value(%r) raised; falling back to os.getenv: %s", name, exc
+        )
         val = None
     if val is None:
         val = os.getenv(name, "")
@@ -178,7 +181,8 @@ def _load_web_config() -> dict:
         # caller that does ``_load_web_config().get(...)``. Honor the ``-> dict``
         # contract so callers never see None.
         return load_config().get("web") or {}
-    except (ImportError, Exception):
+    except Exception as exc:
+        logger.debug("load_config() raised; web config treated as empty: %s", exc)
         return {}
 
 
