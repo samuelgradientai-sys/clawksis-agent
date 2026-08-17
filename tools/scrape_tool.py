@@ -212,8 +212,15 @@ def _run_one(
     wait_selector: Optional[str],
     proxy: Optional[str],
     timeout_s: int,
-) -> Tuple[bool, str, str]:
-    """Run one `scrapling extract <subcmd>`; return (ran_ok, content, stderr)."""
+) -> Tuple[bool, str, str, Optional[int]]:
+    """Run one `scrapling extract <subcmd>`.
+
+    Returns ``(ran_ok, content, stderr, returncode)`` where ``returncode`` is
+    the CLI exit code (``None`` when the attempt was aborted before the CLI
+    exited, e.g. subprocess error or timeout). Staying separate from ``stderr``
+    lets the caller surface a nonzero exit even when the CLI printed nothing —
+    the silent-failure case that previously read as "No content returned".
+    """
     fd, out_path = tempfile.mkstemp(suffix=ext, prefix="scrape_")
     os.close(fd)
     try:
@@ -243,18 +250,30 @@ def _run_one(
                 cmd, capture_output=True, text=True, timeout=timeout_s
             )
         except subprocess.TimeoutExpired:
-            return False, "", f"timed out after {timeout_s}s"
+            return False, "", f"timed out after {timeout_s}s", None
         except (OSError, ValueError, subprocess.SubprocessError) as exc:
             logger.warning("scrape: subprocess error for %s (%s)", url, exc)
-            return False, "", f"subprocess error: {exc}"
+            return False, "", f"subprocess error: {exc}", None
         content = ""
+        stderr = (proc.stderr or "").strip()
+        # A nonzero exit with no output is a silent failure — surface the real
+        # exit code so the caller can distinguish it from an empty-but-OK page
+        # instead of reporting a bare "No content returned".
+        if proc.returncode != 0 and not stderr:
+            logger.warning(
+                "scrape: %s exited %d for %s with no output",
+                subcmd,
+                proc.returncode,
+                url,
+            )
+            stderr = f"scrapling exited with code {proc.returncode}"
         try:
             content = Path(out_path).read_text(encoding="utf-8", errors="replace")
         except (OSError, UnicodeDecodeError) as exc:
             logger.warning("scrape: failed to read output %s (%s)", out_path, exc)
             content = ""
         ran_ok = proc.returncode == 0 and bool(content.strip())
-        return ran_ok, content, (proc.stderr or "").strip()
+        return ran_ok, content, stderr, proc.returncode
     finally:
         try:
             os.unlink(out_path)
@@ -309,7 +328,7 @@ async def _handle_scrape(args, **kw):
             if user_timeout is not None
             else (45 if subcmd == "get" else 90)
         )
-        ran_ok, content, stderr = await asyncio.to_thread(
+        _res = await asyncio.to_thread(
             _run_one,
             base,
             subcmd,
@@ -320,6 +339,13 @@ async def _handle_scrape(args, **kw):
             proxy,
             timeout_s,
         )
+        # Tolerate a 3-tuple return (older callers/tests/providers that don't
+        # yet pass a returncode) — treat the fourth slot as None if absent.
+        if len(_res) == 3:
+            ran_ok, content, stderr = _res  # type: ignore[misc]
+            stderr = stderr or ""
+        else:
+            ran_ok, content, stderr, _returncode = _res
         last_stderr = stderr or last_stderr
         # A css_selector targets a specific fragment — a short match is a real
         # result, not an empty page. Use the lowered empty gate so e.g. a

@@ -923,7 +923,7 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "# Hello")
 
-        ran_ok, content, stderr = st._run_one(
+        ran_ok, content, stderr, returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1205,7 +1205,7 @@ class TestRunOne:
 
         monkeypatch.setattr(st.Path, "read_text", _read_fail)
 
-        ran_ok, content, stderr = st._run_one(
+        ran_ok, content, stderr, returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1233,7 +1233,7 @@ class TestRunOne:
 
         monkeypatch.setattr(st.subprocess, "run", _timeout_run)
 
-        ran_ok, content, stderr = st._run_one(
+        ran_ok, content, stderr, returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1263,7 +1263,7 @@ class TestRunOne:
 
         monkeypatch.setattr(st.subprocess, "run", _boom_run)
 
-        ran_ok, content, stderr = st._run_one(
+        ran_ok, content, stderr, returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1387,7 +1387,7 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "partial content")
 
-        ran_ok, content, stderr = st._run_one(
+        ran_ok, content, stderr, returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1418,7 +1418,7 @@ class TestRunOne:
         monkeypatch.setattr(st.subprocess, "run", _fake_run)
         monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "")
 
-        ran_ok, content, stderr = st._run_one(
+        ran_ok, content, stderr, returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
@@ -1431,6 +1431,75 @@ class TestRunOne:
         assert ran_ok is False
         assert content == ""
         assert "error msg" in stderr
+
+    def test_silent_nonzero_exit_surfaces_exit_code(self, monkeypatch):
+        """A nonzero exit with no stderr is a silent failure — the caller must
+        see the real exit code (e.g. 'scrapling exited with code 3'), not a
+        bare 'No content returned'."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=3, stderr="")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "")
+
+        ran_ok, content, stderr, returncode = st._run_one(
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            30,
+        )
+        assert ran_ok is False
+        assert content == ""
+        assert returncode == 3
+        assert "code 3" in stderr
+
+    def test_silent_nonzero_exit_keeps_real_stderr(self, monkeypatch):
+        """When the CLI DOES print to stderr, keep that message verbatim
+        instead of substituting the generic exit-code hint."""
+        calls = []
+
+        def _fake_mkstemp(suffix, prefix):
+            return (3, "/tmp/fake.md")
+
+        monkeypatch.setattr(st.tempfile, "mkstemp", _fake_mkstemp)
+        monkeypatch.setattr(st.os, "close", lambda fd: None)
+        monkeypatch.setattr(st.os, "unlink", lambda p: calls.append(f"unlink:{p}"))
+
+        def _fake_run(cmd, **kw):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=2, stderr="Chrome not found")
+
+        monkeypatch.setattr(st.subprocess, "run", _fake_run)
+        monkeypatch.setattr(st.Path, "read_text", lambda *a, **k: "")
+
+        ran_ok, content, stderr, returncode = st._run_one(
+            ["scrapling"],
+            "get",
+            "https://example.com",
+            ".md",
+            None,
+            None,
+            None,
+            30,
+        )
+        assert ran_ok is False
+        assert returncode == 2
+        assert stderr == "Chrome not found"
+        assert "code 2" not in stderr
 
     def test_subprocess_valueerror_returns_false(self, monkeypatch):
         """A ValueError from subprocess.run should be caught gracefully."""
@@ -1447,7 +1516,7 @@ class TestRunOne:
 
         monkeypatch.setattr(st.subprocess, "run", _boom_run)
 
-        ran_ok, content, stderr = st._run_one(
+        ran_ok, content, stderr, returncode = st._run_one(
             ["scrapling"],
             "get",
             "https://example.com",
