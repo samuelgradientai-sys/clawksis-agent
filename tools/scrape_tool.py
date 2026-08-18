@@ -387,6 +387,31 @@ async def _handle_scrape(args, **kw):
             content=content or None,
         )
 
+    if best_status == "antibot" and content and len(content) < _MIN_USEFUL_CHARS:
+        # Every mode landed on a SHORT anti-bot challenge interstitial (e.g.
+        # Cloudflare "Just a moment…" / "Checking your browser…"), not real
+        # page text. Delivering that challenge boilerplate as "content" makes
+        # the model read a bot-wall error page; report the real cause instead.
+        return tool_result(
+            ok=False,
+            url=url,
+            attempts=attempts,
+            reason="antibot",
+            error=(
+                "Page sat behind a short anti-bot challenge interstitial "
+                "(Cloudflare/Turnstile) that every mode — including full "
+                "stealth — failed to clear. All attempts returned the "
+                "challenge page, not real content. Options: (1) retry with a "
+                "residential proxy via SCRAPLING_PROXY (or "
+                "web.scrapling_proxy in config) — an on-site IP often passes "
+                "the challenge; (2) use the site's official API if it has "
+                "one; (3) if it only needs JS interaction, try "
+                '`mode: "fetch"` with a `wait_selector` for the target '
+                "element."
+            ),
+            content=content or None,
+        )
+
     if not content:
         return tool_result(
             ok=False,

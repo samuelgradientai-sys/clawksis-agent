@@ -575,6 +575,32 @@ class TestHandleScrape:
         assert "proxy" in res["error"].lower()
         assert len(calls) == 1
 
+    def test_short_antibot_interstitial_is_not_delivered(self, monkeypatch):
+        """When every mode returns a SHORT anti-bot challenge (a pure
+        Cloudflare 'Just a moment…' interstitial under the useful-char gate),
+        the handler must NOT hand that boilerplate back as 'content' with
+        ok=True. It should report the challenge as the real cause (ok=False,
+        reason='antibot'). The long-page antibot case (test above) still
+        returns content because that is arguably real page text."""
+        calls = []
+
+        def tracking_run(base, subcmd, *rest):
+            calls.append(subcmd)
+            # 36 chars — well under _MIN_USEFUL_CHARS (200), but still
+            # recognised as a strong anti-bot challenge by _classify.
+            return (True, "Checking your browser before accessing", "")
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", tracking_run)
+
+        res = _run_tool(st._handle_scrape({"url": "https://example.com"}))
+        assert res["ok"] is False
+        assert res["reason"] == "antibot"
+        assert "challenge" in res["error"].lower()
+        # All three ladder modes got a chance, then the short challenge was
+        # diagnosed instead of being delivered as content.
+        assert calls == ["get", "fetch", "stealthy-fetch"]
+
     def test_empty_content_ladder_runs_all_modes(self, monkeypatch):
         """When content is empty/too-short, all ladder modes are tried."""
         calls = []
