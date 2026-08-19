@@ -419,7 +419,8 @@ def _is_backend_available(backend: str) -> bool:
             from tools.xai_http import has_xai_credentials
 
             return has_xai_credentials()
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 — a broken import = unavailable
+            logger.debug("xai credentials probe failed: %s", exc)
             return False
     return False
 
