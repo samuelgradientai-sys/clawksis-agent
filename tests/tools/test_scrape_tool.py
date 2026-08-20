@@ -386,6 +386,47 @@ class TestAsStr:
         assert st._as_str(0) == ""
 
 
+class TestNetworkFailureReason:
+    """_network_failure_reason — detect connection/DNS/proxy SILENT failures."""
+
+    def test_returns_none_for_empty(self):
+        assert st._network_failure_reason("") is None
+        assert st._network_failure_reason(None) is None
+
+    @pytest.mark.parametrize(
+        "stderr",
+        [
+            "curl: (7) Failed to connect to host port 443",
+            "curl: (6) Could not resolve host: example.com",
+            "Name or service not known",
+            "Connection refused",
+            "TLS handshake failed",
+            "proxy error: connect failed",
+            "407 Proxy Authentication Required",
+            "SSL certificate problem",
+        ],
+    )
+    def test_network_signals_detected(self, stderr):
+        assert st._network_failure_reason(stderr) is not None
+
+    @pytest.mark.parametrize(
+        "stderr",
+        [
+            "401 Unauthorized",
+            "404 Not Found",
+            "403 Forbidden",
+            "just a moment",
+            "Empty reply from server",  # ambiguous — not obviously network
+            "",
+        ],
+    )
+    def test_non_network_returns_none(self, stderr):
+        assert st._network_failure_reason(stderr) is None
+
+    def test_case_insensitive(self):
+        assert st._network_failure_reason("CONNECTION REFUSED") is not None
+
+
 class TestHandleScrape:
     """Test the tool handler logic (subprocess mocked)."""
 
@@ -574,6 +615,47 @@ class TestHandleScrape:
         assert res["reason"] == "ip_block"
         assert "proxy" in res["error"].lower()
         assert len(calls) == 1
+
+    def test_ladder_aborts_on_network_failure(self, monkeypatch):
+        """A connection/DNS failure in stderr stops the ladder early and
+        reports the real cause instead of burning all three modes."""
+        calls = []
+
+        def tracking_run(base, subcmd, *rest):
+            calls.append(subcmd)
+            return (False, "", "curl: (7) Failed to connect to example.com port 443")
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", tracking_run)
+
+        res = _run_tool(st._handle_scrape({"url": "https://example.com"}))
+        assert res["ok"] is False
+        assert "network" in res["error"].lower()
+        assert "scrapling" in res["error"].lower()
+        # Only the fast `get` was tried — no point escalating.
+        assert calls == ["get"]
+
+    def test_network_failure_with_proxy_mentions_proxy(self, monkeypatch):
+        """When the stderr names a proxy error, the user is pointed at the
+        proxy as the fix rather than told to retry."""
+        calls = []
+
+        def tracking_run(base, subcmd, *rest):
+            calls.append(subcmd)
+            return (False, "", "407 Proxy Authentication Required")
+
+        monkeypatch.setattr(st, "_scrapling_cmd", lambda: ["/fake/scrapling"])
+        monkeypatch.setattr(st, "_run_one", tracking_run)
+
+        res = _run_tool(
+            st._handle_scrape({
+                "url": "https://example.com",
+                "proxy": "http://user:pass@proxy:8080",
+            })
+        )
+        assert res["ok"] is False
+        assert "proxy" in res["error"].lower()
+        assert calls == ["get"]
 
     def test_short_antibot_interstitial_is_not_delivered(self, monkeypatch):
         """When every mode returns a SHORT anti-bot challenge (a pure

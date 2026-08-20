@@ -116,6 +116,31 @@ _ANTIBOT_STRONG = (
 )
 _ANTIBOT_WEAK = ("enable javascript", "please enable js")
 
+# Connection / network-layer failures reported in stderr by the scrapling CLI
+# (via curl_fetch_cffi / playwright). These are NOT anti-bot: a stealthier
+# browser or another ladder mode will not help, and continuing to escalate
+# only burns time. When a proxy is configured, most of these mean the proxy
+# itself is unreachable, rejecting the connection, or the proxy can't resolve
+# the target host — so we tell the user to check the proxy instead of retrying.
+_NETWORK_FAIL_SIGNALS = (
+    "connection refused",
+    "failed to connect",
+    "couldn't resolve",
+    "could not resolve",
+    "name or service not known",
+    "resolve dns",
+    "dns resolution failed",
+    "ssl certificate",
+    "certificate verify failed",
+    "tls handshake failed",
+    "proxy error",
+    "proxy authentication",
+    "407 proxy",
+    "502 bad gateway",  # a misbehaving proxy often surfaces as a 502
+    "tunnel connection failed",
+    "connect timeout",
+)
+
 
 def _scrapling_cmd() -> Optional[List[str]]:
     """Return the base command to invoke the scrapling CLI, or None if absent."""
@@ -201,6 +226,27 @@ def _classify(
         if any(m in head for m in _ANTIBOT_WEAK):
             return "antibot"
     return "ok"
+
+
+def _network_failure_reason(stderr: Optional[str]) -> Optional[str]:
+    """Return a human-friendly reason when ``stderr`` is a network/proxy failure.
+
+    This catches the layer of failure that is neither anti-bot nor an empty
+    page: the scrapling CLI couldn't reach the server at all (bad DNS, a
+    refused connection, a TLS/SSL rejection) or a configured proxy misbehaved.
+    Escalating the ladder won't fix any of these, so the handler should surface
+    the real cause instead of retrying every mode and then reporting the
+    generic "No content returned".
+
+    Returns ``None`` when the stderr doesn't look like a connectivity failure.
+    """
+    if not stderr:
+        return None
+    hay = stderr.lower()
+    for phrase in _NETWORK_FAIL_SIGNALS:
+        if phrase in hay:
+            return phrase
+    return None
 
 
 def _run_one(
@@ -363,6 +409,12 @@ async def _handle_scrape(args, **kw):
         # ladder and report the real cause instead of burning more attempts.
         if status == "ip_block":
             break
+        # A connection/DNS/proxy failure in stderr is also ladder-fatal: no
+        # stealthier mode can reach a host that refused the connection or a
+        # proxy that rejected it. Stop early and report the real cause.
+        network_fail = _network_failure_reason(stderr)
+        if network_fail:
+            break
 
     content = best_content.strip()
     truncated = False
@@ -413,16 +465,26 @@ async def _handle_scrape(args, **kw):
         )
 
     if not content:
-        return tool_result(
-            ok=False,
-            url=url,
-            attempts=attempts,
-            error=(
+        hint = _network_failure_reason(last_stderr)
+        if hint:
+            net = (
+                " a proxy-related failure" if "proxy" in hint else " a network failure"
+            )
+            error = (
+                f"Could not reach the page — {net} detected in scrapling's "
+                f"error ({hint}): {last_stderr}. This is not an anti-bot issue, "
+                "so escalating to a stealthier mode won't help. If you're using "
+                "a proxy, check that it's reachable and that the target site "
+                "accepts it (SCRAPLING_PROXY / web.scrapling_proxy); otherwise "
+                "verify the URL and that this server can reach the internet."
+            )
+        else:
+            error = (
                 "No content returned"
                 + (f" (scrapling: {last_stderr})" if last_stderr else "")
                 + ". The page may need a different mode, a proxy, or login."
-            ),
-        )
+            )
+        return tool_result(ok=False, url=url, attempts=attempts, error=error)
 
     return tool_result(
         ok=True,
@@ -478,8 +540,12 @@ SCRAPE_SCHEMA = {
             "proxy": {
                 "type": "string",
                 "description": (
-                    "Optional proxy URL (http://user:pass@host:port). Overrides "
-                    "the SCRAPLING_PROXY env var / config for this call."
+                    "Optional proxy URL, e.g. http://user:pass@host:port or "
+                    "socks5://host:port (HTTP/SOCKS5 supported). Overrides the "
+                    "SCRAPLING_PROXY env var / config for this call. If the "
+                    "proxy is unreachable, refused, or rejects the connection, "
+                    "the tool reports the connection/proxy failure as the cause "
+                    "instead of burning ladder attempts."
                 ),
             },
             "timeout": {
