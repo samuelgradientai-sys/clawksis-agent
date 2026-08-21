@@ -849,7 +849,16 @@ def load_on_disk_store() -> "MemoryStore":
         memory_char_limit = int(mem_cfg.get("memory_char_limit", memory_char_limit))
         user_char_limit = int(mem_cfg.get("user_char_limit", user_char_limit))
     except Exception:
-        pass  # config optional — fall back to defaults rather than break /memory
+        # Config is optional — fall back to defaults rather than break /memory.
+        # Log with exc_info so a malformed config or a bad limit value is
+        # visible instead of silently degrading to the built-in char limits.
+        logger.warning(
+            "memory: could not load memory char limits from config; "
+            "using defaults (memory=%d, user=%d)",
+            memory_char_limit,
+            user_char_limit,
+            exc_info=True,
+        )
 
     store = MemoryStore(
         memory_char_limit=memory_char_limit,
