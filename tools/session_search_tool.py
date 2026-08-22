@@ -188,6 +188,9 @@ def _locate_session_db(session_id: str):
         from clawk_cli import profiles as profiles_mod
         from clawk_state import SessionDB
     except Exception:
+        logging.debug(
+            "could not import profiles/SessionDB during session locate", exc_info=True
+        )
         return None, None
 
     targets = [("default", profiles_mod.get_profile_dir("default"))]
