@@ -143,7 +143,11 @@ def _load_stt_config() -> dict:
         from clawk_cli.config import load_config
 
         return load_config().get("stt") or {}
-    except Exception:
+    except Exception as exc:
+        # Failing to load the config is non-fatal (we fall back to defaults),
+        # but log it so a silent typo/broken config is not mistaken for "the
+        # stt section was empty" when a user option is not being honored.
+        logger.debug("Failed to load stt config, using defaults: %s", exc)
         return {}
 
 
@@ -902,8 +906,8 @@ def _get_provider(stt_config: dict) -> str:
         if resolve_xai_http_credentials().get("api_key"):
             logger.info("No local STT available, using xAI Grok STT API")
             return "xai"
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("xAI STT credentials probe failed (falling back): %s", exc)
     if get_env_value("ELEVENLABS_API_KEY"):
         logger.info("No local STT available, using ElevenLabs Scribe STT API")
         return "elevenlabs"
