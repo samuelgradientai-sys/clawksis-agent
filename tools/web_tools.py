@@ -517,8 +517,8 @@ def _get_extract_char_limit() -> int:
             # Floor at 2k (below that the footer dominates), no hard ceiling
             # beyond a generous guard so a typo can't blow up context.
             return max(2000, min(value, 500_000))
-    except (TypeError, ValueError):
-        pass
+    except (TypeError, ValueError) as exc:
+        logger.debug("web_extract char limit resolution failed, using default: %s", exc)
     return DEFAULT_EXTRACT_CHAR_LIMIT
 
 
