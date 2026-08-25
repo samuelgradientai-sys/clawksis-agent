@@ -195,7 +195,12 @@ def clamp_timeout(raw_timeout: Any) -> int | None:
         return None
     try:
         return max(10, min(300, int(raw_timeout)))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as exc:
+        logger.debug(
+            "clamp_timeout: uncoercible timeout %r ignored, returning None: %s",
+            raw_timeout,
+            exc,
+        )
         return None
 
 
