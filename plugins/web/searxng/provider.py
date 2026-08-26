@@ -37,7 +37,10 @@ def _searxng_url() -> str:
         from clawk_cli.config import get_env_value
 
         val = get_env_value("SEARXNG_URL")
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — config layer is best-effort; fall back to env
+        logger.debug(
+            "searxng: config-aware env lookup failed (%s); using process env", exc
+        )
         val = None
     if val is None:
         val = os.getenv("SEARXNG_URL", "")

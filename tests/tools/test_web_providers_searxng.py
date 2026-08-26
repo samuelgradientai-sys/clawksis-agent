@@ -56,6 +56,36 @@ class TestSearXNGSearchProviderIsConfigured:
         assert issubclass(SearXNGWebSearchProvider, WebSearchProvider)
 
 
+class TestSearXNGUrlFallback:
+    def test_config_env_lookup_raises_falls_back_to_process_env(self, monkeypatch):
+        """If the config-aware get_env_value blows up, fall back to process env."""
+        from clawk_cli import config as clawk_config
+        from plugins.web.searxng import provider
+
+        monkeypatch.setattr(
+            clawk_config,
+            "get_env_value",
+            lambda _key: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        monkeypatch.setenv("SEARXNG_URL", "http://env-only:8080")
+
+        assert provider._searxng_url() == "http://env-only:8080"
+
+    def test_config_env_lookup_raises_and_no_env_returns_empty(self, monkeypatch):
+        """A broken config layer with no process env must yield an empty URL."""
+        from clawk_cli import config as clawk_config
+        from plugins.web.searxng import provider
+
+        monkeypatch.setattr(
+            clawk_config,
+            "get_env_value",
+            lambda _key: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        monkeypatch.delenv("SEARXNG_URL", raising=False)
+
+        assert provider._searxng_url() == ""
+
+
 class TestSearXNGSearchProviderSearch:
     """Happy path and error handling for SearXNGWebSearchProvider.search()."""
 
