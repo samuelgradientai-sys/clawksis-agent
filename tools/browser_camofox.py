@@ -106,8 +106,9 @@ def _config_cdp_url() -> str:
         browser_cfg = read_raw_config().get("browser", {})
         if isinstance(browser_cfg, dict):
             return str(browser_cfg.get("cdp_url", "") or "").strip()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Could not read browser.cdp_url from config: %s", exc)
+        return ""
     return ""
 
 
