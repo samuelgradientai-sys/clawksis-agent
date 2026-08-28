@@ -890,7 +890,9 @@ def _create_skill(name: str, content: str, category: str = None) -> Dict[str, An
             _parsed = yaml.safe_load(content[3 : _fm_end.start() + 3])
             _desc = str(_parsed.get("description", ""))[:120]
     except Exception:
-        pass
+        # Frontmatter parsing is a best-effort nicety for notifications; a
+        # malformed or non-YAML header must not break skill creation/update.
+        logger.debug("failed to parse skill frontmatter description", exc_info=True)
 
     result = {
         "success": True,
@@ -955,7 +957,9 @@ def _edit_skill(name: str, content: str) -> Dict[str, Any]:
             _parsed = yaml.safe_load(content[3 : _fm_end.start() + 3])
             _desc = str(_parsed.get("description", ""))[:120]
     except Exception:
-        pass
+        # Frontmatter parsing is a best-effort nicety for notifications; a
+        # malformed or non-YAML header must not break skill creation/update.
+        logger.debug("failed to parse skill frontmatter description", exc_info=True)
 
     return {
         "success": True,
