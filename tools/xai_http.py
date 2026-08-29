@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 import os
 import uuid
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
 MAX_XAI_STORAGE_EXPIRES_AFTER_SECONDS = 30 * 24 * 60 * 60
@@ -107,7 +110,12 @@ def _load_config_section(section_name: str) -> Dict[str, Any]:
         cfg = load_config()
         section = cfg.get(section_name) if isinstance(cfg, dict) else None
         return section if isinstance(section, dict) else {}
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — config optional; never fatal
+        logger.debug(
+            "xai_http: _load_config_section(%r) raised; treated as empty: %s",
+            section_name,
+            exc,
+        )
         return {}
 
 
@@ -238,7 +246,12 @@ def maybe_mark_xai_storage_notice_seen(section_name: str) -> Optional[str]:
             return None
         marker.write_text(datetime.datetime.now(datetime.UTC).isoformat() + "\n")
         return notice
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — marker optional; never fatal
+        logger.debug(
+            "xai_http: storage-notice marker write failed for %r; returning notice anyway: %s",
+            section_name,
+            exc,
+        )
         return notice
 
 
@@ -306,7 +319,11 @@ def resolve_xai_http_credentials(
                 "api_key": access_token,
                 "base_url": base_url,
             }
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — OAuth pool optional; fall back to raw key
+        logger.debug(
+            "xai_http: OAuth credential pool resolution failed; falling back to bare XAI_API_KEY: %s",
+            exc,
+        )
         pass
 
     api_key = str(get_env_value("XAI_API_KEY") or "").strip()
