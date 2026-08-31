@@ -1118,3 +1118,75 @@ def test_explicit_extract_backend_wins_over_scrapegraph():
         patch.object(wt, "_is_backend_available", return_value=True),
     ):
         assert wt._get_extract_backend() == "exa"
+
+
+# ── Result truncation ───────────────────────────────────────────────────────
+
+
+def test_handler_truncation_marks_oversized_result(monkeypatch):
+    """An oversized JSON result is cut AND tagged so the model knows it's incomplete
+    (a bare cut otherwise looks like a finished blob whose tail silently vanished)."""
+    from tools.scrapegraph_tool import (
+        _MAX_RESULT_CHARS,
+        _TRUNCATION_MARKER,
+        _handle_scrapegraph,
+    )
+
+    async def _fake_extract(
+        source, prompt, *, schema=None, headless=True, timeout=None
+    ):
+        # Render to well over the budget (with indent=2 the dump is large).
+        return {"content": "x" * (_MAX_RESULT_CHARS + 500)}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake_extract)
+    res = _run_tool(_handle_scrapegraph({"url": "https://x.com"}))
+    assert res["ok"] is True
+    assert res["truncated"] is True
+    # The visible marker is present so the cut is not silent.
+    assert _TRUNCATION_MARKER in res["extracted"]
+    # Total output never exceeds the budget.
+    assert len(res["extracted"]) <= _MAX_RESULT_CHARS
+    # The tail carries the marker (not a dangling value mid-way).
+    assert res["extracted"].endswith(_TRUNCATION_MARKER)
+
+
+def test_handler_short_result_not_truncated(monkeypatch):
+    """Results within budget stay untouched — no marker, no flag."""
+    from tools.scrapegraph_tool import _handle_scrapegraph
+
+    async def _fake_extract(
+        source, prompt, *, schema=None, headless=True, timeout=None
+    ):
+        return {"title": "Hi", "price": 9.99}
+
+    monkeypatch.setattr("tools.scrapegraph_tool.extract_structured", _fake_extract)
+    res = _run_tool(_handle_scrapegraph({"url": "example.com"}))
+    assert res["ok"] is True
+    assert res["truncated"] is False
+    assert "TRUNCATED" not in res["extracted"]
+    assert '"title"' in res["extracted"]
+
+
+def test_truncate_rendered_respects_budget_and_marker():
+    """Unit-level: the helper keeps total length <= limit, keeps payload bytes and appends the marker."""
+    from tools.scrapegraph_tool import _TRUNCATION_MARKER, _truncate_rendered
+
+    big = "a" * 200
+    marker_len = len(_TRUNCATION_MARKER)
+
+    # Budget > marker: payload is cut, marker fits fully, total <= limit.
+    limit = 60
+    limited = _truncate_rendered(big, limit=limit)
+    assert len(limited) == limit
+    assert limited.startswith("a" * (limit - marker_len))
+    assert limited.endswith(_TRUNCATION_MARKER)
+
+    # Budget == marker length: only the marker fits, no payload.
+    assert _truncate_rendered(big, limit=marker_len) == _TRUNCATION_MARKER
+
+    # Budget < marker length: truncate the marker itself.
+    assert _truncate_rendered(big, limit=5) == _TRUNCATION_MARKER[:5]
+
+    # Zero/below-zero budgets don't blow up.
+    assert _truncate_rendered(big, limit=0) == ""
+    assert _truncate_rendered(big, limit=-1) == ""

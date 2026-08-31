@@ -35,6 +35,12 @@ from tools.scrapegraph_common import (
 logger = logging.getLogger(__name__)
 
 _MAX_RESULT_CHARS = 30000
+# Tag appended to a truncated result so the model knows the JSON is INCOMPLETE.
+# A bare ``rendered[:limit]`` would otherwise leave a JSON blob that just *ends* —
+# it looks finished but a trailing array/object was silently dropped. That's
+# misleading for a structured-data tool whose whole point is parseable output.
+# Kept short: it counts toward ``_MAX_RESULT_CHARS``.
+_TRUNCATION_MARKER = "\n...[TRUNCATED: result exceeds character budget]"
 _DEFAULT_PROMPT = (
     "Extract the main, useful content of this page as clean structured data."
 )
@@ -143,6 +149,23 @@ def _normalize_urls(args: dict) -> list[str]:
     return out
 
 
+def _truncate_rendered(rendered: str, limit: int) -> str:
+    """Cut ``rendered`` to ``limit`` chars and append a visible truncation marker.
+
+    A bare ``rendered[:limit]`` signals nothing to the caller — the JSON blob
+    just ends mid-value and looks complete. We cut at a boundary that never
+    splits a UTF-8 code point (``str`` slicing already guarantees that) and tag
+    the tail so the model knows the data is incomplete rather than silently
+    dropped. Total length never exceeds ``limit``.
+    """
+    if limit <= 0:
+        return _TRUNCATION_MARKER[:limit] if limit >= 0 else ""
+    marker_len = len(_TRUNCATION_MARKER)
+    if marker_len >= limit:
+        return _TRUNCATION_MARKER[:limit]
+    return rendered[: limit - marker_len] + _TRUNCATION_MARKER
+
+
 def _coerce_schema(raw: Any) -> Any:
     """Accept a JSON-schema dict (or a JSON string of one) for structured output."""
     if raw is None or raw == "":
@@ -217,7 +240,7 @@ async def _handle_scrapegraph(args, **kw):
         rendered = str(data)
     truncated = len(rendered) > _MAX_RESULT_CHARS
     if truncated:
-        rendered = rendered[:_MAX_RESULT_CHARS]
+        rendered = _truncate_rendered(rendered, _MAX_RESULT_CHARS)
 
     # NB: don't use ``data=`` — tool_result() treats ``data`` as its positional
     # payload arg, which would drop the other fields. Use ``extracted``.
