@@ -8,10 +8,13 @@ normal text/binary handling.
 from __future__ import annotations
 
 import json
+import logging
 import posixpath
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "EXTRACTABLE_EXTENSIONS",
@@ -164,7 +167,10 @@ def _extract_xlsx(path: str) -> str:
                     continue
                 try:
                     rows = _sheet_rows(zf.read(part), shared)
-                except ET.ParseError:
+                except ET.ParseError as exc:
+                    logger.debug(
+                        "XML parse error in XLSX sheet %r (%s): %s", name, part, exc
+                    )
                     continue
                 out.append(f"# ── Sheet: {name} ──")
                 out.extend("\t".join(row) for row in rows)
@@ -186,7 +192,8 @@ def _shared_strings(zf: zipfile.ZipFile, names: set[str]) -> list[str]:
         return []
     try:
         root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
-    except ET.ParseError:
+    except ET.ParseError as exc:
+        logger.debug("XML parse error in sharedStrings.xml: %s", exc)
         return []
     s = f"{{{_NS_S}}}"
     return [
@@ -214,7 +221,8 @@ def _workbook_rels(zf: zipfile.ZipFile, names: set[str]) -> dict[str, str]:
         return {}
     try:
         root = ET.fromstring(zf.read(rels_path))
-    except ET.ParseError:
+    except ET.ParseError as exc:
+        logger.debug("XML parse error in workbook.xml.rels: %s", exc)
         return {}
     rel_tag = f"{{{_NS_PKG_REL}}}Relationship"
     return {
@@ -267,7 +275,8 @@ def _cell_value(cell: ET.Element, shared: list[str], s: str) -> str:
     if typ == "s":
         try:
             return shared[int(value)]
-        except (ValueError, IndexError):
+        except (ValueError, IndexError) as exc:
+            logger.debug("Shared string index %r out of range in cell: %s", value, exc)
             return ""
     if typ == "inlineStr":
         inline = cell.find(f"{s}is")
