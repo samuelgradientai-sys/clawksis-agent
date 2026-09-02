@@ -326,9 +326,26 @@ def classify_scrapegraph_error(exc: Exception) -> str:
             "headless server. Omit `render_js` or set it to `true`."
         )
     # 2) Auth / credential errors
+    # Covers HTTP 401 (retries won't help), generic unauthorized markers, and
+    # the provider-specific invalid-API-key messages (OpenAI "Incorrect API
+    # key provided", OpenRouter "expensive API key", Anthropic "invalid
+    # x-api-key", etc.) with their OpenAI 401-style payload bodies like
+    # `"Invalid API key provided: sk-..."`. All of these mean the configured
+    # credential is wrong or missing — retrying is pointless.
     if any(
         kw in exc_msg
-        for kw in ("401", "authenticationerror", "unauthorized", "no api key")
+        for kw in (
+            "401",
+            "authenticationerror",
+            "unauthorized",
+            "no api key",
+            "invalid api key",
+            "incorrect api key",
+            "expensive api key",
+            "api key does not provide",
+            "invalid x-api-key",
+            "api key provided",
+        )
     ):
         return (
             "The LLM model used by ScrapeGraphAI is not authenticated. "

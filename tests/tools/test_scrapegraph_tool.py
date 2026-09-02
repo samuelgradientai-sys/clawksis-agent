@@ -591,6 +591,15 @@ def test_classify_x_display():
 def test_classify_auth():
     hint = sgc.classify_scrapegraph_error(RuntimeError("401 Unauthorized"))
     assert "not authenticated" in hint
+    # Invalid/missing API key messages from the common providers.
+    for msg in (
+        "Incorrect API key provided: sk-...",
+        "Invalid api key",
+        "OpenRouter: expensive API key usage",
+        "invalid x-api-key",
+    ):
+        hint = sgc.classify_scrapegraph_error(RuntimeError(msg))
+        assert "not authenticated" in hint, msg
 
 
 def test_classify_rate_limit():
