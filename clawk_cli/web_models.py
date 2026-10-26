@@ -124,6 +124,14 @@ class ManagedFileDelete(BaseModel):
     recursive: bool = False
 
 
+class HiddenModelUpdate(BaseModel):
+    """POST/DELETE /api/analytics/models/hide — hide (or restore) one Models-page usage card.
+    Stored as ``dashboard.hidden_models`` entries ``"provider|model"``; sessions stay untouched."""
+
+    model: str
+    provider: str = ""
+
+
 class ModelAssignment(BaseModel):
     """POST /api/model/set — assign a provider/model to a slot.
 

@@ -611,6 +611,10 @@ class ModelOptionProvider(OpenModel):
     usage_levels: dict[str, str] | None = None
     limit: ProviderLimit | None = None
     usage: ProviderUsage | None = None
+    # ``clawk_cli/model_locality.py::apply_locality`` — served from a loopback/LAN/Tailscale endpoint
+    # (Ollama, LM Studio, llama.cpp, a local custom endpoint); ``local_url`` is that endpoint.
+    is_local: bool | None = None
+    local_url: str | None = None
 
 
 class ModelOptionsResult(Result):
