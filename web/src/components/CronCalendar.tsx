@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { api, type CronOccurrenceJob } from "@/lib/api";
+import { errorMessage } from "@/lib/api-error";
+import { LoadErrorNotice } from "@/components/LoadErrorNotice";
+import { en } from "@/i18n/en";
 
 /**
  * Month-grid visual of when the active cron jobs fire. For each day in the
@@ -35,6 +38,10 @@ export function CronCalendar({ profile }: { profile: string }) {
   });
   const [jobs, setJobs] = useState<CronOccurrenceJob[]>([]);
   const [loading, setLoading] = useState(false);
+  // A failed load is not "no jobs": say so, with a retry.
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const retry = useCallback(() => setReloadKey((k) => k + 1), []);
 
   const daysInMonth = new Date(view.year, view.month, 0).getDate();
   const firstWeekday = new Date(view.year, view.month - 1, 1).getDay();
@@ -48,13 +55,16 @@ export function CronCalendar({ profile }: { profile: string }) {
     const to = toIsoDate(view.year, view.month, daysInMonth);
     let alive = true;
     setLoading(true);
+    setError(null);
     api
       .getCronOccurrences(from, to, profile)
       .then((r) => {
         if (alive) setJobs(r.jobs || []);
       })
-      .catch(() => {
-        if (alive) setJobs([]);
+      .catch((e) => {
+        if (!alive) return;
+        setJobs([]);
+        setError(errorMessage(e));
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -62,7 +72,7 @@ export function CronCalendar({ profile }: { profile: string }) {
     return () => {
       alive = false;
     };
-  }, [view.year, view.month, daysInMonth, profile]);
+  }, [view.year, view.month, daysInMonth, profile, reloadKey]);
 
   const shiftMonth = (delta: number) => {
     setView((v) => {
@@ -138,7 +148,7 @@ export function CronCalendar({ profile }: { profile: string }) {
               <div className="mt-1 flex flex-col gap-0.5">
                 {fires.slice(0, 3).map(({ job, idx, count }) => (
                   <span
-                    key={job.id}
+                    key={`${job.profile ?? ""}:${job.id}`}
                     title={`${job.name}${count > 1 ? ` ×${count}` : ""}${
                       job.schedule_display ? ` — ${job.schedule_display}` : ""
                     }`}
@@ -167,7 +177,15 @@ export function CronCalendar({ profile }: { profile: string }) {
           {t.common.loading}
         </div>
       )}
-      {!loading && jobs.length === 0 && (
+      {error && (
+        <LoadErrorNotice
+          className="mt-2"
+          what={t.cron.calendarWhat ?? en.cron.calendarWhat!}
+          detail={error}
+          onRetry={retry}
+        />
+      )}
+      {!loading && !error && jobs.length === 0 && (
         <div className="mt-2 text-center text-xs text-muted-foreground">
           {t.cron.noJobs}
         </div>

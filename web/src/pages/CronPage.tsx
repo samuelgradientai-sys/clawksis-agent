@@ -3,13 +3,12 @@ import {
   type CronTriggerController,
   createCronTriggerController,
 } from "@clawk/shared";
-import { Clock, Pause, Pencil, Play, Trash2, X, Zap } from "lucide-react";
-import { Badge } from "@nous-research/ui/ui/components/badge";
+import { Clock, X } from "lucide-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { Select, SelectOption } from "@nous-research/ui/ui/components/select";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
 import { H2 } from "@nous-research/ui/ui/components/typography/h2";
-import { api } from "@/lib/api";
+import { api, getManagementProfile } from "@/lib/api";
 import type {
   CronJob,
   CronDeliveryTarget,
@@ -24,13 +23,20 @@ import {
   splitCronList,
   cronJobHasExecutionContent,
   cronAgoLabel,
-  cronNextRunOverdueMs,
   cronSchedulerStaleAgeS,
   cronJobFormFromJob,
-  cronLastResult,
   focusCronField,
   type CronJobFormState,
 } from "@/lib/cron-job";
+import {
+  getJobKey,
+  getJobProfile,
+  getJobState,
+  getJobTitle,
+  splitJobKey,
+  truncateText,
+} from "@/lib/cron-job-view";
+import { CronJobCard } from "@/components/CronJobCard";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { CronCalendar } from "@/components/CronCalendar";
 import {
@@ -39,7 +45,6 @@ import {
 } from "@/components/ScheduleBuilder";
 import {
   buildScheduleString,
-  describeSchedule,
   englishOrdinal,
   parseScheduleString,
   type ScheduleBuilderState,
@@ -48,6 +53,7 @@ import {
 import { useToast } from "@nous-research/ui/hooks/use-toast";
 import { useConfirmDelete } from "@nous-research/ui/hooks/use-confirm-delete";
 import { useModalBehavior } from "@/hooks/useModalBehavior";
+import { useCronArchiveChats } from "@/hooks/useCronArchiveChats";
 import { Toast } from "@nous-research/ui/ui/components/toast";
 import { Card, CardContent } from "@nous-research/ui/ui/components/card";
 import { Input } from "@nous-research/ui/ui/components/input";
@@ -63,26 +69,6 @@ import { Segmented } from "@nous-research/ui/ui/components/segmented";
 import { AutomationBlueprints } from "@/components/AutomationBlueprints";
 import { cn, themedBody } from "@/lib/utils";
 import { errorMessage } from "@/lib/api-error";
-
-function formatTime(iso?: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleString();
-}
-
-function asText(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function truncateText(value: string, maxLength: number): string {
-  return value.length > maxLength
-    ? value.slice(0, maxLength) + "..."
-    : value;
-}
-
-function getJobPrompt(job: CronJob): string {
-  return asText(job.prompt);
-}
 
 function NameCheckboxPicker({
   id,
@@ -598,89 +584,16 @@ function CronJobFormFields({
   );
 }
 
-function getJobName(job: CronJob): string {
-  return asText(job.name).trim();
+/** The dashboard switcher's profile scopes the page; "All profiles" stays one click away. */
+function initialCronProfile(): string {
+  return getManagementProfile() || "all";
 }
 
-function getJobTitle(job: CronJob): string {
-  const name = getJobName(job);
-  if (name) return name;
-
-  const prompt = getJobPrompt(job);
-  if (prompt) return truncateText(prompt, 60);
-
-  const script = asText(job.script);
-  if (script) return truncateText(script, 60);
-
-  return job.id || "Cron job";
+/** Where a new job / blueprint / the archive toggle land: the filtered profile, or under
+ *  "All profiles" the switcher's one (never silently the default profile). */
+function cronTargetProfile(selected: string): string {
+  return selected === "all" ? getManagementProfile() || "default" : selected;
 }
-
-function getJobScheduleDisplay(
-  job: CronJob,
-  strings: ScheduleDescribeStrings,
-): string {
-  // Prefer a structured render so cron expressions like
-  // ``30 14 * * 1,3,5`` surface as "Weekly on Mon, Wed, Fri at 14:30"
-  // in the list instead of the raw five-field gibberish. Falls back
-  // through the existing chain (``schedule_display`` from the backend,
-  // then the structured ``display`` field, then the raw ``expr``) so
-  // legacy job rows still render *something* meaningful.
-  return describeSchedule(
-    job.schedule,
-    asText(job.schedule_display) || asText(job.schedule?.display),
-    strings,
-  );
-}
-
-function getJobState(job: CronJob): string {
-  return asText(job.state) || (job.enabled === false ? "disabled" : "scheduled");
-}
-
-function getRepeatDisplay(job: CronJob): string {
-  const repeat = job.repeat;
-  if (!repeat || repeat.times == null) return "forever";
-  const completed = repeat.completed ?? 0;
-  return completed > 0 ? `${completed}/${repeat.times}` : `${repeat.times} times`;
-}
-
-function getJobMode(job: CronJob): string {
-  if (job.no_agent) return "no_agent";
-  if (job.script) return "script+agent";
-  return "agent";
-}
-
-function getModelDisplay(job: CronJob): string {
-  const provider = asText(job.provider);
-  const model = asText(job.model);
-  if (provider && model) return `${provider}/${model}`;
-  return model || provider;
-}
-
-function getJobProfile(job: CronJob): string {
-  return asText(job.profile) || asText(job.profile_name) || "default";
-}
-
-function getJobKey(job: CronJob): string {
-  return `${getJobProfile(job)}:${job.id}`;
-}
-
-function splitJobKey(key: string): { profile: string; id: string } {
-  const idx = key.indexOf(":");
-  if (idx === -1) return { profile: "default", id: key };
-  return { profile: key.slice(0, idx) || "default", id: key.slice(idx + 1) };
-}
-
-function profileLabel(profile: string): string {
-  return profile === "default" ? "default" : profile;
-}
-
-const STATUS_TONE: Record<string, "success" | "warning" | "destructive"> = {
-  enabled: "success",
-  scheduled: "success",
-  paused: "warning",
-  error: "destructive",
-  completed: "destructive",
-};
 
 export default function CronPage() {
   const [jobs, setJobs] = useState<CronJob[]>([]);
@@ -707,7 +620,8 @@ export default function CronPage() {
     };
   }, []);
   const [profiles, setProfiles] = useState<ProfileInfo[]>([]);
-  const [selectedProfile, setSelectedProfile] = useState("all");
+  const [selectedProfile, setSelectedProfile] = useState(initialCronProfile);
+  const targetProfile = cronTargetProfile(selectedProfile);
   const [view, setView] = useState<"jobs" | "blueprints">("jobs");
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [loading, setLoading] = useState(true);
@@ -716,41 +630,9 @@ export default function CronPage() {
   const { setEnd } = usePageHeader();
   const cronExtra = cronExtraLabels(t);
 
-  // Toggle cron.archive_chat_sessions (config backend): when on, each run's
-  // chat session is archived at end-of-run so the conversations sidebar isn't
-  // flooded by scheduled jobs. null = still loading the current value.
-  const [archiveChats, setArchiveChats] = useState<boolean | null>(null);
-  useEffect(() => {
-    let alive = true;
-    api
-      .getConfig()
-      .then((cfg) => {
-        if (!alive) return;
-        const cron = (cfg.cron ?? {}) as Record<string, unknown>;
-        setArchiveChats(Boolean(cron.archive_chat_sessions));
-      })
-      .catch(() => {
-        if (alive) setArchiveChats(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-  const toggleArchiveChats = useCallback(
-    async (next: boolean) => {
-      setArchiveChats(next); // optimistic
-      try {
-        // Read-modify-write the full config (the PUT replaces it whole).
-        const cfg = await api.getConfig();
-        const cron = { ...((cfg.cron ?? {}) as Record<string, unknown>) };
-        cron.archive_chat_sessions = next;
-        await api.saveConfig({ ...cfg, cron });
-      } catch {
-        setArchiveChats(!next); // revert on failure
-        showToast("No se pudo guardar la configuración", "error");
-      }
-    },
-    [showToast],
+  const [archiveChats, toggleArchiveChats] = useCronArchiveChats(
+    targetProfile,
+    useCallback((message: string) => showToast(message, "error"), [showToast]),
   );
 
   // Translation surface for the human-readable schedule describer.
@@ -1070,7 +952,7 @@ export default function CronPage() {
         className="uppercase"
         size="sm"
         onClick={() => {
-          setCreateProfile(selectedProfile === "all" ? "default" : selectedProfile);
+          setCreateProfile(targetProfile);
           setCreateModalOpen(true);
         }}
       >
@@ -1080,7 +962,7 @@ export default function CronPage() {
     return () => {
       setEnd(null);
     };
-  }, [setEnd, t.common.create, loading, selectedProfile]);
+  }, [setEnd, t.common.create, loading, targetProfile]);
 
   if (loading) {
     return (
@@ -1127,7 +1009,7 @@ export default function CronPage() {
 
       {view === "blueprints" && (
         <AutomationBlueprints
-          profile={selectedProfile === "all" ? "default" : selectedProfile}
+          profile={targetProfile}
           onCreated={() => loadJobs(selectedProfile)}
         />
       )}
@@ -1188,7 +1070,7 @@ export default function CronPage() {
                 >
                   {profiles.map((profile) => (
                     <SelectOption key={profile.name} value={profile.name}>
-                      {profileLabel(profile.name)}
+                      {profile.name}
                     </SelectOption>
                   ))}
                 </Select>
@@ -1338,13 +1220,13 @@ export default function CronPage() {
                 <SelectOption value="all">All profiles</SelectOption>
                 {profiles.map((profile) => (
                   <SelectOption key={profile.name} value={profile.name}>
-                    {profileLabel(profile.name)}
+                    {profile.name}
                   </SelectOption>
                 ))}
               </Select>
             </div>
             <div className="grid gap-1">
-              <Label htmlFor="cron-archive-chats" title={cronExtra.archiveChatsHint}>
+              <Label htmlFor="cron-archive-chats" title={`${cronExtra.archiveChatsHint} (${targetProfile})`}>
                 {cronExtra.archiveChats}
               </Label>
               <div
@@ -1374,9 +1256,7 @@ export default function CronPage() {
                 className="uppercase"
                 size="sm"
                 onClick={() => {
-                  setCreateProfile(
-                    selectedProfile === "all" ? "default" : selectedProfile,
-                  );
+                  setCreateProfile(targetProfile);
                   setCreateModalOpen(true);
                 }}
               >
@@ -1386,180 +1266,19 @@ export default function CronPage() {
           </Card>
         )}
 
-        {viewMode === "list" && jobs.map((job) => {
-          const state = getJobState(job);
-          const promptText = getJobPrompt(job);
-          const title = getJobTitle(job);
-          const hasName = Boolean(getJobName(job));
-          const deliver = asText(job.deliver);
-          const profile = getJobProfile(job);
-          const jobKey = getJobKey(job);
-          const mode = getJobMode(job);
-          const modelDisplay = getModelDisplay(job);
-          const toolsets = Array.isArray(job.enabled_toolsets)
-            ? job.enabled_toolsets.filter(Boolean)
-            : [];
-          const lastResult = cronLastResult(job);
-
-          return (
-            <Card key={jobKey}>
-              <CardContent className="flex items-start gap-4 py-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="font-medium text-sm truncate min-w-0">
-                      {title}
-                    </span>
-                    <Badge tone={STATUS_TONE[state] ?? "secondary"}>
-                      {state}
-                    </Badge>
-                    {lastResult && lastResult.status !== "ok" && (
-                      <Badge
-                        tone={lastResult.tone}
-                        title={lastResult.detail ?? undefined}
-                        data-testid="cron-last-result"
-                      >
-                        {lastResult.status}
-                      </Badge>
-                    )}
-                    <Badge tone="outline">{profileLabel(profile)}</Badge>
-                    {deliver && deliver !== "local" && (
-                      <Badge tone="outline">{deliver}</Badge>
-                    )}
-                    {Array.isArray(job.skills) && job.skills.length > 0 && (
-                      <Badge tone="outline" title={job.skills.join(", ")}>
-                        {job.skills.length === 1
-                          ? job.skills[0]
-                          : `${job.skills.length} skills`}
-                      </Badge>
-                    )}
-                    {mode !== "agent" && (
-                      <Badge tone="outline">{mode}</Badge>
-                    )}
-                    {modelDisplay && (
-                      <Badge tone="outline" title={modelDisplay}>
-                        model
-                      </Badge>
-                    )}
-                    {toolsets.length > 0 && (
-                      <Badge tone="outline" title={toolsets.join(", ")}>
-                        {toolsets.length} toolsets
-                      </Badge>
-                    )}
-                  </div>
-                  {hasName && promptText && (
-                    <p className="text-xs text-muted-foreground truncate mb-1">
-                      {truncateText(promptText, 100)}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span className="font-mono-ui">
-                      {getJobScheduleDisplay(job, scheduleDescribeStrings)}
-                    </span>
-                    <span>repeat: {getRepeatDisplay(job)}</span>
-                    <span className="flex items-center gap-1">
-                      {job.last_run_at && job.last_status === "ok" && (
-                        <span
-                          className="inline-block text-success"
-                          title="Última ejecución exitosa"
-                          aria-label="ok"
-                        >
-                          ✓
-                        </span>
-                      )}
-                      {job.last_run_at && job.last_status === "error" && (
-                        <span
-                          className="inline-block text-destructive"
-                          title="Última ejecución falló"
-                          aria-label="error"
-                        >
-                          ✗
-                        </span>
-                      )}
-                      {t.cron.last}: {formatTime(job.last_run_at)}
-                    </span>
-                    {cronNextRunOverdueMs(job) === null ? (
-                      <span>
-                        {t.cron.next}: {formatTime(job.next_run_at)}
-                      </span>
-                    ) : (
-                      <span
-                        className="text-warning font-medium"
-                        data-testid="cron-next-run-overdue"
-                      >
-                        {t.cron.overdueSince ?? en.cron.overdueSince!}: {formatTime(job.next_run_at)}
-                      </span>
-                    )}
-                  </div>
-                  {job.last_delivery_error && (
-                    <p className="text-xs text-destructive mt-1">
-                      delivery: {job.last_delivery_error}
-                    </p>
-                  )}
-                  {job.last_fire_error?.detail && (
-                    <p className="text-xs text-destructive mt-1">
-                      missed scheduled fire ({formatTime(job.last_fire_error.at ?? null)}):{" "}
-                      {job.last_fire_error.detail}
-                    </p>
-                  )}
-                  {job.last_error && (
-                    <p className="text-xs text-destructive mt-1">
-                      {job.last_error}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button
-                    ghost
-                    size="icon"
-                    title={state === "paused" ? t.cron.resume : t.cron.pause}
-                    aria-label={
-                      state === "paused" ? t.cron.resume : t.cron.pause
-                    }
-                    onClick={() => handlePauseResume(job)}
-                    className={
-                      state === "paused" ? "text-success" : "text-warning"
-                    }
-                  >
-                    {state === "paused" ? <Play /> : <Pause />}
-                  </Button>
-
-                  <Button
-                    ghost
-                    size="icon"
-                    disabled={triggeringJobKeys.has(jobKey)}
-                    title={t.cron.triggerNow}
-                    aria-label={t.cron.triggerNow}
-                    onClick={() => handleTrigger(job)}
-                  >
-                    {triggeringJobKeys.has(jobKey) ? <Spinner /> : <Zap />}
-                  </Button>
-
-                  <Button
-                    ghost
-                    size="icon"
-                    title="Edit job"
-                    aria-label="Edit job"
-                    onClick={() => openEditModal(job)}
-                  >
-                    <Pencil />
-                  </Button>
-
-                  <Button
-                    ghost
-                    destructive
-                    size="icon"
-                    title={t.common.delete}
-                    aria-label={t.common.delete}
-                    onClick={() => jobDelete.requestDelete(jobKey)}
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+        {viewMode === "list" &&
+          jobs.map((job) => (
+            <CronJobCard
+              key={getJobKey(job)}
+              job={job}
+              scheduleStrings={scheduleDescribeStrings}
+              triggering={triggeringJobKeys.has(getJobKey(job))}
+              onPauseResume={(j) => void handlePauseResume(j)}
+              onTrigger={(j) => void handleTrigger(j)}
+              onEdit={openEditModal}
+              onDelete={(j) => jobDelete.requestDelete(getJobKey(j))}
+            />
+          ))}
       </div>
       )}
 

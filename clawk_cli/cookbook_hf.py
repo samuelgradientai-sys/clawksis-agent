@@ -10,7 +10,8 @@ precargar listas gigantes; cada tecleo del usuario dispara una consulta acotada
     cuantización parseada (Q4_K_M, Q5_K_M, Q8_0, IQ…, F16…), para que el
     usuario elija QUÉ variante bajar.
 
-Todo best-effort: sin red devuelve listas vacías, nunca levanta al caller.
+Sin red levantan ``SourceUnreachable`` (y no cachean el fallo): "HF no
+respondió" no es lo mismo que "no hay resultados".
 """
 
 from __future__ import annotations
@@ -28,6 +29,13 @@ _HEADERS = {"User-Agent": "clawksis-cookbook/1.0"}
 
 # TTL caches (mismo patrón que el scrape de ollama.com en cookbook.py).
 _cache: dict[str, tuple] = {}
+
+
+class SourceUnreachable(RuntimeError):
+    """A live catalog (huggingface.co, ollama.com) did not answer. Distinct from "no results":
+    the dashboard must say "unreachable" instead of "no models match", and a failure is never
+    cached as an empty answer (it would read as "nothing found" for the whole TTL)."""
+
 
 _SEARCH_TTL = 300.0
 
@@ -93,6 +101,11 @@ def search_gguf(query: str, limit: int = 25) -> list[dict[str, Any]]:
     )
 
     data = _get_json(url)
+
+    if data is None:
+        raise SourceUnreachable(
+            "huggingface.co did not answer (offline, proxy or rate limit)"
+        )
 
     rows: list[dict[str, Any]] = []
 
@@ -181,6 +194,9 @@ def repo_gguf_files(repo: str) -> list[dict[str, Any]]:
         return cached[1]
 
     data = _get_json(f"{HF_API}/models/{urllib.parse.quote(r, safe='/')}?blobs=true")
+
+    if data is None:
+        raise SourceUnreachable(f"huggingface.co did not answer for {r}")
 
     rows: list[dict[str, Any]] = []
 

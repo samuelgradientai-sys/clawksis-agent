@@ -24,6 +24,7 @@ from clawk_cli.web_server_gateway import _strip_session_list_rows
 from clawk_cli.web_server_sessions import _session_latest_descendant
 from clawk_cli.web_models import (
     BulkDeleteSessions,
+    SessionCleanup,
     SessionImport,
     SessionOwnerBackfill,
     SessionPrune,
@@ -1314,4 +1315,103 @@ async def prune_sessions_endpoint(body: SessionPrune):
 
     return await asyncio.to_thread(
         _with_session_maintenance, body.profile, _prune_sessions, body
+    )
+
+
+# Cleanup refuses a delete wider than this: one transaction holds the writer, and the
+# filters are coarse enough that a typo (``max_messages`` 1000) could empty the store.
+_CLEANUP_MAX_DELETE = 2000
+
+
+def _cleanup_matches(row: dict, body: SessionCleanup, now: float) -> bool:
+    """Whether one raw session row passes every set cleanup filter (they AND)."""
+    model_q = (body.model or "").strip().lower()
+    if model_q and model_q not in str(row.get("model") or "").lower():
+        return False
+    if (
+        body.max_messages is not None
+        and int(row.get("message_count") or 0) > body.max_messages
+    ):
+        return False
+    if body.older_than_days is not None:
+        last = (
+            row.get("last_active") or row.get("ended_at") or row.get("started_at") or 0
+        )
+        try:
+            last = float(last)
+        except (TypeError, ValueError):
+            last = 0.0
+        if not last or (now - last) < body.older_than_days * 86400:
+            return False
+    return True
+
+
+def _cleanup_sessions(db, body: SessionCleanup) -> dict:
+    """Match raw rows (children included: the point is disk space) and delete them unless dry-run.
+
+    A session with activity inside the live window is never matched — the filter is coarse
+    ("source=telegram") and deleting a chat a gateway is answering right now strands it — and
+    rows a live turn or compression still guards are refused by ``delete_sessions`` itself.
+    """
+    source = (body.source or "").strip().lower()
+    rows = db.list_sessions_rich(
+        source=source or None,
+        limit=1_000_000,
+        offset=0,
+        include_archived=True,
+        include_children=True,
+        project_compression_tips=False,
+    )
+    now = time.time()
+    matched_ids: list[str] = []
+    matched_msgs = live = 0
+    for row in rows:
+        if not row.get("id") or not _cleanup_matches(row, body, now):
+            continue
+        if _is_active(row, now):
+            live += 1
+            continue
+        matched_ids.append(row["id"])
+        matched_msgs += int(row.get("message_count") or 0)
+    if body.dry_run:
+        return {
+            "ok": True,
+            "matched": len(matched_ids),
+            "messages": matched_msgs,
+            "skipped_active": live,
+        }
+    if len(matched_ids) > _CLEANUP_MAX_DELETE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"too many matches (>{_CLEANUP_MAX_DELETE}) — narrow the filter or delete in batches",
+        )
+    skipped: list[str] = []
+    deleted = db.delete_sessions(
+        matched_ids, exclude_active_write_guards=True, skipped_ids=skipped
+    )
+    return {"ok": True, "deleted": deleted, "skipped_active": live + len(skipped)}
+
+
+@manage_router.post("/api/sessions/cleanup")
+async def cleanup_sessions_endpoint(body: SessionCleanup):
+    """Filtered bulk cleanup to free space: ``source``, ``model`` (substring), ``older_than_days``
+    and ``max_messages`` AND together; at least one is required. ``dry_run`` (default) returns the
+    match count + total messages for the preview. Acts on ``body.profile``'s store — the dry run
+    reads unnamed, the delete follows the destructive-route rule like prune and bulk-delete."""
+    has_filter = (
+        bool((body.source or "").strip())
+        or bool((body.model or "").strip())
+        or body.older_than_days is not None
+        or body.max_messages is not None
+    )
+    if not has_filter:
+        raise HTTPException(status_code=400, detail="at least one filter is required")
+    profile = body.profile
+    if not body.dry_run:
+        profile = destructive_profile(profile, "POST /api/sessions/cleanup")
+    return await asyncio.to_thread(
+        _with_db,
+        profile,
+        lambda db: _cleanup_sessions(db, body),
+        read_only=body.dry_run,
     )
