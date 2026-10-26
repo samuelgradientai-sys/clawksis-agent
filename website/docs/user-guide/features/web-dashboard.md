@@ -289,29 +289,34 @@ Advanced/rarely-used keys are hidden by default behind a toggle.
 
 ### Sessions
 
-Browse and inspect all agent sessions. Each row shows the session title, source platform icon (CLI, Telegram, Discord, Slack, cron), model name, message count, tool call count, and how long ago it was active. Live sessions are marked with a pulsing badge.
+Browse and inspect all agent sessions of the selected profile. The history is grouped by the day of last activity (Pinned, Today, Yesterday, Previous 7 days, Previous 30 days, Older) and sorted by latest activity, so a conversation continued today is on top whenever it started. Each row shows the session title, source platform icon (CLI, Telegram, Discord, Slack, cron), model name, message count, tool call count, and how long ago it was active (hover for the exact start and last-activity times). Live sessions are marked with a pulsing badge.
 
 - **Filter** — **Chats / Automation / All** tabs scope the list: *Chats* (the default) shows human conversations and hides automation noise (cron, tool, API, ACP sessions); *Automation* shows only those; *All* shows everything. An exact-source dropdown narrows further to a single channel (e.g. only Telegram). Search respects the active filter.
 - **Search** — full-text search across all message content using FTS5. Results show highlighted snippets and auto-scroll to the first matching message when expanded.
-- **Stats** — a summary bar shows total sessions, how many are active in the store, archived count, total messages, and a per-source breakdown.
+- **Stats** — a summary bar shows total sessions, how many are not archived, archived count, total messages, and a per-source breakdown.
+- **Archived** — the **Archived** button (or the archived count) lists archived sessions, which the default list hides (cron runs archived by `cron.archive_chat_sessions` land here). Each row can be archived / restored and pinned; pinned sessions stay on top.
+- **Overview** — when gateway platforms are configured, the Overview tab shows their status and the newest sessions (live ones included); click one to open it in the history.
 - **Expand** — click a session to load its full message history. Messages are color-coded by role (user, assistant, system, tool) and rendered as Markdown with syntax highlighting.
 - **Tool calls** — assistant messages with tool calls show collapsible blocks with the function name and JSON arguments.
 - **Rename** — set or clear a session's title inline (pencil icon).
 - **Export** — download a session (metadata + full message history) as JSON (download icon).
-- **Prune** — the header "Prune old sessions" button deletes ended sessions older than N days.
+- **Prune** — the header "Prune old sessions" button deletes ENDED sessions whose last activity is older than N days (at least 1); open and archived sessions are kept.
+- **Limpiar** — filtered cleanup by channel, model, age or size with a dry-run preview first; sessions with activity in the last 5 minutes are never touched.
 - **Delete** — remove a session and its message history with the trash icon.
 
 ![Sessions admin page — stats bar, prune, and per-row rename / export / delete](/img/dashboard/admin-sessions.png)
 
 ### Logs
 
-View agent, gateway, and error log files with filtering and live tailing.
+View the selected profile's log files with filtering and live tailing.
 
-- **File** — switch between `agent`, `errors`, and `gateway` log files
-- **Level** — filter by log level: ALL, DEBUG, INFO, WARNING, or ERROR
-- **Component** — filter by source component: all, gateway, agent, tools, cli, or cron
+- **File** — `agent`, `errors` and `gateway` always, plus `gui` (the dashboard itself), `mcp` (MCP server stderr), `desktop`, `update` and `handoff` once they exist
+- **Level** — filter by minimum log level: ALL, DEBUG, INFO, WARNING, or ERROR
+- **Component** — filter by source component (all, agent, cli, cron, gateway, gui, tools)
+- **Filter** — free-text filter over the lines
+- **Download** — save the whole log file (the view shows at most 500 lines)
 - **Lines** — choose how many lines to display (50, 100, 200, or 500)
-- **Auto-refresh** — toggle live tailing that polls for new log lines every 5 seconds
+- **Auto-refresh** — toggle live tailing that polls for new log lines every 5 seconds; it follows the tail only while you are scrolled to the bottom
 - **Color-coded** — log lines are colored by severity (red for errors, yellow for warnings, dim for debug)
 
 ### Analytics
@@ -332,6 +337,8 @@ Create and manage scheduled cron jobs that run agent prompts on a recurring sche
 - **Pause / Resume** — toggle a job between active and paused states
 - **Edit** — open a pre-filled modal to change a job's prompt, schedule, name, or delivery target
 - **Trigger now** — immediately execute a job outside its normal schedule
+- **Run history** — the history button lists a job's recent runs (time, state, duration, messages, preview); an agent run expands to its transcript
+- **Profile** — the list starts on the profile selected in the dashboard switcher ("All profiles" is in the filter); new jobs and blueprints are created in the filtered profile
 - **Delete** — permanently remove a cron job
 
 ### Profiles
@@ -579,7 +586,26 @@ without the route) and does not retry it on every sidebar refresh.
 
 ### GET /api/logs
 
-Returns log lines. Query parameters: `file` (agent/errors/gateway), `lines` (count), `level`, `component`.
+Returns the tail of a log file for the selected `profile`. Query parameters: `file` (any name
+`clawk logs` knows: agent, errors, gateway, gui, desktop, update, handoff, mcp — `update` and
+`handoff` are read from the root home), `lines` (1–500), `level` (minimum level), `component`,
+`search` (case-insensitive substring).
+
+### GET /api/logs/files
+
+Every log file `clawk logs` knows, with `exists`, `size` and `mtime` for the selected `profile`,
+plus the `components` the tail endpoint accepts.
+
+### GET /api/logs/download
+
+The whole log file named by `file` as an attachment (the tail endpoint caps at 500 lines).
+
+### POST /api/sessions/cleanup
+
+Filtered cleanup to free space. Body: any of `source`, `model` (substring), `older_than_days`,
+`max_messages` (they combine), `profile`, and `dry_run` (default `true`, returns the match count).
+Sessions with activity in the last 5 minutes, or guarded by a running turn, are never deleted.
+A non-dry-run call follows the same explicit-`profile` rule as prune and bulk-delete.
 
 ### GET /api/analytics/usage
 
@@ -604,6 +630,12 @@ Resumes a paused cron job.
 ### POST /api/cron/jobs/\{job_id\}/trigger
 
 Immediately triggers a cron job outside its schedule.
+
+### GET /api/cron/jobs/\{job_id\}/runs
+
+A job's recent runs, newest first: agent runs as `source: "cron"` sessions (open their transcript
+with the session endpoints) and script-only fires as `source: "cron_output"` rows. The Cron page
+shows them under each job's history button.
 
 ### DELETE /api/cron/jobs/\{job_id\}
 
