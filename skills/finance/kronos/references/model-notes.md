@@ -67,7 +67,7 @@ libraries, which is why setup installs torch in a separate step from that index.
 | `--horizon` | 10 (backtest 5) | candles ahead; cost and error grow with distance |
 | `--samples` | 8 (backtest 4) | sampled paths for the band; cost grows linearly |
 | `--threads` | all cores | cap it when the VPS also serves the gateway |
-| `--calendar` | `auto` | `weekdays`, `24x7` (crypto), `sessions` (intraday stocks) |
+| `--calendar` | `auto` | `nyse` (holidays, early closes; what `auto` picks without weekend bars), `24x7` (crypto), `weekdays`/`sessions` (no exchange holidays) |
 | `--timeout` | 1800 s | abort a run that takes longer |
 
 A scheduled routine over a watchlist runs one forecast per symbol (about a minute each on
@@ -85,3 +85,13 @@ A scheduled routine over a watchlist runs one forecast per symbol (about a minut
 
 These are why `kronos_backtest.py` exists and why the procedure runs it before presenting a
 forecast as useful.
+
+## Baselines in the backtest
+
+`kronos_backtest.py` scores every origin against two baselines fitted on the same window:
+"repeat the last close" and exponential smoothing on the closes. The ETS forecast comes from
+statsforecast's `AutoETS(season_length=1)` (Apache-2.0, picks the error/trend form by AICc) when
+`kronos_setup.py` could install it, else from a built-in additive Holt fit (simple smoothing or a
+damped trend, grid-searched on one-step error); the output names the engine. `adds_value`
+requires a 2%+ lower MAE than both and a direction hit rate of at least 50%, so the verdict is
+never looser than the old naive-only rule, and automatic buys need it (learning-loop.md).
