@@ -50,8 +50,6 @@ from typing import Any, Dict, Optional
 
 _log = logging.getLogger("clawk_cli.web_server")
 router = APIRouter()
-# Mounted separately by web_server so /api/logs keeps its original route-table position.
-logs_router = APIRouter()
 
 # Late-bound so a test's monkeypatch on the owning module wins at call time.
 _collect_profile_gateway_topology_cached = late(
@@ -1051,60 +1049,3 @@ async def run_debug_share_endpoint(
         "redacted": result.redacted,
         "auto_delete_seconds": result.auto_delete_seconds,
     }
-
-
-@logs_router.get("/api/logs")
-async def get_logs(
-    file: str = "agent",
-    lines: int = 100,
-    level: Optional[str] = None,
-    component: Optional[str] = None,
-    search: Optional[str] = None,
-    profile: Optional[str] = None,
-):
-    from clawk_cli.logs import _read_tail, LOG_FILES
-
-    log_name = LOG_FILES.get(file)
-    if not log_name:
-        raise HTTPException(status_code=400, detail=f"Unknown log file: {file}")
-    with _config_profile_scope(profile):
-        log_path = get_clawk_home() / "logs" / log_name
-    if not log_path.exists():
-        return {"file": file, "lines": []}
-
-    try:
-        from clawk_logging import COMPONENT_PREFIXES
-    except ImportError:
-        COMPONENT_PREFIXES = {}
-    # "ALL"/"all"/empty → no filter (None, not (): _matches_filters treats an empty tuple as
-    # "must match a prefix", which silently drops every line).
-    min_level = level if level and level.upper() != "ALL" else None
-    comp_prefixes = None
-    if component and component.lower() != "all":
-        comp_prefixes = COMPONENT_PREFIXES.get(component)
-        if comp_prefixes is None:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unknown component: {component}. "
-                f"Available: {', '.join(sorted(COMPONENT_PREFIXES))}",
-            )
-
-    def _load_logs():
-        result = _read_tail(
-            log_path,
-            min(lines, 500) if not search else 2000,
-            has_filters=bool(min_level or comp_prefixes or search),
-            min_level=min_level,
-            component_prefixes=comp_prefixes,
-        )
-        # _read_tail doesn't support free-text search, so post-filter (case-insensitive
-        # substring) here and trim to the requested line count afterward.
-        if search:
-            needle = search.lower()
-            result = [line for line in result if needle in line.lower()][
-                -min(lines, 500) :
-            ]
-        return result
-
-    result = await asyncio.to_thread(_load_logs)
-    return {"file": file, "lines": result}

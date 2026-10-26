@@ -2669,6 +2669,7 @@ from clawk_cli.web_routers import (
     files as _files_routes,
     git as _git_routes,
     local_models as _local_models_routes,
+    logs as _logs_routes,
     status as _status_routes,
     actions as _actions_routes,
     audio as _audio_routes,
@@ -2711,7 +2712,7 @@ app.include_router(_config_env_routes.router)
 app.include_router(_messaging_routes.router)
 app.include_router(_oauth_routes.router)
 app.include_router(_sessions_routes.manage_router)
-app.include_router(_status_routes.logs_router)
+app.include_router(_logs_routes.router)
 app.include_router(_cron_routes.router)
 app.include_router(_mcp_routes.router)
 app.include_router(_ops_routes.router)
