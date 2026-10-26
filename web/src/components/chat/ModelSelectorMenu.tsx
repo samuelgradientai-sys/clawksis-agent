@@ -120,14 +120,14 @@ export function ModelSelectorMenu({
         onClick={() => setOpen((v) => !v)}
         disabled={disabled}
         title={disabled ? "Esperá a que termine la respuesta para cambiar de modelo" : "Cambiar de modelo"}
-        className="flex max-w-[180px] items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+        className="flex min-h-11 max-w-[130px] items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent sm:min-h-0 sm:max-w-[180px]"
       >
         <span className="truncate font-medium">{label}</span>
         <ChevronDown className="size-3 shrink-0 opacity-70" />
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 z-50 mb-2 flex max-h-96 w-80 flex-col overflow-hidden rounded-lg border border-border bg-popover shadow-xl">
+        <div className="absolute bottom-full left-0 z-50 mb-2 flex max-h-96 w-80 max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-lg border border-border bg-popover shadow-xl">
           {/* Buscador + re-detectar */}
           <div className="flex items-center gap-2 border-b border-border px-2.5 py-2">
             <Search className="size-3.5 shrink-0 text-muted-foreground" />
@@ -136,7 +136,7 @@ export function ModelSelectorMenu({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar modelo…"
-              className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none"
+              className="w-full bg-transparent text-base text-foreground placeholder:text-muted-foreground outline-none sm:text-xs"
             />
             <button
               type="button"

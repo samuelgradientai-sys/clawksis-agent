@@ -114,6 +114,9 @@ export function sanitizeSessionLabel(
   cleaned = cleaned
     .replace(IMAGE_INTERNAL_NOTE_RE, "")
     .replace(IMAGE_INTERNAL_HINT_RE, "")
+    // A title is plain text: drop markdown emphasis/code marks a model left in.
+    .replace(/(\*\*|\*|`)(\S(?:[^\n]*?\S)?)\1/g, "$2")
+    .replace(/^#{1,6}\s+/, "")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -167,6 +170,8 @@ const SOURCE_LABELS: Record<string, string> = {
 export function useSessions(
   sendRpc: RpcSender,
   ready: boolean,
+  /** Bumped by the gateway's sessions.changed / session.title events. */
+  revision = 0,
 ): UseSessionsResult {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [projects, setProjects] = useState<ChatProject[]>([]);
@@ -181,7 +186,10 @@ export function useSessions(
     setError(null);
     try {
       const res = await fetchJSON<{ sessions?: SessionSummary[] }>(
-        `/api/sessions?limit=${SESSION_LIST_LIMIT}&order=recent`,
+        // Opening the Terminal tab starts an empty session each time; listing
+        // those buried real chats (and boot opened the newest, empty one). A new
+        // chat still shows while open through its optimistic row.
+        `/api/sessions?limit=${SESSION_LIST_LIMIT}&order=recent&min_messages=1`,
       );
       const list = res?.sessions ?? [];
       list.sort((a, b) => (b.started_at || 0) - (a.started_at || 0));
@@ -216,6 +224,14 @@ export function useSessions(
     void refresh();
     void refreshProjects();
   }, [ready, refresh, refreshProjects]);
+
+  // Titles and new or removed sessions arrive as gateway events; a turn emits
+  // several in a row, so one refresh after they settle is enough.
+  useEffect(() => {
+    if (!ready || revision === 0) return;
+    const id = window.setTimeout(() => void refresh(), 400);
+    return () => window.clearTimeout(id);
+  }, [ready, revision, refresh]);
 
   const createSession = useCallback(async (projectId: string | null = null): Promise<CreatedChatSession | null> => {
     if (!ready) return null;

@@ -10,7 +10,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Paperclip,
-  Mic,
   ArrowUp,
   Copy,
   RotateCw,
@@ -28,8 +27,6 @@ import {
   Clock,
   Wrench,
   FileText,
-  Zap,
-  Gauge,
 } from "lucide-react";
 
 import { MediaAttachment } from "@/components/MediaAttachment";
@@ -37,9 +34,15 @@ import { Markdown } from "../Markdown";
 import {
   useChatGateway,
   type ChatMessage,
+  type ComposerPrefill,
   type ConnectionStatus,
   type ToolCall,
 } from "./hooks/useChatGateway";
+import { lastUserIsSlash } from "./hooks/chatTranscript";
+import { localSlashAction, type LocalSlashAction } from "./chatLocalSlash";
+import { ReasoningSelector } from "./ReasoningSelector";
+import { ServerRequestDialog } from "./ServerRequestDialog";
+import { ComposerMicButton } from "./ComposerMicButton";
 import { useMessageQueue, type QueuedMessage } from "./hooks/useMessageQueue";
 import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useSessions, deriveTitle, type RpcSender } from "./hooks/useSessions";
@@ -51,110 +54,17 @@ import { useVoiceInput } from "./hooks/useVoiceInput";
 import { useImageAttachments } from "./hooks/useImageAttachments";
 import { sanitizeSessionLabel } from "./hooks/useSessions";
 import { useCommandHistory } from "./hooks/useCommandHistory";
-import { SessionSidebar } from "./SessionSidebar";
+import { ChatSessionDrawer } from "./ChatSessionDrawer";
+import { PHONE_QUERY, useMediaQuery } from "./chatDrawerStore";
 import { ModelSelectorMenu } from "./ModelSelectorMenu";
 import { ChatSidePanel } from "./ChatSidePanel";
-import { ChatViewTabs } from "./ChatViewTabs";
+import { ChatHeader } from "./ChatHeader";
+import { headerUsage } from "./chatUsage";
 import { toggleSidePanel, useSidePanel } from "./sidePanelStore";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SlashPopover, type SlashPopoverHandle } from "@/components/SlashPopover";
 import { ModelPickerDialog } from "@/components/ModelPickerDialog";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { GatewayClient } from "@/lib/gatewayClient";
-
-interface ChatHeaderProps {
-  status: ConnectionStatus;
-  model: string | null;
-  modelProvider: string | null;
-  sessionId: string | null;
-  tokensUsed: number;
-  tokensMax: number;
-  /** Título de la conversación que se está viendo. */
-  title?: string;
-  /** Click handler para abrir el popover de uso de tokens */
-  onTokensClick?: () => void;
-  /** Ref del botón de tokens para anclar el popover */
-  tokensRef?: React.RefObject<HTMLButtonElement | null>;
-}
-
-function ChatHeader({
-  status,
-  model,
-  modelProvider,
-  sessionId,
-  tokensUsed,
-  tokensMax,
-  title,
-  onTokensClick,
-  tokensRef,
-}: ChatHeaderProps) {
-  const statusColor =
-    status === "connected"
-      ? "bg-success"
-      : status === "connecting"
-        ? "bg-warning animate-pulse"
-        : "bg-destructive";
-
-  const shortSession = sessionId ? sessionId.slice(0, 8) : "—";
-  const tokensLabel =
-    tokensMax > 0
-      ? tokensUsed.toLocaleString() + "/" + (tokensMax / 1000).toFixed(1) + "k tokens"
-      : tokensUsed.toLocaleString() + " tokens";
-
-  const tokenPercent =
-    tokensMax > 0
-      ? Math.min(100, Math.round((tokensUsed / tokensMax) * 100))
-      : null;
-
-  return (
-    <div className="flex items-center justify-between border-b border-white/10 bg-background/28 px-4 py-3 backdrop-blur-xl">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className={"size-2 rounded-full shrink-0 " + statusColor} />
-        <span className="truncate text-sm font-semibold text-foreground">
-          {title || (status === "connecting" ? "Conectando..." : "Nueva conversación")}
-        </span>
-        {model && (
-          <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground sm:flex">
-            <span>·</span>
-            <span className="max-w-[180px] truncate">
-              {model}
-              {modelProvider ? " · " + modelProvider : ""}
-            </span>
-          </span>
-        )}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-1.5">
-        <button
-          type="button"
-          ref={tokensRef}
-          onClick={onTokensClick}
-          disabled={!onTokensClick}
-          title={"Ver desglose de uso de tokens · sesión " + shortSession}
-          className="clawk-liquid-chip hidden md:flex items-center gap-2 rounded-2xl border border-[#6C4FD6]/35 bg-[#6C4FD6]/10 px-3.5 py-2 text-xs text-foreground shadow-sm shadow-[#6C4FD6]/10 transition-all hover:border-[#8B6DFF]/70 hover:bg-[#6C4FD6]/20 disabled:cursor-default disabled:opacity-60"
-          aria-label="Abrir menú de uso de tokens"
-        >
-          <Brain className="size-3.5 text-[#6C4FD6]" />
-          <span className="font-medium">Uso de tokens</span>
-          <span className="hidden text-muted-foreground lg:inline">·</span>
-          <span className="font-mono text-foreground/90">{tokensLabel}</span>
-          {tokenPercent !== null && (
-            <span className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-              {tokenPercent}%
-            </span>
-          )}
-          <ChevronRight className="size-3 rotate-90 text-muted-foreground" />
-        </button>
-
-        {/* Pestañas de vista junto a "Uso de tokens": el chat moderno gana la
-            altura de la banda que antes vivía arriba (ChatRouter). */}
-        <ChatViewTabs />
-      </div>
-    </div>
-  );
-}
-
-
 
 type ProjectSettingsProject = {
   id: string;
@@ -639,138 +549,6 @@ function extractLocalMedia(content: string): {
   return { text: kept.join("\n"), media };
 }
 
-// ── Modo de respuesta: Rápida / Normal / Pensar ─────────────────────────────
-// Controla agent.reasoning_effort vía config.set (aplica en vivo al agente de
-// la sesión): para preguntas simples no quema razonamiento largo; para tareas
-// difíciles piensa a fondo. Persistido en localStorage.
-const REASONING_MODES = [
-  {
-    value: "minimal",
-    label: "Rápida",
-    icon: Zap,
-    hint: "Respuesta directa, sin razonamiento largo — ideal para preguntas simples",
-  },
-  {
-    value: "medium",
-    label: "Normal",
-    icon: Gauge,
-    hint: "Equilibrado (por defecto)",
-  },
-  {
-    value: "high",
-    label: "Pensar",
-    icon: Brain,
-    hint: "Razonamiento profundo para tareas difíciles",
-  },
-] as const;
-
-const REASONING_STORAGE_KEY = "clawksis-reasoning-mode";
-
-function ReasoningSelector({
-  sendRpc,
-  sessionId,
-  disabled,
-}: {
-  sendRpc: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
-  sessionId: string | null;
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<string>(() => {
-    try {
-      return (
-        window.localStorage.getItem(REASONING_STORAGE_KEY) || "medium"
-      );
-    } catch {
-      return "medium";
-    }
-  });
-  const current =
-    REASONING_MODES.find((m) => m.value === mode) ?? REASONING_MODES[1];
-  const CurrentIcon = current.icon;
-
-  const apply = async (value: string) => {
-    setMode(value);
-    setOpen(false);
-    try {
-      window.localStorage.setItem(REASONING_STORAGE_KEY, value);
-    } catch {
-      /* sin persistencia local: igual se aplica al backend */
-    }
-    try {
-      await sendRpc("config.set", {
-        key: "reasoning",
-        value,
-        session_id: sessionId,
-      });
-    } catch (err) {
-      console.warn("[ReasoningSelector] config.set reasoning failed", err);
-    }
-  };
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
-        title={current.hint}
-        aria-label={"Modo de respuesta: " + current.label}
-        className="flex items-center gap-1 rounded-lg px-1.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <CurrentIcon className="size-4" />
-        <span className="hidden sm:inline">{current.label}</span>
-        <ChevronDown className="size-3 opacity-60" />
-      </button>
-
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Cerrar"
-            className="fixed inset-0 z-20 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute bottom-full left-0 z-30 mb-1 w-64 overflow-hidden rounded-md border border-border bg-popover p-1 text-xs text-popover-foreground shadow-lg">
-            {REASONING_MODES.map((m) => {
-              const Icon = m.icon;
-              return (
-                <button
-                  key={m.value}
-                  type="button"
-                  onClick={() => void apply(m.value)}
-                  className={
-                    "flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-muted " +
-                    (m.value === mode ? "bg-[#6C4FD6]/15" : "")
-                  }
-                >
-                  <Icon
-                    className={
-                      "mt-0.5 size-3.5 shrink-0 " +
-                      (m.value === mode
-                        ? "text-[#6C4FD6]"
-                        : "text-muted-foreground")
-                    }
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium">{m.label}</span>
-                    <span className="block text-[10px] text-muted-foreground">
-                      {m.hint}
-                    </span>
-                  </span>
-                  {m.value === mode && (
-                    <span className="text-[10px] text-[#6C4FD6]">✓</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
   const [expanded, setExpanded] = useState(false);
   const isRunning = toolCall.status === "running";
@@ -874,7 +652,7 @@ function MessageActions({
   };
 
   return (
-    <div className="flex items-center gap-3 opacity-0 transition-opacity group-hover:opacity-100">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100">
       <button
         type="button"
         onClick={handleCopy}
@@ -1193,7 +971,7 @@ const MessageBubble = memo(function MessageBubble({
           <>
             <div
               className={
-                "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed text-foreground " +
+                "max-w-[85%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed text-foreground " +
                 (isCommand
                   ? "border border-[#6C4FD6]/30 bg-[#6C4FD6]/10 font-mono"
                   : "bg-muted/50")
@@ -1218,7 +996,7 @@ const MessageBubble = memo(function MessageBubble({
   const showSummary = !message.streaming && hasSteps && !stepsOpen;
 
   return (
-    <div className="clawk-liquid-message group my-2 flex gap-3 rounded-3xl border border-white/10 bg-background/22 p-4 shadow-sm shadow-black/10 backdrop-blur-sm transition-colors hover:border-[#6C4FD6]/25 hover:bg-background/30">
+    <div className="clawk-liquid-message group my-2 flex gap-2.5 rounded-3xl border border-white/10 bg-background/22 p-3 sm:gap-3 sm:p-4 shadow-sm shadow-black/10 backdrop-blur-sm transition-colors hover:border-[#6C4FD6]/25 hover:bg-background/30">
       <div
         className={
           "flex size-7 shrink-0 items-center justify-center rounded-full " +
@@ -1443,6 +1221,9 @@ interface ComposerProps {
   onRemoveCitation: (id: string) => void;
   onClearCitations: () => void;
   buildPromptWithQuotes: (text: string) => string;
+  /** Text to drop into the composer (`/undo` hands back the removed turn). */
+  prefill: ComposerPrefill | null;
+  reasoningEffort?: string;
 }
 
 function Composer({
@@ -1459,14 +1240,23 @@ function Composer({
   onRemoveCitation,
   onClearCitations,
   buildPromptWithQuotes,
+  prefill,
+  reasoningEffort,
 }: ComposerProps) {
   const [value, setValue] = useState("");
+  // A new prefill replaces the draft once (state adjusted during render, not in an effect).
+  const [prefillSeq, setPrefillSeq] = useState(prefill?.seq);
+  if (prefill && prefill.seq !== prefillSeq) {
+    setPrefillSeq(prefill.seq);
+    setValue(prefill.text);
+  }
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Historial de inputs (↑/↓ tipo terminal) + flag para reposicionar el caret.
   const history = useCommandHistory();
   const caretToEndRef = useRef(false);
   const voice = useVoiceInput();
+  const phone = useMediaQuery(PHONE_QUERY);
   // Slash-command autocomplete (mismo backend que el terminal: complete.slash).
   const slashRef = useRef<SlashPopoverHandle>(null);
   const slashGw = useMemo(
@@ -1628,7 +1418,7 @@ function Composer({
   };
 
   return (
-    <div className="border-t border-white/10 bg-background/35 px-4 py-4 backdrop-blur-xl">
+    <div className="border-t border-white/10 bg-background/35 px-2.5 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-4 sm:py-4">
       <div
         className="relative mx-auto w-full max-w-4xl"
         onDragOver={(e) => {
@@ -1695,7 +1485,7 @@ function Composer({
                 type="button"
                 onClick={() => removeImage(img.id)}
                 aria-label={"Quitar " + img.name}
-                className="absolute -right-1.5 -top-1.5 rounded-full bg-destructive p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                className="absolute -right-1.5 -top-1.5 rounded-full bg-destructive p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100"
               >
                 <X className="size-3" />
               </button>
@@ -1743,7 +1533,7 @@ function Composer({
       />
 
       {/* Composer principal — layout tipo Claude: textarea arriba, controles abajo */}
-      <div className="clawk-liquid-composer relative rounded-3xl border border-white/10 bg-background/60 px-4 py-3 shadow-2xl shadow-black/25 ring-1 ring-white/5 backdrop-blur-2xl transition-all duration-200 focus-within:border-[#8B6DFF]/70 focus-within:shadow-[#6C4FD6]/20">
+      <div className="clawk-liquid-composer relative rounded-3xl border border-white/10 bg-background/60 px-3 py-2.5 sm:px-4 sm:py-3 shadow-2xl shadow-black/25 ring-1 ring-white/5 backdrop-blur-2xl transition-all duration-200 focus-within:border-[#8B6DFF]/70 focus-within:shadow-[#6C4FD6]/20">
         {/* Autocomplete de slash commands (/) — flota sobre el composer. */}
         <SlashPopover ref={slashRef} input={value} gw={slashGw} onApply={setValue} />
         <textarea
@@ -1760,11 +1550,14 @@ function Composer({
               ? "Preparando conversación…"
               : disabled
                 ? "Esperando conexión..."
-                : "Mensaje a Clawksis... (Shift+Enter para nueva línea)"
+                : phone
+                  ? "Mensaje a Clawksis…"
+                  : "Mensaje a Clawksis... (Shift+Enter para nueva línea)"
           }
+          enterKeyHint="send"
           rows={1}
           disabled={disabled}
-          className="w-full resize-none bg-transparent px-1 text-[15px] leading-7 text-foreground placeholder:text-muted-foreground/70 outline-none disabled:opacity-50"
+          className="w-full resize-none bg-transparent px-1 text-base leading-7 text-foreground placeholder:text-muted-foreground/70 outline-none disabled:opacity-50 sm:text-[15px]"
         />
         <div className="mt-2.5 flex items-center gap-1">
           <button
@@ -1773,7 +1566,7 @@ function Composer({
             disabled={disabled}
             aria-label="Adjuntar archivo"
             title="Adjuntar documento o imagen (también podés pegar o arrastrar)"
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            className="flex size-11 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent sm:size-8 sm:rounded-lg"
           >
             <Paperclip className="size-4" />
           </button>
@@ -1787,41 +1580,12 @@ function Composer({
           <ReasoningSelector
             sendRpc={sendRpc}
             sessionId={sessionId}
+            reasoningEffort={reasoningEffort}
             disabled={disabled || busy}
           />
 
           <div className="ml-auto flex items-center gap-1">
-            <button
-              type="button"
-              onClick={handleMic}
-              disabled={disabled || !voice.supported || voice.transcribing}
-              aria-label={
-                voice.listening ? "Detener grabación" : "Dictar por voz"
-              }
-              title={
-                !voice.supported
-                  ? "Tu navegador no soporta dictado por voz"
-                  : voice.transcribing
-                    ? "Transcribiendo…"
-                    : voice.listening
-                      ? "Detener (hablá y se transcribe en vivo)"
-                      : voice.live
-                        ? "Dictar por voz — transcripción en vivo"
-                        : "Dictar por voz — se transcribe al soltar"
-              }
-              className={
-                "rounded-lg p-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent " +
-                (voice.listening
-                  ? "bg-destructive/15 text-destructive animate-pulse"
-                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground")
-              }
-            >
-              {voice.transcribing ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Mic className="size-4" />
-              )}
-            </button>
+            <ComposerMicButton voice={voice} disabled={disabled} onClick={handleMic} />
 
             {/* Detener el turno actual (la cola se mantiene y drena después). */}
             {busy && (
@@ -1830,7 +1594,7 @@ function Composer({
                 onClick={onInterrupt}
                 aria-label="Detener respuesta"
                 title="Detener la respuesta actual"
-                className="flex size-8 items-center justify-center rounded-lg bg-destructive text-white hover:bg-destructive/80 transition-colors"
+                className="flex size-11 items-center justify-center rounded-xl bg-destructive text-white hover:bg-destructive/80 transition-colors sm:size-8 sm:rounded-lg"
               >
                 <Square className="size-3.5 fill-current" />
               </button>
@@ -1843,7 +1607,7 @@ function Composer({
               aria-label={busy ? "Agregar a la cola" : "Enviar mensaje"}
               title={busy ? "Agregar a la cola" : "Enviar mensaje"}
               className={
-                "flex size-8 items-center justify-center rounded-lg transition-colors " +
+                "flex size-11 items-center justify-center rounded-xl transition-colors sm:size-8 sm:rounded-lg " +
                 (canSend
                   ? "bg-[#6C4FD6] text-white hover:bg-[#5a40c2]"
                   : "bg-muted/40 text-muted-foreground cursor-not-allowed")
@@ -1930,7 +1694,7 @@ function QueuedBubble({
           onClick={onCancel}
           aria-label="Cancelar mensaje en cola"
           title="Cancelar"
-          className="mt-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+          className="mt-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 [@media(hover:none)]:opacity-100"
         >
           <X className="size-3.5" />
         </button>
@@ -1987,6 +1751,7 @@ export default function ChatModern() {
     messages,
     busy,
     sendMessage,
+    sendQueued,
     interrupt,
     errorMessage,
     liveStatus,
@@ -1997,6 +1762,10 @@ export default function ChatModern() {
     resuming,
     regenerateLast,
     editAndResubmit,
+    sessionsRevision,
+    serverRequests,
+    answerServerRequest,
+    prefill,
   } = useChatGateway();
 
   const {
@@ -2012,7 +1781,7 @@ export default function ChatModern() {
     archiveProject,
     moveSessionToProject,
     refresh: refreshSessions,
-  } = useSessions(sendRpc, readyForRpc);
+  } = useSessions(sendRpc, readyForRpc, sessionsRevision);
 
   const {
     sessionUsage,
@@ -2037,10 +1806,6 @@ export default function ChatModern() {
   // picker de /model y los modales de confirmación destructivos se cuelgan, así
   // que los resolvemos con UI nativa de React.
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
-  const [destructiveConfirm, setDestructiveConfirm] = useState<{
-    command: string;
-    raw: string;
-  } | null>(null);
   // Adapter mínimo sobre sendRpc para los diálogos que esperan un GatewayClient.
   const gwForDialogs = useMemo(
     () =>
@@ -2125,7 +1890,8 @@ export default function ChatModern() {
   // mientras el body todavía pertenece a otra sesión viva del gateway.
   useEffect(() => {
     if (didAutoOpenSidebarTopRef.current) return;
-    if (!readyForRpc || sessionsLoading || resuming || busy) return;
+    // Wait for the boot resume to land, or this races it with a second resume.
+    if (!readyForRpc || sessionsLoading || resuming || busy || !session.sessionId) return;
     if (!newestListedSessionId) return;
 
     didAutoOpenSidebarTopRef.current = true;
@@ -2142,6 +1908,7 @@ export default function ChatModern() {
     newestListedSessionId,
     activeSessionKey,
     switchSession,
+    session.sessionId,
   ]);
 
   useEffect(() => {
@@ -2317,7 +2084,7 @@ export default function ChatModern() {
     busy,
     ready: readyForRpc,
     hasSession: !!session.sessionId,
-    send: sendMessage,
+    send: sendQueued,
   });
 
   const isConnecting = status === "connecting" || status === "idle";
@@ -2345,38 +2112,15 @@ export default function ChatModern() {
   ) => {
     const trimmed = text.trim();
 
-    // Comandos interactivos que cuelgan el worker headless (sin TTY): los
-    // resolvemos con UI nativa de React en vez de mandarlos al worker.
-    if (trimmed.startsWith("/")) {
-      const base = trimmed.slice(1).split(/\s+/)[0].toLowerCase();
-      const rest = trimmed.slice(1 + base.length).trim();
-      // /model SIN args → picker React. Con args ("/model opus") va directo al
-      // worker (es un config.set, funciona headless).
-      if (base === "model" && !rest) {
-        setModelPickerOpen(true);
-        return;
-      }
-      // Destructivos → confirmación React; al confirmar añadimos el token de
-      // skip ("now") para que el worker no abra su propio modal y cuelgue.
-      if (
-        (base === "new" || base === "reset" || base === "clear") &&
-        !/(^|\s)(now|--yes|-y)(\s|$)/i.test(rest)
-      ) {
-        setDestructiveConfirm({ command: base, raw: trimmed });
-        return;
-      }
-    }
-
-    // /stop con un turno corriendo = interrupción INMEDIATA (mismo RPC que el
-    // botón rojo). El /stop del backend vía slash.exec no corta un turno en
-    // vuelo — por eso "seguía de largo" tras pedirle parar. La cola se vacía
-    // TAMBIÉN: si quedara un mensaje encolado, el drenado lo dispararía
-    // ~700ms después del interrupt y el agente "seguiría de largo" con él.
-    if (busy && (trimmed === "/stop" || trimmed === "/interrupt")) {
-      queue.clear();
-      interrupt();
-      return;
-    }
+    // Slash commands this page answers itself (chatLocalSlash.ts). /stop also
+    // empties the queue, or the drain would resume the turn ~700ms later.
+    const local: Record<LocalSlashAction, () => void> = {
+      "model-picker": () => setModelPickerOpen(true),
+      "new-chat": () => void handleNewChat(),
+      interrupt: handleInterrupt,
+    };
+    const action = localSlashAction(trimmed, busy);
+    if (action) return local[action]();
 
     // Cola estilo Telegram: si el agente está ocupado, encolamos el texto en
     // vez de mandarlo (se dispara solo al terminar el turno). NO se encolan:
@@ -2566,56 +2310,15 @@ export default function ChatModern() {
   // luego deriveTitle del listado (que tiene el title de la DB), y finalmente
   // null → el header muestra "Nueva conversación" como placeholder.
   const activeSession = sidebarSessions.find((s) => s.id === sidebarActiveSessionId);
-  const headerTokensUsed =
-    sessionUsage && sessionUsage.total > 0
-      ? sessionUsage.total
-      : session.tokensUsed;
-
-  const headerTokensMax =
-    sessionUsage && sessionUsage.context_max && sessionUsage.context_max > 0
-      ? sessionUsage.context_max
-      : session.tokensMax;
-
-  // popover-token-fallback-v1
-  // El header puede tener tokens restaurados aunque session.usage no tenga
-  // desglose persistido. En ese caso mostramos al menos el total en el popover.
-  const popoverSessionUsage =
-    sessionUsage ??
-    (headerTokensUsed > 0
-      ? {
-          model: session.model,
-          provider: session.modelProvider,
-          calls: 0,
-          input: 0,
-          output: 0,
-          cache_read: 0,
-          cache_write: 0,
-          reasoning: 0,
-          total: headerTokensUsed,
-          cost_usd: null,
-          cost_status: null,
-          context_used: headerTokensUsed,
-          context_max: headerTokensMax > 0 ? headerTokensMax : null,
-          context_percent:
-            headerTokensMax > 0
-              ? Math.min(100, Math.round((headerTokensUsed / headerTokensMax) * 100))
-              : null,
-          compressions: 0,
-        }
-      : null);
+  const { used: headerTokensUsed, max: headerTokensMax, popover: popoverSessionUsage } =
+    headerUsage(sessionUsage, session);
   const activeTitle =
     session.title ??
     (activeSession ? deriveTitle(activeSession) : null);
 
   // Si el último turno fue un slash command, no ofrecer "Regenerar" (re-correría
   // el comando y session.undo borraría el turno real previo).
-  const lastUserIsSlash = (() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "user")
-        return messages[i].content.trim().startsWith("/");
-    }
-    return false;
-  })();
+  const canRegenerateLast = !lastUserIsSlash(messages);
 
   return (
     <>
@@ -2649,25 +2352,16 @@ export default function ChatModern() {
         />
       )}
 
-      <ConfirmDialog
-        open={!!destructiveConfirm}
-        destructive
-        title={`/${destructiveConfirm?.command ?? ""} — descarta la conversación`}
-        description="Esto borra el estado de la conversación actual. ¿Continuar?"
-        confirmLabel="Continuar"
-        cancelLabel="Cancelar"
-        onCancel={() => setDestructiveConfirm(null)}
-        onConfirm={() => {
-          const c = destructiveConfirm;
-          setDestructiveConfirm(null);
-          if (c) sendMessage(`${c.raw} now`);
-        }}
+      <ServerRequestDialog
+        requests={serverRequests}
+        liveSessionId={session.sessionId}
+        onAnswer={answerServerRequest}
       />
 
       {/* Sin "recuadro": el chat se integra al dashboard y deja ver el fondo
           (backdrop) a través de un velo translúcido que mantiene legibilidad. */}
-      <div className="relative flex h-full min-h-0 flex-row overflow-hidden bg-background/25">
-      <SessionSidebar
+      <div className="clawk-chat-root relative flex h-full min-h-0 flex-row overflow-hidden bg-background/25">
+      <ChatSessionDrawer
         sessions={sidebarSessions}
         projects={projects}
         activeSessionId={sidebarActiveSessionId}
@@ -2686,8 +2380,8 @@ export default function ChatModern() {
         onRenameSession={renameSession}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="relative">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="relative z-30">
           <ChatHeader
             status={status}
             model={session.model}
@@ -2745,7 +2439,7 @@ export default function ChatModern() {
               queue.queued.length === 0 ? (
               <EmptyState />
             ) : (
-              <div className="mx-auto flex w-full max-w-4xl flex-col px-4 py-5 sm:px-6">
+              <div className="mx-auto flex w-full max-w-4xl flex-col px-3 py-4 sm:px-6 sm:py-5">
                 {messages.map((msg, idx) => {
                   const isLast =
                     idx === messages.length - 1 && msg.role === "assistant";
@@ -2754,7 +2448,7 @@ export default function ChatModern() {
                       <MessageBubble
                         message={msg}
                         onRegenerate={
-                          isLast && !lastUserIsSlash ? regenerateLast : undefined
+                          isLast && canRegenerateLast ? regenerateLast : undefined
                         }
                         canRegenerate={isLast && !busy}
                         onQuote={handleQuote}
@@ -2807,6 +2501,8 @@ export default function ChatModern() {
           onRemoveCitation={removeCitation}
           onClearCitations={clearCitations}
           buildPromptWithQuotes={buildPromptWithQuotes}
+          prefill={prefill}
+          reasoningEffort={session.reasoningEffort}
         />
       </div>
 

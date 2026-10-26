@@ -3365,6 +3365,7 @@ export interface SessionListRow {
 }
 export interface SessionMostRecentParams {
   profile?: string | null
+  min_messages?: number
 }
 export interface SessionMostRecentResult {
   session_id: string | null

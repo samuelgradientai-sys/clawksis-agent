@@ -425,7 +425,7 @@ function SessionItem({
         title="Opciones"
         className={
           "absolute right-1 top-1.5 rounded p-1 text-muted-foreground/60 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 " +
-          (menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100")
+          (menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100")
         }
       >
         <MoreHorizontal className="size-3.5" />

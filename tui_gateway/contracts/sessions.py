@@ -283,7 +283,9 @@ method(
 
 
 class SessionMostRecentParams(ProfileParams):
-    pass
+    # Skip sessions with fewer messages (the web chat passes 1: opening the
+    # Terminal tab starts an empty session each time).
+    min_messages: int = 0
 
 
 class SessionMostRecentResult(Result):

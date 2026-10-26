@@ -23,6 +23,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { useChatMode } from "./hooks/useChatMode";
+import { PHONE_QUERY, useMediaQuery } from "./chatDrawerStore";
 import {
   setSidePanel,
   toggleSidePanel,
@@ -93,7 +94,9 @@ export function ChatViewTabs() {
   // header (el panel le roba ~430px de ancho al chat). Solo aplica en modo
   // moderno: el panel NO se renderiza en modo terminal, así que ahí no roba
   // ancho y las 5 pestañas entran — colapsar sería gratuito y confuso.
-  const collapsed = mode === "modern" && sidePanel !== null;
+  // En un teléfono no entran nunca junto al título: siempre hamburguesa.
+  const phone = useMediaQuery(PHONE_QUERY);
+  const collapsed = phone || (mode === "modern" && sidePanel !== null);
 
   useEffect(() => {
     if (!collapsed) {
@@ -178,7 +181,8 @@ export function ChatViewTabs() {
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen((v) => !v)}
           title="Vistas del chat"
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-foreground/10 bg-background/40 px-2.5 text-xs text-foreground shadow-sm supports-[backdrop-filter]:backdrop-blur-xl"
+          aria-label="Vistas del chat"
+          className="inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-xl border border-foreground/10 bg-background/40 px-2.5 text-xs text-foreground shadow-sm supports-[backdrop-filter]:backdrop-blur-xl sm:h-9 sm:rounded-lg"
         >
           <Menu className="size-4" />
           {activeEntry && (
@@ -200,7 +204,7 @@ export function ChatViewTabs() {
                   setMenuOpen(false);
                   e.onSelect();
                 }}
-                className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
+                className={`flex min-h-11 w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors sm:min-h-0 sm:text-xs ${
                   e.active
                     ? "bg-[#6C4FD6]/20 text-foreground"
                     : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
