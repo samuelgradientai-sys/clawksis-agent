@@ -1,31 +1,45 @@
 ---
 name: kronos
 description: Forecast stocks/crypto; eToro data and limited trading.
-version: 0.2.0
+version: 0.3.0
 author: samuelgradientai-sys, Clawksis
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
   clawk:
-    tags: [Finance, Forecasting, Stocks, Crypto, eToro, Portfolio, Trading, Time Series]
+    tags: [Finance, Forecasting, Stocks, Crypto, eToro, Portfolio, Trading, Time Series, Technical Analysis]
     category: finance
     related_skills: [stocks]
+    dashboard:
+      title: Kronos
+      description: What Kronos bought, sold, refused and learned.
     config:
       - key: kronos.trading.enabled
-        description: "Let the agent place eToro orders on its own inside the limits below (off unless the user turns it on)"
+        description: "Let the agent place eToro orders inside the limits (off until the user turns it on)"
         default: false
       - key: kronos.trading.account
-        description: "eToro account the orders go to: demo (virtual money) or real"
+        description: "eToro account for orders: demo (virtual money) or real"
         default: demo
       - key: kronos.trading.max_order_usd
-        description: "Maximum USD a single buy may invest"
+        description: "Max USD per buy"
         default: 100
       - key: kronos.trading.max_daily_usd
-        description: "Maximum USD all buys of one UTC day may invest together"
+        description: "Max USD of all buys in one UTC day"
         default: 300
       - key: kronos.trading.max_orders_per_day
-        description: "Maximum number of buys per UTC day"
+        description: "Max buys per UTC day"
         default: 5
+      - key: kronos.goals.watchlist
+        description: "Symbols Kronos follows, comma-separated (e.g. AAPL, BTC)"
+      - key: kronos.goals.objective
+        description: "The user's goal (e.g. learn on demo, grow savings slowly)"
+      - key: kronos.goals.risk
+        description: "Risk tolerance: low, medium or high"
+        default: low
+      - key: kronos.goals.horizon
+        description: "Holding horizon: days, weeks or months"
+      - key: kronos.goals.schedule
+        description: "How often to analyze (e.g. weekdays at 10:30, every 1h)"
 required_environment_variables:
   - name: ETORO_API_KEY
     prompt: eToro public API key (sent as x-api-key)
@@ -41,66 +55,56 @@ required_environment_variables:
 
 # Kronos Skill
 
-Forecasts the next N candles (open/high/low/close/volume) of a stock, ETF, index or crypto
-with the open-source Kronos foundation model, running locally on CPU, and pulls candles or
-the user's open positions from eToro's Public API. When the user turns trading on, it can
-also buy (market, by USD amount, long-only, no leverage) and close positions on its own, inside
-hard limits that the script enforces: demo account by default, a per-order cap, and a daily cap
-on USD and number of buys. Kronos is a research model that often fails to beat "repeat the last
-close", so every forecast ships with a backtest-based honesty check and a not-financial-advice
-disclaimer; it is not a live-quote or fundamentals tool.
+Forecasts the next candles of a stock, ETF, index or crypto with the open-source Kronos model
+on CPU, adds technical indicators and position sizing, reads eToro candles and portfolios, and,
+when the user turns trading on, buys and closes eToro positions inside hard limits (demo account
+by default). It journals every forecast, scores it once the real price is known, turns misses
+into lessons that block automatic buys of symbols it keeps getting wrong, and publishes a
+dashboard of what it bought, sold and learned. Kronos is a research model that often fails to
+beat "repeat the last close"; this is not a live-quote, fundamentals or leverage tool.
 
 ## When to Use
 
-- "Forecast / predict AAPL for the next 10 days", "what might BTC do in the next 24 hours",
-  "next candles for EURUSD", "chart a forecast band for my stock".
-- Spanish triggers: "pronóstico de acciones", "predecir velas", "¿qué hará Tesla la próxima
-  semana?", "proyección del bitcoin", "predicción del precio", "analizar mi portafolio de
-  eToro", "conecta mi cuenta de eToro", "¿vale la pena este modelo para esta acción?".
-- Reviewing an eToro portfolio: positions, weights, unrealized P&L, copy-trading, then
-  forecasting the largest holdings.
-- Judging whether a forecast model adds value for one instrument (walk-forward backtest).
-- Trading on eToro when it is enabled: "compra 50 dólares de Apple", "vende mi posición de
-  Tesla", "opera automáticamente con Kronos", "cierra la mitad de BTC", "¿cuánto me queda del
-  límite de hoy?".
-- Not for: leverage, short selling, stop-loss edits or limit orders (not implemented; the user
-  does those in the eToro app), live quotes or company fundamentals (the optional `stocks`
-  skill covers Yahoo data).
+- "Forecast AAPL for the next 10 days", "what might BTC do in 24 hours", "RSI / MACD of Tesla",
+  "how much should I buy and where is the stop", "is this model any good for this stock?".
+- Spanish: "pronóstico de acciones", "¿qué hará Tesla la próxima semana?", "analiza el RSI",
+  "conecta mi cuenta de eToro", "analiza mi portafolio", "instalé Kronos, ¿y ahora?",
+  "analiza Apple cada día", "¿qué aprendió Kronos?", "muéstrame qué compró y vendió".
+- Setting goals and a recurring routine (watchlist, objective, risk, horizon, schedule).
+- Trading when enabled: "compra 50 dólares de Apple", "vende mi posición de Tesla", "opera
+  automáticamente con Kronos", "¿cuánto me queda del límite de hoy?".
+- Not for: leverage, short selling, limit orders, stop-loss edits in eToro (the user does
+  those in the app), live quotes or fundamentals (the optional `stocks` skill covers Yahoo).
 
 ## Prerequisites
 
-- **One-time runtime install** (`kronos_setup.py`): builds a dedicated venv under
-  `$CLAWK_HOME/kronos/` with CPU-only PyTorch, the upstream Kronos code pinned to a commit and
-  verified file by file (sha256, fail closed), and weights at pinned Hugging Face revisions.
-  About 1.2 GB of disk and a few minutes; needs pypi.org, download.pytorch.org,
-  codeload.github.com and huggingface.co. It never touches Clawksis' own environment.
-- **Hardware**: CPU is enough. Kronos-small (default) peaks around 1 GB of RAM, comfortable
-  on a 12 GB VPS; `mini` is lighter and faster; `base` is slow on CPU.
-- **Data**: at least 64 chronologically ordered bars, ideally 300–500, from eToro, a CSV
-  (timestamps/date, open, high, low, close, optional volume; `;`-delimited decimal-comma
-  exports work), or the `stocks` skill's `history` JSON.
-- **eToro (optional)**: `ETORO_API_KEY` (public API key) and `ETORO_USER_KEY` in the profile's
-  `.env`. Create them in eToro under Settings > Trading > API Key Management; a key belongs to
-  one environment (real or demo) and the user key is shown only once. If the user pastes keys
-  in chat, save them with `clawk config set ETORO_API_KEY ...` / `clawk config set
-  ETORO_USER_KEY ...` through `terminal`, never echo them back, then continue.
-- **Trading (optional, off by default)**: the user turns it on with `clawk config set
-  skills.config.kronos.trading.enabled true`. Orders go to the **demo** account unless the user
-  sets `skills.config.kronos.trading.account real`, and demo trading needs a key pair created in
-  the eToro demo (virtual) portfolio. Limits: `max_order_usd` (100), `max_daily_usd` (300) and
-  `max_orders_per_day` (5) under the same prefix. The loaded skill shows the current values in
-  its `[Skill config]` block. Only the user changes these settings; never change them yourself.
+- **Runtime, once** (`kronos_setup.py`): a dedicated venv under `$CLAWK_HOME/kronos/` with
+  CPU PyTorch, upstream Kronos code pinned and verified file by file, and pinned weights;
+  ~1.2 GB and a few minutes (pypi.org, download.pytorch.org, codeload.github.com,
+  huggingface.co). Kronos-small needs ~1 GB RAM. Indicators, risk and review need no runtime.
+- **Data**: 64+ ordered bars (300–500 ideal) from eToro, a CSV (timestamps/date, open, high,
+  low, close, optional volume) or the `stocks` skill's `history` JSON.
+- **eToro (optional)**: `ETORO_API_KEY` and `ETORO_USER_KEY` in the profile's `.env`, created
+  under Settings > Trading > API Key Management (one environment per key pair; the user key
+  is shown once). Keys pasted in chat: save them with `clawk config set ETORO_API_KEY ...` /
+  `clawk config set ETORO_USER_KEY ...` through `terminal`, never echo them back.
+- **Trading (off by default)**: only the user runs `clawk config set
+  skills.config.kronos.trading.enabled true`. Orders go to the demo account unless the user
+  sets `trading.account real`; limits `max_order_usd` (100), `max_daily_usd` (300),
+  `max_orders_per_day` (5). Never change these yourself.
+- **Goals** (`skills.config.kronos.goals.*`): saved by you when the user states them. The
+  loaded skill's `[Skill config]` block shows all current values.
 
 ## How to Run
 
-Run every script through the `terminal` tool with `python3` and the full path below
-(`${CLAWK_SKILL_DIR}` is expanded when the skill loads; shell variables do not persist
-between terminal calls). Forecast and backtest relaunch themselves inside the skill venv.
-Output is a chat-ready table by default; `--format json` for automation. Errors come back as
-JSON with `error` and `hint`.
+Run every script through `terminal` with `python3` and the full path
+(`${CLAWK_SKILL_DIR}` is expanded when the skill loads; shell variables do not persist between
+calls). Forecast and backtest relaunch themselves inside the skill venv. Output is chat-ready
+text; `--format json` (or `--json` on the newer scripts) for automation. Errors are JSON with
+`error` and `hint`.
 
 ```bash
-python3 ${CLAWK_SKILL_DIR}/scripts/kronos_setup.py --check
+python3 ${CLAWK_SKILL_DIR}/scripts/kronos_review.py --etoro
 python3 ${CLAWK_SKILL_DIR}/scripts/kronos_forecast.py --etoro AAPL --interval OneDay --horizon 10 --plot auto
 ```
 
@@ -110,123 +114,122 @@ python3 ${CLAWK_SKILL_DIR}/scripts/kronos_forecast.py --etoro AAPL --interval On
 # runtime (once per profile; idempotent)
 python3 ${CLAWK_SKILL_DIR}/scripts/kronos_setup.py --check
 python3 ${CLAWK_SKILL_DIR}/scripts/kronos_setup.py
-python3 ${CLAWK_SKILL_DIR}/scripts/kronos_setup.py --model mini --pin-on-first-use
 
 # eToro, read-only
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_data.py check
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_data.py search TSLA
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_data.py candles BTC --interval OneHour --count 500 --output btc_1h.csv
-python3 ${CLAWK_SKILL_DIR}/scripts/etoro_data.py portfolio --account real --format table
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_data.py portfolio --account demo --format table
 
-# trading (only when enabled; the script enforces account and limits)
+# analysis: indicators (no model), honesty check, forecast (journaled), sizing
+python3 ${CLAWK_SKILL_DIR}/scripts/kronos_indicators.py --etoro AAPL --interval OneDay
+python3 ${CLAWK_SKILL_DIR}/scripts/kronos_backtest.py --etoro AAPL --interval OneDay
+python3 ${CLAWK_SKILL_DIR}/scripts/kronos_forecast.py --etoro AAPL --interval OneDay --horizon 10 --format json
+python3 ${CLAWK_SKILL_DIR}/scripts/kronos_forecast.py --input aapl.csv --symbol AAPL --horizon 5
+python3 ${CLAWK_SKILL_DIR}/scripts/kronos_risk.py --account-size 10000 --etoro AAPL --interval OneDay
+
+# learning loop and dashboard
+python3 ${CLAWK_SKILL_DIR}/scripts/kronos_review.py --etoro
+python3 ${CLAWK_SKILL_DIR}/scripts/kronos_review.py --bars AAPL=aapl.csv --json
+python3 ${CLAWK_SKILL_DIR}/scripts/kronos_dashboard.py
+
+# trading (only when enabled; the script enforces account, limits and lessons)
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py status
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py positions
-python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py buy AAPL --amount 50 --reason "backtest adds_value, +2.1% in 5d" --dry-run
-python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py buy AAPL --amount 50 --reason "backtest adds_value, +2.1% in 5d"
-python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py close 123456789 --reason "forecast turned down"
-python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py close 123456789 --units 0.5 --reason "take half profit"
-
-# honesty check, then forecast
-python3 ${CLAWK_SKILL_DIR}/scripts/kronos_backtest.py --etoro AAPL --interval OneDay
-python3 ${CLAWK_SKILL_DIR}/scripts/kronos_forecast.py --etoro AAPL --interval OneDay --horizon 10 --plot auto
-python3 ${CLAWK_SKILL_DIR}/scripts/kronos_forecast.py --input prices.csv --horizon 5 --format json
-python3 ${CLAWK_SKILL_DIR}/scripts/kronos_forecast.py --input prices.csv --dry-run
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py buy AAPL --amount 50 --reason "adds_value, +2.1% in 5d, bullish" --dry-run
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py buy AAPL --amount 50 --reason "user asked" --user-requested
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py close 123456789 --units 0.5 --reason "target hit"
 ```
 
-| Knob | Default | Effect on a CPU-only VPS |
-|---|---|---|
-| `--model` | `small` | `mini` ≈ 5x faster, context 2048; `base` ≈ 4x slower |
-| `--lookback` | 400 (backtest 256) | bars of context; cost grows linearly (max 512, mini 2048) |
-| `--horizon` | 10 (backtest 5) | candles ahead; cost and error grow with distance |
-| `--samples` | 8 (backtest 4) | sampled paths for the band; cost grows linearly |
-| `--threads` | all cores | cap it when the VPS also serves the gateway |
-| `--calendar` | `auto` | `weekdays`, `24x7` (crypto), `sessions` (intraday stocks) |
-
-Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMinutes`,
-`OneHour`, `FourHours`, `OneDay`, `OneWeek` (aliases `1d`, `1h`, `15m` ... work).
+Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMinutes`, `OneHour`,
+`FourHours`, `OneDay`, `OneWeek` (aliases `1h`, `1d` ...). CPU knobs (`--model`,
+`--lookback`, `--samples`, `--threads`): `references/model-notes.md`.
 
 ## Procedure
 
-1. **Pick the data.** eToro symbol (`--etoro`), a user file (inspect it with `read_file`), or
-   `stocks` history JSON. Ambiguous symbol (`AAPL` vs `AAPL.24-7`)? Run `etoro_data.py search`
-   and use the exact symbol. Keys missing? The script says how to add them; offer the CSV route.
-2. **Check the runtime** with `kronos_setup.py --check`. If `setup_needed`, tell the user it is
-   a one-time ~1.2 GB download of a few minutes, then run `kronos_setup.py` (add `--model
-   mini` only when asked for speed; it needs `--pin-on-first-use`, see Pitfalls).
-3. **Run the honesty check first**: `kronos_backtest.py` on the same symbol and interval. Keep
-   its `verdict` (`adds_value`, `no_clear_edge`, `worse_than_naive`, `inconclusive`).
-4. **Forecast** with a horizon that fits the bar size: daily 5–10, hourly 12–24, 15-minute
-   8–16. Add `--plot auto` when the user is on a messaging app.
-5. **Present compactly**: last close, close at horizon with % change and direction, the
-   p10–p90 band (say it is too narrow), the backtest verdict in one sentence, and the
-   disclaimer from the output. On Telegram/WhatsApp use bullets, not tables, and attach the
-   chart with `MEDIA:/absolute/path.png` from `chart_path`; use `send_message` only to deliver
-   it to a different channel. With `worse_than_naive`, lead with that, not the numbers.
-6. **Portfolio review** ("analiza mi portafolio de eToro"): `etoro_data.py portfolio` (add
-   `--account demo` for demo keys), summarize cash, weights, concentration, unrealized P&L and
-   copy-trading; then forecast the 3–5 largest holdings, one script run each (~1 min on CPU).
-   Frame results as scenarios, never as buy/sell instructions.
-7. **Recurring forecasts** on request: schedule a `cronjob` that runs the backtest + forecast
-   and delivers the summary and chart to the user's channel.
-8. **Trading** (only when `etoro_trade.py status` shows `enabled: true`). The user chose
-   automatic trading inside limits, so do not ask before each order, but:
-   - Buy only when the backtest verdict for that symbol and interval is `adds_value` and the
-     forecast points up, or when the user names a specific trade. Never trade on
-     `worse_than_naive` or `inconclusive`.
-   - Size within the limits from `status` (`usd_left`, `buys_left`); the script refuses the
-     rest. Never split one decision into several orders to get around a cap.
-   - Sell by closing positions (`positions` lists their ids); closes are not capped.
-   - Always pass a one-line `--reason` (verdict + forecast), and after every order tell the
-     user what was bought or sold, the amount, the status and why. `submitted` or `placed`
-     means eToro has not filled it yet; check `positions` later.
-   - Automatic runs on a schedule: a `cronjob` that runs backtest, forecast and, when the rules
-     above allow it, `etoro_trade.py`, then reports to the user's channel.
+1. **First use: goals.** If `kronos.goals.watchlist` is `(not set)` and the user wants more
+   than a one-off answer, ask the five onboarding questions in one message (symbols,
+   objective, risk, horizon, how often; `references/trading-playbook.md` § 1), resolve
+   symbols with `etoro_data.py search`, and save each answer with `clawk config set
+   skills.config.kronos.goals.<key> "<value>"` through `terminal`. Saving goals never
+   enables trading.
+2. **Offer the routine.** Create one `cronjob_manage` job (`action="create"`,
+   `skills=["kronos"]`, `schedule` from the goals, the prompt template in playbook § 2;
+   leave `deliver` unset). Schedule times are the user's Clawksis timezone; keep US stocks
+   inside 9:30–16:00 New York. Update that job when goals change; never duplicate it.
+3. **Runtime.** `kronos_setup.py --check`; if `setup_needed`, say it is a one-time ~1.2 GB
+   download, then run `kronos_setup.py`.
+4. **Learn first.** Run `kronos_review.py --etoro` (or `--bars SYMBOL=FILE` for file data)
+   before analyzing or trading: it scores matured forecasts, updates lessons and the buy
+   gate, and refreshes the dashboard. Tell the user about new lessons in plain words.
+5. **Analyze each symbol.** `kronos_indicators.py` (signal + reasons), the backtest verdict
+   (`kronos_backtest.py`; re-run when older than 7 days), then `kronos_forecast.py` with a
+   horizon that fits the bars (daily 5–10, hourly 12–24). Forecasts are journaled
+   automatically; pass `--symbol` for file input so reviews and trades match it, and
+   `--no-journal` only for throwaway experiments.
+6. **Present compactly.** Last close, close at horizon with % and direction, the p10–p90 band
+   (too narrow), the backtest verdict, the indicator signal, `track_record` and `lessons` from
+   the forecast output, and the disclaimer. Lead with `worse_than_naive` or a blocked track
+   record when present. On messaging apps use bullets and attach `MEDIA:/abs/path.png` from
+   `chart_path`.
+7. **Portfolio review** ("analiza mi portafolio"): `etoro_data.py portfolio`, summarize cash,
+   weights, concentration, P&L and copy-trading, then analyze the 3–5 largest holdings.
+8. **Trading** (only when `status` shows `enabled: true`; no confirmation per order):
+   - Buy only when every check in playbook § 3 passes (verdict `adds_value`, forecast up by
+     at least half an ATR, indicators not bearish, no blocking lesson, limits left), sized
+     with `kronos_risk.py`. Never split one decision into several orders.
+   - The script refuses automatic buys of a symbol whose recent forecasts mostly missed;
+     accept it and tell the user. `--user-requested` is ONLY for a buy the user explicitly
+     asked for in this conversation; never in a scheduled run or to get past a refusal.
+   - Manage open positions every run (stop, target, broken thesis, time stop; playbook § 4)
+     by closing with `close` (not capped).
+   - Always pass a one-line `--reason`; after every order report what, how much, status and
+     why. `submitted`/`placed` means not filled yet: check `positions` later.
+9. **Dashboard.** Forecasts, reviews and orders refresh `$CLAWK_HOME/dashboards/kronos.json`
+   on their own; `kronos_dashboard.py` rebuilds it. Point the user to the Kronos dashboard in
+   the Clawksis web dashboard for what was bought, sold, refused and learned.
 
 ## Pitfalls
 
-- **Not advice, and often no better than naive.** Independent tests (upstream issues #354,
-  #375) found Kronos losing to "repeat the last close" and its sampled bands covering ~58% of
-  outcomes instead of 90%. Never present a forecast without the backtest verdict.
-- **Trading is off until the user turns it on.** If `status` says `enabled: false`, explain
-  how the user enables it; do not enable it, raise limits or switch to the real account
-  yourself, and never call eToro trading endpoints any other way than `etoro_trade.py`.
-- **Limits are hard.** A refused order (`TradingRefused`) is final for today unless the user
-  changes the limits. An `unknown` status (network failure) keeps counting toward the daily
-  limit: check `positions` before buying again, never resend blindly.
+- **Not advice, often no better than naive.** Independent tests found Kronos losing to
+  "repeat the last close" and its bands covering ~58% instead of 90%. Never present a
+  forecast without the backtest verdict and its track record.
+- **Trading is the user's switch.** If `status` says `enabled: false`, explain how the user
+  enables it; never enable it, raise limits, switch to real, or call eToro trading any way
+  other than `etoro_trade.py`.
+- **Refusals are final for today.** A `TradingRefused` (limits) or `LessonRefused` (track
+  record) stands; an `unknown` order keeps counting: check `positions`, never resend blindly.
+- **Unjournaled or mislabeled forecasts teach nothing.** File forecasts without `--symbol` are
+  journaled under the file name and never match the eToro symbol a trade uses.
+- **Reviews need matching bars**: same bar size as the forecast and reaching back before it;
+  eToro returns at most 1000 bars, so very old forecasts can no longer be scored.
 - **Minimums and market hours.** eToro rejects buys under the instrument minimum (HTTP 400);
   stock orders outside market hours stay `placed` until the open.
-- **401/403 from eToro**: wrong key, a demo key used with `--account real` (or the reverse), a
-  demo key while `trading.account` is `real` (or the reverse), or a key without that
-  permission. `etoro_data.py check` shows the granted scopes.
-- **eToro candle limits**: at most 1000 bars per request, always ending at the latest bar; the
-  still-forming candle is dropped automatically. For longer daily history use `OneWeek` or a CSV.
-- **Unverified API details**: the official reference could not be fetched when this skill was
-  written; endpoints follow two third-party clients. See `references/etoro-api.md` before
-  debugging odd responses.
-- **No holiday calendar**: future timestamps skip weekends (or replay intraday sessions) but not
-  exchange holidays. Crypto is detected as 24x7 from weekend bars.
-- **Mixed adjustments**: do not mix split-adjusted and unadjusted prices in one series.
-- **CPU cost** grows with lookback x horizon x samples (no KV cache upstream). Lower `--samples`
-  or `--lookback`, or use `--model mini`, when a run nears `--timeout` (default 30 min).
-- **mini/base revisions are not pinned yet**; `--pin-on-first-use` records the current Hugging
-  Face commit once in `state.json` and later runs load exactly that commit.
-- **Keys added mid-conversation** may need a new session (or `clawk gateway restart`) before the
-  terminal sees them.
+- **401/403 from eToro**: wrong key, demo/real key mismatch with `--account` or
+  `trading.account`, or a key without that permission; `etoro_data.py check` shows scopes.
+- **Unverified API details**: endpoints follow two third-party clients; see
+  `references/etoro-api.md` before debugging odd responses.
+- **No holiday calendar** for future timestamps (reviews count real bars, so scoring is fine).
+- **CPU cost** grows with lookback x horizon x samples; for long watchlists use
+  `--model mini` or fewer `--samples` (`references/model-notes.md`). `mini`/`base` need
+  `kronos_setup.py --model mini --pin-on-first-use`.
+- **Keys added mid-conversation** may need a new session before `terminal` sees them.
 - `pip install kronos` is an unrelated package; never run the upstream web UI or fine-tune
-  pipeline (unauthenticated server, pickle loading). Uninstall: delete `$CLAWK_HOME/kronos/`.
+  pipeline. Uninstall: delete `$CLAWK_HOME/kronos/`.
 
-Details: `references/etoro-api.md` (endpoints, verified vs assumed fields) and
-`references/model-notes.md` (model zoo, pins, resource numbers, upstream issues).
+Details: `references/trading-playbook.md` (decisions, onboarding, routine prompt, reporting),
+`references/learning-loop.md` (journal, scoring, lessons, gate, dashboard panels),
+`references/etoro-api.md`, `references/model-notes.md`.
 
 ## Verification
 
 ```bash
 python3 ${CLAWK_SKILL_DIR}/scripts/kronos_setup.py --check
-python3 ${CLAWK_SKILL_DIR}/scripts/kronos_forecast.py --input prices.csv --horizon 5 --format json
-python3 ${CLAWK_SKILL_DIR}/scripts/etoro_data.py check
+python3 ${CLAWK_SKILL_DIR}/scripts/kronos_indicators.py --input prices.csv --json
+python3 ${CLAWK_SKILL_DIR}/scripts/kronos_review.py --json
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py status
 ```
 
-`--check` prints `"ok": true`; the forecast JSON has 5 `forecast` rows with numeric `close`,
-`close_p10`, `close_p90` and a `disclaimer`; `check` prints `"ok": true` and the eToro username;
+`--check` prints `"ok": true`; indicators print a `signal` with `reasons`; the review prints
+`"ok": true` with `accuracy`, `buy_gate` and `lessons` and refreshes the dashboard file;
 `status` prints the trading settings and today's remaining limits.

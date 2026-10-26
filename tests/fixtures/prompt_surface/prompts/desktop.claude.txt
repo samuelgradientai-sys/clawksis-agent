@@ -74,7 +74,7 @@ After difficult/iterative tasks, offer to save as a skill. If a skill you loaded
   emil-design-eng:
     - emil-design-eng: Design-engineering rules for polished UI and animation. [ux, components, accessibility, frontend]
   finance: Skills for markets and personal investing — stock and crypto price forecasts, broker data and limited automated trading (eToro), portfolio review, and backtests of forecasting models.
-    - kronos: Forecast stocks/crypto; eToro data and limited trading. [Forecasting, Portfolio, Time Series]
+    - kronos: Forecast stocks/crypto; eToro data and limited trading. [Forecasting, Portfolio, Time Series, Technical Analysis]
   integrations:
     - notion-mcp: Conecta y automatiza Notion vía su servidor MCP oficial. [database, enrichment, cron, automation, no-code]
     - supabase: Build on Supabase: Postgres, auth, RLS, storage, functions. [database, edge-functions, realtime]

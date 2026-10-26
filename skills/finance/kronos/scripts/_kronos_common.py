@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import sys
+import time as _time
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
@@ -143,6 +144,99 @@ def load_state() -> dict[str, Any] | None:
 
 def setup_command() -> str:
     return f"python3 {Path(__file__).resolve().parent / 'kronos_setup.py'}"
+
+
+# ── Append-only JSONL files (trade ledger, forecast journal, lessons) and their lock ──
+
+LOCK_TIMEOUT = 30.0
+STALE_LOCK_SECONDS = 120.0
+
+
+class FileLock:
+    """Cross-platform exclusive lock: an O_EXCL lock file, stale after STALE_LOCK_SECONDS."""
+
+    busy_message = "Another Kronos run is writing the same file; try again in a minute."
+
+    def __init__(
+        self,
+        path: Path,
+        *,
+        timeout: float = LOCK_TIMEOUT,
+        sleep: Callable[[float], None] = _time.sleep,
+        clock: Callable[[], float] = _time.time,
+    ) -> None:
+        self.path, self.timeout, self._sleep, self._clock = path, timeout, sleep, clock
+
+    def busy_error(self) -> SkillError:
+        return SkillError(self.busy_message)
+
+    def __enter__(self) -> FileLock:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        deadline = self._clock() + self.timeout
+        while True:
+            try:
+                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                if self._is_stale():
+                    self.path.unlink(missing_ok=True)
+                    continue
+                if self._clock() >= deadline:
+                    raise self.busy_error() from None
+                self._sleep(0.2)
+                continue
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            return self
+
+    def _is_stale(self) -> bool:
+        try:
+            return self._clock() - self.path.stat().st_mtime > STALE_LOCK_SECONDS
+        except FileNotFoundError:
+            return False
+
+    def __exit__(self, *exc: object) -> None:
+        self.path.unlink(missing_ok=True)
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """Every JSON-object line of *path*; malformed lines are skipped, a missing file is []."""
+    if not path.exists():
+        return []
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
+
+
+def fold_rows(rows: Iterable[dict[str, Any]], key: str = "id") -> list[dict[str, Any]]:
+    """Later rows with the same *key* update earlier ones; first-seen order is kept."""
+    folded: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if row.get(key):
+            folded.setdefault(str(row[key]), {}).update(row)
+    return list(folded.values())
+
+
+def append_jsonl(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(dict(row), ensure_ascii=False, default=str) + "\n")
+
+
+def iso_z(value: Any) -> str | None:
+    """ISO-8601 UTC with a ``Z`` suffix (seconds precision); ``None`` when unparsable."""
+    if value in (None, ""):
+        return None
+    try:
+        moment = parse_timestamp(value)
+    except (ValueError, OverflowError, OSError):
+        return None
+    return moment.isoformat(timespec="seconds") + "Z"
 
 
 def require_state() -> dict[str, Any]:
