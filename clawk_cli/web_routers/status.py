@@ -655,6 +655,8 @@ async def get_status(profile: Optional[str] = None):
 
         status = {
             "version": get_version_info().base_version,
+            # A checkout with no reachable release tag has base "unknown"; this keeps its commit.
+            "display_version": get_version_info().display_version,
             "release_date": __release_date__,
             "config_version": current_ver,
             "latest_config_version": latest_ver,

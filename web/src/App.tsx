@@ -12,11 +12,9 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 import {
   Routes,
   Route,
-  NavLink,
   Navigate,
   useLocation,
   useNavigate,
@@ -25,7 +23,6 @@ import {
   Activity,
   BarChart3,
   BookOpen,
-  ChevronDown,
   Clock,
   Code,
   Cpu,
@@ -66,6 +63,7 @@ import { Typography } from "@nous-research/ui/ui/components/typography/index";
 import { ConfirmDialog } from "@nous-research/ui/ui/components/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { SidebarFooter } from "@/components/SidebarFooter";
+import { SidebarNav, SidebarTooltip, type NavItem, type TooltipWarmRef } from "@/components/SidebarNav";
 import { SidebarStatusStrip, gatewayLine } from "@/components/SidebarStatusStrip";
 import { useBelowBreakpoint } from "@nous-research/ui/hooks/use-below-breakpoint";
 import { useSidebarStatus } from "@/hooks/useSidebarStatus";
@@ -168,6 +166,8 @@ const CronPage = lazyPage(() => import("@/pages/CronPage"));
 const ProfilesPage = lazyPage(() => import("@/pages/ProfilesPage"));
 const ProfileBuilderPage = lazyPage(() => import("@/pages/ProfileBuilderPage"));
 const SkillsPage = lazyPage(() => import("@/pages/SkillsPage"));
+const SkillDashboardsPage = lazyPage(() => import("@/pages/SkillDashboardsPage"));
+const SkillDashboardPage = lazyPage(() => import("@/pages/SkillDashboardPage"));
 const PluginsPage = lazyPage(() => import("@/pages/PluginsPage"));
 const McpPage = lazyPage(() => import("@/pages/McpPage"));
 const PairingPage = lazyPage(() => import("@/pages/PairingPage"));
@@ -199,7 +199,6 @@ const SmoothScroll = lazy(() =>
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { useI18n } from "@/i18n";
-import type { Translations } from "@/i18n/types";
 import { PluginPage, PluginSlot, usePlugins } from "@/plugins";
 import type { PluginManifest } from "@/plugins";
 import { useTheme } from "@/themes";
@@ -265,6 +264,8 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/logs": LogsPage,
   "/cron": CronPage,
   "/skills": SkillsPage,
+  "/skills/dashboards": SkillDashboardsPage,
+  "/skills/dashboards/:name": SkillDashboardPage,
   "/plugins": PluginsPage,
   "/mcp": McpPage,
   "/pairing": PairingPage,
@@ -723,7 +724,7 @@ export default function App() {
             id="app-sidebar"
             aria-label={t.app.navigation}
             className={cn(
-              "fixed top-0 left-0 z-50 flex h-dvh max-h-dvh w-64 min-h-0 flex-col font-sans",
+              "clawk-liquid-sidebar fixed top-0 left-0 z-50 flex h-dvh max-h-dvh w-64 min-h-0 flex-col font-sans",
               "border-r border-current/20",
               "bg-background-base",
               "transition-[transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]",
@@ -790,101 +791,14 @@ export default function App() {
 
             <ProfileSwitcher collapsed={isDesktopCollapsed} />
 
-            <nav
-              className="min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden border-t border-current/10 py-2"
-              aria-label={t.app.navigation}
-            >
-              <ul className="flex flex-col">
-                {(() => {
-                  // Grupos desplegables: Chat agrupa sus vistas hermanas y
-                  // las integraciones van juntas. En modo colapsado (solo
-                  // íconos) se renderiza plano — los grupos no aportan ahí.
-                  const items = sidebarNav.coreItems;
-                  if (isDesktopCollapsed) {
-                    return items.map((item) => (
-                      <SidebarNavLink
-                        closeMobile={closeMobile}
-                        collapsed={isDesktopCollapsed}
-                        item={item}
-                        key={item.path}
-                        t={t}
-                        tooltipWarmRef={tooltipWarmRef}
-                      />
-                    ));
-                  }
-                  const byPath = new Map(items.map((i) => [i.path, i]));
-                  const groupedPaths = new Set(
-                    NAV_GROUPS.flatMap((g) => g.paths),
-                  );
-                  return items.map((item) => {
-                    if (!groupedPaths.has(item.path)) {
-                      return (
-                        <SidebarNavLink
-                          closeMobile={closeMobile}
-                          collapsed={isDesktopCollapsed}
-                          item={item}
-                          key={item.path}
-                          t={t}
-                          tooltipWarmRef={tooltipWarmRef}
-                        />
-                      );
-                    }
-                    // El grupo se pinta en la posición de su PRIMER miembro
-                    // presente; el resto de miembros se omiten del nivel raíz.
-                    const group = NAV_GROUPS.find(
-                      (g) =>
-                        g.paths.find((p) => byPath.has(p)) === item.path,
-                    );
-                    if (!group) return null;
-                    return (
-                      <SidebarNavGroup
-                        key={"group:" + group.id}
-                        group={group}
-                        items={group.paths
-                          .map((p) => byPath.get(p))
-                          .filter((x): x is NavItem => !!x)}
-                        closeMobile={closeMobile}
-                        t={t}
-                        tooltipWarmRef={tooltipWarmRef}
-                      />
-                    );
-                  });
-                })()}
-
-              </ul>
-
-              {sidebarNav.pluginItems.length > 0 && (
-                <div
-                  aria-labelledby="clawk-sidebar-plugin-nav-heading"
-                  className="flex flex-col border-t border-current/10 pb-2"
-                  role="group"
-                >
-                  <span
-                    className={cn(
-                      "px-5 pt-2.5 pb-1",
-                      "font-sans font-bold text-display text-xs tracking-[0.12em] text-text-tertiary",
-                      isDesktopCollapsed && "lg:hidden",
-                    )}
-                    id="clawk-sidebar-plugin-nav-heading"
-                  >
-                    {t.app.pluginNavSection}
-                  </span>
-
-                  <ul className="flex flex-col">
-                    {sidebarNav.pluginItems.map((item) => (
-                      <SidebarNavLink
-                        closeMobile={closeMobile}
-                        collapsed={isDesktopCollapsed}
-                        item={item}
-                        key={item.path}
-                        t={t}
-                        tooltipWarmRef={tooltipWarmRef}
-                      />
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </nav>
+            <SidebarNav
+              closeMobile={closeMobile}
+              collapsed={isDesktopCollapsed}
+              coreItems={sidebarNav.coreItems}
+              pluginItems={sidebarNav.pluginItems}
+              t={t}
+              tooltipWarmRef={tooltipWarmRef}
+            />
 
             <SidebarSystemActions
               collapsed={isDesktopCollapsed}
@@ -1031,235 +945,6 @@ export default function App() {
 function ProfileKeyedRoutes({ children }: { children: ReactNode }) {
   const { profile } = useProfileScope();
   return <div key={profile || "__own__"} className="contents">{children}</div>;
-}
-
-// ── Grupos desplegables del sidebar ─────────────────────────────────────────
-// Chat contiene sus vistas hermanas (Sesiones/Modelos/Media) y las
-// integraciones van bajo un solo encabezado. `home` = path al que navega el
-// encabezado del grupo (si lo tiene); el chevron despliega/colapsa.
-
-interface NavGroup {
-  id: string;
-  label: string;
-  home?: string;
-  paths: string[];
-}
-
-const NAV_GROUPS: NavGroup[] = [
-  {
-    id: "chat",
-    label: "Chat",
-    home: "/chat",
-    paths: ["/chat", "/sessions", "/models", "/media"],
-  },
-  {
-    id: "integraciones",
-    label: "Integraciones",
-    paths: ["/skills", "/plugins", "/mcp", "/channels", "/webhooks", "/pairing"],
-  },
-];
-
-const NAV_GROUP_STORAGE_PREFIX = "clawksis-nav-group-";
-
-function SidebarNavGroup({
-  group,
-  items,
-  closeMobile,
-  t,
-  tooltipWarmRef,
-}: {
-  group: NavGroup;
-  items: NavItem[];
-  closeMobile: () => void;
-  t: Translations;
-  tooltipWarmRef: TooltipWarmRef;
-}) {
-  const { pathname } = useLocation();
-  const containsActive = items.some(
-    (i) => pathname === i.path || pathname.startsWith(i.path + "/"),
-  );
-  const [open, setOpen] = useState<boolean>(() => {
-    try {
-      const v = window.localStorage.getItem(NAV_GROUP_STORAGE_PREFIX + group.id);
-      if (v === "1") return true;
-      if (v === "0") return false;
-    } catch {
-      /* sin persistencia */
-    }
-    return true; // desplegado por defecto: nada desaparece de golpe
-  });
-  const toggle = () => {
-    setOpen((prev) => {
-      try {
-        window.localStorage.setItem(
-          NAV_GROUP_STORAGE_PREFIX + group.id,
-          prev ? "0" : "1",
-        );
-      } catch {
-        /* ídem */
-      }
-      return !prev;
-    });
-  };
-
-  const home = group.home ? items.find((i) => i.path === group.home) : null;
-  const HomeIcon = home?.icon;
-  const children = items.filter((i) => i.path !== group.home);
-
-  const headerClasses = cn(
-    "group/nav relative flex w-full items-center gap-3",
-    "px-5 py-2.5",
-    "font-sans font-bold text-display uppercase text-sm tracking-[0.12em]",
-    "whitespace-nowrap transition-colors cursor-pointer",
-    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-midground",
-    containsActive && !open
-      ? "text-midground"
-      : "text-text-secondary hover:text-midground",
-  );
-
-  return (
-    <li>
-      <div className="flex items-center">
-        {home && HomeIcon ? (
-          <NavLink
-            to={home.path}
-            onClick={closeMobile}
-            className={({ isActive }) =>
-              cn(headerClasses, "flex-1", isActive && "text-midground")
-            }
-            style={{ clipPath: "var(--component-tab-clip-path)" }}
-          >
-            <HomeIcon className="h-4 w-4 shrink-0" />
-            <span>{group.label}</span>
-          </NavLink>
-        ) : (
-          <button
-            type="button"
-            onClick={toggle}
-            className={cn(headerClasses, "flex-1 text-left")}
-          >
-            <Plug className="h-4 w-4 shrink-0" />
-            <span>{group.label}</span>
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={toggle}
-          aria-expanded={open}
-          aria-label={(open ? "Colapsar " : "Desplegar ") + group.label}
-          className="mr-3 rounded p-1 text-text-tertiary transition-colors hover:text-midground"
-        >
-          <ChevronDown
-            className={cn(
-              "h-3.5 w-3.5 transition-transform duration-150",
-              !open && "-rotate-90",
-            )}
-          />
-        </button>
-      </div>
-
-      {open && (
-        <ul className="ml-5 flex flex-col border-l border-current/10">
-          {children.map((item) => (
-            <SidebarNavLink
-              closeMobile={closeMobile}
-              collapsed={false}
-              item={item}
-              key={item.path}
-              t={t}
-              tooltipWarmRef={tooltipWarmRef}
-            />
-          ))}
-        </ul>
-      )}
-    </li>
-  );
-}
-
-function SidebarNavLink({
-  closeMobile,
-  collapsed,
-  item,
-  tooltipWarmRef,
-  t,
-}: SidebarNavLinkProps) {
-  const { path, label, labelKey, icon: Icon } = item;
-  const [hovered, setHovered] = useState(false);
-  const [tooltipAnchor, setTooltipAnchor] = useState<HTMLElement | null>(null);
-
-  const navLabel = labelKey
-    ? ((t.app.nav as Record<string, string>)[labelKey] ?? label)
-    : label;
-  const showTooltip = (event: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>) => {
-    setHovered(true);
-    setTooltipAnchor(event.currentTarget);
-  };
-  const hideTooltip = () => {
-    setHovered(false);
-    setTooltipAnchor(null);
-  };
-
-  return (
-    <li
-      onMouseEnter={collapsed ? showTooltip : undefined}
-      onMouseLeave={collapsed ? hideTooltip : undefined}
-    >
-      <NavLink
-        to={path}
-        end={path === "/sessions"}
-        onClick={closeMobile}
-        aria-label={collapsed ? navLabel : undefined}
-        onFocus={collapsed ? showTooltip : undefined}
-        onBlur={collapsed ? hideTooltip : undefined}
-        className={({ isActive }) =>
-          cn(
-            "group/nav relative flex items-center gap-3",
-            "px-5 py-2.5",
-            "font-sans font-bold text-display uppercase text-sm tracking-[0.12em]",
-            "whitespace-nowrap transition-colors cursor-pointer",
-            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-midground",
-            isActive
-              ? "text-midground"
-              : "text-text-secondary hover:text-midground",
-          )
-        }
-        style={{
-          clipPath: "var(--component-tab-clip-path)",
-        }}
-      >
-        {({ isActive }) => (
-          <>
-            <Icon className="h-3.5 w-3.5 shrink-0" />
-
-            <span
-              className={cn(
-                "truncate transition-opacity duration-300",
-                collapsed ? "lg:opacity-0" : "lg:opacity-100",
-              )}
-            >
-              {navLabel}
-            </span>
-
-            <span
-              aria-hidden
-              className="absolute inset-y-0.5 left-1.5 right-1.5 bg-midground opacity-0 pointer-events-none transition-opacity duration-200 group-hover/nav:opacity-5"
-            />
-
-            {isActive && (
-              <span
-                aria-hidden
-                className="absolute left-0 top-0 bottom-0 w-px bg-midground"
-              />
-            )}
-          </>
-        )}
-      </NavLink>
-
-      {collapsed && hovered && tooltipAnchor && (
-        <SidebarTooltip anchor={tooltipAnchor} label={navLabel} warmRef={tooltipWarmRef} />
-      )}
-    </li>
-  );
 }
 
 function SidebarSystemActions({
@@ -1630,60 +1315,10 @@ function GatewayDot({ collapsed, status, tooltipWarmRef }: GatewayDotProps) {
   );
 }
 
-function SidebarTooltip({ anchor, label, warmRef }: SidebarTooltipProps) {
-  const rect = anchor.getBoundingClientRect();
-  const sidebar = document.getElementById("app-sidebar");
-  const sidebarRight = sidebar?.getBoundingClientRect().right ?? rect.right;
-  const [isWarm, setIsWarm] = useState(false);
-
-  useEffect(() => {
-    if (!warmRef) {
-      setIsWarm(false);
-      return;
-    }
-    const now = Date.now();
-    setIsWarm(now - warmRef.current < 300);
-    warmRef.current = now;
-    return () => {
-      if (warmRef) warmRef.current = Date.now();
-    };
-  }, [warmRef]);
-
-  return createPortal(
-    <span
-      className={cn(
-        "fixed z-[100] pointer-events-none",
-        "px-2 py-1",
-        "bg-background-base border border-current/20 shadow-lg",
-        "font-sans text-display text-xs tracking-[0.1em] text-midground uppercase",
-      )}
-      style={{
-        top: rect.top + rect.height / 2,
-        left: sidebarRight + 8,
-        transform: "translateY(-50%)",
-        opacity: isWarm ? 1 : undefined,
-        animation: isWarm ? "none" : "sidebar-tooltip-in 120ms ease-out",
-      }}
-    >
-      {label}
-    </span>,
-    document.body,
-  );
-}
-
-type TooltipWarmRef = React.RefObject<number>;
-
 interface GatewayDotProps {
   collapsed: boolean;
   status: StatusResponse | null;
   tooltipWarmRef: TooltipWarmRef;
-}
-
-interface NavItem {
-  icon: ComponentType<{ className?: string }>;
-  label: string;
-  labelKey?: string;
-  path: string;
 }
 
 interface SidebarIconWithTooltipProps {
@@ -1693,25 +1328,11 @@ interface SidebarIconWithTooltipProps {
   tooltipWarmRef: TooltipWarmRef;
 }
 
-interface SidebarNavLinkProps {
-  closeMobile: () => void;
-  collapsed: boolean;
-  item: NavItem;
-  t: Translations;
-  tooltipWarmRef: TooltipWarmRef;
-}
-
 interface SidebarSystemActionsProps {
   collapsed: boolean;
   onNavigate: () => void;
   status: StatusResponse | null;
   tooltipWarmRef: TooltipWarmRef;
-}
-
-interface SidebarTooltipProps {
-  anchor: HTMLElement;
-  label: string;
-  warmRef?: TooltipWarmRef;
 }
 
 interface SystemActionButtonProps {

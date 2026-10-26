@@ -927,6 +927,7 @@ const sidebars: SidebarsConfig = {
               ],
             },
             'developer-guide/creating-skills',
+            'developer-guide/skill-dashboards',
             'developer-guide/extending-the-cli',
           ],
         },

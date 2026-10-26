@@ -22,6 +22,9 @@ stored under `skills.config.<key>`, prompted during setup, injected at load). To
 `category:` are accepted and mirrored from `metadata.clawk.*` by the loader. Tags also ride the
 system-prompt skills index as `[keywords]` (those the name, description and category don't already
 say, at most 8), so list the words a user would use to ask for the skill.
+`metadata.clawk.dashboard` (`{title, description}`) gives the skill a mini dashboard in the web UI,
+fed by the JSON snapshot its scripts write to `$CLAWK_HOME/dashboards/<name>.json`
+(`website/docs/developer-guide/skill-dashboards.md`; the server only reads and clips it).
 
 ## Authoring standards (HARDLINE — enforced by `tests/skills/test_authoring_standards.py`)
 
