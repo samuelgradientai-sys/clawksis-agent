@@ -270,6 +270,22 @@ def _skill_emoji(frontmatter: dict[str, Any]) -> str:
     return ""
 
 
+def _skill_dashboard(frontmatter: dict[str, Any]) -> dict[str, str] | None:
+    """``metadata.clawk.dashboard`` (``true`` or ``{title, description}``): the skill writes a
+    snapshot the web dashboard renders (clawk_cli/web_routers/skill_dashboards.py); None when absent."""
+    meta = frontmatter.get("metadata")
+    clawk = meta.get("clawk") if isinstance(meta, dict) else None
+    declared = clawk.get("dashboard") if isinstance(clawk, dict) else None
+    if declared is True:
+        return {"title": "", "description": ""}
+    if not isinstance(declared, dict):
+        return None
+    return {
+        key: str(declared.get(key) or "").strip()[:120]
+        for key in ("title", "description")
+    }
+
+
 def _skill_catalog(
     *, skip_disabled: bool = False, include_hidden: bool = False
 ) -> list[dict[str, Any]]:
@@ -333,6 +349,7 @@ def _skill_catalog(
                         "description": _truncate_description(description),
                         "category": _get_category_from_path(skill_md),
                         "emoji": _skill_emoji(frontmatter),
+                        "dashboard": _skill_dashboard(frontmatter),
                         "tier": tier,
                         "root": scan_dir,
                         "path": skill_md,
@@ -377,6 +394,19 @@ def find_all_skills(*, skip_disabled: bool = False) -> list[dict[str, Any]]:
         for s in _skill_catalog(skip_disabled=skip_disabled)
         if s["load_name"]
     ]
+
+
+def find_skill_dashboards(*, skip_disabled: bool = False) -> dict[str, dict[str, Any]]:
+    """``{load name: declaration + category/emoji}`` for loadable skills declaring a dashboard."""
+    return {
+        s["load_name"]: {
+            **s["dashboard"],
+            "category": s["category"],
+            "emoji": s.get("emoji", ""),
+        }
+        for s in _skill_catalog(skip_disabled=skip_disabled)
+        if s["load_name"] and s.get("dashboard") is not None
+    }
 
 
 def sort_skills(skills: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
   Package,
   Search,
@@ -28,8 +28,11 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Gauge,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { skillDashboardPath, type SkillDashboardFlag } from "@/lib/api-skill-dashboards";
+import { dashboardCopy } from "@/components/skill-dashboard/copy";
 import type {
   SkillInfo,
   ToolsetInfo,
@@ -839,6 +842,8 @@ function SkillRow({
   onEdit,
   noDescriptionLabel,
 }: SkillRowProps) {
+  const { t } = useI18n();
+  const dashboardLabel = dashboardCopy(t).dashboardButton;
   return (
     <div className="group flex items-start gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40">
       <div className="pt-0.5 shrink-0">
@@ -868,6 +873,15 @@ function SkillRow({
           {skill.description || noDescriptionLabel}
         </p>
       </div>
+      {(skill as SkillInfo & SkillDashboardFlag).has_dashboard && (
+        <Link
+          to={skillDashboardPath(skill.name)}
+          className="clawk-liquid-chip inline-flex shrink-0 items-center gap-1.5 self-center rounded-full border border-[#6C4FD6]/35 px-2.5 py-1 text-xs text-foreground transition-colors hover:border-[#8B6DFF]/70"
+        >
+          <Gauge className="h-3.5 w-3.5" />
+          {dashboardLabel}
+        </Link>
+      )}
       <Button
         ghost
         size="icon"
