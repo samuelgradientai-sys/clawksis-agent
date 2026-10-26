@@ -1,0 +1,133 @@
+/* Voice mode overlay + orb. The orb reads one CSS variable, --orb-level (0..1),
+   written per animation frame from the mic (listening) or the reply (speaking). */
+
+.voice-overlay {
+  background:
+    radial-gradient(120% 80% at 50% 38%, rgba(108, 79, 214, 0.32) 0%, rgba(20, 14, 44, 0) 60%),
+    radial-gradient(90% 60% at 50% 110%, rgba(56, 189, 248, 0.12) 0%, rgba(10, 8, 22, 0) 70%),
+    #0b0918;
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  animation: voice-overlay-in 220ms ease-out;
+}
+
+@keyframes voice-overlay-in {
+  from {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+}
+
+.voice-orb {
+  --orb-level: 0;
+  --orb-a: #8b6dff;
+  --orb-b: #6c4fd6;
+  --orb-c: #38bdf8;
+  position: relative;
+  width: min(62vw, 34vh, 260px);
+  aspect-ratio: 1;
+  transition: filter 400ms ease, opacity 400ms ease;
+}
+
+.voice-orb[data-phase="speaking"] {
+  --orb-a: #c084fc;
+  --orb-b: #7c3aed;
+  --orb-c: #f472b6;
+}
+
+.voice-orb[data-phase="connecting"],
+.voice-orb[data-phase="listening"][data-muted="true"] {
+  filter: saturate(0.25) brightness(0.8);
+  opacity: 0.7;
+}
+
+.voice-orb__glow {
+  position: absolute;
+  inset: -22%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--orb-a) 55%, transparent) 0%, transparent 62%);
+  filter: blur(28px);
+  opacity: calc(0.45 + var(--orb-level) * 0.55);
+  transform: scale(calc(0.9 + var(--orb-level) * 0.45));
+}
+
+.voice-orb__core {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 32% 28%, #ffffff 0%, color-mix(in srgb, var(--orb-a) 40%, white) 10%,
+      var(--orb-a) 38%, var(--orb-b) 66%, #1b1040 100%);
+  box-shadow:
+    inset -18px -24px 48px rgba(10, 6, 30, 0.55),
+    inset 10px 12px 30px rgba(255, 255, 255, 0.25),
+    0 30px 80px -20px color-mix(in srgb, var(--orb-b) 70%, transparent);
+  transform: scale(calc(0.94 + var(--orb-level) * 0.16));
+  transition: transform 70ms linear;
+}
+
+.voice-orb__swirl {
+  position: absolute;
+  inset: -10%;
+  border-radius: 9999px;
+  background: conic-gradient(from 0deg, transparent 0deg, color-mix(in srgb, var(--orb-c) 70%, transparent) 70deg,
+      transparent 150deg, rgba(255, 255, 255, 0.45) 220deg, transparent 290deg);
+  mix-blend-mode: screen;
+  filter: blur(14px);
+  opacity: 0.7;
+  animation: voice-orb-spin 9s linear infinite;
+}
+
+.voice-orb[data-phase="speaking"] .voice-orb__swirl,
+.voice-orb[data-phase="transcribing"] .voice-orb__swirl {
+  animation-duration: 3.5s;
+}
+
+.voice-orb[data-phase="thinking"] .voice-orb__core,
+.voice-orb[data-phase="connecting"] .voice-orb__core {
+  animation: voice-orb-breathe 1.6s ease-in-out infinite;
+}
+
+.voice-orb[data-phase="thinking"] .voice-orb__glow {
+  animation: voice-orb-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes voice-orb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes voice-orb-breathe {
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes voice-orb-glow {
+  50% {
+    opacity: 0.95;
+    transform: scale(1.18);
+  }
+}
+
+.voice-caption-reply {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.voice-controls {
+  padding-bottom: max(env(safe-area-inset-bottom), 1.5rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-overlay,
+  .voice-orb,
+  .voice-orb * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
