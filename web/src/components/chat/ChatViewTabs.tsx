@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Activity,
+  Globe,
   Images,
   Menu,
   MessageSquare,
@@ -166,6 +167,14 @@ export function ChatViewTabs() {
       icon: <SquareKanban className="size-3.5" />,
       active: mode === "modern" && sidePanel === "tasks",
       onSelect: () => openPanel("tasks"),
+    },
+    {
+      key: "browser",
+      label: "Navegador",
+      title: "Navegador — mirá en vivo el navegador del agente y tomá el control",
+      icon: <Globe className="size-3.5" />,
+      active: mode === "modern" && sidePanel === "browser",
+      onSelect: () => openPanel("browser"),
     },
   ];
 

@@ -190,6 +190,8 @@ Ask in plain language and the agent acts on the machine with its tools — runs 
 
 Close the browser tab and the PTY is reaped cleanly on the server. Re-opening spawns a fresh session.
 
+**Live browser (Modern chat → Navegador):** when the agent starts browsing (`browser_*` tools or Browser Use's `browser_exec`), the **Navegador** side panel opens on its own and shows the agent's browser live — the tab it is working in, its title and URL, and a feed of its recent browser actions. The server screencasts that browser over CDP (it is on the server's loopback, so the dashboard relays it over the authenticated socket), which works for the local Chromium, the Browser Use backend and CDP/cloud browsers alike. **Tomar control** sends your clicks, scrolling and typing to that same browser — handy to log in or clear a captcha while the agent waits. A headless browser closes when the agent's turn ends (`cleanup_task_resources`); the panel then keeps the last frame and says *Terminado*. Run the browser headed to keep it open between turns.
+
 To point [Clawksis Desktop](#connecting-clawk-desktop-to-a-remote-backend) at a dashboard running on another machine instead of its own bundled backend, see the remote-backend section below.
 
 ### Connecting Clawksis Desktop to a remote backend

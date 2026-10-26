@@ -1,6 +1,6 @@
 /**
  * sidePanelStore — estado compartido del panel lateral del chat
- * (Visualización / Media / Tareas), fuera de ChatModern.
+ * (Visualización / Media / Tareas / Navegador), fuera de ChatModern.
  *
  * Vive a nivel módulo para que la barra de pestañas unificada del ChatRouter
  * (Modern · Terminal · Visualización · Media · Tareas) pueda abrir/cerrar el
@@ -14,7 +14,9 @@
 
 import { useSyncExternalStore } from "react";
 
-export type SidePanelTab = "viz" | "media" | "tasks";
+export type SidePanelTab = "viz" | "media" | "tasks" | "browser";
+
+const TABS: readonly string[] = ["viz", "media", "tasks", "browser"];
 
 const STORAGE_KEY = "clawksis-chat-side-panel";
 
@@ -36,7 +38,7 @@ function clampWidth(w: number): number {
 function read(): SidePanelTab | null {
   try {
     const v = window.localStorage.getItem(STORAGE_KEY);
-    return v === "viz" || v === "media" || v === "tasks" ? v : null;
+    return v && TABS.includes(v) ? (v as SidePanelTab) : null;
   } catch {
     return null;
   }
