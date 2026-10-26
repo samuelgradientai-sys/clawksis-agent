@@ -253,6 +253,16 @@ export function dailyTime(expr: string | null | undefined): string | null {
   return `${match[2].padStart(2, "0")}:${match[1].padStart(2, "0")}`;
 }
 
+/** The nightly digest's default channel: the first messaging platform with a home channel
+ *  (Telegram, Discord, …). Bot Chat targets (`bot-chat:<profile>`, always listed) and the implicit
+ *  local/origin entries are never picked; with no platform it is "origin" (the home channel). */
+export function defaultDeliver(targets: ReadonlyArray<{ id: string; home_target_set: boolean }>): string {
+  const home = targets.find(
+    (t) => t.id !== "local" && t.id !== "origin" && !t.id.includes(":") && t.home_target_set,
+  );
+  return home?.id ?? "origin";
+}
+
 /** "22:00" → "0 22 * * *"; null for anything that is not HH:MM. */
 export function dailyCron(time: string): string | null {
   const match = /^(\d{1,2}):(\d{2})$/.exec(time.trim());

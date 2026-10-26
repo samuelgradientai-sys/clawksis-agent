@@ -2,14 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
 import { Check, Moon } from "lucide-react";
-import { Button } from "@nous-research/ui/ui/components/button";
 import { api, type CronDeliveryTarget, type CronJob } from "@/lib/api";
 import { errorMessage } from "@/lib/api-error";
 import { DASHBOARD_MODAL_BACKDROP, DASHBOARD_MODAL_PANEL } from "@/lib/dashboard-modal-shell";
 import { useModalBehavior } from "@/hooks/useModalBehavior";
-import { cn, themedBody } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { fill, type TodayCopy } from "./copy";
-import { dailyCron, dailyTime } from "./today-model";
+import { dailyCron, dailyTime, defaultDeliver } from "./today-model";
 
 interface NightlyDigestProps {
   copy: TodayCopy;
@@ -38,10 +37,6 @@ function scheduleLabel(copy: TodayCopy, job: CronJob): string {
   return time ? fill(copy.nightlyEveryDay, { time }) : job.schedule_display || job.schedule?.display || "";
 }
 
-function defaultDeliver(targets: CronDeliveryTarget[]): string {
-  const home = targets.find((t) => t.id !== "local" && t.id !== "origin" && t.home_target_set);
-  return home?.id ?? "origin";
-}
 
 /** "Recibir este resumen cada noche": shows the existing nightly job, or creates one after a confirm. */
 export function NightlyDigest({ copy, profile }: NightlyDigestProps) {
@@ -149,7 +144,7 @@ function NightlyDialog({ copy, onClose, onCreated, profile }: NightlyDialogProps
       aria-labelledby="nightly-digest-title"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div ref={ref} className={cn(themedBody, DASHBOARD_MODAL_PANEL, "max-w-md rounded-3xl p-5")}>
+      <div ref={ref} className={cn(DASHBOARD_MODAL_PANEL, "clawk-liquid-panel max-w-md rounded-3xl p-5")}>
         <h2 id="nightly-digest-title" className="flex items-center gap-2 text-base font-semibold text-text-primary">
           <Moon className="h-4 w-4 text-[rgb(var(--clawk-liquid-violet))]" aria-hidden /> {copy.nightlyTitle}
         </h2>
@@ -173,12 +168,21 @@ function NightlyDialog({ copy, onClose, onCreated, profile }: NightlyDialogProps
         </div>
         {error && <p className="mt-3 break-words text-sm text-rose-300">{error}</p>}
         <div className="mt-5 flex justify-end gap-2">
-          <Button outlined onClick={onClose} className="min-h-[44px]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="clawk-liquid-chip min-h-[44px] rounded-full px-5 text-sm text-text-secondary transition-colors hover:text-text-primary"
+          >
             {copy.nightlyCancel}
-          </Button>
-          <Button onClick={() => void create()} disabled={!schedule || saving} className="min-h-[44px]">
+          </button>
+          <button
+            type="button"
+            onClick={() => void create()}
+            disabled={!schedule || saving}
+            className="min-h-[44px] rounded-full bg-[rgb(var(--clawk-liquid-violet))] px-5 text-sm font-medium text-white shadow-[0_8px_24px_rgb(var(--clawk-liquid-violet)/0.35)] transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
             {copy.nightlyConfirm}
-          </Button>
+          </button>
         </div>
       </div>
     </div>,

@@ -7,6 +7,7 @@ import {
   clock,
   dailyCron,
   dailyTime,
+  defaultDeliver,
   dayRelation,
   filesPageLink,
   groupFilesByProject,
@@ -145,6 +146,16 @@ describe("dailyCron", () => {
     expect(dailyCron("7:05")).toBe("5 7 * * *");
     expect(dailyCron("24:00")).toBeNull();
     expect(dailyCron("noche")).toBeNull();
+  });
+
+  it("delivers to the first messaging platform with a home channel, never Bot Chat by default", () => {
+    const local = { id: "local", home_target_set: true };
+    const origin = { id: "origin", home_target_set: true };
+    const botChat = { id: "bot-chat:default", home_target_set: true };
+    expect(defaultDeliver([local, origin, botChat])).toBe("origin");
+    expect(defaultDeliver([local, { id: "discord", home_target_set: false }, { id: "telegram", home_target_set: true }, botChat])).toBe(
+      "telegram",
+    );
   });
 
   it("reads a daily expression back as a time, and nothing else", () => {

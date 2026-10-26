@@ -19,7 +19,7 @@ const es = {
   summaryStale: "Hubo actividad nueva desde este resumen.",
   summaryFailed: "No pude escribir el resumen: {error}",
   summaryNoModel:
-    "Configurá un modelo auxiliar en Modelos → Auxiliares (tarea «daily_summary») o usá el principal.",
+    "Usa la tarea auxiliar «daily_summary» («auto» = tu modelo principal): elegí otro con `clawk model` → «Auxiliary models» → Daily summary, o en config.yaml (auxiliary.daily_summary).",
   summaryEmpty: "Cuando el agente haga algo, acá vas a ver el resumen.",
   summaryMeta: "Escrito a las {time}",
   summaryModel: "con {model}",
@@ -133,7 +133,7 @@ const en: TodayCopy = {
   summaryStale: "There was new activity since this summary.",
   summaryFailed: "Could not write the summary: {error}",
   summaryNoModel:
-    "Set an auxiliary model in Models → Auxiliary (task “daily_summary”) or use the main one.",
+    "It runs on the “daily_summary” auxiliary task (“auto” = your main model): pick another with `clawk model` → “Auxiliary models” → Daily summary, or in config.yaml (auxiliary.daily_summary).",
   summaryEmpty: "Once the agent does something, its summary shows up here.",
   summaryMeta: "Written at {time}",
   summaryModel: "with {model}",
