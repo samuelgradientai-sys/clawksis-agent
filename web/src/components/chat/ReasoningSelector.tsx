@@ -60,7 +60,7 @@ export function ReasoningSelector({
         onClick={() => setOpen((v) => !v)}
         title={current.hint}
         aria-label={"Modo de respuesta: " + current.label}
-        className="flex min-h-10 items-center gap-1 rounded-lg px-1.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0"
+        className="flex min-h-11 items-center gap-1 rounded-lg px-1.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0"
       >
         <CurrentIcon className="size-4" />
         <span className="hidden sm:inline">{current.label}</span>

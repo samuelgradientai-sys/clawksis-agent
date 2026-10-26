@@ -28,7 +28,7 @@ export function ComposerMicButton({
       aria-label={voice.listening ? "Detener grabación" : "Dictar por voz"}
       title={micTitle(voice)}
       className={
-        "flex size-10 items-center justify-center rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent sm:size-8 sm:rounded-lg " +
+        "flex size-11 items-center justify-center rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent sm:size-8 sm:rounded-lg " +
         (voice.listening
           ? "bg-destructive/15 text-destructive animate-pulse"
           : "text-muted-foreground hover:bg-muted/40 hover:text-foreground")

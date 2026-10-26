@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { KeyRound, MessageCircleQuestion, ShieldAlert } from "lucide-react";
 import type { ApprovalChoice, ChatServerRequest, ClarifyQuestionView } from "./hooks/serverRequests";
 
@@ -37,7 +38,7 @@ function ApprovalCard({ request, onAnswer }: { request: Extract<ChatServerReques
           {request.command}
         </pre>
       )}
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+      <div className="grid gap-2 sm:grid-cols-2">
         <button type="button" className={DANGER} onClick={() => onAnswer(request, { choice: "deny" })}>
           {CHOICE_LABEL.deny}
         </button>
@@ -231,8 +232,10 @@ export function ServerRequestDialog({
   if (!request) return null;
   const { title, icon: Icon } = TITLES[request.kind];
   const elsewhere = !!request.sessionId && !!liveSessionId && request.sessionId !== liveSessionId;
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 backdrop-blur-[2px] sm:items-center sm:p-6">
+  // Portalled: the shell's route wrapper is a stacking context that would put
+  // its top bar (and, on desktop, the navigation) above this overlay.
+  return createPortal(
+    <div className="clawk-chat-root fixed inset-0 z-[90] flex items-end justify-center bg-black/45 backdrop-blur-[2px] sm:items-center sm:p-6">
       <div
         role="dialog"
         aria-modal="true"
@@ -255,6 +258,7 @@ export function ServerRequestDialog({
         </div>
         <RequestBody key={request.id} request={request} onAnswer={onAnswer} />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

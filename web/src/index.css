@@ -396,6 +396,15 @@ code { font-size: 0.875rem; }
   }
 }
 
+/* Phones zoom the whole page into a focused field whose text is under 16px;
+   the modern chat's fields (composer, edit, rename, search) stay at 16px there.
+   Unlayered on purpose: it must beat the `text-xs` / `text-sm` utilities. */
+@media (max-width: 767px) {
+  .clawk-chat-root :is(input, textarea, select) {
+    font-size: 16px;
+  }
+}
+
 /* The UI library inverts every <code> (inline-code look); inside a fenced
    block that painted a light slab behind each line. Blocks keep the
    surrounding text color. */
