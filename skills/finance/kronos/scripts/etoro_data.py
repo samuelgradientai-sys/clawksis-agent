@@ -114,7 +114,8 @@ _HTTP_HINTS = {
     403: "eToro refused access: the key pair lacks permission for this data, or the key "
     "environment (real vs demo) does not match --account.",
     404: "eToro has no such resource (unknown instrument or path).",
-    429: "eToro rate limit hit (market data allows about 120 requests per minute).",
+    429: "eToro rate limit hit (60 reads per minute per user key, shared by every app "
+    "using it); wait a minute and retry.",
 }
 
 

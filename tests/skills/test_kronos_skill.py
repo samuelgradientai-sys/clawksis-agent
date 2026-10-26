@@ -236,7 +236,7 @@ def test_timestamp_formats_normalize_to_naive_utc(raw, expected):
 def test_daily_weekday_series_rolls_friday_to_monday():
     history = [datetime(2026, 10, 19) + timedelta(days=i) for i in range(5)]  # Mon..Fri
     future, calendar, step = kc.future_timestamps(history, 3)
-    assert calendar == "weekdays" and step == timedelta(days=1)
+    assert calendar == "nyse" and step == timedelta(days=1)
     assert [d.weekday() for d in future] == [0, 1, 2]
     assert future[0] == datetime(2026, 10, 26)
 
@@ -254,7 +254,7 @@ def test_intraday_sessions_continue_at_the_next_weekday_open():
     days = [datetime(2026, 10, 19) + timedelta(days=d) for d in range(5)]  # Mon..Fri
     history = [d.replace(hour=h, minute=30) for d in days for h in range(9, 16)]
     future, calendar, _ = kc.future_timestamps(history, 3)
-    assert calendar == "sessions"
+    assert calendar == "nyse"
     assert future == [datetime(2026, 10, 26, h, 30) for h in (9, 10, 11)]
 
 
@@ -294,7 +294,7 @@ def test_dry_run_needs_no_runtime_and_reports_the_plan(tmp_path, capsys):
     assert forecast.main(["--input", str(path), "--horizon", "3", "--dry-run"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["dry_run"] and out["bars"] == 120 and len(out["future_timestamps"]) == 3
-    assert out["calendar"] == "weekdays" and "financial advice" in out["disclaimer"]
+    assert out["calendar"] == "nyse" and "financial advice" in out["disclaimer"]
 
 
 def test_real_run_without_setup_points_at_the_setup_script(tmp_path, capsys):
@@ -368,6 +368,7 @@ def test_verdict_is_honest(origins, skill, hit, expected):
         {
             "origins": origins,
             "mae_skill_vs_naive": skill,
+            "mae_skill_vs_ets": 0.10,  # also beat the ETS baseline (see test_kronos_baselines)
             "kronos": {"direction_hit_rate": hit},
         }
     )

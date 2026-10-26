@@ -2,8 +2,10 @@
 
 The script places real orders when the user enables it, so every guard is pinned here:
 off by default and fail-closed config, per-order and daily limits counted from the ledger,
-long-only unleveraged buys on the configured account, the exact routes the client may reach,
-honest outcome logging (rejected vs unknown), and the file lock. Stdlib fakes only, no network.
+long-only unleveraged buys with their stop-loss on the configured account, the exact routes the
+client may reach, honest outcome logging (rejected vs unknown), and the file lock. Stdlib fakes
+only, no network. Order-retry, protection, market-hours, backtest-gate and reconcile contracts
+live in ``test_kronos_order_safety.py``.
 """
 
 from __future__ import annotations
@@ -75,6 +77,40 @@ class Recorder:
 
 
 SEARCH_AAPL = {"items": [{"instrumentId": 1001, "internalSymbolFull": "AAPL"}]}
+PROTECTED = ("--stop", "95", "--target", "110")  # around the fake price of 100
+
+
+def _candles(now=NOW, price=100.0, hours=200):
+    """Hourly candles up to the still-forming one at *now*, weekends included (24/7)."""
+    start = now.replace(minute=0, tzinfo=None) - timedelta(hours=hours - 1)
+    rows = [
+        {
+            "fromDate": (start + timedelta(hours=i)).isoformat() + "Z",
+            "open": price,
+            "high": price + 1,
+            "low": price - 1,
+            "close": price,
+            "volume": 10,
+        }
+        for i in range(hours)
+    ]
+    return {"candles": [{"instrumentId": 1001, "candles": rows}]}
+
+
+MARKET = [SEARCH_AAPL, _candles()]
+
+
+def _adds_value(deps, symbol="AAPL"):
+    """A fresh backtest verdict that lets automatic buys of *symbol* through."""
+    kc.append_jsonl(
+        trade.backtests_path(deps.kronos_dir()),
+        {
+            "symbol": symbol,
+            "interval": "1 day",
+            "verdict": "adds_value",
+            "made_at": (NOW - timedelta(days=1)).isoformat(),
+        },
+    )
 
 
 def _config(tmp_path: Path, **trading) -> Path:
@@ -104,9 +140,9 @@ def _args(*argv):
     return trade.build_parser().parse_args(list(argv))
 
 
-def _buy(deps, symbol="AAPL", amount="50"):
+def _buy(deps, symbol="AAPL", amount="50", extra=PROTECTED):
     return trade.cmd_buy(
-        _args("buy", symbol, "--amount", amount, "--reason", "test"), deps
+        _args("buy", symbol, "--amount", amount, "--reason", "test", *extra), deps
     )
 
 
@@ -252,12 +288,13 @@ def test_buy_sends_one_unleveraged_long_market_order_to_the_demo_account(tmp_pat
     deps, _, trader_rec = _deps(
         tmp_path,
         _config(tmp_path, enabled="true"),
-        reader_responses=[SEARCH_AAPL],
+        reader_responses=MARKET,
         trader_responses=[
             {"token": "t", "orderId": 77, "referenceId": "r"},
             {"status": {"id": 3, "name": "Filled"}},
         ],
     )
+    _adds_value(deps)
     result = _buy(deps, amount="50")
     order_request, lookup_request = trader_rec.requests
     assert order_request.get_method() == "POST"
@@ -272,14 +309,18 @@ def test_buy_sends_one_unleveraged_long_market_order_to_the_demo_account(tmp_pat
         "orderType": "mkt",
         "leverage": 1,
         "amount": 50.0,
+        "stopLossRate": 95.0,
+        "stopLossType": "fixed",
+        "takeProfitRate": 110.0,
     }
     assert lookup_request.full_url.endswith(
         "/api/v2/trading/info/demo/orders:lookup?orderId=77"
     )
     (row,) = _ledger_rows(deps)
     headers = {k.lower(): v for k, v in order_request.header_items()}
-    assert headers["x-request-id"] == row["id"]  # the idempotency key is the logged id
+    assert headers["x-request-id"] == row["id"]  # the lookup handle is the logged id
     assert (row["status"], row["order_id"], row["reason"]) == ("filled", 77, "test")
+    assert (row["stop_loss"], row["take_profit"]) == (95.0, 110.0)
     assert result["ok"] and result["order"]["status"] == "filled"
     assert result["limits"]["usd_left_after"] == 250.0
 
@@ -288,7 +329,7 @@ def test_real_account_orders_use_the_real_routes(tmp_path):
     deps, _, trader_rec = _deps(
         tmp_path,
         _config(tmp_path, enabled="true", account="real"),
-        reader_responses=[SEARCH_AAPL],
+        reader_responses=MARKET,
         trader_responses=[
             {"orderId": 5},
             {"status": {"id": 2}},
@@ -296,6 +337,7 @@ def test_real_account_orders_use_the_real_routes(tmp_path):
             {"status": {"id": 2}},
         ],
     )
+    _adds_value(deps)
     result = _buy(deps)
     assert trader_rec.requests[0].full_url.endswith("/api/v2/trading/execution/orders")
     assert "/demo/" not in trader_rec.requests[1].full_url
@@ -306,9 +348,10 @@ def test_rejected_order_is_logged_and_frees_the_daily_limit(tmp_path):
     deps, _, _ = _deps(
         tmp_path,
         _config(tmp_path, enabled="true"),
-        reader_responses=[SEARCH_AAPL],
+        reader_responses=MARKET,
         trader_responses=[_http_error(400, {"errorMessage": "amount below minimum"})],
     )
+    _adds_value(deps)
     with pytest.raises(etoro.EtoroError, match="amount below minimum"):
         _buy(deps, amount="5")
     (row,) = _ledger_rows(deps)
@@ -320,12 +363,13 @@ def test_an_unanswered_order_keeps_counting_until_confirmed(tmp_path):
     deps, _, trader_rec = _deps(
         tmp_path,
         _config(tmp_path, enabled="true"),
-        reader_responses=[SEARCH_AAPL],
+        reader_responses=MARKET,
         trader_responses=[urllib.error.URLError("timed out")],
     )
+    _adds_value(deps)
     with pytest.raises(etoro.EtoroError) as caught:
         _buy(deps, amount="60")
-    assert "positions" in caught.value.hint
+    assert "reconcile" in caught.value.hint
     assert len(trader_rec.requests) == 1  # never resent blindly
     assert trade.usage_today(_ledger_rows(deps), "demo", NOW) == (1, 60.0)
 
@@ -334,14 +378,15 @@ def test_legacy_route_is_used_only_when_the_v2_route_is_missing(tmp_path):
     deps, _, trader_rec = _deps(
         tmp_path,
         _config(tmp_path, enabled="true"),
-        reader_responses=[SEARCH_AAPL],
+        reader_responses=MARKET,
         trader_responses=[
             _http_error(404),
             {"orderForOpen": {"orderID": 9}, "token": "t"},
             {"status": {"id": 3}},
         ],
     )
-    result = _buy(deps, amount="20")
+    # Only an unprotected (user-requested) buy may fall back: v1 may drop a stop.
+    result = _buy(deps, amount="20", extra=("--user-requested",))
     v2, v1, _lookup = trader_rec.requests
     assert v1.full_url.endswith(
         "/api/v1/trading/execution/demo/market-open-orders/by-amount"
@@ -358,9 +403,10 @@ def test_legacy_route_is_used_only_when_the_v2_route_is_missing(tmp_path):
     deps, _, trader_rec = _deps(
         tmp_path / "second",
         _config(tmp_path, enabled="true"),
-        reader_responses=[SEARCH_AAPL],
+        reader_responses=MARKET,
         trader_responses=[_http_error(500)],
     )
+    _adds_value(deps)
     with pytest.raises(etoro.EtoroError):
         _buy(deps)
     assert (
@@ -370,12 +416,17 @@ def test_legacy_route_is_used_only_when_the_v2_route_is_missing(tmp_path):
 
 def test_dry_run_checks_everything_and_sends_nothing(tmp_path):
     deps, _, trader_rec = _deps(
-        tmp_path, _config(tmp_path, enabled="true"), reader_responses=[SEARCH_AAPL]
+        tmp_path, _config(tmp_path, enabled="true"), reader_responses=MARKET
     )
+    _adds_value(deps)
     result = trade.cmd_buy(
-        _args("buy", "AAPL", "--amount", "40", "--reason", "x", "--dry-run"), deps
+        _args(
+            "buy", "AAPL", "--amount", "40", "--reason", "x", "--dry-run", *PROTECTED
+        ),
+        deps,
     )
     assert result["dry_run"] and result["would_buy"]["leverage"] == 1
+    assert result["would_buy"]["market"]["price"] == 100.0
     assert trader_rec.requests == [] and _ledger_rows(deps) == []
 
 
@@ -459,7 +510,7 @@ def test_a_held_lock_blocks_a_second_order_and_a_stale_one_is_reclaimed(tmp_path
     assert not lock_path.exists()
 
     lock_path.write_text("123", encoding="utf-8")
-    old = lock_path.stat().st_mtime - kc.STALE_LOCK_SECONDS - 5
+    old = lock_path.stat().st_mtime - trade.LedgerLock.stale_after - 5
     os.utime(lock_path, (old, old))
     with trade.LedgerLock(lock_path):
         assert lock_path.read_text(encoding="utf-8") != "123"
