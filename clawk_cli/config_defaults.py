@@ -521,11 +521,11 @@ DEFAULT_CONFIG = {
             "rewrite_loopback_urls": False,
             "loopback_host_alias": "host.docker.internal",
         },
-        # Authenticated browser-extension controller lane: a registered extension can become the
-        # exact controller for a session's browser_* tools (fail-closed once bound). Local API
-        # registration also requires the API server bearer key. developer_mode gates the privileged
-        # browser_cdp / browser_evaluate capabilities.
+        # Authenticated browser-extension controller lane: a registered extension can become the exact
+        # controller for a session's browser_* tools (fail-closed once bound). Local API registration
+        # also requires the API server bearer key. developer_mode gates browser_cdp / browser_evaluate.
         "extension_control": {"enabled": False, "developer_mode": False},
+        "my_chrome": {"enabled": False, "confirm_payments": False},  # Mi Chrome
     },
     # Stale git worktree lifecycle (`clawk -w`, `/worktree new`, subagent isolation, Desktop). The
     # sweep runs at `clawk -w` startup and every 6h from the cron ticker over every repo Clawksis made
