@@ -1,7 +1,7 @@
 """Identifier-to-speech normalization (#119207).
 
 Both speech normalizers — tools/tts_text_normalize.py (gateway/CLI/TTS tool)
-and apps/desktop/src/lib/speech-text.ts (Desktop read-aloud / auto-speak) —
+and apps/shared/src/voice/speech-text.ts (Desktop read-aloud / auto-speak) —
 must apply the same policy to identifier-dense tokens (filenames with
 extensions, hashes, UUIDs, dense model/version IDs, paths): silence, never
 hardcoded English placeholder words (#86602 — the reply may be in any

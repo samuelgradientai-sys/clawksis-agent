@@ -22,7 +22,8 @@
     "./skin": "./src/skin.ts",
     "./slash": "./src/slash.ts",
     "./theme-presets": "./src/theme-presets.ts",
-    "./usage-tick": "./src/usage-tick.ts"
+    "./usage-tick": "./src/usage-tick.ts",
+    "./voice/*": "./src/voice/*.ts"
   },
   "types": "./src/index.ts",
   "scripts": {
@@ -30,9 +31,11 @@
     "lint:fix": "eslint src/ --fix",
     "fix": "npm run lint:fix",
     "typecheck": "tsc -p . --noEmit",
-    "check": "npm run typecheck && npm run lint"
+    "test": "vitest run src/voice",
+    "check": "npm run typecheck && npm run test && npm run lint"
   },
   "devDependencies": {
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "4.1.12"
   }
 }

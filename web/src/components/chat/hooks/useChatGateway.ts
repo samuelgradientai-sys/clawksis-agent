@@ -110,6 +110,8 @@ interface UseChatGatewayResult {
   sendMessage: (text: string, images?: ChatImagePreview[]) => void;
   /** Drain one locally queued message: held by the server if a turn still runs. */
   sendQueued: (text: string) => void;
+  /** A spoken voice-mode turn (normal bubble + history; spoken-reply route). */
+  sendVoiceTurn: (text: string, interrupted?: boolean) => void;
   interrupt: () => void;
   errorMessage: string | null;
   /** Progreso en vivo del turno (retry / cambio de fallback / rate-limit). */
@@ -446,6 +448,14 @@ export function useChatGateway(): UseChatGatewayResult {
   // `queued: true`: a turn the client believes ended may still be running; the
   // server then holds this message instead of redirecting the live turn.
   const sendQueued = useCallback((text: string) => submitText(text, undefined, { queued: true }), [submitText]);
+  // Voice mode: `voice_turn` runs it on auxiliary.voice_chat, `surface: "voice"`
+  // adds the spoken-reply note to this turn's model input, `interrupted` says the
+  // user talked over the previous reply.
+  const sendVoiceTurn = useCallback(
+    (text: string, interrupted = false) =>
+      submitText(text, undefined, { voice_turn: true, surface: "voice", ...(interrupted && { interrupted: true }) }),
+    [submitText],
+  );
 
   const interrupt = useCallback(() => {
     if (!session.sessionId) return;
@@ -597,6 +607,7 @@ export function useChatGateway(): UseChatGatewayResult {
     busy,
     sendMessage,
     sendQueued,
+    sendVoiceTurn,
     interrupt,
     errorMessage,
     liveStatus,

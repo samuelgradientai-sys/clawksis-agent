@@ -42,7 +42,9 @@ import { lastUserIsSlash } from "./hooks/chatTranscript";
 import { localSlashAction, type LocalSlashAction } from "./chatLocalSlash";
 import { ReasoningSelector } from "./ReasoningSelector";
 import { ServerRequestDialog } from "./ServerRequestDialog";
-import { ComposerMicButton } from "./ComposerMicButton";
+import { ComposerVoiceControls } from "./voice/ComposerVoiceControls";
+import { VoiceModeMount } from "./voice/VoiceModeMount";
+import { modelLikelyNeedsVisionTool } from "./modelVision";
 import { useMessageQueue, type QueuedMessage } from "./hooks/useMessageQueue";
 import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useSessions, deriveTitle, type RpcSender } from "./hooks/useSessions";
@@ -64,7 +66,7 @@ import { toggleSidePanel, useSidePanel } from "./sidePanelStore";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SlashPopover, type SlashPopoverHandle } from "@/components/SlashPopover";
 import { ModelPickerDialog } from "@/components/ModelPickerDialog";
-import type { GatewayClient } from "@/lib/gatewayClient";
+import { rpcGatewayClient } from "./rpcGatewayClient";
 
 type ProjectSettingsProject = {
   id: string;
@@ -1188,25 +1190,6 @@ function CitationChip({
   );
 }
 
-function modelLikelyNeedsVisionTool(model: string | null): boolean {
-  const normalized = (model ?? "").trim().toLowerCase();
-  if (!normalized) return false;
-
-  // Modelos conocidos como text-only en el routing actual. No bloqueamos el
-  // envío; solo avisamos que, sin vision/OpenRouter o un modelo multimodal, la
-  // imagen puede quedar adjunta pero no analizada.
-  return [
-    "deepseek",
-    "gpt-oss",
-    "glm-5",
-    "glm-4.7",
-    "qwen3-coder",
-    "qwen3-32b",
-    "qwen3-235b",
-    "minimax-m2",
-  ].some((needle) => normalized.includes(needle));
-}
-
 interface ComposerProps {
   busy: boolean;
   disabled: boolean;
@@ -1259,13 +1242,7 @@ function Composer({
   const phone = useMediaQuery(PHONE_QUERY);
   // Slash-command autocomplete (mismo backend que el terminal: complete.slash).
   const slashRef = useRef<SlashPopoverHandle>(null);
-  const slashGw = useMemo(
-    () =>
-      ({
-        request: (m: string, p?: Record<string, unknown>) => sendRpc(m, p),
-      }) as unknown as GatewayClient,
-    [sendRpc],
-  );
+  const slashGw = useMemo(() => rpcGatewayClient(sendRpc), [sendRpc]);
   const {
     attachments,
     addFiles,
@@ -1585,7 +1562,7 @@ function Composer({
           />
 
           <div className="ml-auto flex items-center gap-1">
-            <ComposerMicButton voice={voice} disabled={disabled} onClick={handleMic} />
+            <ComposerVoiceControls voice={voice} disabled={disabled} onMic={handleMic} />
 
             {/* Detener el turno actual (la cola se mantiene y drena después). */}
             {busy && (
@@ -1752,6 +1729,7 @@ export default function ChatModern() {
     busy,
     sendMessage,
     sendQueued,
+    sendVoiceTurn,
     interrupt,
     errorMessage,
     liveStatus,
@@ -1807,14 +1785,7 @@ export default function ChatModern() {
   // que los resolvemos con UI nativa de React.
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   // Adapter mínimo sobre sendRpc para los diálogos que esperan un GatewayClient.
-  const gwForDialogs = useMemo(
-    () =>
-      ({
-        request: (method: string, params?: Record<string, unknown>) =>
-          sendRpc(method, params),
-      }) as unknown as GatewayClient,
-    [sendRpc],
-  );
+  const gwForDialogs = useMemo(() => rpcGatewayClient(sendRpc), [sendRpc]);
 
   // optimistic-new-chat-sidebar-v1
   // Conversaciones creadas localmente que aún no aparecen en session.list.
@@ -2357,6 +2328,7 @@ export default function ChatModern() {
         liveSessionId={session.sessionId}
         onAnswer={answerServerRequest}
       />
+      <VoiceModeMount gateway={{ sessionId: session.sessionId, busy, sendVoiceTurn, interrupt, sendRpc, waitingOnUser: serverRequests.length > 0 }} />
 
       {/* Sin "recuadro": el chat se integra al dashboard y deja ver el fondo
           (backdrop) a través de un velo translúcido que mantiene legibilidad. */}

@@ -10,6 +10,7 @@
  * queue fire a plain `prompt.submit` into the live turn and redirect it.
  */
 
+import { notifyChatEventListeners } from "./chatEventListeners";
 import { applySessionInfo, titleFromEvent, trackSessionIds } from "./sessionInfo";
 import {
   appendReasoning,
@@ -200,4 +201,5 @@ export function dispatchChatEvent(ctx: ChatEventContext, event: GatewayEventFram
   const own = isOwnEvent(ctx.ids.liveSid.current, event.session_id);
   const handler = (own ? CHAT_EVENT_HANDLERS : FOREIGN_EVENT_HANDLERS)[event.type];
   handler?.(ctx, event.payload ?? {}, event.session_id);
+  if (own) notifyChatEventListeners(event);
 }

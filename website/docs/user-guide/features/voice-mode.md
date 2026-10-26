@@ -223,6 +223,10 @@ voice:
 
 Client-direct wire support: OpenAI (incl. Nous-managed audio), Groq, Mistral, and DeepInfra via the OpenAI-compatible shapes, xAI Grok STT, and ElevenLabs STT + TTS. xAI configured through OAuth stays on the relay (the OAuth bearer refreshes server-side).
 
+### Web dashboard voice mode
+
+The dashboard's Modern chat has the same chained voice conversation, built for the browser: the page captures the microphone (Silero VAD, run locally in the page) and plays the reply, while transcription and speech run on the server through the `stt.*` / `tts.*` providers — so it works from a phone against a dashboard on a VPS, which has no microphone or speaker of its own. Spoken turns are normal turns of the open chat, carry a per-turn note asking for a short spoken-style answer (model input only, like the HUD note), and use the [voice chat model](#voice-chat-model). The page must be served over HTTPS (or localhost). See [Web Dashboard → Voice mode](./web-dashboard.md#voice-mode-modern-chat) for usage and a Spanish setup.
+
 ### Desktop: GPT-Live voice chat mode (full duplex, delegates to Clawksis)
 
 The chained loop above is one of two voice chat modes in the desktop app. The other replaces the whole STT → turn → TTS chain with **one full-duplex voice model**, OpenAI's `gpt-live-1`: it listens while it speaks, handles interruptions, backchannels and background noise itself, and has **no tools of its own**. Whenever you ask for real work it *delegates* to Clawksis, which answers as usual — with whatever model and provider the session has selected, the full toolset, memory and approvals — and the voice paraphrases the answer aloud.
@@ -255,7 +259,7 @@ auxiliary:
 
 Reasoning is off on voice turns by default, also when the slot is left on `auto` and the session's model answers. A model that cannot switch reasoning off (gpt-6-astra, mandatory-thinking Claude, routes whose catalog marks it mandatory) gets its lowest accepted level instead, and a route that rejects the disable at runtime is remembered for the next voice turn. Set any level, or `""` to use the session's effort.
 
-It applies to every chained voice turn: CLI and TUI voice mode, the Desktop voice conversation, and voice notes on messaging platforms. The voice turn has the full toolset; only the model answering it changes. The next typed message goes back to the session's model, and so do memory and skill reviews after the turn. Usage is recorded under the `voice_chat` task, so the session keeps the model you picked as its own.
+It applies to every chained voice turn: CLI and TUI voice mode, the Desktop voice conversation, the web dashboard's voice mode, and voice notes on messaging platforms. The voice turn has the full toolset; only the model answering it changes. The next typed message goes back to the session's model, and so do memory and skill reviews after the turn. Usage is recorded under the `voice_chat` task, so the session keeps the model you picked as its own.
 
 The voice model never forces a compaction: when the conversation is already larger than its context window, that turn runs on the session's model and a one-time notice says so. GPT-Live voice chat ignores this slot, because there the voice layer already is the fast model and delegates real work to the session's model.
 

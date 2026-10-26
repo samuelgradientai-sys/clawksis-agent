@@ -1,4 +1,4 @@
-"""Per-turn client surface (floating HUD, live voice) carried through canonical admission.
+"""Per-turn client surface (floating HUD, chained voice, live voice) carried through canonical admission.
 
 A surface is a fact about ONE turn, never about the session: the same session alternates
 between the app window, the HUD and a spoken delegation. It is committed with the admission
@@ -11,7 +11,7 @@ from contextvars import ContextVar
 
 from clawk_state_runtime import RuntimeStoreError
 
-SURFACES = frozenset({"hud", "voice-live"})
+SURFACES = frozenset({"hud", "voice", "voice-live"})
 _VOICE_CONTEXT_LIMIT = 6000
 _SUBMIT_FIELDS = ("surface", "voice_context", "interrupted", "voice_turn")
 _surface_turn = ContextVar("surface_turn", default=None)
@@ -72,18 +72,29 @@ def _hud_note(committed, valid_tool_names):
     return hud_surface_note(valid_tool_names)
 
 
+def _voice_note(committed, valid_tool_names):
+    from tools.tts_streaming import SPOKEN_REPLY_NOTE
+
+    return SPOKEN_REPLY_NOTE
+
+
 def _voice_live_note(committed, valid_tool_names):
     from tools.voice_live import voice_live_turn_note
 
     return voice_live_turn_note(committed.get("voice_context") or "")
 
 
-_SURFACE_NOTES = {"hud": _hud_note, "voice-live": _voice_live_note}
+_SURFACE_NOTES = {
+    "hud": _hud_note,
+    "voice": _voice_note,
+    "voice-live": _voice_live_note,
+}
 
 
 def surface_note(committed, valid_tool_names=None):
     """The model-bound note for a committed surface (``""`` for the plain app window): barge-in
-    first, then the HUD read-the-window-below prior or the spoken-delegation contract."""
+    first, then the HUD read-the-window-below prior, the spoken-reply style of a chained voice
+    turn, or the spoken-delegation contract."""
     notes = []
     if committed.get("interrupted"):
         from tools.tts_streaming import SPEECH_INTERRUPTED_NOTE

@@ -14,6 +14,8 @@ function compilerPreset() {
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 
 const configDir: string = fileURLToPath(new URL(".", import.meta.url));
 
@@ -76,17 +78,58 @@ function clawkDevToken(): Plugin {
   };
 }
 
+/**
+ * Voice mode's Silero VAD model and AudioWorklet, served same-origin from
+ * `/voice-vad/` (never a CDN): emitted into the build, served from
+ * node_modules in dev. They are fetched by fixed name (vad-web's
+ * `baseAssetPath`), so they cannot be hashed assets; the ONNX runtime's wasm
+ * is, via a `?url` import in sileroSegmenter.ts.
+ */
+const requireFromConfig = createRequire(import.meta.url);
+
+/** vad-web `require`s ORT's CJS build, which loads its wasm glue with a
+ *  runtime `import()` of a separate .mjs; the ESM bundle build embeds it, so
+ *  voice mode never depends on fetching (or failing to fetch) another module. */
+const ORT_WASM_BUNDLE = path.join(
+  path.dirname(requireFromConfig.resolve("onnxruntime-web/wasm")),
+  "ort.wasm.bundle.min.mjs",
+);
+
+function voiceVadAssets(): Plugin {
+  const files = ["silero_vad_v5.onnx", "vad.worklet.bundle.min.js"];
+  const dist = path.join(path.dirname(requireFromConfig.resolve("@ricky0123/vad-web/package.json")), "dist");
+  const types: Record<string, string> = { onnx: "application/octet-stream", js: "text/javascript" };
+  return {
+    name: "clawk:voice-vad-assets",
+    configureServer(server) {
+      server.middlewares.use("/voice-vad", (req, res, next) => {
+        const name = (req.url ?? "").replace(/^\//, "").split("?")[0];
+        if (!files.includes(name)) return next();
+        res.setHeader("Content-Type", types[name.split(".").pop() ?? ""] ?? "application/octet-stream");
+        res.end(readFileSync(path.join(dist, name)));
+      });
+    },
+    generateBundle() {
+      for (const name of files) {
+        this.emitFile({ type: "asset", fileName: `voice-vad/${name}`, source: readFileSync(path.join(dist, name)) });
+      }
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
     babel({ presets: [compilerPreset()] }),
     tailwindcss(),
     clawkDevToken(),
+    voiceVadAssets(),
   ],
   resolve: {
     alias: {
       "@": path.resolve(configDir, "./src"),
       "@clawk/shared": path.resolve(configDir, "../apps/shared/src"),
+      "onnxruntime-web/wasm": ORT_WASM_BUNDLE,
     },
     // When @nous-research/ui is symlinked via `file:../../design-language`,
     // Node's module resolution would pick up shared deps from
@@ -146,6 +189,11 @@ export default defineConfig({
             {
               name: "ui",
               test: /node_modules[\\/]@nous-research[\\/]ui([\\/]|$)/,
+            },
+            {
+              // Voice mode's VAD runtime: loaded on the first voice conversation only.
+              name: "voice-vad",
+              test: /node_modules[\\/](@ricky0123[\\/]vad-web|onnxruntime-web|onnxruntime-common)[\\/]/,
             },
             {
               name: "vendor",

@@ -1,8 +1,9 @@
+import { IncrementalSpeechSentenceBuffer } from '@clawk/shared/voice/speech-text'
+import { isTtsEcho } from '@clawk/shared/voice/tts-echo'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { type ResolvedOwner, resolveOwnerNow } from '@/clawk'
 import { useI18n } from '@/i18n'
-import { IncrementalSpeechSentenceBuffer } from '@/lib/speech-text'
 import { syncSttLease, VOICE_INPUT_LEASE } from '@/lib/stt-lease'
 import { startThinkingSound, stopThinkingSound } from '@/lib/thinking-sound'
 import { monitorSpeechDuringPlayback } from '@/lib/voice-barge-in'
@@ -15,7 +16,6 @@ import {
   takeVoicePlaybackInterrupted
 } from '@/lib/voice-playback'
 import { isVoiceStopCommand } from '@/lib/voice-stop-word'
-import { isTtsEcho } from '@/lib/voice-tts-echo'
 import { notify, notifyError } from '@/store/notifications'
 import { $voicePlayback } from '@/store/voice-playback'
 import { $autoSpeakReplies, $bargeInEnabled, $bargeInThresholdMultiplier, $voiceSilenceMs } from '@/store/voice-prefs'
