@@ -911,18 +911,22 @@ async def create_managed_directory(payload: ManagedDirectoryCreate, request: Req
 
 @router.delete("/api/files")
 async def delete_managed_file(payload: ManagedFileDelete, request: Request):
-    policy, target, display_path = _resolve_managed_path(payload.path, request)
+    policy, target, display_path = _resolve_managed_path(
+        payload.path, request, keep_link=True
+    )
     if policy.locked_root is not None and target == policy.locked_root:
         raise HTTPException(
             status_code=400, detail="Cannot delete the managed files root"
         )
     if target.parent == target:
         raise HTTPException(status_code=400, detail="Cannot delete the filesystem root")
-    if not target.exists():
+    if not target.exists() and not target.is_symlink():
         raise HTTPException(status_code=404, detail="Path not found")
 
     try:
-        if target.is_dir():
+        if target.is_symlink():
+            target.unlink()  # the link only — never what it points at
+        elif target.is_dir():
             if payload.recursive:
                 shutil.rmtree(target)
             else:
