@@ -8,17 +8,26 @@ import { resetBrowserLiveStore } from "./browserLiveStore";
 /** The open side-panel tab, as the store persists it. */
 const panel = () => window.localStorage.getItem("clawksis-chat-side-panel");
 
-function chat(selectedKey: string | null) {
-  const ctx = {
+function chatContext(selectedKey: string | null) {
+  return {
     setMessages: () => undefined,
+    setSession: () => undefined,
     setLiveStatus: () => undefined,
     setBusy: () => undefined,
     setErrorMessage: () => undefined,
+    deltas: { push: () => undefined, take: () => "" },
     turn: { started: false, submitsInFlight: 0 },
     ids: { liveSid: { current: "live-1" }, selectedKey: { current: selectedKey } },
   } as unknown as ChatEventContext;
+}
+
+function chat(selectedKey: string | null, ctx = chatContext(selectedKey)) {
   return (name: string) =>
     dispatchChatEvent(ctx, { type: "tool.start", session_id: "live-1", payload: { name, tool_id: name } });
+}
+
+function endTurn(ctx: ChatEventContext) {
+  dispatchChatEvent(ctx, { type: "message.complete", session_id: "live-1", payload: { text: "listo" } });
 }
 
 describe("the Navegador panel opens itself when the agent starts browsing", () => {
@@ -35,13 +44,22 @@ describe("the Navegador panel opens itself when the agent starts browsing", () =
     expect(panel()).toBe("browser");
   });
 
-  it("respects the user closing it for the rest of that conversation", () => {
-    const toolStarts = chat("chat-1");
+  it("opens once per turn: a user close holds until the next turn starts browsing", () => {
+    const ctx = chatContext("chat-1");
+    const toolStarts = chat("chat-1", ctx);
     toolStarts("browser_navigate");
     setSidePanel(null);
     toolStarts("browser_click");
     expect(panel()).toBeNull();
 
+    endTurn(ctx);
+    toolStarts("browser_exec");
+    expect(panel()).toBe("browser");
+  });
+
+  it("another conversation's first browser tool opens it too", () => {
+    chat("chat-1")("browser_navigate");
+    setSidePanel(null);
     chat("chat-2")("browser_navigate");
     expect(panel()).toBe("browser");
   });

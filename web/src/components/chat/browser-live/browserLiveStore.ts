@@ -1,7 +1,8 @@
 /**
  * Which browser session the chat wants to watch, the agent's recent browser actions (from its
- * browser_* tool calls), and the one-time auto-open of the "Navegador" panel: the first browser tool
- * of a conversation opens it; closing it is respected afterwards.
+ * browser_* tool calls), and the auto-open of the "Navegador" panel: the first browser tool of a
+ * TURN opens it (on phones too, where the panel is an overlay); if the user closes it during that
+ * turn it stays closed until the next turn starts browsing.
  */
 
 import { useSyncExternalStore } from "react";
@@ -11,7 +12,8 @@ const MAX_ACTIONS = 6;
 
 let preferredKey: string | null = null;
 let actions: string[] = [];
-const autoOpened = new Set<string>();
+// Conversations whose current turn already opened the panel.
+const openedThisTurn = new Set<string>();
 const listeners = new Set<() => void>();
 
 export function isBrowserTool(name: unknown): boolean {
@@ -25,9 +27,14 @@ export function noteBrowserActivity(sessionKey: string | null, toolName: string)
   preferredKey = sessionKey;
   actions = [...actions.slice(1 - MAX_ACTIONS), toolName];
   for (const l of listeners) l();
-  if (autoOpened.has(key)) return;
-  autoOpened.add(key);
+  if (openedThisTurn.has(key)) return;
+  openedThisTurn.add(key);
   setSidePanel("browser");
+}
+
+/** The conversation's turn ended: its next browser tool may open the panel again. */
+export function noteTurnEnded(sessionKey: string | null): void {
+  openedThisTurn.delete(sessionKey ?? "");
 }
 
 function subscribe(listener: () => void): () => void {
@@ -50,5 +57,5 @@ export function useBrowserActions(): string[] {
 export function resetBrowserLiveStore(): void {
   preferredKey = null;
   actions = [];
-  autoOpened.clear();
+  openedThisTurn.clear();
 }

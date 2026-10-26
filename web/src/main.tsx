@@ -8,6 +8,7 @@ import { BrowserRouter } from "react-router";
 import "./index.css";
 import App from "./App";
 import { DashboardNavigationBridge } from "./components/DashboardNavigationBridge";
+import { MyChromeActivityPill } from "./components/my-chrome/MyChromeActivityPill";
 import { ProfileProvider } from "./contexts/ProfileProvider";
 import { SystemActionsProvider } from "./contexts/SystemActions";
 import { I18nProvider } from "./i18n";
@@ -44,6 +45,8 @@ createRoot(document.getElementById("root")!).render(
           {/* Above App, so its plugin loader follows the selected profile. */}
           <ProfileProvider>
             <App />
+            {/* Fixed-position, on every page: "the agent is using your Chrome · Ver en vivo". */}
+            <MyChromeActivityPill />
           </ProfileProvider>
         </SystemActionsProvider>
       </ThemeProvider>

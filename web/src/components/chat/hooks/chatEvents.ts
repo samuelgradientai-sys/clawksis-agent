@@ -22,7 +22,7 @@ import {
 } from "./chatTranscript";
 import type { ChatMessage, SessionInfo } from "./useChatGateway";
 import { relayDashboardNavigate } from "@/lib/dashboard-navigation";
-import { isBrowserTool, noteBrowserActivity } from "../browser-live/browserLiveStore";
+import { isBrowserTool, noteBrowserActivity, noteTurnEnded } from "../browser-live/browserLiveStore";
 
 type Payload = Record<string, unknown>;
 type Update<T> = (update: (prev: T) => T) => void;
@@ -101,6 +101,7 @@ function endTurn(ctx: ChatEventContext): void {
   ctx.turn.started = false;
   ctx.setBusy(false);
   ctx.setLiveStatus(null);
+  noteTurnEnded(ctx.ids.selectedKey.current);
 }
 
 /** The cumulative session total a `message.complete` carries (assigned, not summed). */

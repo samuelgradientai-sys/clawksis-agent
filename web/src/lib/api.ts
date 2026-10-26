@@ -149,15 +149,15 @@ const PROFILE_SCOPED_PREFIXES = [
   "/api/model/moa",
   "/api/model/options",
   "/api/model/local-status",
-  // A named profile keeps its own pairing whitelist, and its gateway only
-  // consults that one — approving into the global store would grant access
-  // the running gateway never sees.
+  // A named profile keeps its own pairing whitelist, and its gateway only consults that one —
+  // approving into the global store would grant access the running gateway never sees. Same for
+  // Mi Chrome: its switches, paired device and connection are each profile's own.
   "/api/pairing",
-  // Memory files, the curator state file, webhook subscriptions, shell hooks,
-  // checkpoints, backups/imports and the dashboard's own theme/font/plugin
-  // preferences all live in a profile home. One backend now serves every
-  // profile, so the switcher's selection has to ride on the request or a reset
-  // lands on the launch profile's data.
+  "/api/my-chrome",
+  // Memory files, the curator state file, webhook subscriptions, shell hooks, checkpoints,
+  // backups/imports and the dashboard's own theme/font/plugin preferences all live in a profile
+  // home. One backend now serves every profile, so the switcher's selection has to ride on the
+  // request or a reset lands on the launch profile's data.
   "/api/memory",
   "/api/curator",
   "/api/webhooks",

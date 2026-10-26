@@ -9,12 +9,16 @@ const ownsKey = (id: string, key: string) =>
 /** Delegated subagents browse under their own task id (`sa-<index>-<id>`). */
 const isSubagentKey = (id: string) => /^sa-\d+-/.test(id);
 
-/** "Agente" for the conversation's own browser, "Subagente n" for delegated helpers, "Navegador n"
- *  for anything else. */
+/** "Agente" for the conversation's own browser, "Subagente n" for delegated helpers, the server's
+ *  own label when it sends one ("Mi Chrome"), "Navegador n" for anything else. */
 export function sessionLabels(sessions: LiveBrowserSession[], preferred: string | null): Map<string, string> {
   const labels = new Map<string, string>();
   const counts = { Subagente: 0, Navegador: 0 };
-  for (const { task_id: id } of sessions) {
+  for (const { task_id: id, label } of sessions) {
+    if (label) {
+      labels.set(id, label);
+      continue;
+    }
     if (preferred && ownsKey(id, preferred)) {
       labels.set(id, "Agente");
       continue;
@@ -26,11 +30,18 @@ export function sessionLabels(sessions: LiveBrowserSession[], preferred: string 
 }
 
 /** The conversation's own browser (its key, or a variant of it: `<key>@<profile>`, `<key>::local`),
- *  else the most recently opened one. */
+ *  else the user's own Chrome (a conversation running on it is folded into that entry), else the
+ *  most recently opened one. */
 export function pickSession(sessions: LiveBrowserSession[], preferred: string | null): string | null {
   const ids = sessions.map((s) => s.task_id);
   const own = preferred ? ids.filter((id) => ownsKey(id, preferred)) : [];
-  return own.at(-1) ?? ids.at(-1) ?? null;
+  const mine = sessions.filter((s) => s.kind === "my_chrome").map((s) => s.task_id);
+  return own.at(-1) ?? mine.at(-1) ?? ids.at(-1) ?? null;
+}
+
+/** Whether the shown browser is the user's own Chrome (Mi Chrome) rather than the server's. */
+export function isUsersChrome(sessions: LiveBrowserSession[], taskId: string | null): boolean {
+  return sessions.some((s) => s.task_id === taskId && s.kind === "my_chrome");
 }
 
 interface Box {
