@@ -40,7 +40,8 @@ def test_skill_opens_its_mini_dashboard():
 
 
 @pytest.mark.parametrize(
-    "kwargs", [{"page": "nowhere"}, {"page": ""}, {"skill": "../config"}, {"skill": "a/b"}]
+    "kwargs",
+    [{"page": "nowhere"}, {"page": ""}, {"skill": "../config"}, {"skill": "a/b"}],
 )
 def test_unknown_targets_emit_nothing(kwargs):
     calls = _capture()

@@ -123,7 +123,9 @@ _CODING_TOOLS = _core_without(
 
 # Toolsets a CLIENT adds to its own sessions (tui_gateway/server.py::_gui_surface_toolsets), never
 # config: another surface lacking them made no configuration choice.
-CLIENT_SURFACE_TOOLSETS = frozenset({"project", "desktop_ui", "catalog", "dashboard_ui"})
+CLIENT_SURFACE_TOOLSETS = frozenset(
+    {"project", "desktop_ui", "catalog", "dashboard_ui"}
+)
 
 # Core toolset definitions: individual tools or references to other toolsets.
 TOOLSETS = {
