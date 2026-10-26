@@ -226,6 +226,41 @@ export interface Translations {
     workspaceCustom: string;
     previousPage: string;
     nextPage: string;
+    /** Optional — English fallback until translated (sessionsLabels()). */
+    loadWhat?: string;
+    storeCorrupt?: string;
+    groupPinned?: string;
+    groupToday?: string;
+    groupYesterday?: string;
+    groupWeek?: string;
+    groupMonth?: string;
+    groupOlder?: string;
+    showArchived?: string;
+    archive?: string;
+    unarchive?: string;
+    pin?: string;
+    unpin?: string;
+    archivedBadge?: string;
+    pinnedBadge?: string;
+    sessionArchived?: string;
+    sessionUnarchived?: string;
+    updateFailed?: string;
+    historyTruncated?: string;
+    notArchived?: string;
+    startedAt?: string;
+    lastActiveAt?: string;
+    rename?: string;
+    renamed?: string;
+    renameFailed?: string;
+    exportJson?: string;
+    exportFailed?: string;
+    pruneButton?: string;
+    pruneTitle?: string;
+    pruneDescription?: string;
+    pruneDays?: string;
+    pruneAction?: string;
+    pruneInvalidDays?: string;
+    pruneFailed?: string;
     roles: {
       user: string;
       assistant: string;
@@ -283,6 +318,11 @@ export interface Translations {
     component: string;
     lines: string;
     noLogLines: string;
+    /** Optional — English fallback until translated. */
+    search?: string;
+    download?: string;
+    noFileYet?: string;
+    downloadFailed?: string;
   };
 
   // ── Cron page ──
@@ -290,6 +330,15 @@ export interface Translations {
     /** Optional — English fallback until translated. */
     loadWhat?: string;
     scriptRequired?: string;
+    runHistory?: string;
+    runsWhat?: string;
+    noRuns?: string;
+    runLive?: string;
+    runFinished?: string;
+    runUnfinished?: string;
+    runScriptOutput?: string;
+    showTranscript?: string;
+    calendarWhat?: string;
     confirmDeleteMessage: string;
     confirmDeleteTitle: string;
     newJob: string;
