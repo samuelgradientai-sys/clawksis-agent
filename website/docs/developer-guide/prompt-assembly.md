@@ -143,7 +143,7 @@ renderable inside a terminal.
 The platform hint (Layer 10 above) is the per-surface guidance Clawksis
 injects for Telegram, WhatsApp, Slack, CLI, and other platforms — for
 example "you are on a terminal, avoid Markdown." The built-in defaults
-live in `PLATFORM_HINTS` (`agent/system_prompt.py`); plugin-provided
+live in `PLATFORM_HINTS` (`agent/prompt_builder_platform_hints.py`); plugin-provided
 platforms supply theirs through the platform registry.
 
 An administrator can append to or replace a single platform's hint from

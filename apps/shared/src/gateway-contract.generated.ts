@@ -6029,6 +6029,10 @@ export interface PaneRevealPayload {
   pane: string
   [key: string]: unknown
 }
+/** ``tools/dashboard_open_tool.py``. */
+export interface DashboardNavigatePayload {
+  path: string
+}
 /** ``tools/react_to_message_tool.py``. */
 export interface MessageReactionPayload {
   row_id: number
@@ -7119,6 +7123,8 @@ export interface BackendGatewayEventMap {
   'connection.update': ConnectionUpdatePayload
   /** cron/jobs.json moved; refetch the cron list. */
   'cron.changed': ChangeSignalPayload
+  /** Open a web-dashboard route (the chat stays mounted). */
+  'dashboard.navigate': DashboardNavigatePayload
   /** The install ended (0 ok, -1 cancelled, -2 no sudo: the command to run by hand was streamed). */
   'display.install.done': DisplayInstallDonePayload
   /** One line of package-manager output. */
@@ -7269,6 +7275,7 @@ export const GATEWAY_EVENT_TYPES = [
   'connection.request',
   'connection.update',
   'cron.changed',
+  'dashboard.navigate',
   'display.install.done',
   'display.install.log',
   'display.lease',

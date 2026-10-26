@@ -123,7 +123,7 @@ _CODING_TOOLS = _core_without(
 
 # Toolsets a CLIENT adds to its own sessions (tui_gateway/server.py::_gui_surface_toolsets), never
 # config: another surface lacking them made no configuration choice.
-CLIENT_SURFACE_TOOLSETS = frozenset({"project", "desktop_ui", "catalog"})
+CLIENT_SURFACE_TOOLSETS = frozenset({"project", "desktop_ui", "catalog", "dashboard_ui"})
 
 # Core toolset definitions: individual tools or references to other toolsets.
 TOOLSETS = {
@@ -260,6 +260,12 @@ TOOLSETS = {
             "show_tip",
             "set_theme",
         ],
+    ),
+    "dashboard_ui": _ts(
+        "Web dashboard affordances — open a dashboard page or a skill's mini dashboard "
+        "for the user (dashboard chat sessions only)",
+        ["dashboard_open"],
+        platforms=frozenset({"dashboard"}),
     ),
     "onboarding": _ts(
         "First-run onboarding cards; folded in only for the onboarding chat (tui_gateway/methods_onboarding.py)",

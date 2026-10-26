@@ -7,6 +7,7 @@ import { BrowserRouter } from "react-router";
 // an isolated context where `@apply p-4` errors with "unknown utility class".
 import "./index.css";
 import App from "./App";
+import { DashboardNavigationBridge } from "./components/DashboardNavigationBridge";
 import { ProfileProvider } from "./contexts/ProfileProvider";
 import { SystemActionsProvider } from "./contexts/SystemActions";
 import { I18nProvider } from "./i18n";
@@ -36,6 +37,7 @@ window.addEventListener("vite:preloadError", (event) => {
 
 createRoot(document.getElementById("root")!).render(
   <BrowserRouter basename={CLAWK_BASE_PATH || undefined}>
+    <DashboardNavigationBridge />
     <I18nProvider>
       <ThemeProvider>
         <SystemActionsProvider>

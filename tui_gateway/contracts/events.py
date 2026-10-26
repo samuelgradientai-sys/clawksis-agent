@@ -887,6 +887,19 @@ class PaneRevealPayload(OpenPayload):
 event("pane.reveal", PaneRevealPayload, doc="Focus / reveal a named desktop pane.")
 
 
+class DashboardNavigatePayload(Payload):
+    """``tools/dashboard_open_tool.py``."""
+
+    path: str
+
+
+event(
+    "dashboard.navigate",
+    DashboardNavigatePayload,
+    doc="Open a web-dashboard route (the chat stays mounted).",
+)
+
+
 class MessageReactionPayload(Payload):
     """``tools/react_to_message_tool.py``."""
 

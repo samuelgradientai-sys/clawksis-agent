@@ -26,18 +26,17 @@ from agent.prompt_builder import (
     CLAWK_AGENT_HELP_GUIDANCE_NO_SKILLS,
     KANBAN_GUIDANCE,
     PARALLEL_TOOL_CALL_GUIDANCE,
-    PLATFORM_HINTS,
     SCRAPING_GUIDANCE,
     SESSION_SEARCH_GUIDANCE,
     SKILLS_GUIDANCE,
     STEER_CHANNEL_NOTE,
     TASK_COMPLETION_GUIDANCE,
-    TELEGRAM_RICH_MESSAGES_HINT,
     TOOL_USE_ENFORCEMENT_GUIDANCE,
     TOOL_USE_ENFORCEMENT_MODELS,
     drain_truncation_warnings,
 )
 from agent import prompt_builder as _pb
+from agent.prompt_builder_platform_hints import PLATFORM_HINTS, TELEGRAM_RICH_MESSAGES_HINT
 from agent.runtime_cwd import resolve_agent_cwd, resolve_context_cwd
 from clawk_constants import get_default_clawk_root, get_clawk_home
 from utils import is_truthy_value

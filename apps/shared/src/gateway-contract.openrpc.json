@@ -16768,6 +16768,21 @@
         "title": "CurrentSubscription",
         "type": "object"
       },
+      "DashboardNavigatePayload": {
+        "additionalProperties": false,
+        "description": "``tools/dashboard_open_tool.py``.",
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "DashboardNavigatePayload",
+        "type": "object"
+      },
       "DelegationPauseParams": {
         "additionalProperties": false,
         "properties": {
@@ -49543,6 +49558,18 @@
           "name": "payload",
           "schema": {
             "$ref": "#/components/schemas/ChangeSignalPayload"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dashboard.navigate",
+      "summary": "Open a web-dashboard route (the chat stays mounted).",
+      "params": [
+        {
+          "name": "payload",
+          "schema": {
+            "$ref": "#/components/schemas/DashboardNavigatePayload"
           }
         }
       ]
