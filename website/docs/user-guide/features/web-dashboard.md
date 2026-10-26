@@ -333,6 +333,32 @@ Each key shows:
 
 Advanced/rarely-used keys are hidden by default behind a toggle.
 
+### Today ("Hoy")
+
+The first sidebar entry: what the agent did and built on one day for the selected profile, in your
+browser's timezone. The arrows (or `/today?date=YYYY-MM-DD`) browse earlier days.
+
+- **Day summary** — a short recap written by the auxiliary model on the `daily_summary` task
+  (`auxiliary.daily_summary` in `config.yaml`; `auto` uses the main model). It is written the first
+  time a day with activity is opened, cached per profile and day under `<profile home>/cache/today/`,
+  and only rewritten with **Regenerate**; the page says when the day has had new activity since. If
+  no model answers, everything else still renders.
+- **Day in numbers** — conversations, messages, tool calls (and how many failed), files created and
+  edited, shell commands, cron runs ok/failed, skills created/updated, and tokens/cost of the sessions
+  started that day (the same attribution as Analytics).
+- **What it built** — files written with `write_file`/`patch`, grouped by project (git work tree or
+  folder; each opens its folder in Files), skills changed through `skill_manage`, commits made that day
+  in the repos it wrote to or committed in, new cron jobs, and the last commands it ran. A file whose
+  first change of the day was a whole-file write counts as new.
+- **Timeline** — every conversation (source, time span, the request, the last reply, failed tools;
+  click to resume it in Chat), cron runs with their outcome from the execution ledger, commits, skill
+  changes and skill dashboards refreshed that day.
+- **Get this summary every night** — after a confirmation, creates a daily cron job (time and delivery
+  channel of your choice) that asks the agent for the day's summary.
+
+`GET /api/analytics/today?date=&tz=&profile=` returns the data; `POST /api/analytics/today/summary`
+(`{date, tz, lang, regenerate}`) writes the summary.
+
 ### Sessions
 
 Browse and inspect all agent sessions of the selected profile. The history is grouped by the day of last activity (Pinned, Today, Yesterday, Previous 7 days, Previous 30 days, Older) and sorted by latest activity, so a conversation continued today is on top whenever it started. Each row shows the session title, source platform icon (CLI, Telegram, Discord, Slack, cron), model name, message count, tool call count, and how long ago it was active (hover for the exact start and last-activity times). Live sessions are marked with a pulsing badge.

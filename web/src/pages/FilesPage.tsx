@@ -18,6 +18,7 @@ import {
   Unlink,
   Upload,
 } from "lucide-react";
+import { useSearchParams } from "react-router";
 import { Badge } from "@nous-research/ui/ui/components/badge";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { Card, CardContent } from "@nous-research/ui/ui/components/card";
@@ -74,7 +75,11 @@ export default function FilesPage() {
   const { setAfterTitle, setEnd } = usePageHeader();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dragDepthRef = useRef(0);
-  const [currentPath, setCurrentPath] = useState<string | undefined>(undefined);
+  // `?path=` opens a folder directly (the "Hoy" page links each file to its folder).
+  const [searchParams] = useSearchParams();
+  const [currentPath, setCurrentPath] = useState<string | undefined>(
+    () => searchParams.get("path") || undefined,
+  );
   const [pathInput, setPathInput] = useState("");
   const [listing, setListing] = useState<ManagedFilesResponse | null>(null);
   const [loading, setLoading] = useState(false);

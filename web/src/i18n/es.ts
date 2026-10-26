@@ -80,6 +80,7 @@ export const es: Translations = {
       sessions: "Sesiones",
       skills: "Habilidades",
       integrations: "Integraciones",
+      today: "Hoy",
     },
     modelToolsSheetSubtitle: "y herramientas",
     modelToolsSheetTitle: "Modelo",

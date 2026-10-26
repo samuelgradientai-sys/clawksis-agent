@@ -110,6 +110,35 @@ def _ref_exists(cwd: str, ref: str) -> bool:
     return _git(cwd, ["rev-parse", "--verify", "--quiet", ref])[0] == 0
 
 
+def commits_in_window(
+    cwd: str, start: float, end: float, *, limit: int = 20, timeout: int = 5
+) -> list[dict]:
+    """Non-merge commits on local branches committed in ``[start, end)`` (epoch seconds), newest
+    first: ``{"sha", "at", "author", "subject"}``. [] on a non-repo or any git failure."""
+    code, out, _ = _git(
+        cwd,
+        [
+            "log",
+            "--branches",
+            "--no-merges",
+            f"--since=@{int(start)}",
+            f"--until=@{int(end) - 1}",
+            f"--max-count={int(limit)}",
+            "--pretty=format:%H%x1f%ct%x1f%an%x1f%s",
+        ],
+        timeout=timeout,
+    )
+    commits = []
+    for line in out.splitlines() if code == 0 else []:
+        parts = line.split("\x1f")
+        if len(parts) == 4 and parts[1].isdigit():
+            sha, at, author, subject = parts
+            commits.append(
+                {"sha": sha, "at": float(at), "author": author, "subject": subject}
+            )
+    return commits
+
+
 # ── shared helpers ───────────────────────────────────────────────────────────
 
 

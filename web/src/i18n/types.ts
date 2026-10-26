@@ -144,6 +144,8 @@ export interface Translations {
       skills: string;
       /** Optional — English fallback until translated. */
       integrations?: string;
+      /** Optional — English fallback until translated. */
+      today?: string;
     };
     modelToolsSheetSubtitle: string;
     modelToolsSheetTitle: string;

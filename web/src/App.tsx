@@ -49,6 +49,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Sun,
   Terminal,
   Users,
   Webhook,
@@ -177,6 +178,7 @@ const SystemPage = lazyPage(() => import("@/pages/SystemPage"));
 const VisualizationPage = lazyPage(() => import("@/pages/VisualizationPage"));
 const CookbookPage = lazyPage(() => import("@/pages/CookbookPage"));
 const MediaPage = lazyPage(() => import("@/pages/MediaPage"));
+const TodayPage = lazyPage(() => import("@/pages/TodayPage"));
 
 // Wrapper que decide entre modo terminal (xterm) y modo moderno (burbujas).
 // Lee preferencia de localStorage vía useChatMode y carga ChatPage lazy cuando
@@ -242,6 +244,14 @@ const CHAT_NAV_ITEM: NavItem = {
   icon: Terminal,
 };
 
+// "Hoy" (what the agent did today) opens the sidebar, above Chat.
+const TODAY_NAV_ITEM: NavItem = {
+  path: "/today",
+  labelKey: "today",
+  label: "Today",
+  icon: Sun,
+};
+
 /**
  * Built-in routes except /chat.  Chat is rendered persistently (outside
  * <Routes>) when embedded — see the persistent chat host block rendered
@@ -255,6 +265,7 @@ const CHAT_NAV_ITEM: NavItem = {
  */
 const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/": RootRedirect,
+  "/today": TodayPage,
   "/sessions": SessionsPage,
   "/visualization": VisualizationPage,
   "/files": FilesPage,
@@ -591,8 +602,8 @@ export default function App() {
 
   const builtinNav = useMemo(() => {
     const base = embeddedChat
-      ? [CHAT_NAV_ITEM, ...BUILTIN_NAV_REST]
-      : BUILTIN_NAV_REST;
+      ? [TODAY_NAV_ITEM, CHAT_NAV_ITEM, ...BUILTIN_NAV_REST]
+      : [TODAY_NAV_ITEM, ...BUILTIN_NAV_REST];
     return showTokenAnalytics
       ? base
       : base.filter((n) => n.path !== "/analytics");

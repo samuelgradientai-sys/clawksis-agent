@@ -865,9 +865,9 @@ DEFAULT_CONFIG = {
         # Curator skill-usage review can take minutes on reasoning models (umbrellas over hundreds
         # of skills); route cheaper via `clawk model` → auxiliary → Curator.
         "curator": _aux(600),
-        "monitor": _aux(
-            60
-        ),  # important-mail 0-10 scorer; high-volume, small model fine
+        # monitor: important-mail 0-10 scorer; high-volume, small model fine.
+        "monitor": _aux(60),
+        "daily_summary": _aux(120),  # dashboard "Hoy" page day summary
         # Post-turn self-improvement fork (save memory / patch skill). "auto" = main model replaying
         # the full conversation (warm cache); other models replay a compact digest (~3-5x cheaper).
         # enabled=false skips auto spawns (/refine still works). An explicit max_input_tokens caps

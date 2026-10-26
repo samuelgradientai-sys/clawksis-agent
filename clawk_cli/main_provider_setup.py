@@ -97,6 +97,7 @@ _AUX_TASKS: list[tuple[str, str, str]] = [
     ("kanban_decomposer", "Kanban decomposer", "task decomposition"),
     ("profile_describer", "Profile describer", "auto profile descriptions"),
     ("curator", "Curator", "skill-usage review pass"),
+    ("daily_summary", "Daily summary", "dashboard 'Hoy' day summary"),
 ]
 
 # Special non-auxiliary task surfaced in the same picker: subagent delegation. Routing lives
