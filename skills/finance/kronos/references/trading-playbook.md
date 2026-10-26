@@ -103,7 +103,7 @@ Stay out (and say why in the report) when: the market is closed for that stock, 
 bar is older than two bar lengths (stale data), any order is `unknown` (run `reconcile`), the
 verdict is not `adds_value`, the script refuses the buy (limits, lessons, backtest, stop,
 market), or the evidence disagrees (forecast up, indicators bearish). The script itself refuses
-buys while the New York session is closed for anything that does not trade on weekends, and
+buys while the New York session is closed for anything with no Saturday trading, and
 when the newest eToro price is over 2 hours old.
 
 `--user-requested` exists only for a buy the user explicitly asked for in the conversation

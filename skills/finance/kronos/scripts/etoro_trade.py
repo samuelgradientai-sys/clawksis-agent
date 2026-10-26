@@ -19,9 +19,9 @@ OFF BY DEFAULT. Every guard runs here, before any order leaves the machine:
 - Protection: an automatic buy must carry a stop-loss (``--stop``; ``--target`` optional),
   sent with the order so eToro executes it. Before the order, the instrument's current eToro
   price is read: the stop must sit below it (by at most 50%) and the target above it.
-- Market hours: the newest eToro price must be under 2 hours old, and an instrument that does
-  not trade on weekends is bought only inside the New York Stock Exchange regular session
-  (holidays and early closes included).
+- Market hours: the newest eToro price must be under 2 hours old, and an instrument with no
+  Saturday trading (anything but crypto-like 24/7 markets) is bought only inside the New York
+  Stock Exchange regular session (holidays and early closes included).
 - At most once: an order POST is retried only after HTTP 429 (eToro did not process it), with
   the Retry-After wait or a 15/30/60 s backoff. A timeout, dropped connection, unreadable answer
   or 5xx is never resent: the buy is logged ``unknown`` (it keeps counting toward the limits)
@@ -150,7 +150,9 @@ WRITE_RETRY_WAITS = (15.0, 30.0, 60.0)
 READ_RETRY_WAITS = (2.0,)
 MAX_WRITE_RETRY_AFTER = 60.0
 # Current price for the protection and market checks: hourly candles, the newest of which is the
-# still-forming one; 200 of them span 8+ days, so a 24/7 instrument always shows weekend bars.
+# still-forming one; 200 of them span 8+ days, so a 24/7 instrument always shows Saturday bars.
+# Saturday, not Sunday: 24/5 stock sessions and forex open on Sunday evening (UTC Monday or late
+# Sunday) and must stay under the New York hours rule.
 PRICE_INTERVAL = "OneHour"
 PRICE_BARS = 200
 PRICE_MAX_AGE = timedelta(hours=2)
@@ -505,7 +507,7 @@ def check_price_levels(stop: float | None, target: float | None, price: float) -
 
 
 def market_snapshot(reader: EtoroClient, instrument_id: int) -> dict[str, Any]:
-    """Current price (the forming candle's close), its time, and whether it trades on weekends."""
+    """Current price (the forming candle's close), its time, and whether it trades on Saturdays."""
     bars, _warnings = rows_to_bars(
         reader.candles(instrument_id, PRICE_INTERVAL, PRICE_BARS)
     )
@@ -513,7 +515,7 @@ def market_snapshot(reader: EtoroClient, instrument_id: int) -> dict[str, Any]:
     return {
         "price": newest.close,
         "price_time": newest.ts,
-        "trades_weekends": any(bar.ts.weekday() >= 5 for bar in bars),
+        "trades_weekends": any(bar.ts.weekday() == 5 for bar in bars),
     }
 
 
@@ -521,7 +523,7 @@ def check_market(
     symbol: str, instrument: Mapping[str, Any], snapshot: dict[str, Any], now: datetime
 ) -> dict[str, Any]:
     """Refuse when eToro marks the instrument untradable, its price is stale, or (for an
-    instrument that does not trade on weekends) the NYSE regular session is closed."""
+    instrument with no Saturday trading) the NYSE regular session is closed."""
     if (
         instrument.get("isDelisted") is True
         or instrument.get("isCurrentlyTradable") is False
@@ -547,7 +549,7 @@ def check_market(
             "The New York stock market is closed now (weekend, holiday or after the close); "
             "a stock order would wait for the open and fill far from today's price.",
             hint=f"The next regular session opens {status['next_open']} (UTC). Instruments "
-            "that trade on weekends, like crypto, are not limited to these hours.",
+            "that trade on Saturdays, like crypto, are not limited to these hours.",
         )
     return {**market, "calendar_source": status["source"]}
 

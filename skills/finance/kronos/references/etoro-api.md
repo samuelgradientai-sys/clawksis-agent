@@ -98,7 +98,7 @@ Run in this order, before the order request: trading enabled, limits, lesson gat
 gate (automatic buys need a verdict `adds_value` from the last 7 days in
 `kronos/backtests.jsonl`), stop present (automatic buys), then the read-only checks: the
 instrument is tradable (`isCurrentlyTradable`/`isDelisted` from the search), the newest hourly
-candle is under 2 hours old, the NYSE regular session is open for an instrument with no weekend
+candle is under 2 hours old, the NYSE regular session is open for an instrument with no Saturday
 candles (`_kronos_calendar.py`), and the stop sits below the current price (by at most 50%) with
 the target above it. Refused buys go to `kronos/refused.jsonl` with their kind (`limit`,
 `lesson`, `backtest`, `stop`, `market`), never to the ledger.

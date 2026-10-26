@@ -200,8 +200,8 @@ Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMi
   eToro returns at most 1000 bars, so very old forecasts can no longer be scored.
 - **Minimums and market hours.** eToro rejects buys under the instrument minimum (HTTP 400).
   The script refuses buys when the newest eToro price is over 2 hours old and, for anything
-  that does not trade on weekends, outside the NYSE regular session (holidays and 13:00 early
-  closes included; non-US stocks are held to New York hours too).
+  with no Saturday trading (24/5 stocks included), outside the NYSE regular session (holidays
+  and 13:00 early closes included; non-US stocks are held to New York hours too).
 - **Rate limits**: 60 reads and 20 order requests per minute per user key, shared with any
   other app using it.
 - **401/403 from eToro**: wrong key, demo/real key mismatch with `--account` or

@@ -84,8 +84,13 @@ class Recorder:
         return FakeResponse(json.dumps(item).encode())
 
 
-def _candles(now=MONDAY, price=100.0, weekends=True, hours=200, last_age_hours=0):
-    """Hourly candles ending *last_age_hours* before *now* (the newest one still forming)."""
+def _candles(
+    now=MONDAY, price=100.0, weekends=True, hours=200, last_age_hours=0, closed=None
+):
+    """Hourly candles ending *last_age_hours* before *now* (the newest one still forming),
+    none on the weekdays in *closed* (default: none, or Saturday and Sunday without
+    *weekends*)."""
+    closed = set(closed if closed is not None else (() if weekends else (5, 6)))
     newest = now.replace(minute=0, tzinfo=None) - timedelta(hours=last_age_hours)
     stamps = [newest - timedelta(hours=hours - 1 - i) for i in range(hours)]
     rows = [
@@ -98,7 +103,7 @@ def _candles(now=MONDAY, price=100.0, weekends=True, hours=200, last_age_hours=0
             "volume": 10,
         }
         for ts in stamps
-        if weekends or ts.weekday() < 5
+        if ts.weekday() not in closed
     ]
     return {"candles": [{"instrumentId": 1001, "candles": rows}]}
 
@@ -400,6 +405,17 @@ def test_stale_prices_refuse_and_weekend_traders_buy_on_saturday(tmp_path):
         now=SATURDAY,
     )
     assert _buy(deps, *PROTECTED)["order"]["market"]["calendar"] == "24x7"
+
+
+def test_a_24_5_stock_trading_on_sunday_evening_still_keeps_new_york_hours(tmp_path):
+    sunday_night = datetime(2026, 10, 25, 23, 0, tzinfo=kc.UTC)  # fresh 24/5 prices
+    extended = _candles(now=sunday_night, closed=(5,))  # every day but Saturday
+    deps, _, trader_rec, _ = _deps(
+        tmp_path, reader=[SEARCH, extended], now=sunday_night
+    )
+    with pytest.raises(trade.MarketRefused, match="New York stock market is closed"):
+        _buy(deps, *PROTECTED)
+    assert trader_rec.requests == []
 
 
 def test_an_instrument_etoro_marks_untradable_is_refused(tmp_path):
