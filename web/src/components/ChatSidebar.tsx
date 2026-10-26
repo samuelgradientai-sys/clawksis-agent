@@ -695,9 +695,11 @@ export function ChatSidebar({
           // Same path the Models page uses (REST /api/model/set), not the
           // sidecar config.set RPC, which didn't reliably land in the
           // config.yaml the agent boots from. Always persisted (alwaysGlobal).
-          loader={() => api.getModelOptions(profile)}
+          // Forward the dialog's `refresh` ("Refresh Models"): dropping it re-read the 1h
+          // model-id cache, so a model pulled into a local server never showed up.
+          loader={options => api.getModelOptions({ profile, refresh: options?.refresh })}
           alwaysGlobal
-          onApply={async ({ provider, model, confirmExpensiveModel }) => {
+          onApply={async ({ provider, model, baseUrl, confirmExpensiveModel }) => {
             setModelNotice(null)
             setPendingReloadModel(null)
             setSwitchNotice(null)
@@ -706,7 +708,8 @@ export function ChatSidebar({
                 confirm_expensive_model: confirmExpensiveModel,
                 scope: 'main',
                 provider,
-                model
+                model,
+                ...(baseUrl ? { base_url: baseUrl } : {})
               },
               profile
             )

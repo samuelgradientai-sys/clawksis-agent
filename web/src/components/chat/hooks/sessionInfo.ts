@@ -1,3 +1,4 @@
+import { sessionInfoProvider } from "@/lib/session-info-model";
 import type { SessionInfo } from "./useChatGateway";
 
 type Payload = Record<string, unknown>;
@@ -27,7 +28,7 @@ export function applySessionInfo(prev: SessionInfo, payload: Payload, liveId: st
     sessionId: liveId ?? prev.sessionId,
     sessionKey: storedSessionKey(payload) ?? prev.sessionKey,
     model: nonEmpty(payload.model) ?? prev.model,
-    modelProvider: nonEmpty(payload.provider) ?? nonEmpty(payload.model_provider) ?? prev.modelProvider,
+    modelProvider: sessionInfoProvider(payload) ?? prev.modelProvider,
     tokensUsed: finite(usage.context_used) ?? finite(payload.tokens_used) ?? prev.tokensUsed,
     tokensMax: finite(usage.context_max) ?? finite(payload.tokens_max) ?? prev.tokensMax,
     title: nonEmpty(payload.title) ?? prev.title,

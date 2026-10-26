@@ -17,10 +17,12 @@ import { fuzzyRank, modelSearchText } from "@clawk/shared";
 import { errorMessage } from "@/lib/api-error";
 import {
   formatPickerCurrentLabel,
-  isAutoPickerCurrent,
+  isCurrentProviderRow,
   resolveInitialProviderSlug,
   resolvePickerCurrent,
+  type PickerCurrent,
 } from "@/lib/model-picker-current";
+import { assignmentBaseUrl } from "@/lib/model-catalog";
 
 /**
  * Two-stage model picker modal.
@@ -52,6 +54,14 @@ interface ConfigSetResponse extends ExpensiveModelConfirmResponse {
   value?: string;
 }
 
+function expensiveConfirmMessage(result: ExpensiveModelConfirmResponse): string {
+  return (
+    result.confirm_message ||
+    result.warning ||
+    "This model has unusually high known pricing."
+  );
+}
+
 interface PendingExpensiveConfirm {
   message: string;
   model: string;
@@ -71,6 +81,9 @@ interface Props {
     confirmExpensiveModel?: boolean;
     provider: string;
     model: string;
+    /** The picked row's endpoint for custom/local providers ("" otherwise); an auxiliary slot
+     *  on such a provider routes only through it. See `assignmentBaseUrl`. */
+    baseUrl: string;
     persistGlobal: boolean;
   }):
     | Promise<ExpensiveModelConfirmResponse | void>
@@ -86,7 +99,7 @@ interface Props {
    * The options loader always returns the main chat model; without this,
    * "Set Auxiliary: Vision" shows `current: glm-5.3` while Vision is Qwen.
    */
-  currentAssignment?: { model?: string; provider?: string } | null;
+  currentAssignment?: { model?: string; provider?: string; baseUrl?: string } | null;
 }
 
 export function ModelPickerDialog(props: Props) {
@@ -104,8 +117,11 @@ export function ModelPickerDialog(props: Props) {
   const standalone = !!loader && !!onApply;
 
   const [providers, setProviders] = useState<ModelOptionProvider[]>([]);
-  const [currentModel, setCurrentModel] = useState("");
-  const [currentProviderSlug, setCurrentProviderSlug] = useState("");
+  const [current, setCurrent] = useState<PickerCurrent>({ model: "", provider: "" });
+  const currentModel = current.model;
+  const currentProviderSlug = current.provider;
+  const isCurrentRow = (row: ModelOptionProvider) =>
+    isCurrentProviderRow(row, current, !!currentAssignment);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSlug, setSelectedSlug] = useState("");
@@ -120,13 +136,12 @@ export function ModelPickerDialog(props: Props) {
 
   const applyOptions = (r: ModelOptionsResult) => {
     const next = r?.providers ?? [];
-    const current = resolvePickerCurrent(r, currentAssignment);
+    const resolved = resolvePickerCurrent(r, currentAssignment);
     setProviders(next);
-    setCurrentModel(current.model);
-    setCurrentProviderSlug(current.provider);
+    setCurrent(resolved);
     setSelectedSlug((prev) => {
       if (prev && next.some((p) => p.slug === prev)) return prev;
-      return resolveInitialProviderSlug(next, current.provider);
+      return resolveInitialProviderSlug(next, resolved.provider);
     });
     setSelectedModel("");
   };
@@ -231,9 +246,13 @@ export function ModelPickerDialog(props: Props) {
       (p) => `${p.name} ${p.slug} ${(p.models ?? []).join(" ")}`,
     ).map((r) => r.item);
     if (trimmedQuery) return ranked;
-    const withModels = ranked.filter((p) => (p.models ?? []).length > 0);
-    const withoutModels = ranked.filter((p) => (p.models ?? []).length === 0);
-    return [...withModels, ...withoutModels];
+    // Then local servers (Ollama, LM Studio, llama.cpp, local endpoints) ahead of cloud catalogs.
+    const rank = (p: ModelOptionProvider) =>
+      p.is_current ? 0 : (p.models ?? []).length === 0 ? 3 : p.is_local ? 1 : 2;
+    return ranked
+      .map((p, index) => ({ p, index }))
+      .sort((a, b) => rank(a.p) - rank(b.p) || a.index - b.index)
+      .map(({ p }) => p);
   }, [providers, trimmedQuery]);
 
   // A query that matched the SELECTED provider by name/slug (not its models)
@@ -266,6 +285,11 @@ export function ModelPickerDialog(props: Props) {
 
   const canConfirm = !!selectedProvider && !!selectedModel && !applying;
 
+  const baseUrlFor = (slug: string) => {
+    const row = providers.find((p) => p.slug === slug);
+    return row ? assignmentBaseUrl(row) : "";
+  };
+
   const applySelection = async (
     confirmExpensiveModel = false,
     forced?: PendingExpensiveConfirm,
@@ -283,6 +307,7 @@ export function ModelPickerDialog(props: Props) {
           confirmExpensiveModel,
           provider: providerSlug,
           model,
+          baseUrl: baseUrlFor(providerSlug),
           persistGlobal: shouldPersistGlobal,
         });
         if (result?.confirm_required) {
@@ -290,10 +315,7 @@ export function ModelPickerDialog(props: Props) {
             provider: providerSlug,
             model,
             persistGlobal: shouldPersistGlobal,
-            message:
-              result.confirm_message ||
-              result.warning ||
-              "This model has unusually high known pricing.",
+            message: expensiveConfirmMessage(result),
           });
           return;
         }
@@ -318,10 +340,7 @@ export function ModelPickerDialog(props: Props) {
             provider: providerSlug,
             model,
             persistGlobal: shouldPersistGlobal,
-            message:
-              result.confirm_message ||
-              result.warning ||
-              "This model has unusually high known pricing.",
+            message: expensiveConfirmMessage(result),
           });
           return;
         }
@@ -406,7 +425,7 @@ export function ModelPickerDialog(props: Props) {
             providers={filteredProviders}
             total={providers.length}
             selectedSlug={selectedSlug}
-            currentProviderSlug={currentProviderSlug}
+            isCurrentRow={isCurrentRow}
             query={trimmedQuery}
             onSelect={(slug) => {
               setSelectedSlug(slug);
@@ -420,7 +439,7 @@ export function ModelPickerDialog(props: Props) {
             allModels={models}
             selectedModel={selectedModel}
             currentModel={currentModel}
-            currentProviderSlug={currentProviderSlug}
+            isCurrentRow={isCurrentRow}
             onSelect={setSelectedModel}
             onConfirm={(m) => {
               setSelectedModel(m);
@@ -511,7 +530,7 @@ function ProviderColumn({
   providers,
   total,
   selectedSlug,
-  currentProviderSlug,
+  isCurrentRow,
   query,
   onSelect,
   onClose,
@@ -521,7 +540,7 @@ function ProviderColumn({
   providers: ModelOptionProvider[];
   total: number;
   selectedSlug: string;
-  currentProviderSlug: string;
+  isCurrentRow(row: ModelOptionProvider): boolean;
   query: string;
   onSelect(slug: string): void;
   /** The links below navigate away; the full-screen dialog must close or it keeps covering the target page. */
@@ -559,9 +578,7 @@ function ProviderColumn({
 
       {providers.map((p) => {
         const active = p.slug === selectedSlug;
-        const isCurrentProvider =
-          p.slug === currentProviderSlug &&
-          !isAutoPickerCurrent({ model: "", provider: currentProviderSlug });
+        const isCurrentProvider = isCurrentRow(p);
         return (
           <ListItem
             key={p.slug}
@@ -574,6 +591,11 @@ function ProviderColumn({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-medium truncate">{p.name}</span>
+                {p.is_local && (
+                  <span className="shrink-0 text-xs text-success" title={p.local_url ?? undefined}>
+                    local
+                  </span>
+                )}
                 {isCurrentProvider && <CurrentTag />}
               </div>
               <div className="text-xs text-text-secondary font-mono truncate">
@@ -597,7 +619,7 @@ function ModelColumn({
   allModels,
   selectedModel,
   currentModel,
-  currentProviderSlug,
+  isCurrentRow,
   onSelect,
   onConfirm,
 }: {
@@ -606,7 +628,7 @@ function ModelColumn({
   allModels: string[];
   selectedModel: string;
   currentModel: string;
-  currentProviderSlug: string;
+  isCurrentRow(row: ModelOptionProvider): boolean;
   onSelect(model: string): void;
   onConfirm(model: string): void;
 }) {
@@ -637,8 +659,7 @@ function ModelColumn({
       ) : (
         models.map(({ model: m, positions }) => {
           const active = m === selectedModel;
-          const isCurrent =
-            m === currentModel && provider.slug === currentProviderSlug;
+          const isCurrent = m === currentModel && isCurrentRow(provider);
 
           return (
             <ListItem

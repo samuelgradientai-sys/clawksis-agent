@@ -1898,6 +1898,14 @@ Launch the web dashboard to manage configuration, API keys, and sessions. For a 
 | `--stop` | — | Stop the running `clawk dashboard` / `clawk serve` backend **of this Clawksis home** and exit (`-p <profile>` / `CLAWK_HOME` select which; backends of other profiles, other installs on the machine, and the shell you typed the command into are never touched — a backend whose owner cannot be read is left alone). SIGTERM, a 10s grace, then SIGKILL; a hosted Chat TUI that outlives its backend is stopped too (it would otherwise keep the deleted `state.db-wal` open and block the next start). Messaging-gateway bots started from the dashboard are not touched. |
 | `--status` | — | List running `clawk dashboard` processes and exit. |
 
+### `clawk dashboard mobile`
+
+```bash
+clawk dashboard mobile [--tailscale | --domain <domain>] [--port 9119]
+```
+
+Print the address to open the dashboard from a phone, with a QR code, and say whether a login exists yet. Without flags it reuses a front door already set up (`dashboard.public_url` or the `clawk dashboard domain` hosts) and otherwise explains the two safe options. `--tailscale` (root + systemd) keeps the service on loopback with the login gate forced, allows the machine's MagicDNS name and runs `tailscale serve --bg --https=443 http://127.0.0.1:<port>`, so the dashboard is reachable at `https://<machine>.<tailnet>.ts.net` only inside your tailnet (the tailnet needs HTTPS certificates enabled). `--domain` runs `clawk dashboard domain` and then prints the address. The dashboard ships a web app manifest, so "Add to Home Screen" opens it full screen.
+
 ### `clawk dashboard register`
 
 Register this install as a self-hosted dashboard with your Nous Portal account. Creates an OAuth client, writes `CLAWK_DASHBOARD_OAUTH_CLIENT_ID` into `~/.clawksis/.env`, and prints how to engage the login gate. Requires being logged in (`clawk setup`).

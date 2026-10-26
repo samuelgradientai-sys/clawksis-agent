@@ -331,11 +331,45 @@ def get_auxiliary_models(profile: Optional[str] = None):
             for entry in plugin_tasks
         )
 
-        model, provider = _main_model_fields(cfg.get("model", {}))
+        model_cfg = cfg.get("model", {})
+        model, provider = _main_model_fields(model_cfg)
+        main_base_url = (
+            str(model_cfg.get("base_url") or "") if isinstance(model_cfg, dict) else ""
+        )
         return {
             "tasks": tasks,
-            "main": {"provider": str(provider or ""), "model": str(model or "")},
+            "main": {
+                "provider": str(provider or ""),
+                "model": str(model or ""),
+                # Same pair the task rows carry, so the Models page can mark a local main model
+                # (and match it to its local endpoint's reachability) like a local aux pin.
+                "base_url": main_base_url,
+                "local_endpoint": is_local_endpoint(main_base_url),
+            },
         }
+
+
+@router.get("/api/model/local-status")
+async def get_local_model_status(profile: Optional[str] = None):
+    """Reachability of every local endpoint the profile routes to: ``{"endpoints": [{url,
+    reachable, status, models, error, latency_ms}]}``. Endpoints come from the profile's config
+    (main model, ``custom_providers:``/``providers:``, auxiliary pins) plus the built-in local
+    defaults (Ollama, LM Studio, the managed llama.cpp router); ``/api/model/options`` rows join on
+    ``local_url``. Each probe is a bounded ``GET /models`` — on demand, never on a picker open."""
+    from clawk_cli.model_locality import local_status_targets, probe_local_endpoints
+
+    with http_failure(
+        "GET /api/model/local-status failed",
+        500,
+        detail="Failed to check local model servers",
+    ):
+
+        def _targets() -> tuple[list[str], dict]:
+            with _config_profile_scope(profile):
+                return local_status_targets(load_config())
+
+        endpoints, managed = await run_in_threadpool(_targets)
+        return {"endpoints": await probe_local_endpoints(endpoints, managed)}
 
 
 @router.get("/api/model/moa")

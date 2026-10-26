@@ -836,6 +836,8 @@ export interface ModelOptionProvider {
   usage_levels?: Record<string, string> | null
   limit?: ProviderLimit | null
   usage?: ProviderUsage | null
+  is_local?: boolean | null
+  local_url?: string | null
   [key: string]: unknown
 }
 /** ``clawk_cli/inventory.py::_apply_capabilities``. */

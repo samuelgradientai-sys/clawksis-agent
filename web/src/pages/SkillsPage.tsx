@@ -90,6 +90,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   ui: "UI",
 };
 
+/** Optional skills strings with the English fallback (keeps the page component's branches flat). */
+function skillsLabel(t: { skills: Partial<Record<"learnSkill" | "newSkill", string>> }, key: "learnSkill" | "newSkill"): string {
+  return t.skills[key] ?? en.skills[key] ?? "";
+}
+
 function prettyCategory(
   raw: string | null | undefined,
   generalLabel: string,
@@ -592,7 +597,7 @@ export default function SkillsPage() {
             /* Skills list */
             <Card className="rounded-none">
               <CardHeader className="py-3 px-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <Package className="h-4 w-4" />
                     {activeCategory
@@ -602,7 +607,7 @@ export default function SkillsPage() {
                         )
                       : t.skills.all}
                   </CardTitle>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge tone="secondary" className="text-xs">
                       {t.skills.skillCount
                         .replace("{count}", String(activeSkills.length))
@@ -610,19 +615,19 @@ export default function SkillsPage() {
                     </Badge>
                     <Button
                       size="sm"
-                      outlined
+                      outlined title={skillsLabel(t, "learnSkill")} aria-label={skillsLabel(t, "learnSkill")}
                       onClick={openLearn}
                       prefix={<Sparkles />}
                     >
-                      Learn a skill
+                      <span className="whitespace-nowrap">{skillsLabel(t, "learnSkill")}</span>
                     </Button>
                     <Button
                       size="sm"
-                      outlined
+                      outlined title={skillsLabel(t, "newSkill")} aria-label={skillsLabel(t, "newSkill")}
                       onClick={openCreateEditor}
                       prefix={<Plus />}
                     >
-                      New skill
+                      <span className="whitespace-nowrap">{skillsLabel(t, "newSkill")}</span>
                     </Button>
                   </div>
                 </div>
@@ -775,7 +780,7 @@ export default function SkillsPage() {
       <Dialog open={learnOpen} onOpenChange={setLearnOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Learn a skill</DialogTitle>
+            <DialogTitle>{skillsLabel(t, "learnSkill")}</DialogTitle>
             <DialogDescription>
               Point Clawksis at anything and it will distill a reusable skill —
               following the house authoring standards. Fill in any combination
