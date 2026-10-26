@@ -156,6 +156,7 @@ La forma más fácil de conectar cualquiera es **`clawk model`** (menú interact
 | `clawk dashboard` | Abrir el dashboard web (chat Modern/Terminal, sesiones, media, tareas) |
 | `clawk dashboard domain <dominio>` | Publicarlo en `https://<dominio>` con HTTPS, en un comando |
 | `clawk dashboard mobile` | Abrirlo desde el móvil: dirección segura + código QR (`--tailscale` privado o `--domain`) |
+| `clawk config permissions full` | Acceso total para el agente: sin pedir aprobación (también en crons), puede editar sus instrucciones y su configuración (`default` lo revierte) |
 | `clawk gateway install` | Mensajería como servicio del sistema |
 | `clawk cron add "<schedule>" "<prompt>"` | Programar una tarea recurrente |
 | `clawk skills` | Buscar, instalar y gestionar skills |

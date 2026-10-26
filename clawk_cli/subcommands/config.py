@@ -7,6 +7,12 @@ from typing import Callable
 from clawk_cli.subcommands._shared import add_json_flag
 
 
+def _cmd_config_permissions(args) -> None:
+    from clawk_cli.config_permissions import cmd_config_permissions
+
+    cmd_config_permissions(args)
+
+
 def build_config_parser(subparsers, *, cmd_config: Callable) -> None:
     """Attach the ``config`` subcommand to ``subparsers``."""
     config_parser = subparsers.add_parser(
@@ -46,6 +52,25 @@ def build_config_parser(subparsers, *, cmd_config: Callable) -> None:
         "unset", help="Remove a configuration value"
     )
     config_unset.add_argument("key", nargs="?", help="Configuration key to remove")
+
+    config_permissions = config_subparsers.add_parser(
+        "permissions",
+        help="How much the agent may do: full access, default, or show the current state",
+        description=(
+            "full: the agent runs commands without approval prompts (cron and unattended "
+            "runs too), may edit its instruction files and schedule jobs from cron, and "
+            "changes its own settings with `clawk config set`. default: the shipped, safe "
+            "values. No argument: show each setting. The hardline floor (wiping / or /home, "
+            "formatting disks, shutting the host down) always stays."
+        ),
+    )
+    config_permissions.add_argument("level", nargs="?", choices=["full", "default"])
+    config_permissions.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirm `full` without the interactive prompt",
+    )
+    config_permissions.set_defaults(func=_cmd_config_permissions)
 
     config_subparsers.add_parser("path", help="Print config file path")
     config_subparsers.add_parser("env-path", help="Print .env file path")
