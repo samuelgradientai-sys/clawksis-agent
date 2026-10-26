@@ -19,8 +19,13 @@ export interface ModelOptionProvider {
   slug: string;
   models?: string[];
   total_models?: number;
+  /** Backend verdict: this row is the live session's provider (handles a `custom` provider
+   *  served by a named endpoint row, whose slug is `custom:<name>`). */
   is_current?: boolean;
-  warning?: string;
+  /** Served from a loopback/LAN endpoint (Ollama, LM Studio, llama.cpp, local custom). */
+  is_local?: boolean;
+  local_url?: string | null;
+  warning?: string | null;
 }
 
 interface ModelOptionsResponse {
@@ -48,7 +53,8 @@ interface UseModelOptionsResult {
   currentProvider: string;
   loading: boolean;
   error: string | null;
-  refresh: () => Promise<void>;
+  /** `force` busts the backend's model-id caches and live-probes saved endpoints. */
+  refresh: (force?: boolean) => Promise<void>;
   switchModel: (
     model: string,
     providerSlug: string,
@@ -67,15 +73,15 @@ export function useModelOptions(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (force = false) => {
     if (!ready) return;
     setLoading(true);
     setError(null);
     try {
-      const res = (await sendRpc(
-        "model.options",
-        sessionId ? { session_id: sessionId } : {},
-      )) as ModelOptionsResponse;
+      const res = (await sendRpc("model.options", {
+        ...(sessionId ? { session_id: sessionId } : {}),
+        ...(force ? { refresh: true } : {}),
+      })) as ModelOptionsResponse;
       setProviders(res?.providers ?? []);
       setCurrentModel(String(res?.model ?? ""));
       setCurrentProvider(String(res?.provider ?? ""));

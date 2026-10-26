@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from clawk_cli.config import get_config_path, read_raw_config
 from clawk_cli.web_deps import late
-from clawk_cli.web_routers._common import corrupt_store_as_status
+from clawk_cli.web_routers._common import config_write_scope, corrupt_store_as_status
 from clawk_cli.web_server_profiles import (
     _approval_mode_of,
     _aux_task_summary,
@@ -23,7 +23,7 @@ from clawk_cli.web_server_profiles import (
     _is_other_profile,
     _merge_aux_into_by_model,
 )
-from clawk_cli.web_models import RawConfigUpdate
+from clawk_cli.web_models import HiddenModelUpdate, RawConfigUpdate
 
 router = APIRouter()
 
@@ -35,7 +35,11 @@ _session_db_path_for_profile = late(
     "_session_db_path_for_profile", "clawk_cli.web_server_sessions"
 )
 _profile_scope = late("_profile_scope", "clawk_cli.web_server_profiles")
+_config_profile_scope = late("_config_profile_scope", "clawk_cli.web_server_profiles")
 save_config = late("save_config", "clawk_cli.config")
+require_readable_config_before_write = late(
+    "require_readable_config_before_write", "clawk_cli.config"
+)
 
 # ── Raw YAML config ──────────────────────────────────────────────────────────
 
@@ -365,15 +369,61 @@ def _attach_tool_calls(db, cutoff: float, raw_rows: list[dict[str, Any]]) -> Non
             target["tool_calls"] += calls
 
 
-def _hidden_models() -> set[str]:
-    """``dashboard.hidden_models`` (written by POST /api/analytics/models/hide); empty on any error."""
-    try:
-        from clawk_cli.config import cfg_get, load_config
+def _hidden_models(profile: Optional[str] = None) -> list[str]:
+    """The profile's ``dashboard.hidden_models`` (written by POST /api/analytics/models/hide).
 
+    Read under ``profile``'s scope: the analytics query opens that profile's session DB, so the
+    hidden list must come from the same home or a card hidden in profile B stays visible there
+    (and B's list filters the default profile's cards)."""
+    from clawk_cli.config import cfg_get, load_config
+
+    with _config_profile_scope(profile):
         raw = cfg_get(load_config(), "dashboard", "hidden_models", default=None)
-    except Exception:
-        return set()
-    return {str(h) for h in raw} if isinstance(raw, list) else set()
+    return [str(h) for h in raw] if isinstance(raw, list) else []
+
+
+def _hidden_model_key(body: HiddenModelUpdate) -> tuple[str, str]:
+    model = (body.model or "").strip()
+    if not model:
+        raise HTTPException(status_code=400, detail="model is required")
+    return f"{(body.provider or '').strip()}|{model}", model
+
+
+def _write_hidden_models(profile: Optional[str], edit) -> list[str]:
+    """Sparse read-modify-write of ``dashboard.hidden_models`` in ``profile``'s config.yaml."""
+    with config_write_scope(profile):
+        raw = require_readable_config_before_write()
+        dashboard = (
+            raw.get("dashboard") if isinstance(raw.get("dashboard"), dict) else {}
+        )
+        current = dashboard.get("hidden_models")
+        hidden = edit([str(h) for h in current] if isinstance(current, list) else [])
+        save_config({"dashboard": {"hidden_models": hidden}}, merge_existing=True)
+        return hidden
+
+
+@router.post("/api/analytics/models/hide")
+async def hide_model_card(body: HiddenModelUpdate, profile: Optional[str] = None):
+    """Hide one usage card from the Models page (sessions and history are untouched)."""
+    key, _model = _hidden_model_key(body)
+    hidden = await asyncio.to_thread(
+        _write_hidden_models,
+        profile,
+        lambda current: current if key in current else [*current, key],
+    )
+    return {"ok": True, "hidden_models": hidden}
+
+
+@router.delete("/api/analytics/models/hide")
+async def unhide_model_card(body: HiddenModelUpdate, profile: Optional[str] = None):
+    """Restore a hidden usage card (drops both the ``provider|model`` and a bare-model entry)."""
+    key, model = _hidden_model_key(body)
+    hidden = await asyncio.to_thread(
+        _write_hidden_models,
+        profile,
+        lambda current: [h for h in current if h not in (key, model)],
+    )
+    return {"ok": True, "hidden_models": hidden}
 
 
 def _get_models_analytics(days: int = 30, profile: Optional[str] = None):
@@ -459,12 +509,13 @@ def _get_models_analytics(days: int = 30, profile: Optional[str] = None):
         )
         # Models the user hid from the Models page (sessions untouched; Clawksis):
         # ``dashboard.hidden_models`` entries are "provider|model" (or a bare model).
-        hidden = _hidden_models()
+        hidden = _hidden_models(profile)
+        hidden_set = set(hidden)
         rows = [
             r
             for r in rows
-            if f"{r.get('billing_provider') or ''}|{r['model']}" not in hidden
-            and r["model"] not in hidden
+            if f"{r.get('billing_provider') or ''}|{r['model']}" not in hidden_set
+            and r["model"] not in hidden_set
         ]
 
         models = [
@@ -499,7 +550,12 @@ def _get_models_analytics(days: int = 30, profile: Optional[str] = None):
         # the page (#89631).
         totals["distinct_models"] = len({row["model"] for row in rows})
 
-        return {"models": models, "totals": totals, "period_days": days}
+        return {
+            "models": models,
+            "totals": totals,
+            "period_days": days,
+            "hidden_models": hidden,
+        }
     finally:
         db.close()
 

@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, CLAWK_BASE_PATH, buildWsAuthParam } from "@/lib/api";
 import { executeSlash } from "@/lib/slashExec";
+import { sessionInfoProvider } from "@/lib/session-info-model";
 
 export type ConnectionStatus =
   | "idle"
@@ -356,8 +357,7 @@ export function useChatGateway(): UseChatGatewayResult {
           // sessionKey es visual/persistido: se usa para sidebar/historial.
           sessionKey: storedId ?? prev.sessionKey,
           model: (payload.model as string) ?? prev.model,
-          modelProvider:
-            (payload.model_provider as string) ?? prev.modelProvider,
+          modelProvider: sessionInfoProvider(payload) ?? prev.modelProvider,
           tokensUsed: (payload.tokens_used as number) ?? prev.tokensUsed,
           tokensMax: (payload.tokens_max as number) ?? prev.tokensMax,
         }));
@@ -1233,7 +1233,7 @@ export function useChatGateway(): UseChatGatewayResult {
           sessionId: liveSid,
           sessionKey: targetId,
           model: (info.model as string) ?? null,
-          modelProvider: (info.model_provider as string) ?? null,
+          modelProvider: sessionInfoProvider(info) ?? null,
           tokensUsed: restoredTokensUsed,
           tokensMax: restoredTokensMax,
           // El backend devuelve title en info — si no llega, prev.title queda null

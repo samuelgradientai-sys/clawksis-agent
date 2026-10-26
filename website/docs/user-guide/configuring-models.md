@@ -23,10 +23,11 @@ On a brand-new install the bundled default config has `model: ""` (an empty stri
 
 ## The Models page
 
-Open the dashboard and click **Models** in the sidebar. You get two sections:
+Open the dashboard and click **Models** in the sidebar. You get three sections:
 
-1. **Model Settings** — the top panel, where you assign models to slots.
-2. **Usage analytics** — ranked cards showing every model that ran a session in the selected period, with token counts, cost, and capability badges.
+1. **Model Settings** — the top panel, where you assign models to slots. A local main model is tagged **Local** with its server's state (**Running** / **Not reachable** / **Starts on demand**).
+2. **Available models** — everything the selected profile can run right now, from the same catalog the pickers use: the models **In use** (main and every pinned auxiliary task) on top, then **Local** providers (Ollama, LM Studio, llama.cpp, local custom endpoints — each with its URL and whether its server answers) and **Cloud** providers. Local servers are asked for their live model list, so a model loaded after you set the endpoint up shows as *detected* and one the server no longer serves as *not loaded on the server*. Filter by provider or model, click **Re-detect** to bust the model caches, and use **Use as** on any model to assign it. Providers without a key are folded under **Not configured**.
+3. **Usage history** — ranked cards showing every model that ran a session in the selected period, with token counts, cost, and capability badges. The trash icon hides a card (sessions are kept); hidden cards are listed next to the heading and can be restored there.
 
 ![Models page overview](/img/docs/dashboard-models/overview.png)
 
@@ -421,7 +422,7 @@ Edit `~/.clawksis/config.yaml` and restart whatever reads it. See the [Configura
 
 ### REST API
 
-The dashboard uses three endpoints. Useful for scripting:
+The dashboard uses these endpoints (add `?profile=<name>` to target another profile). Useful for scripting:
 
 ```bash
 # List authenticated providers + curated model lists
@@ -429,6 +430,9 @@ curl -H "X-Clawksis-Session-Token: $TOKEN" http://localhost:PORT/api/model/optio
 
 # Read current main + auxiliary assignments
 curl -H "X-Clawksis-Session-Token: $TOKEN" http://localhost:PORT/api/model/auxiliary
+
+# Is each local model server up? (main, custom endpoints, aux pins, Ollama / LM Studio / llama.cpp)
+curl -H "X-Clawksis-Session-Token: $TOKEN" http://localhost:PORT/api/model/local-status
 
 # Set the main model
 curl -X POST -H "Content-Type: application/json" -H "X-Clawksis-Session-Token: $TOKEN" \
