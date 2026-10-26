@@ -24,6 +24,17 @@ def _scoped(profile: Optional[str], fn, *args):
         return fn(*args)
 
 
+async def _live(build, key: str) -> dict:
+    """Run a live-catalog lookup off the loop. An unreachable source answers ``{key: [],
+    "error": ...}`` so the page says "unreachable" instead of "no models match"."""
+    from clawk_cli.cookbook_hf import SourceUnreachable
+
+    try:
+        return await asyncio.to_thread(build)
+    except SourceUnreachable as exc:
+        return {key: [], "error": str(exc)}
+
+
 @router.get("/api/cookbook/hardware")
 async def get_cookbook_hardware():
     """Detected hardware (RAM / CPU / GPU + VRAM) for the fit recommender."""
@@ -66,48 +77,42 @@ async def get_cookbook_search(q: str):
 
     Returns catalog-shaped rows (one per size tag) with fit + installed flags,
     so ANY model in ollama.com/library is findable — not just the curated set.
-    Returns [] if ollama.com is unreachable.
+    An unreachable ollama.com answers ``error`` next to an empty list.
     """
     query = (q or "").strip()
     if not query:
         return {"models": []}
-    try:
-        from clawk_cli import cookbook
+    from clawk_cli import cookbook
 
-        def _build():
-            hw = cookbook.detect_hardware()
-            installed = cookbook.ollama_models()
-            return {
-                "models": cookbook.rows_with_fit(
-                    cookbook.search_ollama_library(query), hw, installed
-                )
-            }
+    def _build():
+        hw = cookbook.detect_hardware()
+        installed = cookbook.ollama_models()
+        return {
+            "models": cookbook.rows_with_fit(
+                cookbook.search_ollama_library(query), hw, installed
+            )
+        }
 
-        return await asyncio.to_thread(_build)
-    except Exception:
-        return {"models": []}
+    return await _live(_build, "models")
 
 
 @router.get("/api/cookbook/library")
 async def get_cookbook_library():
     """The FULL Ollama library (scraped, cached ~30 min) with fit + installed."""
-    try:
-        from clawk_cli import cookbook
+    from clawk_cli import cookbook
 
-        def _build():
-            hw = cookbook.detect_hardware()
-            installed = cookbook.ollama_models()
-            return {
-                "hardware": hw,
-                "ollama": cookbook.ollama_status(),
-                "models": cookbook.rows_with_fit(
-                    cookbook.full_ollama_library(), hw, installed
-                ),
-            }
+    def _build():
+        hw = cookbook.detect_hardware()
+        installed = cookbook.ollama_models()
+        return {
+            "hardware": hw,
+            "ollama": cookbook.ollama_status(),
+            "models": cookbook.rows_with_fit(
+                cookbook.full_ollama_library(), hw, installed
+            ),
+        }
 
-        return await asyncio.to_thread(_build)
-    except Exception:
-        return {"hardware": {}, "ollama": {}, "models": []}
+    return await _live(_build, "models")
 
 
 @router.get("/api/cookbook/ollama")
@@ -240,8 +245,7 @@ async def get_cookbook_hf_search(q: str):
         return {"models": []}
     from clawk_cli import cookbook_hf
 
-    rows = await asyncio.to_thread(cookbook_hf.search_gguf, query)
-    return {"models": rows}
+    return await _live(lambda: {"models": cookbook_hf.search_gguf(query)}, "models")
 
 
 @router.get("/api/cookbook/hf-files")
@@ -252,8 +256,10 @@ async def get_cookbook_hf_files(repo: str):
         raise HTTPException(status_code=400, detail="repo is required")
     from clawk_cli import cookbook_hf
 
-    files = await asyncio.to_thread(cookbook_hf.repo_gguf_files, r)
-    return {"repo": r, "files": files}
+    return {
+        "repo": r,
+        **await _live(lambda: {"files": cookbook_hf.repo_gguf_files(r)}, "files"),
+    }
 
 
 class CookbookDownloadBody(BaseModel):

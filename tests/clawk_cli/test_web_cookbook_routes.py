@@ -4,12 +4,12 @@ daemon is enough to pull a model (Ollama in a container has no binary on our PAT
 import http.server
 import json
 import threading
-import time
 
 import pytest
 import clawk_yaml as yaml
 
 from clawk_cli import cookbook
+from tests.waiting import wait_until
 
 
 @pytest.fixture
@@ -98,12 +98,30 @@ def test_pull_runs_against_a_reachable_daemon_without_a_local_binary(
         started = cookbook.start_pull("tiny:1b")
 
         assert started["ok"] is True, started
-        deadline = time.monotonic() + 10
-        while (
-            cookbook.pull_status("tiny:1b") in ("pulling", "validating")
-            and time.monotonic() < deadline
-        ):
-            time.sleep(0.05)
+        wait_until(
+            lambda: cookbook.pull_status("tiny:1b") not in ("pulling", "validating"),
+            what="pull finished",
+        )
         assert cookbook.pull_status("tiny:1b") == "done"
     finally:
         server.shutdown()
+
+
+def test_unreachable_hugging_face_is_reported_and_not_cached_as_no_results(
+    client, monkeypatch
+):
+    from clawk_cli import cookbook_hf
+
+    answers = [None, [{"id": "acme/tiny-GGUF", "downloads": 3, "gguf": {}}]]
+    monkeypatch.setattr(
+        cookbook_hf, "_get_json", lambda _url, timeout=15.0: answers.pop(0)
+    )
+    cookbook_hf._cache.clear()
+
+    offline = client.get("/api/cookbook/hf-search", params={"q": "tiny"}).json()
+    assert offline["models"] == [] and "huggingface.co" in offline["error"]
+
+    # The failure was not cached as "nothing found": the next search reaches HF again.
+    online = client.get("/api/cookbook/hf-search", params={"q": "tiny"}).json()
+    assert [m["repo"] for m in online["models"]] == ["acme/tiny-GGUF"]
+    assert "error" not in online

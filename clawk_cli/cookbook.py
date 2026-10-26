@@ -28,6 +28,8 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional
 
+from clawk_cli.cookbook_hf import SourceUnreachable
+
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_OPENAI_URL = "http://localhost:11434/v1"
 
@@ -1269,8 +1271,8 @@ def _cards_to_rows(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def search_ollama_library(query: str, limit: int = 80) -> list[dict[str, Any]]:
     """Live search of the FULL Ollama library for models matching *query*.
 
-    Returns CATALOG-shaped rows (one per size tag). Cached per-query; [] if
-    ollama.com is unreachable.
+    Returns CATALOG-shaped rows (one per size tag). Cached per-query; raises
+    ``SourceUnreachable`` (never caches) when ollama.com does not answer.
     """
     q = (query or "").strip().lower()
     if not q:
@@ -1279,7 +1281,9 @@ def search_ollama_library(query: str, limit: int = 80) -> list[dict[str, Any]]:
     if cached and time.monotonic() - cached[0] < _SEARCH_TTL_SECONDS:
         return cached[1][:limit]
     html = _web_fetch(f"{_OLLAMA_WEB}/search?q={urllib.parse.quote(q)}")
-    rows = _cards_to_rows(_parse_model_cards(html)) if html else []
+    if html is None:
+        raise SourceUnreachable("ollama.com did not answer (offline or proxy)")
+    rows = _cards_to_rows(_parse_model_cards(html))
     _lib_cache[f"q:{q}"] = (time.monotonic(), rows)
     return rows[:limit]
 
@@ -1290,7 +1294,9 @@ def full_ollama_library() -> list[dict[str, Any]]:
     if cached and time.monotonic() - cached[0] < _LIB_TTL_SECONDS:
         return cached[1]
     html = _web_fetch(f"{_OLLAMA_WEB}/library")
-    rows = _cards_to_rows(_parse_model_cards(html)) if html else []
+    if html is None:
+        raise SourceUnreachable("ollama.com did not answer (offline or proxy)")
+    rows = _cards_to_rows(_parse_model_cards(html))
     _lib_cache["__all__"] = (time.monotonic(), rows)
     return rows
 
