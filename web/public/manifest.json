@@ -1,0 +1,15 @@
+{
+  "name": "Clawksis",
+  "short_name": "Clawksis",
+  "description": "Tu agente de IA autónomo, desde el móvil.",
+  "start_url": "chat",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0a18",
+  "theme_color": "#0b0a18",
+  "icons": [
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "clawksis-logo-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

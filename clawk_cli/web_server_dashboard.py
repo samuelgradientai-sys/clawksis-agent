@@ -211,6 +211,8 @@ def mount_spa(application: FastAPI):
                 'href="/assets/',
                 'src="/assets/',
                 'href="/favicon.ico"',
+                'href="/manifest.json"',
+                'href="/apple-touch-icon.png"',
                 'href="/fonts/',
                 'href="/ds-assets/',
                 'src="/ds-assets/',

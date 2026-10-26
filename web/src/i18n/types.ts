@@ -506,6 +506,9 @@ export interface Translations {
     loadWhat?: string;
     browseHub?: string;
     createSkill?: string;
+    /** Optional — English fallback until translated. */
+    learnSkill?: string;
+    newSkill?: string;
     enabledOf: string;
     all: string;
     categories: string;

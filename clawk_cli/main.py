@@ -2078,6 +2078,12 @@ cmd_dashboard_domain = _forward_command(
     "cmd_dashboard_domain",
     doc="Publish the dashboard at https://<domain> (systemd + Caddy, one command).",
 )
+cmd_dashboard_mobile = _forward_command(
+    "cmd_dashboard_mobile",
+    "clawk_cli.dashboard_mobile",
+    "cmd_dashboard_mobile",
+    doc="Open the dashboard on your phone: secure URL + QR code (Tailscale or domain).",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -4734,107 +4740,15 @@ def _extend_dashboard_parser(subparsers) -> None:
         help="Run in the foreground even over SSH (don't auto-background; it will stop on logout)",
     )
 
-    dashboard_subparsers = _existing_subparsers(dashboard_parser)
-    # `clawk dashboard password` — set/change/remove the built-in login
-    # (dashboard.basic_auth). Same credentials the first-run setup page
-    # creates; forgot the password → run this again to overwrite it.
-    password_parser = dashboard_subparsers.add_parser(
-        "password",
-        help="Set or change the dashboard login (username + password)",
-        description=(
-            "Set, change, or remove the dashboard's built-in login "
-            "(dashboard.basic_auth in ~/.clawksis/config.yaml). The password "
-            "is stored as a scrypt hash — never plaintext. Forgot it? Run "
-            "this command again to overwrite it."
-        ),
-    )
-    password_parser.add_argument(
-        "--username",
-        default=None,
-        help="Login username (prompted interactively if omitted)",
-    )
-    password_parser.add_argument(
-        "--password",
-        default=None,
-        help=(
-            "New password (prompted interactively — recommended — if omitted, "
-            "so it doesn't land in your shell history)"
-        ),
-    )
-    password_parser.add_argument(
-        "--clear",
-        action="store_true",
-        help="Remove the configured login (the first-run setup page returns)",
-    )
-    password_parser.set_defaults(func=cmd_dashboard_password)
+    from clawk_cli.subcommands.dashboard_extras import build_dashboard_extras
 
-    # `clawk dashboard service` — instala/actualiza la unit systemd en un
-    # comando (unit + daemon-reload + enable + start + verificación HTTP).
-    service_parser = dashboard_subparsers.add_parser(
-        "service",
-        help="Install the dashboard as a systemd service (starts on boot, one command)",
-        description=(
-            "Write/refresh /etc/systemd/system/clawk-dashboard.service pointing "
-            "at this install, reload systemd, enable + start it, and verify it "
-            "answers HTTP. Linux + root. --uninstall removes it; --status shows it."
-        ),
+    build_dashboard_extras(
+        _existing_subparsers(dashboard_parser),
+        cmd_dashboard_password=cmd_dashboard_password,
+        cmd_dashboard_service=cmd_dashboard_service,
+        cmd_dashboard_domain=cmd_dashboard_domain,
+        cmd_dashboard_mobile=cmd_dashboard_mobile,
     )
-    service_parser.add_argument(
-        "--host",
-        default="127.0.0.1",
-        help=(
-            "Bind host for the service (default 127.0.0.1 — local/SSH-tunnel "
-            "only; 0.0.0.0 exposes it with the login gate active)"
-        ),
-    )
-    service_parser.add_argument(
-        "--port", type=int, default=9119, help="Port (default 9119)"
-    )
-    service_parser.add_argument(
-        "--plain",
-        action="store_true",
-        help=(
-            "Write a clean unit, discarding any domain-mode env preserved from "
-            "a previous `clawk dashboard domain` (use to leave domain mode)"
-        ),
-    )
-    service_parser.add_argument(
-        "--uninstall",
-        action="store_true",
-        help="Disable and remove the systemd service",
-    )
-    service_parser.add_argument(
-        "--status",
-        action="store_true",
-        help="Show the systemd service status and exit",
-    )
-    service_parser.set_defaults(func=cmd_dashboard_service)
-
-    # `clawk dashboard domain <dominio>` — publica el dashboard en
-    # https://<dominio>: unit en modo reverse-proxy (loopback + login gate
-    # forzado) + Caddy con HTTPS automático. Solo falta el registro DNS.
-    domain_parser = dashboard_subparsers.add_parser(
-        "domain",
-        help="Publish the dashboard at https://<domain> (reverse proxy + HTTPS, one command)",
-        description=(
-            "One-command public deploy: installs the systemd service bound to "
-            "loopback with the login gate FORCED on, installs Caddy if missing, "
-            "writes the reverse-proxy block and reloads it. HTTPS is automatic "
-            "(Let's Encrypt) once the domain's DNS A record points at this "
-            "server — the command prints the exact record to create."
-        ),
-    )
-    domain_parser.add_argument(
-        "domain",
-        help="Domain to serve the dashboard at, e.g. panel.tudominio.com",
-    )
-    domain_parser.add_argument(
-        "--port",
-        type=int,
-        default=9119,
-        help="Dashboard port to proxy to (default 9119)",
-    )
-    domain_parser.set_defaults(func=cmd_dashboard_domain)
 
 
 def _build_cli_parser():
