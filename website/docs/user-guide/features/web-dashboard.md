@@ -190,7 +190,7 @@ Ask in plain language and the agent acts on the machine with its tools — runs 
 
 Close the browser tab and the PTY is reaped cleanly on the server. Re-opening spawns a fresh session.
 
-**Live browser (Modern chat → Navegador):** when the agent starts browsing (`browser_*` tools or Browser Use's `browser_exec`), the **Navegador** side panel opens on its own and shows the agent's browser live — the tab it is working in, its title and URL, and a feed of its recent browser actions. The server screencasts that browser over CDP (it is on the server's loopback, so the dashboard relays it over the authenticated socket), which works for the local Chromium, the Browser Use backend and CDP/cloud browsers alike. **Tomar control** sends your clicks, scrolling and typing to that same browser — handy to log in or clear a captcha while the agent waits. The agent's **cursor** is drawn over the page — where it moves, clicks (a pulse) and types — reported by a listener in an isolated world the page's own scripts can't see. When the browser has several tabs, a tab strip lets you watch any of them (**Seguir al agente** goes back to following the agent), and when several browsers are open at once — e.g. subagents fanned out by the `mass-search` skill — **Mosaico** shows them all live side by side. A headless browser closes when the agent's turn ends (`cleanup_task_resources`); the panel then keeps the last frame and says *Terminado*. Run the browser headed to keep it open between turns.
+**Live browser (Modern chat → Navegador):** when the agent starts browsing (`browser_*` tools or Browser Use's `browser_exec`), the **Navegador** side panel opens on its own and shows the agent's browser live — the tab it is working in, its title and URL, and a feed of its recent browser actions. The server screencasts that browser over CDP (it is on the server's loopback, so the dashboard relays it over the authenticated socket), which works for the local Chromium, the Browser Use backend and CDP/cloud browsers alike. **Tomar control** sends your clicks, scrolling and typing to that same browser — handy to log in or clear a captcha while the agent waits. The agent's **cursor** is drawn over the page — where it moves, clicks (a pulse) and types — reported by a listener in an isolated world the page's own scripts can't see. When the browser has several tabs, a tab strip lets you watch any of them (**Seguir al agente** goes back to following the agent), and when several browsers are open at once — e.g. subagents fanned out by the `mass-search` skill — **Mosaico** shows them all live side by side. A headless browser closes when the agent's turn ends (`cleanup_task_resources`); the panel then keeps the last frame and says *Terminado*. Run the browser headed to keep it open between turns. The panel opens once per turn: close it and it stays closed until the next turn (on a phone too). Its badge says **Usando tu Chrome** when the agent is working in your own Chrome through [Mi Chrome](#mi-chrome), and **Navegador del servidor** otherwise.
 
 To point [Clawksis Desktop](#connecting-clawk-desktop-to-a-remote-backend) at a dashboard running on another machine instead of its own bundled backend, see the remote-backend section below.
 
@@ -495,6 +495,21 @@ the API server and webhook endpoints) with its live connection status.
 - **Restart gateway** — credentials are written to `~/.clawksis/.env` and the enabled flag to `config.yaml`; the gateway connects each enabled channel on its next restart, which you can trigger right from the page. On a system-scope install (`clawk gateway install --system`) the dashboard runs the restart under `sudo -n`, so the dashboard user needs passwordless sudo; without it the request fails immediately instead of reporting a restart that the CLI then refuses.
 
 ![Channels admin page — every messaging platform with status, enable toggles, and per-platform setup forms](/img/dashboard/admin-channels.png)
+
+### Mi Chrome
+
+Under **Integrations → Mi Chrome**: connect the Chrome on your laptop so the agent on the server
+works in your own tabs and signed-in accounts ([how it works, payments and limits](browser.md#your-own-chrome-from-anywhere-mi-chrome)).
+
+- **On / off** — `browser.my_chrome.enabled`. Off, the dashboard refuses the extension and the agent uses the server's browser.
+- **Setup in 4 steps** — download the extension (a `.zip` to load unpacked in Chrome, Edge or Brave), generate the pairing code (shown once; generating another replaces it) and paste it into the extension.
+- **Status** — *Conectado* / *Esperando la extensión* / *Sin emparejar*, the browser and since when, and the tabs the agent can see (its own ones marked *Del agente*).
+- **Pagos** — **Pedirme confirmación antes de pagar** (`browser.my_chrome.confirm_payments`, off by default): off, the agent completes the purchases you ask for and then shows you the receipt; on, it stops before paying and waits for your "yes". Only you can change it.
+- **Revocar emparejamiento** — disconnects the extension and invalidates its code.
+
+While the agent is driving your Chrome, every other dashboard page (and the terminal chat) shows a
+pill, *El agente está usando tu Chrome · Ver en vivo*; **Ver en vivo** opens the Modern chat with
+the Navegador panel watching it live.
 
 ### System
 

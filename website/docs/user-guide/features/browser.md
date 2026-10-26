@@ -16,6 +16,7 @@ Clawksis includes a full browser automation toolset with multiple backend option
 - **Camofox local mode** via [Camofox](https://github.com/jo-inc/camofox-browser) for local anti-detection browsing (Firefox-based fingerprint spoofing)
 - **Lightpanda local engine** via [Lightpanda](https://lightpanda.io) — a headless browser built from scratch in Zig for machines; instant start up, 16x lower memory and 9x faster than Chrome. Works in Browser Use mode (Clawksis spawns it, no Chromium or Node needed) and with the built-in tools (automatic Chrome fallback for actions it doesn't support yet)
 - **Local Chromium-family CDP** — connect browser tools to your own Chrome, Brave, Chromium, or Edge instance using `/browser connect`
+- **Mi Chrome** — let the agent on your VPS use the Chrome on your laptop (your open tabs and signed-in accounts) through a small extension paired with the dashboard — see [Mi Chrome](#your-own-chrome-from-anywhere-mi-chrome)
 - **Local browser mode** via the `agent-browser` CLI and a local Chromium installation
 
 In all modes, the agent can navigate websites, interact with page elements, fill forms, and extract information.
@@ -572,6 +573,84 @@ A dedicated profile starts out signed out of everything. If you want the agent t
 :::
 
 When connected via CDP, all browser tools (`browser_navigate`, `browser_click`, etc.) operate on your live browser instance instead of spinning up a cloud session.
+
+### Your own Chrome, from anywhere (Mi Chrome)
+
+`/browser connect` needs Clawksis and the browser on the same machine. **Mi Chrome** covers the
+usual self-hosted case instead: the agent runs on your VPS and you browse on your laptop. A small
+Chrome extension connects your everyday Chrome to the dashboard, and from then on the agent works
+in **your tabs, signed in to your accounts** — ask it from the dashboard chat, Telegram or any
+other channel ("book me a flight to Cancún") and it does it in your browser while you watch.
+
+Setup (dashboard → **Integrations → Mi Chrome**):
+
+1. Turn the page's switch on (`browser.my_chrome.enabled`, off by default) and click
+   **Descargar extensión**. Unzip it somewhere you won't delete.
+2. Open `chrome://extensions` (Edge and Brave work too, version 125+), enable **Developer mode**,
+   click **Load unpacked** and pick the `clawksis-mi-chrome` folder.
+3. Click **Generar código**. The pairing code is shown once; treat it like a password.
+4. Click the Mi Chrome icon in Chrome's toolbar, paste the code and click **Conectar**. The page
+   then shows **Conectado** and the tabs the agent can see.
+
+The dashboard has to be reachable from your laptop over `https://` — for example with
+`clawk dashboard mobile --tailscale` or `clawk dashboard domain` (see
+[On your phone](web-dashboard.md#on-your-phone)) — or be on the same machine (`localhost`).
+
+**How it works.** The extension opens an outbound WebSocket to the dashboard it was paired with
+(nothing listens on your laptop) and relays the Chrome DevTools Protocol through
+`chrome.debugger`. On the server, the dashboard exposes that as an ordinary browser CDP endpoint
+on `127.0.0.1` behind an unguessable path, and every process of the profile (the dashboard chat,
+the messaging gateway, cron) uses it as its browser while the extension is connected — after a
+live `/browser connect`, before `browser.cdp_url`. Both browser drivers work on it: Browser Use
+(`browser_exec`) and the built-in `browser_*` tools. The Navegador panel shows it live with a
+**Usando tu Chrome** badge. When the extension disconnects, the next browser call falls back to
+the server's browser.
+
+**What the agent does in your Chrome.** It sees your open tabs (and can switch to one, e.g. the
+airline page you already have open), opens its own tabs in a purple **Clawksis** tab group, and
+never closes yours; "closing the browser" just detaches from it. The `my-chrome` skill tells it
+how to work there.
+
+**Payments.** By default the agent completes the purchases, payments and bookings you ask for on
+its own, then reports what it bought, the amount, the merchant, the confirmation number and a
+screenshot of the receipt. If you'd rather approve each one, turn on **Pedirme confirmación antes
+de pagar** on the Mi Chrome page (`browser.my_chrome.confirm_payments: true`): the agent then stops
+before the final payment step, shows you the summary and waits for your "yes". Either way:
+
+- The setting is yours. The agent reads it but cannot change it: `clawk config set
+  browser.my_chrome.*` and the dashboard's settings route are refused for the agent even in yolo
+  mode, and `config.yaml` is already off-limits to its file tools.
+- It only spends on what you asked for (or a cron job you created). It never pays, adds a card,
+  changes your account or shipping details or transfers money because a web page, email or
+  document says so; it ignores such instructions and tells you about them.
+- A 3-D Secure / SMS code, a wallet or OS prompt, or a CVV your card asks for is requested in the
+  chat; the agent uses it once and never stores it. Card numbers and labelled CVVs are masked in
+  logs and in what the browser tools return.
+
+**Stopping it.** While the agent uses a tab, Chrome shows a bar saying *"Clawksis — Mi Chrome"
+started debugging this browser*; **Cancel** there, **Desconectar** in the extension, the page's
+switch, or **Revocar emparejamiento** (the code stops working) all cut it off at once.
+
+**Security.** Only a SHA-256 hash of the device token is stored, in the profile's home
+(`my_chrome/pairing.json`, mode 0600); the token travels as a WebSocket subprotocol, never in a
+URL, and a missing, wrong or revoked token is refused before the socket opens. The extension only
+connects to the dashboard it was paired with, over `wss://` unless that is `localhost`. Each
+profile pairs its own Chrome. Nothing is sent anywhere else.
+
+**Limits.**
+
+- Your computer has to be on, with Chrome open, and the dashboard running on the server (it hosts
+  the relay).
+- `chrome://` pages, other extensions and the Chrome Web Store can't be automated (Chrome's rule),
+  and incognito windows are never shared.
+- You share the windows with the agent: it brings the tab it works in to the front (background
+  tabs don't paint, so screenshots and the live view need it), so avoid typing in that tab while
+  it works.
+- The extension is loaded unpacked, not from the Web Store: after updating Clawksis, download it
+  again and click the reload icon in `chrome://extensions` if the page says it changed.
+- The loopback endpoint is protected by its secret path, and the built-in tools pass that URL to
+  their driver on the command line. On a server other people can log in to, they could read it from
+  the process list, so use Mi Chrome on a VPS that is yours alone.
 
 ### WSL2 + Windows Chrome: prefer MCP over `/browser connect`
 

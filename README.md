@@ -42,6 +42,7 @@
 - ⏰ **Proactivo, no solo reactivo** — tareas programadas (cron), webhooks y hooks de shell: el agente te escribe **a vos** cuando pasa algo.
 - 🧩 **Extensible** — skills, plugins, servidores MCP y bundles. Un ecosistema que crece con vos.
 - 🖥️ **CLI + Dashboard web + App de escritorio** — usalo como prefieras, incluido acceso remoto por dominio con HTTPS.
+- 🌐 **Usa tu propio Chrome** — con la extensión **Mi Chrome**, el agente que corre en tu VPS trabaja en las pestañas de tu compu, con tus sesiones iniciadas: pedile «reservame un pasaje a Cancún» y lo hace mientras lo mirás en vivo.
 - 📦 **Multiplataforma** — Linux, macOS, Windows y Android (Termux).
 
 ---
@@ -182,7 +183,7 @@ La referencia completa está organizada por categoría — expandí la que neces
 <details>
 <summary><b>Dashboard web (<code>clawk dashboard</code>)</b></summary>
 
-El dashboard es una web UI (por defecto en `http://127.0.0.1:9119`): chat en dos modos — **Modern** (burbujas, con paneles laterales de **Visualización** de agentes, **Media** generada y **Tareas** kanban) y **Terminal** (la CLI clásica) —, gestión de sesiones, modelos, skills, plugins, MCP y canales. En un servidor, `clawk dashboard` queda corriendo en segundo plano (sobrevive al cierre de SSH).
+El dashboard es una web UI (por defecto en `http://127.0.0.1:9119`): chat en dos modos — **Modern** (burbujas, con paneles laterales de **Visualización** de agentes, **Media** generada y **Tareas** kanban) y **Terminal** (la CLI clásica) —, gestión de sesiones, modelos, skills, plugins, MCP y canales, y **Mi Chrome** (conectá el Chrome de tu compu para que el agente use tus pestañas; ver [la guía](website/docs/user-guide/features/browser.md#your-own-chrome-from-anywhere-mi-chrome)). En un servidor, `clawk dashboard` queda corriendo en segundo plano (sobrevive al cierre de SSH).
 
 | Comando | Qué hace |
 |---|---|
