@@ -620,6 +620,17 @@ browser:
   extension_control:
     enabled: false
 
+  # Mi Chrome: let every agent of this profile drive YOUR Chrome (open tabs,
+  # logged-in accounts) through the Clawksis extension paired from the
+  # dashboard (Integraciones → Mi Chrome). Used only while the extension is
+  # connected; otherwise the server's own browser is used. confirm_payments
+  # makes the agent stop and ask before paying; by default it pays what you
+  # asked for and reports the receipt. Only you can change these (the agent
+  # is blocked from editing browser.my_chrome).
+  my_chrome:
+    enabled: false
+    confirm_payments: false
+
   # Maximum characters of snapshot content before truncate-and-store.
   # Increase for long pages (for example, documentation or financial reports),
   # or decrease to reduce context usage. Minimum: 1000; default: 15000
