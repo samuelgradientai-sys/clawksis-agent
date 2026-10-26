@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionLabel, keyboardEvent, mouseEvent, pickSession, toViewport } from "./liveInput";
+import { actionLabel, keyboardEvent, mouseEvent, pickSession, sessionLabels, toViewport } from "./liveInput";
 
 const meta = { deviceWidth: 1280, deviceHeight: 720 };
 
@@ -59,4 +59,14 @@ it("labels the agent's browser tools in Spanish, passing unknown ones through", 
   expect(actionLabel("browser_click")).toBe("Hace clic");
   expect(actionLabel("browser_exec")).toBe("Ejecuta un paso en el navegador");
   expect(actionLabel("browser_new_thing")).toBe("new_thing");
+});
+
+describe("mosaic labels", () => {
+  it("names the conversation's browser Agente and delegated helpers Subagente n", () => {
+    const labels = sessionLabels(
+      [{ task_id: "chat-7" }, { task_id: "sa-0-bbbf9446" }, { task_id: "sa-1-ab3cbe9c" }, { task_id: "other" }],
+      "chat-7",
+    );
+    expect([...labels.values()]).toEqual(["Agente", "Subagente 1", "Subagente 2", "Navegador 1"]);
+  });
 });

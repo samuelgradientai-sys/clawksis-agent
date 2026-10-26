@@ -156,6 +156,10 @@ export const CHAT_EVENT_HANDLERS: Record<string, Handler> = {
     if (isBrowserTool(payload.name)) noteBrowserActivity(ctx.ids.selectedKey.current, payload.name as string);
   },
   "tool.complete": (ctx, payload) => ctx.setMessages((prev) => finishTool(prev, payload)),
+  // A delegated subagent browsing (a mass search fans out to several): open the live panel too.
+  "subagent.tool": (ctx, payload) => {
+    if (isBrowserTool(payload.tool_name)) noteBrowserActivity(ctx.ids.selectedKey.current, payload.tool_name as string);
+  },
   // A session-level failure. Before any turn event it is the refusal of the
   // submit we just made (ownership, cancelled before the agent was ready): that
   // turn never runs, so release the composer. Mid-turn it is out of band.
