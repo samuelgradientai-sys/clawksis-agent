@@ -15,11 +15,21 @@ export interface AuxiliaryTaskAssignment {
   inherit_from?: string | null;
   /** Inheriting plugin tasks only: the route the task resolves to right now. */
   effective?: { provider: string; model: string; base_url: string };
+  /** The task's own reasoning-effort override (null = inherit the main agent's). */
+  reasoning_effort?: string | null;
+  /** Backend verdict (`is_local_endpoint`) that `base_url` is loopback/LAN/Tailscale. */
+  local_endpoint?: boolean;
 }
 
 export interface AuxiliaryModelsResponse {
   tasks: AuxiliaryTaskAssignment[];
-  main: { provider: string; model: string };
+  main: {
+    provider: string;
+    model: string;
+    /** config.yaml `model.base_url` (custom / local endpoints); absent on older backends. */
+    base_url?: string;
+    local_endpoint?: boolean;
+  };
 }
 
 /** An auxiliary task still pinned to a provider that differs from the

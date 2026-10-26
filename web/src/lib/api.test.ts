@@ -132,6 +132,7 @@ describe("management profile scope", () => {
     "/api/credentials/pool/anthropic/0",
     "/api/dashboard/plugin-providers",
     "/api/model/recommended-default",
+    "/api/model/local-status",
     "/api/local-models",
     "/api/ops/restart",
   ])("scopes %s to the selected management profile", async (path) => {

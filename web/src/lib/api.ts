@@ -8,6 +8,7 @@ import { createDashboardSessionMutations } from "./session-mutations";
 const mutateSessionHttp = createDashboardSessionMutations(fetchJSON);
 
 import type { AuxiliaryModelsResponse, ModelAssignmentResponse } from "./api-aux";
+import type { ModelsAnalyticsResponse } from "./api-models";
 import type { AgentPluginUpdateResponse } from "./api-plugins";
 import type {
   WhatsAppOnboardingApplyResponse,
@@ -127,6 +128,7 @@ const PROFILE_SCOPED_PREFIXES = [
   "/api/model/auxiliary",
   "/api/model/moa",
   "/api/model/options",
+  "/api/model/local-status",
   // A named profile keeps its own pairing whitelist, and its gateway only
   // consults that one — approving into the global store would grant access
   // the running gateway never sees.
@@ -2428,45 +2430,7 @@ export interface ProfileInfo {
   has_alias: boolean;
 }
 
-export interface ModelsAnalyticsModelEntry {
-  model: string;
-  provider: string;
-  input_tokens: number;
-  output_tokens: number;
-  cache_read_tokens: number;
-  reasoning_tokens: number;
-  estimated_cost: number;
-  actual_cost: number;
-  sessions: number;
-  api_calls: number;
-  tool_calls: number;
-  last_used_at: number;
-  avg_tokens_per_session: number;
-  capabilities: {
-    supports_tools?: boolean;
-    supports_vision?: boolean;
-    supports_reasoning?: boolean;
-    context_window?: number;
-    max_output_tokens?: number;
-    model_family?: string;
-  };
-}
-
-export interface ModelsAnalyticsResponse {
-  models: ModelsAnalyticsModelEntry[];
-  totals: {
-    distinct_models: number;
-    total_input: number;
-    total_output: number;
-    total_cache_read: number;
-    total_reasoning: number;
-    total_estimated_cost: number;
-    total_actual_cost: number;
-    total_sessions: number;
-    total_api_calls: number;
-  };
-  period_days: number;
-}
+export type { ModelsAnalyticsModelEntry, ModelsAnalyticsResponse } from "./api-models";
 
 export interface CronOccurrenceJob {
   id: string;
