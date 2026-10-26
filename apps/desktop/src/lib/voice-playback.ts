@@ -1,4 +1,5 @@
 import { resolveGatewayWsUrl } from '@clawk/shared'
+import { cutSentences, sanitizeTextForSpeech } from '@clawk/shared/voice/speech-text'
 
 import type { OwnerScope } from '@/api/client'
 import { getApiRequestConnection, getApiRequestProfile, speakText } from '@/clawk'
@@ -10,8 +11,6 @@ import {
   type VoicePlaybackSource,
   type VoicePlaybackState
 } from '@/store/voice-playback'
-
-import { cutSentences, sanitizeTextForSpeech } from './speech-text'
 
 // Free Edge TTS occasionally hands back audio that never fires `playing`/`ended`
 // nor `error` — leaving voice mode stuck "speaking" forever. Reject if playback

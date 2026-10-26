@@ -46,3 +46,20 @@ describe("the Navegador panel opens itself when the agent starts browsing", () =
     expect(panel()).toBe("browser");
   });
 });
+
+describe("subagents browsing open the panel too", () => {
+  beforeEach(() => {
+    resetBrowserLiveStore();
+    setSidePanel(null);
+  });
+
+  it("opens on a subagent's browser tool", () => {
+    const ctx = {
+      ids: { liveSid: { current: "live-1" }, selectedKey: { current: "chat-9" } },
+    } as unknown as ChatEventContext;
+    dispatchChatEvent(ctx, { type: "subagent.tool", session_id: "live-1", payload: { tool_name: "web_search" } });
+    expect(panel()).toBeNull();
+    dispatchChatEvent(ctx, { type: "subagent.tool", session_id: "live-1", payload: { tool_name: "browser_navigate" } });
+    expect(panel()).toBe("browser");
+  });
+});

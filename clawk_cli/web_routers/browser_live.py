@@ -53,7 +53,7 @@ async def list_live_browsers() -> dict[str, Any]:
 
 
 @router.websocket("/api/browser/live/ws")
-async def live_browser_ws(ws: WebSocket, task: str = "") -> None:
+async def live_browser_ws(ws: WebSocket, task: str = "", thumb: bool = False) -> None:
     from clawk_cli.web_routers.chat_ws import _close_unless_sidecar_allowed
     from tools.browser_live_screencast import LiveScreencast
 
@@ -67,7 +67,7 @@ async def live_browser_ws(ws: WebSocket, task: str = "") -> None:
 
     await ws.accept()
     try:
-        await LiveScreencast(cdp_url, ws.send_json).run(ws.receive_text)
+        await LiveScreencast(cdp_url, ws.send_json, thumb=thumb).run(ws.receive_text)
     except (
         OSError,
         InvalidHandshake,

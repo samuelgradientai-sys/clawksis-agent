@@ -1178,7 +1178,8 @@ def _start_notification_poller(sid: str, session: dict) -> threading.Event:
 
 def _hud_surface_note(session: dict) -> str:
     """The per-surface note for this turn ("" for the plain app window): HUD -> the read-the-window-below
-    prior; voice-live -> the spoken-delegation contract with the recent transcript."""
+    prior; voice -> the spoken-reply style of a chained voice turn; voice-live -> the spoken-delegation
+    contract with the recent transcript."""
     from gateway.session_surface import surface_note
 
     surface, agent = session.get("client_surface"), session.get("agent")

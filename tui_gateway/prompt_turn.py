@@ -1022,6 +1022,10 @@ def _invoke_agent(
         run_params = {}
     if "task_id" in run_params:
         run_kwargs["task_id"] = session["session_key"]
+    # The title is the user's words, never the per-turn notes prepended to the model input
+    # (voice / HUD / live-voice surface, barge-in): those would name the chat "[Note: …".
+    if isinstance(prompt, str) and "title_user_message" in run_params:
+        run_kwargs["title_user_message"] = prompt
     if display_kind and "persist_user_display_kind" in run_params:
         run_kwargs["persist_user_display_kind"] = display_kind
     if display_metadata and "persist_user_display_metadata" in run_params:

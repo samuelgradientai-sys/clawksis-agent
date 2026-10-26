@@ -57,6 +57,17 @@ SPEECH_INTERRUPTED_NOTE = (
 _INTERRUPT_TTL_S = 120.0
 _interrupted_at: Optional[float] = None
 
+# Per-turn note for a chained voice-conversation turn (client surface ``voice``: speech-to-text →
+# this turn → text-to-speech). Same channel as SPEECH_INTERRUPTED_NOTE and the HUD / GPT-Live
+# notes: it rides the model-bound user message, never the byte-stable system prompt.
+SPOKEN_REPLY_NOTE = (
+    "[Note: this message is a voice transcript from a spoken conversation (it may contain "
+    "mis-hearings; use the most plausible intent). Your reply will be read aloud by text-to-speech: "
+    "answer in plain conversational sentences in the user's language, keep it short unless they ask "
+    "for detail, and avoid markdown, tables, lists, code blocks and URLs. Do the work with your tools "
+    "as usual; only your final words are spoken.]"
+)
+
 
 def mark_speech_interrupted() -> None:
     global _interrupted_at

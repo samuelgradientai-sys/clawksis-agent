@@ -172,7 +172,7 @@ def normalize_symbols_for_tts(text: str) -> str:
 # placeholder word (#86602: the reply may be in any language). Ordinary
 # prose, dates, ratios and short hyphenated words (COVID-19, well-known)
 # pass through untouched. Mirrored token-for-token by
-# apps/desktop/src/lib/speech-text.ts — keep both in lockstep and extend the
+# apps/shared/src/voice/speech-text.ts — keep both in lockstep and extend the
 # shared corpus (tests/fixtures/identifier_speech_corpus.json) first.
 
 _FILENAME_EXT_RE = re.compile(

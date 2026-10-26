@@ -20,6 +20,7 @@ class ClientSurface(WireEnum):
     """Where the user typed this turn; anything else is treated as the plain app window."""
 
     hud = "hud"
+    voice = "voice"  # a chained voice-conversation turn (STT → turn → TTS): spoken-reply note
     voice_live = "voice-live"
 
 

@@ -188,9 +188,41 @@ The dashboard also ships a **Modern** chat — a native React client (not the PT
 
 Close the browser tab and the PTY is reaped cleanly on the server. Re-opening spawns a fresh session.
 
-**Live browser (Modern chat → Navegador):** when the agent starts browsing (`browser_*` tools or Browser Use's `browser_exec`), the **Navegador** side panel opens on its own and shows the agent's browser live — the tab it is working in, its title and URL, and a feed of its recent browser actions. The server screencasts that browser over CDP (it is on the server's loopback, so the dashboard relays it over the authenticated socket), which works for the local Chromium, the Browser Use backend and CDP/cloud browsers alike. **Tomar control** sends your clicks, scrolling and typing to that same browser — handy to log in or clear a captcha while the agent waits. A headless browser closes when the agent's turn ends (`cleanup_task_resources`); the panel then keeps the last frame and says *Terminado*. Run the browser headed to keep it open between turns.
+**Live browser (Modern chat → Navegador):** when the agent starts browsing (`browser_*` tools or Browser Use's `browser_exec`), the **Navegador** side panel opens on its own and shows the agent's browser live — the tab it is working in, its title and URL, and a feed of its recent browser actions. The server screencasts that browser over CDP (it is on the server's loopback, so the dashboard relays it over the authenticated socket), which works for the local Chromium, the Browser Use backend and CDP/cloud browsers alike. **Tomar control** sends your clicks, scrolling and typing to that same browser — handy to log in or clear a captcha while the agent waits. The agent's **cursor** is drawn over the page — where it moves, clicks (a pulse) and types — reported by a listener in an isolated world the page's own scripts can't see. When the browser has several tabs, a tab strip lets you watch any of them (**Seguir al agente** goes back to following the agent), and when several browsers are open at once — e.g. subagents fanned out by the `mass-search` skill — **Mosaico** shows them all live side by side. A headless browser closes when the agent's turn ends (`cleanup_task_resources`); the panel then keeps the last frame and says *Terminado*. Run the browser headed to keep it open between turns.
 
 To point [Clawksis Desktop](#connecting-clawk-desktop-to-a-remote-backend) at a dashboard running on another machine instead of its own bundled backend, see the remote-backend section below.
+
+### Voice mode (Modern chat)
+
+The Modern chat has a ChatGPT-style **voice conversation**: tap the waveform button next to the microphone in the composer (the microphone itself is still plain dictation into the text box). A full-screen view opens with an animated orb; just talk. When you pause, what you said is transcribed and sent as a normal chat turn, and the reply is read aloud **while it is still being written**. The orb follows your voice while it listens, pulses while the agent thinks, and follows the reply while it speaks; live captions show your last turn and the reply.
+
+- **Interrupt by talking.** Speak over the reply (or while the agent is still thinking) and it stops at once; what you say becomes the next turn, and the agent is told its reply was cut off. A transcript that is just the reply heard back through your speakers is ignored.
+- **End it by voice.** Say *«basta»*, *«chau»*, *«terminar»*, *«stop»*… (the whole utterance, so «pará el contenedor» still goes to the agent). A custom `voice.stop_phrases` list replaces the built-in one; `[]` disables spoken stop.
+- **Controls:** mute the microphone, hang up, or **Texto** (close and jump to the composer). `Esc` also hangs up. Hanging up never cancels a reply that is still being generated: it keeps arriving as text.
+- **Everything stays in the chat.** Voice turns are ordinary turns of the open conversation (same history, tools, approvals, title). If the agent asks for an approval mid-turn, the voice view tells you and **Ver en el chat** takes you to the card.
+- On a phone the screen is kept awake during the conversation; switching apps or locking the phone ends it cleanly.
+
+**Requirements.** The browser only allows the microphone on a secure page: open the dashboard over **HTTPS** (`clawk dashboard mobile --tailscale`, `clawk dashboard domain`, a reverse proxy with TLS) or on `localhost` / `127.0.0.1`. Over plain `http://` from another device the voice view explains this instead of starting. Speech-to-text and text-to-speech run on the **server** with the providers configured under `stt.*` / `tts.*` (Config page or `config.yaml`); the browser only captures and plays audio, so nothing needs to be installed on the phone. If no STT provider is configured the view says so and links to **Config**; without a working TTS provider the replies show as captions only.
+
+Recommended setup for Spanish (the defaults transcribe English):
+
+```yaml
+stt:
+  provider: groq              # fast cloud Whisper (GROQ_API_KEY); or "local" (faster-whisper on the server, no key)
+  language: es                # the default is "en": set it, or Spanish is misheard
+  local:
+    model: small              # only for provider: local — "base" is faster, "small" understands Spanish better
+tts:
+  provider: edge              # free, no key
+  edge:
+    voice: es-AR-ElenaNeural  # or es-AR-TomasNeural, es-ES-ElviraNeural, es-MX-DaliaNeural
+```
+
+Optional: `auxiliary.voice_chat` picks a faster model for spoken turns ([Voice chat model](./voice-mode.md#voice-chat-model)), and `voice.barge_in`, `voice.barge_in_grace_seconds`, `voice.barge_in_threshold_multiplier` and `voice.silence_duration` tune interruptions and how long a pause ends your turn (voice mode uses 1 s while `silence_duration` is left at its CLI default).
+
+**How it works.** The browser listens with [Silero VAD](https://github.com/snakers4/silero-vad) (a small neural voice detector running locally in the page; its model and runtime are served by the dashboard itself and load only the first time you open voice mode, ≈4 MB compressed — a browser that cannot run it falls back to a simpler loudness detector). Each utterance is sent as 16 kHz WAV to `POST /api/audio/transcribe`; the turn goes through the chat's own gateway connection as `prompt.submit` with `voice_turn` (spoken-reply note on that turn's model input, the `auxiliary.voice_chat` route); the reply text streams sentence by sentence into the `/api/audio/speak-stream` WebSocket and the PCM that comes back is played gap-free (falling back to `POST /api/audio/speak` per sentence). `stt-lease` / `tts-lease` keep local models warm while the conversation is open. All of it uses the dashboard's normal authentication.
+
+The GPT-Live voice mode (`voice.voice_chat_mode: gpt-live`) is Desktop-only for now; the dashboard always uses the chained loop above.
 
 ### Connecting Clawksis Desktop to a remote backend
 
