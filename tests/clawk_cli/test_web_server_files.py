@@ -442,7 +442,7 @@ def test_managed_file_entry_reuses_symlink_stat_snapshot(tmp_path, monkeypatch):
     )
 
     assert entry["name"] == "link"
-    assert entry["path"] == str(resolved_target)
+    assert entry["path"] == str(link)  # a link is listed at its own path
     assert entry["size"] == 1
     assert target_stat_calls == 1
 

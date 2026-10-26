@@ -360,7 +360,10 @@ def _resolve_managed_path(
     *,
     for_write: bool = False,
     for_agent_read: bool = False,
+    keep_link: bool = False,
 ) -> tuple[ManagedFilesPolicy, Path, str]:
+    """``keep_link``: a final component that is a symlink (dangling or not) names the LINK, not
+    what it points at — delete must remove the entry the listing showed, never the target."""
     policy = _managed_files_policy(request)
     text = _path_text(raw_path)
     root = policy.locked_root
@@ -398,7 +401,7 @@ def _resolve_managed_path(
     if ".." in candidate.parts:
         raise HTTPException(status_code=400, detail="Path cannot contain '..'")
 
-    if for_write and not candidate.exists():
+    if (for_write and not candidate.exists()) or (keep_link and candidate.is_symlink()):
         parent = _canonical_path(candidate.parent)
         resolved = parent / candidate.name
     else:
@@ -477,6 +480,7 @@ def _managed_file_entry(
                 "name": target.name or resolved.name or str(resolved),
                 "path": str(target),
                 "is_directory": False,
+                "is_symlink": True,
                 "broken_link": True,
                 "size": None,
                 "mtime": None,
@@ -506,10 +510,14 @@ def _managed_file_entry(
         if is_dir
         else (mimetypes.guess_type(resolved.name)[0] or "application/octet-stream")
     )
+    is_link = target.is_symlink()
     return {
         "name": target.name or resolved.name or str(resolved),
-        "path": str(resolved),
+        # A link is listed at its own path: navigating it still resolves, and delete acts on
+        # the entry the user sees instead of rmtree-ing whatever it points at.
+        "path": str(target) if is_link else str(resolved),
         "is_directory": is_dir,
+        "is_symlink": is_link,
         "size": None if is_dir else st.st_size,
         "mtime": st.st_mtime,
         "mime_type": mime_type,

@@ -1,14 +1,15 @@
 import asyncio
 import threading
 
-from clawk_cli.web_routers import status
+from clawk_cli.web_routers import logs
 
 
-def test_get_logs_yields_while_reading_and_filtering(tmp_path, monkeypatch):
-    logs_dir = tmp_path / "logs"
-    logs_dir.mkdir()
+def test_get_logs_yields_while_reading_and_filtering(monkeypatch):
+    from clawk_constants import get_clawk_home
+
+    logs_dir = get_clawk_home() / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
     (logs_dir / "agent.log").write_text("fixture\n", encoding="utf-8")
-    monkeypatch.setattr(status, "get_clawk_home", lambda: tmp_path)
 
     loop_ran = threading.Event()
 
@@ -22,6 +23,6 @@ def test_get_logs_yields_while_reading_and_filtering(tmp_path, monkeypatch):
 
     async def exercise():
         asyncio.get_running_loop().call_soon(loop_ran.set)
-        return await status.get_logs(file="agent", lines=100)
+        return await logs.get_logs(file="agent", lines=100)
 
     assert asyncio.run(exercise()) == {"file": "agent", "lines": ["fixture"]}

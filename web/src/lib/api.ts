@@ -26,6 +26,26 @@ import type {
   ManagedFilesResponse,
   ManagedFileWriteResponse,
 } from "./api-files";
+import type {
+  PaginatedSessions,
+  SessionImportResponse,
+  SessionInfo,
+  SessionLatestDescendantResponse,
+  SessionMessagesResponse,
+  SessionSearchResponse,
+  SessionStoreStats,
+} from "./api-sessions";
+import type {
+  CronDeliveryTarget,
+  CronJob,
+  CronJobMutation,
+  CronJobRunsResponse,
+  CronOccurrenceJob,
+} from "./api-cron";
+import type { LogFilesResponse, LogsResponse } from "./api-logs";
+export type * from "./api-sessions";
+export type * from "./api-cron";
+export type * from "./api-logs";
 import { dashboardServingProfile } from "./profile-bootstrap";
 
 // The dashboard can be served either at the root of its host (e.g.
@@ -160,6 +180,10 @@ const PROFILE_SCOPED_PREFIXES = [
   "/api/plugins/", // a plugin's backend: the selected profile's copy, as its bundle is (PLG-3)
   // The shared-metrics answer is one per profile (telemetry.shared_metrics in its config.yaml).
   "/api/shared-metrics",
+  // Cookbook "use this local model" writes the profile's model block; the rest of
+  // /api/cookbook (model files, servers, downloads) is machine-level and stays unscoped.
+  "/api/cookbook/use",
+  "/api/cookbook/model-use",
 ];
 
 // The dashboard's own profile when nothing else named one. The backend injects it only
@@ -398,6 +422,8 @@ export interface SessionQueryOptions {
   source?: string | null;
   sources?: string[];
   excludeSources?: string[];
+  /** Backend default "exclude" hides archived rows; "only" lists just them. */
+  archived?: "exclude" | "only" | "include";
 }
 
 function normalizeSessionQueryOptions(
@@ -423,6 +449,7 @@ function appendSessionFilters(url: string, options: SessionQueryOptions): string
   if (options.excludeSources && options.excludeSources.length > 0) {
     next = appendQueryParam(next, "exclude_sources", options.excludeSources.join(","));
   }
+  next = appendQueryParam(next, "archived", options.archived);
   return appendProfileParam(next, options.profile);
 }
 
@@ -524,23 +551,35 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids, profile: profile || undefined }),
     }),
-  cleanupSessions: (filter: {
-    source?: string;
-    model?: string;
-    older_than_days?: number;
-    max_messages?: number;
-    dry_run: boolean;
-  }) =>
-    fetchJSON<{ ok: boolean; matched?: number; messages?: number; deleted?: number }>(
-      "/api/sessions/cleanup",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filter),
-      },
-    ),
+  cleanupSessions: (
+    filter: {
+      source?: string;
+      model?: string;
+      older_than_days?: number;
+      max_messages?: number;
+      dry_run: boolean;
+    },
+    profile = getManagementProfile(),
+  ) =>
+    fetchJSON<{
+      ok: boolean;
+      matched?: number;
+      messages?: number;
+      deleted?: number;
+      skipped_active?: number;
+    }>("/api/sessions/cleanup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...filter, profile: profile || undefined }),
+    }),
   renameSession: (id: string, title: string, profile = getManagementProfile()) =>
     mutateSessionHttp<{ ok: boolean; title: string }>(id, "PATCH", { title }, profile),
+  /** Archive / pin flags ride the same PATCH revision as a rename. */
+  setSessionFlags: (
+    id: string,
+    flags: { archived?: boolean; pinned?: boolean },
+    profile = getManagementProfile(),
+  ) => mutateSessionHttp<{ ok: boolean }>(id, "PATCH", flags, profile),
   getSessionStats: (profile = getManagementProfile()) =>
     fetchJSON<SessionStoreStats>(appendProfileParam("/api/sessions/stats", profile)),
   exportSessionUrl: (id: string, profile = getManagementProfile()) =>
@@ -578,6 +617,15 @@ export const api = {
     fetchJSON<ManagedFileReadResponse>(
       `/api/files/read?path=${encodeURIComponent(path)}`,
     ),
+  /** Streamed attachment (FileResponse) — no base64 data-URL round trip. */
+  downloadManagedFile: async (path: string): Promise<Blob> => {
+    const url = `/api/files/download?path=${encodeURIComponent(path)}`;
+    const res = await authedFetch(url);
+    if (!res.ok) {
+      throw apiErrorFromResponse(res.status, await res.text().catch(() => ""), url);
+    }
+    return res.blob();
+  },
   uploadFile: (path: string, file: File, overwrite = true) => {
     // Stream the raw bytes as multipart/form-data. Do NOT set Content-Type —
     // the browser adds the multipart boundary automatically. Sending the file
@@ -605,13 +653,30 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path, recursive }),
     }),
-  getLogs: (params: { file?: string; lines?: number; level?: string; component?: string }) => {
+  getLogs: (params: {
+    file?: string;
+    lines?: number;
+    level?: string;
+    component?: string;
+    search?: string;
+  }) => {
     const qs = new URLSearchParams();
     if (params.file) qs.set("file", params.file);
     if (params.lines) qs.set("lines", String(params.lines));
     if (params.level && params.level !== "ALL") qs.set("level", params.level);
     if (params.component && params.component !== "all") qs.set("component", params.component);
+    if (params.search?.trim()) qs.set("search", params.search.trim());
     return fetchJSON<LogsResponse>(`/api/logs?${qs.toString()}`);
+  },
+  getLogFiles: () => fetchJSON<LogFilesResponse>("/api/logs/files"),
+  /** The whole log file (the tail endpoint caps at 500 lines), as a Blob to save. */
+  downloadLog: async (file: string): Promise<Blob> => {
+    const url = `/api/logs/download?file=${encodeURIComponent(file)}`;
+    const res = await authedFetch(url);
+    if (!res.ok) {
+      throw apiErrorFromResponse(res.status, await res.text().catch(() => ""), url);
+    }
+    return res.blob();
   },
   getAnalytics: (days: number, profile = getManagementProfile()) =>
     fetchJSON<AnalyticsResponse>(
@@ -763,6 +828,10 @@ export const api = {
     fetchJSON<CronJob>(`/api/cron/jobs/${encodeURIComponent(id)}/resume?profile=${encodeURIComponent(profile)}`, { method: "POST" }),
   triggerCronJob: (id: string, profile = "default") =>
     fetchJSON<CronJob>(`/api/cron/jobs/${encodeURIComponent(id)}/trigger?profile=${encodeURIComponent(profile)}`, { method: "POST" }),
+  getCronJobRuns: (id: string, profile = "default", limit = 20) =>
+    fetchJSON<CronJobRunsResponse>(
+      `/api/cron/jobs/${encodeURIComponent(id)}/runs?profile=${encodeURIComponent(profile)}&limit=${limit}`,
+    ),
   deleteCronJob: (id: string, profile = "default") =>
     fetchJSON<{ ok: boolean }>(`/api/cron/jobs/${encodeURIComponent(id)}?profile=${encodeURIComponent(profile)}`, { method: "DELETE" }),
 
@@ -1617,24 +1686,6 @@ export interface DebugShareResponse {
   auto_delete_seconds: number;
 }
 
-export interface SessionStoreStats {
-  total: number;
-  active_store: number;
-  archived: number;
-  messages: number;
-  by_source: Record<string, number>;
-}
-
-export interface SessionImportResponse {
-  ok: boolean;
-  imported: number;
-  skipped: number;
-  detached: number;
-  imported_ids: string[];
-  skipped_ids: string[];
-  errors: Array<Record<string, unknown>>;
-}
-
 export interface SkillHubResult {
   name: string;
   description: string;
@@ -2232,40 +2283,6 @@ export interface ChatWorkspacesResponse {
   scan_enabled: boolean;
 }
 
-export interface SessionInfo {
-  id: string;
-  source: string | null;
-  model: string | null;
-  title: string | null;
-  started_at: number;
-  ended_at: number | null;
-  last_active: number;
-  is_active: boolean;
-  message_count: number;
-  tool_call_count: number;
-  input_tokens: number;
-  output_tokens: number;
-  preview: string | null;
-  parent_session_id?: string | null;
-  /** Owning profile stamped by the list/detail endpoints (the store the row
-   * was read from). Absent on search-endpoint rows, which carry no stamp. */
-  profile?: string;
-}
-
-export interface SessionLatestDescendantResponse {
-  requested_session_id: string;
-  session_id: string;
-  path: string[];
-  changed: boolean;
-}
-
-export interface PaginatedSessions {
-  sessions: SessionInfo[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
 export interface EnvVarInfo {
   is_set: boolean;
   redacted_value: string | null;
@@ -2307,34 +2324,6 @@ export interface TelegramOnboardingApplyResponse {
   restart_action?: string;
   restart_pid?: number | null;
   restart_error?: string;
-}
-
-export interface SessionMessage {
-  role: "user" | "assistant" | "system" | "tool";
-  content: string | null;
-  tool_calls?: Array<{
-    id: string;
-    function: { name: string; arguments: string };
-  }>;
-  tool_name?: string;
-  tool_call_id?: string;
-  timestamp?: number;
-}
-
-export interface SessionMessagesResponse {
-  session_id: string;
-  messages: SessionMessage[];
-  pagination?: {
-    limit: number;
-    offset: number;
-    order: "latest" | "oldest";
-    returned: number;
-  };
-}
-
-export interface LogsResponse {
-  file: string;
-  lines: string[];
 }
 
 export type {
@@ -2432,89 +2421,6 @@ export interface ProfileInfo {
 
 export type { ModelsAnalyticsModelEntry, ModelsAnalyticsResponse } from "./api-models";
 
-export interface CronOccurrenceJob {
-  id: string;
-  name: string;
-  profile?: string | null;
-  schedule_display?: string | null;
-  /** Map of "YYYY-MM-DD" → number of firings that day (in server timezone). */
-  days: Record<string, number>;
-}
-
-export interface CronJobRepeat {
-  times: number | null;
-  completed?: number;
-}
-
-export interface CronJobMutation {
-  name?: string;
-  prompt?: string;
-  schedule?: string;
-  deliver?: string;
-  skills?: string[];
-  provider?: string | null;
-  model?: string | null;
-  base_url?: string | null;
-  script?: string | null;
-  no_agent?: boolean;
-  context_from?: string[] | null;
-  enabled_toolsets?: string[] | null;
-  workdir?: string | null;
-  // Clawksis cron extensions (repeat count, SOUL/USER/MEMORY toggles,
-  // "no news" notice, per-job model fallback chain as "provider:model").
-  repeat?: number | null;
-  silent_notice?: boolean;
-  use_soul?: boolean;
-  use_user_md?: boolean;
-  use_memory?: boolean;
-  fallback_models?: string[];
-}
-
-export interface CronJob {
-  id: string;
-  profile?: string | null;
-  profile_name?: string | null;
-  clawk_home?: string | null;
-  is_default_profile?: boolean;
-  name?: string | null;
-  prompt?: string | null;
-  script?: string | null;
-  skills?: string[] | null;
-  schedule?: { kind?: string; expr?: string; run_at?: string; display?: string };
-  schedule_display?: string | null;
-  repeat?: CronJobRepeat | null;
-  enabled: boolean;
-  state?: string | null;
-  deliver?: string | null;
-  model?: string | null;
-  provider?: string | null;
-  base_url?: string | null;
-  no_agent?: boolean | null;
-  context_from?: string[] | string | null;
-  enabled_toolsets?: string[] | null;
-  workdir?: string | null;
-  last_run_at?: string | null;
-  next_run_at?: string | null;
-  /** Seconds since the job's profile ticker last iterated; null when it cannot be dated. */
-  scheduler_heartbeat_age_s?: number | null;
-  last_status?: string | null;
-  last_error?: string | null;
-  last_delivery_error?: string | null;
-  last_fire_error?: { at?: string | null; detail?: string | null } | null;
-  silent_notice?: boolean;
-  use_soul?: boolean;
-  use_user_md?: boolean;
-  use_memory?: boolean;
-  fallback_models?: { provider: string; model: string }[] | null;
-}
-
-export interface CronDeliveryTarget {
-  id: string;
-  name: string;
-  home_target_set: boolean;
-  home_env_var: string | null;
-}
-
 export interface SkillInfo {
   name: string;
   description: string;
@@ -2577,18 +2483,6 @@ export interface ToolsetEnvResult {
   saved: string[];
   skipped: string[];
   is_set: Record<string, boolean>;
-}
-
-export interface SessionSearchResult extends SessionInfo {
-  session_id: string;
-  snippet: string;
-  role: string | null;
-  session_started: number | null;
-  lineage_root?: string;
-}
-
-export interface SessionSearchResponse {
-  results: SessionSearchResult[];
 }
 
 // ── Model info types ──────────────────────────────────────────────────

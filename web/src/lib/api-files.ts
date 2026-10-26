@@ -4,8 +4,10 @@
 
 export interface ManagedFileEntry {
   name: string;
+  /** A symlink is listed at its OWN path (deleting it removes the link, not the target). */
   path: string;
   is_directory: boolean;
+  is_symlink?: boolean;
   broken_link?: boolean;
   size: number | null;
   mtime: number | null;

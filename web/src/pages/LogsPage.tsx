@@ -5,36 +5,32 @@ import {
   useCallback,
   useRef,
 } from "react";
-import { FileText, RefreshCw } from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
 import { useSearchParams } from "react-router";
 import { api } from "@/lib/api";
+import type { LogFilesResponse } from "@/lib/api";
 import { Badge } from "@nous-research/ui/ui/components/badge";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { FilterGroup, Segmented } from "@nous-research/ui/ui/components/segmented";
+import { Input } from "@nous-research/ui/ui/components/input";
 import { Spinner } from "@nous-research/ui/ui/components/spinner";
 import { Switch } from "@nous-research/ui/ui/components/switch";
-import { Card, CardContent, CardHeader, CardTitle } from "@nous-research/ui/ui/components/card";
 import { Label } from "@nous-research/ui/ui/components/label";
+import { useToast } from "@nous-research/ui/hooks/use-toast";
+import { Toast } from "@nous-research/ui/ui/components/toast";
 import { useI18n } from "@/i18n";
+import { en } from "@/i18n/en";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { PluginSlot } from "@/plugins";
-// Level classification is unit-tested in @/lib/log-classify; it prefers the
-// structured level token and falls back to word-boundary matching so payload
-// text like "parse_errors=0" can't render an INFO line red.
-import { classifyLine } from "@/lib/log-classify";
 import { errorMessage } from "@/lib/api-error";
+import { isNearBottom, logFileOptions } from "@/lib/log-files";
+import { saveBlob } from "@/lib/save-blob";
+import { LogViewer } from "./LogsPage_viewer";
 
-const FILES = ["agent", "errors", "gateway"] as const;
 const LEVELS = ["ALL", "DEBUG", "INFO", "WARNING", "ERROR"] as const;
-const COMPONENTS = ["all", "gateway", "agent", "tools", "cli", "cron"] as const;
+// Fallback until /api/logs/files answers (older backend: this was the whole set).
+const DEFAULT_COMPONENTS = ["gateway", "agent", "tools", "cli", "cron"];
 const LINE_COUNTS = [50, 100, 200, 500] as const;
-
-const LINE_COLORS: Record<string, string> = {
-  error: "text-destructive",
-  warning: "text-warning",
-  info: "text-foreground",
-  debug: "text-text-tertiary",
-};
 
 const formatFilterLabel = (value: string) => value.toUpperCase();
 
@@ -47,47 +43,70 @@ const filterGroupClass =
 const segmentedClass =
   "w-fit max-w-full flex-wrap justify-start self-start";
 
-type LogFile = (typeof FILES)[number];
-
-function isLogFile(value: string | null): value is LogFile {
-  return (FILES as readonly string[]).includes(value ?? "");
+/** Debounced copy of *value* so typing a filter does not refetch per keystroke. */
+function useDebounced(value: string, ms: number): string {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return debounced;
 }
 
 export default function LogsPage() {
   // `?file=gateway` deep link (System page "Open logs" next to a failed gateway).
   const [searchParams] = useSearchParams();
-  const requestedFile = searchParams.get("file");
-  const [file, setFile] = useState<LogFile>(() =>
-    isLogFile(requestedFile) ? requestedFile : "agent",
-  );
+  const [file, setFile] = useState(() => searchParams.get("file") || "agent");
   const [level, setLevel] = useState<(typeof LEVELS)[number]>("ALL");
-  const [component, setComponent] =
-    useState<(typeof COMPONENTS)[number]>("all");
+  const [component, setComponent] = useState("all");
   const [lineCount, setLineCount] = useState<(typeof LINE_COUNTS)[number]>(100);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inventory, setInventory] = useState<LogFilesResponse | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Follow the tail only while the reader sits at the bottom (true until they scroll up).
+  const followRef = useRef(true);
   const { t } = useI18n();
+  const { toast, showToast } = useToast();
   const { setAfterTitle, setEnd } = usePageHeader();
+  const logsT = { ...en.logs, ...t.logs } as Required<typeof en.logs>;
+
+  useEffect(() => {
+    api.getLogFiles().then(setInventory).catch(() => setInventory(null));
+  }, []);
 
   const fetchLogs = useCallback(() => {
     setLoading(true);
     setError(null);
     api
-      .getLogs({ file, lines: lineCount, level, component })
+      .getLogs({ file, lines: lineCount, level, component, search: debouncedSearch })
       .then((resp) => {
         setLines(resp.lines);
         setTimeout(() => {
-          if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-          }
+          const el = scrollRef.current;
+          if (el && followRef.current) el.scrollTop = el.scrollHeight;
         }, 50);
       })
       .catch((err) => setError(errorMessage(err)))
       .finally(() => setLoading(false));
-  }, [file, lineCount, level, component]);
+  }, [file, lineCount, level, component, debouncedSearch]);
+
+  const downloadFile = useCallback(async () => {
+    setDownloading(true);
+    try {
+      const info = inventory?.files.find((f) => f.name === file);
+      saveBlob(await api.downloadLog(file), info?.filename ?? `${file}.log`);
+    } catch (err) {
+      showToast(`${logsT.downloadFailed}: ${errorMessage(err)}`, "error");
+    } finally {
+      setDownloading(false);
+    }
+  }, [file, inventory, logsT.downloadFailed, showToast]);
 
   useLayoutEffect(() => {
     setAfterTitle(
@@ -167,8 +186,14 @@ export default function LogsPage() {
     };
   }, [autoRefresh, fetchLogs]);
 
+  const selectFile = (next: string) => {
+    followRef.current = true;
+    setFile(next);
+  };
+
   return (
     <div className="flex min-w-0 max-w-full flex-col gap-4">
+      <Toast toast={toast} />
       <PluginSlot name="logs:top" />
       <div
         role="toolbar"
@@ -179,8 +204,8 @@ export default function LogsPage() {
           <Segmented
             className={segmentedClass}
             value={file}
-            onChange={setFile}
-            options={toSegmentOptions(FILES)}
+            onChange={selectFile}
+            options={toSegmentOptions(logFileOptions(inventory?.files ?? null, file))}
           />
         </FilterGroup>
 
@@ -198,7 +223,7 @@ export default function LogsPage() {
             className={segmentedClass}
             value={component}
             onChange={setComponent}
-            options={toSegmentOptions(COMPONENTS)}
+            options={toSegmentOptions(["all", ...(inventory?.components ?? DEFAULT_COMPONENTS)])}
           />
         </FilterGroup>
 
@@ -215,45 +240,37 @@ export default function LogsPage() {
             }))}
           />
         </FilterGroup>
+
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={logsT.search}
+            aria-label={logsT.search}
+            className="h-8 py-0 pl-8 text-xs"
+          />
+        </div>
       </div>
 
-      <Card className="min-w-0 max-w-full overflow-hidden">
-        <CardHeader className="py-3 px-4">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            {file}.log
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {error && (
-            <div className="bg-destructive/10 border-b border-destructive/20 p-3">
-              <p className="text-sm text-destructive">{error}</p>
-            </div>
-          )}
-
-          <div
-            ref={scrollRef}
-            className="max-w-full min-h-[400px] max-h-[calc(100vh-220px)] overflow-auto p-4 font-mono-ui text-xs leading-5 break-words"
-          >
-            {lines.length === 0 && !loading && (
-              <p className="text-muted-foreground text-center py-8">
-                {t.logs.noLogLines}
-              </p>
-            )}
-            {lines.map((line, i) => {
-              const cls = classifyLine(line);
-              return (
-                <div
-                  key={i}
-                  className={`${LINE_COLORS[cls]} hover:bg-secondary/20 px-1 -mx-1`}
-                >
-                  {line}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+      <LogViewer
+        file={file}
+        info={inventory?.files.find((f) => f.name === file)}
+        lines={lines}
+        loading={loading}
+        error={error}
+        downloading={downloading}
+        onDownload={() => void downloadFile()}
+        scrollRef={scrollRef}
+        onScroll={(e) => {
+          followRef.current = isNearBottom(e.currentTarget);
+        }}
+        labels={{
+          noLogLines: t.logs.noLogLines,
+          noFileYet: logsT.noFileYet,
+          download: logsT.download,
+        }}
+      />
       <PluginSlot name="logs:bottom" />
     </div>
   );

@@ -62,6 +62,22 @@ The full set of keys:
 Setting `approvals.mode: off` disables all safety prompts. Use only in trusted environments (CI/CD, containers, etc.).
 :::
 
+### Full access in one command (`clawk config permissions`)
+
+On a machine that is yours alone (a personal VPS, say), you can let the agent act without asking:
+
+```bash
+clawk config permissions          # show where each switch stands
+clawk config permissions full     # full access (asks you to confirm; --yes skips it)
+clawk config permissions default  # back to the shipped, safe values
+```
+
+`full` sets `approvals.mode: off`, `approvals.cron_mode`, `unattended_mode` and `single_query_mode` to `approve`, `security.protected_instruction_files: false` (the agent may edit SOUL.md / AGENTS.md), `cron.allow_agent_scheduling: true` and `terminal.backend: local`. The agent then changes its own settings with `clawk config set` from its terminal; direct writes to `config.yaml` stay refused so every change goes through the validated setter. Still enforced: the [hardline floor](#hardline-blocklist-always-on-floor), your `approvals.deny` rules and secret redaction.
+
+:::warning
+With full access, anyone who can message the agent (Telegram, WhatsApp, Discord, the dashboard) controls the machine. Keep the platform allowlists and the dashboard login in place.
+:::
+
 ### YOLO Mode
 
 YOLO mode bypasses **all** dangerous command approval prompts for the current session. It can be activated three ways:

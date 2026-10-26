@@ -12,6 +12,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  Link2,
   RefreshCw,
   Trash2,
   Unlink,
@@ -38,6 +39,7 @@ import { api } from "@/lib/api";
 import type { ManagedFileEntry, ManagedFilesResponse } from "@/lib/api";
 import { PluginSlot } from "@/plugins";
 import { errorMessage } from "@/lib/api-error";
+import { formatBytes, saveBlob } from "@/lib/save-blob";
 
 const DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -52,21 +54,11 @@ function joinPath(base: string, name: string): string {
   return `${base}${separator}${cleanName}`;
 }
 
-function formatBytes(size: number | null): string {
-  if (size === null) return "-";
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-}
-
-function downloadDataUrl(dataUrl: string, name: string) {
-  const link = document.createElement("a");
-  link.href = dataUrl;
-  link.download = name || "download";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+function deleteDescription(entry: ManagedFileEntry | null): string {
+  if (entry?.is_symlink) return "This removes the link only; what it points to is kept.";
+  return entry?.is_directory
+    ? "This removes the folder and everything inside it."
+    : "This removes the file.";
 }
 
 function displayPath(path: string | null | undefined): string {
@@ -240,8 +232,7 @@ export default function FilesPage() {
   const downloadFile = async (entry: ManagedFileEntry) => {
     if (entry.is_directory || entry.broken_link) return;
     try {
-      const file = await api.readFile(entry.path);
-      downloadDataUrl(file.data_url, file.name);
+      saveBlob(await api.downloadManagedFile(entry.path), entry.name);
     } catch (e) {
       showToast(`Download failed: ${errorMessage(e)}`, "error");
     }
@@ -417,6 +408,12 @@ export default function FilesPage() {
                     <FileIcon className="h-4 w-4 shrink-0 text-text-tertiary" />
                   )}
                   <span className="truncate">{entry.name}</span>
+                  {entry.is_symlink && !entry.broken_link && (
+                    <Link2
+                      className="h-3.5 w-3.5 shrink-0 text-text-tertiary"
+                      aria-label="Symbolic link"
+                    />
+                  )}
                   {entry.broken_link && (
                     <Badge tone="destructive" className="shrink-0 text-xs">
                       Broken link
@@ -528,11 +525,7 @@ export default function FilesPage() {
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => void confirmDelete()}
         title={pendingDelete ? `Delete ${pendingDelete.name}?` : "Delete item?"}
-        description={
-          pendingDelete?.is_directory
-            ? "This removes the folder and everything inside it."
-            : "This removes the file."
-        }
+        description={deleteDescription(pendingDelete)}
       />
     </div>
   );
