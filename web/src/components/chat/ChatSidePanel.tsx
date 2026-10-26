@@ -55,6 +55,7 @@ import {
   type SidePanelTab,
 } from "./sidePanelStore";
 import { TasksPanel } from "./TasksPanel";
+import { BrowserLivePanel } from "./browser-live/BrowserLivePanel";
 
 export type { SidePanelTab };
 
@@ -413,7 +414,15 @@ const PANEL_TABS: { id: SidePanelTab; label: string }[] = [
   { id: "viz", label: "Visualización" },
   { id: "media", label: "Media" },
   { id: "tasks", label: "Tareas" },
+  { id: "browser", label: "Navegador" },
 ];
+
+const PANELS: Record<SidePanelTab, () => React.ReactElement> = {
+  viz: VisualizationPanel,
+  media: MediaPanel,
+  tasks: TasksPanel,
+  browser: BrowserLivePanel,
+};
 
 export function ChatSidePanel({
   tab,
@@ -426,6 +435,7 @@ export function ChatSidePanel({
 }) {
   const width = useSidePanelWidth();
   const dragging = useRef(false);
+  const Panel = PANELS[tab];
 
   // Drag-resize del borde izquierdo (solo desktop: el aside es overlay en
   // mobile). El panel está anclado a la derecha, así que el ancho es
@@ -453,7 +463,7 @@ export function ChatSidePanel({
   return (
     <aside
       style={{ "--panel-w": `${width}px` } as React.CSSProperties}
-      className="absolute inset-y-0 right-0 z-20 flex w-[88vw] max-w-[26rem] flex-col border-l border-border/60 bg-background/80 backdrop-blur-xl lg:static lg:z-auto lg:w-[var(--panel-w)] lg:max-w-none lg:bg-background/40"
+      className="absolute inset-y-0 right-0 z-40 flex w-[88vw] max-w-[26rem] flex-col border-l border-border/60 bg-background/80 backdrop-blur-xl lg:static lg:z-auto lg:w-[var(--panel-w)] lg:max-w-none lg:bg-background/40"
     >
       <div
         role="separator"
@@ -487,7 +497,7 @@ export function ChatSidePanel({
           <X className="size-4" />
         </button>
       </div>
-      {tab === "viz" ? <VisualizationPanel /> : tab === "media" ? <MediaPanel /> : <TasksPanel />}
+      <Panel />
     </aside>
   );
 }
