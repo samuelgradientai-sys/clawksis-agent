@@ -45,6 +45,23 @@ Per-invocation bypass without changing config:
 
 Note: YOLO / `approvals.mode: off` does NOT turn off secret redaction. They are independent.
 
+### "Full access" / "no restrictions" / "let it change its own settings"
+
+One switch covers it:
+
+```bash
+clawk config permissions          # show the current state
+clawk config permissions full     # no approval prompts (cron/unattended too), may edit SOUL.md/AGENTS.md,
+                                  # schedule from cron, terminal on this machine
+clawk config permissions default  # back to the safe defaults
+```
+
+`full` asks for confirmation on a terminal (`--yes` skips it). Run it only when the user explicitly
+asks for full access, and tell them the trade-off: anyone who can message the agent then controls the
+machine, so platform allowlists and the dashboard login matter. With or without it, the agent changes
+its own settings with `clawk config set <key> <value>` (never by editing config.yaml directly — that
+write is refused). The hardline floor (wiping / or /home, formatting disks, shutting down) always stays.
+
 ### "Reset permissions" / "make Clawksis ask again"
 
 The user usually means: wipe the accumulated "Always allow" state — NOT yolo
