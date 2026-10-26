@@ -44,7 +44,7 @@ vi.mock('@/lib/thinking-sound', () => ({
   stopThinkingSound: vi.fn()
 }))
 
-vi.mock('@/lib/speech-text', () => ({
+vi.mock('@clawk/shared/voice/speech-text', () => ({
   IncrementalSpeechSentenceBuffer: class {
     append() {
       return []
@@ -56,7 +56,7 @@ vi.mock('@/lib/speech-text', () => ({
 }))
 
 vi.mock('@/lib/voice-stop-word', () => ({ isVoiceStopCommand: () => false }))
-vi.mock('@/lib/voice-tts-echo', () => ({ isTtsEcho: () => false }))
+vi.mock('@clawk/shared/voice/tts-echo', () => ({ isTtsEcho: () => false }))
 
 vi.mock('@/store/notifications', () => ({
   notify: vi.fn(),

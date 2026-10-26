@@ -21,7 +21,8 @@
       "@/*": ["./src/*"],
       "@clawk/shared": ["../apps/shared/src/index.ts"],
       "@clawk/shared/ansi": ["../apps/shared/src/ansi.ts"],
-      "@clawk/shared/i18n": ["../apps/shared/src/i18n.ts"]
+      "@clawk/shared/i18n": ["../apps/shared/src/i18n.ts"],
+      "@clawk/shared/voice/*": ["../apps/shared/src/voice/*"]
     },
 
     /* Linting */

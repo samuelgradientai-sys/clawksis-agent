@@ -1,13 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { sanitizeTextForSpeech } from '@clawk/shared/voice/speech-text'
 import { describe, expect, it } from 'vitest'
-
-import { sanitizeTextForSpeech } from './speech-text'
 
 // The shared corpus both speech normalizers must agree on (#119207): the
 // identical file is loaded by tests/tools/test_tts_identifier_speech.py, so
-// the desktop (speech-text.ts) and gateway/CLI (tts_text_normalize.py)
+// the client (apps/shared/src/voice/speech-text.ts) and gateway/CLI (tts_text_normalize.py)
 // halves stay in lockstep. Policy: identifier-dense tokens are silence,
 // never hardcoded English placeholder words (#86602); ordinary prose,
 // emails, dates and ratios pass verbatim.

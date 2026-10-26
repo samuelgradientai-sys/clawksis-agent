@@ -24,6 +24,7 @@
       "@clawk/shared/color": ["../shared/src/color.ts"],
       "@clawk/shared/i18n": ["../shared/src/i18n.ts"],
       "@clawk/shared/translucency": ["../shared/src/translucency.ts"],
+      "@clawk/shared/voice/*": ["../shared/src/voice/*"],
       "@clawk/shared": ["../shared/src/index.ts"]
     }
   },

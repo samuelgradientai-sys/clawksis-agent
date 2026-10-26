@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isTtsEcho, sequenceMatcherRatio } from './voice-tts-echo'
+import { isTtsEcho, sequenceMatcherRatio } from './tts-echo'
 
 // Mirrors tests/tools/test_voice_tts_echo_guard.py::TestIsTtsEcho so the
 // desktop guard and the CLI guard agree on what counts as echo.
