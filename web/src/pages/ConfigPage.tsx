@@ -551,7 +551,7 @@ export default function ConfigPage() {
         <div className="flex flex-col sm:flex-row gap-4">
           <aside aria-label={t.config.filters} className="sm:w-56 sm:shrink-0">
             <div className="sm:sticky sm:top-4">
-              <div className="flex flex-col border border-border bg-muted/20">
+              <div className="clawk-liquid-panel flex flex-col overflow-hidden rounded-2xl">
                 <div className="hidden sm:flex items-center gap-2 px-3 py-2 border-b border-border">
                   <Filter className="h-3 w-3 text-text-tertiary" />
                   <span className="font-mondwest text-display text-xs tracking-[0.12em] text-text-secondary">

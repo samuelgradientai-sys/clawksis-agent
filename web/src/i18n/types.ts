@@ -142,6 +142,8 @@ export interface Translations {
       plugins: string;
       sessions: string;
       skills: string;
+      /** Optional — English fallback until translated. */
+      integrations?: string;
     };
     modelToolsSheetSubtitle: string;
     modelToolsSheetTitle: string;
@@ -1023,4 +1025,31 @@ export interface Translations {
       confirmManyTitle?: string;
     };
   };
+
+  /** Skill mini dashboards. Optional — English fallback until translated. */
+  skillDashboards?: SkillDashboardsCopy;
+}
+
+export interface SkillDashboardsCopy {
+  title: string;
+  subtitle: string;
+  empty: string;
+  emptyHint: string;
+  open: string;
+  updated: string;
+  noData: string;
+  noSnapshot: string;
+  noSnapshotHint: string;
+  error: string;
+  disabled: string;
+  autoRefresh: string;
+  unsupported: string;
+  emptyPanel: string;
+  back: string;
+  installedSkills: string;
+  installedSkillsHint: string;
+  manageSkills: string;
+  dashboardButton: string;
+  showData: string;
+  hideData: string;
 }

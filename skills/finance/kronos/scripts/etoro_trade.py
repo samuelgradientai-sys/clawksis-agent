@@ -13,6 +13,11 @@ OFF BY DEFAULT. Every guard runs here, before any request leaves the machine:
   keeps counting until it is confirmed.
 - A close only reduces risk, so it is not capped, but the position must exist in the
   configured account.
+- Lessons bite: an automatic buy is refused while Kronos got the symbol's direction right in
+  under half of its last reviewed forecasts (at least 5, scored by kronos_review.py into the
+  forecast journal). ``--user-requested`` skips only this check, and only for a buy the user
+  explicitly asked for; every limit above still applies. An unreadable journal refuses
+  automatic buys. Refused buys are logged to ``refused.jsonl`` for the dashboard.
 
 The trading client reaches exactly the routes in TRADE_ROUTES (open order, close position,
 order lookup); reads (symbol search, portfolio) go through the read-only ``etoro_data``
@@ -21,7 +26,7 @@ client. Endpoint notes: references/etoro-api.md § Trading.
 Usage:
   etoro_trade.py status
   etoro_trade.py positions [--format table|json]
-  etoro_trade.py buy SYMBOL --amount USD --reason TEXT [--dry-run]
+  etoro_trade.py buy SYMBOL --amount USD --reason TEXT [--user-requested] [--dry-run]
   etoro_trade.py close POSITION_ID [--units N] --reason TEXT [--dry-run]
 """
 
@@ -29,7 +34,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 import time
@@ -48,13 +52,23 @@ if _SCRIPTS_DIR not in sys.path:
 
 from _kronos_common import (
     UTC,
+    FileLock,
     SkillError,
-    clawk_home,
+    append_jsonl,
     display_home,
     dump_json,
+    fold_rows,
     kronos_home,
+    read_jsonl,
     render_table,
     run_cli,
+)
+from _kronos_config import ConfigError, kronos_settings, load_config
+from _kronos_journal import (
+    GATE_MIN_HIT_RATE,
+    forecasts_path,
+    gate_status,
+    read_forecasts,
 )
 from etoro_data import (
     BASE_URL,
@@ -68,7 +82,6 @@ from etoro_data import (
     load_keys,
 )
 
-CONFIG_PATH = ("skills", "config", "kronos", "trading")
 SET_CMD = "clawk config set skills.config.kronos.trading"
 TRADE_ROUTES = (
     ("POST", re.compile(r"^/api/v2/trading/execution/(?:demo/)?orders$")),
@@ -102,8 +115,6 @@ ORDER_STATUS = {
 FINAL_STATUSES = {"filled", "rejected", "canceled", "expired", "partially_filled"}
 # Statuses where no money moved: they do not count toward the daily limits.
 NOT_COUNTED = {"rejected", "canceled", "expired", "dry_run"}
-LOCK_TIMEOUT = 30.0
-STALE_LOCK_SECONDS = 120.0
 POLL_ATTEMPTS = 3
 POLL_INTERVAL = 2.0
 _HTTP_HINTS = {
@@ -121,6 +132,10 @@ class TradingRefused(SkillError):
     """A guard stopped the order before any request was made."""
 
 
+class LessonRefused(TradingRefused):
+    """The symbol's recent forecast accuracy is too low for an automatic buy."""
+
+
 # ── Config ──
 
 
@@ -134,34 +149,6 @@ class TradingConfig:
 
 
 DEFAULTS = TradingConfig(False, "demo", 100.0, 300.0, 5)
-
-
-def _yaml_loader() -> tuple[Callable[[str], Any], type[Exception]]:
-    """(safe loader, its parse-error class): ruamel.yaml (ships with Clawksis), else PyYAML."""
-    try:
-        from ruamel.yaml import YAML
-        from ruamel.yaml.error import YAMLError
-    except ImportError:
-        try:
-            import yaml
-        except ImportError:
-            raise TradingRefused(
-                "Cannot read config.yaml (neither ruamel.yaml nor PyYAML is importable), "
-                "so trading stays off.",
-                hint="Run the script with the python3 that ships with Clawksis.",
-            ) from None
-        return yaml.safe_load, yaml.YAMLError
-    return YAML(typ="safe").load, YAMLError
-
-
-def _read_yaml(path: Path) -> Any:
-    load, parse_error = _yaml_loader()
-    try:
-        return load(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, parse_error) as exc:
-        raise TradingRefused(
-            f"config.yaml could not be read ({exc}); trading stays off."
-        ) from None
 
 
 def _as_bool(value: Any, key: str) -> bool:
@@ -187,17 +174,16 @@ def _as_number(value: Any, key: str, kind: type) -> float | int:
     return number
 
 
-def _trading_section(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    node: Any = _read_yaml(path)
-    for key in CONFIG_PATH:
-        node = node.get(key) if isinstance(node, dict) else None
+def _trading_section(path: Path | None) -> dict[str, Any]:
+    try:
+        node = kronos_settings(load_config(path)).get("trading")
+    except ConfigError as exc:
+        raise TradingRefused(f"{exc}; trading stays off.", hint=exc.hint) from None
     return node if isinstance(node, dict) else {}
 
 
 def load_trading_config(path: Path | None = None) -> TradingConfig:
-    raw = _trading_section(path or clawk_home() / "config.yaml")
+    raw = _trading_section(path)
     account = str(raw.get("account") or DEFAULTS.account).strip().lower()
     if account not in {"demo", "real"}:
         raise TradingRefused(
@@ -242,70 +228,26 @@ def ledger_path() -> Path:
     return kronos_home() / "trades.jsonl"
 
 
-class LedgerLock:
-    """Cross-platform exclusive lock: an O_EXCL lock file, stale after STALE_LOCK_SECONDS."""
+def refused_path(kronos_dir: Path | None = None) -> Path:
+    return (kronos_dir or kronos_home()) / "refused.jsonl"
 
-    def __init__(
-        self,
-        path: Path,
-        *,
-        timeout: float = LOCK_TIMEOUT,
-        sleep: Callable[[float], None] = time.sleep,
-        clock: Callable[[], float] = time.time,
-    ) -> None:
-        self.path, self.timeout, self._sleep, self._clock = path, timeout, sleep, clock
 
-    def __enter__(self) -> LedgerLock:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        deadline = self._clock() + self.timeout
-        while True:
-            try:
-                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            except FileExistsError:
-                if self._is_stale():
-                    self.path.unlink(missing_ok=True)
-                    continue
-                if self._clock() >= deadline:
-                    raise TradingRefused(
-                        "Another order is still being placed; try again in a minute."
-                    ) from None
-                self._sleep(0.2)
-                continue
-            os.write(fd, str(os.getpid()).encode())
-            os.close(fd)
-            return self
+class LedgerLock(FileLock):
+    """The ledger's lock; a busy lock refuses the order instead of waiting forever."""
 
-    def _is_stale(self) -> bool:
-        try:
-            return self._clock() - self.path.stat().st_mtime > STALE_LOCK_SECONDS
-        except FileNotFoundError:
-            return False
-
-    def __exit__(self, *exc: object) -> None:
-        self.path.unlink(missing_ok=True)
+    def busy_error(self) -> SkillError:
+        return TradingRefused(
+            "Another order is still being placed; try again in a minute."
+        )
 
 
 def read_ledger(path: Path | None = None) -> list[dict[str, Any]]:
     """Entries folded by id, in first-seen order; malformed lines are skipped."""
-    path = path or ledger_path()
-    if not path.exists():
-        return []
-    folded: dict[str, dict[str, Any]] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        try:
-            row = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(row, dict) and row.get("id"):
-            folded.setdefault(str(row["id"]), {}).update(row)
-    return list(folded.values())
+    return fold_rows(read_jsonl(path or ledger_path()))
 
 
 def append_ledger(row: Mapping[str, Any], path: Path | None = None) -> None:
-    path = path or ledger_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(dict(row), ensure_ascii=False, default=str) + "\n")
+    append_jsonl(path or ledger_path(), dict(row))
 
 
 def usage_today(
@@ -353,6 +295,43 @@ def check_limits(
         "usd_today": spent,
         "usd_left_after": round(config.max_daily_usd - spent - amount, 2),
     }
+
+
+def check_lessons(
+    symbol: str, journal: Path, *, user_requested: bool
+) -> dict[str, Any]:
+    """Refuse an automatic buy while the symbol's recent forecasts mostly missed (fail closed).
+
+    Returns the track record logged with the order. ``user_requested`` (the user named this
+    trade) skips the refusal only; the limits are checked separately and always apply.
+    """
+    try:
+        gate = gate_status(read_forecasts(journal), symbol)
+    except (OSError, ValueError, TypeError) as exc:
+        if user_requested:
+            return {"user_requested": True, "checked": False, "error": str(exc)}
+        raise LessonRefused(
+            f"The forecast journal could not be read ({exc}), so Kronos cannot check its "
+            "track record; automatic buys stay off.",
+            hint=f"Repair or remove {journal}. Buy only if the user explicitly asks for "
+            "this trade (then add --user-requested).",
+        ) from None
+    record = {
+        "user_requested": user_requested,
+        "checked": True,
+        "matured": gate["matured"],
+        "hits": gate["hits"],
+        "blocked": gate["blocked"],
+    }
+    if gate["blocked"] and not user_requested:
+        raise LessonRefused(
+            f"Kronos got the direction of {gate['symbol']} right in only {gate['hits']} of "
+            f"its last {gate['matured']} reviewed forecasts; automatic buys need "
+            f"{GATE_MIN_HIT_RATE:.0%} or better.",
+            hint="Do not buy it on the forecast. Only if the user explicitly asks for this "
+            "exact buy, run it again with --user-requested.",
+        )
+    return record
 
 
 # ── Trading client ──
@@ -530,6 +509,8 @@ class Deps:
     reader: EtoroClient | None = None
     trader: TradeClient | None = None
     sleep: Callable[[float], None] = time.sleep
+    # Dashboard snapshot file; None = $CLAWK_HOME/dashboards/kronos.json.
+    dashboard: Path | None = None
 
     def clients(self) -> tuple[EtoroClient, TradeClient]:
         if self.reader is None or self.trader is None:
@@ -541,6 +522,20 @@ class Deps:
     def lock(self) -> LedgerLock:
         target = self.ledger or ledger_path()
         return LedgerLock(target.with_suffix(".lock"), sleep=self.sleep)
+
+    def kronos_dir(self) -> Path:
+        """Where the ledger lives; the journal and refusal log sit next to it."""
+        return (self.ledger or ledger_path()).parent
+
+    def refresh_dashboard(self) -> None:
+        from kronos_dashboard import refresh_safely
+
+        refresh_safely(
+            config_path=self.config_path,
+            kronos_dir=self.kronos_dir(),
+            out=self.dashboard,
+            now=self.now(),
+        )
 
 
 def cmd_status(_args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
@@ -631,11 +626,43 @@ def _submit_buy(
     return order_id, api
 
 
+def log_refusal(deps: Deps, args: argparse.Namespace, exc: TradingRefused) -> None:
+    """Record a refused buy for the dashboard; a write failure never hides the refusal."""
+    row = {
+        "id": str(uuid.uuid4()),
+        "ts": deps.now().astimezone(UTC).isoformat(),
+        "symbol": str(args.symbol).upper(),
+        "amount": args.amount,
+        "reason": args.reason,
+        "kind": "lesson" if isinstance(exc, LessonRefused) else "limit",
+        "refusal": str(exc),
+        "user_requested": args.user_requested,
+    }
+    try:
+        append_jsonl(refused_path(deps.kronos_dir()), row)
+    except OSError as err:
+        print(f"could not log the refused buy: {err}", file=sys.stderr)
+
+
 def cmd_buy(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
+    try:
+        return _buy(args, deps)
+    except TradingRefused as exc:
+        if not args.dry_run:
+            log_refusal(deps, args, exc)
+        raise
+
+
+def _buy(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
     config = load_trading_config(deps.config_path)
     require_enabled(config)
     amount = round(float(args.amount), 2)
     check_limits(config, amount, read_ledger(deps.ledger), deps.now())
+    track_record = check_lessons(
+        args.symbol,
+        forecasts_path(deps.kronos_dir()),
+        user_requested=args.user_requested,
+    )
     reader, trader = deps.clients()
     instrument = reader.resolve(args.symbol)
     entry = {
@@ -648,6 +675,8 @@ def cmd_buy(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
         "amount": amount,
         "leverage": 1,
         "reason": args.reason,
+        "user_requested": args.user_requested,
+        "track_record": track_record,
     }
     if args.dry_run:
         return {"ok": True, "dry_run": True, "would_buy": entry}
@@ -680,6 +709,37 @@ def _find_position(portfolio: Mapping[str, Any], position_id: int) -> dict[str, 
     )
 
 
+def _number(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _close_economics(
+    position: Mapping[str, Any], units: float | None, held: float
+) -> dict[str, Any]:
+    """Invested USD and P&L of the closed part, from the last valuation before the close."""
+    share = units / held if units is not None and held else 1.0
+    pnl = position.get("unrealizedPnL")
+    pnl_value = _number(pnl.get("pnL")) if isinstance(pnl, dict) else None
+    invested = _number(position.get("amount"))
+    return {
+        "open_rate": _number(position.get("openRate")),
+        "invested_usd": round(invested * share, 2) if invested is not None else None,
+        "pnl_usd": round(pnl_value * share, 2) if pnl_value is not None else None,
+    }
+
+
+def _symbol_from_ledger(
+    entries: list[dict[str, Any]], instrument_id: int
+) -> str | None:
+    for entry in reversed(entries):
+        if entry.get("instrument_id") == instrument_id and entry.get("symbol"):
+            return str(entry["symbol"])
+    return None
+
+
 def cmd_close(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
     config = load_trading_config(deps.config_path)
     require_enabled(config)
@@ -690,14 +750,17 @@ def cmd_close(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
     units = args.units
     if units is not None and not 0 < units <= held:
         raise TradingRefused(f"--units must be above 0 and at most {held}.")
+    instrument_id = int(position.get("instrumentID") or 0)
     entry = {
         "id": str(uuid.uuid4()),
         "ts": deps.now().astimezone(UTC).isoformat(),
         "action": "close",
         "account": config.account,
         "position_id": int(args.position_id),
-        "instrument_id": int(position.get("instrumentID") or 0),
+        "instrument_id": instrument_id,
+        "symbol": _symbol_from_ledger(read_ledger(deps.ledger), instrument_id),
         "units": units if units is not None else "all",
+        **_close_economics(position, units, held),
         "reason": args.reason,
     }
     if args.dry_run:
@@ -721,7 +784,8 @@ def cmd_close(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
     return {
         "ok": True,
         "close": {**entry, "order_id": order_id, "status": "submitted"},
-        "note": "eToro fills the close asynchronously; confirm with `etoro_trade.py positions`.",
+        "note": "eToro fills the close asynchronously; confirm with `etoro_trade.py positions`. "
+        "pnl_usd is estimated from the last valuation before the close.",
     }
 
 
@@ -748,6 +812,12 @@ def build_parser() -> argparse.ArgumentParser:
     buy.add_argument("symbol")
     buy.add_argument("--amount", type=float, required=True, help="USD to invest")
     buy.add_argument("--reason", required=True, help="why, for the trade log")
+    buy.add_argument(
+        "--user-requested",
+        action="store_true",
+        help="the user explicitly asked for this exact buy: skip the lesson check (limits "
+        "still apply). Never set it for an automatic decision.",
+    )
     buy.add_argument("--dry-run", action="store_true")
     close = sub.add_parser("close", help="close a position (all units unless --units)")
     close.add_argument("position_id", type=int)
@@ -767,7 +837,12 @@ COMMANDS = {
 
 def main(argv: list[str] | None = None, deps: Deps | None = None) -> int:
     args = build_parser().parse_args(argv)
-    result = COMMANDS[args.command](args, deps or Deps())
+    deps = deps or Deps()
+    try:
+        result = COMMANDS[args.command](args, deps)
+    finally:
+        if args.command in {"buy", "close"} and not args.dry_run:
+            deps.refresh_dashboard()  # best effort; also after a refused or failed order
     if args.command == "positions" and args.format == "table":
         print(_positions_table(result))
     else:
