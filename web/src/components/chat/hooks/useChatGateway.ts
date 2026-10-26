@@ -1,13 +1,48 @@
 /**
  * useChatGateway — Hook para conexión JSON-RPC con el gateway de Clawksis.
  *
- * Fase 2.7 — versión completa con switchSession para sidebar de sesiones.
+ * Owns the chat's state and sequences the gateway calls; the per-event
+ * handling (chatEvents), transcript transitions (chatTranscript), history
+ * mapping (chatHistory), session attach (sessionOpen), the wire (gatewayWire)
+ * and the agent's questions (serverRequests) live in sibling modules.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, CLAWK_BASE_PATH, buildWsAuthParam } from "@/lib/api";
-import { executeSlash } from "@/lib/slashExec";
-import { applySessionInfo, titleFromEvent, trackSessionIds } from "./sessionInfo";
+import { CLAWK_BASE_PATH, buildWsAuthParam } from "@/lib/api";
+import { executeSlash, type SlashExecCallbacks } from "@/lib/slashExec";
+import { mapHistoryMessages } from "./chatHistory";
+import { createDeltaBuffer, dispatchChatEvent, type GatewayEventFrame, type TurnTracker } from "./chatEvents";
+import {
+  appendContent,
+  dropLastExchange,
+  editResubmitParams,
+  lastUserIsSlash,
+  matchUserRowId,
+  setRowId,
+  slashOutputBubble,
+  userBubble,
+} from "./chatTranscript";
+import { PendingRpcs, routeGatewayFrame, trySend } from "./gatewayWire";
+import {
+  deliverAnswer,
+  parseServerRequest,
+  requestsFromResume,
+  unhandledReply,
+  useServerRequestQueue,
+  type ChatServerRequest,
+} from "./serverRequests";
+import {
+  fastHistory,
+  loadTranscript,
+  openInitialSession,
+  readUsage,
+  resumeIsBusy,
+  sessionErrorText,
+  sessionFromResume,
+  switchingSession,
+  type OpenedSession,
+  type ResumeResult,
+} from "./sessionOpen";
 
 export type ConnectionStatus =
   | "idle"
@@ -44,112 +79,9 @@ export interface ChatMessage {
   timestamp: number;
   /** Miniaturas de imágenes adjuntadas por el usuario (data URL local). */
   images?: ChatImagePreview[];
-}
-
-// Nota interna que el resume-pending del gateway antepone al prompt del
-// usuario re-despachado ("[A previous request was interrupted... Please finish
-// processing...]"). Es para el MODELO, no para la vista: se recorta del texto
-// del mensaje user al hidratar el history.
-const RESUME_NOTE_RE =
-  /^\s*\[(?:session resumed|a previous request|please finish)[^\]]*\]\s*/i;
-
-// Bloques internos que el gateway agrega para que el modelo pueda resolver
-// imágenes vía vision_analyze. Son útiles para el modelo, pero NO deben
-// mostrarse como texto visible del usuario al rehidratar session.history.
-const IMAGE_INTERNAL_NOTE_RE =
-  /^\s*\[The user attached an image(?: but analysis failed\.|:\n[\s\S]*?)\]\s*/i;
-
-const IMAGE_INTERNAL_HINT_RE =
-  /^\s*\[You can examine it with vision_analyze using image_url:[^\]]+\]\s*/i;
-
-const IMAGE_URL_PATH_RE =
-  /image_url:\s*([^\]\n\r]+)/i;
-
-function localImagePreviewUrl(path: string): string {
-  return "/media/local?path=" + encodeURIComponent(path);
-}
-
-function imageNameFromPath(path: string): string {
-  const clean = path.split(/[?#]/)[0] || "";
-  return clean.split("/").filter(Boolean).pop() || "imagen adjunta";
-}
-
-function sanitizeUserHistoryContent(content: string): {
-  content: string;
-  images?: ChatImagePreview[];
-} {
-  let next = content.replace(RESUME_NOTE_RE, "");
-  const imageMatch = next.match(IMAGE_URL_PATH_RE);
-  const imagePath = imageMatch?.[1]?.trim();
-  const hadImageInternalNote = IMAGE_INTERNAL_NOTE_RE.test(next);
-  const images = imagePath
-    ? [
-        {
-          previewUrl: localImagePreviewUrl(imagePath),
-          name: imageNameFromPath(imagePath),
-        },
-      ]
-    : undefined;
-
-  next = next.replace(IMAGE_INTERNAL_NOTE_RE, "");
-  next = next.replace(IMAGE_INTERNAL_HINT_RE, "");
-  next = next.trimStart();
-
-  // Si el turno era solo una imagen sin texto, no dejemos la burbuja vacía.
-  if (hadImageInternalNote && !next.trim()) {
-    return { content: "Imagen adjunta", images };
-  }
-
-  return { content: next, images };
-}
-
-/** Reconstruye ChatMessages COMPLETOS desde session.history: los mensajes
- *  role:"tool" del gateway se adjuntan como toolCalls (desplegables de pasos)
- *  al assistant de su turno, y el razonamiento persistido viaja en
- *  msg.reasoning — así los pasos y el "Pensando" sobreviven al F5 en vez de
- *  perderse (antes se filtraba todo lo que no fuera user/assistant). */
-export function mapHistoryMessages(
-  raw: Array<Record<string, unknown>>,
-  idPrefix: string,
-): ChatMessage[] {
-  const out: ChatMessage[] = [];
-  let pendingTools: ToolCall[] = [];
-  const base = Date.now() - 1000 * (raw.length + 1);
-  raw.forEach((m, i) => {
-    const role = m.role;
-    if (role === "tool") {
-      pendingTools.push({
-        id: idPrefix + "-tc-" + i,
-        name: String((m.name as string) ?? "tool"),
-        args: {},
-        status: "done",
-        summary: typeof m.context === "string" ? m.context : undefined,
-      });
-      return;
-    }
-    if (role !== "user" && role !== "assistant") return;
-    let content = String((m.text as string) ?? (m.content as string) ?? "");
-    const historyImages =
-      role === "user" ? sanitizeUserHistoryContent(content) : null;
-    if (historyImages) content = historyImages.content;
-    const reasoningRaw =
-      (typeof m.reasoning === "string" && m.reasoning) ||
-      (typeof m.reasoning_content === "string" && m.reasoning_content) ||
-      "";
-    if (!content.trim() && role === "user") return; // era solo la nota interna
-    out.push({
-      id: idPrefix + "-" + i,
-      role,
-      content,
-      reasoning: reasoningRaw.trim() ? reasoningRaw : undefined,
-      toolCalls: role === "assistant" ? pendingTools : [],
-      streaming: false,
-      timestamp: (m.timestamp as number) ?? base + i * 1000,
-      images: historyImages?.images,
-    });
-    if (role === "assistant") pendingTools = [];
-  });
-  return out;
+  /** Durable state.db row (history `row_id`, prompt.submit `user_row_id`):
+   *  what an edit's truncation is aimed by. */
+  rowId?: number;
 }
 
 export interface SessionInfo {
@@ -160,34 +92,15 @@ export interface SessionInfo {
   tokensUsed: number;
   tokensMax: number;
   title: string | null;
+  /** The session's `reasoning_effort` ("" = configured default). */
+  reasoningEffort?: string;
 }
 
-interface JsonRpcRequest {
-  jsonrpc: "2.0";
-  id: number;
-  method: string;
-  params?: Record<string, unknown>;
+/** A composer prefill (`/undo` hands back the text of the turn it removed). */
+export interface ComposerPrefill {
+  text: string;
+  seq: number;
 }
-
-interface JsonRpcEvent {
-  jsonrpc: "2.0";
-  method: "event";
-  params: {
-    type: string;
-    /** Live session id (sid) del gateway que emitió el evento. */
-    session_id?: string;
-    payload?: Record<string, unknown>;
-  };
-}
-
-interface JsonRpcResponse {
-  jsonrpc: "2.0";
-  id: number;
-  result?: unknown;
-  error?: { code: number; message: string };
-}
-
-type IncomingMessage = JsonRpcEvent | JsonRpcResponse;
 
 interface UseChatGatewayResult {
   status: ConnectionStatus;
@@ -195,6 +108,8 @@ interface UseChatGatewayResult {
   messages: ChatMessage[];
   busy: boolean;
   sendMessage: (text: string, images?: ChatImagePreview[]) => void;
+  /** Drain one locally queued message: held by the server if a turn still runs. */
+  sendQueued: (text: string) => void;
   interrupt: () => void;
   errorMessage: string | null;
   /** Progreso en vivo del turno (retry / cambio de fallback / rate-limit). */
@@ -218,6 +133,31 @@ interface UseChatGatewayResult {
   editAndResubmit: (messageId: string, newText: string) => Promise<void>;
   /** Contador que sube cuando el gateway anuncia sessions.changed / session.title. */
   sessionsRevision: number;
+  /** Questions the agent is waiting on (approval, clarify, sudo, secret). */
+  serverRequests: ChatServerRequest[];
+  answerServerRequest: (request: ChatServerRequest, result: Record<string, unknown>) => void;
+  prefill: ComposerPrefill | null;
+}
+
+const EMPTY_SESSION: SessionInfo = {
+  sessionId: null,
+  sessionKey: null,
+  model: null,
+  modelProvider: null,
+  tokensUsed: 0,
+  tokensMax: 0,
+  title: null,
+};
+
+const SESSION_GONE_SEND =
+  "La sesión activa ya no está disponible. Vuelve a seleccionar la conversación o crea una nueva.";
+const SESSION_GONE_SWITCH =
+  "No se pudo reabrir esta conversación en el gateway. Selecciónala de nuevo o crea una conversación nueva.";
+
+function wsUrl(authName: string, authValue: string): string {
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const qs = new URLSearchParams({ [authName]: authValue });
+  return proto + "//" + window.location.host + CLAWK_BASE_PATH + "/api/ws?" + qs.toString();
 }
 
 export function useChatGateway(): UseChatGatewayResult {
@@ -231,18 +171,10 @@ export function useChatGateway(): UseChatGatewayResult {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
-  const [session, setSession] = useState<SessionInfo>({
-    sessionId: null,
-    sessionKey: null,
-    model: null,
-    modelProvider: null,
-    tokensUsed: 0,
-    tokensMax: 0,
-    title: null,
-  });
-  // Sid VIVO de la conversación abierta, como ref para que handleEvent (estable)
-  // pueda filtrar eventos de OTRAS sesiones sin re-suscribirse. El WS trae los
-  // eventos de todas las sesiones del gateway (chats paralelos, crons).
+  const [session, setSession] = useState<SessionInfo>(EMPTY_SESSION);
+  // Sid VIVO de la conversación abierta: handleEvent (estable) filtra con él los
+  // eventos de OTRAS sesiones (chats paralelos, crons). null mientras conecta o
+  // cambia de conversación: entonces ningún evento con session_id es nuestro.
   const liveSidRef = useRef<string | null>(null);
   // KEY (id de DB) de la conversación que el usuario tiene abierta. En una
   // reconexión se re-reanuda ESTA sesión — no session.most_recent, que puede
@@ -254,56 +186,23 @@ export function useChatGateway(): UseChatGatewayResult {
   // Sube con cada cambio de sesiones que anuncia el gateway (título nuevo, sesión
   // creada/borrada): el listado lo usa para refrescarse.
   const [sessionsRevision, setSessionsRevision] = useState(0);
-  // Progreso en vivo del turno (retry / cambio de fallback / rate-limit). El
-  // loop del agente lo reporta por eventos status.update; sin esto el Modern no
-  // mostraba NADA durante la cascada de fallback (que dura minutos) y parecía
-  // colgado. El Terminal sí los renderiza.
   const [liveStatus, setLiveStatus] = useState<string | null>(null);
+  const [prefill, setPrefill] = useState<ComposerPrefill | null>(null);
+  const {
+    requests: serverRequests,
+    add: addRequest,
+    remove: removeRequest,
+    removeApprovals,
+    clear: clearRequests,
+  } = useServerRequestQueue();
 
   const wsRef = useRef<WebSocket | null>(null);
-  const nextIdRef = useRef(1);
-  const pendingRef = useRef<Map<number, (resp: JsonRpcResponse) => void>>(
-    new Map(),
-  );
-
-  // Coalescing de message.delta: deepseek (y cualquier modelo rápido) escupe
-  // tokens a gran velocidad; aplicar setMessages por CADA token reparsea el
-  // markdown completo (O(n^2)) y reflowea el scroll por token → tirones. Igual
-  // que el TUI (turnController.scheduleStreaming), buffereamos los deltas y los
-  // volcamos en UN render por frame (requestAnimationFrame). El buffer pendiente
-  // se vuelca sí o sí en message.complete para no perder los últimos tokens.
-  const deltaBufferRef = useRef("");
-  const flushHandleRef = useRef<number | null>(null);
-
-  const flushDeltas = useCallback(() => {
-    flushHandleRef.current = null;
-    const buffered = deltaBufferRef.current;
-    if (!buffered) return;
-    deltaBufferRef.current = "";
-    setMessages((prev) => {
-      const last = prev[prev.length - 1];
-      if (last && last.role === "assistant" && last.streaming) {
-        return [
-          ...prev.slice(0, -1),
-          { ...last, content: last.content + buffered },
-        ];
-      }
-      // Nos sumamos a un stream YA empezado (volvimos a una conversación cuyo
-      // turno corría en background y el message.start quedó atrás): crear la
-      // burbuja acá para no tirar los tokens al piso.
-      return [
-        ...prev,
-        {
-          id: "asst-late-" + Date.now(),
-          role: "assistant" as const,
-          content: buffered,
-          toolCalls: [],
-          streaming: true,
-          timestamp: Date.now(),
-        },
-      ];
-    });
-  }, []);
+  const pendingRef = useRef(new PendingRpcs());
+  const turnRef = useRef<TurnTracker>({ started: false, submitsInFlight: 0 });
+  const switchSeqRef = useRef(0);
+  // message.delta coalescing: one render per frame instead of a markdown
+  // re-parse per token (deepseek & co. stream very fast).
+  const [deltas] = useState(() => createDeltaBuffer((text) => setMessages((prev) => appendContent(prev, text))));
 
   const sendRpc = useCallback(
     (method: string, params?: Record<string, unknown>): Promise<unknown> => {
@@ -311,427 +210,82 @@ export function useChatGateway(): UseChatGatewayResult {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         return Promise.reject(new Error("WebSocket not connected"));
       }
-      const id = nextIdRef.current++;
-      const req: JsonRpcRequest = { jsonrpc: "2.0", id, method, params };
-      return new Promise((resolve, reject) => {
-        pendingRef.current.set(id, (resp) => {
-          if (resp.error) {
-            reject(new Error(resp.error.code + ": " + resp.error.message));
-          } else {
-            resolve(resp.result);
-          }
-        });
-        ws.send(JSON.stringify(req));
-      });
+      return pendingRef.current.call(method, params, (frame) => ws.send(frame));
     },
     [],
   );
 
-  const handleEvent = useCallback((event: JsonRpcEvent) => {
-    const { type, payload = {} } = event.params;
+  const handleEvent = useCallback(
+    (event: GatewayEventFrame) =>
+      dispatchChatEvent(
+        {
+          setMessages,
+          setSession,
+          setBusy,
+          setErrorMessage,
+          setLiveStatus,
+          bumpSessions: () => setSessionsRevision((n) => n + 1),
+          ids: { liveSid: liveSidRef, selectedKey: selectedKeyRef },
+          deltas,
+          turn: turnRef.current,
+          requests: { cancel: removeRequest, cancelApprovals: removeApprovals },
+        },
+        event,
+      ),
+    [deltas, removeRequest, removeApprovals],
+  );
 
-    // Multi-conversación: ignorar eventos de sesiones AJENAS. Sin este filtro,
-    // un turno corriendo en la conversación A (o un cron) streamea sus mensajes
-    // sobre la conversación B que está abierta — los "chats mezclados". Los
-    // eventos sin session_id (p.ej. gateway.ready) pasan siempre.
-    const evtSid = event.params.session_id;
-    if (evtSid && liveSidRef.current && evtSid !== liveSidRef.current) {
-      return;
-    }
+  const handleServerRequest = useCallback(
+    (id: string, method: string, params: unknown) => {
+      const request = parseServerRequest(id, method, params);
+      if (request) addRequest(request);
+      else trySend(wsRef.current, unhandledReply(id, method));
+    },
+    [addRequest],
+  );
 
-    switch (type) {
-      case "gateway.ready":
-        break;
-
-      case "session.info": {
-        const liveId = trackSessionIds({ liveSid: liveSidRef, selectedKey: selectedKeyRef }, evtSid, payload);
-        setSession((prev) => applySessionInfo(prev, payload, liveId));
-        break;
+  /** Show an opened conversation: transcript, live turn state, header, and
+   *  the questions it still waits on. False when a newer switch superseded it. */
+  const showOpened = useCallback(
+    async (opened: OpenedSession, isCurrent: () => boolean): Promise<boolean> => {
+      const view = await loadTranscript(sendRpc, opened, "hist-" + Date.now());
+      if (!isCurrent()) return false;
+      setMessages(view);
+      for (const key of [opened.storedKey, opened.sid]) {
+        if (key) sessionMessagesCacheRef.current.set(key, view);
       }
-
-      // El título lo pone el backend (primer mensaje y luego el resumen del
-      // modelo); el header y el listado lo siguen sin recargar.
-      case "session.title":
-        setSession((prev) => ({ ...prev, title: titleFromEvent(payload) ?? prev.title }));
-        setSessionsRevision((n) => n + 1);
-        break;
-
-      case "sessions.changed":
-        setSessionsRevision((n) => n + 1);
-        break;
-
-      case "message.start": {
-        setMessages((prev) => {
-          // Si reasoning.delta ya creó el bubble del assistant, reusarlo
-          // (los modelos thinking razonan ANTES de empezar a responder).
-          const last = prev[prev.length - 1];
-          if (last && last.role === "assistant" && last.streaming) return prev;
-          return [
-            ...prev,
-            {
-              id: "asst-" + Date.now(),
-              role: "assistant",
-              content: "",
-              reasoning: "",
-              toolCalls: [],
-              streaming: true,
-              timestamp: Date.now(),
-            },
-          ];
-        });
-        setBusy(true);
-        break;
-      }
-
-      case "reasoning.delta":
-      case "thinking.delta": {
-        const text = (payload.text as string) ?? "";
-        if (!text) break;
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last && last.role === "assistant" && last.streaming) {
-            return [
-              ...prev.slice(0, -1),
-              { ...last, reasoning: (last.reasoning ?? "") + text },
-            ];
-          }
-          return [
-            ...prev,
-            {
-              id: "asst-" + Date.now(),
-              role: "assistant",
-              content: "",
-              reasoning: text,
-              toolCalls: [],
-              streaming: true,
-              timestamp: Date.now(),
-            },
-          ];
-        });
-        setBusy(true);
-        break;
-      }
-
-      case "message.delta": {
-        const text = (payload.text as string) ?? "";
-        if (!text) break;
-        // Llegó contenido real → limpiar el progreso en vivo (retry/fallback).
-        setLiveStatus(null);
-        deltaBufferRef.current += text;
-        if (flushHandleRef.current == null) {
-          flushHandleRef.current = requestAnimationFrame(flushDeltas);
-        }
-        break;
-      }
-
-      case "message.complete": {
-        // Volcar cualquier delta pendiente del buffer ANTES de cerrar el
-        // streaming, si no se pierden los últimos tokens.
-        if (flushHandleRef.current != null) {
-          cancelAnimationFrame(flushHandleRef.current);
-          flushHandleRef.current = null;
-        }
-        const buffered = deltaBufferRef.current;
-        deltaBufferRef.current = "";
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last && last.role === "assistant" && last.streaming) {
-            return [
-              ...prev.slice(0, -1),
-              {
-                ...last,
-                content: last.content + buffered,
-                streaming: false,
-                reasoning: (payload.reasoning as string) || last.reasoning,
-              },
-            ];
-          }
-          // Turno completado sin burbuja abierta (la conversación corrió en
-          // background y volvimos tarde): crear el mensaje final con el texto
-          // completo del payload para que la respuesta NO se pierda.
-          const full = ((payload.text as string) || buffered || "").trim();
-          if (!full) return prev;
-          return [
-            ...prev,
-            {
-              id: "asst-done-" + Date.now(),
-              role: "assistant" as const,
-              content: full,
-              toolCalls: [],
-              streaming: false,
-              reasoning: (payload.reasoning as string) || undefined,
-              timestamp: Date.now(),
-            },
-          ];
-        });
-        setBusy(false);
-        setLiveStatus(null);
-        // El usage del backend (_get_usage) es el total ACUMULADO de la sesión
-        // (session_*_tokens), no un delta por turno: por eso se ASIGNA, no se
-        // suma (sumar inflaba el contador en cada respuesta).
-        const u =
-          payload.usage && typeof payload.usage === "object"
-            ? (payload.usage as Record<string, unknown>)
-            : {};
-        const inTok = Number(u.input ?? u.prompt ?? u.input_tokens ?? 0) || 0;
-        const outTok =
-          Number(u.output ?? u.completion ?? u.output_tokens ?? 0) || 0;
-        const totalTok =
-          Number(u.total ?? u.total_tokens ?? 0) || inTok + outTok;
-        if (totalTok) {
-          setSession((prev) => ({ ...prev, tokensUsed: totalTok }));
-        }
-        break;
-      }
-
-      case "tool.start": {
-        const toolId = (payload.tool_id as string) ?? "tool-" + Date.now();
-        const name = (payload.name as string) ?? "unknown";
-        const args = (payload.args as Record<string, unknown>) ?? {};
-        setMessages((prev) => {
-          if (prev.length === 0) return prev;
-          const last = prev[prev.length - 1];
-          if (last.role !== "assistant") return prev;
-          const newToolCall: ToolCall = {
-            id: toolId,
-            name,
-            args,
-            status: "running",
-          };
-          return [
-            ...prev.slice(0, -1),
-            { ...last, toolCalls: [...last.toolCalls, newToolCall] },
-          ];
-        });
-        break;
-      }
-
-      case "tool.complete": {
-        const toolId = payload.tool_id as string;
-        const result = payload.result;
-        const summary = payload.summary as string | undefined;
-        const duration_s = payload.duration_s as number | undefined;
-        setMessages((prev) => {
-          return prev.map((msg) => {
-            if (msg.role !== "assistant") return msg;
-            const idx = msg.toolCalls.findIndex((tc) => tc.id === toolId);
-            if (idx === -1) return msg;
-            const updatedToolCalls = [...msg.toolCalls];
-            updatedToolCalls[idx] = {
-              ...updatedToolCalls[idx],
-              status: "done",
-              result,
-              summary,
-              duration_s,
-            };
-            return { ...msg, toolCalls: updatedToolCalls };
-          });
-        });
-        break;
-      }
-
-      case "error": {
-        const msg = (payload.message as string) ?? "Unknown error";
-        setErrorMessage(msg);
-        setLiveStatus(null);
-        // Desatascar la UI: el agente falló a mitad de turno, así que liberamos
-        // el "busy" y finalizamos el mensaje en streaming para que no quede
-        // colgado en "Pensando..." para siempre.
-        setBusy(false);
-        // Volcar/limpiar el buffer de deltas: preserva el parcial y evita que se
-        // filtre al próximo turno.
-        if (flushHandleRef.current != null) {
-          cancelAnimationFrame(flushHandleRef.current);
-          flushHandleRef.current = null;
-        }
-        const buffered = deltaBufferRef.current;
-        deltaBufferRef.current = "";
-        setMessages((prev) => {
-          if (prev.length === 0) return prev;
-          const last = prev[prev.length - 1];
-          if (last.role === "assistant" && last.streaming) {
-            const content = last.content + buffered;
-            const empty =
-              !content.trim() &&
-              last.toolCalls.length === 0 &&
-              !(last.reasoning ?? "").trim();
-            // Error antes de cualquier contenido → dropear la burbuja vacía
-            // (si no, queda un avatar huérfano al lado del banner de error).
-            if (empty) return prev.slice(0, -1);
-            return [...prev.slice(0, -1), { ...last, content, streaming: false }];
-          }
-          return prev;
-        });
-        break;
-      }
-
-      case "status.update": {
-        // El loop del agente reporta progreso y errores de retry/fallback/
-        // billing SOLO por status.update. El Modern los ignoraba → durante la
-        // cascada de fallback (minutos) quedaba en spinner sin mostrar nada.
-        const text = (payload.text as string) ?? "";
-        const kind = (payload.kind as string) ?? "";
-        if (!text) break;
-
-        const isTerminal = kind === "error" || text.trimStart().startsWith("❌");
-
-        if (isTerminal) {
-          // Fallo terminal (sin créditos / billing / fallbacks agotados):
-          // tratarlo como FIN de turno — mostrar el error y parar el spinner
-          // ya, sin esperar el message.complete final (que tarda minutos).
-          setLiveStatus(null);
-          setErrorMessage(text.replace(/^❌\s*/, ""));
-          setBusy(false);
-          if (flushHandleRef.current != null) {
-            cancelAnimationFrame(flushHandleRef.current);
-            flushHandleRef.current = null;
-          }
-          const buffered = deltaBufferRef.current;
-          deltaBufferRef.current = "";
-          setMessages((prev) => {
-            if (prev.length === 0) return prev;
-            const last = prev[prev.length - 1];
-            if (last.role === "assistant" && last.streaming) {
-              const content = last.content + buffered;
-              const empty =
-                !content.trim() &&
-                last.toolCalls.length === 0 &&
-                !(last.reasoning ?? "").trim();
-              if (empty) return prev.slice(0, -1);
-              return [
-                ...prev.slice(0, -1),
-                { ...last, content, streaming: false },
-              ];
-            }
-            return prev;
-          });
-        } else {
-          // Progreso no-terminal (reintentando, cambiando de proveedor,
-          // rate-limit transitorio): mostrarlo en vivo para no parecer colgado.
-          setLiveStatus(text);
-        }
-        break;
-      }
-
-      default:
-        break;
-    }
-  }, [flushDeltas]);
+      liveSidRef.current = opened.sid;
+      if (opened.storedKey) selectedKeyRef.current = opened.storedKey;
+      setBusy(resumeIsBusy(opened.resume));
+      setSession((prev) => sessionFromResume(prev, opened));
+      requestsFromResume(opened.resume).forEach(addRequest);
+      return true;
+    },
+    [sendRpc, addRequest],
+  );
 
   useEffect(() => {
     let cancelled = false;
-    // Auto-reconexión con backoff exponencial: la conexión al gateway puede
-    // parpadear (túnel SSH que se cae, red móvil, restart del server). Sin
-    // esto, un solo drop dejaba el chat muerto en "Conectando..." hasta un
-    // F5 manual. El backoff se resetea en cada conexión exitosa.
+    // Auto-reconexión con backoff exponencial (túnel SSH, red móvil, restart).
     let reconnectDelay = 1_000;
     let reconnectTimer: number | undefined;
 
-    interface ResumePayload {
-      session_id?: string;
-      resumed?: string;
-      running?: boolean;
-      inflight?: {
-        user?: string;
-        assistant?: string;
-        streaming?: boolean;
-      } | null;
-    }
-
-    async function resolveSession(): Promise<{
-      sid: string;
-      resume: ResumePayload | null;
-    } | null> {
+    async function attach() {
+      // Si el usuario cambia de conversación mientras esta init corre,
+      // switchSession avanza el seq → abortamos antes de pisar SU vista.
+      const seqAtOpen = switchSeqRef.current;
+      const isCurrent = () => !cancelled && seqAtOpen === switchSeqRef.current;
       try {
-        const recent = (await sendRpc("session.most_recent", { min_messages: 1 })) as {
-          session_id?: string;
-        } | null;
-        const sid = recent?.session_id;
-        if (sid) {
-          try {
-            const resumeResult = (await sendRpc("session.resume", {
-              session_id: sid,
-            })) as ResumePayload;
-            const liveSid = resumeResult?.session_id ?? sid;
-            selectedKeyRef.current = sid;
-            console.log("[useChatGateway] resumed session", sid, "→ live sid", liveSid);
-            return { sid: liveSid, resume: resumeResult };
-          } catch (resumeErr) {
-            console.warn(
-              "[useChatGateway] resume failed, creating new session",
-              resumeErr,
-            );
-          }
+        const opened = await openInitialSession(sendRpc, selectedKeyRef.current);
+        if (!isCurrent()) return;
+        if (!opened) {
+          setErrorMessage("No se pudo crear/obtener sesión");
+          return;
         }
+        await showOpened(opened, isCurrent);
       } catch (err) {
-        console.warn("[useChatGateway] session.most_recent failed", err);
-      }
-
-      try {
-        const created = (await sendRpc("session.create", {
-          source: "dashboard",
-        })) as { session_id?: string };
-        const newSid = created?.session_id;
-        if (newSid) {
-          selectedKeyRef.current = newSid;
-          console.log("[useChatGateway] created new session", newSid);
-          try {
-            const resumeResult = (await sendRpc("session.resume", {
-              session_id: newSid,
-            })) as ResumePayload;
-            const liveSid = resumeResult?.session_id ?? newSid;
-            return { sid: liveSid, resume: resumeResult };
-          } catch (err) {
-            console.warn(
-              "[useChatGateway] resume after create failed (continuing anyway)",
-              err,
-            );
-            return { sid: newSid, resume: null };
-          }
-        }
-      } catch (err) {
-        console.error("[useChatGateway] session.create failed", err);
-        throw err;
-      }
-
-      return null;
-    }
-
-    // Turno EN VUELO al (re)cargar la página: el F5 con el agente trabajando
-    // detach-ea la sesión en el server (el turno SIGUE corriendo, hay 90s de
-    // gracia) y el resume la reengancha — pero este path descartaba `running`
-    // e `inflight`, así que la conversación aparecía "muerta" y la respuesta
-    // parecía perdida. Misma hidratación que switchSession.
-    function applyResumeLiveState(resume: ResumePayload | null) {
-      if (!resume) return;
-      setBusy(Boolean(resume.running));
-      const inflight = resume.inflight;
-      if (inflight && (inflight.streaming || inflight.assistant)) {
-        setMessages((prev) => {
-          const next = [...prev];
-          const inflightUser = (inflight.user || "").trim();
-          const lastUser = [...next].reverse().find((m) => m.role === "user");
-          if (inflightUser && lastUser?.content !== inflightUser) {
-            next.push({
-              id: "usr-inflight-" + Date.now(),
-              role: "user",
-              content: inflightUser,
-              toolCalls: [],
-              streaming: false,
-              timestamp: Date.now(),
-            });
-          }
-          next.push({
-            id: "asst-inflight-" + Date.now(),
-            role: "assistant",
-            content: inflight.assistant || "",
-            toolCalls: [],
-            streaming: true,
-            timestamp: Date.now(),
-          });
-          return next;
-        });
-        setBusy(true);
+        console.error("[useChatGateway] session init failed", err);
+        if (!cancelled) setErrorMessage(err instanceof Error ? err.message : "Session init failed");
       }
     }
 
@@ -741,126 +295,36 @@ export function useChatGateway(): UseChatGatewayResult {
       try {
         const [authName, authValue] = await buildWsAuthParam();
         if (cancelled) return;
-
-        const proto =
-          window.location.protocol === "https:" ? "wss:" : "ws:";
-        const qs = new URLSearchParams({ [authName]: authValue });
-        const url =
-          proto +
-          "//" +
-          window.location.host +
-          CLAWK_BASE_PATH +
-          "/api/ws?" +
-          qs.toString();
-
-        const ws = new WebSocket(url);
+        const ws = new WebSocket(wsUrl(authName, authValue));
         wsRef.current = ws;
 
-        ws.onopen = async () => {
+        ws.onopen = () => {
           if (cancelled) return;
           reconnectDelay = 1_000; // conexión sana → resetear el backoff
           setStatus("connected");
-          // Si el usuario cambia de conversación mientras esta init corre,
-          // switchSession avanza el seq → abortamos antes de pisar SU vista.
-          const seqAtOpen = switchSeqRef.current;
-          try {
-            // Con una conversación abierta (reconexión, o carrera con un
-            // switch), re-reanudar ESA sesión — session.most_recent puede ser
-            // un cron u otro chat y escribiría su transcript encima.
-            let sid: string | null = null;
-            let resumePayload: ResumePayload | null = null;
-            const preferredKey = selectedKeyRef.current;
-            if (preferredKey) {
-              try {
-                const r = (await sendRpc("session.resume", {
-                  session_id: preferredKey,
-                })) as ResumePayload;
-                sid = r?.session_id ?? preferredKey;
-                resumePayload = r;
-              } catch (resumeErr) {
-                console.warn(
-                  "[useChatGateway] re-resume of selected session failed",
-                  resumeErr,
-                );
-                sid = null;
-              }
-            }
-            if (!sid) {
-              const resolved = await resolveSession();
-              sid = resolved?.sid ?? null;
-              resumePayload = resolved?.resume ?? null;
-            }
-            if (cancelled) return;
-            if (!sid) {
-              setErrorMessage("No se pudo crear/obtener sesión");
-              return;
-            }
-            if (seqAtOpen !== switchSeqRef.current) return; // hubo switch: no pisar
-
-            try {
-              const history = (await sendRpc("session.history", {
-                session_id: sid,
-              })) as { messages?: Array<Record<string, unknown>> };
-              if (cancelled || seqAtOpen !== switchSeqRef.current) return;
-
-              // Reconstrucción COMPLETA: pasos (tool calls) + razonamiento
-              // persistidos sobreviven al F5 (antes se filtraban).
-              setMessages(mapHistoryMessages(history?.messages ?? [], "hist"));
-            } catch (histErr) {
-              console.warn(
-                "[useChatGateway] session.history failed (empty session)",
-                histErr,
-              );
-              if (seqAtOpen === switchSeqRef.current) setMessages([]);
-            }
-
-            // DESPUÉS del history: busy + burbujas del turno en vuelo (si el
-            // agente seguía trabajando cuando se recargó la página).
-            if (!cancelled && seqAtOpen === switchSeqRef.current) {
-              applyResumeLiveState(resumePayload);
-            }
-
-            liveSidRef.current = sid;
-            setSession((prev) => ({
-              ...prev,
-              sessionId: sid,
-              sessionKey: selectedKeyRef.current ?? sid,
-            }));
-          } catch (err) {
-            console.error("[useChatGateway] session init failed", err);
-            setErrorMessage(
-              err instanceof Error ? err.message : "Session init failed",
-            );
-          }
+          setResuming(false);
+          // Before anything else on this connection: we answer server→client
+          // requests. Without it the backend withdraws every approval/clarify
+          // for this socket as coming from an app too old to answer.
+          void sendRpc("client.capabilities", { server_requests: true }).catch(() => undefined);
+          void attach();
         };
 
-        ws.onmessage = (ev) => {
-          if (typeof ev.data !== "string") return;
-          let parsed: IncomingMessage;
-          try {
-            parsed = JSON.parse(ev.data);
-          } catch {
-            return;
-          }
-          if ("method" in parsed && parsed.method === "event") {
-            handleEvent(parsed);
-            return;
-          }
-          if ("id" in parsed && parsed.id != null) {
-            const cb = pendingRef.current.get(parsed.id);
-            if (cb) {
-              pendingRef.current.delete(parsed.id);
-              cb(parsed);
-            }
-          }
-        };
+        ws.onmessage = (ev) =>
+          routeGatewayFrame(ev.data, {
+            onEvent: handleEvent,
+            onRequest: handleServerRequest,
+            onResponse: (frame) => pendingRef.current.settle(frame),
+          });
 
         ws.onclose = () => {
+          // Nothing that waited on this socket can be answered any more.
+          pendingRef.current.rejectAll("WebSocket closed");
+          clearRequests();
           if (cancelled) return;
+          // `busy` stays: the turn keeps running server-side, and the
+          // reconnect's resume reports whether it still does.
           setStatus("disconnected");
-          setBusy(false);
-          // Reintentar solo: resolveSession() reanuda la sesión más reciente
-          // al reabrir, así la conversación en curso vuelve sin F5.
           const delay = reconnectDelay;
           reconnectDelay = Math.min(reconnectDelay * 2, 15_000);
           reconnectTimer = window.setTimeout(() => {
@@ -884,509 +348,244 @@ export function useChatGateway(): UseChatGatewayResult {
 
     void connect();
 
+    const pending = pendingRef.current;
     return () => {
       cancelled = true;
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
-      if (wsRef.current) {
-        try {
-          wsRef.current.close();
-        } catch {
-          /* ignore */
-        }
-        wsRef.current = null;
-      }
-      pendingRef.current.clear();
+      wsRef.current?.close();
+      wsRef.current = null;
+      pending.rejectAll("WebSocket closed");
     };
-  }, [handleEvent, sendRpc]);
+  }, [handleEvent, handleServerRequest, sendRpc, showOpened, clearRequests]);
 
-  const sendMessage = useCallback(
-    (text: string, images?: ChatImagePreview[]) => {
+  /** prompt.submit with the bookkeeping every submit needs: the in-flight count
+   *  that keeps a stale `running: false` from ending the turn, the durable row
+   *  the server wrote for the bubble, and error reporting. False on failure. */
+  const submitPrompt = useCallback(
+    async (params: Record<string, unknown>, bubbleId?: string): Promise<boolean> => {
+      turnRef.current.submitsInFlight++;
+      try {
+        const r = (await sendRpc("prompt.submit", params)) as { user_row_id?: number } | null;
+        if (bubbleId) setMessages((prev) => setRowId(prev, bubbleId, r?.user_row_id));
+        return true;
+      } catch (err) {
+        console.error("[useChatGateway] prompt.submit failed", err);
+        setErrorMessage(sessionErrorText(err, "Failed to send message", SESSION_GONE_SEND));
+        setLiveStatus(null);
+        setBusy(false);
+        return false;
+      } finally {
+        turnRef.current.submitsInFlight--;
+      }
+    },
+    [sendRpc],
+  );
+
+  /** Reload the transcript from the server (a slash command rewound it). */
+  const reloadTranscript = useCallback(async () => {
+    const sid = liveSidRef.current;
+    if (!sid) return;
+    try {
+      const history = (await sendRpc("session.history", { session_id: sid })) as {
+        messages?: Array<Record<string, unknown>>;
+      } | null;
+      if (liveSidRef.current === sid) setMessages(mapHistoryMessages(history?.messages ?? [], "hist-" + Date.now()));
+    } catch (err) {
+      console.warn("[useChatGateway] session.history reload failed", err);
+    }
+  }, [sendRpc]);
+
+  // Slash command (/model, /help, /status, skills, /retry, /undo …): the shared
+  // dispatcher (slashExec) — same contract as the TUI.
+  const runSlash = useCallback(
+    (command: string, sid: string) => {
+      setMessages((prev) => [...prev, userBubble(command)]);
+      const callbacks: SlashExecCallbacks = {
+        sys: (out) => out && setMessages((prev) => [...prev, slashOutputBubble(out)]),
+        send: async (message, options) => {
+          const bubble = options?.asUserTurn ? userBubble(message) : null;
+          if (bubble) setMessages((prev) => [...prev, bubble]);
+          setBusy(true);
+          await submitPrompt({ session_id: sid, text: message }, bubble?.id);
+        },
+        prefill: (text) => setPrefill({ text, seq: Date.now() }),
+        refresh: reloadTranscript,
+      };
+      executeSlash({ command, sessionId: sid, gw: { request: (m, p) => sendRpc(m, p) as never }, callbacks }).catch(
+        (err) => setErrorMessage(err instanceof Error ? err.message.replace(/^\d+:\s*/, "") : "El comando falló"),
+      );
+    },
+    [sendRpc, submitPrompt, reloadTranscript],
+  );
+
+  const submitText = useCallback(
+    (text: string, images: ChatImagePreview[] | undefined, extra: Record<string, unknown>) => {
       if (!text.trim()) return;
-      if (!session.sessionId) {
+      const sid = session.sessionId;
+      if (!sid) {
         setErrorMessage("No hay sesión activa todavía");
         return;
       }
       // Nuevo turno: limpiar cualquier error previo + progreso en vivo.
       setErrorMessage(null);
       setLiveStatus(null);
-      const userMsgId = "usr-" + Date.now();
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: userMsgId,
-          role: "user",
-          content: text,
-          toolCalls: [],
-          streaming: false,
-          timestamp: Date.now(),
-          images: images && images.length ? images : undefined,
-        },
-      ]);
-
-      // Slash command (/model, /help, /status, skills, …): dispatcher unificado.
-      // executeSlash intenta slash.exec y, si el backend lo rechaza (skills,
-      // comandos pending-input como /retry /queue /goal /undo /steer, o alias),
-      // cae a command.dispatch — el mismo contrato que la TUI. Sin esto, las
-      // skills aparecían en el autocomplete pero fallaban al ejecutarse, y los
-      // comandos pending-input daban error 4018 en el chat Modern. Los comandos
-      // con efectos (model/new/stop) emiten eventos que el chat ya procesa.
-      if (text.trim().startsWith("/")) {
-        const appendSystem = (out: string) => {
-          if (!out) return;
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: "slash-" + Date.now(),
-              role: "assistant",
-              content: out,
-              toolCalls: [],
-              streaming: false,
-              timestamp: Date.now(),
-            },
-          ]);
-        };
-        const submitToAgent: (msg: string) => void = (msg) => {
-          void sendRpc("prompt.submit", {
-            session_id: session.sessionId,
-            text: msg,
-          }).catch((err) => {
-            console.error("[useChatGateway] prompt.submit failed", err);
-            const raw =
-              err instanceof Error ? err.message : "Failed to send message";
-            const normalized = raw.replace(/^\d+:\s*/, "");
-            setLiveStatus(null);
-            setBusy(false);
-            setErrorMessage(
-              /4007|session not found/i.test(raw)
-                ? "La sesión activa ya no está disponible. Vuelve a seleccionar la conversación o crea una nueva."
-                : normalized,
-            );
-          });
-        };
-        void executeSlash({
-          command: text.trim(),
-          sessionId: session.sessionId,
-          gw: {
-            request<T = unknown>(
-              method: string,
-              params?: Record<string, unknown>,
-            ): Promise<T> {
-              return sendRpc(method, params) as Promise<T>;
-            },
-          },
-          callbacks: { sys: appendSystem, send: submitToAgent },
-        }).catch((err) => {
-          console.error("[useChatGateway] executeSlash failed", err);
-          setErrorMessage(
-            err instanceof Error
-              ? err.message.replace(/^\d+:\s*/, "")
-              : "El comando falló",
-          );
-        });
-        return;
-      }
-
-      // Marcamos busy de inmediato (no esperando message.start) para que la cola
-      // de mensajes tenga un gate confiable: sin esto, en la ventana del
-      // round-trip busy=false y el siguiente mensaje en cola se dispararía sobre
-      // una sesión que ya está por ocuparse (→ 4009 / mensaje perdido).
+      if (text.trim().startsWith("/")) return runSlash(text.trim(), sid);
+      const bubble = userBubble(text, { images: images && images.length ? images : undefined });
+      setMessages((prev) => [...prev, bubble]);
+      // busy de inmediato (no esperando message.start): gate confiable para la cola.
       setBusy(true);
-      sendRpc("prompt.submit", {
-        session_id: session.sessionId,
-        text,
-      }).catch((err) => {
-        console.error("[useChatGateway] prompt.submit failed", err);
-        const raw =
-          err instanceof Error ? err.message : "Failed to send message";
-        const normalized = raw.replace(/^\d+:\s*/, "");
-        setErrorMessage(
-          /4007|session not found/i.test(raw)
-            ? "La sesión activa ya no está disponible. Vuelve a seleccionar la conversación o crea una nueva."
-            : normalized,
-        );
-        setLiveStatus(null);
-        // El submit falló (p.ej. 4007/4009): liberamos para no colgar.
-        setBusy(false);
-      });
+      void submitPrompt({ session_id: sid, text, ...extra }, bubble.id);
     },
-    [session.sessionId, sendRpc],
+    [session.sessionId, runSlash, submitPrompt],
   );
+
+  const sendMessage = useCallback(
+    (text: string, images?: ChatImagePreview[]) => submitText(text, images, {}),
+    [submitText],
+  );
+  // `queued: true`: a turn the client believes ended may still be running; the
+  // server then holds this message instead of redirecting the live turn.
+  const sendQueued = useCallback((text: string) => submitText(text, undefined, { queued: true }), [submitText]);
 
   const interrupt = useCallback(() => {
     if (!session.sessionId) return;
-    sendRpc("session.interrupt", { session_id: session.sessionId }).catch(
-      (err) => {
-        console.error("[useChatGateway] session.interrupt failed", err);
-      },
-    );
+    sendRpc("session.interrupt", { session_id: session.sessionId }).catch((err) => {
+      console.error("[useChatGateway] session.interrupt failed", err);
+    });
   }, [session.sessionId, sendRpc]);
 
-  const switchSeqRef = useRef(0);
+  const answerServerRequest = useCallback(
+    (request: ChatServerRequest, result: Record<string, unknown>) => {
+      removeRequest(request.id);
+      deliverAnswer(request, result, { sendFrame: (f) => trySend(wsRef.current, f), rpc: sendRpc }).catch((err) =>
+        setErrorMessage("No se pudo enviar la respuesta: " + (err instanceof Error ? err.message : String(err))),
+      );
+    },
+    [removeRequest, sendRpc],
+  );
+
   const switchSession = useCallback(
     async (
       targetId: string,
       options?: { assumeLive?: boolean; sessionKey?: string | null },
     ): Promise<void> => {
       if (!targetId) return;
-
       const assumeLive = Boolean(options?.assumeLive);
+      // new-chat-stored-session-contract-v1: targetId is the LIVE sid when
+      // assumeLive (a fresh session.create); visualKey is the stored DB id.
       const visualKey = (options?.sessionKey || targetId).trim();
-
+      const cache = sessionMessagesCacheRef.current;
       const currentKey = selectedKeyRef.current || liveSidRef.current;
-      if (currentKey && messagesRef.current.length > 0) {
-        sessionMessagesCacheRef.current.set(currentKey, messagesRef.current);
-      }
+      if (currentKey && messagesRef.current.length > 0) cache.set(currentKey, messagesRef.current);
 
-      const cachedMessages =
-        sessionMessagesCacheRef.current.get(visualKey) ??
-        sessionMessagesCacheRef.current.get(targetId);
-
-      // eslint-disable-next-line react-hooks/immutability -- monotonic switch counter in a ref
       const mySeq = ++switchSeqRef.current;
-      setMessages(cachedMessages ? [...cachedMessages] : []);
+      const isCurrent = () => mySeq === switchSeqRef.current;
+      const cached = cache.get(visualKey) ?? cache.get(targetId);
+      setMessages(cached ? [...cached] : []);
       setBusy(false);
-      setResuming(true);
       setErrorMessage(null);
-      // Mostrar ya el header/asociación de la sesión; el composer queda
-      // deshabilitado por `resuming` hasta que el resume (build del agente) termine.
-      //
-      // new-chat-stored-session-contract-v1:
-      // targetId es el ID vivo del gateway cuando assumeLive=true.
-      // visualKey/sessionKey es el ID persistido de SQLite para sidebar/historial.
-      // En sesiones históricas, targetId ya es el ID persistido y session.resume
-      // debe devolver el liveSid antes de habilitar prompt.submit.
-      liveSidRef.current = assumeLive ? targetId : "";
+      setLiveStatus(null);
+      liveSidRef.current = assumeLive ? targetId : null;
       selectedKeyRef.current = visualKey;
-      setSession((prev) => ({
-        ...prev,
-        sessionId: assumeLive ? targetId : null,
-        sessionKey: visualKey,
-        model: null,
-        modelProvider: null,
-        tokensUsed: 0,
-        tokensMax: 0,
-      }));
-
-      // new-chat-assume-live
-      // session.create ya devuelve una sesión viva. Para una conversación nueva
-      // NO hacemos session.resume porque puede fallar con "session not found".
-      // El resume se reserva para sesiones históricas del sidebar.
-      if (options?.assumeLive) {
+      setSession((prev) => switchingSession(prev, assumeLive ? targetId : null, visualKey));
+      // A session.create result is already live: nothing to resume.
+      if (assumeLive) {
         setResuming(false);
         return;
       }
+      setResuming(true);
 
-      // 1) Historial al INSTANTE: lee del DB por HTTP (no construye el agente),
-      //    así la conversación aparece sin esperar el build lento del resume.
-      try {
-        const fast = await api.getSessionMessages(targetId);
-        if (mySeq !== switchSeqRef.current) return;
-        const fastMsgs: ChatMessage[] = (fast?.messages ?? [])
-          .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m, i) => ({
-            id: "hist-" + targetId + "-" + i,
-            role: m.role as "user" | "assistant",
-            content: m.content ?? "",
-            toolCalls: [],
-            streaming: false,
-            timestamp: Date.now() - 1000 * (1000 - i),
-          }));
-        if (fastMsgs.length) {
-          sessionMessagesCacheRef.current.set(targetId, fastMsgs);
-          setMessages(fastMsgs);
-        }
-      } catch {
-        // best-effort: el resume de abajo igual trae los mensajes.
+      // 1) Historial al INSTANTE por HTTP (no construye el agente).
+      const fastMsgs = await fastHistory(targetId);
+      if (!isCurrent()) return;
+      if (fastMsgs.length) {
+        cache.set(targetId, fastMsgs);
+        setMessages(fastMsgs);
       }
 
-      // 2) Resume: construye el agente (lento) y deja la sesión VIVA para poder
-      //    enviar. El historial ya se mostró en el paso 1.
+      // 2) Resume: construye el agente (lento) y deja la sesión VIVA.
       try {
-        const resumeResult = (await sendRpc("session.resume", {
-          session_id: targetId,
-        })) as {
-          session_id?: string;
-          messages?: Array<Record<string, unknown>>;
-          info?: Record<string, unknown>;
-          running?: boolean;
-          inflight?: {
-            user?: string;
-            assistant?: string;
-            streaming?: boolean;
-          } | null;
-        };
-        if (mySeq !== switchSeqRef.current) return;
-        const liveSid = resumeResult?.session_id ?? targetId;
-        liveSidRef.current = liveSid;
-        // Conversación reanudada con un turno EN VUELO (sobrevive al navegar):
-        // restaurar busy para que el composer entre en modo cola ("Agregar a la
-        // cola", estilo Telegram) en vez de chocar con 4009 session busy.
-        setBusy(Boolean(resumeResult?.running));
-        const historyMessages = resumeResult?.messages ?? [];
-        if (historyMessages.length) {
-          // Igual que en el connect inicial: pasos + razonamiento incluidos.
-          const resumedMessages = mapHistoryMessages(
-            historyMessages,
-            "hist-" + Date.now(),
-          );
-          sessionMessagesCacheRef.current.set(targetId, resumedMessages);
-          sessionMessagesCacheRef.current.set(liveSid, resumedMessages);
-          setMessages(resumedMessages);
-        }
-        if (mySeq !== switchSeqRef.current) return;
-        // Turno EN VUELO: el history persistido aún no tiene este turno, pero
-        // el gateway manda su snapshot (prompt + texto acumulado). Hidratarlo:
-        // sin esto, al volver a una conversación corriendo se veía "vacía" y
-        // la respuesta parecía perderse.
-        const inflight = resumeResult?.inflight;
-        if (inflight && (inflight.streaming || inflight.assistant)) {
-          setMessages((prev) => {
-            const next = [...prev];
-            const inflightUser = (inflight.user || "").trim();
-            const lastUser = [...next]
-              .reverse()
-              .find((m) => m.role === "user");
-            if (inflightUser && lastUser?.content !== inflightUser) {
-              next.push({
-                id: "usr-inflight-" + Date.now(),
-                role: "user",
-                content: inflightUser,
-                toolCalls: [],
-                streaming: false,
-                timestamp: Date.now(),
-              });
-            }
-            next.push({
-              id: "asst-inflight-" + Date.now(),
-              role: "assistant",
-              content: inflight.assistant || "",
-              toolCalls: [],
-              streaming: true,
-              timestamp: Date.now(),
-            });
-            return next;
-          });
-          setBusy(true);
-        }
-        // Tokens por conversación + modelo de la sesión resumida.
-        const info = resumeResult?.info ?? {};
-
-        // tokens-hydrate-on-switch-v2
-        // Al cambiar de conversación, rehidratamos el contador del header.
-        // Importante: NO cambiamos sessionId visual aquí; sessionId debe seguir
-        // siendo liveSid para que prompt.submit/slash.exec no fallen.
-        const infoForTokens = info as Record<string, unknown>;
-
-        const restoredTokensUsed =
-          Number(
-            infoForTokens.tokens_used ??
-              infoForTokens.total_tokens ??
-              infoForTokens.total ??
-              0,
-          ) || 0;
-
-        const restoredTokensMax =
-          Number(
-            infoForTokens.tokens_max ??
-              infoForTokens.context_max ??
-              0,
-          ) || 0;
-
-        const tryReadUsageSnapshot = async (sid: string) => {
-          try {
-            const usage = (await sendRpc("session.usage", {
-              session_id: sid,
-            })) as Record<string, unknown> | null;
-
-            return {
-              ok: true,
-              total:
-                Number(
-                  usage?.total ??
-                    usage?.total_tokens ??
-                    usage?.tokens_used ??
-                    0,
-                ) || 0,
-              max:
-                Number(
-                  usage?.context_max ??
-                    usage?.tokens_max ??
-                    0,
-                ) || 0,
-            };
-          } catch (usageErr) {
-            console.warn(
-              "[useChatGateway] session.usage failed during token restore",
-              sid,
-              usageErr,
-            );
-            return { ok: false, total: 0, max: 0 };
-          }
-        };
-
-        setSession((prev) => ({
-          ...prev,
-          sessionId: liveSid,
-          sessionKey: targetId,
-          model: (info.model as string) ?? null,
-          modelProvider: (info.model_provider as string) ?? null,
-          tokensUsed: restoredTokensUsed,
-          tokensMax: restoredTokensMax,
-          // El backend devuelve title en info — si no llega, prev.title queda null
-          // del paso inmediato anterior, lo cual está bien.
-          title: ((info.title as string) || null) ?? prev.title,
-        }));
-
-        // Fast Switch Session v1:
-        // session.usage puede tardar y no debe bloquear el cambio de chat.
-        // Probamos targetId/liveSid en segundo plano y actualizamos el header
-        // solo si el usuario sigue viendo esta misma sesión.
-        void (async () => {
-          for (const sid of Array.from(new Set([targetId, liveSid])).filter(Boolean)) {
-            const usage = await tryReadUsageSnapshot(sid);
-
-            if (mySeq !== switchSeqRef.current) return;
-
-            if (usage.ok && (usage.total > 0 || usage.max > 0)) {
-              setSession((prev) =>
-                prev.sessionId === liveSid || prev.sessionId === targetId
-                  ? {
-                      ...prev,
-                      tokensUsed: usage.total,
-                      tokensMax: usage.max,
-                    }
-                  : prev,
-              );
-              break;
-            }
-          }
-        })();
+        const r = ((await sendRpc("session.resume", { session_id: targetId })) ?? {}) as ResumeResult;
+        const opened: OpenedSession = { sid: r.session_id || targetId, storedKey: targetId, resume: r };
+        if (!(await showOpened(opened, isCurrent))) return;
+        // session.usage puede tardar: no bloquea el cambio de chat.
+        void readUsage(sendRpc, [targetId, opened.sid]).then((usage) => {
+          if (usage && isCurrent()) setSession((prev) => ({ ...prev, tokensUsed: usage.total, tokensMax: usage.max }));
+        });
       } catch (err) {
         console.error("[useChatGateway] switchSession failed", err);
-        if (mySeq === switchSeqRef.current) {
-          const raw =
-            err instanceof Error ? err.message : "Failed to switch session";
-          const normalized = raw.replace(/^\d+:\s*/, "");
-          liveSidRef.current = "";
-          setBusy(false);
-          setLiveStatus(null);
-          setSession((prev) => ({
-            ...prev,
-            sessionId: null,
-            sessionKey: targetId,
-          }));
-          setErrorMessage(
-            /4007|session not found/i.test(raw)
-              ? "No se pudo reabrir esta conversación en el gateway. Selecciónala de nuevo o crea una conversación nueva."
-              : normalized,
-          );
+        if (isCurrent()) {
+          setSession((prev) => ({ ...prev, sessionId: null, sessionKey: targetId }));
+          setErrorMessage(sessionErrorText(err, "Failed to switch session", SESSION_GONE_SWITCH));
         }
       } finally {
-        if (mySeq === switchSeqRef.current) setResuming(false);
+        if (isCurrent()) setResuming(false);
+      }
+    },
+    [sendRpc, showOpened],
+  );
+
+  const regenerateLast = useCallback(async (): Promise<void> => {
+    const sid = session.sessionId;
+    if (busy || !sid) return;
+    const before = messagesRef.current;
+    // El último mensaje user es el prompt que produjo la última respuesta. Un
+    // slash no se regenera: el history del backend no tiene ese turno, así que
+    // session.undo borraría el turno real previo.
+    const lastUser = [...before].reverse().find((m) => m.role === "user");
+    if (!lastUser || lastUserIsSlash(before)) return;
+    setMessages(dropLastExchange(before));
+    try {
+      await sendRpc("session.undo", { session_id: sid });
+    } catch (err) {
+      console.error("[useChatGateway] session.undo failed", err);
+      setMessages(before);
+      setErrorMessage(err instanceof Error ? err.message : "Failed to regenerate");
+      return;
+    }
+    sendMessage(lastUser.content);
+  }, [busy, session.sessionId, sendRpc, sendMessage]);
+
+  /** The durable row of a bubble the server has written but we never learned
+   *  (a submit whose receipt lacked it): read it back from session.history. */
+  const lookUpRowId = useCallback(
+    async (sid: string, local: ChatMessage[], index: number): Promise<number | undefined> => {
+      try {
+        const history = (await sendRpc("session.history", { session_id: sid })) as {
+          messages?: Array<Record<string, unknown>>;
+        } | null;
+        return matchUserRowId(local, index, mapHistoryMessages(history?.messages ?? [], "lookup"));
+      } catch {
+        return undefined;
       }
     },
     [sendRpc],
   );
 
-  const regenerateLast = useCallback(async (): Promise<void> => {
-    if (busy) return;
-    const sid = session.sessionId;
-    if (!sid) return;
-
-    // El último mensaje user es el prompt que produjo la última respuesta.
-    let lastUserText: string | null = null;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "user") {
-        lastUserText = messages[i].content;
-        break;
-      }
-    }
-    if (lastUserText == null) return;
-    // Si el último turno fue un slash command, NO regenerar: re-ejecutaría el
-    // comando y session.undo borraría el turno real previo (los slash no quedan
-    // en el history del backend).
-    if (lastUserText.trim().startsWith("/")) return;
-
-    // Sacar localmente el último turno (desde el último user, inclusive). El
-    // backend hace lo mismo con session.undo; re-enviamos el prompt para
-    // generar una respuesta fresca sin duplicar el turno.
-    setMessages((prev) => {
-      let cut = prev.length;
-      for (let i = prev.length - 1; i >= 0; i--) {
-        if (prev[i].role === "user") {
-          cut = i;
-          break;
-        }
-      }
-      return prev.slice(0, cut);
-    });
-
-    try {
-      await sendRpc("session.undo", { session_id: sid });
-    } catch (err) {
-      console.error("[useChatGateway] session.undo failed", err);
-      setErrorMessage(
-        err instanceof Error ? err.message : "Failed to regenerate",
-      );
-      return;
-    }
-
-    sendMessage(lastUserText);
-  }, [busy, session.sessionId, messages, sendRpc, sendMessage]);
-
-  // Editar un mensaje del usuario y reenviar desde ahí (estilo ChatGPT): trunca
-  // el historial ANTES de ese mensaje user y reenvía el texto editado. El backend
-  // (prompt.submit + truncate_before_user_ordinal) reescribe history y DB, así que
-  // sobrevive a navegar/recargar. El ordinal indexa la sublista de mensajes user
-  // del backend, que NO incluye los slash (van por executeSlash, no por
-  // prompt.submit) → contamos solo users que no empiezan con "/".
+  // Editar un mensaje del usuario y reenviar desde ahí (estilo ChatGPT): el
+  // backend (prompt.submit + truncate_before_row_id) reescribe history y DB, así
+  // que sobrevive a navegar/recargar. Si el servidor rechaza, la vista vuelve.
   const editAndResubmit = useCallback(
     async (messageId: string, newText: string): Promise<void> => {
-      if (busy) return;
       const sid = session.sessionId;
-      if (!sid || !newText.trim()) return;
-      if (newText.trim().startsWith("/")) return; // no editar a un slash command
-
-      const msgs = messagesRef.current;
-      const idx = msgs.findIndex((m) => m.id === messageId);
-      if (idx < 0 || msgs[idx].role !== "user") return;
-
-      // ordinal = cantidad de mensajes user NO-slash antes de idx (alinea con
-      // user_indices del backend, que filtra los slash).
-      let ordinal = 0;
-      for (let i = 0; i < idx; i++) {
-        if (msgs[i].role === "user" && !msgs[i].content.trim().startsWith("/")) {
-          ordinal++;
-        }
+      if (busy || !sid || !newText.trim() || newText.trim().startsWith("/")) return;
+      let before = messagesRef.current;
+      const index = before.findIndex((m) => m.id === messageId);
+      if (index < 0 || before[index].role !== "user") return;
+      if (before[index].rowId === undefined) {
+        before = setRowId(before, messageId, await lookUpRowId(sid, before, index));
       }
-
-      // Truncado local: dejar lo previo + el mensaje user editado; la respuesta
-      // nueva llega por streaming y se appendea encima (igual que regenerateLast).
-      const editedMsg: ChatMessage = {
-        ...msgs[idx],
-        id: "usr-" + Date.now(),
-        content: newText,
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev.slice(0, idx), editedMsg]);
-
-      // Gate de cola sincrónico antes del RPC (igual que sendMessage).
+      const plan = editResubmitParams(before, messageId, newText);
+      if (!plan) {
+        setErrorMessage("No se pudo ubicar ese mensaje en el historial guardado. Recarga la conversación e intenta de nuevo.");
+        return;
+      }
+      const edited = userBubble(newText, { images: before[index].images });
+      setMessages([...before.slice(0, plan.index), edited]);
       setBusy(true);
-      try {
-        await sendRpc("prompt.submit", {
-          session_id: sid,
-          text: newText,
-          truncate_before_user_ordinal: ordinal,
-        });
-      } catch (err) {
-        console.error("[useChatGateway] editAndResubmit failed", err);
-        setErrorMessage(
-          err instanceof Error ? err.message : "Failed to edit message",
-        );
-        setBusy(false);
-      }
+      if (!(await submitPrompt({ session_id: sid, ...plan.params }, edited.id))) setMessages(before);
     },
-    [busy, session.sessionId, sendRpc],
+    [busy, session.sessionId, lookUpRowId, submitPrompt],
   );
 
   const clearError = useCallback(() => setErrorMessage(null), []);
@@ -1397,6 +596,7 @@ export function useChatGateway(): UseChatGatewayResult {
     messages,
     busy,
     sendMessage,
+    sendQueued,
     interrupt,
     errorMessage,
     liveStatus,
@@ -1408,5 +608,8 @@ export function useChatGateway(): UseChatGatewayResult {
     regenerateLast,
     editAndResubmit,
     sessionsRevision,
+    serverRequests,
+    answerServerRequest,
+    prefill,
   };
 }

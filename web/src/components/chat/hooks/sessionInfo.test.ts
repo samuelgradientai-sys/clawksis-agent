@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionInfo } from "./useChatGateway";
-import { applySessionInfo, storedSessionKey, titleFromEvent, trackSessionIds } from "./sessionInfo";
+import { applySessionInfo, modeForEffort, storedSessionKey, titleFromEvent, trackSessionIds } from "./sessionInfo";
 
 const empty: SessionInfo = {
   sessionId: null,
@@ -48,6 +48,16 @@ describe("session event helpers", () => {
     expect(storedSessionKey({ session_id: "legacy" })).toBe("legacy");
     expect(titleFromEvent({ title: "  Plan de viaje " })).toBe("Plan de viaje");
     expect(titleFromEvent({ title: "   " })).toBeNull();
+  });
+
+  it("follow the session's reasoning effort for the response-mode menu", () => {
+    const withHigh = applySessionInfo(empty, { reasoning_effort: "xhigh" }, null);
+    expect(withHigh.reasoningEffort).toBe("xhigh");
+    expect(modeForEffort(withHigh.reasoningEffort)).toBe("high");
+    // A partial payload keeps it; "" is the configured default.
+    expect(applySessionInfo(withHigh, { title: "t" }, null).reasoningEffort).toBe("xhigh");
+    expect(modeForEffort(applySessionInfo(withHigh, { reasoning_effort: "" }, null).reasoningEffort)).toBe("medium");
+    expect(modeForEffort("low")).toBe("minimal");
   });
 
   it("tracks the live sid and the stored key once", () => {

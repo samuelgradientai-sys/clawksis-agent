@@ -31,7 +31,26 @@ export function applySessionInfo(prev: SessionInfo, payload: Payload, liveId: st
     tokensUsed: finite(usage.context_used) ?? finite(payload.tokens_used) ?? prev.tokensUsed,
     tokensMax: finite(usage.context_max) ?? finite(payload.tokens_max) ?? prev.tokensMax,
     title: nonEmpty(payload.title) ?? prev.title,
+    // "" is the session running the configured default; a partial payload
+    // without the field keeps what we had.
+    reasoningEffort: typeof payload.reasoning_effort === "string" ? payload.reasoning_effort : prev.reasoningEffort,
   };
+}
+
+const EFFORT_MODE: Record<string, string> = {
+  none: "minimal",
+  minimal: "minimal",
+  low: "minimal",
+  medium: "medium",
+  high: "high",
+  xhigh: "high",
+  max: "high",
+};
+
+/** The response-mode menu entry (minimal / medium / high) a session's
+ *  `reasoning_effort` falls under; "" is the configured default. */
+export function modeForEffort(effort: string | undefined): string {
+  return EFFORT_MODE[(effort ?? "").trim().toLowerCase()] ?? "medium";
 }
 
 /** The title a `session.title` event announces, or null when it is blank. */

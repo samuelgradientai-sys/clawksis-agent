@@ -10,7 +10,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Paperclip,
-  Mic,
   ArrowUp,
   Copy,
   RotateCw,
@@ -28,8 +27,6 @@ import {
   Clock,
   Wrench,
   FileText,
-  Zap,
-  Gauge,
 } from "lucide-react";
 
 import { MediaAttachment } from "@/components/MediaAttachment";
@@ -37,9 +34,15 @@ import { Markdown } from "../Markdown";
 import {
   useChatGateway,
   type ChatMessage,
+  type ComposerPrefill,
   type ConnectionStatus,
   type ToolCall,
 } from "./hooks/useChatGateway";
+import { lastUserIsSlash } from "./hooks/chatTranscript";
+import { localSlashAction, type LocalSlashAction } from "./chatLocalSlash";
+import { ReasoningSelector } from "./ReasoningSelector";
+import { ServerRequestDialog } from "./ServerRequestDialog";
+import { ComposerMicButton } from "./ComposerMicButton";
 import { useMessageQueue, type QueuedMessage } from "./hooks/useMessageQueue";
 import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useSessions, deriveTitle, type RpcSender } from "./hooks/useSessions";
@@ -60,7 +63,6 @@ import { toggleSidePanel, useSidePanel } from "./sidePanelStore";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SlashPopover, type SlashPopoverHandle } from "@/components/SlashPopover";
 import { ModelPickerDialog } from "@/components/ModelPickerDialog";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { GatewayClient } from "@/lib/gatewayClient";
 
 type ProjectSettingsProject = {
@@ -544,138 +546,6 @@ function extractLocalMedia(content: string): {
   }
 
   return { text: kept.join("\n"), media };
-}
-
-// ── Modo de respuesta: Rápida / Normal / Pensar ─────────────────────────────
-// Controla agent.reasoning_effort vía config.set (aplica en vivo al agente de
-// la sesión): para preguntas simples no quema razonamiento largo; para tareas
-// difíciles piensa a fondo. Persistido en localStorage.
-const REASONING_MODES = [
-  {
-    value: "minimal",
-    label: "Rápida",
-    icon: Zap,
-    hint: "Respuesta directa, sin razonamiento largo — ideal para preguntas simples",
-  },
-  {
-    value: "medium",
-    label: "Normal",
-    icon: Gauge,
-    hint: "Equilibrado (por defecto)",
-  },
-  {
-    value: "high",
-    label: "Pensar",
-    icon: Brain,
-    hint: "Razonamiento profundo para tareas difíciles",
-  },
-] as const;
-
-const REASONING_STORAGE_KEY = "clawksis-reasoning-mode";
-
-function ReasoningSelector({
-  sendRpc,
-  sessionId,
-  disabled,
-}: {
-  sendRpc: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
-  sessionId: string | null;
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<string>(() => {
-    try {
-      return (
-        window.localStorage.getItem(REASONING_STORAGE_KEY) || "medium"
-      );
-    } catch {
-      return "medium";
-    }
-  });
-  const current =
-    REASONING_MODES.find((m) => m.value === mode) ?? REASONING_MODES[1];
-  const CurrentIcon = current.icon;
-
-  const apply = async (value: string) => {
-    setMode(value);
-    setOpen(false);
-    try {
-      window.localStorage.setItem(REASONING_STORAGE_KEY, value);
-    } catch {
-      /* sin persistencia local: igual se aplica al backend */
-    }
-    try {
-      await sendRpc("config.set", {
-        key: "reasoning",
-        value,
-        session_id: sessionId,
-      });
-    } catch (err) {
-      console.warn("[ReasoningSelector] config.set reasoning failed", err);
-    }
-  };
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
-        title={current.hint}
-        aria-label={"Modo de respuesta: " + current.label}
-        className="flex items-center gap-1 rounded-lg px-1.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <CurrentIcon className="size-4" />
-        <span className="hidden sm:inline">{current.label}</span>
-        <ChevronDown className="size-3 opacity-60" />
-      </button>
-
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Cerrar"
-            className="fixed inset-0 z-20 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute bottom-full left-0 z-30 mb-1 w-64 overflow-hidden rounded-md border border-border bg-popover p-1 text-xs text-popover-foreground shadow-lg">
-            {REASONING_MODES.map((m) => {
-              const Icon = m.icon;
-              return (
-                <button
-                  key={m.value}
-                  type="button"
-                  onClick={() => void apply(m.value)}
-                  className={
-                    "flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-muted " +
-                    (m.value === mode ? "bg-[#6C4FD6]/15" : "")
-                  }
-                >
-                  <Icon
-                    className={
-                      "mt-0.5 size-3.5 shrink-0 " +
-                      (m.value === mode
-                        ? "text-[#6C4FD6]"
-                        : "text-muted-foreground")
-                    }
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium">{m.label}</span>
-                    <span className="block text-[10px] text-muted-foreground">
-                      {m.hint}
-                    </span>
-                  </span>
-                  {m.value === mode && (
-                    <span className="text-[10px] text-[#6C4FD6]">✓</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
-  );
 }
 
 function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
@@ -1350,6 +1220,9 @@ interface ComposerProps {
   onRemoveCitation: (id: string) => void;
   onClearCitations: () => void;
   buildPromptWithQuotes: (text: string) => string;
+  /** Text to drop into the composer (`/undo` hands back the removed turn). */
+  prefill: ComposerPrefill | null;
+  reasoningEffort?: string;
 }
 
 function Composer({
@@ -1366,8 +1239,16 @@ function Composer({
   onRemoveCitation,
   onClearCitations,
   buildPromptWithQuotes,
+  prefill,
+  reasoningEffort,
 }: ComposerProps) {
   const [value, setValue] = useState("");
+  // A new prefill replaces the draft once (state adjusted during render, not in an effect).
+  const [prefillSeq, setPrefillSeq] = useState(prefill?.seq);
+  if (prefill && prefill.seq !== prefillSeq) {
+    setPrefillSeq(prefill.seq);
+    setValue(prefill.text);
+  }
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Historial de inputs (↑/↓ tipo terminal) + flag para reposicionar el caret.
@@ -1694,41 +1575,12 @@ function Composer({
           <ReasoningSelector
             sendRpc={sendRpc}
             sessionId={sessionId}
+            reasoningEffort={reasoningEffort}
             disabled={disabled || busy}
           />
 
           <div className="ml-auto flex items-center gap-1">
-            <button
-              type="button"
-              onClick={handleMic}
-              disabled={disabled || !voice.supported || voice.transcribing}
-              aria-label={
-                voice.listening ? "Detener grabación" : "Dictar por voz"
-              }
-              title={
-                !voice.supported
-                  ? "Tu navegador no soporta dictado por voz"
-                  : voice.transcribing
-                    ? "Transcribiendo…"
-                    : voice.listening
-                      ? "Detener (hablá y se transcribe en vivo)"
-                      : voice.live
-                        ? "Dictar por voz — transcripción en vivo"
-                        : "Dictar por voz — se transcribe al soltar"
-              }
-              className={
-                "rounded-lg p-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent " +
-                (voice.listening
-                  ? "bg-destructive/15 text-destructive animate-pulse"
-                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground")
-              }
-            >
-              {voice.transcribing ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Mic className="size-4" />
-              )}
-            </button>
+            <ComposerMicButton voice={voice} disabled={disabled} onClick={handleMic} />
 
             {/* Detener el turno actual (la cola se mantiene y drena después). */}
             {busy && (
@@ -1894,6 +1746,7 @@ export default function ChatModern() {
     messages,
     busy,
     sendMessage,
+    sendQueued,
     interrupt,
     errorMessage,
     liveStatus,
@@ -1905,6 +1758,9 @@ export default function ChatModern() {
     regenerateLast,
     editAndResubmit,
     sessionsRevision,
+    serverRequests,
+    answerServerRequest,
+    prefill,
   } = useChatGateway();
 
   const {
@@ -1945,10 +1801,6 @@ export default function ChatModern() {
   // picker de /model y los modales de confirmación destructivos se cuelgan, así
   // que los resolvemos con UI nativa de React.
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
-  const [destructiveConfirm, setDestructiveConfirm] = useState<{
-    command: string;
-    raw: string;
-  } | null>(null);
   // Adapter mínimo sobre sendRpc para los diálogos que esperan un GatewayClient.
   const gwForDialogs = useMemo(
     () =>
@@ -2227,7 +2079,7 @@ export default function ChatModern() {
     busy,
     ready: readyForRpc,
     hasSession: !!session.sessionId,
-    send: sendMessage,
+    send: sendQueued,
   });
 
   const isConnecting = status === "connecting" || status === "idle";
@@ -2255,38 +2107,15 @@ export default function ChatModern() {
   ) => {
     const trimmed = text.trim();
 
-    // Comandos interactivos que cuelgan el worker headless (sin TTY): los
-    // resolvemos con UI nativa de React en vez de mandarlos al worker.
-    if (trimmed.startsWith("/")) {
-      const base = trimmed.slice(1).split(/\s+/)[0].toLowerCase();
-      const rest = trimmed.slice(1 + base.length).trim();
-      // /model SIN args → picker React. Con args ("/model opus") va directo al
-      // worker (es un config.set, funciona headless).
-      if (base === "model" && !rest) {
-        setModelPickerOpen(true);
-        return;
-      }
-      // Destructivos → confirmación React; al confirmar añadimos el token de
-      // skip ("now") para que el worker no abra su propio modal y cuelgue.
-      if (
-        (base === "new" || base === "reset" || base === "clear") &&
-        !/(^|\s)(now|--yes|-y)(\s|$)/i.test(rest)
-      ) {
-        setDestructiveConfirm({ command: base, raw: trimmed });
-        return;
-      }
-    }
-
-    // /stop con un turno corriendo = interrupción INMEDIATA (mismo RPC que el
-    // botón rojo). El /stop del backend vía slash.exec no corta un turno en
-    // vuelo — por eso "seguía de largo" tras pedirle parar. La cola se vacía
-    // TAMBIÉN: si quedara un mensaje encolado, el drenado lo dispararía
-    // ~700ms después del interrupt y el agente "seguiría de largo" con él.
-    if (busy && (trimmed === "/stop" || trimmed === "/interrupt")) {
-      queue.clear();
-      interrupt();
-      return;
-    }
+    // Slash commands this page answers itself (chatLocalSlash.ts). /stop also
+    // empties the queue, or the drain would resume the turn ~700ms later.
+    const local: Record<LocalSlashAction, () => void> = {
+      "model-picker": () => setModelPickerOpen(true),
+      "new-chat": () => void handleNewChat(),
+      interrupt: handleInterrupt,
+    };
+    const action = localSlashAction(trimmed, busy);
+    if (action) return local[action]();
 
     // Cola estilo Telegram: si el agente está ocupado, encolamos el texto en
     // vez de mandarlo (se dispara solo al terminar el turno). NO se encolan:
@@ -2484,13 +2313,7 @@ export default function ChatModern() {
 
   // Si el último turno fue un slash command, no ofrecer "Regenerar" (re-correría
   // el comando y session.undo borraría el turno real previo).
-  const lastUserIsSlash = (() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "user")
-        return messages[i].content.trim().startsWith("/");
-    }
-    return false;
-  })();
+  const canRegenerateLast = !lastUserIsSlash(messages);
 
   return (
     <>
@@ -2524,19 +2347,10 @@ export default function ChatModern() {
         />
       )}
 
-      <ConfirmDialog
-        open={!!destructiveConfirm}
-        destructive
-        title={`/${destructiveConfirm?.command ?? ""} — descarta la conversación`}
-        description="Esto borra el estado de la conversación actual. ¿Continuar?"
-        confirmLabel="Continuar"
-        cancelLabel="Cancelar"
-        onCancel={() => setDestructiveConfirm(null)}
-        onConfirm={() => {
-          const c = destructiveConfirm;
-          setDestructiveConfirm(null);
-          if (c) sendMessage(`${c.raw} now`);
-        }}
+      <ServerRequestDialog
+        requests={serverRequests}
+        liveSessionId={session.sessionId}
+        onAnswer={answerServerRequest}
       />
 
       {/* Sin "recuadro": el chat se integra al dashboard y deja ver el fondo
@@ -2629,7 +2443,7 @@ export default function ChatModern() {
                       <MessageBubble
                         message={msg}
                         onRegenerate={
-                          isLast && !lastUserIsSlash ? regenerateLast : undefined
+                          isLast && canRegenerateLast ? regenerateLast : undefined
                         }
                         canRegenerate={isLast && !busy}
                         onQuote={handleQuote}
@@ -2682,6 +2496,8 @@ export default function ChatModern() {
           onRemoveCitation={removeCitation}
           onClearCitations={clearCitations}
           buildPromptWithQuotes={buildPromptWithQuotes}
+          prefill={prefill}
+          reasoningEffort={session.reasoningEffort}
         />
       </div>
 
