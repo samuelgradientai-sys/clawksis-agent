@@ -16,7 +16,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchJSON } from "@/lib/api";
+import { fetchJSON, getManagementProfile } from "@/lib/api";
+import { errorMessage } from "@/lib/api-error";
+import { OllamaCard } from "./CookbookPage_ollama";
+import { ollamaAvailable } from "@/lib/cookbook-ollama";
 
 interface Fit {
   mode: "gpu" | "cpu" | "none" | "unknown";
@@ -663,14 +666,14 @@ export default function CookbookPage() {
       if (res.ok) {
         setNotice(
           model.tool_use
-            ? `Agent model set to ${model.name} (${model.ollama}) via local Ollama.`
+            ? `Agent model set to ${model.name} (${model.ollama}) via local Ollama — profile "${getManagementProfile() || "default"}".`
             : `⚠ Set to ${model.name} (${model.ollama}), but this model does NOT support tools — the agent will error the moment it needs one (e.g. delegating a subagent). Pick a model marked "tools ✓".`,
         );
       } else {
         setNotice(`Could not switch model: ${res.error ?? "failed"}`);
       }
-    } catch {
-      setNotice("Could not switch model.");
+    } catch (e) {
+      setNotice(`Could not switch model: ${errorMessage(e)}`);
     }
   }, []);
 
@@ -692,12 +695,12 @@ export default function CookbookPage() {
         );
         setNotice(
           res.ok
-            ? `Agent model set to ${res.model ?? m.name} (${m.provider === "llamacpp" ? "llama.cpp server" : "Ollama"}). Applies everywhere the agent model is used: chat, agents, skills, workflows.`
+            ? `Agent model of profile "${getManagementProfile() || "default"}" set to ${res.model ?? m.name} (${m.provider === "llamacpp" ? "llama.cpp server" : "Ollama"}). Applies everywhere that profile's agent model is used: chat, agents, skills, workflows.`
             : `Could not switch model: ${res.error ?? "failed"}`,
         );
         if (res.ok) void load();
       } catch (e) {
-        setNotice(`Could not switch model: ${e instanceof Error ? e.message : e}`);
+        setNotice(`Could not switch model: ${errorMessage(e)}`);
       } finally {
         setBusyModel(null);
       }
@@ -797,7 +800,8 @@ export default function CookbookPage() {
   const looksLikeTag = /^[a-z0-9][a-z0-9._/-]*(:[a-z0-9._-]+)?$/i.test(query.trim());
   const tagKnown = models.some((m) => m.ollama.toLowerCase() === q);
   const customTag = query.trim();
-  const showCustomPull = !!q && looksLikeTag && !tagKnown && !!ollama.installed;
+  const ollamaReady = ollamaAvailable(ollama);
+  const showCustomPull = !!q && looksLikeTag && !tagKnown && ollamaReady;
   const customPull = pulling[customTag];
 
   const llamaInstall = installing["llamacpp"] ?? llamacpp.install_status ?? "";
@@ -932,35 +936,7 @@ export default function CookbookPage() {
             {hw.load_1m ? ` · load ${hw.load_1m}` : ""}
           </div>
         </div>
-        <div className="rounded-lg border border-border bg-card/40 p-3 text-sm">
-          <div className="mb-1 flex items-center justify-between gap-2">
-            <span className="font-medium">Ollama</span>
-            {!ollama.installed &&
-              ollamaInstall !== "done" &&
-              (ollamaInstall === "installing" ? (
-                <span className="text-xs text-muted-foreground">installing…</span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void onInstallProvider("ollama")}
-                  className="rounded-md border border-[var(--color-primary)] bg-[var(--color-primary)]/15 px-2 py-0.5 text-xs"
-                >
-                  Install
-                </button>
-              ))}
-          </div>
-          <div className="text-muted-foreground">
-            {ollama.installed
-              ? ollama.running
-                ? `Running · ${String(ollama.models?.length ?? 0)} model(s) pulled`
-                : "Installed — starts automatically when you pull a model."
-              : ollamaInstall.startsWith("error")
-                ? ollamaInstall
-                : ollamaInstall === "installing"
-                  ? "Installing on this machine…"
-                  : "Not installed."}
-          </div>
-        </div>
+        <OllamaCard ollama={ollama} install={ollamaInstall} onInstall={() => void onInstallProvider("ollama")} />
         <div className="rounded-lg border border-border bg-card/40 p-3 text-sm">
           <div className="mb-1 flex items-center justify-between gap-2">
             <span className="font-medium">llama.cpp</span>
@@ -1463,10 +1439,10 @@ export default function CookbookPage() {
                       ) : (
                         <button
                           type="button"
-                          disabled={!fits || !ollama.installed}
+                          disabled={!fits || !ollamaReady}
                           onClick={() => void onPull(m.ollama)}
                           title={
-                            !ollama.installed
+                            !ollamaReady
                               ? "Install Ollama first"
                               : !fits
                                 ? "Too big for this machine"
