@@ -100,11 +100,13 @@ def is_camofox_mode() -> bool:
     Selection is ``browser.cloud_provider: camofox``; ``CAMOFOX_URL`` is only the address
     and never overrides a different stored selection (legacy: with no selection ever
     written, a set ``CAMOFOX_URL`` still activates Camofox). A CDP override (``BROWSER_CDP_URL``
-    env or ``browser.cdp_url``, same precedence as ``browser_tool_cdp._get_cdp_override()``) wins.
+    env or ``browser.cdp_url``, same precedence as ``browser_tool_cdp._get_cdp_override()``) wins,
+    and so does a connected Mi Chrome extension.
     """
+    from tools.browser_my_chrome_state import my_chrome_cdp_url
     from tools.browser_tool_cdp import env_cdp_url, live_cdp_override
 
-    if live_cdp_override() or env_cdp_url() or _config_cdp_url():
+    if live_cdp_override() or my_chrome_cdp_url() or env_cdp_url() or _config_cdp_url():
         return False
     try:
         from tools.tool_backend_helpers import read_selection

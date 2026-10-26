@@ -423,12 +423,16 @@ def _local_backend_process_dead(session_info: dict[str, Any]) -> bool:
 
 
 def _create_cdp_session(task_id: str, cdp_url: str) -> dict[str, str]:
-    """Session connecting to a user-supplied CDP endpoint."""
-    info = _session_record("cdp", cdp_url, {"cdp_override": True})
+    """Session connecting to a user-supplied CDP endpoint (or the user's own Chrome via Mi Chrome)."""
+    from tools.browser_my_chrome_state import my_chrome_cdp_url
+
+    my_chrome = bool(cdp_url) and cdp_url == my_chrome_cdp_url()
+    features = {"cdp_override": True, **({"my_chrome": True} if my_chrome else {})}
+    info = _session_record("cdp", cdp_url, features)
     _bt.logger.info(
         "Created CDP browser session %s → %s for task %s",
         info["session_name"],
-        _bt._sanitize_url_for_logs(cdp_url),
+        "Mi Chrome" if my_chrome else _bt._sanitize_url_for_logs(cdp_url),
         task_id,
     )
     return info
@@ -501,6 +505,11 @@ def _get_session_info(task_id: Optional[str] = None) -> dict[str, Any]:
     if task_id is None:
         task_id = "default"
 
+    # A Mi Chrome extension that (dis)connected since the last call moved this profile's endpoint:
+    # its browsers are reaped first, so the session below is built on the current one.
+    from tools.browser_my_chrome_state import sync_relay_endpoint
+
+    sync_relay_endpoint()
     _lifecycle._start_browser_cleanup_thread()
     _lifecycle._update_session_activity(task_id)
 

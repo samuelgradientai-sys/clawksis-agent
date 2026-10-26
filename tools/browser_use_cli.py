@@ -958,6 +958,12 @@ def _route_exec_current(
 ) -> tuple[dict, Optional[str], bool, int]:
     """``_route_exec`` on a copy of ``env`` -> ``(routed env, error, sidecar, generation)``, re-routed (at
     most 3 tries) when /browser connect published meanwhile; ``_reload_if_republished`` covers dispatch."""
+    _lazy_call(
+        "tools.browser_my_chrome_state",
+        "sync_relay_endpoint",
+        False,
+        "Mi Chrome endpoint sync failed",
+    )  # daemons latched to a Mi Chrome endpoint that moved are stopped before routing
     for _attempt in range(3):
         routed = dict(env)
         generation = _live_generation()
@@ -988,6 +994,52 @@ def _take_real_profile_note(route_key: str) -> dict:
         return {}
     _real_profile_note_delivered.add(route_key)
     return {"real_profile_unavailable": _real_profile_fallback[route_key]}
+
+
+def _on_my_chrome(env: dict) -> bool:
+    cdp = env.get("BU_CDP_WS") or ""
+    return bool(cdp) and cdp == _lazy_call(
+        "tools.browser_my_chrome_state",
+        "my_chrome_cdp_url",
+        "",
+        "Mi Chrome lookup failed",
+    )
+
+
+def _pins_own_tab(session: str, env: dict) -> bool:
+    """A named session on a shared browser gets its own tab; on the user's own Chrome (Mi Chrome)
+    the default session does too, so it never starts out driving whichever tab the user has in
+    front (it can still switch_tab() to one of theirs)."""
+    return bool(session) or _on_my_chrome(env)
+
+
+def _scope_to_own_tab(code: str, session: str, env: dict, private_browser) -> str:
+    """``code`` pinned to its own tab on a shared browser (``_OWN_TAB_PREAMBLE``). On the user's
+    own Chrome the harness also stops retitling the tab it drives ("🐴 …"): those are the user's
+    pages, and Chrome's debugging bar and the "Clawksis" tab group already show what it uses."""
+    if _on_my_chrome(env):
+        env["BH_TAB_MARKER"] = "0"
+    if _pins_own_tab(session, env) and not private_browser:
+        return _OWN_TAB_PREAMBLE + code
+    return code
+
+
+# (route key, Mi Chrome endpoint) -> the payments mode the model was last told about.
+_my_chrome_note_modes: dict[tuple[str, str], bool] = {}
+
+
+def _take_my_chrome_note(route_key: str, env: dict) -> dict:
+    """The Mi Chrome note on the first result a route returns from the user's own Chrome (again
+    after the extension reconnects — a new endpoint — or once the user flipped the payments mode)."""
+    if not _on_my_chrome(env):
+        return {}
+    from tools.browser_tool_my_chrome import current_note_mode, note_text
+
+    key, mode = (route_key, env.get("BU_CDP_WS") or ""), current_note_mode()
+    if _my_chrome_note_modes.get(key) is mode:
+        return {}
+    _my_chrome_note_modes[key] = mode
+    return {"my_chrome": note_text(mode)}
 
 
 def browser_exec(
@@ -1050,8 +1102,7 @@ def browser_exec(
     private_browser = env.pop(
         _PRIVATE_BROWSER_SENTINEL, None
     )  # always pop: never exported to the CLI
-    if session and not private_browser:
-        code = _OWN_TAB_PREAMBLE + code
+    code = _scope_to_own_tab(code, session, env, private_browser)
 
     workspace = _workspace_dir(task_id)
     if workspace:
@@ -1112,6 +1163,7 @@ def browser_exec(
     if session:
         result["session"] = session
     result.update(_take_real_profile_note(route_key))
+    result.update(_take_my_chrome_note(route_key, env))
     stderr = redact_sensitive_text((proc.stderr or "").strip(), force=True)
     if len(stderr) > _STDERR_CAP_CHARS:
         stderr = stderr[:_STDERR_CAP_CHARS] + "\n… (stderr truncated)"

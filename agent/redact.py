@@ -1010,6 +1010,53 @@ def _redact_phone(m):
     return phone[:keep] + "****" + phone[-keep:]
 
 
+# Payment card data (an agent completing checkouts in the user's own Chrome): a CVV/CVC next to
+# its label, and a card number that passes the issuer-prefix + Luhn checks. Prose and logs only:
+# source files keep their test-card fixtures (code_file), like every other assignment pass.
+_CARD_CVV_RE = re.compile(
+    r"(?i)\b(cvv2?|cvc2?|csc|cid|security[ _-]?code|card[ _-]?verification(?:[ _-]?(?:code|value))?"
+    r"|c[oó]digo[ _-]de[ _-]seguridad)\b([\s\"':=#-]{0,6})(\d{3,4})(?!\d)"
+)
+_CARD_CVV_GATE_RE = re.compile(r"(?i)cv|csc|cid|security|seguridad|verification")
+_CARD_PAN_RE = re.compile(r"(?<![\d.])\d(?:[ -]?\d){12,18}(?![\d.])")
+# Issuer prefixes and lengths: Visa, Mastercard, Amex, Discover, JCB, Diners, UnionPay.
+_CARD_BRANDS = (
+    (re.compile(r"4"), (13, 16, 19)),
+    (re.compile(r"5[1-5]|2(?:22[1-9]|2[3-9]\d|[3-6]\d\d|7[01]\d|720)"), (16,)),
+    (re.compile(r"3[47]"), (15,)),
+    (re.compile(r"6(?:011|5|4[4-9])"), (16, 19)),
+    (re.compile(r"35(?:2[89]|[3-8])"), (16, 19)),
+    (re.compile(r"3(?:0[0-5]|[689])"), (14, 16)),
+    (re.compile(r"62"), (16, 19)),
+)
+
+
+def _luhn_valid(digits: str) -> bool:
+    total = 0
+    for i, ch in enumerate(reversed(digits)):
+        n = int(ch) * (2 if i % 2 else 1)
+        total += n - 9 if n > 9 else n
+    return total % 10 == 0
+
+
+def _looks_like_card_number(digits: str) -> bool:
+    return _luhn_valid(digits) and any(
+        prefix.match(digits) and len(digits) in lengths
+        for prefix, lengths in _CARD_BRANDS
+    )
+
+
+def _mask_card_number(m: re.Match[str]) -> str:
+    digits = re.sub(r"\D", "", m.group(0))
+    return f"****{digits[-4:]}" if _looks_like_card_number(digits) else m.group(0)
+
+
+def _redact_payment_card_data(text: str) -> str:
+    if _CARD_CVV_GATE_RE.search(text):
+        text = _CARD_CVV_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}***", text)
+    return _CARD_PAN_RE.sub(_mask_card_number, text)
+
+
 def redact_sensitive_text(
     text: str,
     *,
@@ -1132,6 +1179,9 @@ def redact_sensitive_text(
 
     if "+" in text:
         text = _SIGNAL_PHONE_RE.sub(_redact_phone, text)
+
+    if not code_file:
+        text = _redact_payment_card_data(text)
 
     return text
 

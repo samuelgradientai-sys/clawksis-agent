@@ -22,6 +22,15 @@ from tools.approval_detection import (
 
 logger = logging.getLogger("tools.approval")
 
+# Settings that are the USER's, never the agent's, to change: Mi Chrome's on/off switch and its
+# payments mode (``browser.my_chrome.*``). The user sets them in the dashboard or their own
+# terminal; the agent is refused like an ``approvals.deny`` match, before yolo / mode=off.
+_USER_OWNED_SETTING_GLOBS = (
+    "*clawk*config set browser.my_chrome*",
+    "*clawk*config unset browser.my_chrome*",
+    "*/api/my-chrome/settings*",
+)
+
 
 def _match_user_deny_rule(command: str) -> str | None:
     """Return the matching ``approvals.deny`` glob, or None. User-defined fnmatch
@@ -29,7 +38,11 @@ def _match_user_deny_rule(command: str) -> str | None:
     BEFORE the yolo / mode=off bypass ("never let the agent run this, even under
     yolo"). Case-insensitive, run over the same normalized/deobfuscated variants
     the dangerous-pattern detector uses so quoting tricks (``r\\m``,
-    ``git st""atus``) can't sidestep a rule."""
+    ``git st""atus``) can't sidestep a rule. The built-in user-owned setting globs
+    (``_USER_OWNED_SETTING_GLOBS``) match first, whatever the config says."""
+    owned = _first_glob_match(command, _USER_OWNED_SETTING_GLOBS)
+    if owned is not None:
+        return owned
     try:
         deny_patterns = _ctx._get_approval_config().get("deny") or []
     except Exception:
@@ -37,6 +50,10 @@ def _match_user_deny_rule(command: str) -> str | None:
     globs = [p.strip() for p in deny_patterns if isinstance(p, str) and p.strip()]
     if not globs:
         return None
+    return _first_glob_match(command, globs)
+
+
+def _first_glob_match(command: str, globs) -> str | None:
     for command_variant in _deny_command_variants(command):
         candidate = command_variant.lower().strip()
         for pattern in globs:
@@ -47,6 +64,17 @@ def _match_user_deny_rule(command: str) -> str | None:
 
 def _user_deny_block_result(pattern: str) -> dict:
     """Build the standard block result for an ``approvals.deny`` match."""
+    if pattern in _USER_OWNED_SETTING_GLOBS:
+        return {
+            "approved": False,
+            "user_deny": True,
+            "message": (
+                "BLOCKED: Mi Chrome's settings (browser.my_chrome.*: the on/off switch and the "
+                "payments confirmation mode) belong to the user. They change them in the dashboard "
+                "(the Mi Chrome page) or in their own terminal, never through the agent. Do "
+                "NOT retry this another way; tell the user if a change seems needed."
+            ),
+        }
     return {
         "approved": False,
         "user_deny": True,
