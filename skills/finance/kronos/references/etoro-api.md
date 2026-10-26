@@ -76,6 +76,11 @@ Behaviour notes:
 - Per-instrument minimum amounts are enforced by eToro (HTTP 400); the script does not guess them.
 - Settlement `real` buys the underlying asset without leverage; instruments that only trade as
   CFDs are rejected rather than silently opened as CFDs.
+- The close route returns no realized P&L, so a close's ledger entry records `open_rate`,
+  `invested_usd` and `pnl_usd` from the position's last `unrealizedPnL` valuation (pro-rated
+  for partial closes) — an estimate the learning loop and dashboard label as such.
+- Buys refused before any request (limits, lessons) are logged to `kronos/refused.jsonl`, never
+  to the ledger, so they cannot count toward the daily limits.
 
 ## Not implemented
 

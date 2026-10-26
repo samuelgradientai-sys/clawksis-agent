@@ -9,6 +9,10 @@ Output: table (chat), json or csv; K sampled paths give a p10–p90 close band; 
 writes a PNG for MEDIA: delivery. Always carries a not-financial-advice disclaimer.
 The script starts under any Python and re-launches itself inside the skill venv that
 kronos_setup.py built; --dry-run validates data and timestamps without the model.
+
+Every real forecast is appended to the forecast journal ($CLAWK_HOME/kronos/forecasts.jsonl,
+skip with --no-journal) so kronos_review.py can later score it; the output then carries the
+symbol's recent track record and active lessons, and the dashboard snapshot is refreshed.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ from _kronos_common import (
     MAX_CONTEXT,
     MIN_BARS,
     MODEL_NAMES,
+    UTC,
     Bar,
     SkillError,
     describe_step,
@@ -45,6 +50,15 @@ from _kronos_common import (
     run_cli,
     summarize_paths,
 )
+from _kronos_journal import (
+    append_locked,
+    forecast_record,
+    forecasts_path,
+    gate_status,
+    read_forecasts,
+    symbol_key,
+)
+from _kronos_lessons import active_lessons, lessons_for_symbol, lessons_path
 
 DEFAULT_LOOKBACK = 400
 MAX_HORIZON = 240
@@ -140,6 +154,16 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PNG",
         help="write a chart; 'auto' saves under $CLAWK_HOME/kronos/charts/",
     )
+    parser.add_argument(
+        "--symbol",
+        metavar="LABEL",
+        help="symbol recorded in the journal (default: the eToro symbol or the file name)",
+    )
+    parser.add_argument(
+        "--no-journal",
+        action="store_true",
+        help="do not record this forecast for later review (ad-hoc experiments)",
+    )
     return parser
 
 
@@ -202,6 +226,7 @@ def plan_forecast(bars: list[Bar], args: argparse.Namespace) -> dict[str, Any]:
         "lookback": lookback,
         "calendar": calendar,
         "interval": describe_step(step),
+        "step_seconds": int(step.total_seconds()),
         "warnings": warnings,
     }
 
@@ -258,6 +283,59 @@ def build_result(
     }
 
 
+def journal_label(args: argparse.Namespace, meta: dict[str, Any]) -> str:
+    raw = args.symbol or meta.get("symbol") or Path(str(meta.get("input", ""))).stem
+    return symbol_key(raw) or "SERIES"
+
+
+def journal_forecast(
+    result: dict[str, Any],
+    *,
+    label: str,
+    source: str,
+    step_seconds: int,
+    kronos_dir: Path | None = None,
+    now: datetime | None = None,
+) -> None:
+    """Record the forecast for later review and attach the symbol's record and lessons.
+
+    A journal failure only adds a warning: the forecast itself is already computed.
+    """
+    path = forecasts_path(kronos_dir)
+    record = forecast_record(
+        result,
+        label=label,
+        source=source,
+        step_seconds=step_seconds,
+        now=now or datetime.now(UTC),
+    )
+    try:
+        append_locked(path, [record])
+        gate = gate_status(read_forecasts(path), label)
+        lessons = lessons_for_symbol(active_lessons(lessons_path(kronos_dir)), label)
+    except (OSError, ValueError, SkillError) as exc:
+        result["warnings"].append(f"forecast not journaled: {exc}")
+        return
+    result["journal"] = {"id": record["id"], "symbol": label, "path": str(path)}
+    result["track_record"] = {
+        k: gate[k] for k in ("matured", "hits", "hit_rate", "blocked")
+    }
+    result["lessons"] = [str(lesson.get("text")) for lesson in lessons]
+
+
+def _track_record_lines(result: dict[str, Any]) -> list[str]:
+    record = result.get("track_record") or {}
+    lines = []
+    if record.get("matured"):
+        lines.append(
+            f"track record: direction right {record['hits']}/{record['matured']} in the "
+            "last reviewed forecasts"
+            + (" (automatic buys blocked)" if record.get("blocked") else "")
+        )
+    lines.extend(f"lesson: {text}" for text in result.get("lessons") or [])
+    return lines
+
+
 def render_text(result: dict[str, Any]) -> str:
     label = result.get("symbol") or Path(str(result.get("input", "series"))).stem
     rows = [
@@ -275,6 +353,7 @@ def render_text(result: dict[str, Any]) -> str:
     ]
     if result.get("chart_path"):
         lines.append(f"chart: {result['chart_path']}")
+    lines.extend(_track_record_lines(result))
     lines.extend(f"warning: {w}" for w in result["warnings"])
     lines.extend([result["honesty_check"], result["disclaimer"]])
     return "\n".join(lines)
@@ -363,7 +442,18 @@ def run(args: argparse.Namespace, argv: list[str]) -> int:
         result["chart_path"] = str(
             render_chart(bars, result, plot_path(args.plot, label), title)
         )
+    if not args.no_journal:
+        journal_forecast(
+            result,
+            label=journal_label(args, meta),
+            source="etoro" if args.etoro else "file",
+            step_seconds=plan["step_seconds"],
+        )
     emit(result, args.format)
+    if not args.no_journal:
+        from kronos_dashboard import refresh_safely
+
+        refresh_safely()
     return 0
 
 

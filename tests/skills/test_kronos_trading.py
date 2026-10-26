@@ -459,7 +459,7 @@ def test_a_held_lock_blocks_a_second_order_and_a_stale_one_is_reclaimed(tmp_path
     assert not lock_path.exists()
 
     lock_path.write_text("123", encoding="utf-8")
-    old = lock_path.stat().st_mtime - trade.STALE_LOCK_SECONDS - 5
+    old = lock_path.stat().st_mtime - kc.STALE_LOCK_SECONDS - 5
     os.utime(lock_path, (old, old))
     with trade.LedgerLock(lock_path):
         assert lock_path.read_text(encoding="utf-8") != "123"

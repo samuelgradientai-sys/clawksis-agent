@@ -58,6 +58,22 @@ cache and re-runs the whole window every step. CPU-only torch from the PyTorch C
 ~200 MB to download (~1 GB installed); the default PyPI wheel on Linux pulls 3–5 GB of CUDA
 libraries, which is why setup installs torch in a separate step from that index.
 
+## CPU knobs (`kronos_forecast.py` / `kronos_backtest.py`)
+
+| Knob | Default | Effect on a CPU-only VPS |
+|---|---|---|
+| `--model` | `small` | `mini` ≈ 5x faster, context 2048; `base` ≈ 4x slower |
+| `--lookback` | 400 (backtest 256) | bars of context; cost grows linearly (max 512, mini 2048) |
+| `--horizon` | 10 (backtest 5) | candles ahead; cost and error grow with distance |
+| `--samples` | 8 (backtest 4) | sampled paths for the band; cost grows linearly |
+| `--threads` | all cores | cap it when the VPS also serves the gateway |
+| `--calendar` | `auto` | `weekdays`, `24x7` (crypto), `sessions` (intraday stocks) |
+| `--timeout` | 1800 s | abort a run that takes longer |
+
+A scheduled routine over a watchlist runs one forecast per symbol (about a minute each on
+4 vCPU with the defaults); for long watchlists or hourly schedules use `--model mini` or
+`--samples 4`, and `--threads 2` when the gateway shares the machine.
+
 ## Known independent evaluations
 
 - Issue #354: Kronos-mini zero-shot on AAPL daily, 1,800 forecasts — MAPE 12–22% worse than
