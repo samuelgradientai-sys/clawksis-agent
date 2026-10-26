@@ -87,6 +87,7 @@ export const en: Translations = {
       sessions: "Sessions",
       skills: "Skills",
       integrations: "Integrations",
+      today: "Today",
     },
     modelToolsSheetSubtitle: "& tools",
     modelToolsSheetTitle: "Model",

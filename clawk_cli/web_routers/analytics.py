@@ -568,3 +568,9 @@ async def get_models_analytics(
     """Return model analytics without blocking the serving event loop."""
     with corrupt_store_as_status(_session_db_path_for_profile(profile)):
         return await asyncio.to_thread(_get_models_analytics, days, profile)
+
+
+# The "Hoy" page rides the analytics prefix (and the SPA's ?profile= scope for it).
+from clawk_cli.web_routers.today import router as _today_router
+
+router.include_router(_today_router)

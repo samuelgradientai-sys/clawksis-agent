@@ -29,6 +29,12 @@ describe("resolvePageTitle", () => {
     expect(resolvePageTitle("/env", t, [])).toBe("Keys");
   });
 
+  it("titles /today with its optional nav key, English until translated", () => {
+    expect(resolvePageTitle("/today", t, [])).toBe("Today");
+    const es = { app: { ...t.app, nav: { ...t.app.nav, today: "Hoy" } } } as unknown as Translations;
+    expect(resolvePageTitle("/today", es, [])).toBe("Hoy");
+  });
+
   it("prefers plugin tab labels", () => {
     expect(
       resolvePageTitle("/kanban", t, [{ path: "/kanban", label: "Kanban" }]),
