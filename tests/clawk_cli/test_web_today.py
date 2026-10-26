@@ -472,7 +472,9 @@ def test_no_auxiliary_model_still_leaves_the_page_working(client, homes, monkeyp
     assert data["summary"] is None and data["stats"]["conversations"] == 1
 
 
-def test_the_summary_runs_on_the_profiles_daily_summary_slot(client, homes, monkeypatch):
+def test_the_summary_runs_on_the_profiles_daily_summary_slot(
+    client, homes, monkeypatch
+):
     """``auxiliary.daily_summary`` in the summarized profile's config.yaml routes the call."""
     from agent import auxiliary_client
     from agent.auxiliary_task_config import _get_auxiliary_task_config
