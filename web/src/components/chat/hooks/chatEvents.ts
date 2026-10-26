@@ -20,6 +20,7 @@ import {
   withStreamingBubble,
 } from "./chatTranscript";
 import type { ChatMessage, SessionInfo } from "./useChatGateway";
+import { relayDashboardNavigate } from "@/lib/dashboard-navigation";
 
 type Payload = Record<string, unknown>;
 type Update<T> = (update: (prev: T) => T) => void;
@@ -172,6 +173,8 @@ export const CHAT_EVENT_HANDLERS: Record<string, Handler> = {
     if (line) ctx.setLiveStatus(line);
   },
   "request.cancel": cancelRequest,
+  // The agent's dashboard_open: follow it only for the conversation on screen.
+  "dashboard.navigate": (_ctx, payload) => relayDashboardNavigate(payload),
   "approval.cancelled": (ctx, payload) => {
     const ids = Array.isArray(payload.request_ids) ? payload.request_ids.filter((v) => typeof v === "string") : [];
     ctx.requests.cancelApprovals(ids as string[]);

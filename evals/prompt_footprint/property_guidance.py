@@ -44,20 +44,11 @@ def main():
         )
         fixed_hint = hints.PLATFORM_HINTS["desktop"]
         # The original clause is taken from the pinned base, never synthesized.
-        # PLATFORM_HINTS moved out of prompt_builder.py; older bases still hold it there.
-        source = next(
-            out
-            for path in ("agent/prompt_builder_platform_hints.py", "agent/prompt_builder.py")
-            if (
-                out := subprocess.run(
-                    ["git", "show", f"{sys.argv[1]}:{path}"],
-                    cwd=ROOT,
-                    text=True,
-                    capture_output=True,
-                    check=False,
-                    stdin=subprocess.DEVNULL,
-                ).stdout
-            )
+        source = subprocess.check_output(
+            ["git", "show", f"{sys.argv[1]}:agent/prompt_builder.py"],
+            cwd=ROOT,
+            text=True,
+            stdin=subprocess.DEVNULL,
         )
         import ast
 
