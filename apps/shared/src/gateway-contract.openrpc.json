@@ -38374,6 +38374,11 @@
             ],
             "default": null,
             "title": "Profile"
+          },
+          "min_messages": {
+            "default": 0,
+            "title": "Min Messages",
+            "type": "integer"
           }
         },
         "title": "SessionMostRecentParams",

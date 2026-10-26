@@ -54,107 +54,14 @@ import { useCommandHistory } from "./hooks/useCommandHistory";
 import { SessionSidebar } from "./SessionSidebar";
 import { ModelSelectorMenu } from "./ModelSelectorMenu";
 import { ChatSidePanel } from "./ChatSidePanel";
-import { ChatViewTabs } from "./ChatViewTabs";
+import { ChatHeader } from "./ChatHeader";
+import { headerUsage } from "./chatUsage";
 import { toggleSidePanel, useSidePanel } from "./sidePanelStore";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SlashPopover, type SlashPopoverHandle } from "@/components/SlashPopover";
 import { ModelPickerDialog } from "@/components/ModelPickerDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { GatewayClient } from "@/lib/gatewayClient";
-
-interface ChatHeaderProps {
-  status: ConnectionStatus;
-  model: string | null;
-  modelProvider: string | null;
-  sessionId: string | null;
-  tokensUsed: number;
-  tokensMax: number;
-  /** Título de la conversación que se está viendo. */
-  title?: string;
-  /** Click handler para abrir el popover de uso de tokens */
-  onTokensClick?: () => void;
-  /** Ref del botón de tokens para anclar el popover */
-  tokensRef?: React.RefObject<HTMLButtonElement | null>;
-}
-
-function ChatHeader({
-  status,
-  model,
-  modelProvider,
-  sessionId,
-  tokensUsed,
-  tokensMax,
-  title,
-  onTokensClick,
-  tokensRef,
-}: ChatHeaderProps) {
-  const statusColor =
-    status === "connected"
-      ? "bg-success"
-      : status === "connecting"
-        ? "bg-warning animate-pulse"
-        : "bg-destructive";
-
-  const shortSession = sessionId ? sessionId.slice(0, 8) : "—";
-  const tokensLabel =
-    tokensMax > 0
-      ? tokensUsed.toLocaleString() + "/" + (tokensMax / 1000).toFixed(1) + "k tokens"
-      : tokensUsed.toLocaleString() + " tokens";
-
-  const tokenPercent =
-    tokensMax > 0
-      ? Math.min(100, Math.round((tokensUsed / tokensMax) * 100))
-      : null;
-
-  return (
-    <div className="flex items-center justify-between border-b border-white/10 bg-background/28 px-4 py-3 backdrop-blur-xl">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className={"size-2 rounded-full shrink-0 " + statusColor} />
-        <span className="truncate text-sm font-semibold text-foreground">
-          {title || (status === "connecting" ? "Conectando..." : "Nueva conversación")}
-        </span>
-        {model && (
-          <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground sm:flex">
-            <span>·</span>
-            <span className="max-w-[180px] truncate">
-              {model}
-              {modelProvider ? " · " + modelProvider : ""}
-            </span>
-          </span>
-        )}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-1.5">
-        <button
-          type="button"
-          ref={tokensRef}
-          onClick={onTokensClick}
-          disabled={!onTokensClick}
-          title={"Ver desglose de uso de tokens · sesión " + shortSession}
-          className="clawk-liquid-chip hidden md:flex items-center gap-2 rounded-2xl border border-[#6C4FD6]/35 bg-[#6C4FD6]/10 px-3.5 py-2 text-xs text-foreground shadow-sm shadow-[#6C4FD6]/10 transition-all hover:border-[#8B6DFF]/70 hover:bg-[#6C4FD6]/20 disabled:cursor-default disabled:opacity-60"
-          aria-label="Abrir menú de uso de tokens"
-        >
-          <Brain className="size-3.5 text-[#6C4FD6]" />
-          <span className="font-medium">Uso de tokens</span>
-          <span className="hidden text-muted-foreground lg:inline">·</span>
-          <span className="font-mono text-foreground/90">{tokensLabel}</span>
-          {tokenPercent !== null && (
-            <span className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-              {tokenPercent}%
-            </span>
-          )}
-          <ChevronRight className="size-3 rotate-90 text-muted-foreground" />
-        </button>
-
-        {/* Pestañas de vista junto a "Uso de tokens": el chat moderno gana la
-            altura de la banda que antes vivía arriba (ChatRouter). */}
-        <ChatViewTabs />
-      </div>
-    </div>
-  );
-}
-
-
 
 type ProjectSettingsProject = {
   id: string;
@@ -1997,6 +1904,7 @@ export default function ChatModern() {
     resuming,
     regenerateLast,
     editAndResubmit,
+    sessionsRevision,
   } = useChatGateway();
 
   const {
@@ -2012,7 +1920,7 @@ export default function ChatModern() {
     archiveProject,
     moveSessionToProject,
     refresh: refreshSessions,
-  } = useSessions(sendRpc, readyForRpc);
+  } = useSessions(sendRpc, readyForRpc, sessionsRevision);
 
   const {
     sessionUsage,
@@ -2125,7 +2033,8 @@ export default function ChatModern() {
   // mientras el body todavía pertenece a otra sesión viva del gateway.
   useEffect(() => {
     if (didAutoOpenSidebarTopRef.current) return;
-    if (!readyForRpc || sessionsLoading || resuming || busy) return;
+    // Wait for the boot resume to land, or this races it with a second resume.
+    if (!readyForRpc || sessionsLoading || resuming || busy || !session.sessionId) return;
     if (!newestListedSessionId) return;
 
     didAutoOpenSidebarTopRef.current = true;
@@ -2142,6 +2051,7 @@ export default function ChatModern() {
     newestListedSessionId,
     activeSessionKey,
     switchSession,
+    session.sessionId,
   ]);
 
   useEffect(() => {
@@ -2566,43 +2476,8 @@ export default function ChatModern() {
   // luego deriveTitle del listado (que tiene el title de la DB), y finalmente
   // null → el header muestra "Nueva conversación" como placeholder.
   const activeSession = sidebarSessions.find((s) => s.id === sidebarActiveSessionId);
-  const headerTokensUsed =
-    sessionUsage && sessionUsage.total > 0
-      ? sessionUsage.total
-      : session.tokensUsed;
-
-  const headerTokensMax =
-    sessionUsage && sessionUsage.context_max && sessionUsage.context_max > 0
-      ? sessionUsage.context_max
-      : session.tokensMax;
-
-  // popover-token-fallback-v1
-  // El header puede tener tokens restaurados aunque session.usage no tenga
-  // desglose persistido. En ese caso mostramos al menos el total en el popover.
-  const popoverSessionUsage =
-    sessionUsage ??
-    (headerTokensUsed > 0
-      ? {
-          model: session.model,
-          provider: session.modelProvider,
-          calls: 0,
-          input: 0,
-          output: 0,
-          cache_read: 0,
-          cache_write: 0,
-          reasoning: 0,
-          total: headerTokensUsed,
-          cost_usd: null,
-          cost_status: null,
-          context_used: headerTokensUsed,
-          context_max: headerTokensMax > 0 ? headerTokensMax : null,
-          context_percent:
-            headerTokensMax > 0
-              ? Math.min(100, Math.round((headerTokensUsed / headerTokensMax) * 100))
-              : null,
-          compressions: 0,
-        }
-      : null);
+  const { used: headerTokensUsed, max: headerTokensMax, popover: popoverSessionUsage } =
+    headerUsage(sessionUsage, session);
   const activeTitle =
     session.title ??
     (activeSession ? deriveTitle(activeSession) : null);
@@ -2686,7 +2561,7 @@ export default function ChatModern() {
         onRenameSession={renameSession}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="relative">
           <ChatHeader
             status={status}

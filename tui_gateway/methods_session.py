@@ -790,16 +790,14 @@ def _(rid, params: dict) -> dict:
     plus ``source='unknown'`` guard placeholders, #54320); errors fold into ``session_id: null``."""
     with _profile_db(params) as db:
         try:
+            floor = int(params.get("min_messages") or 0)  # web chat: skip empty ones
             # Generous over-fetch: many denied rows must not yield a false "none".
-            rows = (
-                [
-                    row
-                    for row in _listing_rows(db, 200)
-                    if not _auto_resume_denied_source(row)
-                ]
-                if db is not None
-                else []
-            )
+            rows = [
+                row
+                for row in (_listing_rows(db, 200) if db is not None else [])
+                if not _auto_resume_denied_source(row)
+                and (row.get("message_count") or 0) >= floor
+            ]
             for row in rows[:1]:
                 return _ok(
                     rid,

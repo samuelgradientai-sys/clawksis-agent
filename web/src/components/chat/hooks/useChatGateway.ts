@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, CLAWK_BASE_PATH, buildWsAuthParam } from "@/lib/api";
 import { executeSlash } from "@/lib/slashExec";
+import { applySessionInfo, titleFromEvent, trackSessionIds } from "./sessionInfo";
 
 export type ConnectionStatus =
   | "idle"
@@ -215,6 +216,8 @@ interface UseChatGatewayResult {
   regenerateLast: () => Promise<void>;
   /** Editar un mensaje del usuario y reenviar al agente (estilo ChatGPT). */
   editAndResubmit: (messageId: string, newText: string) => Promise<void>;
+  /** Contador que sube cuando el gateway anuncia sessions.changed / session.title. */
+  sessionsRevision: number;
 }
 
 export function useChatGateway(): UseChatGatewayResult {
@@ -248,6 +251,9 @@ export function useChatGateway(): UseChatGatewayResult {
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resuming, setResuming] = useState(false);
+  // Sube con cada cambio de sesiones que anuncia el gateway (título nuevo, sesión
+  // creada/borrada): el listado lo usa para refrescarse.
+  const [sessionsRevision, setSessionsRevision] = useState(0);
   // Progreso en vivo del turno (retry / cambio de fallback / rate-limit). El
   // loop del agente lo reporta por eventos status.update; sin esto el Modern no
   // mostraba NADA durante la cascada de fallback (que dura minutos) y parecía
@@ -338,31 +344,21 @@ export function useChatGateway(): UseChatGatewayResult {
         break;
 
       case "session.info": {
-        const liveId = evtSid || liveSidRef.current || null;
-        const storedId = (payload.session_id as string | undefined) ?? null;
-
-        if (liveId) {
-          liveSidRef.current = liveId;
-        }
-
-        if (storedId && (!selectedKeyRef.current || selectedKeyRef.current === liveId)) {
-          selectedKeyRef.current = storedId;
-        }
-
-        setSession((prev) => ({
-          ...prev,
-          // sessionId es operativo: debe seguir siendo el live sid del gateway.
-          sessionId: liveId ?? prev.sessionId,
-          // sessionKey es visual/persistido: se usa para sidebar/historial.
-          sessionKey: storedId ?? prev.sessionKey,
-          model: (payload.model as string) ?? prev.model,
-          modelProvider:
-            (payload.model_provider as string) ?? prev.modelProvider,
-          tokensUsed: (payload.tokens_used as number) ?? prev.tokensUsed,
-          tokensMax: (payload.tokens_max as number) ?? prev.tokensMax,
-        }));
+        const liveId = trackSessionIds({ liveSid: liveSidRef, selectedKey: selectedKeyRef }, evtSid, payload);
+        setSession((prev) => applySessionInfo(prev, payload, liveId));
         break;
       }
+
+      // El título lo pone el backend (primer mensaje y luego el resumen del
+      // modelo); el header y el listado lo siguen sin recargar.
+      case "session.title":
+        setSession((prev) => ({ ...prev, title: titleFromEvent(payload) ?? prev.title }));
+        setSessionsRevision((n) => n + 1);
+        break;
+
+      case "sessions.changed":
+        setSessionsRevision((n) => n + 1);
+        break;
 
       case "message.start": {
         setMessages((prev) => {
@@ -647,7 +643,7 @@ export function useChatGateway(): UseChatGatewayResult {
       resume: ResumePayload | null;
     } | null> {
       try {
-        const recent = (await sendRpc("session.most_recent")) as {
+        const recent = (await sendRpc("session.most_recent", { min_messages: 1 })) as {
           session_id?: string;
         } | null;
         const sid = recent?.session_id;
@@ -1411,5 +1407,6 @@ export function useChatGateway(): UseChatGatewayResult {
     resuming,
     regenerateLast,
     editAndResubmit,
+    sessionsRevision,
   };
 }
