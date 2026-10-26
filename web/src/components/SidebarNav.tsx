@@ -43,7 +43,12 @@ const NAV_GROUPS: NavGroup[] = [
     paths: ["/plugins", "/skills", "/mcp"],
     extensions: true,
   },
-  { id: "integraciones", label: "Integrations", labelKey: "integrations", paths: ["/channels", "/webhooks", "/pairing"] },
+  {
+    id: "integraciones",
+    label: "Integrations",
+    labelKey: "integrations",
+    paths: ["/channels", "/webhooks", "/pairing", "/my-chrome"],
+  },
 ];
 
 // Paths whose nav entry must not stay lit on their sub-routes.

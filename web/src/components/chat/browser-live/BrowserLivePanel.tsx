@@ -3,13 +3,16 @@
  *  "Tomar control" forwards clicks, scroll and typing to that same browser (pair browsing). */
 
 import { useState } from "react";
-import { Globe, Hand, LayoutGrid, MousePointerClick, Square } from "lucide-react";
+import { Link } from "react-router";
+import { Chromium, Globe, Hand, LayoutGrid, MousePointerClick, Square } from "lucide-react";
+import { myChromeCopy } from "@/components/my-chrome/copy";
 import { AgentCursor } from "./AgentCursor";
 import { useBrowserActions, usePreferredBrowserKey } from "./browserLiveStore";
 import { LiveMosaic } from "./LiveMosaic";
 import { LiveTabStrip } from "./LiveTabStrip";
 import {
   actionLabel,
+  isUsersChrome,
   keyboardEvent,
   mouseEvent,
   pickSession,
@@ -31,18 +34,34 @@ type ViewMode = "one" | "grid";
 interface StatusBarProps {
   live: LiveBrowser;
   label: string | null;
+  usersChrome: boolean;
   control: boolean;
   onToggle: () => void;
 }
 
-function StatusBar({ live, label, control, onToggle }: StatusBarProps) {
+/** Whose browser this is: the user's own Chrome (Mi Chrome) or the server's. */
+function BackendBadge({ usersChrome }: { usersChrome: boolean }) {
+  return usersChrome ? (
+    <span className="flex items-center gap-1 rounded-full border border-[#6C4FD6]/60 bg-[#6C4FD6]/15 px-2 py-0.5 text-[11px] text-foreground">
+      <Chromium className="size-3" aria-hidden />
+      {myChromeCopy.badgeMyChrome}
+    </span>
+  ) : (
+    <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground">
+      {myChromeCopy.badgeServer}
+    </span>
+  );
+}
+
+function StatusBar({ live, label, usersChrome, control, onToggle }: StatusBarProps) {
   const copy = STATE_COPY[live.state];
   return (
-    <div className="flex items-center gap-2 px-3 pt-3">
+    <div className="flex flex-wrap items-center gap-2 px-3 pt-3">
       <span className="flex items-center gap-1.5 rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground">
         <span className={`size-1.5 rounded-full ${copy.dot}`} />
         {copy.label}
       </span>
+      {live.state !== "searching" && <BackendBadge usersChrome={usersChrome} />}
       {label && <span className="truncate text-[11px] text-muted-foreground">{label}</span>}
       {live.state === "live" && (
         <button
@@ -146,6 +165,12 @@ function EmptyState() {
         Pedile algo como «abrí google.com y buscá el precio de NVDA» y lo vas a ver acá en vivo, mientras
         navega, hace clic y escribe.
       </p>
+      <p className="mt-3 text-xs">
+        {myChromeCopy.panelHint}{" "}
+        <Link to="/my-chrome" className="text-foreground underline underline-offset-2">
+          {myChromeCopy.panelLink}
+        </Link>
+      </p>
     </div>
   );
 }
@@ -214,6 +239,7 @@ export function BrowserLivePanel() {
   const [control, setControl] = useState(false);
   const liveControl = control && live.state === "live";
   const labels = sessionLabels(sessions, preferred);
+  const labelled = sessions.length > 1 || sessions.some((s) => s.task_id === taskId && s.label);
   const grid = mode === "grid" && sessions.length > 1;
   const open = (id: string) => {
     setChosen(id);
@@ -223,7 +249,8 @@ export function BrowserLivePanel() {
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
       <StatusBar
         live={live}
-        label={sessions.length > 1 && taskId ? (labels.get(taskId) ?? null) : null}
+        label={labelled && taskId ? (labels.get(taskId) ?? null) : null}
+        usersChrome={isUsersChrome(sessions, taskId)}
         control={liveControl}
         onToggle={() => setControl((c) => !c)}
       />

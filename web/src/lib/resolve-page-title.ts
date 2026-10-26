@@ -24,6 +24,7 @@ const BUILTIN_LITERAL: Record<string, string> = {
   "/channels": "Channels",
   "/webhooks": "Webhooks",
   "/pairing": "Pairing",
+  "/my-chrome": "Mi Chrome",
   "/system": "System",
 };
 

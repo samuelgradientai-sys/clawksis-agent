@@ -1,0 +1,159 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #18181b;
+  --muted: #71717a;
+  --border: #e4e4e7;
+  --accent: #6c4fd6;
+  --on: #16a34a;
+  --wait: #d97706;
+  --off: #71717a;
+  --danger: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #18181b;
+    --fg: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #3f3f46;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 340px;
+  padding: 14px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+}
+
+h1 {
+  margin: 0;
+  font-size: 15px;
+}
+
+#host {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pill.on {
+  color: var(--on);
+}
+
+.pill.wait {
+  color: var(--wait);
+}
+
+.pill.off {
+  color: var(--off);
+}
+
+label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: transparent;
+  color: inherit;
+  font: 12px/1.4 ui-monospace, monospace;
+}
+
+button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+button.link {
+  margin-top: 10px;
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+button[hidden] {
+  display: none;
+}
+
+#pairBtn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.row button {
+  flex: 1;
+}
+
+.hint,
+footer {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.detail {
+  margin-top: 0;
+}
+
+.error {
+  color: var(--danger);
+}
+
+footer {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}

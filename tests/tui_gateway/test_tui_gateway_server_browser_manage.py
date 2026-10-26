@@ -88,8 +88,9 @@ def test_browser_manage_status_falls_back_to_config_cdp_url(monkeypatch):
     config.yaml so users see what the next tool call will read."""
     monkeypatch.delenv("BROWSER_CDP_URL", raising=False)
 
+    raw = {"browser": {"cdp_url": "http://lan:9222"}}
     fake_cfg = types.SimpleNamespace(
-        read_raw_config=lambda: {"browser": {"cdp_url": "http://lan:9222"}}
+        read_raw_config=lambda: raw, read_raw_config_readonly=lambda: raw
     )
     with patch.dict(sys.modules, {"clawk_cli.config": fake_cfg}):
         resp = server.handle_request(

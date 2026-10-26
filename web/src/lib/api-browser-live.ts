@@ -7,6 +7,10 @@ import { buildWsUrl, fetchJSON } from "./api";
 
 export interface LiveBrowserSession {
   task_id: string;
+  /** "my_chrome": the user's own Chrome through the extension, whichever process drives it. */
+  kind?: "my_chrome";
+  /** Set for browsers that are not an agent session: "Mi Chrome". */
+  label?: string;
 }
 
 export interface LiveFrameMetadata {

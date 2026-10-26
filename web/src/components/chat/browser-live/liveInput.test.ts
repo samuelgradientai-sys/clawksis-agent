@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { actionLabel, keyboardEvent, mouseEvent, pickSession, sessionLabels, toViewport } from "./liveInput";
+import {
+  actionLabel,
+  isUsersChrome,
+  keyboardEvent,
+  mouseEvent,
+  pickSession,
+  sessionLabels,
+  toViewport,
+} from "./liveInput";
 
 const meta = { deviceWidth: 1280, deviceHeight: 720 };
 
@@ -52,6 +60,14 @@ describe("which session to watch", () => {
   it("recognises the conversation's profile-scoped and local-sidecar browsers", () => {
     const scoped = [{ task_id: "chat-7@a1b2::local" }, { task_id: "chat-70" }];
     expect(pickSession(scoped, "chat-7")).toBe("chat-7@a1b2::local");
+  });
+
+  it("shows the user's own Chrome when the conversation runs on it", () => {
+    const withChrome = [{ task_id: "mi-chrome:0", kind: "my_chrome" as const, label: "Mi Chrome" }, { task_id: "other" }];
+    expect(pickSession(withChrome, "chat-7")).toBe("mi-chrome:0");
+    expect(isUsersChrome(withChrome, "mi-chrome:0")).toBe(true);
+    expect(isUsersChrome(withChrome, "other")).toBe(false);
+    expect(sessionLabels(withChrome, "chat-7").get("mi-chrome:0")).toBe("Mi Chrome");
   });
 });
 

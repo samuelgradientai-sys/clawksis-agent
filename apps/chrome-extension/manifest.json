@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Clawksis — Mi Chrome",
+  "short_name": "Mi Chrome",
+  "version": "1.0.0",
+  "description": "Deja que tu agente Clawksis use tus pestañas de Chrome, con tus sesiones iniciadas.",
+  "minimum_chrome_version": "125",
+  "incognito": "not_allowed",
+  "permissions": ["debugger", "tabs", "tabGroups", "storage", "alarms"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Mi Chrome — Clawksis",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

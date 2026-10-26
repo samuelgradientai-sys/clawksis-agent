@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mi Chrome</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <img src="icons/icon32.png" alt="" width="28" height="28" />
+      <div class="title">
+        <h1>Mi Chrome</h1>
+        <p id="host">Clawksis</p>
+      </div>
+      <span id="pill" class="pill wait">…</span>
+    </header>
+
+    <section id="pair" hidden>
+      <label for="code">Pegá el código de emparejamiento</label>
+      <textarea id="code" rows="4" placeholder="clawk-mychrome:…" spellcheck="false" autocomplete="off"></textarea>
+      <p class="hint">Lo generás en el panel de Clawksis → Integraciones → Mi Chrome.</p>
+      <button id="pairBtn" class="primary" type="button">Conectar</button>
+    </section>
+
+    <section id="paired" hidden>
+      <p id="detail" class="detail"></p>
+      <p id="tabs" class="hint"></p>
+      <div class="row">
+        <button id="disconnectBtn" type="button">Desconectar</button>
+        <button id="reconnectBtn" class="primary" type="button">Reconectar</button>
+      </div>
+      <button id="forgetBtn" class="link" type="button">Olvidar este panel</button>
+    </section>
+
+    <p id="error" class="error" role="alert" hidden></p>
+
+    <footer>
+      Mientras el agente usa una pestaña, Chrome muestra una barra avisando que «Clawksis — Mi Chrome» está depurando el navegador.
+      Tocá <strong>Cancelar</strong> ahí para frenarlo al instante. Las pestañas que abre el agente quedan en el grupo
+      <strong>Clawksis</strong>.
+    </footer>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

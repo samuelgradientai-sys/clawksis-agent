@@ -23,6 +23,7 @@ import {
   Activity,
   BarChart3,
   BookOpen,
+  Chromium,
   Clock,
   Code,
   Cpu,
@@ -174,6 +175,7 @@ const McpPage = lazyPage(() => import("@/pages/McpPage"));
 const PairingPage = lazyPage(() => import("@/pages/PairingPage"));
 const ChannelsPage = lazyPage(() => import("@/pages/ChannelsPage"));
 const WebhooksPage = lazyPage(() => import("@/pages/WebhooksPage"));
+const MyChromePage = lazyPage(() => import("@/pages/MyChromePage"));
 const SystemPage = lazyPage(() => import("@/pages/SystemPage"));
 const VisualizationPage = lazyPage(() => import("@/pages/VisualizationPage"));
 const CookbookPage = lazyPage(() => import("@/pages/CookbookPage"));
@@ -283,6 +285,7 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/media": MediaPage,
   "/channels": ChannelsPage,
   "/webhooks": WebhooksPage,
+  "/my-chrome": MyChromePage,
   "/system": SystemPage,
   "/profiles": ProfilesPage,
   "/profiles/new": ProfileBuilderPage,
@@ -332,6 +335,7 @@ const BUILTIN_NAV_REST: NavItem[] = [
   { path: "/channels", label: "Channels", icon: Radio },
   { path: "/webhooks", label: "Webhooks", icon: Webhook },
   { path: "/pairing", label: "Pairing", icon: ShieldCheck },
+  { path: "/my-chrome", label: "Mi Chrome", icon: Chromium },
   { path: "/profiles", labelKey: "profiles", label: "Profiles", icon: Users },
   { path: "/config", labelKey: "config", label: "Config", icon: Settings },
   { path: "/env", labelKey: "keys", label: "Keys", icon: KeyRound },

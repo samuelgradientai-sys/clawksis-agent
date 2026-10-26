@@ -110,6 +110,16 @@ def set_live_cdp_override(url: Optional[str]) -> None:
 _live_generations: dict[str, int] = {}
 
 
+def bump_live_generation(home_key: Optional[str] = None) -> None:
+    """Count an endpoint change published outside this process (the Mi Chrome relay), so a session
+    being created against the old endpoint is closed and rebuilt like after ``/browser connect``."""
+    from clawk_constants import clawk_home_key
+
+    key = home_key or clawk_home_key()
+    with _live_overrides_lock:
+        _live_generations[key] = _live_generations.get(key, 0) + 1
+
+
 def live_cdp_generation(home_key: Optional[str] = None) -> int:
     """The current (or ``home_key``'s) profile's live-endpoint generation."""
     from clawk_constants import clawk_home_key
@@ -138,13 +148,16 @@ def env_cdp_url() -> str:
 def _get_cdp_override_raw() -> str:
     """Return the *configured* CDP override without any network I/O.
 
-    Precedence: this profile's live ``/browser connect``, then its ``BROWSER_CDP_URL`` (:func:`env_cdp_url`),
-    then ``browser.cdp_url``. Is-it-configured
+    Precedence: this profile's live ``/browser connect``, then its connected "Mi Chrome" extension
+    (``browser_my_chrome_state.my_chrome_cdp_url``, published across processes by the dashboard), then
+    its ``BROWSER_CDP_URL`` (:func:`env_cdp_url`), then ``browser.cdp_url``. Is-it-configured
     gates (check_fns, ``_is_local_mode`` / ``_is_local_backend``, ``clawk doctor``) MUST use this, not
     :func:`_get_cdp_override`: its 10s HTTP discovery against a stale ``cdp_url`` would stall every startup's
     schema build with no error.
     """
-    env_override = live_cdp_override() or env_cdp_url()
+    from tools.browser_my_chrome_state import my_chrome_cdp_url
+
+    env_override = live_cdp_override() or my_chrome_cdp_url() or env_cdp_url()
     return env_override or _origin()._browser_cfg(
         "cdp_url", "", lambda v: str(v or "").strip(), "browser.cdp_url from config"
     )

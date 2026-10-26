@@ -298,6 +298,7 @@ from tools import browser_tool_cdp as _cdp
 from tools import browser_tool_cloud as _cloud
 
 from tools import browser_tool_lightpanda_fallback as _lp
+from tools import browser_tool_my_chrome as _my_chrome
 
 
 # Single shared real-profile copy-browser session: concurrent tasks reuse it
@@ -879,10 +880,11 @@ def browser_navigate(url: str, task_id: Optional[str] = None) -> str:
         session_info["_first_nav"] = False
         _maybe_start_recording(nav_session_key)
 
+    command, args = _my_chrome.navigate_command(session_info, url, is_first_nav)
     result = _session._run_browser_command(
         nav_session_key,
-        "open",
-        [url],
+        command,
+        args,
         timeout=_get_open_command_timeout(first_open=is_first_nav),
     )
     if not result.get("success"):
@@ -908,6 +910,7 @@ def browser_navigate(url: str, task_id: Optional[str] = None) -> str:
             True  # first SUCCESSFUL navigation carries it, failed opens don't eat it
         )
         response["real_profile_unavailable"] = session_info["real_profile_unavailable"]
+    response.update(_my_chrome.session_note(session_info))
     # Only a successful, non-blocked navigation becomes the task owner: failed opens
     # and blocked redirects must not retarget follow-up clicks to an irrelevant session.
     _last_active_session_key[effective_task_id] = nav_session_key
@@ -959,6 +962,7 @@ def browser_snapshot(
 
     response = {"success": True, **_snapshot_fields(result)}
     _lp._copy_fallback_warning(response, result)
+    response.update(_my_chrome.task_note(effective_task_id))
 
     # Merge supervisor state (pending dialogs + frame tree) when a CDP supervisor is
     # attached. See website/docs/developer-guide/browser-supervisor.md.

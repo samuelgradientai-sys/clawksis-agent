@@ -13,11 +13,12 @@ _CDP_SCHEMES = {"http", "https", "ws", "wss"}
 def _resolve_browser_cdp_url() -> str:
     """Configured browser CDP override without network I/O (``/browser status`` must be fast;
     ``tools.browser_tool_cdp._get_cdp_override`` HTTP-probes discovery URLs). Same precedence (this
-    profile's live connect, env, then ``browser.cdp_url``) minus WS resolution; ``browser_navigate``
-    normalizes on the next call."""
+    profile's live connect, its Mi Chrome extension, env, then ``browser.cdp_url``) minus WS
+    resolution; ``browser_navigate`` normalizes on the next call."""
+    from tools.browser_my_chrome_state import my_chrome_cdp_url
     from tools.browser_tool_cdp import env_cdp_url, live_cdp_override
 
-    if env_url := live_cdp_override() or env_cdp_url():
+    if env_url := live_cdp_override() or my_chrome_cdp_url() or env_cdp_url():
         return env_url
     with contextlib.suppress(Exception):
         from clawk_cli.config import read_raw_config

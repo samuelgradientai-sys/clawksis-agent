@@ -405,6 +405,7 @@ const sidebars: SidebarsConfig = {
                   collapsed: true,
                   items: [
                     'user-guide/skills/bundled/web/web-blocked-page-recovery',
+                    'user-guide/skills/bundled/web/web-my-chrome',
                     'user-guide/skills/bundled/web/web-scrapegraphai',
                     'user-guide/skills/bundled/web/web-scrapling-official',
                   ],

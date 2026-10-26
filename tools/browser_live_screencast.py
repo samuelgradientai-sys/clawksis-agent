@@ -169,7 +169,15 @@ def cursor_message(payload: str) -> Optional[dict]:
 class LiveScreencast:
     """One viewer's screencast over a browser-level CDP WebSocket."""
 
-    def __init__(self, ws_url: str, send: SendToViewer, thumb: bool = False):
+    def __init__(
+        self,
+        ws_url: str,
+        send: SendToViewer,
+        thumb: bool = False,
+        focus: Optional[str] = None,
+    ):
+        """``focus``: the target to show until a tab navigates (the Mi Chrome relay knows which of
+        the user's many tabs matters; an agent's own browser starts with one)."""
         self._ws_url = ws_url
         self._send = send
         self._thumb = thumb
@@ -181,7 +189,7 @@ class LiveScreencast:
         self._ids = itertools.count(1)
         self._pending: dict[int, asyncio.Future] = {}
         self._pages: dict[str, dict] = {}
-        self._recent: list[str] = []
+        self._recent: list[str] = [focus] if focus else []
         self._followed: Optional[str] = None
         self._session: Optional[str] = None
         self._conn: Any = None
@@ -289,6 +297,7 @@ class LiveScreencast:
             "Target.targetCreated": self._on_target_info,
             "Target.targetInfoChanged": self._on_target_info,
             "Target.targetDestroyed": self._on_target_gone,
+            "Clawk.agentFocus": self._on_agent_focus,
         }.get(method)
         if handler is not None:
             await handler(params, session)
@@ -303,6 +312,13 @@ class LiveScreencast:
             self._recent = [t for t in self._recent if t != info["targetId"]]
             self._recent.append(info["targetId"])
         await self._refollow()
+
+    async def _on_agent_focus(self, params: dict, _session: Optional[str]) -> None:
+        """The Mi Chrome relay says which tab the agent is driving (``Clawk.agentFocus``)."""
+        target = params.get("targetId")
+        if target in self._pages:
+            self._recent = [t for t in self._recent if t != target] + [target]
+            await self._refollow()
 
     async def _on_target_gone(self, params: dict, _session: Optional[str]) -> None:
         if self._pages.pop(params.get("targetId"), None) is not None:

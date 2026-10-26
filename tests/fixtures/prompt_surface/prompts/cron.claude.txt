@@ -146,6 +146,7 @@ After difficult/iterative tasks, offer to save as a skill. If a skill you loaded
     - token-saver: Find and disable unused skills that waste context tokens. [optimization, cost]
   web: Skills for reaching web content when direct access fails — blocked, paywalled, rate-limited, or bot-walled pages.
     - blocked-page-recovery: Use when a fetch fails: 403/429, paywall, WAF, bot wall. [Research, Archives, Wayback, Fallback]
+    - my-chrome: Use the user's own Chrome tabs and signed-in sites. [Mi Chrome, Logged-in, Booking, Shopping, Checkout, Payment]
     - scrapegraphai: Extract structured JSON from web pages with ScrapeGraphAI. [scraping, extraction, llm]
     - scrapling-official: Scrape sites with Scrapling: anti-bot, stealth, spiders. [scraping, crawling, cloudflare]
 </available_skills>
