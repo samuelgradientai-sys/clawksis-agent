@@ -426,6 +426,40 @@ code { font-size: 0.875rem; }
   }
 }
 
+/* Library controls (@nous-research/ui 0.18.2), matched by their fixed class
+   signatures, get the same rounded glass language. Unlayered for the same
+   reason as the Card rule; they fall back to square if the library changes. */
+button[class*="grid-cols-[auto_1fr_auto]"],
+a[class*="grid-cols-[auto_1fr_auto]"] {
+  border-radius: 0.75rem;
+}
+
+[class*="h-9"][class*="border-midground/15"][class*="bg-background/40"],
+[class*="inline-flex"][class*="border-midground/15"][class*="bg-background/30"] {
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+[class*="max-h-60"][class*="border-midground/15"][class*="bg-background-base"] {
+  border-radius: 0.875rem;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.07),
+    0 18px 40px rgb(0 0 0 / 0.35);
+}
+
+[class*="peer"][class*="h-5"][class*="w-9"][class*="border"],
+[class*="peer"][class*="h-5"][class*="w-9"] > [class*="h-3.5"][class*="w-3.5"] {
+  border-radius: 999px;
+}
+
+[class*="font-compressed"][class*="px-2"][class*="py-1"][class*="tracking-[0.2em]"] {
+  border-radius: 999px;
+}
+
+[class*="fixed"][class*="top-1/2"][class*="left-1/2"][class*="-translate-x-1/2"][class*="z-50"] {
+  border-radius: 1.5rem;
+}
+
 @layer components {
   .clawk-liquid-nav-item {
     margin-inline: 0.5rem;
