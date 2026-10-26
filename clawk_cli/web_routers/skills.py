@@ -415,7 +415,7 @@ async def scan_skill_hub(identifier: str = "", profile: Optional[str] = None):
 
 @router.get("/api/skills")
 async def get_skills(profile: Optional[str] = None):
-    from tools.skills_tool import find_all_skills
+    from tools.skills_tool import find_all_skills, find_skill_dashboards
     from clawk_cli.skills_config import get_disabled_skills
     from tools.skill_usage import (
         _external_skill_names,
@@ -430,6 +430,7 @@ async def get_skills(profile: Optional[str] = None):
             config = load_config()
             disabled = get_disabled_skills(config)
             skills = find_all_skills(skip_disabled=True)
+            dashboards = find_skill_dashboards(skip_disabled=True)
             usage = load_usage()
             # Set-based provenance (same classification as skill_usage.provenance,
             # without a per-skill manifest read): hub > bundled > external > agent.
@@ -444,6 +445,7 @@ async def get_skills(profile: Optional[str] = None):
         for s in skills:
             s["enabled"] = s["name"] not in disabled
             s["usage"] = activity_count(usage.get(s["name"], {}))
+            s["has_dashboard"] = s["name"] in dashboards
             s["provenance"] = (
                 "hub"
                 if s["name"] in hub_names
@@ -532,3 +534,9 @@ async def update_skill_content(body: SkillContentUpdate, profile: Optional[str] 
         raise HTTPException(status_code=status, detail=err)
     _clear_skills_prompt_cache()
     return result
+
+
+# Skill mini dashboards share this router's mount point (and its auth and profile scope).
+from clawk_cli.web_routers.skill_dashboards import router as _dashboards_router
+
+router.include_router(_dashboards_router)
