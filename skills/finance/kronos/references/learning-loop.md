@@ -11,8 +11,10 @@ in the profile's `$CLAWK_HOME` and are append-only JSONL (later lines update ear
 |---|---|---|
 | `kronos/forecasts.jsonl` | `kronos_forecast.py` (one line per run), `kronos_review.py` (`{"id", "outcome"}` lines) | the forecast journal |
 | `kronos/lessons.jsonl` | `kronos_review.py` | lessons, folded by `key` |
-| `kronos/trades.jsonl` | `etoro_trade.py buy/close` | the trade ledger (limits are counted from it) |
-| `kronos/refused.jsonl` | `etoro_trade.py buy` | buys refused by the limits or the lessons |
+| `kronos/trades.jsonl` | `etoro_trade.py buy/close/reconcile` | the trade ledger (limits are counted from it) |
+| `kronos/refused.jsonl` | `etoro_trade.py buy` | buys refused before any order, with their kind: `limit`, `lesson`, `backtest`, `stop`, `market` |
+| `kronos/backtests.jsonl` | `kronos_backtest.py` (one line per run) | verdicts vs "no change" and ETS; the backtest gate reads them |
+| `kronos/strategy.jsonl` | `kronos_strategy_backtest.py` | playbook replay summaries for the dashboard |
 | `dashboards/kronos.json` | `kronos_dashboard.py` (called by all of the above) | the dashboard snapshot |
 
 Journal record: `id`, `made_at`, `symbol` (eToro symbol, `--symbol`, or the file name
@@ -37,9 +39,15 @@ forecast, or have a different bar size, are refused with a note. The outcome sto
 - **Buy gate** (in `etoro_trade.py buy`, before any network call): the symbol's last 10 scored
   forecasts across all bar sizes; with at least 5 and a direction hit rate under 50%, an
   automatic buy is refused (`LessonRefused`, logged to `refused.jsonl`). An unreadable journal
-  refuses too (fail closed). `--user-requested` skips only this check, for a buy the user
-  explicitly asked for; the limits still apply. The order's ledger entry records
-  `user_requested` and the `track_record` it was checked against.
+  refuses too (fail closed).
+- **Backtest gate** (same place): an automatic buy also needs at least one backtest of the
+  symbol in the last 7 days, and the newest one of every bar size in that window must say
+  `adds_value` (Kronos's MAE at least 2% lower than both "repeat the last close" and the ETS
+  baseline, direction right half the time or more); otherwise `BacktestRefused`. An unreadable
+  `backtests.jsonl` refuses too.
+- `--user-requested` skips only these two gates, for a buy the user explicitly asked for; the
+  limits, market hours and price checks still apply. The order's ledger entry records
+  `user_requested`, the `track_record` and the `backtest` verdicts it was checked against.
 
 ## Lessons
 
@@ -58,7 +66,7 @@ lesson or new numbers append a line; a lesson whose condition no longer holds is
 | `bullish_bias` | predicted up ≥ 80% but rose ≤ 50% | discount "up" calls |
 | `losing_trades` | ≥2 closed trades, net loss, more losers | require `adds_value` + bullish indicators |
 | `winning_trades` | ≥2 closed trades, net gain | keep the playbook; don't raise size |
-| `unknown_orders` | a buy with status `unknown` | check positions before buying again |
+| `unknown_orders` | a buy with status `unknown` | run `etoro_trade.py reconcile` before buying again |
 
 Closed-trade P&L is estimated from the position's last valuation (`unrealizedPnL`) when
 `etoro_trade.py close` ran, pro-rated for partial closes; eToro's realized figure may differ
@@ -77,6 +85,8 @@ slightly (spread, fill price).
 `summary` (account, trading on/off, buys and USD today vs caps, orders in flight, forecast hit
 rate, closed P&L, active lessons), `goals`, `lessons` ("What it learned"), `bought`, `sold`,
 `refused`, `accuracy_chart` (rolling hit rate, overall + busiest symbols), `accuracy_by_symbol`,
-`forecasts` (recent, with hit/miss), `disclaimer`. Written atomically, at most 512 KiB, local
+`backtests` (newest verdict per symbol and bar size, skill vs "no change" and ETS, stale ones
+marked), `strategy` (newest playbook replay per symbol: trades, win rate, CAGR, max drawdown,
+Sharpe vs buy-and-hold and the benchmark), `forecasts` (recent, with hit/miss), `disclaimer`. Written atomically, at most 512 KiB, local
 files only. The skill declares it in `metadata.clawk.dashboard`, so the web dashboard lists it
 before the first snapshot exists.

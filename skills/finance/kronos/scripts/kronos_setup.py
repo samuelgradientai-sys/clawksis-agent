@@ -2,7 +2,9 @@
 """One-time, idempotent install of the Kronos runtime into ``$CLAWK_HOME/kronos/``.
 
 Layout (per Clawksis profile; never touches Clawksis' own environment):
-  venv/                  dedicated interpreter: CPU PyTorch + pandas + einops + hf_hub ...
+  venv/                  dedicated interpreter: CPU PyTorch + pandas + einops + hf_hub ...,
+                         plus best-effort extras (statsforecast, pandas_market_calendars,
+                         quantstats): a failed extra never fails the install
   src/<sha>/model/*.py   upstream shiyu-coder/Kronos code at UPSTREAM_SHA (+ LICENSE),
                          every file verified against a pinned sha256 (fail closed)
   models/<repo>@<rev>/   weights (config.json + *.safetensors only) at pinned revisions
@@ -13,6 +15,7 @@ Usage:
   kronos_setup.py [--model small]          # install / repair (default model: small)
   kronos_setup.py --model mini --pin-on-first-use
   kronos_setup.py --force                  # rebuild the venv and re-download code
+  kronos_setup.py --no-extras              # skip the optional extras (~300 MB)
 Network is used only by an install run: pypi.org, download.pytorch.org (CPU wheels),
 codeload.github.com (upstream tarball) and huggingface.co (weights).
 """
@@ -69,6 +72,22 @@ RUNTIME_REQUIREMENTS = (
 )
 IMPORT_PROBE = (
     "import torch, numpy, pandas, einops, safetensors, huggingface_hub, matplotlib"
+)
+# Optional: each makes one part more honest or complete, and each part degrades without it.
+# statsforecast: the AutoETS baseline in backtests (else a built-in Holt fit);
+# pandas_market_calendars: NYSE holidays (else the built-in rules); quantstats: the strategy
+# replay's HTML tear sheet (else metrics only). Installed one by one; a failure is reported.
+EXTRA_REQUIREMENTS = {
+    "statsforecast": "statsforecast>=2.1,<3",
+    "pandas_market_calendars": "pandas_market_calendars>=5.5,<6",
+    "quantstats": "quantstats>=0.0.86,<0.1",
+}
+CORE_BOUNDS = tuple(
+    r for r in RUNTIME_REQUIREMENTS if r.startswith(("numpy", "pandas", "matplotlib"))
+)
+_EXTRAS_PROBE = (
+    "import importlib.util, json, sys; "
+    "print(json.dumps({n: bool(importlib.util.find_spec(n)) for n in sys.argv[1:]}))"
 )
 HF_PATTERNS = ["config.json", "*.safetensors"]  # never pickled .bin weights
 
@@ -281,6 +300,46 @@ def install_commands(python: Path, device: str, uv: str | None) -> list[list[str
     return [torch_step, [*base, *RUNTIME_REQUIREMENTS]]
 
 
+def extras_status(python: Path, runner: Runner) -> dict[str, str]:
+    """``ok`` or ``missing`` per optional extra in the venv (``unknown`` when it cannot say)."""
+    names = list(EXTRA_REQUIREMENTS)
+    if not python.exists():
+        return dict.fromkeys(names, "missing")
+    try:
+        proc = runner([str(python), "-c", _EXTRAS_PROBE, *names], 120)
+        found = json.loads(proc.stdout or "{}") if proc.returncode == 0 else None
+    except (subprocess.TimeoutExpired, ValueError):
+        found = None
+    if not isinstance(found, dict):
+        return dict.fromkeys(names, "unknown")
+    return {name: "ok" if found.get(name) else "missing" for name in names}
+
+
+def ensure_extras(python: Path, runner: Runner) -> dict[str, str]:
+    """Install each missing extra on its own; a failure is reported, never raised."""
+    status = extras_status(python, runner)
+    uv = shutil.which("uv")
+    base = (
+        [uv, "pip", "install", "--python", str(python)]
+        if uv
+        else [str(python), "-m", "pip", "install"]
+    )
+    for name, requirement in EXTRA_REQUIREMENTS.items():
+        if status.get(name) == "ok":
+            continue
+        _log(f"installing optional {requirement}")
+        try:
+            # The core bounds ride along so an extra can never move numpy/pandas out of them.
+            cmd = [*base, requirement, *CORE_BOUNDS]
+            _checked(runner, cmd, 1800, f"Installing {name}")
+        except SkillError as exc:
+            _log(f"optional {name} not installed: {exc}")
+            status[name] = f"failed: {exc}"
+            continue
+        status[name] = "ok"
+    return status
+
+
 def deps_ok(python: Path, runner: Runner) -> bool:
     if not python.exists():
         return False
@@ -438,6 +497,7 @@ def check_status(
     deps = (
         ("ok" if deps_ok(python, runner) else "missing") if probe_deps else "unchecked"
     )
+    extras = extras_status(python, runner) if probe_deps and deps == "ok" else {}
     ok = (
         python.exists()
         and deps in {"ok", "unchecked"}
@@ -453,6 +513,7 @@ def check_status(
         "upstream_code": "ok" if not problems else "; ".join(problems),
         "upstream": f"{UPSTREAM_REPO}@{UPSTREAM_SHA}",
         "models": models,
+        "extras": extras,
         "next_step": None
         if ok
         else f"python3 {Path(__file__).resolve()} --model small",
@@ -488,6 +549,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="rebuild the venv and re-download the upstream code",
     )
+    parser.add_argument(
+        "--no-extras",
+        action="store_true",
+        help="skip the optional statsforecast, pandas_market_calendars and quantstats",
+    )
     return parser
 
 
@@ -501,6 +567,12 @@ def install(
     code = install_upstream_code(home, force=args.force)  # cheapest, fails closed first
     python = ensure_venv(home, runner, force=args.force)
     ensure_deps(python, args.device, runner, force=args.force)
+    extras = {} if args.no_extras else ensure_extras(python, runner)
+    if extras and not deps_ok(python, runner):
+        raise SkillError(
+            "Installing the optional extras broke the Kronos runtime (`import torch` fails).",
+            hint=f"Re-run `{Path(__file__).resolve()} --force --no-extras`.",
+        )
     state = read_state(home)
     models = dict(state.get("models") or {})
     models[args.model] = install_model(
@@ -524,6 +596,7 @@ def install(
         "state_file": str(home / "state.json"),
         "installed_model": args.model,
         **models[args.model],
+        "extras": extras,
     }
 
 

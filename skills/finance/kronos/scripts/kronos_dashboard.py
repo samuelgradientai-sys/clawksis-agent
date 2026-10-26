@@ -5,11 +5,13 @@ Writes ``$CLAWK_HOME/dashboards/kronos.json`` (contract version 1, rendered by t
 dashboard): ``{"version": 1, "title", "subtitle", "updated_at", "panels": [...]}`` with stats,
 table, list, chart and text panels. The write is atomic (temp file in the same directory, then
 ``os.replace``) and capped at 512 KiB. It reads only local files (config.yaml, the trade ledger,
-the forecast journal, the lessons and the refusal log), never the network. Labels follow
-``display.language`` (Spanish when it starts with "es", English otherwise).
+the forecast journal, the lessons, the refusal log, the backtest verdicts and the strategy
+replays), never the network. Labels follow ``display.language`` (Spanish when it starts with
+"es", English otherwise).
 
-``etoro_trade.py buy/close``, ``kronos_review.py`` and ``kronos_forecast.py`` refresh it on
-their own (best effort); run it by hand to rebuild the snapshot.
+``etoro_trade.py buy/close/reconcile``, ``kronos_review.py``, ``kronos_forecast.py``,
+``kronos_backtest.py`` and ``kronos_strategy_backtest.py`` refresh it on their own (best
+effort); run it by hand to rebuild the snapshot.
 
 Usage:
   kronos_dashboard.py [--print]
@@ -53,12 +55,16 @@ from _kronos_config import (
 )
 from _kronos_dashboard_labels import LABELS, STATUS_ES
 from _kronos_journal import (
+    BACKTEST_MAX_AGE,
     MIN_MATURED,
     RECENT_WINDOW,
+    backtests_path,
     forecasts_path,
     group_accuracy,
+    read_backtests,
     read_forecasts,
     scored,
+    strategy_path,
     symbol_key,
 )
 from _kronos_lessons import all_lessons, interval_label, lessons_path, money, render
@@ -86,6 +92,12 @@ STATUS_TONE = {
     "expired": "negative",
     "failed": "negative",
     "unknown": "warning",
+    "not_found": "warning",
+}
+VERDICT_TONE = {
+    "adds_value": "positive",
+    "worse_than_naive": "negative",
+    "no_clear_edge": "warning",
 }
 
 
@@ -125,6 +137,8 @@ class Inputs:
     records: list[dict[str, Any]]
     lessons: list[dict[str, Any]]
     refused: list[dict[str, Any]]
+    backtests: list[dict[str, Any]]
+    strategies: list[dict[str, Any]]
 
 
 def load_inputs(config_path: Path | None, kronos_dir: Path) -> Inputs:
@@ -144,6 +158,8 @@ def load_inputs(config_path: Path | None, kronos_dir: Path) -> Inputs:
         records=read_forecasts(forecasts_path(kronos_dir)),
         lessons=all_lessons(lessons_path(kronos_dir)),
         refused=read_jsonl(refused_path(kronos_dir)),
+        backtests=read_backtests(backtests_path(kronos_dir)),
+        strategies=read_jsonl(strategy_path(kronos_dir)),
     )
 
 
@@ -409,7 +425,7 @@ def refused_panel(inputs: Inputs) -> dict[str, Any]:
             "time": iso_z(e.get("ts")),
             "symbol": e.get("symbol"),
             "amount": _num(e.get("amount")),
-            "kind": t["kind_lesson"] if e.get("kind") == "lesson" else t["kind_limit"],
+            "kind": t.get(f"kind_{e.get('kind')}", t["kind_limit"]),
             "why": _text(e.get("refusal")),
             "_tone": "warning",
         }
@@ -552,6 +568,129 @@ def forecasts_panel(inputs: Inputs) -> dict[str, Any]:
     }
 
 
+def _latest(rows: list[dict[str, Any]], *keys: str) -> list[dict[str, Any]]:
+    """The newest row per combination of *keys*, newest first."""
+    latest: dict[tuple, dict[str, Any]] = {}
+    for row in sorted(rows, key=lambda r: str(r.get("made_at") or "")):
+        latest[tuple(str(row.get(k) or "") for k in keys)] = row
+    return sorted(
+        latest.values(), key=lambda r: str(r.get("made_at") or ""), reverse=True
+    )
+
+
+def _skill_pct(value: Any) -> float | None:
+    number = _num(value)
+    return round(number * 100.0, 1) if number is not None else None
+
+
+def _backtest_row(row: dict[str, Any], now: datetime, t: dict[str, str]) -> dict:
+    verdict = str(row.get("verdict") or "")
+    made = iso_z(row.get("made_at"))
+    fresh = False
+    if made:
+        age = now.astimezone(UTC).replace(tzinfo=None) - datetime.fromisoformat(
+            made[:-1]
+        )
+        fresh = age <= BACKTEST_MAX_AGE
+    return {
+        "made": made,
+        "symbol": row.get("symbol"),
+        "interval": row.get("interval"),
+        "origins": _num(row.get("origins")),
+        "vs_naive": _skill_pct(row.get("mae_skill_vs_naive")),
+        "vs_ets": _skill_pct(row.get("mae_skill_vs_ets")),
+        "hit_rate": _skill_pct(row.get("hit_rate")),
+        "verdict": t.get(f"verdict_{verdict}", verdict)
+        + ("" if fresh else f" ({t['stale']})"),
+        "_tone": VERDICT_TONE.get(verdict, "neutral") if fresh else "neutral",
+    }
+
+
+def backtests_panel(inputs: Inputs, now: datetime) -> dict[str, Any]:
+    t = LABELS[inputs.lang]
+    rows = _latest(inputs.backtests, "symbol", "interval")
+    return {
+        "id": "backtests",
+        "type": "table",
+        "title": t["backtests"],
+        "description": t["backtests_desc"],
+        "columns": [
+            _col("made", t["made"], "datetime"),
+            _col("symbol", t["symbol"]),
+            _col("interval", t["interval"]),
+            _col("origins", t["origins"], "number"),
+            _col("vs_naive", t["vs_naive"], "percent"),
+            _col("vs_ets", t["vs_ets"], "percent"),
+            _col("hit_rate", t["hit_rate"], "percent"),
+            _col("verdict", t["verdict"]),
+        ],
+        "rows": [_backtest_row(r, now, t) for r in rows[:TABLE_ROWS]],
+        "empty": t["backtests_empty"],
+    }
+
+
+def _benchmark_text(row: dict[str, Any]) -> str | None:
+    bench = row.get("benchmark") if isinstance(row.get("benchmark"), dict) else None
+    if not bench or _num(bench.get("cagr_pct")) is None:
+        return None
+    return f"{bench.get('symbol')} {float(bench['cagr_pct']):+.1f}%"
+
+
+def _count(value: Any) -> int | None:
+    number = _num(value)
+    return int(number) if number is not None else None
+
+
+def _forecaster_label(row: dict[str, Any]) -> str:
+    """'ETS (AutoETS)', 'ETS (built-in)' or the Kronos model name."""
+    engine = str(row.get("forecaster") or "")
+    if row.get("method") == "ets":
+        return (
+            "ETS (AutoETS)" if engine.startswith("statsforecast") else "ETS (built-in)"
+        )
+    return _text(engine, 40)
+
+
+def strategy_panel(inputs: Inputs) -> dict[str, Any]:
+    t = LABELS[inputs.lang]
+    rows = [
+        {
+            "made": iso_z(r.get("made_at")),
+            "symbol": r.get("symbol"),
+            "forecaster": _forecaster_label(r),
+            "trades": _count(r.get("trades")),
+            "win_rate": _num(r.get("win_rate_pct")),
+            "cagr": _num(r.get("cagr_pct")),
+            "max_dd": _num(r.get("max_drawdown_pct")),
+            "sharpe": _num(r.get("sharpe")),
+            "hold_cagr": _num(r.get("hold_cagr_pct")),
+            "benchmark": _benchmark_text(r),
+            "_tone": _sign_tone(_num(r.get("cagr_pct"))),
+        }
+        for r in _latest(inputs.strategies, "symbol", "interval", "method")
+    ]
+    return {
+        "id": "strategy",
+        "type": "table",
+        "title": t["strategy"],
+        "description": t["strategy_desc"],
+        "columns": [
+            _col("made", t["made"], "datetime"),
+            _col("symbol", t["symbol"]),
+            _col("forecaster", t["forecaster"]),
+            _col("trades", t["trades"], "number"),
+            _col("win_rate", t["win_rate"], "percent"),
+            _col("cagr", t["cagr"], "percent"),
+            _col("max_dd", t["max_dd"], "percent"),
+            _col("sharpe", t["sharpe"], "number"),
+            _col("hold_cagr", t["hold_cagr"], "percent"),
+            _col("benchmark", t["benchmark"]),
+        ],
+        "rows": rows[:TABLE_ROWS],
+        "empty": t["strategy_empty"],
+    }
+
+
 def build_snapshot(inputs: Inputs, now: datetime) -> dict[str, Any]:
     t = LABELS[inputs.lang]
     subtitle = None
@@ -571,6 +710,8 @@ def build_snapshot(inputs: Inputs, now: datetime) -> dict[str, Any]:
         refused_panel(inputs),
         accuracy_chart_panel(inputs),
         by_symbol_panel(inputs),
+        backtests_panel(inputs, now),
+        strategy_panel(inputs),
         forecasts_panel(inputs),
         {
             "id": "disclaimer",

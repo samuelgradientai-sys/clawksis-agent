@@ -9,8 +9,9 @@ amount USD = risk USD / (entry - stop) x entry, then capped by the account size,
              limit and what is left of today's limits in config.yaml.
 
 It only reads the limits (skills.config.kronos.trading.*) and the trade ledger; it never
-changes them and places no order. eToro orders from etoro_trade.py carry no stop-loss or
-take-profit, so the stop and target are levels the agent checks on later runs (playbook).
+changes them and places no order. ``buy_args`` is ready for ``etoro_trade.py buy``: the stop
+and target travel with the order (``--stop``/``--target``) and eToro executes them, and an
+automatic buy without a stop is refused.
 
 Usage:
   kronos_risk.py --account-size 10000 --etoro AAPL [--interval OneDay] [--risk-pct 1]
@@ -159,6 +160,8 @@ def plan_position(
         "max_loss_usd": round(amount / entry * per_unit, 2),
         "units": round(amount / entry, 6),
         "reward_risk": rr,
+        "buy_args": f"--amount {amount:.2f} --stop {round(stop, 6)} --target "
+        f"{round(entry + rr * per_unit, 6)}",
     }
 
 
@@ -218,6 +221,7 @@ def render_text(result: dict[str, Any]) -> str:
         f"stop {result['stop_loss']:,.4f} (-{result['stop_distance_pct']}%), target "
         f"{result['take_profit']:,.4f} ({result['reward_risk']:g}:1), max loss "
         f"{result['max_loss_usd']:,.2f} USD at {result['risk_pct']:g}% risk",
+        f"order: etoro_trade.py buy SYMBOL {result['buy_args']}",
         f"limits: {result['limits']['max_order_usd']:g} USD/order, "
         f"{result['limits']['usd_left_today']:g} USD and "
         f"{result['limits']['buys_left_today']} buys left today",

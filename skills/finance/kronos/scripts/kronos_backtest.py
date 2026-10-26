@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Honesty check: walk-forward Kronos vs the naive "repeat the last close" forecast.
+"""Honesty check: walk-forward Kronos vs two baselines, "repeat the last close" and ETS.
 
-For each origin in the instrument's recent history, Kronos sees only the bars up to
-that origin and forecasts the next --horizon closes; the naive baseline repeats the
-origin's close. Reports MAE/MAPE (all steps), direction hit-rate at the horizon, the
-"always up" base rate, MAE skill vs naive, and a plain-language verdict the agent should
-relay before presenting any Kronos forecast as useful.
+For each origin in the instrument's recent history, Kronos sees only the bars up to that origin
+and forecasts the next --horizon closes. The naive baseline repeats the origin's close; the
+classical baseline is an exponential-smoothing forecast fitted on the same window
+(statsforecast AutoETS when installed, else a built-in Holt fit; see _kronos_baselines.py).
+Reports MAE/MAPE (all steps), direction hit-rate at the horizon, the "always up" base rate, MAE
+skill vs each baseline, and a plain-language verdict the agent relays before presenting any
+Kronos forecast as useful. ``adds_value`` needs a 2%+ lower MAE than BOTH baselines.
 
-Origins are batched into a few predict_batch calls (one process, few model calls).
+Every finished run is appended to ``$CLAWK_HOME/kronos/backtests.jsonl`` (skip with
+--no-record): ``etoro_trade.py buy`` refuses automatic buys of a symbol unless its backtests of
+the last 7 days say ``adds_value``. Origins are batched into a few predict_batch calls.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,20 +27,32 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
+from _kronos_baselines import ENGINE_BUILTIN, ets_forecasts
 from _kronos_common import (
     DISCLAIMER,
     MAX_CONTEXT,
+    UTC,
     Bar,
     SkillError,
+    describe_step,
     dump_json,
+    infer_step,
     reexec_in_skill_venv,
     render_table,
     require_state,
     run_cli,
     score_origins,
     verdict,
+    verdict_detail,
 )
-from kronos_forecast import _bounded, add_data_args, add_model_args, load_input
+from _kronos_journal import append_locked, backtest_record, backtests_path
+from kronos_forecast import (
+    _bounded,
+    add_data_args,
+    add_model_args,
+    journal_label,
+    load_input,
+)
 
 MIN_ORIGINS = 5
 
@@ -64,6 +81,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="bars between origins (default: horizon)",
     )
     add_model_args(parser, samples=4, lookback=256)
+    parser.add_argument(
+        "--symbol",
+        metavar="LABEL",
+        help="symbol the verdict is recorded under (default: the eToro symbol or the file "
+        "name); must match the symbol etoro_trade.py buys",
+    )
+    parser.add_argument(
+        "--no-record",
+        action="store_true",
+        help="do not record the verdict (it then cannot unlock automatic buys)",
+    )
     parser.add_argument("--format", choices=("table", "json"), default="table")
     return parser
 
@@ -100,24 +128,48 @@ def origin_windows(
 
 
 def render_text(result: dict[str, Any]) -> str:
-    k, n = result["metrics"]["kronos"], result["metrics"]["naive_last_close"]
+    metrics = result["metrics"]
+    k, n, e = metrics["kronos"], metrics["naive_last_close"], metrics.get("ets") or {}
     rows = [
         ("Kronos", k["mae"], k["mape_pct"], k["direction_hit_rate"]),
         ("repeat last close", n["mae"], n["mape_pct"], None),
-        ("always up (base rate)", None, None, result["metrics"]["always_up_hit_rate"]),
+        ("ETS", e.get("mae"), e.get("mape_pct"), e.get("direction_hit_rate")),
+        ("always up (base rate)", None, None, metrics["always_up_hit_rate"]),
     ]
+    ets_skill = metrics.get("mae_skill_vs_ets")
+    ets_text = f"{ets_skill:+.1%}" if ets_skill is not None else "n/a"
     label = result.get("symbol") or Path(str(result.get("input", "series"))).stem
     return "\n".join(
         [
             f"{label}: {result['origins']} origins, horizon {result['horizon']}, lookback "
             f"{result['lookback']}, {result['model']} ({result['first_origin']} → {result['last_origin']})",
             render_table(("forecaster", "MAE", "MAPE_%", "direction_hit"), rows),
-            f"MAE skill vs naive: {result['metrics']['mae_skill_vs_naive']:+.1%}",
+            f"MAE skill vs naive: {metrics['mae_skill_vs_naive']:+.1%}; vs ETS: {ets_text} "
+            f"({result['ets_engine']})",
             f"verdict: {result['verdict']} — {result['verdict_text']}",
             *(f"warning: {w}" for w in result["warnings"]),
             result["disclaimer"],
         ]
     )
+
+
+def record_verdict(
+    result: dict[str, Any],
+    args: argparse.Namespace,
+    meta: dict[str, Any],
+    *,
+    kronos_dir: Path | None = None,
+    now: datetime | None = None,
+) -> None:
+    """Append the verdict to the backtest log; a write failure only adds a warning."""
+    label = journal_label(args, meta)
+    row = backtest_record(result, label=label, now=now or datetime.now(UTC))
+    try:
+        append_locked(backtests_path(kronos_dir), [row])
+    except (OSError, SkillError) as exc:
+        result["warnings"].append(f"verdict not recorded: {exc}")
+        return
+    result["recorded_as"] = label
 
 
 def run(args: argparse.Namespace, argv: list[str]) -> int:
@@ -129,6 +181,7 @@ def run(args: argparse.Namespace, argv: list[str]) -> int:
     lookback = min(args.lookback, MAX_CONTEXT[args.model])
     needed = lookback + (args.origins - 1) * stride + args.horizon + 1
     bars, meta, warnings = load_input(args, min(needed, 1000))
+    interval = describe_step(infer_step([b.ts for b in bars]))
     indices = plan_origins(len(bars), lookback, args.horizon, args.origins, stride)
     if len(indices) < args.origins:
         warnings.append(
@@ -138,6 +191,7 @@ def run(args: argparse.Namespace, argv: list[str]) -> int:
     base = {
         "ok": True,
         **meta,
+        "interval": interval,
         "origins": len(windows),
         "horizon": args.horizon,
         "lookback": lookback,
@@ -157,6 +211,14 @@ def run(args: argparse.Namespace, argv: list[str]) -> int:
     from _kronos_model import load_predictor, predict_paths
 
     started = time.monotonic()
+    ets, ets_engine = ets_forecasts(
+        [[b.close for b in w["window"]] for w in windows], args.horizon
+    )
+    if ets_engine == ENGINE_BUILTIN:
+        warnings.append(
+            "statsforecast is not installed in the Kronos venv; the ETS baseline used the "
+            "built-in Holt fit (kronos_setup.py adds statsforecast)"
+        )
     predictor = load_predictor(
         state, args.model, device=args.device, threads=args.threads, seed=args.seed
     )
@@ -174,8 +236,9 @@ def run(args: argparse.Namespace, argv: list[str]) -> int:
             "last_close": w["last_close"],
             "actual": w["actual"],
             "kronos": [row["close"] for row in path],
+            "ets": baseline,
         }
-        for w, path in zip(windows, paths)
+        for w, path, baseline in zip(windows, paths, ets)
     ]
     metrics = score_origins(scored)
     code, text = verdict(metrics)
@@ -185,13 +248,21 @@ def run(args: argparse.Namespace, argv: list[str]) -> int:
         "samples": args.samples,
         "stride": stride,
         "metrics": metrics,
+        "ets_engine": ets_engine,
         "verdict": code,
+        "verdict_detail": verdict_detail(metrics),
         "verdict_text": text,
         "warnings": warnings,
         "elapsed_s": round(time.monotonic() - started, 1),
         "disclaimer": DISCLAIMER,
     }
+    if not args.no_record:
+        record_verdict(result, args, meta)
     print(render_text(result) if args.format == "table" else dump_json(result))
+    if not args.no_record:
+        from kronos_dashboard import refresh_safely
+
+        refresh_safely()
     return 0
 
 

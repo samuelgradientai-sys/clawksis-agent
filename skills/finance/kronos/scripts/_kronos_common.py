@@ -49,7 +49,7 @@ MAX_CONTEXT = {"mini": 2048, "small": 512, "base": 512}
 MODEL_NAMES = tuple(MAX_CONTEXT)
 DEFAULT_MODEL = "small"
 MIN_BARS = 64
-CALENDARS = ("auto", "weekdays", "24x7", "sessions")
+CALENDARS = ("auto", "nyse", "weekdays", "24x7", "sessions")
 
 PRICE_COLUMNS = ("open", "high", "low", "close")
 _COLUMN_ALIASES = {
@@ -153,9 +153,10 @@ STALE_LOCK_SECONDS = 120.0
 
 
 class FileLock:
-    """Cross-platform exclusive lock: an O_EXCL lock file, stale after STALE_LOCK_SECONDS."""
+    """Cross-platform exclusive lock: an O_EXCL lock file, stale after ``stale_after`` seconds."""
 
     busy_message = "Another Kronos run is writing the same file; try again in a minute."
+    stale_after = STALE_LOCK_SECONDS
 
     def __init__(
         self,
@@ -190,7 +191,7 @@ class FileLock:
 
     def _is_stale(self) -> bool:
         try:
-            return self._clock() - self.path.stat().st_mtime > STALE_LOCK_SECONDS
+            return self._clock() - self.path.stat().st_mtime > self.stale_after
         except FileNotFoundError:
             return False
 
@@ -507,10 +508,10 @@ def infer_step(timestamps: Sequence[datetime]) -> timedelta:
 
 
 def detect_calendar(timestamps: Sequence[datetime], step: timedelta) -> str:
-    """24x7 when any bar falls on a weekend (crypto); weekdays for daily+; else sessions."""
+    """24x7 when any bar falls on a weekend (crypto); otherwise the NYSE calendar."""
     if any(ts.weekday() >= 5 for ts in timestamps):
         return "24x7"
-    return "weekdays" if step >= timedelta(days=1) else "sessions"
+    return "nyse"
 
 
 def describe_step(step: timedelta) -> str:
@@ -534,6 +535,32 @@ def _next_weekday(day: date) -> date:
     return day
 
 
+def _following_days(
+    after: date, count: int, nyse: bool
+) -> list[tuple[date, datetime | None]]:
+    """The *count* trading days after *after* with their close: weekdays (close unknown) or
+    NYSE sessions (holidays skipped, early closes known)."""
+    if not nyse:
+        out: list[tuple[date, datetime | None]] = []
+        day = after
+        while len(out) < count:
+            day = _next_weekday(day)
+            out.append((day, None))
+        return out
+    from _kronos_calendar import nyse_sessions
+
+    span = 2 * count + 10
+    while True:
+        sessions, _source = nyse_sessions(
+            after + timedelta(days=1), after + timedelta(days=span)
+        )
+        if len(sessions) >= count:
+            return [(day, close) for day, (_o, close) in sorted(sessions.items())][
+                :count
+            ]
+        span *= 2
+
+
 def _continuous(history: Sequence[datetime], step: timedelta, n: int) -> list[datetime]:
     return [history[-1] + step * (i + 1) for i in range(n)]
 
@@ -550,6 +577,14 @@ def _weekdays(history: Sequence[datetime], step: timedelta, n: int) -> list[date
     return out
 
 
+def _nyse_days(history: Sequence[datetime], step: timedelta, n: int) -> list[datetime]:
+    if step >= timedelta(days=6):  # weekly bars keep their weekday
+        return _continuous(history, step, n)
+    last = history[-1]
+    days = _following_days(last.date(), n, nyse=True)
+    return [datetime.combine(day, last.time()) for day, _close in days]
+
+
 def _session_slots(history: Sequence[datetime], days: int = 20) -> list[time]:
     weekday_bars = [ts for ts in history if ts.weekday() < 5]
     recent_days = sorted({ts.date() for ts in weekday_bars})[-days:]
@@ -557,28 +592,52 @@ def _session_slots(history: Sequence[datetime], days: int = 20) -> list[time]:
     return sorted({ts.time() for ts in weekday_bars if ts.date() in keep})
 
 
-def _sessions(history: Sequence[datetime], step: timedelta, n: int) -> list[datetime]:
-    """Replay the intraday bar times seen on recent weekdays (no holiday calendar)."""
+def _day_slots(
+    day: date, slots: Sequence[time], close: datetime | None
+) -> list[datetime]:
+    stamps = [datetime.combine(day, slot) for slot in slots]
+    return [t for t in stamps if close is None or t < close]
+
+
+def _nyse_close(day: date) -> datetime | None:
+    from _kronos_calendar import nyse_session
+
+    session = nyse_session(day)
+    return session[1] if session else None
+
+
+def _sessions(
+    history: Sequence[datetime], step: timedelta, n: int, *, nyse: bool = False
+) -> list[datetime]:
+    """Replay the intraday bar times seen on recent weekdays; with *nyse*, holidays are skipped
+    and bars at or after an early close are dropped."""
     slots = _session_slots(history)
     if len(slots) <= 1:
-        return _weekdays(history, step, n)
+        return _nyse_days(history, step, n) if nyse else _weekdays(history, step, n)
     last = history[-1]
-    day = last.date()
-    later = [s for s in slots if s > last.time()]
-    index = slots.index(later[0]) if later else len(slots)
-    out: list[datetime] = []
+    close = _nyse_close(last.date()) if nyse else None
+    out = [t for t in _day_slots(last.date(), slots, close) if t > last]
+    cursor = last.date()
     while len(out) < n:
-        if index >= len(slots):
-            day, index = _next_weekday(day), 0
-            continue
-        out.append(datetime.combine(day, slots[index]))
-        index += 1
-    return out
+        wanted = -(-(n - len(out)) // len(slots)) + 1
+        batch = _following_days(cursor, wanted, nyse)
+        for day, close_at in batch:
+            out.extend(_day_slots(day, slots, close_at))
+        cursor = batch[-1][0]
+    return out[:n]
+
+
+def _nyse(history: Sequence[datetime], step: timedelta, n: int) -> list[datetime]:
+    """NYSE trading days for daily bars, NYSE sessions for intraday bars."""
+    if step >= timedelta(days=1):
+        return _nyse_days(history, step, n)
+    return _sessions(history, step, n, nyse=True)
 
 
 _CALENDAR_GENERATORS: dict[
     str, Callable[[Sequence[datetime], timedelta, int], list[datetime]]
 ] = {
+    "nyse": _nyse,
     "24x7": _continuous,
     "weekdays": _weekdays,
     "sessions": _sessions,
@@ -588,7 +647,11 @@ _CALENDAR_GENERATORS: dict[
 def future_timestamps(
     history: Sequence[datetime], n: int, calendar: str = "auto"
 ) -> tuple[list[datetime], str, timedelta]:
-    """The next *n* bar timestamps after *history*; returns (timestamps, calendar, step)."""
+    """The next *n* bar timestamps after *history*; returns (timestamps, calendar, step).
+
+    ``auto`` picks 24x7 for series with weekend bars and the NYSE calendar otherwise (exchange
+    holidays and early closes skipped; pass ``weekdays`` or ``sessions`` for other markets).
+    """
     step = infer_step(history)
     resolved = detect_calendar(history, step) if calendar == "auto" else calendar
     if resolved not in _CALENDAR_GENERATORS:
@@ -686,73 +749,117 @@ def _errors(
     return abs_err, pct_err
 
 
-def score_origins(origins: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    """MAE/MAPE (all horizon steps) and direction hit-rate (at the horizon) vs persistence.
+def _hit(predicted_end: float, last: float, actual_move: int) -> int:
+    return int(_sign(predicted_end - last) == actual_move and actual_move != 0)
 
-    Each origin is ``{"last_close": float, "actual": [...], "kronos": [...]}``.
-    """
-    if not origins:
-        raise SkillError("No backtest origins to score.")
-    k_abs, k_pct, n_abs, n_pct = [], [], [], []
-    hits = ups = 0
+
+def _forecaster_scores(origins: Sequence[dict[str, Any]], key: str) -> dict[str, Any]:
+    """MAE/MAPE over all steps and direction hit rate at the horizon of ``origin[key]``."""
+    abs_err: list[float] = []
+    pct_err: list[float] = []
+    hits = 0
     for origin in origins:
-        last, actual, kronos = origin["last_close"], origin["actual"], origin["kronos"]
-        naive = naive_forecast(last, len(actual))
-        for bucket, values in zip((k_abs, k_pct), _errors(kronos, actual)):
-            bucket.extend(values)
-        for bucket, values in zip((n_abs, n_pct), _errors(naive, actual)):
-            bucket.extend(values)
-        actual_move = _sign(actual[-1] - last)
-        hits += int(_sign(kronos[-1] - last) == actual_move and actual_move != 0)
-        ups += int(actual_move > 0)
-    count = len(origins)
-    kronos_mae = sum(k_abs) / len(k_abs)
-    naive_mae = sum(n_abs) / len(n_abs)
+        last, actual, predicted = origin["last_close"], origin["actual"], origin[key]
+        errors = _errors(predicted, actual)
+        abs_err.extend(errors[0])
+        pct_err.extend(errors[1])
+        hits += _hit(predicted[-1], last, _sign(actual[-1] - last))
     return {
-        "origins": count,
-        "kronos": {
-            "mae": kronos_mae,
-            "mape_pct": sum(k_pct) / len(k_pct) if k_pct else None,
-            "direction_hit_rate": hits / count,
-        },
-        "naive_last_close": {
-            "mae": naive_mae,
-            "mape_pct": sum(n_pct) / len(n_pct) if n_pct else None,
-            "direction_hit_rate": None,
-        },
-        "always_up_hit_rate": ups / count,
-        "mae_skill_vs_naive": 1.0 - kronos_mae / naive_mae if naive_mae else 0.0,
+        "mae": sum(abs_err) / len(abs_err),
+        "mape_pct": sum(pct_err) / len(pct_err) if pct_err else None,
+        "direction_hit_rate": hits / len(origins),
     }
 
 
-# (verdict code, minimum origins, minimum MAE skill, minimum hit rate) checked in order.
-_VERDICT_RULES = (
-    ("adds_value", 10, 0.02, 0.5),
-    ("no_clear_edge", 10, -0.02, 0.0),
-    ("worse_than_naive", 10, float("-inf"), 0.0),
-)
+def _skill(model_mae: float, baseline_mae: float) -> float:
+    return 1.0 - model_mae / baseline_mae if baseline_mae else 0.0
+
+
+def score_origins(origins: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """MAE/MAPE (all horizon steps) and direction hit-rate (at the horizon) vs the baselines.
+
+    Each origin is ``{"last_close": float, "actual": [...], "kronos": [...]}`` plus, when the
+    classical baseline ran, ``"ets": [...]``. ETS scores appear only when every origin has one.
+    """
+    if not origins:
+        raise SkillError("No backtest origins to score.")
+    with_naive = [
+        {**o, "naive": naive_forecast(o["last_close"], len(o["actual"]))}
+        for o in origins
+    ]
+    kronos = _forecaster_scores(with_naive, "kronos")
+    naive = _forecaster_scores(with_naive, "naive")
+    naive["direction_hit_rate"] = None  # a flat forecast never calls a direction
+    ups = sum(int(o["actual"][-1] > o["last_close"]) for o in origins)
+    scores: dict[str, Any] = {
+        "origins": len(origins),
+        "kronos": kronos,
+        "naive_last_close": naive,
+        "always_up_hit_rate": ups / len(origins),
+        "mae_skill_vs_naive": _skill(kronos["mae"], naive["mae"]),
+        "ets": None,
+        "mae_skill_vs_ets": None,
+    }
+    if all(o.get("ets") for o in origins):
+        ets = _forecaster_scores(with_naive, "ets")
+        scores["ets"] = ets
+        scores["mae_skill_vs_ets"] = _skill(kronos["mae"], ets["mae"])
+    return scores
+
+
+MIN_VERDICT_ORIGINS = 10
+MIN_SKILL = 0.02  # MAE at least 2% lower than a baseline counts as beating it
+MIN_HIT_RATE = 0.5
 _VERDICT_TEXT = {
-    "adds_value": "Kronos beat the naive last-close forecast here (MAE {skill:.0%} lower, direction "
-    "right {hit:.0%} of the time). Still noisy: one input among many, not a signal to trade.",
+    "adds_value": "Kronos beat both baselines here: MAE {skill:.0%} lower than repeating the last "
+    "close and {ets_skill:.0%} lower than the classical ETS forecast, direction right {hit:.0%} of "
+    "the time. Still noisy: one input among many, not a signal to trade.",
     "no_clear_edge": "Kronos was about as accurate as simply repeating the last close (MAE skill "
     "{skill:+.0%}); its forecast adds little for this instrument.",
+    "no_edge_over_ets": "Kronos beat repeating the last close (MAE skill {skill:+.0%}) but not the "
+    "classical ETS forecast (MAE skill {ets_skill:+.0%}) or not often enough in direction "
+    "({hit:.0%}); a plain statistical model does as well, so its forecast adds little here.",
+    "no_ets_baseline": "Kronos beat repeating the last close (MAE skill {skill:+.0%}), but the "
+    "classical ETS baseline did not run, so it cannot be called useful; re-run the backtest.",
     "worse_than_naive": "Kronos was LESS accurate than repeating the last close (MAE skill "
     "{skill:+.0%}); do not present its forecast as useful for this instrument.",
     "inconclusive": "Too few test windows ({origins}) to judge; fetch more history or lower --stride.",
 }
+# Detail code -> verdict code: anything short of beating both baselines is "no_clear_edge".
+_VERDICT_CODE = {
+    "no_edge_over_ets": "no_clear_edge",
+    "no_ets_baseline": "no_clear_edge",
+}
+
+
+def verdict_detail(scores: dict[str, Any]) -> str:
+    """The verdict with the reason a forecast that beat "no change" still falls short."""
+    skill, ets_skill = scores["mae_skill_vs_naive"], scores.get("mae_skill_vs_ets")
+    hit = scores["kronos"]["direction_hit_rate"]
+    if scores["origins"] < MIN_VERDICT_ORIGINS:
+        return "inconclusive"
+    if skill <= -MIN_SKILL:
+        return "worse_than_naive"
+    if skill <= MIN_SKILL:
+        return "no_clear_edge"
+    if ets_skill is None:
+        return "no_ets_baseline"
+    if ets_skill > MIN_SKILL and hit >= MIN_HIT_RATE:
+        return "adds_value"
+    return "no_edge_over_ets"
 
 
 def verdict(scores: dict[str, Any]) -> tuple[str, str]:
-    skill = scores["mae_skill_vs_naive"]
-    hit = scores["kronos"]["direction_hit_rate"]
-    code = "inconclusive"
-    for name, min_origins, min_skill, min_hit in _VERDICT_RULES:
-        if scores["origins"] >= min_origins and skill > min_skill and hit >= min_hit:
-            code = name
-            break
-    return code, _VERDICT_TEXT[code].format(
-        skill=skill, hit=hit, origins=scores["origins"]
+    """(code, plain-language text). ``adds_value`` needs a 2%+ lower MAE than BOTH repeating the
+    last close and the ETS baseline, and the direction right at least half the time."""
+    detail = verdict_detail(scores)
+    text = _VERDICT_TEXT[detail].format(
+        skill=scores["mae_skill_vs_naive"],
+        ets_skill=scores.get("mae_skill_vs_ets") or 0.0,
+        hit=scores["kronos"]["direction_hit_rate"],
+        origins=scores["origins"],
     )
+    return _VERDICT_CODE.get(detail, detail), text
 
 
 # ── Output ──

@@ -227,6 +227,11 @@ def test_risk_cli_uses_goals_atr_and_todays_ledger_without_writing(tmp_path, cap
     out = json.loads(capsys.readouterr().out)
     assert out["risk_profile"] == "high" and out["risk_pct"] == 2.0
     assert out["stop_loss"] == 96.0 and out["take_profit"] == 108.0  # 2 ATR, 2:1
+    # Ready to paste into etoro_trade.py buy, which sends the stop and target with the order.
+    buy = trade.build_parser().parse_args(
+        ["buy", "AAPL", "--reason", "x", *out["buy_args"].split()]
+    )
+    assert (buy.amount, buy.stop, buy.target) == (50.0, 96.0, 108.0)
     assert (
         out["suggested_amount_usd"] == 50.0 and out["binding_cap"] == "usd_left_today"
     )

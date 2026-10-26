@@ -3,7 +3,9 @@
 ``$CLAWK_HOME/kronos/forecasts.jsonl`` is append-only. ``kronos_forecast.py`` writes one line per
 forecast; ``kronos_review.py`` appends ``{"id", "outcome"}`` lines that fold into it once the
 forecast's horizon has passed. The recent directional hit rate per symbol computed here is what
-``etoro_trade.py buy`` consults before an automatic buy (``gate_status``). Stdlib only.
+``etoro_trade.py buy`` consults before an automatic buy (``gate_status``), together with the
+backtest verdicts ``kronos_backtest.py`` appends to ``backtests.jsonl`` (``backtest_gate``).
+Stdlib only.
 """
 
 from __future__ import annotations
@@ -202,4 +204,84 @@ def gate_status(
         "min_matured": MIN_MATURED,
         "min_hit_rate": GATE_MIN_HIT_RATE,
         "blocked": blocked,
+    }
+
+
+# ── Backtest verdicts (kronos_backtest.py) and the buy gate built on them ──
+
+BACKTEST_MAX_AGE = timedelta(days=7)
+
+
+def backtests_path(kronos_dir: Path | None = None) -> Path:
+    return (kronos_dir or kronos_home()) / "backtests.jsonl"
+
+
+def strategy_path(kronos_dir: Path | None = None) -> Path:
+    """Summaries of ``kronos_strategy_backtest.py`` replays, for the dashboard."""
+    return (kronos_dir or kronos_home()) / "strategy.jsonl"
+
+
+def backtest_record(
+    result: dict[str, Any], *, label: str, now: datetime
+) -> dict[str, Any]:
+    """The line ``kronos_backtest.py`` appends for one finished backtest."""
+    metrics = result["metrics"]
+    return {
+        "id": str(uuid.uuid4()),
+        "made_at": iso_z(now),
+        "symbol": label,
+        "interval": result["interval"],
+        "model": result.get("model"),
+        "horizon": int(result["horizon"]),
+        "origins": int(result["origins"]),
+        "verdict": result["verdict"],
+        "verdict_detail": result.get("verdict_detail"),
+        "mae_skill_vs_naive": metrics.get("mae_skill_vs_naive"),
+        "mae_skill_vs_ets": metrics.get("mae_skill_vs_ets"),
+        "hit_rate": metrics["kronos"]["direction_hit_rate"],
+        "ets_engine": result.get("ets_engine"),
+        "first_origin": result.get("first_origin"),
+        "last_origin": result.get("last_origin"),
+    }
+
+
+def read_backtests(path: Path | None = None) -> list[dict[str, Any]]:
+    return read_jsonl(path or backtests_path())
+
+
+def _made_at(row: dict[str, Any]) -> datetime | None:
+    try:
+        return parse_timestamp(row["made_at"])
+    except (KeyError, TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
+def backtest_gate(
+    rows: Iterable[dict[str, Any]], symbol: str, now: datetime
+) -> dict[str, Any]:
+    """Whether *symbol*'s backtests allow an automatic buy: at least one in the last 7 days, and
+    the newest one of every bar size in that window says ``adds_value``."""
+    moment = _naive_utc(now)
+    mine = [
+        (made, row)
+        for row in rows
+        if symbol_key(row.get("symbol")) == symbol_key(symbol)
+        and (made := _made_at(row)) is not None
+    ]
+    fresh = sorted(
+        (pair for pair in mine if moment - pair[0] <= BACKTEST_MAX_AGE),
+        key=lambda pair: pair[0],
+    )
+    latest = {str(row.get("interval") or ""): row for _made, row in fresh}
+    failing = [row for row in latest.values() if row.get("verdict") != "adds_value"]
+    newest_any = max((made for made, _row in mine), default=None)
+    return {
+        "symbol": symbol_key(symbol),
+        "verdicts": {
+            interval: {"verdict": row.get("verdict"), "made_at": row.get("made_at")}
+            for interval, row in latest.items()
+        },
+        "last_backtest": iso_z(newest_any) if newest_any else None,
+        "failing": failing,
+        "blocked": not latest or bool(failing),
     }
