@@ -54,6 +54,8 @@ EXPECTED_PANELS = [
     "refused",
     "accuracy_chart",
     "accuracy_by_symbol",
+    "backtests",
+    "strategy",
     "forecasts",
     "disclaimer",
 ]

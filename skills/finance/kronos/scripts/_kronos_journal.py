@@ -216,6 +216,11 @@ def backtests_path(kronos_dir: Path | None = None) -> Path:
     return (kronos_dir or kronos_home()) / "backtests.jsonl"
 
 
+def strategy_path(kronos_dir: Path | None = None) -> Path:
+    """Summaries of ``kronos_strategy_backtest.py`` replays, for the dashboard."""
+    return (kronos_dir or kronos_home()) / "strategy.jsonl"
+
+
 def backtest_record(
     result: dict[str, Any], *, label: str, now: datetime
 ) -> dict[str, Any]:

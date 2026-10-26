@@ -146,7 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--calendar",
         choices=CALENDARS,
         default="auto",
-        help="future timestamps: auto, weekdays, 24x7, sessions",
+        help="future timestamps: auto (24x7 or nyse), nyse, weekdays, 24x7, sessions",
     )
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     parser.add_argument(
