@@ -1073,8 +1073,12 @@ def _do_pull(tag: str) -> None:
 
 
 def start_pull(tag: str) -> dict[str, Any]:
-    """Kick off `ollama pull <tag>` in the background. Returns immediately."""
-    if not ollama_installed():
+    """Kick off a pull of <tag> in the background. Returns immediately.
+
+    The pull streams over the daemon's HTTP API, so a reachable daemon is enough: Ollama in a
+    container or under a service account answers on :11434 with no ``ollama`` on our PATH.
+    """
+    if not (ollama_installed() or ollama_running()):
         return {
             "ok": False,
             "error": "Ollama isn't installed on this host yet.",
