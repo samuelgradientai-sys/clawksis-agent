@@ -927,3 +927,9 @@ async def events_ws(ws: WebSocket) -> None:
                 subs.discard(ws)
                 if not subs:
                     event_channels.pop(channel, None)
+
+
+# The live view of the agent's browser rides the chat's mount point and socket auth.
+from clawk_cli.web_routers.browser_live import router as _browser_live_router
+
+router.include_router(_browser_live_router)

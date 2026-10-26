@@ -20,6 +20,7 @@ import {
   withStreamingBubble,
 } from "./chatTranscript";
 import type { ChatMessage, SessionInfo } from "./useChatGateway";
+import { isBrowserTool, noteBrowserActivity } from "../browser-live/browserLiveStore";
 
 type Payload = Record<string, unknown>;
 type Update<T> = (update: (prev: T) => T) => void;
@@ -152,6 +153,7 @@ export const CHAT_EVENT_HANDLERS: Record<string, Handler> = {
   "tool.start": (ctx, payload) => {
     ctx.setMessages((prev) => startTool(prev, payload));
     markStarted(ctx);
+    if (isBrowserTool(payload.name)) noteBrowserActivity(ctx.ids.selectedKey.current, payload.name as string);
   },
   "tool.complete": (ctx, payload) => ctx.setMessages((prev) => finishTool(prev, payload)),
   // A session-level failure. Before any turn event it is the refusal of the
