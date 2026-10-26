@@ -827,6 +827,79 @@ async def list_cron_job_runs(
     )
 
 
+def _occurrence_jobs(profile: str) -> list[dict[str, Any]]:
+    requested = (profile or "all").strip()
+    if requested.lower() != "all":
+        return _call_cron_for_profile(requested, "list_jobs", True)
+    jobs: list[dict[str, Any]] = []
+    for item in _cron_profile_dicts():
+        name = str(item.get("name") or "")
+        if not name:
+            continue
+        try:
+            jobs.extend(_call_cron_for_profile(name, "list_jobs", True))
+        except Exception:  # health: allow BLE001 -- one profile's unreadable store must not blank every profile's calendar; traceback logged
+            _log.exception("Failed to list cron jobs for profile %s", name)
+    return jobs
+
+
+def _job_occurrence_days(job: dict[str, Any], win_start, win_end) -> dict[str, int]:
+    from cron.jobs import compute_occurrences
+
+    schedule = job.get("schedule") or {}
+    if not isinstance(schedule, dict):
+        return {}
+    anchor = job.get("next_run_at") or job.get("created_at")
+    try:
+        occ = compute_occurrences(schedule, win_start, win_end, anchor=anchor)
+    except Exception:  # health: allow BLE001 -- a schedule the projector cannot expand drops that job from the calendar only; traceback logged
+        _log.exception("occurrences failed for job %s", job.get("id"))
+        return {}
+    days: dict[str, int] = {}
+    for dt in occ:
+        key = dt.strftime("%Y-%m-%d")
+        days[key] = days.get(key, 0) + 1
+    return days
+
+
+def _cron_occurrences_sync(start: str, end: str, profile: str) -> dict[str, Any]:
+    from cron.jobs import _ensure_aware
+
+    try:
+        win_start = _ensure_aware(datetime.fromisoformat(f"{start}T00:00:00"))
+        win_end = _ensure_aware(datetime.fromisoformat(f"{end}T23:59:59"))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=400, detail=f"invalid start/end (use YYYY-MM-DD): {exc}"
+        )
+    result: list[dict[str, Any]] = []
+    for job in _occurrence_jobs(profile):
+        if not job.get("enabled", True) or job.get("state") == "paused":
+            continue
+        days = _job_occurrence_days(job, win_start, win_end)
+        if days:
+            schedule = job.get("schedule") or {}
+            result.append(
+                {
+                    "id": job.get("id"),
+                    "name": job.get("name") or job.get("id"),
+                    "profile": job.get("profile"),
+                    "schedule_display": job.get("schedule_display")
+                    or schedule.get("display"),
+                    "days": days,
+                }
+            )
+    return {"start": start, "end": end, "jobs": result}
+
+
+@router.get("/api/cron/occurrences")
+async def cron_occurrences(start: str, end: str, profile: str = "all"):
+    """Per-job firing days within [start, end] (YYYY-MM-DD) for the calendar view. Enumerates
+    each enabled job's schedule with the canonical scheduler logic (croniter / interval phase /
+    one-shot) and buckets by local date — every profile's jobs.json read off the event loop."""
+    return await _run_cron_dashboard_io(_cron_occurrences_sync, start, end, profile)
+
+
 @router.post("/api/cron/jobs")
 async def create_cron_job(body: CronJobCreate, profile: Optional[str] = None):
     return await _run_cron_dashboard_io(_create_cron_job_sync, body, profile)
