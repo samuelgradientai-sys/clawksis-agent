@@ -155,6 +155,7 @@ La forma más fácil de conectar cualquiera es **`clawk model`** (menú interact
 | `clawk update` | Actualizar a la última versión |
 | `clawk dashboard` | Abrir el dashboard web (chat Modern/Terminal, sesiones, media, tareas) |
 | `clawk dashboard domain <dominio>` | Publicarlo en `https://<dominio>` con HTTPS, en un comando |
+| `clawk dashboard mobile` | Abrirlo desde el móvil: dirección segura + código QR (`--tailscale` privado o `--domain`) |
 | `clawk gateway install` | Mensajería como servicio del sistema |
 | `clawk cron add "<schedule>" "<prompt>"` | Programar una tarea recurrente |
 | `clawk skills` | Buscar, instalar y gestionar skills |
@@ -190,6 +191,7 @@ El dashboard es una web UI (por defecto en `http://127.0.0.1:9119`): chat en dos
 | `clawk dashboard password` | Crear/cambiar el login (usuario + contraseña; `--clear` lo borra) |
 | `clawk dashboard service` | Instalarlo como servicio systemd (arranca solo al boot; `--uninstall`, `--status`, `--plain`) |
 | `clawk dashboard domain <dominio>` | Publicarlo en `https://<dominio>`: systemd + login forzado + Caddy con HTTPS automático, en un comando (ver [Self-hosted](#self-hosted-acceso-por-dominio)) |
+| `clawk dashboard mobile [--tailscale \| --domain <dominio>]` | Dirección para el móvil con QR y login obligatorio: tu dominio publicado, o Tailscale (`tailscale serve`, privado y sin abrir puertos). En el móvil, «Añadir a pantalla de inicio» lo abre como app |
 | `clawk dashboard --host 0.0.0.0 --insecure` | Exponerlo en toda interfaz (activa el login; preferí `domain` para HTTPS) |
 
 </details>
@@ -344,6 +346,31 @@ clawk cron add 30m --script check_disk.sh --no-agent --name disco
 > Los plugins instalados pueden registrar comandos top-level propios — usá `clawk <plugin> --help` para verlos.
 
 ---
+
+<details>
+<summary><b>📱 Desde el móvil</b> — <code>clawk dashboard mobile</code> te da la dirección y un QR</summary>
+
+```bash
+sudo clawk dashboard mobile --tailscale          # privado: solo tus dispositivos (recomendado)
+sudo clawk dashboard mobile --domain panel.tudominio.com   # público con HTTPS y login
+clawk dashboard mobile                           # ya publicado: muestra la dirección + QR
+```
+
+- **Tailscale** (recomendado para uso personal): gratis, sin abrir puertos ni
+  comprar dominio. Instalalo en el servidor (`curl -fsSL https://tailscale.com/install.sh | sh && tailscale up`)
+  y la app en el móvil con la misma cuenta; el comando publica
+  `https://<servidor>.<tu-tailnet>.ts.net` solo dentro de tu red privada. Si
+  `tailscale serve` pide HTTPS, activalo en la consola de Tailscale → DNS →
+  *HTTPS Certificates*.
+- **Dominio propio**: igual que `clawk dashboard domain` (Caddy + HTTPS
+  automático); falta solo el registro DNS `A`.
+
+En ambos casos el dashboard sigue escuchando solo en `127.0.0.1` y el **login
+es obligatorio**. Escaneá el QR con la cámara y, para usarlo como app a pantalla
+completa: iPhone → Compartir → «Añadir a pantalla de inicio»; Android → ⋮ →
+«Instalar app».
+
+</details>
 
 <details>
 <summary><b>🌐 Self-hosted: acceso por dominio</b> — publicá tu dashboard en <code>https://panel.tudominio.com</code> con HTTPS, en un comando</summary>

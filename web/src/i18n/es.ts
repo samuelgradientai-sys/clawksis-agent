@@ -87,6 +87,18 @@ export const es: Translations = {
     openDocumentation: "Abrir documentación en una nueva pestaña",
     openNavigation: "Abrir navegación",
     pluginNavSection: "Complementos",
+    memoryOomRestartBanner:
+      "Tu agente se reinició inesperadamente, probablemente porque se quedó sin memoria. Las sesiones largas y muchas tareas a la vez aumentan el uso de memoria.",
+    memoryCriticalBanner:
+      "Tu agente casi no tiene memoria y podría reiniciarse. Cierra sesiones inactivas o amplía su memoria.",
+    memoryElevatedBanner: "A tu agente le queda poca memoria.",
+    diskCriticalBanner:
+      "El disco de tu agente está casi lleno. Puede que no se guarden mensajes, memorias ni ajustes nuevos.",
+    diskElevatedBanner:
+      "El disco de tu agente se está llenando. Borra sesiones viejas o amplía su almacenamiento.",
+    multiplexStandaloneBanner:
+      "Tu gateway atiende un solo perfil. Sin atender: {profiles}. Motivo: {reason}. Solución: clawk gateway migrate --multiplex",
+    dismiss: "Cerrar",
     sessionsActiveCount: "{count} activas",
     statusOverview: "Resumen de estado",
     system: "Sistema",
@@ -430,6 +442,11 @@ export const es: Translations = {
 
   skills: {
     title: "Habilidades",
+    loadWhat: "las habilidades",
+    browseHub: "Explorar el hub de habilidades",
+    createSkill: "Crear habilidad",
+    learnSkill: "Aprender una habilidad",
+    newSkill: "Nueva habilidad",
     searchPlaceholder: "Buscar habilidades y conjuntos de herramientas...",
     enabledOf: "{enabled}/{total} habilitados",
     all: "Todas",

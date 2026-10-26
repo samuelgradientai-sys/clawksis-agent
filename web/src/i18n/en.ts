@@ -535,6 +535,8 @@ export const en: Translations = {
     loadWhat: "skills",
     browseHub: "Browse skills hub",
     createSkill: "Create skill",
+    learnSkill: "Learn a skill",
+    newSkill: "New skill",
     enabledOf: "{enabled}/{total} enabled",
     all: "All",
     categories: "Categories",
