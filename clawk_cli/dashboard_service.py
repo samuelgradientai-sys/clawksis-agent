@@ -197,6 +197,7 @@ def print_dashboard_command_list() -> None:
             "clawk dashboard domain <dominio>",
             "la publica en https://<dominio> (proxy + HTTPS solos)",
         ),
+        ("clawk dashboard mobile", "dirección + QR para abrirla en el móvil"),
         ("clawk dashboard --remote user@host", "túnel SSH + navegador, desde tu PC"),
         ("clawk update", "actualiza Clawksis y reconstruye la web UI"),
     ]

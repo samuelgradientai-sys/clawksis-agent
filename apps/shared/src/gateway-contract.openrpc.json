@@ -24972,6 +24972,30 @@
               }
             ],
             "default": null
+          },
+          "is_local": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Is Local"
+          },
+          "local_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Local Url"
           }
         },
         "required": [

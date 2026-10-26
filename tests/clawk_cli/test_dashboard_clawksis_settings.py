@@ -30,7 +30,9 @@ def test_models_analytics_skips_hidden_models(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(db, "close", lambda: None)
     monkeypatch.setattr(
-        analytics, "_hidden_models", lambda: {"openrouter|gone-model", "bare-hidden"}
+        analytics,
+        "_hidden_models",
+        lambda profile=None: ["openrouter|gone-model", "bare-hidden"],
     )
 
     models = {m["model"] for m in analytics._get_models_analytics(days=30)["models"]}

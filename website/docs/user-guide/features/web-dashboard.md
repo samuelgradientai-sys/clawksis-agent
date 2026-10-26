@@ -51,6 +51,16 @@ clawk dashboard --remote user@vps
 clawk dashboard --remote user@vps --start --ssh-opt -p --ssh-opt 2222
 ```
 
+### On your phone
+
+```bash
+sudo clawk dashboard mobile --tailscale        # private: only your own devices
+sudo clawk dashboard mobile --domain panel.example.com   # public HTTPS + login
+clawk dashboard mobile                         # already published: address + QR
+```
+
+`clawk dashboard mobile` prints the address with a QR code to scan. Tailscale is the private option (free, no open ports, no domain needed: install it on the server and the app on the phone with the same account); `--domain` is the same as `clawk dashboard domain`. Either way the dashboard keeps listening on `127.0.0.1` with the login required. To use it like an app, add it to the home screen (iPhone: Share → Add to Home Screen; Android: ⋮ → Install app); it opens full screen.
+
 ## Managing multiple profiles
 
 The dashboard is a **machine-level** management surface: one server manages

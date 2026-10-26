@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Brain,
-  ChevronDown,
   Cpu,
   DollarSign,
   Eye,
@@ -14,7 +13,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { api, fetchJSON } from "@/lib/api";
+import { api } from "@/lib/api";
 import { auxTaskLabel, auxTaskRows } from "@/lib/aux-tasks";
 import type {
   AuxiliaryModelsResponse,
@@ -46,6 +45,13 @@ import { ModelPickerDialog } from "@/components/ModelPickerDialog";
 import { ModelReloadConfirm } from "@/components/ModelReloadConfirm";
 import { errorMessage } from "@/lib/api-error";
 import { assignmentToPickerCurrent } from "@/lib/model-picker-current";
+import { modelsApi } from "@/lib/api-models";
+import { buildModelCatalog, MAIN_ROLE, type InUseEntry } from "@/lib/model-catalog";
+import { UseAsMenu } from "@/components/models/UseAsMenu";
+import { AvailableModelsPanel } from "@/components/models/AvailableModelsPanel";
+import { fillCopy, useCatalogCopy } from "@/components/models/catalog-copy";
+import { LocalityTag, ReachabilityPill } from "@/components/models/ModelStatusBadges";
+import { useModelCatalogData } from "@/components/models/useModelCatalogData";
 
 const PERIODS = [
   { label: "7d", days: 7 },
@@ -187,174 +193,6 @@ function CapabilityBadges({
 }
 
 /* ──────────────────────────────────────────────────────────────────── */
-/*  Per-card "Use as" menu                                              */
-/* ──────────────────────────────────────────────────────────────────── */
-
-function UseAsMenu({
-  provider,
-  model,
-  isMain,
-  mainAuxTask,
-  auxTasks,
-  onAssigned,
-}: {
-  provider: string;
-  model: string;
-  /** True when this card's model+provider match config.yaml's main slot. */
-  isMain: boolean;
-  /** If this model is assigned to a specific aux task, that task's key. */
-  mainAuxTask: string | null;
-  /** Auxiliary rows as served (built-ins + plugin tasks); see auxTaskRows. */
-  auxTasks: AuxiliaryTaskAssignment[];
-  onAssigned(): void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pendingConfirm, setPendingConfirm] = useState<{
-    message: string;
-    scope: "main" | "auxiliary";
-    task: string;
-  } | null>(null);
-
-  const assign = async (
-    scope: "main" | "auxiliary",
-    task: string,
-    confirmExpensiveModel = false,
-  ) => {
-    if (!provider || !model) {
-      setError("Missing provider/model");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await api.setModelAssignment({
-        confirm_expensive_model: confirmExpensiveModel,
-        scope,
-        provider,
-        model,
-        task,
-      });
-      if (result.confirm_required) {
-        setPendingConfirm({
-          scope,
-          task,
-          message:
-            result.confirm_message ||
-            "This model has unusually high known pricing.",
-        });
-        return;
-      }
-      onAssigned();
-      setOpen(false);
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Close on outside click.
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && !target.closest?.("[data-use-as-menu]")) setOpen(false);
-    };
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, [open]);
-
-  return (
-    <div className={cn("relative", open && "z-20")} data-use-as-menu>
-      <Button
-        size="sm"
-        outlined
-        onClick={() => setOpen((v) => !v)}
-        disabled={busy}
-        className="h-6 px-2 text-xs uppercase"
-        prefix={busy ? <Spinner /> : null}
-      >
-        Use as <ChevronDown className="h-3 w-3" />
-      </Button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[220px] border border-border bg-card shadow-lg">
-          <button
-            type="button"
-            onClick={() => assign("main", "")}
-            disabled={busy}
-            className="flex w-full items-center justify-between px-3 py-2 text-xs uppercase hover:bg-muted/50 disabled:opacity-40"
-          >
-            <span className="flex items-center gap-2">
-              <Star className="h-3 w-3" />
-              Main model
-            </span>
-            {isMain && (
-              <span className="text-display text-xs tracking-wider text-primary">
-                current
-              </span>
-            )}
-          </button>
-
-          <div className="border-t border-border/50 px-3 py-1.5 text-display text-xs tracking-wider text-text-tertiary">
-            Auxiliary task
-          </div>
-
-          <button
-            type="button"
-            onClick={() => assign("auxiliary", "")}
-            disabled={busy}
-            className="flex w-full items-center justify-between px-3 py-1.5 text-xs uppercase hover:bg-muted/50 disabled:opacity-40"
-          >
-            <span>All auxiliary tasks</span>
-          </button>
-
-          {auxTaskRows(auxTasks).map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => assign("auxiliary", t.key)}
-              disabled={busy}
-              className="flex w-full items-center justify-between px-3 py-1.5 text-xs uppercase hover:bg-muted/50 disabled:opacity-40"
-            >
-              <span>{t.label}</span>
-              {mainAuxTask === t.key && (
-                <span className="text-display text-xs tracking-wider text-primary">
-                  current
-                </span>
-              )}
-            </button>
-          ))}
-
-          {error && (
-            <div className="px-3 py-2 text-xs text-destructive border-t border-border/50">
-              {error}
-            </div>
-          )}
-        </div>
-      )}
-      <ConfirmDialog
-        open={!!pendingConfirm}
-        title="Expensive Model Warning"
-        description={pendingConfirm?.message}
-        destructive
-        confirmLabel="Switch anyway"
-        cancelLabel="Cancel"
-        loading={busy}
-        onCancel={() => setPendingConfirm(null)}
-        onConfirm={() => {
-          const pending = pendingConfirm;
-          if (!pending) return;
-          setPendingConfirm(null);
-          void assign(pending.scope, pending.task, true);
-        }}
-      />
-    </div>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────────── */
 /*  ModelCard                                                           */
 /* ──────────────────────────────────────────────────────────────────── */
 
@@ -376,6 +214,7 @@ function ModelCard({
   showTokens: boolean;
 }) {
   const { t } = useI18n();
+  const copy = useCatalogCopy();
   const provider = entry.provider || modelVendor(entry.model);
   const totalTokens = entry.input_tokens + entry.output_tokens;
   const caps = entry.capabilities;
@@ -469,8 +308,8 @@ function ModelCard({
                 <button
                   type="button"
                   onClick={() => onHide(entry)}
-                  title="Quitar este modelo de la lista (no borra sesiones ni historial)"
-                  aria-label={`Quitar ${entry.model} de la lista`}
+                  title={copy.hideTitle}
+                  aria-label={`${copy.hideTitle}: ${entry.model}`}
                   className="rounded p-1 text-text-tertiary transition-colors hover:bg-destructive/10 hover:text-destructive"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -704,13 +543,14 @@ function AuxiliaryTasksModal({
               aux?.tasks.find((a) => a.task === picker.task),
             )}
             title={`Set Auxiliary: ${auxTaskLabel(aux?.tasks, picker.task)}`}
-            onApply={async ({ provider, model, confirmExpensiveModel }) => {
+            onApply={async ({ provider, model, baseUrl, confirmExpensiveModel }) => {
               const result = await api.setModelAssignment({
                 confirm_expensive_model: confirmExpensiveModel,
                 scope: "auxiliary",
                 task: picker.task,
                 provider,
                 model,
+                ...(baseUrl ? { base_url: baseUrl } : {}),
               });
               if (!result.confirm_required) onSaved();
               return result;
@@ -967,13 +807,17 @@ function MoaModelsModal({
 
 function ModelSettingsPanel({
   aux,
+  mainStatus,
   refreshKey,
   onSaved,
 }: {
   aux: AuxiliaryModelsResponse | null;
+  /** The catalog's in-use entry for the main slot (locality + server reachability). */
+  mainStatus: InUseEntry | null;
   refreshKey: number;
   onSaved(): void;
 }) {
+  const copy = useCatalogCopy();
   const [auxModalOpen, setAuxModalOpen] = useState(false);
   const [moaModalOpen, setMoaModalOpen] = useState(false);
   const [moa, setMoa] = useState<MoaConfigResponse | null>(null);
@@ -996,6 +840,7 @@ function ModelSettingsPanel({
     task,
     provider,
     model,
+    baseUrl,
     confirmExpensiveModel,
   }: {
     confirmExpensiveModel?: boolean;
@@ -1003,6 +848,7 @@ function ModelSettingsPanel({
     task: string;
     provider: string;
     model: string;
+    baseUrl?: string;
   }) => {
     const result = await api.setModelAssignment({
       confirm_expensive_model: confirmExpensiveModel,
@@ -1010,6 +856,7 @@ function ModelSettingsPanel({
       task,
       provider,
       model,
+      ...(baseUrl ? { base_url: baseUrl } : {}),
     });
     if (!result.confirm_required) onSaved();
     return result;
@@ -1037,16 +884,22 @@ function ModelSettingsPanel({
         {/* Main row */}
         <div className="flex min-w-0 flex-col gap-2 bg-muted/20 border border-border/50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-0.5">
+            <div className="flex flex-wrap items-center gap-2 mb-0.5">
               <Star className="h-3 w-3 text-primary" />
               <span className="text-display text-xs font-medium tracking-wider">
                 Main model
               </span>
+              {mainStatus && (
+                <>
+                  <LocalityTag isLocal={mainStatus.isLocal} copy={copy} />
+                  <ReachabilityPill state={mainStatus.reachability} copy={copy} />
+                </>
+              )}
             </div>
             <div className="text-xs font-mono text-text-secondary truncate">
-              {mainProv || "(unset)"}
-              {mainProv && mainModel && " · "}
-              {mainModel || "(unset)"}
+              {mainModel
+                ? `${mainStatus?.providerName || mainProv || copy.unset} · ${mainModel}`
+                : copy.unset}
             </div>
           </div>
           <Button
@@ -1114,13 +967,14 @@ function ModelSettingsPanel({
             loader={api.getModelOptions}
             alwaysGlobal
             title="Set Main Model"
-            onApply={async ({ provider, model, confirmExpensiveModel }) => {
+            onApply={async ({ provider, model, baseUrl, confirmExpensiveModel }) => {
               const result = await applyAssignment({
                 confirmExpensiveModel,
                 scope: "main",
                 task: "",
                 provider,
                 model,
+                baseUrl,
               });
               if (!result.confirm_required) {
                 setSwitchNotice(result.notice ?? null);
@@ -1166,6 +1020,153 @@ function ModelSettingsPanel({
 /*  Page                                                                */
 /* ──────────────────────────────────────────────────────────────────── */
 
+/* ──────────────────────────────────────────────────────────────────── */
+/*  Usage history (session analytics)                                   */
+/* ──────────────────────────────────────────────────────────────────── */
+
+function UsageStatsCard({
+  data,
+  showTokens,
+}: {
+  data: ModelsAnalyticsResponse;
+  showTokens: boolean;
+}) {
+  const { t } = useI18n();
+  const items = showTokens
+    ? [
+        { label: t.models.modelsUsed, value: String(data.totals.distinct_models) },
+        {
+          label: t.analytics.totalTokens,
+          value: formatTokens(data.totals.total_input + data.totals.total_output),
+        },
+        { label: t.analytics.input, value: formatTokens(data.totals.total_input) },
+        { label: t.analytics.output, value: formatTokens(data.totals.total_output) },
+        {
+          label: t.models.estimatedCost,
+          value: formatCost(data.totals.total_estimated_cost),
+        },
+        { label: t.analytics.totalSessions, value: String(data.totals.total_sessions) },
+      ]
+    : [
+        { label: t.models.modelsUsed, value: String(data.totals.distinct_models) },
+        { label: t.analytics.totalSessions, value: String(data.totals.total_sessions) },
+      ];
+  return (
+    <Card className="min-w-0 max-w-full overflow-hidden">
+      <CardContent className="min-w-0 py-6">
+        <div className="min-w-0 max-w-full [&_div.grid]:grid-cols-[auto_minmax(0,1fr)_auto]">
+          <Stats className="min-w-0" items={items} />
+        </div>
+        {!showTokens && (
+          <p className="mt-4 text-xs text-text-tertiary leading-relaxed">
+            Token & cost analytics are hidden because the local counts
+            exclude auxiliary calls (compression, vision, web extract,
+            …) and provider retries, so they diverge from your provider
+            bill. Enable{" "}
+            <span className="font-mono">dashboard.show_token_analytics</span>{" "}
+            in <a href="/config" className="underline">Config</a> to
+            show the local debug estimate anyway.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ModelUsageSection({
+  days,
+  data,
+  error,
+  loading,
+  showTokens,
+  aux,
+  onAssigned,
+  onHide,
+  onRestore,
+}: {
+  days: number;
+  data: ModelsAnalyticsResponse | null;
+  error: string | null;
+  loading: boolean;
+  showTokens: boolean;
+  aux: AuxiliaryModelsResponse | null;
+  onAssigned(): void;
+  onHide(entry: ModelsAnalyticsModelEntry): void;
+  onRestore(hiddenKey: string): void;
+}) {
+  const { t } = useI18n();
+  const copy = useCatalogCopy();
+  const hidden = data?.hidden_models ?? [];
+  return (
+    <section aria-label={copy.usageTitle} className="flex min-w-0 flex-col gap-4">
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="font-mondwest text-display text-sm tracking-wider">{copy.usageTitle}</h2>
+        <span className="text-xs text-text-secondary">{fillCopy(copy.usageHint, { days })}</span>
+        {hidden.length > 0 && (
+          <span className="flex flex-wrap items-center gap-1.5 text-xs text-text-tertiary">
+            {fillCopy(copy.hiddenCount, { n: hidden.length })}:
+            {hidden.map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onRestore(key)}
+                className="border border-border/50 px-1.5 py-0.5 font-mono hover:text-foreground"
+                title={copy.restore}
+              >
+                {key.split("|").pop()} ↺
+              </button>
+            ))}
+          </span>
+        )}
+      </div>
+
+      {loading && !data && !error && (
+        <div className="flex items-center justify-center py-12">
+          <Spinner className="text-2xl text-primary" />
+        </div>
+      )}
+
+      {error && (
+        <p className="text-xs text-text-tertiary">
+          {copy.usageUnavailable} <span className="text-text-secondary">({error})</span>
+        </p>
+      )}
+
+      {data &&
+        (data.models.length > 0 ? (
+          <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {data.models.map((m, i) => (
+              <ModelCard
+                key={`${m.model}:${m.provider}`}
+                entry={m}
+                rank={i + 1}
+                main={aux?.main ?? null}
+                aux={aux?.tasks ?? []}
+                onAssigned={onAssigned}
+                onHide={onHide}
+                showTokens={showTokens}
+              />
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="py-12">
+              <div className="flex flex-col items-center text-muted-foreground">
+                <Cpu className="h-8 w-8 mb-3 opacity-40" />
+                <p className="text-sm font-medium">{t.models.noModelsData}</p>
+                <p className="text-xs mt-1 text-text-tertiary">{t.models.startSession}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+    </section>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────── */
+/*  Page                                                                */
+/* ──────────────────────────────────────────────────────────────────── */
+
 export default function ModelsPage() {
   const [days, setDays] = useState(30);
   const [data, setData] = useState<ModelsAnalyticsResponse | null>(null);
@@ -1178,7 +1179,21 @@ export default function ModelsPage() {
   // calls and retries, so they're misleading next to provider billing.
   const [showTokens, setShowTokens] = useState(false);
   const { t } = useI18n();
+  const copy = useCatalogCopy();
   const { setAfterTitle, setEnd } = usePageHeader();
+  const catalogData = useModelCatalogData();
+  const reloadCatalog = catalogData.reload;
+
+  const catalog = useMemo(
+    () =>
+      buildModelCatalog({
+        options: catalogData.options,
+        aux,
+        localStatus: catalogData.localStatus,
+      }),
+    [catalogData.options, catalogData.localStatus, aux],
+  );
+  const mainStatus = catalog.inUse.find((e) => e.roles.includes(MAIN_ROLE)) ?? null;
 
   useEffect(() => {
     api
@@ -1193,21 +1208,6 @@ export default function ModelsPage() {
       });
   }, []);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    Promise.all([
-      api.getModelsAnalytics(days),
-      api.getAuxiliaryModels().catch(() => null),
-    ])
-      .then(([models, auxData]) => {
-        setData(models);
-        setAux(auxData);
-      })
-      .catch((err) => setError(errorMessage(err)))
-      .finally(() => setLoading(false));
-  }, [days]);
-
   const refreshAux = useCallback(() => {
     api
       .getAuxiliaryModels()
@@ -1215,33 +1215,54 @@ export default function ModelsPage() {
       .catch(() => {});
   }, []);
 
-  const onAssigned = useCallback(() => {
-    // Reload aux state after any assignment change.
-    refreshAux();
-    setSaveKey((k) => k + 1);
-  }, [refreshAux]);
+  // Usage analytics and slot assignments load independently: a profile without a session
+  // store yet answers analytics with 503, and that must not blank the main model above.
+  const loadUsage = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    api
+      .getModelsAnalytics(days)
+      .then(setData)
+      .catch((err) => {
+        setData(null);
+        setError(errorMessage(err));
+      })
+      .finally(() => setLoading(false));
+  }, [days]);
 
-  // Quitar un modelo de la lista (dashboard.hidden_models en config). No
-  // borra sesiones ni historial — solo lo esconde de esta página.
+  const load = useCallback(() => {
+    refreshAux();
+    loadUsage();
+  }, [refreshAux, loadUsage]);
+
+  const onAssigned = useCallback(() => {
+    // The main/aux pins moved: re-read them and the catalog (its `is_current` follows main).
+    refreshAux();
+    void reloadCatalog({ probe: false });
+    setSaveKey((k) => k + 1);
+  }, [refreshAux, reloadCatalog]);
+
+  // Hide a usage card (dashboard.hidden_models of this profile). Sessions and history stay.
   const onHide = useCallback(
     (entry: ModelsAnalyticsModelEntry) => {
-      if (
-        !window.confirm(
-          `¿Quitar "${entry.model}" de la lista? No borra sesiones ni historial; ` +
-            "se restaura quitándolo de dashboard.hidden_models en Config.",
-        )
-      ) {
-        return;
-      }
-      void fetchJSON("/api/analytics/models/hide", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: entry.model, provider: entry.provider || "" }),
-      })
-        .then(() => load())
+      if (!window.confirm(fillCopy(copy.hideConfirm, { model: entry.model }))) return;
+      modelsApi
+        .hideUsageCard(entry)
+        .then(() => loadUsage())
         .catch((err) => setError(errorMessage(err)));
     },
-    [load],
+    [copy.hideConfirm, loadUsage],
+  );
+
+  const onRestore = useCallback(
+    (hiddenKey: string) => {
+      const [provider, ...rest] = hiddenKey.includes("|") ? hiddenKey.split("|") : ["", hiddenKey];
+      modelsApi
+        .unhideUsageCard({ provider, model: rest.join("|") })
+        .then(() => loadUsage())
+        .catch((err) => setError(errorMessage(err)));
+    },
+    [loadUsage],
   );
 
   useLayoutEffect(() => {
@@ -1268,7 +1289,10 @@ export default function ModelsPage() {
           ghost
           size="icon"
           className="text-muted-foreground hover:text-foreground"
-          onClick={load}
+          onClick={() => {
+            load();
+            void reloadCatalog();
+          }}
           disabled={loading}
           aria-label={t.common.refresh}
         >
@@ -1281,11 +1305,15 @@ export default function ModelsPage() {
       setAfterTitle(null);
       setEnd(null);
     };
-  }, [days, loading, load, setAfterTitle, setEnd, t.common.refresh]);
+  }, [days, loading, load, reloadCatalog, setAfterTitle, setEnd, t.common.refresh]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    void reloadCatalog();
+  }, [reloadCatalog]);
 
   // Model assignments can change outside this page (config editor, chat
   // /model --global, CLI), so refetch them when the page regains focus.
@@ -1296,6 +1324,7 @@ export default function ModelsPage() {
       if (Date.now() - last < 1000) return;
       last = Date.now();
       refreshAux();
+      void reloadCatalog({ probe: false });
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
@@ -1303,7 +1332,7 @@ export default function ModelsPage() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
     };
-  }, [refreshAux]);
+  }, [refreshAux, reloadCatalog]);
 
   return (
     <div className="flex min-w-0 max-w-full flex-col gap-6">
@@ -1312,121 +1341,33 @@ export default function ModelsPage() {
       <div className="grid min-w-0 gap-6 lg:grid-cols-2">
         <ModelSettingsPanel
           aux={aux}
+          mainStatus={mainStatus}
           refreshKey={saveKey}
           onSaved={onAssigned}
         />
-
-        {data && (
-          <Card className="min-w-0 max-w-full overflow-hidden">
-            <CardContent className="min-w-0 py-6">
-              <div className="min-w-0 max-w-full [&_div.grid]:grid-cols-[auto_minmax(0,1fr)_auto]">
-                <Stats
-                  className="min-w-0"
-                  items={
-                  showTokens
-                    ? [
-                        {
-                          label: t.models.modelsUsed,
-                          value: String(data.totals.distinct_models),
-                        },
-                        {
-                          label: t.analytics.totalTokens,
-                          value: formatTokens(
-                            data.totals.total_input + data.totals.total_output,
-                          ),
-                        },
-                        {
-                          label: t.analytics.input,
-                          value: formatTokens(data.totals.total_input),
-                        },
-                        {
-                          label: t.analytics.output,
-                          value: formatTokens(data.totals.total_output),
-                        },
-                        {
-                          label: t.models.estimatedCost,
-                          value: formatCost(data.totals.total_estimated_cost),
-                        },
-                        {
-                          label: t.analytics.totalSessions,
-                          value: String(data.totals.total_sessions),
-                        },
-                      ]
-                    : [
-                        {
-                          label: t.models.modelsUsed,
-                          value: String(data.totals.distinct_models),
-                        },
-                        {
-                          label: t.analytics.totalSessions,
-                          value: String(data.totals.total_sessions),
-                        },
-                      ]
-                }
-              />
-              </div>
-              {!showTokens && (
-                <p className="mt-4 text-xs text-text-tertiary leading-relaxed">
-                  Token & cost analytics are hidden because the local counts
-                  exclude auxiliary calls (compression, vision, web extract,
-                  …) and provider retries, so they diverge from your provider
-                  bill. Enable{" "}
-                  <span className="font-mono">dashboard.show_token_analytics</span>{" "}
-                  in <a href="/config" className="underline">Config</a> to
-                  show the local debug estimate anyway.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
+        {data && <UsageStatsCard data={data} showTokens={showTokens} />}
       </div>
 
-      {loading && !data && (
-        <div className="flex items-center justify-center py-24">
-          <Spinner className="text-2xl text-primary" />
-        </div>
-      )}
+      <AvailableModelsPanel
+        catalog={catalog}
+        auxTasks={aux?.tasks ?? []}
+        loading={catalogData.loading}
+        error={catalogData.error}
+        onRedetect={() => void reloadCatalog({ refresh: true })}
+        onAssigned={onAssigned}
+      />
 
-      {error && (
-        <Card>
-          <CardContent className="py-6">
-            <p className="text-sm text-destructive text-center">{error}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {data && (
-        <>
-          {data.models.length > 0 ? (
-            <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {data.models.map((m, i) => (
-                <ModelCard
-                  key={`${m.model}:${m.provider}`}
-                  entry={m}
-                  rank={i + 1}
-                  main={aux?.main ?? null}
-                  aux={aux?.tasks ?? []}
-                  onAssigned={onAssigned}
-                  onHide={onHide}
-                  showTokens={showTokens}
-                />
-              ))}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="py-12">
-                <div className="flex flex-col items-center text-muted-foreground">
-                  <Cpu className="h-8 w-8 mb-3 opacity-40" />
-                  <p className="text-sm font-medium">{t.models.noModelsData}</p>
-                  <p className="text-xs mt-1 text-text-tertiary">
-                    {t.models.startSession}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </>
-      )}
+      <ModelUsageSection
+        days={days}
+        data={data}
+        error={error}
+        loading={loading}
+        showTokens={showTokens}
+        aux={aux}
+        onAssigned={onAssigned}
+        onHide={onHide}
+        onRestore={onRestore}
+      />
 
       <PluginSlot name="models:bottom" />
     </div>

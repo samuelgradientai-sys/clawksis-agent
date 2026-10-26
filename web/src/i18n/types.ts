@@ -17,6 +17,43 @@ export type Locale =
   | "hu"
   | "ar";
 
+/** Models page catalog ("Available models") + usage-history copy. `{n}` / `{days}` / `{model}`
+ *  are replaced by the caller. */
+export interface ModelCatalogStrings {
+  title: string;
+  subtitle: string;
+  searchPlaceholder: string;
+  redetect: string;
+  inUse: string;
+  inUseEmpty: string;
+  main: string;
+  local: string;
+  cloud: string;
+  localEmpty: string;
+  installLocal: string;
+  running: string;
+  unreachable: string;
+  checking: string;
+  onDemand: string;
+  notServed: string;
+  detected: string;
+  currentProvider: string;
+  showAll: string;
+  showLess: string;
+  unconfigured: string;
+  addKeys: string;
+  noMatch: string;
+  modelCount: string;
+  usageTitle: string;
+  usageHint: string;
+  usageUnavailable: string;
+  hiddenCount: string;
+  restore: string;
+  hideTitle: string;
+  hideConfirm: string;
+  unset: string;
+}
+
 export interface Translations {
   // ── Common ──
   common: {
@@ -309,6 +346,8 @@ export interface Translations {
     toolCalls: string;
     noModelsData: string;
     startSession: string;
+    /** Optional — English fallback until translated. */
+    catalog?: ModelCatalogStrings;
   };
 
   // ── Logs page ──
@@ -555,6 +594,9 @@ export interface Translations {
     loadWhat?: string;
     browseHub?: string;
     createSkill?: string;
+    /** Optional — English fallback until translated. */
+    learnSkill?: string;
+    newSkill?: string;
     enabledOf: string;
     all: string;
     categories: string;

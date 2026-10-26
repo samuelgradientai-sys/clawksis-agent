@@ -2003,50 +2003,6 @@ async def get_running_sessions():
 
 
 # ---------------------------------------------------------------------------
-# Models page — hide a model (dashboard.hidden_models)
-# ---------------------------------------------------------------------------
-
-
-class HideModelBody(BaseModel):
-    model: str
-    provider: str = ""
-
-
-@app.post("/api/analytics/models/hide")
-async def post_analytics_models_hide(body: HideModelBody):
-    """Oculta un modelo de la página Modelos (no borra sesiones ni historia).
-
-    Se persiste en config ``dashboard.hidden_models`` como "provider|model";
-    para restaurarlo basta quitar la entrada de esa lista en Config.
-    """
-
-    model = (body.model or "").strip()
-    if not model:
-        raise HTTPException(status_code=400, detail="model is required")
-
-    from clawk_cli.config import load_config, save_config
-
-    def _persist():
-        cfg = load_config()
-        dashboard = cfg.get("dashboard")
-        if not isinstance(dashboard, dict):
-            dashboard = {}
-            cfg["dashboard"] = dashboard
-        hidden = dashboard.get("hidden_models")
-        if not isinstance(hidden, list):
-            hidden = []
-        key = f"{(body.provider or '').strip()}|{model}"
-        if key not in hidden:
-            hidden.append(key)
-        dashboard["hidden_models"] = hidden
-        save_config(cfg)
-        return hidden
-
-    hidden = await asyncio.to_thread(_persist)
-    return {"ok": True, "hidden_models": hidden}
-
-
-# ---------------------------------------------------------------------------
 # Visualization section (pixel office + comms graph)
 # ---------------------------------------------------------------------------
 

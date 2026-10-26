@@ -204,6 +204,9 @@ def build_models_payload(
     if featured:
         _apply_featured(rows, metadata_config=metadata_config)
     _apply_custom_aliases(rows)
+    from clawk_cli.model_locality import apply_locality
+
+    apply_locality(rows)
     from clawk_cli.models_validate import drop_unofferable_model_ids
 
     drop_unofferable_model_ids(rows)
@@ -868,6 +871,11 @@ def _append_unconfigured_rows(
     seen = {r["slug"].lower() for r in rows}
     cur = (ctx.current_provider or "").lower()
     cur_model = str(ctx.current_model or "").strip()
+    # The current selection may already be represented under another slug: ``provider: custom`` +
+    # a base_url that a named ``custom_providers:`` row serves is that row's ``is_current``. The
+    # "missing credentials" skeleton for ``custom`` would then be a second, false current row.
+    if any(r.get("is_current") for r in rows):
+        seen.add(cur)
     # Honor ``model_catalog.excluded_providers`` like ``list_authenticated_providers`` does — unconditionally,
     # even for the current provider — or ``include_unconfigured`` pickers (TUI ``/model``) resurrect every
     # excluded provider as a skeleton row (#68816). A slug is hidden when it or any alias is excluded, so an

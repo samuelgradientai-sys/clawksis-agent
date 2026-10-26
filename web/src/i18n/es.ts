@@ -87,6 +87,18 @@ export const es: Translations = {
     openDocumentation: "Abrir documentación en una nueva pestaña",
     openNavigation: "Abrir navegación",
     pluginNavSection: "Complementos",
+    memoryOomRestartBanner:
+      "Tu agente se reinició inesperadamente, probablemente porque se quedó sin memoria. Las sesiones largas y muchas tareas a la vez aumentan el uso de memoria.",
+    memoryCriticalBanner:
+      "Tu agente casi no tiene memoria y podría reiniciarse. Cierra sesiones inactivas o amplía su memoria.",
+    memoryElevatedBanner: "A tu agente le queda poca memoria.",
+    diskCriticalBanner:
+      "El disco de tu agente está casi lleno. Puede que no se guarden mensajes, memorias ni ajustes nuevos.",
+    diskElevatedBanner:
+      "El disco de tu agente se está llenando. Borra sesiones viejas o amplía su almacenamiento.",
+    multiplexStandaloneBanner:
+      "Tu gateway atiende un solo perfil. Sin atender: {profiles}. Motivo: {reason}. Solución: clawk gateway migrate --multiplex",
+    dismiss: "Cerrar",
     sessionsActiveCount: "{count} activas",
     statusOverview: "Resumen de estado",
     system: "Sistema",
@@ -257,6 +269,42 @@ export const es: Translations = {
     toolCalls: "llamadas de herramientas",
     noModelsData: "No hay datos de uso de modelos para este período",
     startSession: "Inicia una sesión para ver datos de modelos aquí",
+    catalog: {
+      title: "Modelos disponibles",
+      subtitle: "Lo que este perfil puede usar ahora: servidores locales y proveedores en la nube.",
+      searchPlaceholder: "Filtrar modelos o proveedores…",
+      redetect: "Volver a detectar",
+      inUse: "En uso",
+      inUseEmpty: "Todavía no hay ningún modelo asignado.",
+      main: "Principal",
+      local: "Local",
+      cloud: "Nube",
+      localEmpty:
+        "No se detectaron modelos locales. Inicia Ollama, LM Studio o llama.cpp, o agrega un endpoint local en Claves.",
+      installLocal: "Instalar un modelo local",
+      running: "En ejecución",
+      unreachable: "No responde",
+      checking: "Comprobando…",
+      onDemand: "Arranca al elegirlo",
+      notServed: "no está cargado en el servidor",
+      detected: "detectado",
+      currentProvider: "actual",
+      showAll: "Ver los {n}",
+      showLess: "Ver menos",
+      unconfigured: "Sin configurar ({n})",
+      addKeys: "Agregar claves API",
+      noMatch: "Ningún modelo coincide con el filtro.",
+      modelCount: "{n} modelos",
+      usageTitle: "Historial de uso",
+      usageHint: "Modelos usados en las sesiones de este perfil en los últimos {days} días.",
+      usageUnavailable: "Este perfil todavía no tiene historial de uso.",
+      hiddenCount: "{n} ocultos",
+      restore: "Restaurar",
+      hideTitle: "Quitar del historial de uso (no borra sesiones)",
+      hideConfirm:
+        "¿Quitar “{model}” de la lista de uso? No borra sesiones ni historial; puedes restaurarlo aquí.",
+      unset: "(sin definir)",
+    },
   },
 
   logs: {
@@ -442,6 +490,11 @@ export const es: Translations = {
 
   skills: {
     title: "Habilidades",
+    loadWhat: "las habilidades",
+    browseHub: "Explorar el hub de habilidades",
+    createSkill: "Crear habilidad",
+    learnSkill: "Aprender una habilidad",
+    newSkill: "Nueva habilidad",
     searchPlaceholder: "Buscar habilidades y conjuntos de herramientas...",
     enabledOf: "{enabled}/{total} habilitados",
     all: "Todas",

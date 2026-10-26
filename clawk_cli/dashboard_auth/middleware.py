@@ -67,6 +67,7 @@ _GATE_PUBLIC_PREFIXES: tuple[str, ...] = (
     "/favicon.svg",
     "/clawksis-logo-512.png",  # marca en la página de login (pre-auth)
     "/apple-touch-icon.png",
+    "/manifest.json",  # home-screen install metadata; no data, needed before login
     "/ds-assets/",
     "/fonts/",
     "/fonts-terminal/",
