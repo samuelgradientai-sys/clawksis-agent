@@ -351,6 +351,7 @@ const sidebars: SidebarsConfig = {
                     'user-guide/skills/bundled/research/research-hardware-research',
                     'user-guide/skills/bundled/research/research-last30days',
                     'user-guide/skills/bundled/research/research-llm-wiki',
+                    'user-guide/skills/bundled/research/research-mass-search',
                     'user-guide/skills/bundled/research/research-opportunity-research',
                   ],
                 },

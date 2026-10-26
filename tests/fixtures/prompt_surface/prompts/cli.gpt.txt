@@ -193,6 +193,7 @@ After difficult/iterative tasks, offer to save as a skill. If a skill you loaded
     - hardware-research: Research and compare hardware for self-hosted AI. [mini-pc, server, workstation, comparison, ai-inference, reddit, scraping]
     - last30days: Research breaking news and trends from the last 30 days. [recency, reddit, x, youtube, tiktok, hackernews, polymarket]
     - llm-wiki: Karpathy's LLM Wiki: build/query interlinked markdown KB. [knowledge-base, notes, rag-alternative]
+    - mass-search: Research many sources in parallel and merge them. [búsqueda masiva, investigar, paralelo, pestañas, comparar, fuentes, deep research, many tabs]
     - opportunity-research: Research and evaluate digital business opportunities. [market-analysis, niches, competitive-analysis, saas]
   social-media: Skills for interacting with social platforms and social-media workflows — posting, reading, monitoring, and account operations.
     - linkedin-outreach: Find LinkedIn B2B leads and run rate-limited outreach. [sales, prospecting, mcp]

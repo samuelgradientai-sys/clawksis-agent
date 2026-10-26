@@ -4,7 +4,13 @@ Works on any browser the session reaches over CDP (agent-browser's local Chromiu
 Use backend also drives, or a cloud/CDP-override browser). It follows the tab the agent is working in
 — the page that most recently navigated — so a Browser Use ``new_tab()`` is picked up, and streams
 ``Page.screencastFrame`` JPEGs plus the tab list. Viewer input (mouse, wheel, keys, touch) is
-dispatched to the followed tab. Messages to the viewer are built here, never relayed raw.
+dispatched to the followed tab, and the viewer may pin a tab instead of following the agent.
+
+The agent's cursor: a listener installed in an ISOLATED world (invisible to the page's own scripts)
+reports where pointer and key events land — CDP-dispatched clicks fire real DOM events — through a
+binding, so the viewer can draw the agent's pointer, clicks and typing over the frame.
+Messages to the viewer are built here, never relayed raw. ``thumb`` streams a small, input-less
+preview for the mosaic of all live browsers.
 """
 
 from __future__ import annotations
@@ -14,6 +20,7 @@ import contextlib
 import itertools
 import json
 import logging
+import time
 from typing import Any, Awaitable, Callable, Optional
 
 logger = logging.getLogger(__name__)
@@ -26,7 +33,48 @@ _SCREENCAST = {
     "maxHeight": 800,
     "everyNthFrame": 1,
 }
+_THUMB_SCREENCAST = {
+    "format": "jpeg",
+    "quality": 40,
+    "maxWidth": 480,
+    "maxHeight": 300,
+    # Not 2: a static page paints once, so skipping frames can leave a thumbnail blank forever.
+    "everyNthFrame": 1,
+}
 _CALL_TIMEOUT_S = 10.0
+_WORLD = "clawk-live"
+_BINDING = "__clawkLive"
+# The viewer's own "Tomar control" input also fires DOM events; don't echo it back as the agent's cursor.
+_OWN_INPUT_ECHO_S = 0.6
+_DUPLICATE_S = 0.05
+_CURSOR_KINDS = frozenset({"move", "down", "click", "focus", "type", "scroll"})
+CURSOR_SCRIPT = """(() => {
+  if (window.top !== window || window.__clawkLiveCursor) return;
+  window.__clawkLiveCursor = true;
+  const report = (kind, x, y) => {
+    try { __clawkLive(JSON.stringify({ kind, x: Math.round(x), y: Math.round(y) })); } catch (_) {}
+  };
+  const centre = (el) => {
+    const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+    return r && r.width ? [r.left + r.width / 2, r.top + r.height / 2] : null;
+  };
+  const point = (e) => (e.clientX || e.clientY ? [e.clientX, e.clientY] : centre(e.target));
+  let lastMove = 0;
+  addEventListener("mousemove", (e) => {
+    const now = Date.now();
+    if (now - lastMove > 60) { lastMove = now; report("move", e.clientX, e.clientY); }
+  }, true);
+  for (const kind of ["mousedown", "click"]) {
+    addEventListener(kind, (e) => { const p = point(e); if (p) report(kind === "click" ? "click" : "down", ...p); }, true);
+  }
+  addEventListener("focusin", (e) => { const p = centre(e.target); if (p) report("focus", ...p); }, true);
+  let lastKey = 0;
+  addEventListener("keydown", () => {
+    const now = Date.now(), p = centre(document.activeElement);
+    if (p && now - lastKey > 150) { lastKey = now; report("type", ...p); }
+  }, true);
+  addEventListener("wheel", (e) => report("scroll", e.clientX, e.clientY), { capture: true, passive: true });
+})();"""
 
 
 def _is_page(info: dict) -> bool:
@@ -39,9 +87,14 @@ def _is_blank(info: dict) -> bool:
     return str(info.get("url", "")) in ("", "about:blank")
 
 
-def pick_target(pages: list[dict], recent: list[str]) -> Optional[str]:
-    """The tab to follow: the most recently navigated real page, else any non-blank page, else any page."""
+def pick_target(
+    pages: list[dict], recent: list[str], pinned: Optional[str] = None
+) -> Optional[str]:
+    """The tab to show: the one the viewer pinned, else the most recently navigated real page, else any
+    non-blank page, else any page."""
     by_id = {p["targetId"]: p for p in pages}
+    if pinned in by_id:
+        return pinned
     for target_id in reversed(recent):
         if target_id in by_id and not _is_blank(by_id[target_id]):
             return target_id
@@ -50,11 +103,15 @@ def pick_target(pages: list[dict], recent: list[str]) -> Optional[str]:
     return chosen[0]["targetId"] if chosen else None
 
 
-def tabs_message(pages: list[dict], followed: Optional[str]) -> dict:
+def tabs_message(
+    pages: list[dict], followed: Optional[str], pinned: bool = False
+) -> dict:
     return {
         "type": "tabs",
+        "pinned": pinned,
         "tabs": [
             {
+                "id": p["targetId"],
                 "active": p["targetId"] == followed,
                 "title": p.get("title") or None,
                 "url": p.get("url", ""),
@@ -95,12 +152,32 @@ def cdp_input(event: dict) -> Optional[tuple[str, dict]]:
     return None
 
 
+def cursor_message(payload: str) -> Optional[dict]:
+    """The isolated-world listener's report as a viewer ``cursor`` message, or None if malformed."""
+    try:
+        report = json.loads(payload)
+    except ValueError:
+        return None
+    if not isinstance(report, dict) or report.get("kind") not in _CURSOR_KINDS:
+        return None
+    x, y = report.get("x"), report.get("y")
+    if not all(isinstance(v, (int, float)) for v in (x, y)):
+        return None
+    return {"type": "cursor", "kind": report["kind"], "x": x, "y": y}
+
+
 class LiveScreencast:
     """One viewer's screencast over a browser-level CDP WebSocket."""
 
-    def __init__(self, ws_url: str, send: SendToViewer):
+    def __init__(self, ws_url: str, send: SendToViewer, thumb: bool = False):
         self._ws_url = ws_url
         self._send = send
+        self._thumb = thumb
+        self._pinned: Optional[str] = None
+        self._last_input = 0.0
+        self._script_id: Optional[str] = None
+        # Every install adds an isolated world, so a page re-attached keeps the earlier listener too.
+        self._last_cursor: tuple[str, float] = ("", 0.0)
         self._ids = itertools.count(1)
         self._pending: dict[int, asyncio.Future] = {}
         self._pages: dict[str, dict] = {}
@@ -161,10 +238,21 @@ class LiveScreencast:
                 event = json.loads(await viewer_input())
             except ValueError:
                 continue
-            mapped = cdp_input(event) if isinstance(event, dict) else None
-            if mapped and self._session:
-                with contextlib.suppress(TimeoutError, RuntimeError):
-                    await self.call(*mapped, session=self._session)
+            if isinstance(event, dict):
+                await self._on_viewer(event)
+
+    async def _on_viewer(self, event: dict) -> None:
+        kind = event.get("type")
+        if kind in ("focus_tab", "follow_agent"):
+            wanted = event.get("id") if kind == "focus_tab" else None
+            self._pinned = wanted if wanted in self._pages else None
+            await self._refollow()
+            return
+        mapped = None if self._thumb else cdp_input(event)
+        if mapped and self._session:
+            self._last_input = time.monotonic()
+            with contextlib.suppress(TimeoutError, RuntimeError):
+                await self.call(*mapped, session=self._session)
 
     async def _read(self) -> None:
         from websockets.exceptions import ConnectionClosed
@@ -195,29 +283,46 @@ class LiveScreencast:
     async def _on_event(
         self, method: str, params: dict, session: Optional[str]
     ) -> None:
-        if method == "Page.screencastFrame":
-            await self._on_frame(params, session)
-            return
+        handler = {
+            "Page.screencastFrame": self._on_frame,
+            "Runtime.bindingCalled": self._on_binding,
+            "Target.targetCreated": self._on_target_info,
+            "Target.targetInfoChanged": self._on_target_info,
+            "Target.targetDestroyed": self._on_target_gone,
+        }.get(method)
+        if handler is not None:
+            await handler(params, session)
+
+    async def _on_target_info(self, params: dict, _session: Optional[str]) -> None:
         info = params.get("targetInfo")
+        if not info or not _is_page(info):
+            return
+        previous = self._pages.get(info["targetId"])
+        self._pages[info["targetId"]] = info
+        if previous is None or previous.get("url") != info.get("url"):
+            self._recent = [t for t in self._recent if t != info["targetId"]]
+            self._recent.append(info["targetId"])
+        await self._refollow()
+
+    async def _on_target_gone(self, params: dict, _session: Optional[str]) -> None:
+        if self._pages.pop(params.get("targetId"), None) is not None:
+            await self._refollow()
+
+    async def _on_binding(self, params: dict, session: Optional[str]) -> None:
+        if session != self._session or params.get("name") != _BINDING:
+            return
+        now, payload = time.monotonic(), str(params.get("payload", ""))
+        if now - self._last_input < _OWN_INPUT_ECHO_S:
+            return
         if (
-            method in ("Target.targetCreated", "Target.targetInfoChanged")
-            and info
-            and _is_page(info)
+            self._last_cursor[0] == payload
+            and now - self._last_cursor[1] < _DUPLICATE_S
         ):
-            previous = self._pages.get(info["targetId"], {})
-            self._pages[info["targetId"]] = info
-            if method == "Target.targetCreated" or previous.get("url") != info.get(
-                "url"
-            ):
-                self._recent = [t for t in self._recent if t != info["targetId"]] + [
-                    info["targetId"]
-                ]
-            await self._refollow()
-        elif (
-            method == "Target.targetDestroyed" and params.get("targetId") in self._pages
-        ):
-            self._pages.pop(params["targetId"])
-            await self._refollow()
+            return
+        self._last_cursor = (payload, now)
+        message = cursor_message(payload)
+        if message is not None:
+            await self._send(message)
 
     async def _on_frame(self, params: dict, session: Optional[str]) -> None:
         if session != self._session:
@@ -242,22 +347,47 @@ class LiveScreencast:
 
     async def _refollow(self) -> None:
         pages = list(self._pages.values())
-        target = pick_target(pages, self._recent)
+        target = pick_target(pages, self._recent, self._pinned)
         if target != self._followed:
             await self._follow(target)
-        await self._send(tabs_message(pages, self._followed))
+        await self._send(tabs_message(pages, self._followed, self._pinned is not None))
 
     async def _follow(self, target: Optional[str]) -> None:
         if self._session:
             with contextlib.suppress(TimeoutError, RuntimeError):
+                if self._script_id:
+                    await self.call(
+                        "Page.removeScriptToEvaluateOnNewDocument",
+                        {"identifier": self._script_id},
+                        session=self._session,
+                    )
                 await self.call("Target.detachFromTarget", {"sessionId": self._session})
-        self._followed, self._session = target, None
+        self._followed, self._session, self._script_id = target, None, None
         if target is None:
             return
         attached = await self.call(
             "Target.attachToTarget", {"targetId": target, "flatten": True}
         )
         self._session = attached.get("sessionId")
-        if self._session:
-            await self.call("Page.enable", session=self._session)
-            await self.call("Page.startScreencast", _SCREENCAST, session=self._session)
+        if not self._session:
+            return
+        await self.call("Page.enable", session=self._session)
+        if not self._thumb:
+            await self._install_cursor()
+        settings = _THUMB_SCREENCAST if self._thumb else _SCREENCAST
+        await self.call("Page.startScreencast", settings, session=self._session)
+
+    async def _install_cursor(self) -> None:
+        # Binding calls are only reported to a session with the Runtime domain enabled.
+        await self.call("Runtime.enable", session=self._session)
+        await self.call(
+            "Runtime.addBinding",
+            {"name": _BINDING, "executionContextName": _WORLD},
+            session=self._session,
+        )
+        added = await self.call(
+            "Page.addScriptToEvaluateOnNewDocument",
+            {"source": CURSOR_SCRIPT, "worldName": _WORLD, "runImmediately": True},
+            session=self._session,
+        )
+        self._script_id = added.get("identifier")

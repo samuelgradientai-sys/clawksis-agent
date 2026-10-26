@@ -156,6 +156,7 @@ If a skill is missing from this list but present in the repo, the catalog is reg
 | [`hardware-research`](../user-guide/skills/bundled/research/research-hardware-research.md) | Research and compare hardware for self-hosted AI. | `research/hardware-research` |
 | [`last30days`](../user-guide/skills/bundled/research/research-last30days.md) | Research breaking news and trends from the last 30 days. | `research/last30days` |
 | [`llm-wiki`](../user-guide/skills/bundled/research/research-llm-wiki.md) | Karpathy's LLM Wiki: build/query interlinked markdown KB. | `research/llm-wiki` |
+| [`mass-search`](../user-guide/skills/bundled/research/research-mass-search.md) | Research many sources in parallel and merge them. | `research/mass-search` |
 | [`opportunity-research`](../user-guide/skills/bundled/research/research-opportunity-research.md) | Research and evaluate digital business opportunities. | `research/opportunity-research` |
 
 ## social-media

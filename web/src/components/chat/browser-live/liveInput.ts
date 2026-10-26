@@ -3,13 +3,33 @@
 
 import type { LiveBrowserSession, LiveFrameMetadata } from "@/lib/api-browser-live";
 
+const ownsKey = (id: string, key: string) =>
+  id === key || id.startsWith(`${key}@`) || id.startsWith(`${key}::`);
+
+/** Delegated subagents browse under their own task id (`sa-<index>-<id>`). */
+const isSubagentKey = (id: string) => /^sa-\d+-/.test(id);
+
+/** "Agente" for the conversation's own browser, "Subagente n" for delegated helpers, "Navegador n"
+ *  for anything else. */
+export function sessionLabels(sessions: LiveBrowserSession[], preferred: string | null): Map<string, string> {
+  const labels = new Map<string, string>();
+  const counts = { Subagente: 0, Navegador: 0 };
+  for (const { task_id: id } of sessions) {
+    if (preferred && ownsKey(id, preferred)) {
+      labels.set(id, "Agente");
+      continue;
+    }
+    const kind = isSubagentKey(id) ? "Subagente" : "Navegador";
+    labels.set(id, `${kind} ${++counts[kind]}`);
+  }
+  return labels;
+}
+
 /** The conversation's own browser (its key, or a variant of it: `<key>@<profile>`, `<key>::local`),
  *  else the most recently opened one. */
 export function pickSession(sessions: LiveBrowserSession[], preferred: string | null): string | null {
   const ids = sessions.map((s) => s.task_id);
-  const own = preferred
-    ? ids.filter((id) => id === preferred || id.startsWith(`${preferred}@`) || id.startsWith(`${preferred}::`))
-    : [];
+  const own = preferred ? ids.filter((id) => ownsKey(id, preferred)) : [];
   return own.at(-1) ?? ids.at(-1) ?? null;
 }
 

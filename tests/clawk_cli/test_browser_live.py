@@ -1,8 +1,10 @@
 """Live view of the agent's browser: the dashboard screencasts the session's browser over CDP.
 
 Contract: the viewer sees the tab the agent is working in — including a tab Browser Use opened with
-``new_tab()`` — as JPEG frames plus the tab list; only mouse/keyboard/touch input reaches the browser,
-on the followed tab; a session without a browser is a 4404 close; the socket needs dashboard auth.
+``new_tab()`` — as JPEG frames plus the tab list and the agent's cursor (reported from an isolated
+world the page can't see); the viewer may pin another tab and go back to following the agent; only
+mouse/keyboard/touch input reaches the browser, on the shown tab; thumbnails take no input and
+install nothing; a session without a browser is a 4404 close; the socket needs dashboard auth.
 """
 
 import asyncio
@@ -39,6 +41,28 @@ def test_follows_the_most_recently_navigated_real_page():
     other = {**PAGE1, "targetId": "T3", "url": "https://example.com/"}
     assert sc.pick_target([BLANK, PAGE1, other], recent=["T3", "T2"]) == "T2"
     assert sc.pick_target([], recent=["T2"]) is None
+
+
+def test_a_pinned_tab_wins_while_it_exists():
+    pages = [BLANK, PAGE1]
+    assert sc.pick_target(pages, recent=["T2"], pinned="T1") == "T1"
+    assert sc.pick_target(pages, recent=["T2"], pinned="gone") == "T2"
+
+
+def test_cursor_reports_are_validated():
+    assert sc.cursor_message('{"kind": "click", "x": 10, "y": 20.5}') == {
+        "type": "cursor",
+        "kind": "click",
+        "x": 10,
+        "y": 20.5,
+    }
+    for junk in (
+        '{"kind": "steal", "x": 1, "y": 2}',
+        '{"kind": "move", "x": "1"}',
+        "[]",
+        "nope",
+    ):
+        assert sc.cursor_message(junk) is None
 
 
 def test_only_input_events_become_cdp_input():
@@ -133,6 +157,23 @@ class _FakeBrowser:
                             }
                         )
                     )
+                if (
+                    method == "Page.addScriptToEvaluateOnNewDocument"
+                    and sessions[session] == "T2"
+                ):
+                    click = {
+                        "name": "__clawkLive",
+                        "payload": '{"kind": "click", "x": 120, "y": 64}',
+                    }
+                    await conn.send(
+                        json.dumps(
+                            {
+                                "method": "Runtime.bindingCalled",
+                                "params": click,
+                                "sessionId": session,
+                            }
+                        )
+                    )
 
         async with serve(handler, "127.0.0.1", 0) as server:
             self.port = server.sockets[0].getsockname()[1]
@@ -179,12 +220,18 @@ def test_streams_the_tab_browser_use_opened_and_forwards_input(client, monkeypat
             m.get("type") == "frame" and m["data"] == "cGFnZTE=" for m in seen
         ):
             seen.append(ws.receive_json())
+        while not any(m.get("type") == "cursor" for m in seen):
+            seen.append(ws.receive_json())
+        assert [m for m in seen if m["type"] == "cursor"] == [
+            {"type": "cursor", "kind": "click", "x": 120, "y": 64}
+        ]
         tabs = [m for m in seen if m["type"] == "tabs"][-1]["tabs"]
         assert [(t["url"], t["active"]) for t in tabs] == [
             ("about:blank", False),
             (PAGE1["url"], True),
         ]
-        assert seen[-1]["metadata"] == {"deviceWidth": 1280, "deviceHeight": 720}
+        frames = [m for m in seen if m["type"] == "frame"]
+        assert frames[-1]["metadata"] == {"deviceWidth": 1280, "deviceHeight": 720}
 
         ws.send_text(json.dumps({"type": "Runtime.evaluate", "expression": "alert(1)"}))
         ws.send_text(
@@ -205,9 +252,74 @@ def test_streams_the_tab_browser_use_opened_and_forwards_input(client, monkeypat
 
     methods = [c[0] for c in browser.calls]
     assert "Runtime.evaluate" not in methods
+    script = next(
+        c[1] for c in browser.calls if c[0] == "Page.addScriptToEvaluateOnNewDocument"
+    )
+    assert script["worldName"] == "clawk-live" and script["runImmediately"] is True
+    binding = next(c[1] for c in browser.calls if c[0] == "Runtime.addBinding")
+    assert binding == {"name": "__clawkLive", "executionContextName": "clawk-live"}
     mouse = next(c for c in browser.calls if c[0] == "Input.dispatchMouseEvent")
     assert mouse[2] == "S-T2" and mouse[1]["type"] == "mousePressed"
     assert ("Page.screencastFrameAck", {"sessionId": 7}, "S-T2") in browser.calls
+
+
+def _receive_until(ws, predicate):
+    seen = []
+    while not seen or not predicate(seen[-1]):
+        seen.append(ws.receive_json())
+    return seen
+
+
+def test_the_viewer_pins_a_tab_and_goes_back_to_following_the_agent(
+    client, monkeypatch
+):
+    browser = _FakeBrowser()
+    monkeypatch.setattr(
+        browser_live, "session_cdp_url", lambda task: f"ws://127.0.0.1:{browser.port}/x"
+    )
+
+    with client.websocket_connect(_url("chat-1"), headers=LOOPBACK) as ws:
+        _receive_until(
+            ws, lambda m: m.get("type") == "frame" and m["data"] == "cGFnZTE="
+        )
+        ws.send_text(json.dumps({"type": "focus_tab", "id": "T1"}))
+        pinned = _receive_until(ws, lambda m: m.get("type") == "tabs" and m["pinned"])[
+            -1
+        ]
+        assert [t["id"] for t in pinned["tabs"] if t["active"]] == ["T1"]
+        ws.send_text(json.dumps({"type": "follow_agent"}))
+        following = _receive_until(
+            ws, lambda m: m.get("type") == "tabs" and not m["pinned"]
+        )[-1]
+        assert [t["id"] for t in following["tabs"] if t["active"]] == ["T2"]
+
+
+def test_a_thumbnail_takes_no_input_and_installs_nothing(client, monkeypatch):
+    browser = _FakeBrowser()
+    monkeypatch.setattr(
+        browser_live, "session_cdp_url", lambda task: f"ws://127.0.0.1:{browser.port}/x"
+    )
+
+    with client.websocket_connect(_url("chat-1") + "&thumb=1", headers=LOOPBACK) as ws:
+        _receive_until(
+            ws, lambda m: m.get("type") == "frame" and m["data"] == "cGFnZTE="
+        )
+        ws.send_text(
+            json.dumps(
+                {"type": "input_mouse", "eventType": "mousePressed", "x": 5, "y": 6}
+            )
+        )
+        ws.send_text(json.dumps({"type": "focus_tab", "id": "T1"}))
+        _receive_until(ws, lambda m: m.get("type") == "tabs" and m["pinned"])
+
+    methods = [c[0] for c in browser.calls]
+    assert "Input.dispatchMouseEvent" not in methods
+    assert (
+        "Runtime.addBinding" not in methods
+        and "Page.addScriptToEvaluateOnNewDocument" not in methods
+    )
+    casts = [c[1] for c in browser.calls if c[0] == "Page.startScreencast"]
+    assert casts and all(c["maxWidth"] <= 480 for c in casts)
 
 
 def test_a_session_without_a_browser_is_refused(client, monkeypatch):

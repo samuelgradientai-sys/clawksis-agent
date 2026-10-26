@@ -1,11 +1,23 @@
-/** "Navegador" side panel: the agent's browser, live, with the page it is on and what it just did.
+/** "Navegador" side panel: the agent's browser, live — the page it is on, its cursor, its tabs and
+ *  what it just did — or a mosaic of every open agent browser (a mass search with subagents).
  *  "Tomar control" forwards clicks, scroll and typing to that same browser (pair browsing). */
 
 import { useState } from "react";
-import { Globe, Hand, MousePointerClick } from "lucide-react";
+import { Globe, Hand, LayoutGrid, MousePointerClick, Square } from "lucide-react";
+import { AgentCursor } from "./AgentCursor";
 import { useBrowserActions, usePreferredBrowserKey } from "./browserLiveStore";
-import { actionLabel, keyboardEvent, mouseEvent, toViewport, wheelEvent } from "./liveInput";
-import { useLiveBrowser, type LiveBrowser, type LiveState } from "./useLiveBrowser";
+import { LiveMosaic } from "./LiveMosaic";
+import { LiveTabStrip } from "./LiveTabStrip";
+import {
+  actionLabel,
+  keyboardEvent,
+  mouseEvent,
+  pickSession,
+  sessionLabels,
+  toViewport,
+  wheelEvent,
+} from "./liveInput";
+import { useLiveBrowser, useLiveSessions, type LiveBrowser, type LiveState } from "./useLiveBrowser";
 
 const STATE_COPY: Record<LiveState, { label: string; dot: string }> = {
   live: { label: "En vivo", dot: "bg-emerald-400 animate-pulse" },
@@ -14,7 +26,16 @@ const STATE_COPY: Record<LiveState, { label: string; dot: string }> = {
   ended: { label: "Terminado", dot: "bg-muted-foreground/50" },
 };
 
-function StatusBar({ live, control, onToggle }: { live: LiveBrowser; control: boolean; onToggle: () => void }) {
+type ViewMode = "one" | "grid";
+
+interface StatusBarProps {
+  live: LiveBrowser;
+  label: string | null;
+  control: boolean;
+  onToggle: () => void;
+}
+
+function StatusBar({ live, label, control, onToggle }: StatusBarProps) {
   const copy = STATE_COPY[live.state];
   return (
     <div className="flex items-center gap-2 px-3 pt-3">
@@ -22,6 +43,7 @@ function StatusBar({ live, control, onToggle }: { live: LiveBrowser; control: bo
         <span className={`size-1.5 rounded-full ${copy.dot}`} />
         {copy.label}
       </span>
+      {label && <span className="truncate text-[11px] text-muted-foreground">{label}</span>}
       {live.state === "live" && (
         <button
           type="button"
@@ -59,10 +81,11 @@ function Viewport({ live, control }: { live: LiveBrowser; control: boolean }) {
   if (!frame) return null;
   const point = (e: React.MouseEvent<HTMLImageElement>) =>
     toViewport(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect(), frame.meta);
-  const onPointer = (eventType: "mousePressed" | "mouseReleased") => (e: React.PointerEvent<HTMLImageElement>) => {
-    const p = control ? point(e) : null;
-    if (p) live.send(mouseEvent(eventType, p, e));
-  };
+  const onPointer =
+    (eventType: "mousePressed" | "mouseReleased") => (e: React.PointerEvent<HTMLImageElement>) => {
+      const p = control ? point(e) : null;
+      if (p) live.send(mouseEvent(eventType, p, e));
+    };
   const onWheel = (e: React.WheelEvent<HTMLImageElement>) => {
     const p = control ? point(e) : null;
     if (p) live.send(wheelEvent(p, e.deltaX, e.deltaY));
@@ -92,6 +115,7 @@ function Viewport({ live, control }: { live: LiveBrowser; control: boolean }) {
         onContextMenu={(e) => control && e.preventDefault()}
         className={`size-full select-none object-contain ${control ? "cursor-pointer" : "cursor-default"}`}
       />
+      <AgentCursor cursor={live.cursor} meta={frame.meta} />
     </div>
   );
 }
@@ -126,32 +150,90 @@ function EmptyState() {
   );
 }
 
+function ViewToggle({
+  mode,
+  count,
+  onMode,
+}: {
+  mode: ViewMode;
+  count: number;
+  onMode: (m: ViewMode) => void;
+}) {
+  if (count < 2) return null;
+  const item = (m: ViewMode, icon: React.ReactNode, text: string) => (
+    <button
+      type="button"
+      aria-pressed={mode === m}
+      onClick={() => onMode(m)}
+      className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition-colors ${
+        mode === m ? "bg-[#6C4FD6]/20 text-foreground" : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {icon}
+      {text}
+    </button>
+  );
+  return (
+    <div className="mx-3 mt-3 flex items-center gap-1 rounded-lg border border-border/60 p-0.5">
+      {item("one", <Square className="size-3" />, "Uno")}
+      {item("grid", <LayoutGrid className="size-3" />, `Mosaico · ${count} navegadores`)}
+    </div>
+  );
+}
+
+function SingleView({ live, control }: { live: LiveBrowser; control: boolean }) {
+  return (
+    <>
+      <AddressBar live={live} />
+      <LiveTabStrip live={live} />
+      <Viewport live={live} control={control} />
+      {live.state === "ended" && (
+        <p className="mx-3 mt-2 text-[11px] text-muted-foreground">
+          El agente cerró el navegador al terminar la tarea. Esta es la última imagen; cuando vuelva a
+          navegar, la vas a ver acá en vivo.
+        </p>
+      )}
+      {control && (
+        <p className="mx-3 mt-2 text-[11px] text-muted-foreground">
+          Tenés el control: tus clics, scroll y teclas van al navegador del agente.
+        </p>
+      )}
+      <ActionFeed />
+    </>
+  );
+}
+
 export function BrowserLivePanel() {
-  const live = useLiveBrowser(usePreferredBrowserKey());
+  const preferred = usePreferredBrowserKey();
+  const sessions = useLiveSessions();
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [mode, setMode] = useState<ViewMode>("one");
+  const taskId =
+    chosen && sessions.some((s) => s.task_id === chosen) ? chosen : pickSession(sessions, preferred);
+  const live = useLiveBrowser(taskId);
   const [control, setControl] = useState(false);
   const liveControl = control && live.state === "live";
+  const labels = sessionLabels(sessions, preferred);
+  const grid = mode === "grid" && sessions.length > 1;
+  const open = (id: string) => {
+    setChosen(id);
+    setMode("one");
+  };
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
-      <StatusBar live={live} control={liveControl} onToggle={() => setControl((c) => !c)} />
-      {live.state === "searching" ? (
+      <StatusBar
+        live={live}
+        label={sessions.length > 1 && taskId ? (labels.get(taskId) ?? null) : null}
+        control={liveControl}
+        onToggle={() => setControl((c) => !c)}
+      />
+      <ViewToggle mode={grid ? "grid" : "one"} count={sessions.length} onMode={setMode} />
+      {grid ? (
+        <LiveMosaic sessions={sessions} labels={labels} onOpen={open} />
+      ) : live.state === "searching" ? (
         <EmptyState />
       ) : (
-        <>
-          <AddressBar live={live} />
-          <Viewport live={live} control={liveControl} />
-          {live.state === "ended" && (
-            <p className="mx-3 mt-2 text-[11px] text-muted-foreground">
-              El agente cerró el navegador al terminar la tarea. Esta es la última imagen; cuando vuelva a
-              navegar, la vas a ver acá en vivo.
-            </p>
-          )}
-          {liveControl && (
-            <p className="mx-3 mt-2 text-[11px] text-muted-foreground">
-              Tenés el control: tus clics, scroll y teclas van al navegador del agente.
-            </p>
-          )}
-          <ActionFeed />
-        </>
+        <SingleView live={live} control={liveControl} />
       )}
     </div>
   );
