@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 import pytest
 
-from agent.prompt_builder import PLATFORM_HINTS
+from agent.prompt_builder_platform_hints import PLATFORM_HINTS
 from agent.system_prompt import (
     _tui_embedded_pane_clarifier,
     build_system_prompt_parts,

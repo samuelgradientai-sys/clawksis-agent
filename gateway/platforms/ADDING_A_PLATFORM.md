@@ -257,7 +257,7 @@ and update `to_dict()`, `from_dict()`, and `build_source()` in base.py.
 ## 6. System Prompt Hints (`platform_hint`)
 
 Declare `platform_hint=` on `ctx.register_platform` (keep the text in a light sibling such as
-`adapter_hint.py`) so the agent knows what platform it's on. `agent/prompt_builder.py::PLATFORM_HINTS`
+`adapter_hint.py`) so the agent knows what platform it's on. `agent/prompt_builder_platform_hints.py::PLATFORM_HINTS`
 holds only core surfaces (CLI, TUI, API server, ...):
 
 ```python

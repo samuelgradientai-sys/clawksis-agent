@@ -163,6 +163,8 @@ The **Chat** tab embeds the full Clawksis TUI (the same interface you get from `
 
 :::note Modern (React) chat
 The dashboard also ships a **Modern** chat — a native React client (not the PTY/xterm.js TUI above) that talks to the gateway over WebSocket JSON-RPC. It runs the **same slash-command set** (built-ins, skills, bundles, and pending-input commands like `/queue` and `/retry`) through the shared `slash.exec` → `command.dispatch` pipeline, opens native dialogs for interactive commands (`/model`, and the destructive `/clear` · `/new` · `/reset`), and adds composer niceties: `↑`/`↓` input history, `/` autocomplete with category labels, and collapsible command output. See the [Slash Commands Reference](../../reference/slash-commands.md#modern-web-chat-dashboard).
+
+Ask in plain language and the agent acts on the machine with its tools — runs code, creates a cron job, installs or edits a skill, changes its own settings with `clawk config set` — and then opens the page that shows the result (Cron, Skills, a skill's mini dashboard such as Kronos, Models, Config, …) with its `dashboard_open` tool. The chat stays mounted while the page changes, so the conversation keeps going.
 :::
 
 **How it works:**

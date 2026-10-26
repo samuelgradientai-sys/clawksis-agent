@@ -408,9 +408,14 @@ def _gui_surface_toolsets(platform: str) -> set[str]:
     """Toolsets that exist because of the CLIENT (off ``_CLAWK_CORE_TOOLS``; this is the one gate).
     ``platform`` is the SESSION's source, never a process env var: the desktop may drive a URL/cloud
     backend where ``CLAWK_DESKTOP`` is unset (AGENTS.md surface rule)."""
-    from toolsets import CLIENT_SURFACE_TOOLSETS
+    from toolsets import CLIENT_SURFACE_TOOLSETS, TOOLSET_SESSION_PLATFORMS
 
-    return set(CLIENT_SURFACE_TOOLSETS) if platform == "desktop" else {"project"}
+    # An ungated client toolset belongs to the desktop; a gated one to the platforms it names.
+    return {"project"} | {
+        name
+        for name in CLIENT_SURFACE_TOOLSETS
+        if platform in TOOLSET_SESSION_PLATFORMS.get(name, ("desktop",))
+    }
 
 
 def _with_session_toolsets(selection, platform: str) -> list[str]:
