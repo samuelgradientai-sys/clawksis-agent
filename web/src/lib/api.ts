@@ -522,21 +522,27 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids, profile: profile || undefined }),
     }),
-  cleanupSessions: (filter: {
-    source?: string;
-    model?: string;
-    older_than_days?: number;
-    max_messages?: number;
-    dry_run: boolean;
-  }) =>
-    fetchJSON<{ ok: boolean; matched?: number; messages?: number; deleted?: number }>(
-      "/api/sessions/cleanup",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filter),
-      },
-    ),
+  cleanupSessions: (
+    filter: {
+      source?: string;
+      model?: string;
+      older_than_days?: number;
+      max_messages?: number;
+      dry_run: boolean;
+    },
+    profile = getManagementProfile(),
+  ) =>
+    fetchJSON<{
+      ok: boolean;
+      matched?: number;
+      messages?: number;
+      deleted?: number;
+      skipped_active?: number;
+    }>("/api/sessions/cleanup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...filter, profile: profile || undefined }),
+    }),
   renameSession: (id: string, title: string, profile = getManagementProfile()) =>
     mutateSessionHttp<{ ok: boolean; title: string }>(id, "PATCH", { title }, profile),
   getSessionStats: (profile = getManagementProfile()) =>

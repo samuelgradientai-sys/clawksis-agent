@@ -373,6 +373,17 @@ class SessionPrune(BaseModel):
     dry_run: bool = False
 
 
+class SessionCleanup(BaseModel):
+    """Filtered free-space cleanup (dashboard "Limpiar"): filters are ANDed, at least one required."""
+
+    source: Optional[str] = None
+    model: Optional[str] = None  # case-insensitive substring of the session's model
+    older_than_days: Optional[int] = Field(None, ge=0)
+    max_messages: Optional[int] = Field(None, ge=0)
+    profile: Optional[str] = None
+    dry_run: bool = True
+
+
 class CronJobCreate(BaseModel):
     paused: StrictBool = False
     paused_reason: Optional[str] = None
