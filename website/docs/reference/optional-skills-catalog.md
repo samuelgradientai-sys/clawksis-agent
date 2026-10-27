@@ -118,6 +118,7 @@ clawk skills uninstall <skill-name>
 | Skill | Description |
 |-------|-------------|
 | [**agentmail**](../user-guide/skills/optional/email/email-agentmail.md) | Use when an agent needs AgentMail CLI email inboxes. |
+| [**harvey**](../user-guide/skills/optional/email/email-harvey.md) | Find and research B2B prospects, draft cold outreach. |
 
 ## finance
 
