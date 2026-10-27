@@ -266,6 +266,12 @@ def fetch_models_with_pricing(
         mid, pricing = item.get("id"), item.get("pricing")
         if mid and isinstance(pricing, dict):
             entry = _pricing_entry(pricing)
+            # ``-1`` means "rate varies" (router models such as typesafe/jev-router): no price is
+            # better than a negative one ("$-1000000" in the picker, negative session costs).
+            if any(
+                str(entry[k]).strip().startswith("-") for k in ("prompt", "completion")
+            ):
+                continue
             # Sale chrome is Nous Portal-only; never copy pricing.original for other catalogs.
             original = pricing.get("original") if include_sale_original else None
             if isinstance(original, dict):
