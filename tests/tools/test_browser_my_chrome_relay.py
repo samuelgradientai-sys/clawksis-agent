@@ -484,8 +484,10 @@ def test_the_live_view_draws_the_agents_pointer_and_not_the_users_own_mouse():
         )
         view = asyncio.create_task(live.run(asyncio.Event().wait))
         await async_wait_until(
-            lambda: live._followed == own
-            and any(c.viewer and c.discover for c in relay.clients),
+            lambda: (
+                live._followed == own
+                and any(c.viewer and c.discover for c in relay.clients)
+            ),
             what="the live view follows the agent's tab",
         )
 
