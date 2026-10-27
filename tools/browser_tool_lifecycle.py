@@ -109,6 +109,12 @@ def _emergency_cleanup_all_sessions():
                 _bt._session_owner_homes.clear()
                 _bt._cleanup_failures.clear()
                 _bt._recording_sessions.clear()
+    # Browser Use daemons this process drove: browser_exec does not register an ``_active_sessions``
+    # entry, so the cleanup above misses them and they would outlive the process (on Mi Chrome,
+    # holding the user's tabs attached).
+    _best_effort(
+        "Browser Use harness daemon stop on exit", _stop_driven_harness_daemons
+    )
     # Lightpanda servers we spawned that fell out of ``_active_sessions``.
     _best_effort("Lightpanda cleanup on exit", _stop_all_lightpanda)
     # Safe even if we never used the browser — owner_pid liveness protects daemons
@@ -733,6 +739,15 @@ def cleanup_browser(task_id: Optional[str] = None) -> None:
         _cleanup_single_browser_session(session_key)
     _drop_last_active_binding(task_id)
 
+    def _stop_my_chrome_harness():
+        from tools.browser_use_cli import stop_my_chrome_daemons
+
+        stop_my_chrome_daemons(task_id)
+
+    # Browser Use daemons are not browser sessions: on the user's own Chrome they would keep its
+    # tabs attached (and the live view on them) after the turn, so this task's are stopped here.
+    _best_effort("Mi Chrome harness daemon stop", _stop_my_chrome_harness)
+
 
 def _kill_verified_daemon(socket_dir: str, session_name: str) -> bool:
     """Tree-kill the daemon in ``<socket_dir>/<session>.pid`` if verifiably ours; True when
@@ -907,6 +922,12 @@ def cleanup_profile_browsers(home_key: str) -> None:
     for cache in ("_cached_command_timeout", "_cached_snapshot_threshold"):
         with contextlib.suppress(AttributeError, TypeError):
             getattr(_bt, cache).pop(home_key, None)
+
+
+def _stop_driven_harness_daemons() -> None:
+    from tools.browser_use_cli import stop_harness_daemons
+
+    stop_harness_daemons()
 
 
 def cleanup_all_browsers() -> None:

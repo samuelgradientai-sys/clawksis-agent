@@ -59,22 +59,34 @@ CURSOR_SCRIPT = """(() => {
     return r && r.width ? [r.left + r.width / 2, r.top + r.height / 2] : null;
   };
   const point = (e) => (e.clientX || e.clientY ? [e.clientX, e.clientY] : centre(e.target));
+  // On the user's own Chrome their real mouse and keys fire trusted events too: only the agent's
+  // script-made events (el.click(), dispatchEvent) are reported; its CDP input comes from the relay.
+  const skip = (e) => SYNTHETIC_ONLY && e.isTrusted;
   let lastMove = 0;
   addEventListener("mousemove", (e) => {
+    if (skip(e)) return;
     const now = Date.now();
     if (now - lastMove > 60) { lastMove = now; report("move", e.clientX, e.clientY); }
   }, true);
   for (const kind of ["mousedown", "click"]) {
-    addEventListener(kind, (e) => { const p = point(e); if (p) report(kind === "click" ? "click" : "down", ...p); }, true);
+    addEventListener(kind, (e) => { if (skip(e)) return; const p = point(e); if (p) report(kind === "click" ? "click" : "down", ...p); }, true);
   }
-  addEventListener("focusin", (e) => { const p = centre(e.target); if (p) report("focus", ...p); }, true);
+  addEventListener("focusin", (e) => { if (skip(e)) return; const p = centre(e.target); if (p) report("focus", ...p); }, true);
   let lastKey = 0;
-  addEventListener("keydown", () => {
+  addEventListener("keydown", (e) => {
+    if (skip(e)) return;
     const now = Date.now(), p = centre(document.activeElement);
     if (p && now - lastKey > 150) { lastKey = now; report("type", ...p); }
   }, true);
-  addEventListener("wheel", (e) => report("scroll", e.clientX, e.clientY), { capture: true, passive: true });
+  addEventListener("wheel", (e) => { if (!skip(e)) report("scroll", e.clientX, e.clientY); }, { capture: true, passive: true });
 })();"""
+
+
+def cursor_script(synthetic_only: bool = False) -> str:
+    """The cursor listener; ``synthetic_only`` on a browser the user also drives by hand."""
+    return CURSOR_SCRIPT.replace(
+        "SYNTHETIC_ONLY", "true" if synthetic_only else "false"
+    )
 
 
 def _is_page(info: dict) -> bool:
@@ -175,10 +187,14 @@ class LiveScreencast:
         send: SendToViewer,
         thumb: bool = False,
         focus: Optional[str] = None,
+        users_chrome: bool = False,
     ):
         """``focus``: the target to show until a tab navigates (the Mi Chrome relay knows which of
-        the user's many tabs matters; an agent's own browser starts with one)."""
+        the user's many tabs matters; an agent's own browser starts with one). ``users_chrome``: the
+        user's own Chrome (Mi Chrome), where their hand on the mouse must not pass for the agent's —
+        the agent's pointer comes from the relay (``Clawk.agentInput``) instead."""
         self._ws_url = ws_url
+        self._users_chrome = users_chrome
         self._send = send
         self._thumb = thumb
         self._pinned: Optional[str] = None
@@ -298,6 +314,7 @@ class LiveScreencast:
             "Target.targetInfoChanged": self._on_target_info,
             "Target.targetDestroyed": self._on_target_gone,
             "Clawk.agentFocus": self._on_agent_focus,
+            "Clawk.agentInput": self._on_agent_input,
         }.get(method)
         if handler is not None:
             await handler(params, session)
@@ -312,6 +329,16 @@ class LiveScreencast:
             self._recent = [t for t in self._recent if t != info["targetId"]]
             self._recent.append(info["targetId"])
         await self._refollow()
+
+    async def _on_agent_input(self, params: dict, _session: Optional[str]) -> None:
+        """The Mi Chrome relay saw the agent's mouse or keys land on a tab (``Clawk.agentInput``)."""
+        if self._thumb or params.get("targetId") != self._followed:
+            return
+        message = cursor_message(
+            json.dumps({k: params.get(k) for k in ("kind", "x", "y")})
+        )
+        if message is not None:
+            await self._send(message)
 
     async def _on_agent_focus(self, params: dict, _session: Optional[str]) -> None:
         """The Mi Chrome relay says which tab the agent is driving (``Clawk.agentFocus``)."""
@@ -403,7 +430,11 @@ class LiveScreencast:
         )
         added = await self.call(
             "Page.addScriptToEvaluateOnNewDocument",
-            {"source": CURSOR_SCRIPT, "worldName": _WORLD, "runImmediately": True},
+            {
+                "source": cursor_script(self._users_chrome),
+                "worldName": _WORLD,
+                "runImmediately": True,
+            },
             session=self._session,
         )
         self._script_id = added.get("identifier")

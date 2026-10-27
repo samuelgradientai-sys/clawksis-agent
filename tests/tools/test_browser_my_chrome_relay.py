@@ -6,8 +6,9 @@ own tabs first; flatten attach hands out a relay session whose commands reach th
 whose events arrive only for the domains that session enabled; a second driver joining a tab
 gets the execution contexts Chrome reported before it; createTarget opens a grouped agent tab in
 front; the user's tabs are never closed and Browser.close is a no-op; the endpoint refuses web
-pages and wrong secrets; the live view's traffic is not agent activity, and it is told which tab
-the agent is driving.
+pages and wrong secrets; the live view's traffic is not agent activity, it is told which tab
+the agent is driving, and it only ever sees the agent's own tabs and the user's tabs the agent is
+working in (never the rest of the user's tabs, and not one the agent has let go of).
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import urllib.request
 
 import pytest
 
+from tests.waiting import async_wait_until
 from tools.browser_my_chrome_relay import MyChromeRelay, is_debuggable_url
 from tools.browser_my_chrome_server import LoopbackCdpServer
 
@@ -334,18 +336,29 @@ def test_a_closed_tab_detaches_its_sessions_and_is_announced_gone():
     run_relay(scenario)
 
 
-def test_the_live_view_is_not_agent_activity_and_follows_the_agents_tab():
+def test_the_live_view_only_sees_the_users_tabs_the_agent_works_in():
     async def scenario(relay, extension, server, open_driver):
         viewer = await open_driver(viewer=True)
         await viewer.call("Target.setDiscoverTargets", {"discover": True})
-        infos = (await viewer.call("Target.getTargets"))["result"]["targetInfos"]
-        await viewer.call(
-            "Target.attachToTarget", {"targetId": infos[0]["targetId"], "flatten": True}
-        )
-        assert relay.agent_active() is False
+        assert (await viewer.call("Target.getTargets"))["result"]["targetInfos"] == []
+        assert relay.focus_target_id() is None
 
         agent = await open_driver()
-        news = next(i for i in infos if "news" in i["url"])["targetId"]
+        infos = (await agent.call("Target.getTargets"))["result"]["targetInfos"]
+        by_url = {i["url"]: i["targetId"] for i in infos}
+        front, news = (
+            by_url["https://vuelaya.example/"],
+            by_url["https://news.example/"],
+        )
+        # A driver's setup traffic on the tab the user has in front is not the agent working there.
+        idle = (
+            await agent.call(
+                "Target.attachToTarget", {"targetId": front, "flatten": True}
+            )
+        )["result"]["sessionId"]
+        await agent.call("Page.enable", session=idle)
+        assert relay.agent_active() is False
+
         sid = (
             await agent.call(
                 "Target.attachToTarget", {"targetId": news, "flatten": True}
@@ -354,10 +367,157 @@ def test_the_live_view_is_not_agent_activity_and_follows_the_agents_tab():
         await agent.call("Runtime.evaluate", {"expression": "1"}, session=sid)
         assert relay.agent_active() is True
         await viewer.drain()
+        created = viewer.named("Target.targetCreated")
+        assert [e["params"]["targetInfo"]["targetId"] for e in created] == [news]
         assert [e["params"]["targetId"] for e in viewer.named("Clawk.agentFocus")] == [
             news
         ]
         assert relay.focus_target_id() == news
+        seen = (await viewer.call("Target.getTargets"))["result"]["targetInfos"]
+        assert [i["targetId"] for i in seen] == [news]
+        refused = await viewer.call(
+            "Target.attachToTarget", {"targetId": front, "flatten": True}
+        )
+        assert "error" in refused
+
+    run_relay(scenario)
+
+
+def test_when_the_agent_lets_go_the_live_view_releases_the_users_tab():
+    async def scenario(relay, extension, server, open_driver):
+        viewer = await open_driver(viewer=True)
+        await viewer.call("Target.setDiscoverTargets", {"discover": True})
+        agent = await open_driver()
+        infos = (await agent.call("Target.getTargets"))["result"]["targetInfos"]
+        news = next(i for i in infos if "news" in i["url"])["targetId"]
+        sid = (
+            await agent.call(
+                "Target.attachToTarget", {"targetId": news, "flatten": True}
+            )
+        )["result"]["sessionId"]
+        await agent.call("Runtime.evaluate", {"expression": "1"}, session=sid)
+        own = (await agent.call("Target.createTarget", {"url": "https://a.example/"}))[
+            "result"
+        ]["targetId"]
+        watch = (
+            await viewer.call(
+                "Target.attachToTarget", {"targetId": news, "flatten": True}
+            )
+        )["result"]["sessionId"]
+        await viewer.call("Page.enable", session=watch)
+
+        await agent.conn.close()
+        await async_wait_until(
+            lambda: 11 in [c["tabId"] for c in extension.sent("detach")],
+            what="Chrome detached from the user's tab",
+        )
+        await viewer.drain()
+
+        assert news in [
+            e["params"]["targetId"] for e in viewer.named("Target.targetDestroyed")
+        ]
+        assert watch in [
+            e["params"]["sessionId"] for e in viewer.named("Target.detachedFromTarget")
+        ]
+        assert 11 in [c["tabId"] for c in extension.sent("detach")]
+        # The agent's own tab stays on screen; the user's tab is gone from the live view.
+        seen = (await viewer.call("Target.getTargets"))["result"]["targetInfos"]
+        assert [i["targetId"] for i in seen] == [own]
+        assert relay.focus_target_id() == own
+
+    run_relay(scenario)
+
+
+def test_a_tab_the_agent_opened_and_never_used_is_closed_when_it_leaves():
+    async def scenario(relay, extension, server, open_driver):
+        agent = await open_driver()
+        sibling = await open_driver()  # a parallel task, still working
+        blank = (await agent.call("Target.createTarget", {"url": "about:blank"}))[
+            "result"
+        ]["targetId"]
+        used = (await agent.call("Target.createTarget", {"url": "https://a.example/"}))[
+            "result"
+        ]["targetId"]
+        theirs = (await sibling.call("Target.createTarget", {"url": "about:blank"}))[
+            "result"
+        ]["targetId"]
+        closing = {relay.tab_for_target(t).tab_id: t for t in (blank, used, theirs)}
+
+        await agent.conn.close()
+        await async_wait_until(
+            lambda: extension.sent("close_tab"), what="the unused tab was closed"
+        )
+        await sibling.drain()
+
+        closed = [closing[c["tabId"]] for c in extension.sent("close_tab")]
+        assert closed == [blank]  # not the page it worked on, not the sibling's tab
+        assert [t.url for t in relay.tabs.values() if t.tab_id in (11, 12)] == [
+            "https://news.example/",
+            "https://vuelaya.example/",
+        ]
+
+    run_relay(scenario)
+
+
+def test_the_live_view_draws_the_agents_pointer_and_not_the_users_own_mouse():
+    from tools.browser_live_screencast import LiveScreencast
+
+    async def scenario(relay, extension, server, open_driver):
+        agent = await open_driver()
+        own = (await agent.call("Target.createTarget", {"url": "https://a.example/"}))[
+            "result"
+        ]["targetId"]
+        sid = (
+            await agent.call(
+                "Target.attachToTarget", {"targetId": own, "flatten": True}
+            )
+        )["result"]["sessionId"]
+        await agent.call("Runtime.evaluate", {"expression": "1"}, session=sid)
+
+        shown: list[dict] = []
+
+        async def send(message):
+            shown.append(message)
+
+        live = LiveScreencast(
+            server.ws_url + "?viewer=1", send, focus=own, users_chrome=True
+        )
+        view = asyncio.create_task(live.run(asyncio.Event().wait))
+        await async_wait_until(
+            lambda: (
+                live._followed == own
+                and any(c.viewer and c.discover for c in relay.clients)
+            ),
+            what="the live view follows the agent's tab",
+        )
+
+        for kind in ("mouseMoved", "mousePressed", "mouseReleased"):
+            await agent.call(
+                "Input.dispatchMouseEvent",
+                {"type": kind, "x": 40, "y": 50, "button": "left"},
+                session=sid,
+            )
+        await agent.call("Input.insertText", {"text": "hola"}, session=sid)
+        await async_wait_until(
+            lambda: sum(m.get("type") == "cursor" for m in shown) == 4,
+            what="the agent's pointer reached the live view",
+        )
+        view.cancel()
+
+        assert [
+            (m["kind"], m["x"], m["y"]) for m in shown if m["type"] == "cursor"
+        ] == [
+            ("move", 40, 50),
+            ("down", 40, 50),
+            ("click", 40, 50),
+            ("type", 40, 50),
+        ]
+        # The page itself reports only script-made events: the user's real mouse is trusted input.
+        script = next(
+            c["params"]["source"]
+            for c in extension.sent("cdp", "Page.addScriptToEvaluateOnNewDocument")
+        )
+        assert "true && e.isTrusted" in script
 
     run_relay(scenario)
 

@@ -6,6 +6,7 @@ instead of default browser tools
 
 import contextlib
 import functools
+import hashlib
 import importlib
 import importlib.util
 import json
@@ -881,6 +882,10 @@ def _run_cli_killing_process_group(cmd, code, env, timeout):
 # Harness daemons this process drove: each latches BU_CDP_* at start and outlives every call, so a backend
 # swap (/browser connect|disconnect) leaves later calls in the old browser until these are stopped.
 _driven_daemons: dict[tuple[str, ...], str] = {}  # daemon identity -> home
+# Daemons on the user's own Chrome (Mi Chrome) -> the task that drove them. Such a daemon keeps the
+# user's tabs attached (Chrome's "being debugged" bar, the live view following it) for as long as it
+# lives, so it is stopped when that task's turn ends instead of idling until the process exits.
+_my_chrome_daemons: dict[tuple[str, ...], Optional[str]] = {}
 _driven_daemons_lock = threading.Lock()
 _live_generation = functools.partial(
     _lazy_call,
@@ -905,6 +910,22 @@ def stop_harness_daemons(home_key: Optional[str] = None) -> None:
             key for key, home in _driven_daemons.items() if home_key in (None, home)
         )
         for key in daemons:
+            _driven_daemons.pop(key, None)
+            _my_chrome_daemons.pop(key, None)
+    _reload_daemons(daemons)
+
+
+def stop_my_chrome_daemons(task_id: Optional[str] = None) -> None:
+    """Stop the harness daemons that ``task_id`` drove on Mi Chrome (every Mi Chrome daemon when
+    None), so none of them keeps the user's tabs attached once the agent is done with them."""
+    with _driven_daemons_lock:
+        daemons = sorted(
+            key
+            for key, owner in _my_chrome_daemons.items()
+            if task_id is None or owner == task_id
+        )
+        for key in daemons:
+            _my_chrome_daemons.pop(key, None)
             _driven_daemons.pop(key, None)
     _reload_daemons(daemons)
 
@@ -982,6 +1003,7 @@ def _reload_if_republished(env: dict, generation: int) -> None:
     daemon = daemon_identity(env)
     with _driven_daemons_lock:
         _driven_daemons.pop(daemon, None)
+        _my_chrome_daemons.pop(daemon, None)
     _reload_daemons([daemon])
 
 
@@ -1006,11 +1028,22 @@ def _on_my_chrome(env: dict) -> bool:
     )
 
 
+def _task_daemon_name(task_id: str) -> str:
+    """The harness daemon a task drives the user's own Chrome with. All tasks share one browser
+    there, and a daemon drives one tab at a time: parallel subagents on the shared default daemon
+    would navigate each other's tab. One daemon per task gives each its own tab."""
+    return "task-" + hashlib.sha256(task_id.encode()).hexdigest()[:12]
+
+
 def _pins_own_tab(session: str, env: dict) -> bool:
     """A named session on a shared browser gets its own tab; on the user's own Chrome (Mi Chrome)
     the default session does too, so it never starts out driving whichever tab the user has in
-    front (it can still switch_tab() to one of theirs)."""
-    return bool(session) or _on_my_chrome(env)
+    front (it can still switch_tab() to one of theirs). A task's own daemon there (``_task_daemon_name``)
+    is a named daemon, which the harness already starts on a dedicated tab: pinning another would
+    leave an empty tab beside it."""
+    if session:
+        return True
+    return _on_my_chrome(env) and env.get("BU_NAME", "default") == "default"
 
 
 def _scope_to_own_tab(code: str, session: str, env: dict, private_browser) -> str:
@@ -1094,6 +1127,8 @@ def browser_exec(
         return tool_error(route_err)
     if local_sidecar:
         env["BU_NAME"] = _sidecar_daemon_name(session)
+    elif not session and task_id and _on_my_chrome(env):
+        env["BU_NAME"] = _task_daemon_name(task_id)
     _exec_route_is_sidecar[route_key] = local_sidecar
     bot_desktop_browser = bool(env.pop(_BOT_DESKTOP_BROWSER_SENTINEL, None))
 
@@ -1120,9 +1155,12 @@ def browser_exec(
 
     def dispatch() -> dict[str, Any]:
         _attach_vault_supervisor(env, task_id)
+        on_my_chrome = _on_my_chrome(env)
         with _driven_daemons_lock:
             daemon = daemon_identity(env)
             _driven_daemons[daemon] = clawk_home_key()
+            if on_my_chrome:
+                _my_chrome_daemons[daemon] = task_id
         try:
             return {"proc": _run_cli_killing_process_group(cmd, code, env, timeout)}
         except subprocess.TimeoutExpired:
