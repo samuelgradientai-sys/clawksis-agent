@@ -38,6 +38,39 @@ logger = logging.getLogger(__name__)
 _CDP_CALL_TIMEOUT_S = 60.0
 # A driver command this recent means the agent is using the user's Chrome right now.
 _ACTIVE_WINDOW_S = 20.0
+# Housekeeping a driver sends to every page it attaches to (a Browser Use daemon to the first tab at
+# startup, an auto-attaching client to all of them). It is not the agent working in that tab, so it
+# neither moves the live view nor lets the live view see one of the user's tabs.
+_PASSIVE_METHODS = frozenset(
+    {
+        "Runtime.runIfWaitingForDebugger",
+        "Page.getFrameTree",
+        "Page.setLifecycleEventsEnabled",
+        "Page.addScriptToEvaluateOnNewDocument",
+        "Page.removeScriptToEvaluateOnNewDocument",
+        "Runtime.addBinding",
+        "Network.setCacheDisabled",
+        "Target.setAutoAttach",
+        "Target.setDiscoverTargets",
+        "Target.getTargets",
+        "Target.getTargetInfo",
+        "Target.attachToTarget",
+        "Target.detachFromTarget",
+        "Target.getBrowserContexts",
+        "Browser.getVersion",
+    }
+)
+
+
+def is_passive(method: str) -> bool:
+    """Whether ``method`` is a driver's setup traffic rather than the agent acting on the page."""
+    return (
+        method in _PASSIVE_METHODS
+        or method.endswith(".enable")
+        or method.endswith(".disable")
+    )
+
+
 _TAB_CALL_TIMEOUT_S = 20.0
 DEFAULT_CONTEXT_ID = "C1A0C0DE000000000000000000000001"
 
@@ -201,6 +234,9 @@ class MyChromeRelay:
         self.ready = asyncio.Event()
         self.last_agent_command = 0.0
         self._agent_focus: Optional[int] = None
+        # The user's own tabs an agent driver has worked in: only these (and the agent's own tabs)
+        # are shown to live viewers, so the dashboard never streams a tab the agent did not touch.
+        self._agent_tabs: set[int] = set()
         self._by_target: dict[str, int] = {}
         self._pending: dict[int, asyncio.Future] = {}
         self._ids = itertools.count(1)
@@ -323,6 +359,14 @@ class MyChromeRelay:
     def _visible(self, tab: Optional[TabTarget]) -> bool:
         return tab is not None and is_debuggable_url(tab.url)
 
+    def viewer_can_see(self, tab: TabTarget) -> bool:
+        """A live viewer sees the agent's own tabs and the user's tabs the agent worked in."""
+        return tab.agent_owned or tab.tab_id in self._agent_tabs
+
+    def targets_for(self, client: RelayClient) -> list[TabTarget]:
+        tabs = self.ordered_targets()
+        return [t for t in tabs if self.viewer_can_see(t)] if client.viewer else tabs
+
     def ordered_targets(self) -> list[TabTarget]:
         """Debuggable tabs: the agent's own first (drivers attach to the first page), then the
         tab the user is looking at, then the rest in tab-strip order."""
@@ -353,7 +397,9 @@ class MyChromeRelay:
             self._announce_destroyed(tab)
         elif visible and before != (tab.url, tab.title):
             self._broadcast_discovery(
-                "Target.targetInfoChanged", {"targetInfo": self.target_info(tab)}
+                "Target.targetInfoChanged",
+                {"targetInfo": self.target_info(tab)},
+                tab=tab,
             )
         return tab
 
@@ -363,6 +409,7 @@ class MyChromeRelay:
             return
         self._by_target.pop(tab.target_id, None)
         self._attached.discard(tab.tab_id)
+        self._agent_tabs.discard(tab.tab_id)
         if is_debuggable_url(tab.url):
             self._announce_destroyed(tab)
 
@@ -371,11 +418,19 @@ class MyChromeRelay:
             if tab.window_id == window_id:
                 tab.active = tab.tab_id == tab_id
 
-    def _announce_created(self, tab: TabTarget) -> None:
-        self._broadcast_discovery(
-            "Target.targetCreated", {"targetInfo": self.target_info(tab)}
-        )
+    def _announce_created(self, tab: TabTarget, viewers_only: bool = False) -> None:
         for client in list(self.clients):
+            if (viewers_only and not client.viewer) or (
+                client.viewer and not self.viewer_can_see(tab)
+            ):
+                continue
+            if client.discover:
+                client.send(
+                    {
+                        "method": "Target.targetCreated",
+                        "params": {"targetInfo": self.target_info(tab)},
+                    }
+                )
             if client.auto_attach is not None:
                 self._auto_attach_tab(client, tab)
 
@@ -386,10 +441,15 @@ class MyChromeRelay:
         self._reset_tab(tab.tab_id)
         self._broadcast_discovery("Target.targetDestroyed", {"targetId": tab.target_id})
 
-    def _broadcast_discovery(self, method: str, params: dict) -> None:
+    def _broadcast_discovery(
+        self, method: str, params: dict, tab: Optional[TabTarget] = None
+    ) -> None:
         for client in list(self.clients):
-            if client.discover:
-                client.send({"method": method, "params": params})
+            if not client.discover:
+                continue
+            if client.viewer and tab is not None and not self.viewer_can_see(tab):
+                continue
+            client.send({"method": method, "params": params})
 
     def tab_for_target(self, target_id: Any) -> TabTarget:
         tab = self.tabs.get(self._by_target.get(target_id, -1))
@@ -488,6 +548,39 @@ class MyChromeRelay:
         for session in list(client.sessions.values()):
             client.sessions.pop(session.id, None)
             self._release_channel_keys(session)
+        if not client.viewer:
+            self._release_agent_tabs()
+
+    def _release_agent_tabs(self) -> None:
+        """Hide from live viewers the user's tabs no agent driver is attached to any more: their
+        sessions are dropped, so Chrome detaches (and its "being debugged" bar goes away)."""
+        held = {
+            s.tab_id
+            for c in self.clients
+            if not c.viewer
+            for s in c.sessions.values()
+            if s.child is None
+        }
+        for tab_id in sorted(self._agent_tabs - held):
+            self._agent_tabs.discard(tab_id)
+            tab = self.tabs.get(tab_id)
+            if tab is None or tab.agent_owned:
+                continue
+            if self._agent_focus == tab_id:
+                self._agent_focus = None
+            for viewer in [c for c in self.clients if c.viewer]:
+                for session in [
+                    v for v in viewer.sessions.values() if v.tab_id == tab_id
+                ]:
+                    self._drop_session(session, notify=True)
+                    self._release_channel_keys(session)
+                if viewer.discover:
+                    viewer.send(
+                        {
+                            "method": "Target.targetDestroyed",
+                            "params": {"targetId": tab.target_id},
+                        }
+                    )
 
     def add_client(self, viewer: bool = False) -> RelayClient:
         client = RelayClient(viewer=viewer)
@@ -609,7 +702,7 @@ class MyChromeRelay:
         """Answer one CDP command from ``client`` (replies are queued on its outbox)."""
         msg_id, session_id = msg.get("id"), msg.get("sessionId")
         method, params = str(msg.get("method") or ""), msg.get("params") or {}
-        if not client.viewer:
+        if not client.viewer and not is_passive(method):
             self.last_agent_command = time.monotonic()
         try:
             if session_id:
@@ -640,7 +733,7 @@ class MyChromeRelay:
         session = client.sessions.get(session_id)
         if session is None:
             raise CdpError("Session with given id not found.", -32001)
-        if not client.viewer and session.child is None:
+        if not client.viewer and session.child is None and not is_passive(method):
             self._note_agent_focus(session.tab_id)
         if method.startswith(
             "Browser."
@@ -731,8 +824,8 @@ class MyChromeRelay:
     async def _browser_contexts(self, _client: RelayClient, _params: dict) -> dict:
         return {"browserContextIds": []}
 
-    async def _get_targets(self, _client: RelayClient, _params: dict) -> dict:
-        return {"targetInfos": [self.target_info(t) for t in self.ordered_targets()]}
+    async def _get_targets(self, client: RelayClient, _params: dict) -> dict:
+        return {"targetInfos": [self.target_info(t) for t in self.targets_for(client)]}
 
     async def _get_target_info(self, _client: RelayClient, params: dict) -> dict:
         if (
@@ -754,7 +847,7 @@ class MyChromeRelay:
     async def _set_discover_targets(self, client: RelayClient, params: dict) -> dict:
         client.discover = bool(params.get("discover"))
         if client.discover:
-            for tab in self.ordered_targets():
+            for tab in self.targets_for(client):
                 client.send(
                     {
                         "method": "Target.targetCreated",
@@ -770,7 +863,7 @@ class MyChromeRelay:
         if params.get("flatten") is False:
             raise CdpError("Mi Chrome only supports flatten sessions")
         client.auto_attach = dict(params)
-        for tab in self.ordered_targets():
+        for tab in self.targets_for(client):
             self._auto_attach_tab(client, tab)
         return {}
 
@@ -778,6 +871,8 @@ class MyChromeRelay:
         if params.get("flatten") is False:
             raise CdpError("Mi Chrome only supports flatten sessions")
         tab = self.tab_for_target(params.get("targetId"))
+        if client.viewer and not self.viewer_can_see(tab):
+            raise CdpError(f"No target with given id found: {params.get('targetId')}")
         await self._ensure_attached(tab.tab_id)
         session = self._new_session(client, tab)
         client.send(self._attached_event(session, tab))
@@ -800,6 +895,8 @@ class MyChromeRelay:
             raise CdpError("No session with given id")
         self._drop_session(session, notify=True)
         self._release_channel_keys(session)
+        if not client.viewer:
+            self._release_agent_tabs()
         return {}
 
     async def _create_target(self, client: RelayClient, params: dict) -> dict:
@@ -841,6 +938,11 @@ class MyChromeRelay:
         tab = self.tabs.get(tab_id)
         if tab_id == self._agent_focus or not self._visible(tab):
             return
+        if not self.viewer_can_see(
+            tab
+        ):  # the agent starts working in one of the user's tabs
+            self._agent_tabs.add(tab_id)
+            self._announce_created(tab, viewers_only=True)
         self._agent_focus = tab_id
         for viewer in [c for c in self.clients if c.viewer and c.discover]:
             viewer.send(
@@ -857,14 +959,14 @@ class MyChromeRelay:
 
     def focus_target_id(self) -> Optional[str]:
         """The tab a viewer should see first: the one an agent is driving, else the agent's tab in
-        front, else the agent's newest tab, else the tab the user is looking at."""
-        tabs = self.ordered_targets()
+        front, else the agent's newest tab, else any other tab the agent worked in; None when the
+        agent has none (the live view then shows nothing rather than one of the user's tabs)."""
+        tabs = [t for t in self.ordered_targets() if self.viewer_can_see(t)]
         agent = [t for t in tabs if t.agent_owned]
         for pool in (
             [t for t in tabs if t.tab_id == self._agent_focus],
             [t for t in agent if t.active],
             sorted(agent, key=lambda t: t.tab_id)[-1:],
-            [t for t in tabs if t.active],
             tabs,
         ):
             if pool:

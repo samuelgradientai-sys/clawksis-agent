@@ -881,6 +881,10 @@ def _run_cli_killing_process_group(cmd, code, env, timeout):
 # Harness daemons this process drove: each latches BU_CDP_* at start and outlives every call, so a backend
 # swap (/browser connect|disconnect) leaves later calls in the old browser until these are stopped.
 _driven_daemons: dict[tuple[str, ...], str] = {}  # daemon identity -> home
+# Daemons on the user's own Chrome (Mi Chrome) -> the task that drove them. Such a daemon keeps the
+# user's tabs attached (Chrome's "being debugged" bar, the live view following it) for as long as it
+# lives, so it is stopped when that task's turn ends instead of idling until the process exits.
+_my_chrome_daemons: dict[tuple[str, ...], Optional[str]] = {}
 _driven_daemons_lock = threading.Lock()
 _live_generation = functools.partial(
     _lazy_call,
@@ -905,6 +909,22 @@ def stop_harness_daemons(home_key: Optional[str] = None) -> None:
             key for key, home in _driven_daemons.items() if home_key in (None, home)
         )
         for key in daemons:
+            _driven_daemons.pop(key, None)
+            _my_chrome_daemons.pop(key, None)
+    _reload_daemons(daemons)
+
+
+def stop_my_chrome_daemons(task_id: Optional[str] = None) -> None:
+    """Stop the harness daemons that ``task_id`` drove on Mi Chrome (every Mi Chrome daemon when
+    None), so none of them keeps the user's tabs attached once the agent is done with them."""
+    with _driven_daemons_lock:
+        daemons = sorted(
+            key
+            for key, owner in _my_chrome_daemons.items()
+            if task_id is None or owner == task_id
+        )
+        for key in daemons:
+            _my_chrome_daemons.pop(key, None)
             _driven_daemons.pop(key, None)
     _reload_daemons(daemons)
 
@@ -982,6 +1002,7 @@ def _reload_if_republished(env: dict, generation: int) -> None:
     daemon = daemon_identity(env)
     with _driven_daemons_lock:
         _driven_daemons.pop(daemon, None)
+        _my_chrome_daemons.pop(daemon, None)
     _reload_daemons([daemon])
 
 
@@ -1120,9 +1141,12 @@ def browser_exec(
 
     def dispatch() -> dict[str, Any]:
         _attach_vault_supervisor(env, task_id)
+        on_my_chrome = _on_my_chrome(env)
         with _driven_daemons_lock:
             daemon = daemon_identity(env)
             _driven_daemons[daemon] = clawk_home_key()
+            if on_my_chrome:
+                _my_chrome_daemons[daemon] = task_id
         try:
             return {"proc": _run_cli_killing_process_group(cmd, code, env, timeout)}
         except subprocess.TimeoutExpired:
