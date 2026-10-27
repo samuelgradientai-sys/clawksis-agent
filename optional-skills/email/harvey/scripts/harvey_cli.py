@@ -75,6 +75,7 @@ def _python_version(exe: str) -> Optional[tuple[int, int]]:
     try:
         out = subprocess.run(
             [exe, "-c", "import sys; print('%d %d' % sys.version_info[:2])"],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             check=False,
@@ -106,7 +107,9 @@ def harvey_env(base: Optional[dict] = None, claude: Optional[Path] = None) -> di
 
 
 def _sh(cmd: list[str], **kwargs) -> None:
-    subprocess.run(cmd, check=True, timeout=INSTALL_TIMEOUT_S, **kwargs)
+    subprocess.run(
+        cmd, stdin=subprocess.DEVNULL, check=True, timeout=INSTALL_TIMEOUT_S, **kwargs
+    )
 
 
 def _git(root: Path, *args: str) -> None:
@@ -141,6 +144,7 @@ def status(root: Path) -> dict:
     if (root / ".git").is_dir():
         commit = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "HEAD"],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             check=False,
@@ -169,7 +173,12 @@ def run(root: Path, args: list[str]) -> int:
     env = harvey_env(claude=find_claude())
     try:
         done = subprocess.run(
-            [str(harvey), *args], cwd=root, env=env, check=False, timeout=RUN_TIMEOUT_S
+            [str(harvey), *args],
+            cwd=root,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            check=False,
+            timeout=RUN_TIMEOUT_S,
         )
     except subprocess.TimeoutExpired:
         print(
