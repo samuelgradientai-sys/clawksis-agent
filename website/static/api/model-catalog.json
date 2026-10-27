@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-10-23T13:32:23Z",
+  "updated_at": "2026-10-27T16:18:54Z",
   "metadata": {
     "source": "clawksis-agent repo",
     "docs": "https://github.com/samuelgradientai-sys/clawksis-agent"
@@ -260,6 +260,10 @@
         {
           "id": "openrouter/pareto-code",
           "description": "auto-routes to cheapest coder meeting openrouter.min_coding_score"
+        },
+        {
+          "id": "typesafe/jev-router",
+          "description": "auto-routes each request: TypeSafe Jev picks model and effort (price varies)"
         },
         {
           "id": "thinkingmachines/inkling:free",

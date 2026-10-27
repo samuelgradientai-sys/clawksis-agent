@@ -26,6 +26,7 @@ _OPENROUTER_DESCRIPTIONS = {
     "z-ai/glm-5.2": "default",
     "z-ai/glm-5.3-flashx": "high-speed tier of glm-5.3-flash",
     "openrouter/pareto-code": "auto-routes to cheapest coder meeting openrouter.min_coding_score",
+    "typesafe/jev-router": "auto-routes each request: TypeSafe Jev picks model and effort (price varies)",
     "openai/gpt-6-astra-fast": "2x price, priority tier",
     "openai/gpt-6-astra-flex": "0.5x price, flex tier",
     "openai/gpt-6-astra-pro-fast": "2x price, priority tier",
@@ -98,6 +99,7 @@ OPENROUTER_MODELS: list[tuple[str, str]] = [
         "upstage/solar-pro4",
         "upstage/solar-mini4",
         "openrouter/pareto-code",
+        "typesafe/jev-router",
         "thinkingmachines/inkling:free",
         "thinkingmachines/inkling-small:free",
         "minimax/minimax-m3:free",
@@ -121,6 +123,7 @@ _OPENROUTER_ONLY = {
     "meta/muse-spark-1.2-contributor",
     "meta/muse-spark-1.3-contributor",
     "openrouter/pareto-code",
+    "typesafe/jev-router",
     "stealth/union-alpha",
 }
 
