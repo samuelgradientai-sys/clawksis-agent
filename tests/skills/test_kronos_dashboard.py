@@ -48,6 +48,7 @@ FORMATS = {"text", "number", "money", "percent", "datetime"}
 EXPECTED_PANELS = [
     "summary",
     "goals",
+    "etoro_key",
     "lessons",
     "bought",
     "sold",
@@ -443,3 +444,54 @@ def test_skill_frontmatter_declares_the_dashboard_within_the_catalog_budget():
         for k in ("watchlist", "objective", "risk", "horizon", "schedule")
     } <= keys
     assert "kronos.trading.max_order_usd" in keys
+
+
+def test_the_key_panel_lists_the_scopes_riskiest_first_and_is_empty_until_checked(
+    tmp_path,
+):
+    empty = _panel(_refresh(tmp_path, tmp_path / "missing.yaml"), "etoro_key")
+    assert empty["items"] == [] and "check your eToro key" in empty["empty"]
+
+    (tmp_path / "kronos").mkdir(exist_ok=True)
+    dash.key_check_path(tmp_path / "kronos").write_text(
+        json.dumps(
+            {
+                "checked_at": "2026-10-26T13:00:00Z",
+                "scopes": [
+                    "etoro-public:market-data:read",
+                    "etoro-public:trade.demo:write",
+                    "etoro-public:trade.real:write",
+                    "etoro-public:something:new",
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = _write_config(tmp_path, "display:\n  language: es\n")
+    panel = _panel(_refresh(tmp_path, config), "etoro_key")
+    assert [(i["title"], i["tone"]) for i in panel["items"]] == [
+        ("Operar con dinero REAL", "negative"),
+        ("Operar en la cuenta demo", "warning"),
+        ("Leer precios y velas", "neutral"),
+        ("Permiso sin descripción aquí.", "neutral"),
+    ]
+    assert "2026-10-26 13:00" in panel["description"]
+
+
+def test_checking_the_key_leaves_only_its_scopes_for_the_dashboard(
+    tmp_path, monkeypatch
+):
+    data = _load("etoro_data")
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
+
+    class FakeClient:
+        def identity(self):
+            return {"username": "someone", "scopes": ["etoro-public:market-data:read"]}
+
+    monkeypatch.setattr(data, "client_from_env", lambda: FakeClient())
+    assert data.cmd_check(None) == 0
+    saved = json.loads(dash.key_check_path().read_text(encoding="utf-8"))
+    assert saved["scopes"] == ["etoro-public:market-data:read"]
+    assert set(saved) == {"checked_at", "scopes"}  # no username, no keys
+    snapshot = json.loads((tmp_path / "dashboards" / "kronos.json").read_text("utf-8"))
+    assert _panel(snapshot, "etoro_key")["items"]

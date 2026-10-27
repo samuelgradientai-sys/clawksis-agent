@@ -206,6 +206,23 @@ Each entry supports:
 - `description` (required) — explains what the setting controls
 - `default` (optional) — default value if the user doesn't configure it
 - `prompt` (optional) — prompt text shown during `clawk config migrate`; falls back to `description`
+- `type` (optional) — `bool`, `integer`, `number`, `text` or `choice`; inferred from `choices` or `default` when omitted
+- `choices` (optional) — allowed values; the dashboard shows a dropdown
+- `choice_labels` (optional) — per-locale names for the choices, e.g. `{es: {low: Bajo, high: Alto}}`
+- `min` / `max` (optional) — bounds for `integer` and `number`
+- `label` (optional) — the field's name in the dashboard: text, or per locale (`{es: "Riesgo"}`)
+- `confirm` (optional) — `true` asks the user to confirm turning a `bool` on or raising a number; a list of choices (e.g. `[real]`) asks before picking one of them
+
+**Settings form:** every skill with a dashboard shows a **Settings** card under it (`GET`/`PUT /api/skills/settings/<name>`). It edits only the keys the skill declares, checks each value against its `type`, `choices` and bounds, and refuses changes marked with `confirm` (HTTP 409) until the user confirms them. A setting that hands the agent more power (placing orders, a real-money account, higher limits) should always carry `confirm`.
+
+```yaml
+      - key: kronos.trading.account
+        description: "eToro account for orders: demo (virtual money) or real"
+        default: demo
+        choices: [demo, real]
+        label: {es: "Cuenta de eToro"}
+        confirm: [real]
+```
 
 **How it works:**
 

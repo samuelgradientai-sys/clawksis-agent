@@ -17,29 +17,53 @@ metadata:
       - key: kronos.trading.enabled
         description: "Let the agent place eToro orders inside the limits (off until the user turns it on)"
         default: false
+        label: {es: "Trading automático"}
+        confirm: true
       - key: kronos.trading.account
         description: "eToro account for orders: demo (virtual money) or real"
         default: demo
+        choices: [demo, real]
+        choice_labels: {es: {demo: "Demo (dinero virtual)", real: "Real (dinero de verdad)"}}
+        label: {es: "Cuenta de eToro"}
+        confirm: [real]
       - key: kronos.trading.max_order_usd
         description: "Max USD per buy"
         default: 100
+        min: 1
+        label: {es: "Máximo por orden (USD)"}
+        confirm: true
       - key: kronos.trading.max_daily_usd
         description: "Max USD of all buys in one UTC day"
         default: 300
+        min: 1
+        label: {es: "Máximo por día (USD)"}
+        confirm: true
       - key: kronos.trading.max_orders_per_day
         description: "Max buys per UTC day"
         default: 5
+        min: 1
+        label: {es: "Compras máximas por día"}
+        confirm: true
       - key: kronos.goals.watchlist
         description: "Symbols Kronos follows, comma-separated (e.g. AAPL, BTC)"
+        label: {es: "Lista de seguimiento"}
       - key: kronos.goals.objective
         description: "The user's goal (e.g. learn on demo, grow savings slowly)"
+        label: {es: "Objetivo"}
       - key: kronos.goals.risk
         description: "Risk tolerance: low, medium or high"
         default: low
+        choices: [low, medium, high]
+        choice_labels: {es: {low: Bajo, medium: Medio, high: Alto}}
+        label: {es: "Riesgo"}
       - key: kronos.goals.horizon
         description: "Holding horizon: days, weeks or months"
+        choices: [days, weeks, months]
+        choice_labels: {es: {days: Días, weeks: Semanas, months: Meses}}
+        label: {es: "Horizonte"}
       - key: kronos.goals.schedule
         description: "How often to analyze (e.g. weekdays at 10:30, every 1h)"
+        label: {es: "Frecuencia"}
 required_environment_variables:
   - name: ETORO_API_KEY
     prompt: eToro public API key (sent as x-api-key)

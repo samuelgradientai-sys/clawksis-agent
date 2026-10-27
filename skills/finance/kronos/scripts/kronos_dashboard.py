@@ -53,7 +53,7 @@ from _kronos_config import (
     load_config,
     watchlist,
 )
-from _kronos_dashboard_labels import LABELS, STATUS_ES
+from _kronos_dashboard_labels import LABELS, SCOPES, STATUS_ES
 from _kronos_journal import (
     BACKTEST_MAX_AGE,
     MIN_MATURED,
@@ -139,6 +139,20 @@ class Inputs:
     refused: list[dict[str, Any]]
     backtests: list[dict[str, Any]]
     strategies: list[dict[str, Any]]
+    key_check: dict[str, Any] | None = None
+
+
+def key_check_path(kronos_dir: Path | None = None) -> Path:
+    """Where ``etoro_data.py check`` leaves the scopes it saw (no keys, no account data)."""
+    return (kronos_dir or kronos_home()) / "etoro_key_check.json"
+
+
+def _read_key_check(path: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def load_inputs(config_path: Path | None, kronos_dir: Path) -> Inputs:
@@ -160,6 +174,7 @@ def load_inputs(config_path: Path | None, kronos_dir: Path) -> Inputs:
         refused=read_jsonl(refused_path(kronos_dir)),
         backtests=read_backtests(backtests_path(kronos_dir)),
         strategies=read_jsonl(strategy_path(kronos_dir)),
+        key_check=_read_key_check(key_check_path(kronos_dir)),
     )
 
 
@@ -285,6 +300,41 @@ def goals_panel(inputs: Inputs) -> dict[str, Any]:
     }
     if not inputs.goals.get("watchlist"):
         panel["description"] = t["goals_unset"]
+    return panel
+
+
+_TONE_ORDER = {"negative": 0, "warning": 1, "neutral": 2}
+
+
+def key_panel(inputs: Inputs) -> dict[str, Any]:
+    """The scopes the eToro key pair carries, riskiest first; read-only by design."""
+    t = LABELS[inputs.lang]
+    check = inputs.key_check or {}
+    scopes = check.get("scopes") if isinstance(check.get("scopes"), list) else []
+    items = []
+    for scope in scopes:
+        name = str(scope).strip()
+        short = name.removeprefix("etoro-public:")
+        tone, text = SCOPES.get(short, ("neutral", {}))
+        items.append(
+            {
+                "title": text.get(inputs.lang) or t["key_unknown"],
+                "body": name,
+                "tone": tone,
+            }
+        )
+    items.sort(key=lambda item: (_TONE_ORDER.get(item["tone"], 3), item["body"]))
+    panel: dict[str, Any] = {
+        "id": "etoro_key",
+        "type": "list",
+        "title": t["key"],
+        "width": "half",
+        "items": items[:60],
+        "empty": t["key_empty"],
+    }
+    checked = (iso_z(check.get("checked_at")) or "")[:16].replace("T", " ")
+    if checked:
+        panel["description"] = t["key_desc"].format(when=checked)
     return panel
 
 
@@ -704,6 +754,7 @@ def build_snapshot(inputs: Inputs, now: datetime) -> dict[str, Any]:
     panels = [
         summary_panel(inputs, now),
         goals_panel(inputs),
+        key_panel(inputs),
         lessons_panel(inputs),
         bought_panel(inputs),
         sold_panel(inputs),

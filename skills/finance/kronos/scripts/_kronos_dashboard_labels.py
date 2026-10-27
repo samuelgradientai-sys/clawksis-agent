@@ -28,7 +28,11 @@ LABELS: dict[str, dict[str, str]] = {
         "lessons_count": "Active lessons",
         "config_error": "config.yaml could not be read",
         "goals": "Your goals",
-        "goals_unset": "Not set yet: ask Kronos to set up your goals.",
+        "goals_unset": "Not set yet: fill them in under Settings below, or ask Kronos to set up your goals.",
+        "key": "Your eToro key permissions",
+        "key_desc": "Read-only here: permissions are granted when the key is created on eToro (Settings > Trading > API Key Management). Checked {when} UTC.",
+        "key_empty": "Not checked yet: ask Kronos to check your eToro key.",
+        "key_unknown": "Permission not described here.",
         "watchlist": "Watchlist",
         "objective": "Objective",
         "risk": "Risk",
@@ -146,7 +150,11 @@ LABELS: dict[str, dict[str, str]] = {
         "lessons_count": "Lecciones activas",
         "config_error": "no se pudo leer config.yaml",
         "goals": "Tus objetivos",
-        "goals_unset": "Sin configurar: pide a Kronos que configure tus objetivos.",
+        "goals_unset": "Sin configurar: complétalos en Ajustes (abajo) o pide a Kronos que configure tus objetivos.",
+        "key": "Permisos de tu clave de eToro",
+        "key_desc": "Solo lectura: los permisos se otorgan al crear la clave en eToro (Configuración > Trading > Gestión de claves API). Verificado {when} UTC.",
+        "key_empty": "Todavía no se verificó: pide a Kronos que verifique tu clave de eToro.",
+        "key_unknown": "Permiso sin descripción aquí.",
         "watchlist": "Lista de seguimiento",
         "objective": "Objetivo",
         "risk": "Riesgo",
@@ -262,4 +270,79 @@ STATUS_ES = {
     "received": "recibida",
     "placed": "en espera",
     "not_found": "no encontrada",
+}
+
+
+# What each eToro scope (after the ``etoro-public:`` prefix) lets the key do, and how loud to be
+# about it: real-money writes and transfers are red, demo writes amber, reads neutral.
+SCOPES: dict[str, tuple[str, dict[str, str]]] = {
+    "market-data:read": (
+        "neutral",
+        {"en": "Read prices and candles", "es": "Leer precios y velas"},
+    ),
+    "trade.real:read": (
+        "neutral",
+        {"en": "See the real account", "es": "Ver la cuenta real"},
+    ),
+    "real:read": (
+        "neutral",
+        {"en": "See the real account", "es": "Ver la cuenta real"},
+    ),
+    "trade.demo:read": (
+        "neutral",
+        {"en": "See the demo account", "es": "Ver la cuenta demo"},
+    ),
+    "demo:read": (
+        "neutral",
+        {"en": "See the demo account", "es": "Ver la cuenta demo"},
+    ),
+    "user-info:read": ("neutral", {"en": "Read your profile", "es": "Leer tu perfil"}),
+    "money.balance:read": (
+        "neutral",
+        {"en": "Read your balance", "es": "Leer tu saldo"},
+    ),
+    "money.cash-transactions:read": (
+        "neutral",
+        {"en": "Read deposits and withdrawals", "es": "Leer depósitos y retiros"},
+    ),
+    "money.transfer:read": (
+        "neutral",
+        {"en": "Read transfers", "es": "Leer transferencias"},
+    ),
+    "crypto:read": (
+        "neutral",
+        {"en": "Read crypto data", "es": "Leer datos de cripto"},
+    ),
+    "agent-portfolio:read": (
+        "neutral",
+        {"en": "Read agent portfolios", "es": "Leer carteras de agente"},
+    ),
+    "trade.demo:write": (
+        "warning",
+        {"en": "Place orders on the demo account", "es": "Operar en la cuenta demo"},
+    ),
+    "demo:write": (
+        "warning",
+        {"en": "Place orders on the demo account", "es": "Operar en la cuenta demo"},
+    ),
+    "trade.real:write": (
+        "negative",
+        {"en": "Place orders with REAL money", "es": "Operar con dinero REAL"},
+    ),
+    "real:write": (
+        "negative",
+        {"en": "Place orders with REAL money", "es": "Operar con dinero REAL"},
+    ),
+    "money.transfer:write": (
+        "negative",
+        {"en": "Move money between accounts", "es": "Mover dinero entre cuentas"},
+    ),
+    "crypto:write": (
+        "negative",
+        {"en": "Crypto operations", "es": "Operaciones de cripto"},
+    ),
+    "agent-portfolio:write": (
+        "warning",
+        {"en": "Manage agent portfolios", "es": "Gestionar carteras de agente"},
+    ),
 }

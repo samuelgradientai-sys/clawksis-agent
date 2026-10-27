@@ -19,6 +19,11 @@ vi.mock("@/lib/api-skill-dashboards", async (importOriginal) => ({
   skillDashboardsApi: { list: vi.fn(), get: (name: string) => get(name) },
 }));
 
+vi.mock("@/lib/api-skill-settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api-skill-settings")>()),
+  skillSettingsApi: { get: vi.fn().mockResolvedValue({ name: "kronos", fields: [] }), save: vi.fn() },
+}));
+
 const base: Omit<SkillDashboardDetail, "snapshot" | "error"> = {
   name: "kronos",
   title: "Kronos",
