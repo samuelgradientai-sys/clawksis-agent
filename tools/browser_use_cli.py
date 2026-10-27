@@ -6,6 +6,7 @@ instead of default browser tools
 
 import contextlib
 import functools
+import hashlib
 import importlib
 import importlib.util
 import json
@@ -1027,11 +1028,22 @@ def _on_my_chrome(env: dict) -> bool:
     )
 
 
+def _task_daemon_name(task_id: str) -> str:
+    """The harness daemon a task drives the user's own Chrome with. All tasks share one browser
+    there, and a daemon drives one tab at a time: parallel subagents on the shared default daemon
+    would navigate each other's tab. One daemon per task gives each its own tab."""
+    return "task-" + hashlib.sha256(task_id.encode()).hexdigest()[:12]
+
+
 def _pins_own_tab(session: str, env: dict) -> bool:
     """A named session on a shared browser gets its own tab; on the user's own Chrome (Mi Chrome)
     the default session does too, so it never starts out driving whichever tab the user has in
-    front (it can still switch_tab() to one of theirs)."""
-    return bool(session) or _on_my_chrome(env)
+    front (it can still switch_tab() to one of theirs). A task's own daemon there (``_task_daemon_name``)
+    is a named daemon, which the harness already starts on a dedicated tab: pinning another would
+    leave an empty tab beside it."""
+    if session:
+        return True
+    return _on_my_chrome(env) and env.get("BU_NAME", "default") == "default"
 
 
 def _scope_to_own_tab(code: str, session: str, env: dict, private_browser) -> str:
@@ -1115,6 +1127,8 @@ def browser_exec(
         return tool_error(route_err)
     if local_sidecar:
         env["BU_NAME"] = _sidecar_daemon_name(session)
+    elif not session and task_id and _on_my_chrome(env):
+        env["BU_NAME"] = _task_daemon_name(task_id)
     _exec_route_is_sidecar[route_key] = local_sidecar
     bot_desktop_browser = bool(env.pop(_BOT_DESKTOP_BROWSER_SENTINEL, None))
 

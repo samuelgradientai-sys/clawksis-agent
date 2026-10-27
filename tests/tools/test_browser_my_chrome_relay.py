@@ -428,6 +428,37 @@ def test_when_the_agent_lets_go_the_live_view_releases_the_users_tab():
     run_relay(scenario)
 
 
+def test_a_tab_the_agent_opened_and_never_used_is_closed_when_it_leaves():
+    async def scenario(relay, extension, server, open_driver):
+        agent = await open_driver()
+        sibling = await open_driver()  # a parallel task, still working
+        blank = (await agent.call("Target.createTarget", {"url": "about:blank"}))[
+            "result"
+        ]["targetId"]
+        used = (await agent.call("Target.createTarget", {"url": "https://a.example/"}))[
+            "result"
+        ]["targetId"]
+        theirs = (await sibling.call("Target.createTarget", {"url": "about:blank"}))[
+            "result"
+        ]["targetId"]
+        closing = {relay.tab_for_target(t).tab_id: t for t in (blank, used, theirs)}
+
+        await agent.conn.close()
+        await async_wait_until(
+            lambda: extension.sent("close_tab"), what="the unused tab was closed"
+        )
+        await sibling.drain()
+
+        closed = [closing[c["tabId"]] for c in extension.sent("close_tab")]
+        assert closed == [blank]  # not the page it worked on, not the sibling's tab
+        assert [t.url for t in relay.tabs.values() if t.tab_id in (11, 12)] == [
+            "https://news.example/",
+            "https://vuelaya.example/",
+        ]
+
+    run_relay(scenario)
+
+
 def test_the_endpoint_refuses_web_pages_and_wrong_secrets():
     async def scenario(relay, extension, server, open_driver):
         root = f"http://127.0.0.1:{server.port}"

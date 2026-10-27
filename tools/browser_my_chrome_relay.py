@@ -212,6 +212,8 @@ class RelayClient:
         self.discover = False
         self.auto_attach: Optional[dict] = None
         self.sessions: dict[str, _Session] = {}
+        # The tabs this client opened (Target.createTarget).
+        self.opened_tabs: set[int] = set()
         self.closed = False
 
     def send(self, message: dict) -> None:
@@ -549,7 +551,20 @@ class MyChromeRelay:
             client.sessions.pop(session.id, None)
             self._release_channel_keys(session)
         if not client.viewer:
+            self._close_unused_tabs(client)
             self._release_agent_tabs()
+
+    def _close_unused_tabs(self, client: RelayClient) -> None:
+        """Close the tabs a departing driver opened and never used (still blank). The harness
+        opens its own tab before it knows whether the task needs one, so a run that only read
+        the user's tabs would otherwise leave an empty tab in the "Clawksis" group."""
+        held = {
+            s.tab_id for c in self.clients if not c.viewer for s in c.sessions.values()
+        }
+        for tab_id in sorted(client.opened_tabs - held):
+            tab = self.tabs.get(tab_id)
+            if tab is not None and tab.agent_owned and tab.url in ("", "about:blank"):
+                self._spawn(self._close_tab(tab_id))
 
     def _release_agent_tabs(self) -> None:
         """Hide from live viewers the user's tabs no agent driver is attached to any more: their
@@ -907,6 +922,7 @@ class MyChromeRelay:
         tab = self._upsert_tab(result.get("tab") or {}, opened_by_agent=True)
         if tab is None:
             raise CdpError("Mi Chrome no pudo abrir la pestaña.")
+        client.opened_tabs.add(tab.tab_id)
         return {"targetId": tab.target_id}
 
     async def _close_target(self, _client: RelayClient, params: dict) -> dict:
