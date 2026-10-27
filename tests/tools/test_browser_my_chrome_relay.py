@@ -459,6 +459,67 @@ def test_a_tab_the_agent_opened_and_never_used_is_closed_when_it_leaves():
     run_relay(scenario)
 
 
+def test_the_live_view_draws_the_agents_pointer_and_not_the_users_own_mouse():
+    from tools.browser_live_screencast import LiveScreencast
+
+    async def scenario(relay, extension, server, open_driver):
+        agent = await open_driver()
+        own = (await agent.call("Target.createTarget", {"url": "https://a.example/"}))[
+            "result"
+        ]["targetId"]
+        sid = (
+            await agent.call(
+                "Target.attachToTarget", {"targetId": own, "flatten": True}
+            )
+        )["result"]["sessionId"]
+        await agent.call("Runtime.evaluate", {"expression": "1"}, session=sid)
+
+        shown: list[dict] = []
+
+        async def send(message):
+            shown.append(message)
+
+        live = LiveScreencast(
+            server.ws_url + "?viewer=1", send, focus=own, users_chrome=True
+        )
+        view = asyncio.create_task(live.run(asyncio.Event().wait))
+        await async_wait_until(
+            lambda: live._followed == own
+            and any(c.viewer and c.discover for c in relay.clients),
+            what="the live view follows the agent's tab",
+        )
+
+        for kind in ("mouseMoved", "mousePressed", "mouseReleased"):
+            await agent.call(
+                "Input.dispatchMouseEvent",
+                {"type": kind, "x": 40, "y": 50, "button": "left"},
+                session=sid,
+            )
+        await agent.call("Input.insertText", {"text": "hola"}, session=sid)
+        await async_wait_until(
+            lambda: sum(m.get("type") == "cursor" for m in shown) == 4,
+            what="the agent's pointer reached the live view",
+        )
+        view.cancel()
+
+        assert [
+            (m["kind"], m["x"], m["y"]) for m in shown if m["type"] == "cursor"
+        ] == [
+            ("move", 40, 50),
+            ("down", 40, 50),
+            ("click", 40, 50),
+            ("type", 40, 50),
+        ]
+        # The page itself reports only script-made events: the user's real mouse is trusted input.
+        script = next(
+            c["params"]["source"]
+            for c in extension.sent("cdp", "Page.addScriptToEvaluateOnNewDocument")
+        )
+        assert "true && e.isTrusted" in script
+
+    run_relay(scenario)
+
+
 def test_the_endpoint_refuses_web_pages_and_wrong_secrets():
     async def scenario(relay, extension, server, open_driver):
         root = f"http://127.0.0.1:{server.port}"

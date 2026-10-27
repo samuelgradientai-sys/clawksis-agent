@@ -153,6 +153,26 @@ def _disabled_key(method: str, params: dict) -> Optional[str]:
     return method[: -len(".disable")] if method.endswith(".disable") else None
 
 
+_MOUSE_KINDS = {
+    "mouseMoved": "move",
+    "mousePressed": "down",
+    "mouseReleased": "click",
+    "mouseWheel": "scroll",
+}
+
+
+def _input_kind(method: str, params: dict) -> Optional[str]:
+    """The live-view cursor kind for an agent ``Input.*`` command, or None for none."""
+    if method == "Input.dispatchMouseEvent":
+        return _MOUSE_KINDS.get(str(params.get("type")))
+    if method == "Input.insertText" or (
+        method == "Input.dispatchKeyEvent"
+        and params.get("type") in ("keyDown", "rawKeyDown")
+    ):
+        return "type"
+    return None
+
+
 @dataclass
 class TabTarget:
     """One of the user's tabs, as a CDP page target."""
@@ -239,6 +259,8 @@ class MyChromeRelay:
         # The user's own tabs an agent driver has worked in: only these (and the agent's own tabs)
         # are shown to live viewers, so the dashboard never streams a tab the agent did not touch.
         self._agent_tabs: set[int] = set()
+        # Where the agent's pointer last was, per tab: typing is drawn there.
+        self._agent_pointer: dict[int, tuple[float, float]] = {}
         self._by_target: dict[str, int] = {}
         self._pending: dict[int, asyncio.Future] = {}
         self._ids = itertools.count(1)
@@ -356,6 +378,10 @@ class MyChromeRelay:
         opener = self.tabs.get(tab.opener_tab_id) if tab.opener_tab_id else None
         if opener is not None:
             info["openerId"] = opener.target_id
+        if not tab.agent_owned:
+            # Relay-only: one of the user's own tabs. Helpers that just need "some page" to hook
+            # into (the CDP supervisor) skip these; CDP clients ignore unknown fields.
+            info["clawkUserTab"] = True
         return info
 
     def _visible(self, tab: Optional[TabTarget]) -> bool:
@@ -409,6 +435,7 @@ class MyChromeRelay:
         tab = self.tabs.pop(tab_id, None) if isinstance(tab_id, int) else None
         if tab is None:
             return
+        self._agent_pointer.pop(tab.tab_id, None)
         self._by_target.pop(tab.target_id, None)
         self._attached.discard(tab.tab_id)
         self._agent_tabs.discard(tab.tab_id)
@@ -779,7 +806,32 @@ class MyChromeRelay:
             session.wants.add(on)
             if already:
                 self._replay(session, on)
+        if not client.viewer and session.child is None and method.startswith("Input."):
+            self._announce_agent_input(session.tab_id, method, params)
         return result
+
+    def _announce_agent_input(self, tab_id: int, method: str, params: dict) -> None:
+        """Tell live viewers where the agent's input landed (``Clawk.agentInput``, relay-only). On
+        the user's own Chrome the page cannot tell the agent's input from the user's own mouse and
+        keys (both are trusted events), so the live view draws the agent's cursor from this."""
+        tab = self.tabs.get(tab_id)
+        kind = _input_kind(method, params)
+        if tab is None or kind is None:
+            return
+        if kind == "type":
+            x, y = self._agent_pointer.get(tab_id, (None, None))
+        else:
+            x, y = params.get("x"), params.get("y")
+        if not all(isinstance(v, (int, float)) for v in (x, y)):
+            return
+        self._agent_pointer[tab_id] = (x, y)
+        event = {
+            "method": "Clawk.agentInput",
+            "params": {"targetId": tab.target_id, "kind": kind, "x": x, "y": y},
+        }
+        if self.viewer_can_see(tab):
+            for viewer in [c for c in self.clients if c.viewer and c.discover]:
+                viewer.send(event)
 
     async def _session_target_command(
         self, client: RelayClient, session: _Session, method: str, params: dict

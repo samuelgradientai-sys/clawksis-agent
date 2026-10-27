@@ -120,7 +120,13 @@ async def live_browser_ws(ws: WebSocket, task: str = "", thumb: bool = False) ->
 
     await ws.accept()
     try:
-        screencast = LiveScreencast(cdp_url, ws.send_json, thumb=thumb, focus=focus)
+        screencast = LiveScreencast(
+            cdp_url,
+            ws.send_json,
+            thumb=thumb,
+            focus=focus,
+            users_chrome=task.startswith(MY_CHROME_PREFIX),
+        )
         await screencast.run(ws.receive_text)
     except (
         OSError,

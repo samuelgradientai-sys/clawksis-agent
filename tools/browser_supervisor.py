@@ -544,13 +544,20 @@ class CDPSupervisor(DialogSupervisionMixin, FrameTrackingMixin):
             backoff = min(backoff * 2, 10.0)
 
     async def _attach_initial_page(self) -> None:
-        """Find (or create) a page target, attach flattened, enable domains, install dialog bridge."""
+        """Find (or create) a page target, attach flattened, enable domains, install dialog bridge.
+
+        On the user's own Chrome (the Mi Chrome relay marks their tabs ``clawkUserTab``) only a tab
+        the agent opened qualifies: the bridge must never land on the page the user is on. With
+        none yet, nothing is attached or created here — the vault focus attaches on demand."""
         targets = (
             (await self._cdp("Target.getTargets"))
             .get("result", {})
             .get("targetInfos", [])
         )
-        page_target = next((t for t in targets if t.get("type") == "page"), None)
+        pages = [t for t in targets if t.get("type") == "page"]
+        page_target = next((t for t in pages if not t.get("clawkUserTab")), None)
+        if page_target is None and any(t.get("clawkUserTab") for t in pages):
+            return
         if page_target is None:
             page_target = (
                 await self._cdp("Target.createTarget", {"url": "about:blank"})
