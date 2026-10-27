@@ -48,6 +48,7 @@ from _kronos_common import (
     display_home,
     drop_unclosed_bar,
     dump_json,
+    iso_z,
     render_table,
     rows_to_bars,
     run_cli,
@@ -575,8 +576,28 @@ def cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def _remember_scopes(scopes: Any) -> None:
+    """Leave the granted scopes for the dashboard's read-only permissions panel (best effort)."""
+    try:
+        from kronos_dashboard import key_check_path, refresh_safely
+
+        path = key_check_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        body = {
+            "checked_at": iso_z(datetime.now(UTC)),
+            "scopes": [str(s) for s in scopes] if isinstance(scopes, list) else [],
+        }
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, path)
+        refresh_safely()
+    except Exception:  # health: allow BLE001 -- the check already answered; a dashboard write must not turn it into an error
+        print("The eToro key check was not saved for the dashboard.", file=sys.stderr)
+
+
 def cmd_check(_args: argparse.Namespace) -> int:
     me = client_from_env().identity()
+    _remember_scopes(me.get("scopes"))
     print(
         dump_json(
             {

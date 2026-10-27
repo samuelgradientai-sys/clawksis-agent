@@ -409,6 +409,18 @@ def find_skill_dashboards(*, skip_disabled: bool = False) -> dict[str, dict[str,
     }
 
 
+def find_skill_config_vars(name: str) -> Optional[list[dict[str, Any]]]:
+    """The ``metadata.clawk.config`` declarations of the loadable skill ``name`` (disabled ones
+    included), read from the whole SKILL.md; ``None`` when no such skill exists."""
+    from agent.skill_utils import extract_skill_config_vars
+
+    for s in _skill_catalog(skip_disabled=True):
+        if s["load_name"] == name:
+            frontmatter, _ = _parse_frontmatter(_read_skill_text(s["path"]))
+            return extract_skill_config_vars(frontmatter)
+    return None
+
+
 def sort_skills(skills: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Keep every skill listing path ordered the same way."""
     return sorted(skills, key=lambda s: (s.get("category") or "", s["name"]))

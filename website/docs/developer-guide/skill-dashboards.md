@@ -84,3 +84,11 @@ after each order, forecast and review). The page refreshes every 30 seconds whil
 The API behind the page is `GET /api/skills/dashboards` (the list) and
 `GET /api/skills/dashboards/{name}` (one snapshot), both under the dashboard session token and the
 usual `?profile=` scope: each profile reads its own snapshot.
+
+## 4. Settings
+
+The page also shows a **Settings** card for the values the skill declares under
+`metadata.clawk.config` (see [Creating skills](./creating-skills.md#config-settings-configyaml)).
+Add `type`, `choices`, `min`/`max`, `label` and `confirm` there so the form shows the right control
+and asks before a change that gives the agent more power. The skill reads the saved values from
+`skills.config.<key>` on its next run; the server never runs skill code to apply them.

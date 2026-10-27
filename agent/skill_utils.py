@@ -874,8 +874,95 @@ def extract_skill_config_vars(frontmatter: dict[str, Any]) -> list[dict[str, Any
             if isinstance(prompt_text, str) and prompt_text.strip()
             else desc
         )
+        entry.update(_config_var_form_hints(item))
         result[key] = entry
     return list(result.values())
+
+
+SKILL_CONFIG_TYPES = ("bool", "integer", "number", "text", "choice")
+
+
+def _config_var_form_hints(item: dict[str, Any]) -> dict[str, Any]:
+    """Optional settings-form hints of a ``metadata.clawk.config`` entry; malformed ones are dropped.
+
+    ``type`` (bool/integer/number/text/choice, else inferred from ``choices`` or ``default``),
+    ``choices`` (named per locale by ``choice_labels: {locale: {choice: text}}``), ``min``/``max``,
+    ``label`` (text, or ``{locale: text}``) and ``confirm``: ``true`` asks the user to confirm
+    turning a bool on or raising a number, a list names the choices that need it.
+    """
+    hints: dict[str, Any] = {}
+    choices = item.get("choices")
+    if isinstance(choices, list):
+        cleaned = [str(c).strip() for c in choices if str(c).strip()]
+        if cleaned:
+            hints["choices"] = list(dict.fromkeys(cleaned))
+    hints["type"] = _config_var_type(item, "choices" in hints)
+    for bound in ("min", "max"):
+        value = item.get(bound)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            hints[bound] = value
+    label = _config_var_label(item.get("label"))
+    if label:
+        hints["label"] = label
+    if "choices" in hints:
+        named = _config_var_choice_labels(item.get("choice_labels"), hints["choices"])
+        if named:
+            hints["choice_labels"] = named
+    confirm = item.get("confirm")
+    if confirm is True:
+        hints["confirm"] = True
+    elif isinstance(confirm, list) and "choices" in hints:
+        values = [str(c).strip() for c in confirm if str(c).strip() in hints["choices"]]
+        if values:
+            hints["confirm"] = values
+    return hints
+
+
+def _config_var_type(item: dict[str, Any], has_choices: bool) -> str:
+    declared = str(item.get("type") or "").strip().lower()
+    if declared in SKILL_CONFIG_TYPES and (declared != "choice" or has_choices):
+        return declared
+    if has_choices:
+        return "choice"
+    default = item.get("default")
+    if isinstance(default, bool):
+        return "bool"
+    if isinstance(default, int):
+        return "integer"
+    if isinstance(default, float):
+        return "number"
+    return "text"
+
+
+def _config_var_label(label: Any) -> dict[str, str]:
+    if isinstance(label, str) and label.strip():
+        return {"*": label.strip()}
+    if not isinstance(label, dict):
+        return {}
+    return {
+        str(k).strip().lower(): str(v).strip()
+        for k, v in label.items()
+        if str(k).strip() and isinstance(v, str) and v.strip()
+    }
+
+
+def _config_var_choice_labels(
+    raw: Any, choices: list[str]
+) -> dict[str, dict[str, str]]:
+    if not isinstance(raw, dict):
+        return {}
+    by_locale: dict[str, dict[str, str]] = {}
+    for locale, names in raw.items():
+        if not isinstance(names, dict) or not str(locale).strip():
+            continue
+        named = {
+            str(c): str(v).strip()
+            for c, v in names.items()
+            if str(c) in choices and isinstance(v, str) and v.strip()
+        }
+        if named:
+            by_locale[str(locale).strip().lower()] = named
+    return by_locale
 
 
 def discover_all_skill_config_vars() -> list[dict[str, Any]]:

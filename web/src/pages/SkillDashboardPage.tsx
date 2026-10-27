@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
-import { ArrowLeft, Gauge, RefreshCw } from "lucide-react";
+import { ArrowLeft, Gauge, RefreshCw, Settings2 } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { usePageHeader } from "@/contexts/usePageHeader";
@@ -8,6 +8,7 @@ import { skillDashboardsApi, type SkillDashboardDetail } from "@/lib/api-skill-d
 import { dashboardCopy, fill } from "@/components/skill-dashboard/copy";
 import { relativeTime } from "@/components/skill-dashboard/format";
 import { DashboardPanelView } from "@/components/skill-dashboard/panels";
+import { SkillSettingsCard } from "@/components/skill-dashboard/SkillSettingsCard";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 import { errorMessage } from "@/lib/api-error";
 
@@ -76,6 +77,15 @@ export default function SkillDashboardPage() {
           <span className="hidden text-xs text-text-tertiary sm:inline">{copy.autoRefresh}</span>
           <button
             type="button"
+            onClick={() => document.getElementById("skill-settings")?.scrollIntoView({ behavior: "smooth" })}
+            aria-label={copy.settingsTitle}
+            title={copy.settingsTitle}
+            className="clawk-liquid-chip rounded-full p-2 text-text-secondary transition-colors hover:text-midground"
+          >
+            <Settings2 className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
             onClick={refresh}
             aria-label={t.common.refresh}
             className="clawk-liquid-chip rounded-full p-2 text-text-secondary transition-colors hover:text-midground"
@@ -106,6 +116,10 @@ export default function SkillDashboardPage() {
           ))}
         </div>
       )}
+
+      <div id="skill-settings" className="scroll-mt-4">
+        <SkillSettingsCard key={name} copy={copy} locale={locale} name={name} onSaved={refresh} />
+      </div>
 
       <Link to="/skills/dashboards" className="inline-flex items-center gap-1.5 self-start text-sm text-text-tertiary hover:text-midground">
         <ArrowLeft className="h-4 w-4" /> {copy.back}

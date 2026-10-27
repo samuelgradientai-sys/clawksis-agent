@@ -1106,4 +1106,19 @@ export interface SkillDashboardsCopy {
   dashboardButton: string;
   showData: string;
   hideData: string;
+  settingsTitle: string;
+  settingsHint: string;
+  settingsSave: string;
+  settingsSaving: string;
+  settingsSaved: string;
+  settingsNoChanges: string;
+  settingsReset: string;
+  settingsConfirmTitle: string;
+  settingsConfirmBody: string;
+  settingsConfirmAction: string;
+  settingsCancel: string;
+  settingsOn: string;
+  settingsOff: string;
+  settingsDefault: string;
+  settingsNeedsConfirm: string;
 }

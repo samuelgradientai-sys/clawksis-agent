@@ -540,3 +540,7 @@ async def update_skill_content(body: SkillContentUpdate, profile: Optional[str] 
 from clawk_cli.web_routers.skill_dashboards import router as _dashboards_router
 
 router.include_router(_dashboards_router)
+
+from clawk_cli.web_routers.skill_settings import router as _settings_router
+
+router.include_router(_settings_router)
