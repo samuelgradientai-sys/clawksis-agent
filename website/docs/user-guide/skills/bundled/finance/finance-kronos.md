@@ -68,8 +68,12 @@ baselines; this is not a live-quote, fundamentals or leverage tool.
   low, close, optional volume) or the `stocks` skill's `history` JSON.
 - **eToro (optional)**: `ETORO_API_KEY` and `ETORO_USER_KEY` in the profile's `.env`, created
   under Settings > Trading > API Key Management (one environment per key pair; the user key
-  is shown once). Keys pasted in chat: save them with `clawk config set ETORO_API_KEY ...` /
-  `clawk config set ETORO_USER_KEY ...` through `terminal`, never echo them back.
+  is shown once). eToro's creation screen labels them **Clave privada** (the user key →
+  `ETORO_USER_KEY`) and **Clave pública** (the API key → `ETORO_API_KEY`); map them that way.
+  Ask for read-only scopes (minimal set and full catalog: `references/etoro-permissions.md`).
+  Keys pasted in chat: save them with `clawk config set ETORO_API_KEY ...` /
+  `clawk config set ETORO_USER_KEY ...` through `terminal`, never echo them back, then verify
+  with `etoro_data.py check`.
 - **Trading (off by default)**: only the user runs `clawk config set
   skills.config.kronos.trading.enabled true`. Orders go to the demo account unless the user
   sets `trading.account real`; limits `max_order_usd` (100), `max_daily_usd` (300),
@@ -218,13 +222,24 @@ Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMi
 - **CPU cost** grows with lookback x horizon x samples; for long watchlists use
   `--model mini` or fewer `--samples` (`references/model-notes.md`). `mini`/`base` need
   `kronos_setup.py --model mini --pin-on-first-use`.
-- **Keys added mid-conversation** may need a new session before `terminal` sees them.
+- **Keys saved mid-conversation are not in the environment yet.** The running gateway and
+  terminal inherited their environment at startup, so scripts report "eToro API keys are not
+  configured" while the keys sit in `.env`. Do not ask for the keys again: read `.env` in
+  Python and pass the pair through `env={**os.environ, "ETORO_API_KEY": ..., "ETORO_USER_KEY": ...}`
+  to the script. Only a `cronjob` needs the user to restart the gateway first.
+- **Audit the scopes before trusting a key.** `etoro_data.py check` lists them; with
+  `etoro-public:trade.real:write` present the key can place real orders, so say so plainly.
+  Never change `kronos.trading.*` to compensate.
+- **20 origins is too few to claim an edge.** On daily bars a 20-origin audit can flip (NVDA:
+  +0.089 `adds_value` at 20, -0.042 `worse_than_naive` at 40). Use `--origins 40` before
+  treating a symbol as having edge, and re-audit before each trading decision.
 - `pip install kronos` is an unrelated package; never run the upstream web UI or fine-tune
   pipeline. Uninstall: delete `$CLAWK_HOME/kronos/`.
 
 Details: `references/trading-playbook.md` (decisions, onboarding, routine prompt, reporting,
 replaying the rules), `references/learning-loop.md` (journal, scoring, lessons, gates,
 dashboard panels), `references/etoro-api.md` (routes, at-most-once orders, reconcile),
+`references/etoro-permissions.md` (scope catalog, read-only set),
 `references/model-notes.md` (models, CPU knobs, baselines).
 
 ## Verification
