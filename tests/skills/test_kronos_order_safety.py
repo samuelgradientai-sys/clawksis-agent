@@ -44,7 +44,11 @@ etoro = _load("etoro_data")
 trade = _load("etoro_trade")
 
 MONDAY = datetime(2026, 10, 26, 15, 0, tzinfo=kc.UTC)  # 11:00 in New York, market open
-SEARCH = {"items": [{"instrumentId": 1001, "internalSymbolFull": "AAPL"}]}
+SEARCH = {
+    "items": [
+        {"instrumentId": 1001, "internalSymbolFull": "AAPL", "instrumentTypeID": 5}
+    ]
+}
 PROTECTED = ("--stop", "95", "--target", "110")
 
 

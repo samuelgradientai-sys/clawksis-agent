@@ -53,6 +53,7 @@ from _kronos_config import (
     load_config,
     watchlist,
 )
+from _kronos_crypto import CRYPTO, MEME, STOCK, CryptoConfig, bucket_of, caps_for
 from _kronos_dashboard_labels import LABELS, SCOPES, STATUS_ES
 from _kronos_journal import (
     BACKTEST_MAX_AGE,
@@ -70,7 +71,9 @@ from _kronos_journal import (
 from _kronos_lessons import all_lessons, interval_label, lessons_path, money, render
 from etoro_trade import (
     TradingConfig,
+    cap_usage,
     ledger_path,
+    load_crypto_config,
     load_trading_config,
     refused_path,
     usage_today,
@@ -140,6 +143,7 @@ class Inputs:
     backtests: list[dict[str, Any]]
     strategies: list[dict[str, Any]]
     key_check: dict[str, Any] | None = None
+    crypto: CryptoConfig | None = None
 
 
 def key_check_path(kronos_dir: Path | None = None) -> Path:
@@ -156,11 +160,12 @@ def _read_key_check(path: Path) -> dict[str, Any] | None:
 
 
 def load_inputs(config_path: Path | None, kronos_dir: Path) -> Inputs:
-    lang, trading, error, goal_values = "en", None, None, goals({})
+    lang, trading, error, goal_values, crypto = "en", None, None, goals({}), None
     try:
         config = load_config(config_path)
         lang, goal_values = display_language(config), goals(config)
         trading = load_trading_config(config_path)
+        crypto = load_crypto_config(config_path)
     except (ConfigError, SkillError) as exc:
         error = str(exc)
     return Inputs(
@@ -175,6 +180,7 @@ def load_inputs(config_path: Path | None, kronos_dir: Path) -> Inputs:
         backtests=read_backtests(backtests_path(kronos_dir)),
         strategies=read_jsonl(strategy_path(kronos_dir)),
         key_check=_read_key_check(key_check_path(kronos_dir)),
+        crypto=crypto,
     )
 
 
@@ -233,14 +239,116 @@ def _trading_items(inputs: Inputs, now: datetime, t: dict[str, str]) -> list[dic
         {
             "label": t["buys_today"],
             "value": f"{count} / {config.max_orders_per_day}",
+            "hint": t["stock_hint"],
             "tone": "warning" if count >= config.max_orders_per_day else "neutral",
         },
         {
             "label": t["spent_today"],
             "value": f"{_plain_money(spent)} / {_plain_money(config.max_daily_usd)}",
+            "hint": t["stock_hint"],
             "tone": "warning" if spent >= 0.8 * config.max_daily_usd else "neutral",
         },
+        _crypto_summary_item(inputs, now, t),
     ]
+
+
+def _crypto_summary_item(inputs: Inputs, now: datetime, t: dict[str, str]) -> dict:
+    """One line for the overview: crypto off, or what it spent today of its own cap."""
+    crypto, config = inputs.crypto, inputs.trading
+    if crypto is None or config is None or not crypto.enabled:
+        return {"label": t["crypto_today"], "value": t["off"], "tone": "neutral"}
+    (cap,) = caps_for(CRYPTO, config, crypto)
+    spent = cap_usage(cap, config.account, inputs.ledger, now)["usd"]
+    return {
+        "label": t["crypto_today"],
+        "value": f"{_plain_money(spent)} / {_plain_money(cap.max_daily_usd)}",
+        "hint": t["crypto_today_hint"],
+        "tone": "warning" if spent >= 0.8 * cap.max_daily_usd else "neutral",
+    }
+
+
+def _switch_item(label: str, on: bool, t: dict[str, str], tone_on: str) -> dict:
+    return {
+        "label": label,
+        "value": t["on"] if on else t["off"],
+        "tone": tone_on if on else "neutral",
+    }
+
+
+def _cap_items(
+    cap: Any, usage: dict[str, Any], labels: tuple[str, str, str], t: dict[str, str]
+) -> list[dict[str, Any]]:
+    """Buys (when the cap counts them), USD spent and the per-order maximum of one cap."""
+    buys_label, spent_label, order_label = labels
+    items = []
+    if cap.max_orders_per_day is not None:
+        items.append(
+            {
+                "label": t[buys_label],
+                "value": f"{usage['buys']} / {cap.max_orders_per_day}",
+                "tone": "warning"
+                if usage["buys"] >= cap.max_orders_per_day
+                else "neutral",
+            }
+        )
+    items += [
+        {
+            "label": t[spent_label],
+            "value": f"{_plain_money(usage['usd'])} / {_plain_money(cap.max_daily_usd)}",
+            "tone": "warning" if usage["usd"] >= 0.8 * cap.max_daily_usd else "neutral",
+        },
+        {"label": t[order_label], "value": _plain_money(cap.max_order_usd)},
+    ]
+    return items
+
+
+def crypto_panel(inputs: Inputs, now: datetime) -> dict[str, Any]:
+    """Crypto and meme coins: their switches, their own caps and today's use of them."""
+    t = LABELS[inputs.lang]
+    panel: dict[str, Any] = {
+        "id": "crypto",
+        "type": "stats",
+        "title": t["crypto"],
+        "description": t["crypto_desc"],
+        "width": "half",
+    }
+    crypto, config = inputs.crypto, inputs.trading
+    if crypto is None or config is None:
+        panel["items"] = [
+            {
+                "label": t["crypto_trading"],
+                "value": "?",
+                "hint": t["config_error"],
+                "tone": "warning",
+            }
+        ]
+        return panel
+    meme_cap, crypto_cap = caps_for(MEME, config, crypto)
+    usage = {
+        cap.name: cap_usage(cap, config.account, inputs.ledger, now)
+        for cap in (crypto_cap, meme_cap)
+    }
+    items = [_switch_item(t["crypto_trading"], crypto.enabled, t, "positive")]
+    if crypto.enabled and not config.enabled:
+        items[0]["hint"] = t["crypto_needs_trading"]
+        items[0]["tone"] = "warning"
+    items += _cap_items(
+        crypto_cap,
+        usage[CRYPTO],
+        ("crypto_buys", "crypto_spent", "crypto_max_order"),
+        t,
+    )
+    items.append(_switch_item(t["meme_trading"], crypto.meme_enabled, t, "warning"))
+    items += _cap_items(meme_cap, usage[MEME], ("", "meme_spent", "meme_max_order"), t)
+    items += [
+        {
+            "label": t["crypto_watchlist"],
+            "value": ", ".join(crypto.watchlist) or "—",
+        },
+        {"label": t["meme_symbols"], "value": ", ".join(crypto.meme_symbols) or "—"},
+    ]
+    panel["items"] = items[:12]
+    return panel
 
 
 def summary_panel(inputs: Inputs, now: datetime) -> dict[str, Any]:
@@ -398,6 +506,11 @@ def _price(value: Any) -> float | None:
     return round(number, 4) if number is not None else None
 
 
+def _asset(bucket: str | None, t: dict[str, str]) -> str | None:
+    """Stock/ETF, Crypto or Meme coin; None when the bucket is unknown."""
+    return t[f"asset_{bucket}"] if bucket in (STOCK, CRYPTO, MEME) else None
+
+
 def bought_panel(inputs: Inputs) -> dict[str, Any]:
     t = LABELS[inputs.lang]
     opens = [e for e in inputs.ledger if e.get("action") == "open"]
@@ -405,6 +518,7 @@ def bought_panel(inputs: Inputs) -> dict[str, Any]:
         {
             "time": iso_z(e.get("ts")),
             "symbol": e.get("symbol"),
+            "asset": _asset(bucket_of(e), t),
             "amount": _num(e.get("amount")),
             "status": _status(e.get("status"), inputs.lang),
             "who": t["user"] if e.get("user_requested") else t["auto"],
@@ -420,6 +534,7 @@ def bought_panel(inputs: Inputs) -> dict[str, Any]:
         "columns": [
             _col("time", t["time"], "datetime"),
             _col("symbol", t["symbol"]),
+            _col("asset", t["asset"]),
             _col("amount", t["amount"], "money"),
             _col("status", t["status"]),
             _col("who", t["who"]),
@@ -430,13 +545,19 @@ def bought_panel(inputs: Inputs) -> dict[str, Any]:
     }
 
 
-def _close_row(entry: dict[str, Any], names: dict[Any, Any], t: dict[str, str]) -> dict:
+def _close_row(
+    entry: dict[str, Any],
+    names: dict[Any, Any],
+    buckets: dict[Any, str],
+    t: dict[str, str],
+) -> dict:
     pnl = _num(entry.get("pnl_usd"))
     units = entry.get("units")
     symbol = entry.get("symbol") or names.get(entry.get("instrument_id"))
     return {
         "time": iso_z(entry.get("ts")),
         "symbol": symbol or f"#{entry.get('instrument_id')}",
+        "asset": _asset(buckets.get(entry.get("instrument_id")), t),
         "units": t["all_units"] if units == "all" else _num(units),
         "pnl": pnl,
         "reason": _text(entry.get("reason")),
@@ -446,11 +567,11 @@ def _close_row(entry: dict[str, Any], names: dict[Any, Any], t: dict[str, str]) 
 
 def sold_panel(inputs: Inputs) -> dict[str, Any]:
     t = LABELS[inputs.lang]
-    names = {
-        e.get("instrument_id"): e.get("symbol")
-        for e in inputs.ledger
-        if e.get("action") == "open" and e.get("symbol")
-    }
+    opens = [e for e in inputs.ledger if e.get("action") == "open"]
+    names = {e.get("instrument_id"): e.get("symbol") for e in opens if e.get("symbol")}
+    # A close is in the bucket of the buys of the same instrument (positions bought in the
+    # eToro app have no buy here and show no type).
+    buckets = {e.get("instrument_id"): bucket_of(e) for e in opens}
     closes = [e for e in inputs.ledger if e.get("action") == "close"]
     return {
         "id": "sold",
@@ -459,11 +580,14 @@ def sold_panel(inputs: Inputs) -> dict[str, Any]:
         "columns": [
             _col("time", t["time"], "datetime"),
             _col("symbol", t["symbol"]),
+            _col("asset", t["asset"]),
             _col("units", t["units"], align="right"),
             _col("pnl", t["pnl"], "money"),
             _col("reason", t["reason"]),
         ],
-        "rows": [_close_row(e, names, t) for e in reversed(closes[-TABLE_ROWS:])],
+        "rows": [
+            _close_row(e, names, buckets, t) for e in reversed(closes[-TABLE_ROWS:])
+        ],
         "empty": t["sold_empty"],
     }
 
@@ -474,6 +598,7 @@ def refused_panel(inputs: Inputs) -> dict[str, Any]:
         {
             "time": iso_z(e.get("ts")),
             "symbol": e.get("symbol"),
+            "asset": _asset(e.get("bucket"), t),
             "amount": _num(e.get("amount")),
             "kind": t.get(f"kind_{e.get('kind')}", t["kind_limit"]),
             "why": _text(e.get("refusal")),
@@ -489,6 +614,7 @@ def refused_panel(inputs: Inputs) -> dict[str, Any]:
         "columns": [
             _col("time", t["time"], "datetime"),
             _col("symbol", t["symbol"]),
+            _col("asset", t["asset"]),
             _col("amount", t["amount"], "money"),
             _col("kind", t["kind"]),
             _col("why", t["why"]),
@@ -753,6 +879,7 @@ def build_snapshot(inputs: Inputs, now: datetime) -> dict[str, Any]:
             subtitle += f" · {t['trading_off']}"
     panels = [
         summary_panel(inputs, now),
+        crypto_panel(inputs, now),
         goals_panel(inputs),
         key_panel(inputs),
         lessons_panel(inputs),

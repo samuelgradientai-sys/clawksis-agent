@@ -229,10 +229,12 @@ def _emoji_from_skill_md(skill_dir: Path) -> str:
         md = skill_dir / "SKILL.md"
         if not md.is_file():
             return ""
-        from agent.skill_utils import parse_frontmatter
+        from agent.skill_utils import SKILL_FRONTMATTER_SCAN_CHARS, parse_frontmatter
 
         fm, _ = parse_frontmatter(
-            md.read_text(encoding="utf-8", errors="replace")[:4000]
+            md.read_text(encoding="utf-8", errors="replace")[
+                :SKILL_FRONTMATTER_SCAN_CHARS
+            ]
         )
         meta = fm.get("metadata") if isinstance(fm, dict) else None
         if isinstance(meta, dict):

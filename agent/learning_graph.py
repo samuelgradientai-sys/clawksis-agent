@@ -97,6 +97,8 @@ def _to_int_ts(value: Any) -> Optional[int]:
 
 
 def build_skill_nodes(skill_roots: list[tuple[str, Path]]) -> dict[str, SkillNode]:
+    from agent.skill_utils import SKILL_FRONTMATTER_SCAN_CHARS
+
     usage = _load_usage()
     nodes: dict[str, SkillNode] = {}
     # Tag skills mounted from skills.external_dirs so the journey graph can keep them out of
@@ -112,7 +114,9 @@ def build_skill_nodes(skill_roots: list[tuple[str, Path]]) -> dict[str, SkillNod
             if _SKIP_PARTS.intersection(skill_md.parts):
                 continue
             try:
-                text = skill_md.read_text(encoding="utf-8-sig")[:4000]
+                text = skill_md.read_text(encoding="utf-8-sig")[
+                    :SKILL_FRONTMATTER_SCAN_CHARS
+                ]
             except OSError:
                 continue
             try:

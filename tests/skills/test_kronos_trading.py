@@ -76,7 +76,11 @@ class Recorder:
         return FakeResponse(json.dumps(item).encode())
 
 
-SEARCH_AAPL = {"items": [{"instrumentId": 1001, "internalSymbolFull": "AAPL"}]}
+SEARCH_AAPL = {
+    "items": [
+        {"instrumentId": 1001, "internalSymbolFull": "AAPL", "instrumentTypeID": 5}
+    ]
+}
 PROTECTED = ("--stop", "95", "--target", "110")  # around the fake price of 100
 
 

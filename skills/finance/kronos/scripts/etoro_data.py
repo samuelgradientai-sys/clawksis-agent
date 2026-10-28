@@ -272,21 +272,7 @@ class EtoroClient:
 
     def resolve(self, symbol: str) -> dict[str, Any]:
         """Exact, case-insensitive match: search matches by containment (AAPL -> AAPL.24-7)."""
-        items = self.search(symbol)
-        exact = [
-            i
-            for i in items
-            if str(i.get("internalSymbolFull", "")).lower() == symbol.lower()
-        ]
-        if len(exact) == 1:
-            return exact[0]
-        candidates = (
-            ", ".join(str(i.get("internalSymbolFull")) for i in items[:15]) or "none"
-        )
-        raise EtoroError(
-            f"No single exact eToro instrument for {symbol!r} (search returned: {candidates}).",
-            hint="Pass the exact eToro symbol shown by `etoro_data.py search`.",
-        )
+        return pick_exact(self.search(symbol), symbol)
 
     def candles(
         self, instrument_id: int, interval: str, count: int
@@ -330,6 +316,27 @@ class EtoroClient:
             )
             return (portfolio if isinstance(portfolio, dict) else {}), path
         raise last_error or EtoroError("No portfolio endpoint answered.")
+
+
+def search_candidates(items: list[dict[str, Any]]) -> str:
+    """The symbols a search returned, for an error message."""
+    return ", ".join(str(i.get("internalSymbolFull")) for i in items[:15]) or "none"
+
+
+def pick_exact(items: list[dict[str, Any]], symbol: str) -> dict[str, Any]:
+    """The one search result whose symbol is exactly *symbol* (any case), else EtoroError."""
+    exact = [
+        i
+        for i in items
+        if str(i.get("internalSymbolFull", "")).lower() == symbol.lower()
+    ]
+    if len(exact) == 1:
+        return exact[0]
+    raise EtoroError(
+        f"No single exact eToro instrument for {symbol!r} (search returned: "
+        f"{search_candidates(items)}).",
+        hint="Pass the exact eToro symbol shown by `etoro_data.py search`.",
+    )
 
 
 def parse_candles(payload: Any, instrument_id: int) -> list[dict[str, Any]]:
@@ -383,6 +390,7 @@ def fetch_bars(
         "symbol": instrument.get("internalSymbolFull", symbol),
         "name": instrument.get("displayname"),
         "instrument_id": instrument.get("instrumentId"),
+        "instrument_type_id": instrument.get("instrumentTypeID"),
         "interval": normalize_interval(interval),
         "source": "eToro Public API (read-only)",
     }

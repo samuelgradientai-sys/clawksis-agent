@@ -46,6 +46,12 @@ EXCLUDED_SKILL_DIRS = frozenset(
 # via skill_view(skill, file_path=...), never scanned as standalone skills.
 SKILL_SUPPORT_DIRS = frozenset(("references", "templates", "assets", "scripts"))
 
+# How much of a SKILL.md the scanners (catalog, name and category lookups) read to find its
+# frontmatter. A frontmatter cut short has no closing ``---`` and parses as empty, so the
+# skill would silently lose its name, dashboard and settings: this stays far above any real
+# frontmatter (settings-heavy skills such as finance/kronos run to several thousand chars).
+SKILL_FRONTMATTER_SCAN_CHARS = 12_000
+
 
 def is_excluded_skill_path(path, *, root: Optional[Path] = None) -> bool:
     """True if *path* should be skipped by skill scanners (VCS/dependency/cache
