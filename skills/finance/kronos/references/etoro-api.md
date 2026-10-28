@@ -88,7 +88,10 @@ and etoro-go call `x-request-id` one. The skill assumes the stricter reading:
   order lookup by `referenceId`, then the portfolio (`positions[]` = filled, `ordersForOpen[]`
   = placed, matched by order id, or by instrument, open time from 2 minutes before the buy and
   amount). Found → `filled`/`placed`; otherwise `not_found`, which still counts. Reconcile
-  never frees a limit.
+  never frees a daily limit. It also writes a `flat` ledger row for every instrument Kronos
+  still counts as held but the portfolio no longer shows (no position, no pending order; the
+  newest buy of it at least a minute old): eToro closed it at its stop or target, or the user
+  did in the app, so it stops counting toward `max_positions`.
 - Closes follow the same rule; an ambiguous close is logged `failed` with `in_doubt: true`
   and the hint to check positions before closing again (a repeated partial close sells twice).
 
@@ -96,13 +99,15 @@ and etoro-go call `x-request-id` one. The skill assumes the stricter reading:
 
 Run in this order, before the order request: trading enabled, the bucket's switch and
 limits (stock `trading.*`; crypto `crypto.*`; meme coin `crypto.meme.*` plus `crypto.*`, see
-the trading playbook § 7), lesson gate, backtest
+the trading playbook § 7) and the bucket's `max_positions` (open positions from the ledger,
+`_kronos_positions.py`; an unreadable ledger refuses), lesson gate, backtest
 gate (automatic buys need a verdict `adds_value` from the last 7 days in
 `kronos/backtests.jsonl`), stop present (automatic buys), then the read-only checks: the
 instrument is tradable (`isCurrentlyTradable`/`isDelisted` from the search), the newest hourly
 candle is under 2 hours old, the NYSE regular session is open for an instrument with no Saturday
-candles (`_kronos_calendar.py`), and the stop sits below the current price (by at most 50%) with
-the target above it. Once eToro names the instrument its bucket is settled: crypto when
+candles (`_kronos_calendar.py`), and the stop sits below the current price (by at most 50%,
+and by at most the bucket's `stop_pct` plus one point when that is above 0) with the target
+above it. The limits and positions are checked again under the ledger lock. Once eToro names the instrument its bucket is settled: crypto when
 the search's `instrumentTypeID` is 10 (eToro's types: 1 currencies, 2 commodities, 4 indices,
 5 stocks, 6 ETFs, 10 cryptocurrencies; from eToro's instrument metadata, not the v1 reference,
 so a missing type falls back to Saturday candles), a meme coin when the symbol is on the meme

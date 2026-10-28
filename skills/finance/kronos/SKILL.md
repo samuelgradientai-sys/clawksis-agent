@@ -1,7 +1,7 @@
 ---
 name: kronos
 description: Forecast stocks/crypto; eToro data and limited trading.
-version: 0.5.0
+version: 0.6.0
 author: samuelgradientai-sys, Clawksis
 license: MIT
 platforms: [linux, macos, windows]
@@ -44,6 +44,20 @@ metadata:
         min: 1
         label: {es: "Acciones/ETF: compras máximas por día"}
         confirm: true
+      - key: kronos.trading.max_positions
+        description: "Max stock/ETF positions Kronos holds open at once"
+        default: 5
+        min: 1
+        label: {es: "Acciones/ETF: posiciones abiertas máximas"}
+        confirm: true
+      - key: kronos.trading.stop_pct
+        description: "Stock/ETF stop-loss in % below the entry; 0 = 2×ATR (volatility)"
+        type: number
+        default: 0
+        min: 0
+        max: 50
+        label: {es: "Acciones/ETF: stop-loss % (0 = según volatilidad)"}
+        confirm: true
       - key: kronos.crypto.enabled
         description: "Let Kronos buy crypto (24/7) inside the crypto limits; needs trading on"
         default: false
@@ -70,6 +84,20 @@ metadata:
         min: 1
         label: {es: "Cripto: compras máximas por día"}
         confirm: true
+      - key: kronos.crypto.max_positions
+        description: "Max crypto positions Kronos holds open at once (meme coins apart)"
+        default: 2
+        min: 1
+        label: {es: "Cripto: posiciones abiertas máximas"}
+        confirm: true
+      - key: kronos.crypto.stop_pct
+        description: "Crypto stop-loss in % below the entry; 0 = 2×ATR (volatility)"
+        type: number
+        default: 12
+        min: 0
+        max: 50
+        label: {es: "Cripto: stop-loss % (0 = según volatilidad)"}
+        confirm: true
       - key: kronos.crypto.meme.enabled
         description: "Also let Kronos buy meme coins (extremely volatile; needs crypto on)"
         default: false
@@ -90,6 +118,26 @@ metadata:
         default: 50
         min: 1
         label: {es: "Meme coins: máximo por día (USD)"}
+        confirm: true
+      - key: kronos.crypto.meme.max_orders_per_day
+        description: "Max meme-coin buys per UTC day (they count as crypto buys too)"
+        default: 1
+        min: 1
+        label: {es: "Meme coins: compras máximas por día"}
+        confirm: true
+      - key: kronos.crypto.meme.max_positions
+        description: "Max meme-coin positions Kronos holds open at once"
+        default: 1
+        min: 1
+        label: {es: "Meme coins: posiciones abiertas máximas"}
+        confirm: true
+      - key: kronos.crypto.meme.stop_pct
+        description: "Meme-coin stop-loss in % below the entry; 0 = 2×ATR (volatility)"
+        type: number
+        default: 20
+        min: 0
+        max: 50
+        label: {es: "Meme coins: stop-loss % (0 = según volatilidad)"}
         confirm: true
       - key: kronos.goals.watchlist
         description: "Symbols Kronos follows, comma-separated (e.g. AAPL, BTC)"
@@ -175,16 +223,19 @@ baselines; this is not a live-quote, fundamentals or leverage tool.
 - **Trading (off by default)**: only the user runs `clawk config set
   skills.config.kronos.trading.enabled true`. Orders go to the demo account unless the user
   sets `trading.account real`; limits `max_order_usd` (100), `max_daily_usd` (300),
-  `max_orders_per_day` (5), which cover stocks, ETFs and everything but crypto. Never change
-  these yourself. The script adds its own refusals on top: automatic buys need a stop, a fresh
-  `adds_value` backtest and an open market.
+  `max_orders_per_day` (5), `max_positions` (5 open at once) and `stop_pct` (0 = stop 2 ATR
+  below the entry, else a fixed % below it), which cover stocks, ETFs and everything but
+  crypto. Never change these yourself. The script adds its own refusals on top: automatic
+  buys need a stop, a fresh `adds_value` backtest and an open market.
 - **Crypto (off by default, on top of trading)**: `kronos.crypto.enabled` lets Kronos buy
   crypto (eToro instrument type 10) inside its own caps `crypto.max_order_usd` (50),
-  `max_daily_usd` (150), `max_orders_per_day` (3); `crypto.watchlist` lists the coins it
-  follows. Meme coins (`crypto.meme.symbols`, default DOGE, SHIB, PEPE, BONK, FLOKI, WIF) also
-  need `crypto.meme.enabled` and count against `meme.max_order_usd` (20), `meme.max_daily_usd`
-  (50) and the crypto caps. The user flips these in the Kronos dashboard's Settings (it asks
-  them to confirm) or with `clawk config set`; never you. Rules: playbook § 7.
+  `max_daily_usd` (150), `max_orders_per_day` (3), `max_positions` (2), `stop_pct` (12);
+  `crypto.watchlist` lists the coins it follows. Meme coins (`crypto.meme.symbols`, default
+  DOGE, SHIB, PEPE, BONK, FLOKI, WIF) also need `crypto.meme.enabled` and count against
+  `meme.max_order_usd` (20), `meme.max_daily_usd` (50), `meme.max_orders_per_day` (1) and the
+  crypto caps, with their own `meme.max_positions` (1) and `meme.stop_pct` (20). The user
+  flips these in the Kronos dashboard's Settings (it asks them to confirm) or with
+  `clawk config set`; never you. Rules: playbook § 7.
 - **Goals** (`skills.config.kronos.goals.*`): saved by you when the user states them. The
   loaded skill's `[Skill config]` block shows all current values.
 
@@ -276,12 +327,15 @@ Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMi
 7. **Portfolio review** ("analiza mi portafolio"): `etoro_data.py portfolio`, summarize cash,
    weights, concentration, P&L and copy-trading, then analyze the 3–5 largest holdings.
 8. **Trading** (only when `status` shows `enabled: true`; no confirmation per order):
-   - First `etoro_trade.py reconcile` when any buy is `unknown`; report what it found.
+   - First `etoro_trade.py reconcile`: it settles `unknown` buys and stops counting positions
+     eToro closed on its own (stop or target hit); report what it found.
    - Buy only when every check in playbook § 3 passes (verdict `adds_value`, forecast up by
-     at least half an ATR, indicators not bearish, no blocking lesson, limits left), sized
-     with `kronos_risk.py`: pass its `buy_args` (`--amount --stop --target`); eToro then
-     executes the stop and target. Never split one decision into several orders.
-   - The script refuses automatic buys without a stop, of symbols whose recent forecasts
+     at least half an ATR, indicators not bearish, no blocking lesson, limits and a free
+     position slot left), sized with `kronos_risk.py`: pass its `buy_args` (`--amount --stop
+     --target`; the stop follows the bucket's `stop_pct`); eToro then executes the stop and
+     target. Never split one decision into several orders.
+   - The script refuses automatic buys without a stop, a stop farther than the bucket's
+     `stop_pct`, a buy beyond the bucket's `max_positions`, symbols whose recent forecasts
      mostly missed or without a fresh `adds_value` verdict, and any buy while the market is
      closed or the price is stale; accept it and tell the user. `--user-requested` is ONLY for
      a buy the user explicitly asked for in this conversation (it skips the lesson and
@@ -334,7 +388,11 @@ Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMi
   forecast as more than a coin flip. eToro lists some coins per million units (`SHIBxM`): the
   meme list matches both spellings, but buy the exact symbol eToro shows.
 - **Crypto limits are separate.** Crypto buys never use the stock limits and stock buys never
-  use the crypto ones; a meme coin uses both its own and the crypto caps. `status` shows each.
+  use the crypto ones; a meme coin uses both its own and the crypto daily caps, but only a meme
+  position slot. `status` shows each, with open positions and the stop rule per bucket.
+- **Open positions are counted from the ledger.** A position eToro closed at its stop or
+  target keeps counting until `reconcile` sees it gone from the portfolio; run it before
+  buying, and never delete or edit `trades.jsonl` to free a slot.
 - **Replays are not forecasts.** With $100 orders on a large account the equity curve barely
   moves; read the win rate and average trade too, and never suggest raising limits because a
   replay looked good.
@@ -374,4 +432,5 @@ python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py status
 `--check` prints `"ok": true` and which `extras` are installed; indicators print a `signal`
 with `reasons`; the review prints `"ok": true` with `accuracy`, `buy_gate` and `lessons` and
 refreshes the dashboard file; the replay prints `strategy`, `buy_and_hold` and `limits`;
-`status` prints the trading settings and today's remaining limits, crypto and meme coins apart.
+`status` prints the trading settings, today's remaining limits and the open positions against
+their maximum with the stop rule, crypto and meme coins apart.

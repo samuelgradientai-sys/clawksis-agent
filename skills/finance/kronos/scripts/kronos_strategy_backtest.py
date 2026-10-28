@@ -8,8 +8,9 @@ at that moment, and every order goes through the same guards ``etoro_trade.py`` 
   least half the ATR, the indicator signal is bullish or neutral with RSI ≤ 70, and the lesson
   gate passes (``check_lessons`` over a journal of the simulated forecasts, scored as they
   mature). The size comes from ``kronos_risk.plan_position`` (stop ``--atr-mult`` ATRs below
-  the entry, target at ``--rr``:1) capped by the user's trading limits (``DEFAULTS`` when
-  config.yaml has none), then ``check_limits`` must accept it. The order fills at the next
+  the entry, or ``trading.stop_pct`` % below it when that is set; target at ``--rr``:1)
+  capped by the user's trading limits (``DEFAULTS`` when config.yaml has none), then
+  ``check_limits`` must accept it. The order fills at the next
   bar's open, and only if ``check_price_levels`` accepts the stop and target at that price.
 - Exits: the stop and target execute inside later bars (a gap through one fills at the open; a
   bar touching both counts as the stop); a forecast turning down with bearish indicators, or
@@ -72,6 +73,7 @@ from _kronos_common import (
 from _kronos_config import RISK_PCT, config_path, goals, load_config, risk_profile
 from _kronos_journal import evaluate, strategy_path, symbol_key
 from _kronos_metrics import summarize
+from _kronos_positions import fixed_stop
 from etoro_trade import (
     DEFAULTS,
     LessonRefused,
@@ -423,7 +425,10 @@ def _try_buy(sim: Sim, index: int, signal: dict[str, Any]) -> None:
     """Size the buy and run it through the real guards; it fills at the next open."""
     bar, rules = sim.bars[index], sim.rules
     fill_time = _utc(sim.bars[index + 1].ts)
-    stop = bar.close - rules.atr_mult * signal["indicators"]["atr14"]
+    if sim.config.stop_pct > 0:
+        stop = fixed_stop(bar.close, sim.config.stop_pct)
+    else:
+        stop = bar.close - rules.atr_mult * signal["indicators"]["atr14"]
     if stop <= 0:
         sim.refusals["stop"] += 1
         return
@@ -677,6 +682,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "rules": {
             "risk_pct": rules.risk_pct,
             "atr_mult": rules.atr_mult,
+            "stop_pct": config.stop_pct,
             "reward_risk": rules.rr,
             "max_hold_bars": rules.max_hold,
             "fee_pct_per_side": args.fee_pct,

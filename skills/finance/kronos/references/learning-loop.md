@@ -11,7 +11,7 @@ in the profile's `$CLAWK_HOME` and are append-only JSONL (later lines update ear
 |---|---|---|
 | `kronos/forecasts.jsonl` | `kronos_forecast.py` (one line per run), `kronos_review.py` (`{"id", "outcome"}` lines) | the forecast journal |
 | `kronos/lessons.jsonl` | `kronos_review.py` | lessons, folded by `key` |
-| `kronos/trades.jsonl` | `etoro_trade.py buy/close/reconcile` | the trade ledger (limits are counted from it) |
+| `kronos/trades.jsonl` | `etoro_trade.py buy/close/reconcile` | the trade ledger: `open`, `close` and `flat` rows (limits and open positions are counted from it) |
 | `kronos/refused.jsonl` | `etoro_trade.py buy` | buys refused before any order, with their kind: `limit`, `lesson`, `backtest`, `stop`, `market` |
 | `kronos/backtests.jsonl` | `kronos_backtest.py` (one line per run) | verdicts vs "no change" and ETS; the backtest gate reads them |
 | `kronos/strategy.jsonl` | `kronos_strategy_backtest.py` | playbook replay summaries for the dashboard |
@@ -82,10 +82,11 @@ slightly (spread, fill price).
 
 ## Dashboard panels (`dashboards/kronos.json`, contract version 1)
 
-`summary` (account, trading on/off, stock buys and USD today vs caps, crypto USD today,
-orders in flight, forecast hit rate, closed P&L, active lessons), `crypto` (crypto and meme-coin
-switches, buys and USD today vs their own caps, per-order maximums, the crypto watchlist and
-meme list), `goals`, `etoro_key` (key scopes), `lessons` ("What it learned"), `bought`, `sold` and `refused`
+`summary` (account, trading on/off, stock buys and USD today vs caps, open stock positions
+vs `max_positions` and the stop rule, crypto USD today, orders in flight, forecast hit rate,
+closed P&L, active lessons), `crypto` (crypto and meme-coin switches, buys and USD today vs
+their own caps with the per-order maximum as hint, open positions vs `max_positions` and the
+stop rule of each, the crypto watchlist and meme list), `goals`, `etoro_key` (key scopes), `lessons` ("What it learned"), `bought`, `sold` and `refused`
 (each row tagged Stock/ETF, Crypto or Meme coin), `accuracy_chart` (rolling hit rate, overall + busiest symbols), `accuracy_by_symbol`,
 `backtests` (newest verdict per symbol and bar size, skill vs "no change" and ETS, stale ones
 marked), `strategy` (newest playbook replay per symbol: trades, win rate, CAGR, max drawdown,

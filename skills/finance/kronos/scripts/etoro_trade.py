@@ -15,6 +15,10 @@ OFF BY DEFAULT. Every guard runs here, before any order leaves the machine:
   the ``kronos.crypto.*`` caps; a meme coin (symbol in ``kronos.crypto.meme.symbols``) also
   needs ``kronos.crypto.meme.enabled``, must be listed by eToro, and counts against the meme
   caps and the crypto caps. The ``trading.*`` caps then cover the other (stock) buys only.
+- Open positions: each bucket holds at most its ``max_positions`` (``trading.``,
+  ``crypto.``, ``crypto.meme.``), counted from the ledger under the same lock
+  (``_kronos_positions.py``; a meme coin takes a meme slot only). ``reconcile`` drops the
+  positions eToro closed on its own (stop-loss, take-profit, closed in the app).
 - Lessons bite: an automatic buy is refused while Kronos got the symbol's direction right in
   under half of its last reviewed forecasts (at least 5, scored by kronos_review.py into the
   forecast journal), and unless the symbol's backtests of the last 7 days say ``adds_value``
@@ -23,7 +27,9 @@ OFF BY DEFAULT. Every guard runs here, before any order leaves the machine:
   still applies. An unreadable journal refuses automatic buys.
 - Protection: an automatic buy must carry a stop-loss (``--stop``; ``--target`` optional),
   sent with the order so eToro executes it. Before the order, the instrument's current eToro
-  price is read: the stop must sit below it (by at most 50%) and the target above it.
+  price is read: the stop must sit below it (by at most 50%) and the target above it. A bucket
+  with a fixed ``stop_pct`` also refuses any stop farther below the price than that (plus one
+  point for the price moving since the buy was sized).
 - Market hours: the newest eToro price must be under 2 hours old, and an instrument with no
   Saturday trading (anything but crypto-like 24/7 markets) is bought only inside the New York
   Stock Exchange regular session (holidays and early closes included).
@@ -102,6 +108,18 @@ from _kronos_crypto import (
     parse_crypto_config,
 )
 from _kronos_crypto import SET_CMD as CRYPTO_SET_CMD
+from _kronos_positions import (
+    MAX_STOP_PCT,
+    NOT_COUNTED,
+    BucketRules,
+    bucket_rules,
+    flat_rows,
+    holdings,
+    open_positions,
+    parse_stop_pct,
+    positions_usage,
+    widest_stop,
+)
 from _kronos_journal import (
     BACKTEST_MAX_AGE,
     GATE_MIN_HIT_RATE,
@@ -157,9 +175,6 @@ ORDER_STATUS = {
     10: "rejected_partially_filled",
 }
 FINAL_STATUSES = {"filled", "rejected", "canceled", "expired", "partially_filled"}
-# Statuses where no money moved: they do not count toward the daily limits. Every other status
-# counts, including "unknown" and the "not_found" a reconcile gives it: limits never loosen.
-NOT_COUNTED = {"rejected", "canceled", "expired", "dry_run"}
 # Buys whose outcome is not known: a failed or unanswered request, or a run that stopped mid-order.
 IN_DOUBT = {"unknown", "submitting"}
 LANDED = {"filled", "partially_filled", "received", "placed"}
@@ -178,7 +193,7 @@ MAX_WRITE_RETRY_AFTER = 60.0
 PRICE_INTERVAL = "OneHour"
 PRICE_BARS = 200
 PRICE_MAX_AGE = timedelta(hours=2)
-MAX_STOP_DISTANCE_PCT = 50.0
+MAX_STOP_DISTANCE_PCT = MAX_STOP_PCT
 # /pnl answers are cached ~10 s and fills are asynchronous: reconcile only older buys.
 RECONCILE_MIN_AGE = timedelta(seconds=60)
 RECONCILE_TIME_SLACK = timedelta(minutes=2)
@@ -250,6 +265,8 @@ class TradingConfig:
     max_order_usd: float
     max_daily_usd: float
     max_orders_per_day: int
+    max_positions: int = 5
+    stop_pct: float = 0.0  # 0 = ATR stop
 
 
 DEFAULTS = TradingConfig(False, "demo", 100.0, 300.0, 5)
@@ -276,6 +293,16 @@ def _as_number(value: Any, key: str, kind: type) -> float | int:
             f"skills.config.kronos.trading.{key} must be a positive number."
         )
     return number
+
+
+def _as_stop_pct(value: Any) -> float:
+    pct = parse_stop_pct(value)
+    if pct is None:
+        raise TradingRefused(
+            "skills.config.kronos.trading.stop_pct must be a number from 0 (ATR stop) to "
+            f"{MAX_STOP_PCT:g}."
+        )
+    return pct
 
 
 def _trading_section(path: Path | None) -> dict[str, Any]:
@@ -313,6 +340,12 @@ def load_trading_config(path: Path | None = None) -> TradingConfig:
                 int,
             )
         ),
+        max_positions=int(
+            _as_number(
+                raw.get("max_positions", DEFAULTS.max_positions), "max_positions", int
+            )
+        ),
+        stop_pct=_as_stop_pct(raw.get("stop_pct", DEFAULTS.stop_pct)),
     )
 
 
@@ -369,6 +402,19 @@ def read_ledger(path: Path | None = None) -> list[dict[str, Any]]:
     return fold_rows(read_jsonl(path or ledger_path()))
 
 
+def ledger_for_limits(path: Path | None = None) -> list[dict[str, Any]]:
+    """The ledger a buy is checked against; unreadable means no buy (fail closed)."""
+    try:
+        return read_ledger(path)
+    except (OSError, ValueError) as exc:
+        raise TradingRefused(
+            f"The trade ledger could not be read ({exc}), so today's limits and the open "
+            "positions cannot be counted; nothing is bought.",
+            hint=f"Repair {path or ledger_path()}; never delete it, the limits are counted "
+            "from it.",
+        ) from None
+
+
 def append_ledger(row: Mapping[str, Any], path: Path | None = None) -> None:
     append_jsonl(path or ledger_path(), dict(row))
 
@@ -417,7 +463,7 @@ def check_cap(
             hint="Use a smaller amount. Only the user can raise the limit.",
         )
     count, spent = usage_today(entries, account, now, cap.counts)
-    if cap.max_orders_per_day is not None and count >= cap.max_orders_per_day:
+    if count >= cap.max_orders_per_day:
         raise TradingRefused(
             f"Today's limit of {cap.max_orders_per_day} {word}buys on the {account} "
             "account is used up.",
@@ -453,14 +499,35 @@ def check_bucket_limits(
     entries: list[dict[str, Any]],
     now: datetime,
 ) -> dict[str, Any]:
-    """Every cap of *bucket* (a meme coin: the meme caps, then the crypto caps). The result
-    describes the bucket's own cap and, for a meme coin, what the crypto cap leaves too."""
+    """Every cap of *bucket* (a meme coin: the meme caps, then the crypto caps), then its
+    maximum of open positions. The result describes the bucket's own cap and, for a meme coin,
+    what the crypto cap leaves too."""
     own, *others = caps_for(bucket, config, crypto)
     result = {"bucket": bucket, **check_cap(own, config.account, amount, entries, now)}
     for cap in others:
         left = check_cap(cap, config.account, amount, entries, now)["usd_left_after"]
         result[f"{cap.name}_usd_left_after"] = left
+    rules = bucket_rules(bucket, config, crypto)
+    result["positions_open"] = check_positions(rules, config.account, entries)
+    result["max_positions"] = rules.max_positions
     return result
+
+
+def check_positions(
+    rules: BucketRules, account: str, entries: list[dict[str, Any]]
+) -> int:
+    """Refuse a buy that would hold more than the bucket's maximum of open positions."""
+    held = open_positions(entries, account, rules.bucket)
+    if held >= rules.max_positions:
+        word = _CAP_WORD.get(rules.bucket) or "stock "
+        raise TradingRefused(
+            f"Kronos already holds {held} {word}position(s) on the {account} account; the "
+            f"maximum is {rules.max_positions}.",
+            hint="Close one first, or wait for its stop or target. If eToro already closed "
+            "one, run `etoro_trade.py reconcile` to update the count. Only the user can raise "
+            "the maximum.",
+        )
+    return held
 
 
 def require_bucket_enabled(bucket: str, crypto: CryptoConfig) -> None:
@@ -604,6 +671,18 @@ def check_price_levels(stop: float | None, target: float | None, price: float) -
         raise ProtectionRefused(
             f"The target ({target:g}) is not above the current price ({price:g}).",
             hint="Recompute the target with kronos_risk.py from fresh bars.",
+        )
+
+
+def check_stop_rule(stop: float | None, price: float, stop_pct: float) -> None:
+    """A bucket with a fixed stop_pct accepts no stop farther below the price than that."""
+    floor = widest_stop(price, stop_pct)
+    if stop is not None and floor is not None and stop < floor:
+        raise ProtectionRefused(
+            f"The stop ({stop:g}) is {(1 - stop / price) * 100:.1f}% below the current price "
+            f"({price:g}); this asset type's stop-loss is {stop_pct:g}%.",
+            hint="Recompute the stop with kronos_risk.py, which applies the stop_pct. Only "
+            "the user changes stop_pct.",
         )
 
 
@@ -931,11 +1010,12 @@ def cap_usage(
 ) -> dict[str, Any]:
     """Today's (UTC) use of one cap and what is left of it."""
     count, spent = usage_today(entries, account, now, cap.counts)
-    usage: dict[str, Any] = {"buys": count, "usd": spent}
-    if cap.max_orders_per_day is not None:
-        usage["buys_left"] = max(cap.max_orders_per_day - count, 0)
-    usage["usd_left"] = round(max(cap.max_daily_usd - spent, 0.0), 2)
-    return usage
+    return {
+        "buys": count,
+        "usd": spent,
+        "buys_left": max(cap.max_orders_per_day - count, 0),
+        "usd_left": round(max(cap.max_daily_usd - spent, 0.0), 2),
+    }
 
 
 def _crypto_status(
@@ -946,15 +1026,24 @@ def _crypto_status(
     except TradingRefused as exc:
         return {"error": str(exc)}
     meme_cap, crypto_cap = caps_for(MEME, config, crypto)
+    account, now = config.account, deps.now()
     return {
         "config": asdict(crypto),
-        "today_utc": cap_usage(crypto_cap, config.account, entries, deps.now()),
-        "meme_today_utc": cap_usage(meme_cap, config.account, entries, deps.now()),
+        "today_utc": cap_usage(crypto_cap, account, entries, now),
+        "meme_today_utc": cap_usage(meme_cap, account, entries, now),
+        "positions": positions_usage(
+            bucket_rules(CRYPTO, config, crypto), entries, account
+        ),
+        "meme_positions": positions_usage(
+            bucket_rules(MEME, config, crypto), entries, account
+        ),
         "note": "Crypto buys count only against these caps, meme coins against both the "
-        "meme and the crypto caps; the stock limits above cover everything else.",
+        "meme and the crypto caps; the stock limits above cover everything else. Open "
+        "positions are counted per type: a meme coin takes a meme slot only.",
         "change_settings": f"{CRYPTO_SET_CMD}.<enabled|watchlist|max_order_usd|"
-        "max_daily_usd|max_orders_per_day|meme.enabled|meme.symbols|meme.max_order_usd|"
-        "meme.max_daily_usd> <value> (the user decides)",
+        "max_daily_usd|max_orders_per_day|max_positions|stop_pct|meme.enabled|"
+        "meme.symbols|meme.max_order_usd|meme.max_daily_usd|meme.max_orders_per_day|"
+        "meme.max_positions|meme.stop_pct> <value> (the user decides)",
     }
 
 
@@ -966,10 +1055,13 @@ def cmd_status(_args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
         "ok": True,
         "config": asdict(config),
         "today_utc": cap_usage(stock_cap, config.account, entries, deps.now()),
+        "positions": positions_usage(
+            bucket_rules(STOCK, config, None), entries, config.account
+        ),
         "crypto": _crypto_status(config, deps, entries),
         "ledger": str(deps.ledger or ledger_path()),
         "change_settings": f"{SET_CMD}.<enabled|account|max_order_usd|max_daily_usd|"
-        "max_orders_per_day> <value> (the user decides; config.yaml in "
+        "max_orders_per_day|max_positions|stop_pct> <value> (the user decides; config.yaml in "
         f"{display_home()}; these cover stocks, ETFs and everything but crypto)",
     }
 
@@ -1108,7 +1200,7 @@ class BucketGate:
                 self.crypto,
                 bucket,
                 self.amount,
-                read_ledger(deps.ledger),
+                ledger_for_limits(deps.ledger),
                 deps.now(),
             )
         except TradingRefused as exc:
@@ -1180,6 +1272,8 @@ def _market_checks(
     try:
         market = check_market(args.symbol, instrument, snapshot, deps.now())
         check_price_levels(args.stop, args.target, market["price"])
+        rules = bucket_rules(bucket, gate.trading, gate.crypto)
+        check_stop_rule(args.stop, market["price"], rules.stop_pct)
     except TradingRefused as exc:
         exc.bucket = bucket
         raise
@@ -1414,19 +1508,35 @@ def _reconcile_entry(
     }
 
 
+def _drop_closed_positions(
+    deps: Deps, account: str, portfolio: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    """Log ``flat`` for instruments eToro no longer holds (stop, target or app close)."""
+    rows = flat_rows(read_ledger(deps.ledger), account, portfolio, deps.now())
+    for row in rows:
+        append_ledger(row, deps.ledger)
+    return [
+        {k: row[k] for k in ("symbol", "bucket", "instrument_id", "positions")}
+        for row in rows
+    ]
+
+
 def cmd_reconcile(_args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
-    """Settle buys logged ``unknown`` (or left ``submitting``) from eToro's own records."""
+    """Settle buys logged ``unknown`` (or left ``submitting``) from eToro's own records, and
+    stop counting positions eToro has closed on its own."""
     config = load_trading_config(deps.config_path)
-    results, waiting = [], []
+    results, waiting, closed = [], [], []
     with deps.lock():  # no buy can be half-logged while the ledger is read and updated
+        entries = read_ledger(deps.ledger)
         doubtful = [
             e
-            for e in read_ledger(deps.ledger)
+            for e in entries
             if e.get("action") == "open"
             and e.get("account") == config.account
             and e.get("status") in IN_DOUBT
         ]
-        if doubtful:
+        held = any(h.count for h in holdings(entries, config.account).values())
+        if doubtful or held:
             reader, trader = deps.clients()
             portfolio, _path = reader.portfolio(config.account)
         for entry in doubtful:
@@ -1436,13 +1546,18 @@ def cmd_reconcile(_args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
                 continue
             append_ledger(update, deps.ledger)
             results.append({"symbol": entry.get("symbol"), **update})
+        if doubtful or held:
+            closed = _drop_closed_positions(deps, config.account, portfolio)
     return {
         "ok": True,
         "account": config.account,
         "reconciled": results,
         "too_recent": waiting,
+        "closed_on_etoro": closed,
         "note": "Read-only: nothing was bought or sold. Every one of these buys keeps counting "
-        "toward the limits of the day it was sent.",
+        "toward the limits of the day it was sent; closed_on_etoro lists positions eToro "
+        "closed by itself (stop-loss, take-profit or the app), which no longer count toward "
+        "the maximum of open positions.",
     }
 
 
