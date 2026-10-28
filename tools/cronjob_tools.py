@@ -930,6 +930,10 @@ def _action_create(a: dict[str, Any]) -> str:
             use_memory=False if a["use_memory"] is None else bool(a["use_memory"]),
             fallback_models=a["fallback_models"],
             attach_to_session=a["attach_to_session"],
+            run_in_chat=a["run_in_chat"]
+            if a["run_in_chat"] is not None
+            else _default_run_in_chat(),
+            browser=a["browser"],
             monitor_script=_normalize_optional_job_value(a["monitor_script"]),
             monitor_url=_normalize_optional_job_value(a["monitor_url"]),
             # CLI-only lane: absent from CRONJOB_SCHEMA and the model dispatch (models don't pick models).
@@ -1205,6 +1209,8 @@ def _update_run_fields(
         updates["enabled_toolsets"] = a["enabled_toolsets"]
     if a["attach_to_session"] is not None:
         updates["attach_to_session"] = bool(a["attach_to_session"])
+    if a["browser"] is not None:
+        updates["browser"] = a["browser"]
     if a["workdir"] is not None:
         # Empty string clears; otherwise update_job() validates/normalizes.
         updates["workdir"] = _normalize_optional_job_value(a["workdir"]) or None
@@ -1216,6 +1222,7 @@ def _update_run_fields(
         "use_soul",
         "use_user_md",
         "use_memory",
+        "run_in_chat",
     ):
         if a[flag] is not None:
             updates[flag] = bool(a[flag])
@@ -1346,6 +1353,8 @@ def cronjob(
     use_soul: Optional[bool] = None,
     use_user_md: Optional[bool] = None,
     use_memory: Optional[bool] = None,
+    run_in_chat: Optional[bool] = None,
+    browser: Optional[str] = None,
     fallback_models: Optional[str | list] = None,
     attach_to_session: Optional[bool] = None,
     monitor_script: Optional[str] = None,
@@ -1501,6 +1510,15 @@ GUIDELINES when creating a job (so it behaves well at run time):
                 "default": True,
                 "description": "Default true: inject USER.md (user profile: language, preferences) so a scheduled run honours the user's language without a live conversation. False omits it.",
             },
+            "run_in_chat": {
+                "type": "boolean",
+                "description": "True = at run time the prompt is sent INTO the job's chat as if the user had typed it, and the agent runs it there as a normal turn: same conversation, long-term memory, every tool and skill (Mi Chrome, messaging, clarify) — and answers in that chat, where the user can reply. Use for instructions to the agent ('every day at 10, message my LinkedIn leads'). False = isolated background run that only delivers its final answer. Unset follows config cron.run_in_chat. Needs a messaging-chat target (origin or platform:chat_id); otherwise the job runs isolated.",
+            },
+            "browser": {
+                "type": "string",
+                "enum": ["my_chrome", "server", "auto"],
+                "description": "Which browser the job may use. my_chrome = only the user's own Chrome (their logged-in sessions; required for LinkedIn, Instagram, banks...): if it is offline the run stops and says so instead of using another browser. server = the server's browser, never the user's Chrome (public sites, scraping). auto = the user's Chrome when connected. When a job will browse, ASK the user (clarify) whether it should use their Chrome or the server's browser before creating it, and set this; never guess for logged-in sites.",
+            },
             "use_memory": {
                 "type": "boolean",
                 "default": False,
@@ -1586,6 +1604,8 @@ _HANDLER_FORWARDED_ARGS = (
     "use_soul",
     "use_user_md",
     "use_memory",
+    "run_in_chat",
+    "browser",
     # Fork exception to the "no agent-chosen models" rule above: a per-job fallback chain
     # only applies when the primary model is exhausted.
     "fallback_models",
@@ -1593,6 +1613,12 @@ _HANDLER_FORWARDED_ARGS = (
     "paused_reason",
     "pinned",
 )
+
+
+def _default_run_in_chat() -> Optional[bool]:
+    from cron.scheduler_chat_turn import default_run_in_chat
+
+    return default_run_in_chat()
 
 
 def _cronjob_handler(args, **kw):

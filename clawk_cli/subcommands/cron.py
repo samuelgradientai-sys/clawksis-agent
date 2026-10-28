@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 from typing import Callable
 
 from clawk_cli.subcommands._shared import add_accept_hooks_flag
@@ -344,4 +345,35 @@ def build_cron_parser(subparsers, *, cmd_cron: Callable) -> None:
     cron_tick = cron_subparsers.add_parser("tick", help="Run due jobs once and exit")
     add_accept_hooks_flag(cron_tick)
     add_accept_hooks_flag(cron_parser)
+    _finish_cron_parser(cron_parser, cmd_cron)
+
+
+def _finish_cron_parser(
+    cron_parser: argparse.ArgumentParser, cmd_cron: Callable
+) -> None:
     cron_parser.set_defaults(func=cmd_cron)
+    add_cron_run_mode_flags(cron_parser)
+
+
+def add_cron_run_mode_flags(cron_parser: argparse.ArgumentParser) -> None:
+    """``--in-chat`` and ``--browser`` on ``cron create`` and ``cron edit``."""
+    actions = [
+        a for a in cron_parser._actions if isinstance(a, argparse._SubParsersAction)
+    ]
+    for name in ("create", "edit"):
+        parser = actions[0].choices[name]
+        parser.add_argument(
+            "--browser",
+            choices=("my_chrome", "server", "auto"),
+            help="Browser the job may use: my_chrome (only your Chrome; stops if it "
+            "is offline), server (the server's browser, never your Chrome) or auto.",
+        )
+        parser.add_argument(
+            "--in-chat",
+            dest="run_in_chat",
+            action=argparse.BooleanOptionalAction,
+            default=None,
+            help="Run the prompt inside the delivery chat as if you had sent it (full "
+            "agent: conversation, memory, every tool) instead of an isolated background "
+            "task. --no-in-chat turns it off. Unset follows config cron.run_in_chat.",
+        )

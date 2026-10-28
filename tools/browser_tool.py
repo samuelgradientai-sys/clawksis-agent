@@ -874,7 +874,10 @@ def browser_navigate(url: str, task_id: Optional[str] = None) -> str:
             else "none",
         )
 
-    session_info = _session._get_session_info(nav_session_key)
+    try:
+        session_info = _session._get_session_info(nav_session_key)
+    except RuntimeError as exc:  # e.g. the user's Mi Chrome is paired but offline
+        return _dumps(_err(str(exc)))
     is_first_nav = session_info.get("_first_nav", True)
     if is_first_nav:
         session_info["_first_nav"] = False

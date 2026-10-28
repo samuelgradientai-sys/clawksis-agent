@@ -2130,6 +2130,8 @@ def create_job(
     use_memory: bool = False,
     fallback_models: Optional[str | list[Any]] = None,
     attach_to_session: Optional[bool] = None,
+    run_in_chat: Optional[bool] = None,
+    browser: Optional[str] = None,
     monitor_script: Optional[str] = None,
     monitor_url: Optional[str] = None,
     reasoning_effort: Optional[str] = None,
@@ -2258,6 +2260,8 @@ def create_job(
     # jobs.
     for key, value in (
         ("attach_to_session", normalized_attach),
+        ("run_in_chat", run_in_chat if isinstance(run_in_chat, bool) else None),
+        ("browser", normalize_job_browser(browser)),
         ("reasoning_effort", normalized_reasoning_effort),
         ("failure_deliver", f["failure_deliver"]),
         ("interpreter", f["interpreter"]),
@@ -2533,6 +2537,20 @@ def _fill_missing_next_run(updated: dict[str, Any]) -> None:
     updated["next_run_at"] = next_run
 
 
+JOB_BROWSER_VALUES = ("my_chrome", "server")
+
+
+def normalize_job_browser(value: Any) -> Optional[str]:
+    """A job's ``browser`` choice: ``my_chrome`` / ``server``, or None (automatic) for empty or
+    ``auto``; anything else is refused so a typo never silently means "automatic"."""
+    text = str(value or "").strip().lower().replace("-", "_")
+    if text in ("", "auto", "none"):
+        return None
+    if text not in JOB_BROWSER_VALUES:
+        raise ValueError(f"browser must be my_chrome, server or auto (got {value!r})")
+    return text
+
+
 def update_job(job_id: str, updates: dict[str, Any]) -> Optional[dict[str, Any]]:
     """Update a job by ID, refreshing derived schedule fields when needed."""
     # ``id`` is a path component under OUTPUT_DIR — changing it would leak path-escape values.
@@ -2541,6 +2559,9 @@ def update_job(job_id: str, updates: dict[str, Any]) -> Optional[dict[str, Any]]
         raise ValueError(
             f"Cron job field(s) cannot be updated: {', '.join(sorted(bad_fields))}"
         )
+
+    if updates and "browser" in updates:
+        updates = {**updates, "browser": normalize_job_browser(updates["browser"])}
 
     def apply(jobs, i, job):
         _rederive_repeat_for_schedule_change(job, updates)

@@ -316,7 +316,11 @@ def _job_rows(job: dict[str, Any]) -> list[tuple[str, str]]:
             "Mode",
             color("no-agent", Colors.DIM) + " (script stdout delivered directly)"
             if job.get("no_agent")
-            else "",
+            else (
+                "in chat (sent as your message; the agent runs it there)"
+                if job.get("run_in_chat") is True
+                else ""
+            ),
         ),
         ("Workdir", job.get("workdir")),
         ("Python", job.get("interpreter")),
@@ -1067,6 +1071,8 @@ _JOB_ARG_FIELDS = (
     ("continuity", "continuity"),
     ("reasoning_effort", "reasoning_effort"),
     ("interpreter", "interpreter"),
+    ("run_in_chat", "run_in_chat"),
+    ("browser", "browser"),
 )
 
 
@@ -1081,6 +1087,8 @@ _JOB_DETAIL_LINES = (
     ("monitor_url", "  Monitor: {} (agent runs only on output change)"),
     ("no_agent", "  Mode: no-agent (script stdout delivered directly)"),
     ("continuity", "  Continuity: on (each run sees the previous run's output)"),
+    ("run_in_chat", "  Runs in: the chat, as a message from you (full agent)"),
+    ("browser", "  Browser: {}"),
     ("workdir", "  Workdir: {}"),
     ("interpreter", "  Python: {}"),
 )

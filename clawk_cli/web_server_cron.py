@@ -344,6 +344,10 @@ def _create_cron_job_sync(body: CronJobCreate, profile: Optional[str] = None):
             use_soul=body.use_soul,
             use_user_md=body.use_user_md,
             use_memory=body.use_memory,
+            run_in_chat=body.run_in_chat
+            if body.run_in_chat is not None
+            else _default_run_in_chat(),
+            browser=body.browser,
             fallback_models=body.fallback_models or None,
             **{
                 key: getattr(body, key)
@@ -539,3 +543,9 @@ def _gateway_intentionally_stopped(profile: Optional[str]) -> bool:
         return isinstance(data, dict) and data.get("desired_state") == "stopped"
     except Exception:
         return False
+
+
+def _default_run_in_chat():
+    from cron.scheduler_chat_turn import default_run_in_chat
+
+    return default_run_in_chat()

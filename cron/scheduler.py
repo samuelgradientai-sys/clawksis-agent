@@ -3110,6 +3110,21 @@ def _delegates_to_canonical_owner(job: dict, execution_id: Optional[str]) -> boo
     return not job.get("no_agent") and owner_execution is None
 
 
+def _pin_job_browser_route(job: dict) -> None:
+    """In a restart-safe worker (a process of its own) pin the job's ``browser`` choice for every
+    browser call it makes: ``my_chrome`` never falls back to the server browser, ``server`` never
+    touches the user's Chrome. Never set in the gateway process itself (it serves every chat)."""
+    if not os.environ.get("_CLAWK_CRON_EXTERNAL_WORKER"):
+        return
+    from tools.browser_my_chrome_state import BROWSER_ROUTE_ENV, JOB_BROWSER_CHOICES
+
+    route = str(job.get("browser") or "").strip()
+    if route in JOB_BROWSER_CHOICES:
+        os.environ[BROWSER_ROUTE_ENV] = route
+    else:
+        os.environ.pop(BROWSER_ROUTE_ENV, None)
+
+
 def run_job(
     job: dict,
     *,
@@ -3130,6 +3145,7 @@ def run_job(
         cancel_event=cancel_event,
         execution_id=execution_id,
     )
+    _pin_job_browser_route(job)
     if not str(job.get("profile") or "").strip() or _delegates_to_canonical_owner(
         job, execution_id
     ):
@@ -3506,6 +3522,12 @@ def run_one_job(
     note_cron_execution(job)
     external_owner = os.environ.get("_CLAWK_CRON_EXTERNAL_WORKER") == execution_id
     if not external_owner:
+        # Chat-mode jobs run as a turn of their chat (the live gateway's session, memory and
+        # tools) instead of an isolated worker; anything that cannot be injected falls through.
+        from cron.scheduler_chat_turn import run_in_chat_if_wanted
+
+        if run_in_chat_if_wanted(job, extra_prompt=extra_prompt):
+            return True
         try:
             handed_off = _launch_external_cron_worker(job)
         except Exception as handoff_error:

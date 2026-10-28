@@ -1075,6 +1075,24 @@ def _take_my_chrome_note(route_key: str, env: dict) -> dict:
     return {"my_chrome": note_text(mode)}
 
 
+def _route_error_or_refusal(route_err: str, env: dict, local_sidecar: bool) -> str:
+    """The routing error, else why this call may not run off the user's paired Chrome."""
+    if route_err or local_sidecar or _on_my_chrome(env):
+        return route_err or ""
+    return _my_chrome_offline_refusal()
+
+
+def _my_chrome_offline_refusal() -> str:
+    """Refuse the server's browser while the user's paired Mi Chrome is offline, unless the
+    operator pointed the agent at another browser on purpose (``/browser connect``, a CDP URL)."""
+    from tools.browser_my_chrome_state import offline_refusal
+    from tools.browser_tool_cdp import _get_cdp_override_raw
+
+    if _get_cdp_override_raw():
+        return ""
+    return offline_refusal()
+
+
 def browser_exec(
     code: str,
     session: str = "",
@@ -1123,6 +1141,7 @@ def browser_exec(
     env, route_err, local_sidecar, generation = _route_exec_current(
         env, session, task_id, bool(local), local_sidecar, route_key
     )
+    route_err = _route_error_or_refusal(route_err, env, local_sidecar)
     if route_err:
         return tool_error(route_err)
     if local_sidecar:

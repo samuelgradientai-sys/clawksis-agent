@@ -432,6 +432,13 @@ export interface Translations {
     useSoul?: string;
     useUserMd?: string;
     useMemory?: string;
+    runInChat?: string;
+    runInChatHint?: string;
+    browser?: string;
+    browserAuto?: string;
+    browserMyChrome?: string;
+    browserServer?: string;
+    browserHint?: string;
     contextToggles?: string;
     fallbackModels?: string;
     fallbackModelsHint?: string;

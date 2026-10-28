@@ -413,6 +413,15 @@ export const en: Translations = {
     useSoul: "Use SOUL.md (assistant identity)",
     useUserMd: "Use USER.md (user profile)",
     useMemory: "Use MEMORY.md (long-term memory)",
+    browser: "Browser",
+    browserAuto: "Automatic (my Chrome when it is connected)",
+    browserMyChrome: "Only my Chrome (stops if it is offline)",
+    browserServer: "The server's browser (never my Chrome)",
+    browserHint:
+      "Sites where you are logged in (LinkedIn, Instagram, your bank) must use your Chrome, or they block the account.",
+    runInChat: "Run it in my chat, as if I had sent it",
+    runInChatHint:
+      "The instruction arrives in the delivery chat and the agent runs it there with the whole conversation, memory and every tool, and answers you right there. Off: it runs as an isolated background task that only sends its result.",
     contextToggles: "Context & delivery",
     fallbackModels: "Fallback models (optional)",
     fallbackModelsHint: "If the primary model fails (rate-limit, overload, error), retry with these. Format provider:model, comma-separated.",

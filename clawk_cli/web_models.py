@@ -418,6 +418,10 @@ class CronJobCreate(BaseModel):
     use_soul: bool = True
     use_user_md: bool = True
     use_memory: bool = False
+    # True/False pin chat mode for this job; None follows config cron.run_in_chat.
+    run_in_chat: Optional[bool] = None
+    # "my_chrome" | "server" | None (automatic).
+    browser: Optional[str] = None
     fallback_models: Optional[list[Any] | str] = None
 
 

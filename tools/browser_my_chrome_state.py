@@ -27,6 +27,16 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 STATE_DIRNAME = "my_chrome"
+# A cron job's ``browser`` choice, pinned for its own worker process: "my_chrome" (the user's
+# Chrome or nothing) or "server" (the VPS browser, never the user's Chrome).
+BROWSER_ROUTE_ENV = "CLAWK_BROWSER_ROUTE"
+JOB_BROWSER_CHOICES = ("my_chrome", "server")
+
+
+def _pinned_route() -> str:
+    return os.environ.get(BROWSER_ROUTE_ENV, "").strip()
+
+
 _RELAY_FILE = "relay.json"
 
 _seen: dict[str, str] = {}
@@ -147,9 +157,51 @@ def my_chrome_cdp_url() -> str:
 
     if get_clawk_home_override() is None and is_multiplex_active():
         return ""
-    if not my_chrome_enabled():
+    if _pinned_route() == "server" or not my_chrome_enabled():
         return ""
     return relay_endpoint(get_clawk_home())
+
+
+OFFLINE_MESSAGE = (
+    "Mi Chrome is paired but not connected right now (the Clawksis dashboard is not running, or "
+    "the extension in the user's Chrome is off), so this browser action was NOT run on the "
+    "server's browser instead: that browser has none of the user's sessions and sites like "
+    "LinkedIn block it. Stop the browser part of the task and tell the user to open the "
+    "dashboard (clawk dashboard) and check that the Clawksis extension shows as connected; "
+    "then retry. (To allow the server browser when Mi Chrome is offline, the user sets "
+    "browser.my_chrome.server_fallback: true.)"
+)
+
+
+def offline_refusal() -> str:
+    """Why a browser call must not fall back to the server's browser right now, else "".
+
+    Mi Chrome enabled + paired but its endpoint not live means the user expects their own Chrome
+    (their sessions, their IP); silently using the VPS browser instead gets accounts blocked.
+    ``browser.my_chrome.server_fallback: true`` restores the old fallback."""
+    from agent.secret_scope import is_multiplex_active
+    from clawk_constants import get_clawk_home, get_clawk_home_override
+
+    if get_clawk_home_override() is None and is_multiplex_active():
+        return ""
+    route = _pinned_route()
+    if route == "server":
+        return ""
+    home = get_clawk_home()
+    if route == "my_chrome":  # this job must run on the user's Chrome or not at all
+        return "" if my_chrome_enabled() and relay_endpoint(home) else OFFLINE_MESSAGE
+    if not my_chrome_enabled() or my_chrome_setting("server_fallback"):
+        return ""
+    try:
+        from clawk_cli.my_chrome_pairing import pairing_info
+
+        paired = pairing_info(home) is not None
+    except (OSError, ValueError):
+        logger.debug("Mi Chrome pairing unreadable; treated as unpaired", exc_info=True)
+        paired = False
+    if not paired or relay_endpoint(home):
+        return ""
+    return OFFLINE_MESSAGE
 
 
 def sync_relay_endpoint() -> bool:

@@ -379,6 +379,42 @@ When the cron store (`~/.clawksis/cron/`, or the profile's own `cron/` directory
 
 To fix it, free disk space on the filesystem holding the store, remount it read-write, or fix the ownership and permissions of the store directory so the gateway user can write it. You don't need to restart anything. On the next tick that can write, each job that stayed due fires **once** under the normal [misfire catch-up](#misfire-catch-up) rules, not once per missed tick. A one-shot that came due during the outage fires once instead of expiring (unless the gateway restarts while the store is unwritable).
 
+### Run in your chat (`run_in_chat`)
+
+By default an agent job runs in a fresh, isolated session: no conversation, no long-term memory, no
+`messaging`/`clarify` tools, and only its final answer is delivered. That suits reports. For
+**instructions to the agent** ("every weekday at 10, message my LinkedIn leads") turn on
+**run in chat**: at the scheduled time the prompt is sent into the job's delivery chat as if you had
+typed it, and the agent runs it there as a normal turn, with the whole conversation, memory, every
+tool and skill, and it answers in that chat, where you can reply or correct it.
+
+```bash
+clawk cron edit <job_id> --in-chat        # --no-in-chat turns it off
+```
+
+```yaml
+# ~/.clawksis/config.yaml — default for new jobs (each job stores its own value)
+cron:
+  run_in_chat: true
+```
+
+The message arrives as `⏰ Tarea programada «<name>»:` followed by the prompt and the job's skills.
+If the chat is busy, it waits its turn after the current one (it never interrupts you). It needs a
+messaging-chat target (`origin` or `platform:chat_id`) and the gateway running; otherwise the job
+runs isolated, so a scheduled task is never skipped. Script-only (`no_agent`) jobs are unaffected.
+
+### Which browser a job uses (`browser`)
+
+- `my_chrome`: only your own Chrome (Mi Chrome), with your logged-in sessions. If it is offline the
+  run stops and says so. Use it for LinkedIn, Instagram, your bank: those block the server's browser.
+- `server`: the server's browser, never your Chrome (public sites, scraping). These jobs always run
+  as background tasks, so they never touch your Chrome.
+- `auto` (default): your Chrome when it is connected.
+
+When the agent creates a job that browses, it asks you which one to use. With Mi Chrome paired, no
+job falls back to the server's browser while your Chrome is offline unless you set
+`browser.my_chrome.server_fallback: true`.
+
 ### Gateway scheduler behavior
 
 On each tick Clawksis:

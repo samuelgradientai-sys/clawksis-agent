@@ -36,6 +36,10 @@ export interface CronJobMutation {
   use_soul?: boolean;
   use_user_md?: boolean;
   use_memory?: boolean;
+  /** Run as a message in the delivery chat (full agent) instead of an isolated task. */
+  run_in_chat?: boolean | null;
+  /** "my_chrome" | "server" | "auto" (or null = automatic). */
+  browser?: string | null;
   fallback_models?: string[];
 }
 
@@ -74,6 +78,8 @@ export interface CronJob {
   use_soul?: boolean;
   use_user_md?: boolean;
   use_memory?: boolean;
+  run_in_chat?: boolean | null;
+  browser?: string | null;
   fallback_models?: { provider: string; model: string }[] | null;
 }
 
