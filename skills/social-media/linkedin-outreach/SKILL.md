@@ -58,7 +58,18 @@ scale" automation. Treat every action as if a human reviewer will see it.
   real account: the API calls went into a redirect loop and the operator was
   logged out of LinkedIn in their own browser too. The MCP's own saved session
   (created by `--login` on the operator's machine) is the only automation channel;
-  do not use its `--import-from-browser` either, for the same reason.
+  do not use its `--import-from-browser` either, for the same reason. The server
+  ALSO imports the browser session on its own when its saved one lapses
+  (`--auto-import`, on by default upstream): the catalog entry passes
+  `--no-auto-import`; keep it.
+- **Tool calls run one at a time** (one shared browser, even across clients):
+  never fan them out in parallel. Each page costs ~7 s (a profile's main page) to
+  ~25 s (a connection request); read only the sections a step needs.
+- **A free account has a monthly cap on people searches** ("Has llegado al límite
+  mensual de búsquedas", commercial-use limit). It is account-wide (the browser
+  hits it too) and is not a security checkpoint: stop searching for the run,
+  and source new people from `get_sidebar_profiles` (People You May Know), which
+  does not spend that cap.
 
 If the operator asks for high-volume blasting, refuse the volume and explain the
 ban risk — offer the personalized, capped approach instead.
