@@ -19,9 +19,9 @@ _WHERE = (
     "This browser is the USER'S OWN Chrome (Mi Chrome): their real open tabs, signed-in accounts "
     "and saved cards. Reuse a tab they already have open when it fits the task (list the tabs, "
     "switch to it); open new tabs for new work (they land in the 'Clawksis' tab group) and never "
-    "close the user's tabs. Several independent pages (one per company, product, site...) go "
-    "faster in parallel: hand them to delegate_task as a batch, and each subagent drives its own "
-    "tab. "
+    "close the user's tabs. To READ several pages, call read_pages([...]) in browser_exec: it "
+    "reads them in parallel tabs. Several independent multi-step tasks (one per company, "
+    "product, site...) go to delegate_task as a batch, each subagent in its own tab. "
 )
 _AUTONOMOUS = (
     "Payments: AUTONOMOUS. The user lets you complete the purchases, payments and bookings they "

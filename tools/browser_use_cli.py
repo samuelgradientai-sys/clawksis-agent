@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 from clawk_constants import get_clawk_home, clawk_home_key
+from tools import browser_parallel_read as _parallel_read
 from tools.browser_harness_dirs import (
     daemon_env,
     daemon_identity,
@@ -1156,7 +1157,9 @@ def browser_exec(
     private_browser = env.pop(
         _PRIVATE_BROWSER_SENTINEL, None
     )  # always pop: never exported to the CLI
-    code = _scope_to_own_tab(code, session, env, private_browser)
+    code = _parallel_read.with_helper(
+        _scope_to_own_tab(code, session, env, private_browser)
+    )
 
     workspace = _workspace_dir(task_id)
     if workspace:
@@ -1286,6 +1289,7 @@ _HELPERS_DIGEST = (
     "in Python before printing; it is thousands of nodes), then cdp('DOM.getBoxModel', backendNodeId=n) "
     "gives click coordinates. ensure_real_tab() recovers from a stale/internal tab. Login walls: never guess "
     "credentials; see the vault note below if present, otherwise stop and ask the user."
+    + _parallel_read.DIGEST
 )
 
 

@@ -232,6 +232,27 @@ def test_flatten_attach_routes_commands_and_filters_events_per_session():
     run_relay(scenario)
 
 
+def test_attached_tabs_keep_running_behind_other_tabs():
+    """Chrome freezes a tab that is not in front; the relay emulates focus once per attachment."""
+
+    async def scenario(relay, extension, server, open_driver):
+        driver = await open_driver()
+        created = (
+            await driver.call("Target.createTarget", {"url": "https://a.example/"})
+        )["result"]
+        for _ in range(2):
+            await driver.call(
+                "Target.attachToTarget",
+                {"targetId": created["targetId"], "flatten": True},
+            )
+        focus = extension.sent("cdp", "Emulation.setFocusEmulationEnabled")
+        assert [(c["tabId"], c["params"]) for c in focus] == [
+            (extension.next_tab, {"enabled": True})
+        ]
+
+    run_relay(scenario)
+
+
 def test_a_second_driver_gets_the_execution_contexts_chrome_reported_before_it():
     async def scenario(relay, extension, server, open_driver):
         first, second = await open_driver(), await open_driver()
