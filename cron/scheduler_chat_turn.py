@@ -13,6 +13,8 @@ refuses the route — the job falls back to the isolated run, so a scheduled tas
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import logging
 from pathlib import Path
 from typing import Any, Optional
@@ -116,41 +118,81 @@ def chat_prompt(job: dict, extra_prompt: Optional[str] = None) -> str:
     return "\n\n".join(lines)
 
 
-def _gateway_injector():
-    """The live gateway's chat-turn scheduler in this process (the one plugins use), or None."""
+def _gateway_host():
+    """The live gateway runner in this process (the host plugins inject through), or None."""
     from clawk_cli import plugins
 
     with plugins._published_gateway_host_lock:
         host = plugins._published_gateway_message_injector
-    return host[1] if host else None
+    return host[0] if host else None
+
+
+def _session_key_for_chat(owner, origin: dict[str, Any]) -> Optional[str]:
+    """The existing gateway session of this chat, so the turn continues it with the exact sender
+    identity of the user's own messages (the session authority refuses a look-alike source)."""
+    want = (origin["platform"], str(origin["chat_id"]), origin.get("thread_id") or None)
+    for entry in owner.session_store.list_sessions():
+        source = getattr(entry, "origin", None)
+        if source is None:
+            continue
+        platform = getattr(source.platform, "value", source.platform)
+        have = (str(platform), str(source.chat_id), source.thread_id or None)
+        if have == want:
+            return entry.session_key
+    return None
+
+
+DISPATCH_WAIT_SECONDS = 60
+
+
+def _wait_on_gateway(owner, coro) -> bool:
+    """Run a gateway dispatch coroutine on its loop and wait for the real answer.
+
+    Waiting matters: the gateway can still refuse the turn after accepting the request (its
+    session authority checks the route), and a refused task must run isolated, not be recorded
+    as done. A dispatch still busy after the wait already started its turn."""
+    future = asyncio.run_coroutine_threadsafe(coro, owner._gateway_loop)
+    try:
+        return bool(future.result(timeout=DISPATCH_WAIT_SECONDS))
+    except concurrent.futures.TimeoutError:
+        logger.warning(
+            "Chat dispatch still running after %ss; leaving it to finish",
+            DISPATCH_WAIT_SECONDS,
+        )
+        return True
+    except Exception:
+        logger.warning("Chat dispatch failed; the job runs isolated", exc_info=True)
+        return False
 
 
 def inject_chat_turn(job: dict, extra_prompt: Optional[str] = None) -> bool:
-    """Hand the job to the live gateway as a turn in its chat; False when that is not possible."""
+    """Run the job as a turn of its chat on the live gateway; False when that did not happen."""
     origin = chat_origin(job)
-    if origin is None:
-        return False
-    injector = _gateway_injector()
-    if injector is None:
+    owner = _gateway_host()
+    if origin is None or owner is None or getattr(owner, "_gateway_loop", None) is None:
         return False
     from clawk_constants import get_clawk_home
 
-    try:
-        return bool(
-            injector(
-                content=chat_prompt(job, extra_prompt),
-                plugin_id=PLUGIN_ID,
-                origin=origin,
-                plugin_home=Path(get_clawk_home()),
-            )
+    home = Path(get_clawk_home())
+    content = chat_prompt(job, extra_prompt)
+    session_key = _session_key_for_chat(owner, origin)
+    if session_key:
+        coro = owner._dispatch_plugin_message_injection(
+            session_key=session_key,
+            content=content,
+            plugin_id=PLUGIN_ID,
+            plugin_home=home,
         )
-    except Exception:
-        logger.warning(
-            "Job '%s': handing the task to the chat failed",
-            job.get("id"),
-            exc_info=True,
+    else:
+        source = owner._plugin_origin_source(
+            origin, plugin_home=home, plugin_id=PLUGIN_ID
         )
-        return False
+        if source is None:
+            return False
+        coro = owner._dispatch_plugin_origin_injection(
+            source=source, content=content, plugin_id=PLUGIN_ID
+        )
+    return _wait_on_gateway(owner, coro)
 
 
 def run_in_chat_if_wanted(

@@ -6,6 +6,10 @@ scheduler hands such jobs to the live gateway's chat-injection seam with the rig
 records the run, and falls back to the normal isolated run whenever injection is not possible.
 """
 
+import asyncio
+import threading
+from types import SimpleNamespace
+
 import pytest
 
 from cron import executions, jobs
@@ -26,18 +30,47 @@ def store(tmp_path):
         yield
 
 
+class FakeGateway:
+    """The gateway runner seam the scheduler drives: its loop, session store and the two
+    dispatch coroutines plugins use (keyed session / plain origin)."""
+
+    def __init__(self, loop):
+        self._gateway_loop = loop
+        self.sessions = []
+        self.accept = True
+        self.calls = []
+        self.session_store = SimpleNamespace(list_sessions=lambda: self.sessions)
+
+    async def _dispatch_plugin_message_injection(self, **kwargs):
+        self.calls.append(("session", kwargs))
+        return self.accept
+
+    def _plugin_origin_source(self, origin, *, plugin_home, plugin_id):
+        return SimpleNamespace(**origin)
+
+    async def _dispatch_plugin_origin_injection(self, **kwargs):
+        self.calls.append(("origin", kwargs))
+        return self.accept
+
+
 @pytest.fixture
-def injector(monkeypatch):
-    calls = []
+def gateway(monkeypatch):
+    loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=loop.run_forever, daemon=True)
+    thread.start()
+    runner = FakeGateway(loop)
+    monkeypatch.setattr(chat, "_gateway_host", lambda: runner)
+    yield runner
+    loop.call_soon_threadsafe(loop.stop)
+    thread.join(timeout=5)
+    loop.close()
 
-    def inject(**kwargs):
-        calls.append(kwargs)
-        return inject.accept
 
-    inject.accept = True
-    monkeypatch.setattr(chat, "_gateway_injector", lambda: inject)
-    inject.calls = calls
-    return inject
+def _session(key="agent:main:telegram:dm:5846973344", chat_id="5846973344"):
+    origin = SimpleNamespace(
+        platform=SimpleNamespace(value="telegram"), chat_id=chat_id, thread_id=None
+    )
+    return SimpleNamespace(session_key=key, origin=origin)
 
 
 def _job(**overrides):
@@ -87,27 +120,39 @@ def test_the_chat_is_the_delivery_target_with_the_senders_identity(store):
     assert chat.chat_origin(_job(deliver="local")) is None
 
 
-def test_a_due_chat_job_is_sent_to_its_chat_and_recorded(store, injector):
+def test_a_due_chat_job_continues_the_chats_own_session_and_is_recorded(store, gateway):
+    gateway.sessions = [_session(chat_id="999"), _session()]
     job, execution_id = _fire(_job())
     assert chat.run_in_chat_if_wanted(job, cfg={}) is True
 
-    (call,) = injector.calls
-    assert call["plugin_id"] == "cron"
-    assert call["origin"]["chat_id"] == "5846973344"
-    assert "Escribe a mis leads" in call["content"]
+    ((kind, call),) = gateway.calls
+    # The existing session, so the turn carries the exact identity of the user's own messages.
+    assert kind == "session"
+    assert call["session_key"] == "agent:main:telegram:dm:5846973344"
+    assert call["plugin_id"] == "cron" and "Escribe a mis leads" in call["content"]
     stored = jobs.get_job(job["id"])
     assert stored["last_status"] == "ok" and stored["last_run_at"]
     assert executions.get_execution(execution_id)["status"] == "completed"
 
 
+def test_a_chat_with_no_session_yet_is_opened_from_its_origin(store, gateway):
+    job, _ = _fire(_job())
+    assert chat.run_in_chat_if_wanted(job, cfg={}) is True
+    ((kind, call),) = gateway.calls
+    assert kind == "origin" and call["source"].chat_id == "5846973344"
+
+
 @pytest.mark.parametrize("reason", ["no_gateway", "refused", "isolated_job"])
 def test_anything_that_cannot_reach_the_chat_runs_isolated(
-    store, injector, monkeypatch, reason
+    store, gateway, monkeypatch, reason
 ):
+    """Regression (28-oct 10:00): the session authority refused the turn after the request was
+    accepted, and the job was recorded as done without running. A refusal now runs it isolated."""
+    gateway.sessions = [_session()]
     if reason == "no_gateway":
-        monkeypatch.setattr(chat, "_gateway_injector", lambda: None)
+        monkeypatch.setattr(chat, "_gateway_host", lambda: None)
     elif reason == "refused":
-        injector.accept = False
+        gateway.accept = False
     job, execution_id = _fire(_job(run_in_chat=reason != "isolated_job"))
 
     assert chat.run_in_chat_if_wanted(job, cfg={}) is False
@@ -115,18 +160,17 @@ def test_anything_that_cannot_reach_the_chat_runs_isolated(
     assert executions.get_execution(execution_id)["status"] == "claimed"
 
 
-def test_run_one_job_takes_the_chat_path_before_any_worker(
-    store, injector, monkeypatch
-):
+def test_run_one_job_takes_the_chat_path_before_any_worker(store, gateway, monkeypatch):
     from cron import scheduler
 
     def no_worker(job):
         raise AssertionError("a chat-mode job must not start an isolated worker")
 
     monkeypatch.setattr(scheduler, "_launch_external_cron_worker", no_worker)
+    gateway.sessions = [_session()]
     job, _ = _fire(_job())
     assert scheduler.run_one_job(job) is True
-    assert len(injector.calls) == 1
+    assert len(gateway.calls) == 1
 
 
 def test_new_jobs_store_the_configured_default(store, monkeypatch):
@@ -148,15 +192,13 @@ def test_new_jobs_store_the_configured_default(store, monkeypatch):
     assert jobs.get_job(created["job_id"])["run_in_chat"] is False
 
 
-def test_the_injector_is_the_gateway_one_plugins_use(monkeypatch):
+def test_the_gateway_host_is_the_one_plugins_inject_through(monkeypatch):
     from clawk_cli import plugins
 
-    def inject(**kwargs):
-        return True
-
+    runner = object()
     monkeypatch.setattr(
-        plugins, "_published_gateway_message_injector", (object(), inject)
+        plugins, "_published_gateway_message_injector", (runner, lambda **kw: True)
     )
-    assert chat._gateway_injector() is inject
+    assert chat._gateway_host() is runner
     monkeypatch.setattr(plugins, "_published_gateway_message_injector", None)
-    assert chat._gateway_injector() is None
+    assert chat._gateway_host() is None
