@@ -544,6 +544,108 @@ def test_status_cli_reports_settings_and_what_is_left_today(tmp_path, capsys):
     }
 
 
+def test_position_and_stop_settings_default_parse_and_fail_closed(tmp_path):
+    defaults = trade.load_trading_config(tmp_path / "missing.yaml")
+    assert (defaults.max_positions, defaults.stop_pct) == (5, 0.0)  # 0 = ATR stop
+    path = _config(tmp_path, max_positions="'3'", stop_pct="'8.5'")
+    config = trade.load_trading_config(path)
+    assert (config.max_positions, config.stop_pct) == (3, 8.5)
+    for setting in ({"stop_pct": 60}, {"stop_pct": -1}, {"stop_pct": "wide"}):
+        with pytest.raises(trade.TradingRefused, match="stop_pct must be a number"):
+            trade.load_trading_config(_config(tmp_path, **setting))
+    with pytest.raises(trade.TradingRefused, match="max_positions"):
+        trade.load_trading_config(_config(tmp_path, max_positions=0))
+
+
+def _held(deps, instrument_id, *, days_ago=1):
+    trade.append_ledger(
+        {
+            "id": f"held-{instrument_id}",
+            "ts": (NOW - timedelta(days=days_ago)).isoformat(),
+            "action": "open",
+            "account": "demo",
+            "symbol": f"S{instrument_id}",
+            "instrument_id": instrument_id,
+            "amount": 50.0,
+            "status": "filled",
+        },
+        deps.ledger,
+    )
+
+
+def test_stock_buys_stop_at_five_open_positions_by_default(tmp_path):
+    deps, reader, trader_rec = _deps(
+        tmp_path,
+        _config(tmp_path, enabled="true"),
+        reader_responses=MARKET,
+        trader_responses=[{"orderId": 3}, {"status": {"id": 3}}],
+    )
+    _adds_value(deps)
+    for instrument_id in range(1, 6):
+        _held(deps, instrument_id)
+    with pytest.raises(trade.TradingRefused, match="already holds 5 stock position"):
+        _buy(deps)
+    assert reader.requests == [] and trader_rec.requests == []
+    (refusal,) = kc.read_jsonl(trade.refused_path(deps.kronos_dir()))
+    assert (refusal["kind"], refusal["bucket"]) == ("limit", "stock")
+
+    # A full close frees the slot; the buy then goes through exactly as before.
+    trade.append_ledger(
+        {
+            "id": "close-1",
+            "ts": NOW.isoformat(),
+            "action": "close",
+            "account": "demo",
+            "instrument_id": 1,
+            "units": "all",
+            "status": "submitted",
+        },
+        deps.ledger,
+    )
+    result = _buy(deps)
+    assert result["order"]["status"] == "filled"
+    assert result["limits"]["usd_left_after"] == 250.0
+    assert (result["limits"]["positions_open"], result["limits"]["max_positions"]) == (
+        4,
+        5,
+    )
+
+
+def test_an_unreadable_ledger_refuses_the_buy(tmp_path):
+    deps, reader, trader_rec = _deps(tmp_path, _config(tmp_path, enabled="true"))
+    deps.ledger.mkdir(parents=True)  # a directory where the ledger should be
+    with pytest.raises(trade.TradingRefused, match="ledger could not be read"):
+        _buy(deps)
+    assert reader.requests == [] and trader_rec.requests == []
+    (refusal,) = kc.read_jsonl(trade.refused_path(deps.kronos_dir()))
+    assert refusal["kind"] == "limit"
+
+
+@pytest.mark.parametrize(
+    ("stop_pct", "stop", "refused"),
+    [
+        (None, "60", False),  # default: ATR stops, only the 50% typo bound applies
+        ("10", "60", True),
+        ("10", "89.5", False),  # 10.5%: inside the one-point slack
+    ],
+)
+def test_a_stock_stop_pct_bounds_the_stop_and_the_default_keeps_atr_stops(
+    tmp_path, stop_pct, stop, refused
+):
+    settings = {"enabled": "true", **({"stop_pct": stop_pct} if stop_pct else {})}
+    deps, _, trader_rec = _deps(
+        tmp_path, _config(tmp_path, **settings), reader_responses=MARKET
+    )
+    _adds_value(deps)
+    extra = ("--stop", stop, "--dry-run")
+    if refused:
+        with pytest.raises(trade.ProtectionRefused, match="stop-loss is 10%"):
+            _buy(deps, extra=extra)
+    else:
+        assert _buy(deps, extra=extra)["would_buy"]["stop_loss"] == float(stop)
+    assert trader_rec.requests == []
+
+
 def test_positions_lists_ids_the_agent_needs_to_sell(tmp_path):
     deps, reader, _ = _deps(
         tmp_path,

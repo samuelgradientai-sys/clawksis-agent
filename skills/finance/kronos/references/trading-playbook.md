@@ -65,7 +65,8 @@ Prompt template (fill in the braces; the run has no memory of this chat, so keep
 ```text
 Kronos routine for {WATCHLIST} ({INTERVAL} bars, forecast horizon {H}). Use the kronos skill's
 scripts through the terminal tool and follow its references/trading-playbook.md.
-1. Learn first: kronos_review.py --etoro. If any buy is unknown: etoro_trade.py reconcile.
+1. Learn first: kronos_review.py --etoro, then etoro_trade.py reconcile (settles unknown buys
+   and frees the slots of positions eToro closed at their stop or target).
 2. For each symbol: kronos_indicators.py --etoro SYMBOL --interval {INTERVAL}, then
    kronos_forecast.py --etoro SYMBOL --interval {INTERVAL} --horizon {H} --format json.
    Re-run kronos_backtest.py --etoro SYMBOL --interval {INTERVAL} when its last verdict is
@@ -94,8 +95,9 @@ forecast JSON (`summary`, `track_record`, `lessons`) and `etoro_trade.py status`
 
 Buy only when ALL of these hold:
 
-- `status` shows `enabled: true`, `buys_left > 0` and enough `usd_left` (for crypto also
-  `crypto.config.enabled` and its own `crypto.today_utc`; meme coins: § 7).
+- `status` shows `enabled: true`, `buys_left > 0`, enough `usd_left` and `positions.left > 0`
+  (for crypto also `crypto.config.enabled`, its own `crypto.today_utc` and
+  `crypto.positions`; meme coins: § 7).
 - The user's objective allows trading (not "just watch").
 - Backtest verdict is `adds_value` for this symbol and interval, from the last 7 days: Kronos
   beat both "repeat the last close" and the ETS baseline (the script enforces this).
@@ -110,13 +112,18 @@ Buy only when ALL of these hold:
 
 Size it with `kronos_risk.py --account-size <cash + invested from etoro_data.py portfolio>
 --etoro SYMBOL --interval <same>` and buy with its `buy_args`: `suggested_amount_usd` (already
-capped by the limits; less is fine) plus `--stop` and `--target`, which travel with the order so
-eToro closes the position at either level even between runs. An automatic buy without `--stop`
-is refused. Never split one decision into several orders. Pass a one-line `--reason` with the
+capped by the limits and 0 when the bucket holds its `max_positions`; less is fine) plus
+`--stop` and `--target`, which travel with the order so eToro closes the position at either
+level even between runs. The stop follows the bucket's `stop_pct`: 0 (the stock default) puts
+it 2 ATR below the entry, above 0 it sits exactly that % below. An automatic buy without
+`--stop` is refused, and so is a stop farther below the price than a fixed `stop_pct` (one
+point of slack for the price moving since sizing): do not pass your own `--stop` to
+`kronos_risk.py` to widen it. Never split one decision into several orders. Pass a one-line `--reason` with the
 evidence, e.g. `"adds_value; forecast +2.1% in 5d; indicators bullish (+3); 6/9 right"`.
 
 Stay out (and say why in the report) when: the market is closed for that stock, the newest
 bar is older than two bar lengths (stale data), any order is `unknown` (run `reconcile`), the
+bucket already holds its `max_positions` (after `reconcile`), the
 verdict is not `adds_value`, the script refuses the buy (limits, lessons, backtest, stop,
 market), or the evidence disagrees (forecast up, indicators bearish). The script itself refuses
 buys while the New York session is closed for anything with no Saturday trading, and
@@ -139,6 +146,10 @@ For every open position (`etoro_trade.py positions`), on every run:
 - **Time stop:** held longer than the goal horizon with no progress → close.
 - Always `--reason` (`"thesis broken: forecast -1.8%, bearish"`). Closes are not capped. A
   close that failed `in_doubt` may have gone through: check `positions` before closing again.
+- **Slots:** each bucket holds at most its `max_positions` (stocks 5, crypto 2, meme coins 1
+  by default), counted from the trade ledger: a buy opens one, a full `close` frees one, and
+  `reconcile` frees the ones eToro closed by itself (stop, target, the app). A partial close
+  frees none. Positions the user opened outside Kronos never count.
 
 ## 5. Reporting
 
@@ -164,7 +175,8 @@ python3 ${CLAWK_SKILL_DIR}/scripts/kronos_strategy_backtest.py --etoro AAPL --in
 At each bar it applies § 3 and § 4 with what was known then: the ETS forecast (or
 `--forecaster kronos`, slow: one model call per decision, batched) up by half an ATR,
 indicators not bearish, the lesson gate over its own simulated forecasts, sizing from
-`kronos_risk.py`, the user's limits (`check_limits`; defaults when unset), fills at the next open,
+`kronos_risk.py` (the stop at `trading.stop_pct` when set, else 2 ATR), the user's limits
+(`check_limits`; defaults when unset; one position at a time), fills at the next open,
 stop and target inside later bars, thesis and time exits, `--fee-pct` per side. It reports CAGR,
 max drawdown, Sharpe, win rate, exposure and how many buys the limits, lessons or a gap through
 the stop refused, against buying and holding the symbol and the benchmark; `--report` adds a
@@ -178,11 +190,11 @@ always applies the stock limits (`trading.*`), crypto symbols included.
 Crypto is a separate bucket with its own switch and limits; meme coins are a riskier
 sub-bucket inside it. `etoro_trade.py` enforces all of this on every buy:
 
-| | Switch (default off) | Caps (defaults) | Counts against |
-|---|---|---|---|
-| Stocks, ETFs, rest | `trading.enabled` | `trading.max_order_usd` 100, `max_daily_usd` 300, `max_orders_per_day` 5 | stock caps only |
-| Crypto | `trading.enabled` + `crypto.enabled` | `crypto.max_order_usd` 50, `max_daily_usd` 150, `max_orders_per_day` 3 | crypto caps only |
-| Meme coins | the above + `crypto.meme.enabled` | `crypto.meme.max_order_usd` 20, `max_daily_usd` 50 | meme caps AND crypto caps |
+| | Switch (default off) | Daily caps (defaults) | Counts against | Open positions | Stop |
+|---|---|---|---|---|---|
+| Stocks, ETFs, rest | `trading.enabled` | `trading.max_order_usd` 100, `max_daily_usd` 300, `max_orders_per_day` 5 | stock caps only | `trading.max_positions` 5 | `trading.stop_pct` 0 = 2 ATR |
+| Crypto | `trading.enabled` + `crypto.enabled` | `crypto.max_order_usd` 50, `max_daily_usd` 150, `max_orders_per_day` 3 | crypto caps only | `crypto.max_positions` 2 | `crypto.stop_pct` 12% |
+| Meme coins | the above + `crypto.meme.enabled` | `crypto.meme.max_order_usd` 20, `max_daily_usd` 50, `max_orders_per_day` 1 | meme caps AND crypto caps | `crypto.meme.max_positions` 1 (not a crypto slot) | `crypto.meme.stop_pct` 20% |
 
 - **Which bucket.** eToro's instrument type 10 is crypto (no type: trading on Saturdays
   means crypto); any symbol on `crypto.meme.symbols` is a meme coin, also in eToro's per-million
@@ -193,11 +205,13 @@ sub-bucket inside it. `etoro_trade.py` enforces all of this on every buy:
   `kronos_risk.py --asset crypto|meme`, which caps the amount by that bucket's limits (auto
   when eToro or the lists say crypto). Long-only, leverage 1, real-asset settlement, demo
   account unless the user chose real: nothing changes there.
-- **Stops.** There is no fixed stop percentage: `kronos_risk.py` puts the stop 2 ATR below the
-  entry, so volatile coins get wider stops automatically (and a smaller amount for the same
-  risk). The script refuses a stop more than 50% below the price. On hourly bars a meme-coin
-  stop 10–25% away is normal; never tighten it to make a trade look safer, and remember a
-  gap can jump past it.
+- **Stops.** Each bucket has its own `stop_pct`: crypto 12% and meme coins 20% below the
+  entry by default; 0 switches that bucket to the ATR stop (2 ATR below the entry, so
+  volatile coins get wider stops automatically). `kronos_risk.py` applies it and sizes the
+  amount so a stop hit loses the risk share of the account. The script refuses a stop farther
+  than the bucket's `stop_pct` (plus one point) and any stop more than 50% below the price.
+  Only the user changes `stop_pct`: raising it accepts a bigger loss per trade. Never tighten
+  a stop to make a trade look safer, and remember a gap can jump past it.
 - **Meme coins only when listed.** The buy looks the symbol up in eToro's instrument search
   and refuses (`CryptoRefused`) a meme coin eToro does not list under that exact symbol; use the
   symbol `etoro_data.py search` shows and tell the user when eToro does not offer the coin.

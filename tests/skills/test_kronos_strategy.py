@@ -192,6 +192,21 @@ def test_a_fill_that_gaps_through_the_stop_is_refused_like_a_real_order(
     assert sim.refusals["stop"] == 1 and sim.ledger == [] and sim.trades == []
 
 
+def test_a_fixed_stock_stop_pct_replaces_the_atr_stop_in_the_replay(
+    tmp_path, monkeypatch
+):
+    _bullish(monkeypatch)
+    days = [datetime(2026, 1, 5) + timedelta(days=i) for i in range(6)]
+    bars = _bars([100.0] * 6, days, high_pad=1, low_pad=1)
+    bars[1] = kc.Bar(days[1], 90.0, 91.0, 89.0, 90.0, 1000.0)  # under the 98 ATR stop
+    fixed = trade.TradingConfig(False, "demo", 100.0, 300.0, 5, stop_pct=15.0)
+    sim = _sim(tmp_path, bars, fixed)
+    sim.forecasts = {0: 110.0}
+    strategy.simulate(sim, 0)
+    # The stop sits 15% under the 100 close (85), so the gap to 90 no longer refuses the fill.
+    assert sim.refusals["stop"] == 0 and len(sim.ledger) == 1
+
+
 # ── CLI, record and dashboard ──
 
 

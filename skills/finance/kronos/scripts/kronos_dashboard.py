@@ -69,6 +69,7 @@ from _kronos_journal import (
     symbol_key,
 )
 from _kronos_lessons import all_lessons, interval_label, lessons_path, money, render
+from _kronos_positions import BucketRules, bucket_rules, positions_usage
 from etoro_trade import (
     TradingConfig,
     cap_usage,
@@ -248,8 +249,40 @@ def _trading_items(inputs: Inputs, now: datetime, t: dict[str, str]) -> list[dic
             "hint": t["stock_hint"],
             "tone": "warning" if spent >= 0.8 * config.max_daily_usd else "neutral",
         },
+        *_bucket_items(
+            bucket_rules(STOCK, config, None),
+            inputs,
+            ("positions", "stop_rule"),
+            t,
+            hint=t["positions_hint"],
+        ),
         _crypto_summary_item(inputs, now, t),
     ]
+
+
+def _stop_text(stop_pct: float, t: dict[str, str]) -> str:
+    return (
+        t["stop_fixed"].format(pct=f"{stop_pct:g}") if stop_pct > 0 else t["stop_atr"]
+    )
+
+
+def _bucket_items(
+    rules: BucketRules,
+    inputs: Inputs,
+    labels: tuple[str, str],
+    t: dict[str, str],
+    hint: str | None = None,
+) -> list[dict[str, Any]]:
+    """A bucket's open positions against its maximum, and its stop rule."""
+    usage = positions_usage(rules, inputs.ledger, inputs.trading.account)
+    positions = {
+        "label": t[labels[0]],
+        "value": f"{usage['open']} / {usage['max']}",
+        "tone": "warning" if usage["left"] == 0 else "neutral",
+    }
+    if hint:
+        positions["hint"] = hint
+    return [positions, {"label": t[labels[1]], "value": _stop_text(rules.stop_pct, t)}]
 
 
 def _crypto_summary_item(inputs: Inputs, now: datetime, t: dict[str, str]) -> dict:
@@ -278,28 +311,21 @@ def _switch_item(label: str, on: bool, t: dict[str, str], tone_on: str) -> dict:
 def _cap_items(
     cap: Any, usage: dict[str, Any], labels: tuple[str, str, str], t: dict[str, str]
 ) -> list[dict[str, Any]]:
-    """Buys (when the cap counts them), USD spent and the per-order maximum of one cap."""
+    """Buys and USD spent today of one cap, with its per-order maximum as the hint."""
     buys_label, spent_label, order_label = labels
-    items = []
-    if cap.max_orders_per_day is not None:
-        items.append(
-            {
-                "label": t[buys_label],
-                "value": f"{usage['buys']} / {cap.max_orders_per_day}",
-                "tone": "warning"
-                if usage["buys"] >= cap.max_orders_per_day
-                else "neutral",
-            }
-        )
-    items += [
+    return [
+        {
+            "label": t[buys_label],
+            "value": f"{usage['buys']} / {cap.max_orders_per_day}",
+            "tone": "warning" if usage["buys"] >= cap.max_orders_per_day else "neutral",
+        },
         {
             "label": t[spent_label],
             "value": f"{_plain_money(usage['usd'])} / {_plain_money(cap.max_daily_usd)}",
+            "hint": f"{t[order_label]}: {_plain_money(cap.max_order_usd)}",
             "tone": "warning" if usage["usd"] >= 0.8 * cap.max_daily_usd else "neutral",
         },
-        {"label": t[order_label], "value": _plain_money(cap.max_order_usd)},
     ]
-    return items
 
 
 def crypto_panel(inputs: Inputs, now: datetime) -> dict[str, Any]:
@@ -338,8 +364,22 @@ def crypto_panel(inputs: Inputs, now: datetime) -> dict[str, Any]:
         ("crypto_buys", "crypto_spent", "crypto_max_order"),
         t,
     )
+    items += _bucket_items(
+        bucket_rules(CRYPTO, config, crypto),
+        inputs,
+        ("crypto_positions", "crypto_stop"),
+        t,
+    )
     items.append(_switch_item(t["meme_trading"], crypto.meme_enabled, t, "warning"))
-    items += _cap_items(meme_cap, usage[MEME], ("", "meme_spent", "meme_max_order"), t)
+    items += _cap_items(
+        meme_cap, usage[MEME], ("meme_buys", "meme_spent", "meme_max_order"), t
+    )
+    items += _bucket_items(
+        bucket_rules(MEME, config, crypto),
+        inputs,
+        ("meme_positions", "meme_stop"),
+        t,
+    )
     items += [
         {
             "label": t["crypto_watchlist"],

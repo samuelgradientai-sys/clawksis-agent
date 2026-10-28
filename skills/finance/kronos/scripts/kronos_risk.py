@@ -3,16 +3,19 @@
 
 risk USD   = account size x risk %          (risk % from --risk-pct, else the user's goals.risk:
                                              low 0.5%, medium 1%, high 2%)
-stop       = entry - ATR multiple x ATR14   (or --stop PRICE)
+stop       = entry x (1 - stop_pct / 100) when the bucket's stop_pct is above 0, else
+             entry - ATR multiple x ATR14   (or --stop PRICE)
 target     = entry + reward:risk x (entry - stop)
 amount USD = risk USD / (entry - stop) x entry, then capped by the account size, the per-order
-             limit and what is left of today's limits in config.yaml.
+             limit, what is left of today's limits in config.yaml, and 0 when the bucket
+             already holds its maximum of open positions.
 
 It only reads the limits and the trade ledger; it never changes them and places no order.
 The limits are the bucket's (``--asset``; auto: a symbol on the meme list is a meme coin, eToro
 instrument type 10, Saturday bars or a symbol on ``kronos.crypto.watchlist`` mean crypto, else
 stock): ``trading.*`` for stocks, ``crypto.*`` for crypto, and for a meme coin the tighter of
-the meme and crypto caps. ``buy_args`` is ready for ``etoro_trade.py buy``: the stop
+the meme and crypto caps, with the meme coins' own stop_pct and max_positions. ``buy_args`` is
+ready for ``etoro_trade.py buy``: the stop
 and target travel with the order (``--stop``/``--target``) and eToro executes them, and an
 automatic buy without a stop is refused.
 
@@ -46,6 +49,7 @@ from _kronos_crypto import (
     hint_bucket,
     is_crypto_instrument,
 )
+from _kronos_positions import bucket_rules, fixed_stop, positions_usage, widest_stop
 from etoro_trade import (
     cap_usage,
     caps_for,
@@ -89,10 +93,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--entry", type=_positive, help="entry price (default: last close)"
     )
     parser.add_argument(
-        "--stop", type=_positive, help="stop price (default: ATR based)"
+        "--stop",
+        type=_positive,
+        help="stop price (default: the bucket's stop_pct, else ATR based)",
     )
     parser.add_argument(
-        "--atr-mult", type=_positive, default=2.0, help="stop distance in ATRs"
+        "--atr-mult",
+        type=_positive,
+        default=2.0,
+        help="stop distance in ATRs when the bucket's stop_pct is 0",
     )
     parser.add_argument(
         "--rr", type=_positive, default=2.0, help="reward:risk for the target"
@@ -160,7 +169,8 @@ def asset_bucket(
 
 
 def _limits(deps: RiskDeps, bucket: str = STOCK) -> dict[str, Any]:
-    """The bucket's tightest per-order cap and what is left today of every cap it counts in."""
+    """The bucket's tightest per-order cap, what is left today of every cap it counts in, its
+    open positions against their maximum, and its stop_pct."""
     config = load_trading_config(deps.config_path)
     crypto = None if bucket == STOCK else load_crypto_config(deps.config_path)
     entries, now = read_ledger(deps.ledger), deps.now()
@@ -169,14 +179,36 @@ def _limits(deps: RiskDeps, bucket: str = STOCK) -> dict[str, Any]:
     enabled = config.enabled and (
         crypto is None or (crypto.enabled and (bucket != MEME or crypto.meme_enabled))
     )
+    rules = bucket_rules(bucket, config, crypto)
+    positions = positions_usage(rules, entries, config.account)
     return {
         "bucket": bucket,
         "account": config.account,
         "trading_enabled": enabled,
         "max_order_usd": min(cap.max_order_usd for cap in caps),
         "usd_left_today": min(u["usd_left"] for u in usage),
-        "buys_left_today": min(u["buys_left"] for u in usage if "buys_left" in u),
+        "buys_left_today": min(u["buys_left"] for u in usage),
+        "open_positions": positions["open"],
+        "max_positions": positions["max"],
+        "positions_left": positions["left"],
+        "stop_pct": rules.stop_pct,
     }
+
+
+def choose_stop(
+    args: argparse.Namespace, entry: float, atr14: float | None, stop_pct: float
+) -> tuple[float, str]:
+    """(stop, how): --stop, else the bucket's fixed stop_pct, else ATR multiple x ATR14."""
+    if args.stop is not None:
+        return args.stop, "given"
+    if stop_pct > 0:
+        return fixed_stop(entry, stop_pct), "fixed_pct"
+    if atr14 is None:
+        raise SkillError(
+            "No stop price and no ATR to derive one.",
+            hint="Pass --stop PRICE, or bars with --input/--etoro (14+ bars).",
+        )
+    return entry - args.atr_mult * atr14, "atr"
 
 
 def plan_position(
@@ -202,6 +234,8 @@ def plan_position(
     }
     if limits["buys_left_today"] <= 0:
         caps["buys_left_today"] = 0.0
+    if limits.get("positions_left", 1) <= 0:  # the strategy replay holds one at a time
+        caps["positions_left"] = 0.0
     binding = min(caps, key=caps.get)
     amount = math.floor(caps[binding] * 100) / 100
     return {
@@ -221,6 +255,37 @@ def plan_position(
     }
 
 
+def _warnings(
+    limits: dict[str, Any], plan: dict[str, Any], risk_pct: float, stop_from: str
+) -> list[str]:
+    bucket, warnings = limits["bucket"], []
+    if not limits["trading_enabled"]:
+        warnings.append(f"{bucket} trading is off: this sizing is informational only")
+    if bucket == MEME:
+        warnings.append(
+            "meme coins are extremely volatile: a wide stop is normal, and the whole amount "
+            "can be lost if the price gaps through it"
+        )
+    if limits["positions_left"] <= 0:
+        warnings.append(
+            f"Kronos already holds {limits['open_positions']} {bucket} position(s), the "
+            f"maximum of {limits['max_positions']}: no buy until one closes"
+        )
+    if plan["suggested_amount_usd"] <= 0:
+        warnings.append("no buy fits today's limits")
+    floor = widest_stop(plan["entry"], limits["stop_pct"])
+    if stop_from == "given" and floor is not None and plan["stop_loss"] < floor:
+        warnings.append(
+            f"this stop is farther than the {bucket} stop-loss of {limits['stop_pct']:g}%: "
+            "etoro_trade.py will refuse it; leave out --stop to use the stop_pct"
+        )
+    if risk_pct > RISK_PCT["high"]:
+        warnings.append(
+            f"risking {risk_pct:g}% of the account on one trade is aggressive"
+        )
+    return warnings
+
+
 def run(args: argparse.Namespace, deps: RiskDeps) -> dict[str, Any]:
     close, atr14, symbol, crypto = _market(args)
     entry = args.entry or close
@@ -228,17 +293,10 @@ def run(args: argparse.Namespace, deps: RiskDeps) -> dict[str, Any]:
         raise SkillError(
             "No entry price.", hint="Pass --entry PRICE, or bars with --input/--etoro."
         )
-    stop = args.stop
-    if stop is None:
-        if atr14 is None:
-            raise SkillError(
-                "No stop price and no ATR to derive one.",
-                hint="Pass --stop PRICE, or bars with --input/--etoro (14+ bars).",
-            )
-        stop = entry - args.atr_mult * atr14
+    limits = _limits(deps, asset_bucket(args, symbol, crypto, deps))
+    stop, stop_from = choose_stop(args, entry, atr14, limits["stop_pct"])
     profile = risk_profile(goals(load_config(deps.config_path)))
     risk_pct = args.risk_pct or RISK_PCT[profile]
-    limits = _limits(deps, asset_bucket(args, symbol, crypto, deps))
     plan = plan_position(
         account_size=args.account_size,
         risk_pct=risk_pct,
@@ -247,32 +305,24 @@ def run(args: argparse.Namespace, deps: RiskDeps) -> dict[str, Any]:
         rr=args.rr,
         limits=limits,
     )
-    warnings = []
-    if not limits["trading_enabled"]:
-        warnings.append(
-            f"{limits['bucket']} trading is off: this sizing is informational only"
-        )
-    if limits["bucket"] == MEME:
-        warnings.append(
-            "meme coins are extremely volatile: a wide stop is normal, and the whole amount "
-            "can be lost if the price gaps through it"
-        )
-    if plan["suggested_amount_usd"] <= 0:
-        warnings.append("no buy fits today's limits")
-    if risk_pct > RISK_PCT["high"]:
-        warnings.append(
-            f"risking {risk_pct:g}% of the account on one trade is aggressive"
-        )
     return {
         "ok": True,
         "symbol": symbol,
         "atr14": atr14,
         "risk_profile": None if args.risk_pct else profile,
         **plan,
+        "stop_rule": stop_from,
         "limits": limits,
-        "warnings": warnings,
+        "warnings": _warnings(limits, plan, risk_pct, stop_from),
         "note": NOTE,
     }
+
+
+_STOP_FROM = {
+    "given": "--stop",
+    "fixed_pct": "the bucket's stop_pct",
+    "atr": "ATR based",
+}
 
 
 def render_text(result: dict[str, Any]) -> str:
@@ -281,13 +331,16 @@ def render_text(result: dict[str, Any]) -> str:
         f"{head}buy up to {result['suggested_amount_usd']:,.2f} USD "
         f"(capped by {result['binding_cap']}), about {result['units']:g} units at "
         f"{result['entry']:,.4f}",
-        f"stop {result['stop_loss']:,.4f} (-{result['stop_distance_pct']}%), target "
+        f"stop {result['stop_loss']:,.4f} (-{result['stop_distance_pct']}%, "
+        f"{_STOP_FROM[result['stop_rule']]}), target "
         f"{result['take_profit']:,.4f} ({result['reward_risk']:g}:1), max loss "
         f"{result['max_loss_usd']:,.2f} USD at {result['risk_pct']:g}% risk",
         f"order: etoro_trade.py buy SYMBOL {result['buy_args']}",
         f"{result['limits']['bucket']} limits: {result['limits']['max_order_usd']:g} USD/order, "
         f"{result['limits']['usd_left_today']:g} USD and "
-        f"{result['limits']['buys_left_today']} buys left today",
+        f"{result['limits']['buys_left_today']} buys left today, "
+        f"{result['limits']['open_positions']} of {result['limits']['max_positions']} "
+        "positions open",
         *(f"warning: {w}" for w in result["warnings"]),
         result["note"],
     ]

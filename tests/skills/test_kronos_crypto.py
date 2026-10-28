@@ -284,7 +284,8 @@ def test_crypto_caps_are_enforced_per_bucket(tmp_path, ledger, amount, match):
 def test_meme_coins_count_against_their_own_caps_and_the_crypto_caps(
     tmp_path, ledger, amount, match
 ):
-    deps, reader, _ = _deps(tmp_path, _config(tmp_path, MEME_ON))
+    roomy = MEME_ON + "\n  max_orders_per_day: 5\n  max_positions: 5"
+    deps, reader, _ = _deps(tmp_path, _config(tmp_path, roomy))
     for bucket, usd, n in ledger:
         _bought(deps, bucket, usd, n=n)
     with pytest.raises(trade.TradingRefused, match=match):
@@ -427,7 +428,26 @@ def test_status_reports_the_crypto_and_meme_caps_separately(tmp_path, capsys):
         "buys_left": 1,
         "usd_left": 110.0,
     }
-    assert out["crypto"]["meme_today_utc"] == {"buys": 1, "usd": 10.0, "usd_left": 40.0}
+    assert out["crypto"]["meme_today_utc"] == {
+        "buys": 1,
+        "usd": 10.0,
+        "buys_left": 0,  # one meme-coin buy a day by default
+        "usd_left": 40.0,
+    }
+    assert out["positions"] == {
+        "open": 1,
+        "max": 5,
+        "left": 4,
+        "stop": {"kind": "atr", "atr_mult": 2.0},
+    }
+    assert out["crypto"]["positions"]["open"] == 1  # the meme coin takes no crypto slot
+    assert out["crypto"]["positions"]["stop"] == {"kind": "fixed_pct", "stop_pct": 12.0}
+    assert out["crypto"]["meme_positions"] == {
+        "open": 1,
+        "max": 1,
+        "left": 0,
+        "stop": {"kind": "fixed_pct", "stop_pct": 20.0},
+    }
 
 
 def test_sizing_a_meme_coin_uses_the_tighter_meme_and_crypto_caps(tmp_path, capsys):
@@ -443,3 +463,256 @@ def test_sizing_a_meme_coin_uses_the_tighter_meme_and_crypto_caps(tmp_path, caps
 
     assert risk.main([*argv, "--asset", "crypto"], deps) == 0
     assert json.loads(capsys.readouterr().out)["suggested_amount_usd"] == 50.0
+
+
+# ── Open positions, meme order cap and stop rule per bucket ──
+
+positions = _load("_kronos_positions")
+YESTERDAY = (NOW - timedelta(days=1)).isoformat()
+
+
+def _held(deps, bucket, symbol, instrument_id, *, ts=YESTERDAY):
+    """A position Kronos opened earlier (yesterday: today's caps stay untouched)."""
+    trade.append_ledger(
+        {
+            "id": f"{symbol}-{instrument_id}-{ts}",
+            "ts": ts,
+            "action": "open",
+            "account": "demo",
+            "symbol": symbol,
+            "instrument_id": instrument_id,
+            "amount": 10.0,
+            "status": "filled",
+            "bucket": bucket,
+        },
+        deps.ledger,
+    )
+
+
+@pytest.mark.parametrize(
+    ("held", "symbol", "match", "bucket"),
+    [
+        (
+            [("crypto", "BTC", 100000), ("crypto", "ETH", 100001)],
+            "SOL",
+            "already holds 2 crypto position",
+            "crypto",
+        ),
+        (
+            [("meme", "DOGE", 100043)],
+            "PEPE",
+            "already holds 1 meme-coin position",
+            "meme",
+        ),
+    ],
+)
+def test_a_bucket_at_its_maximum_of_open_positions_refuses_before_any_request(
+    tmp_path, held, symbol, match, bucket
+):
+    deps, reader, trader_rec = _deps(
+        tmp_path, _config(tmp_path, MEME_ON + "\nwatchlist: BTC, ETH, SOL")
+    )
+    for args in held:
+        _held(deps, *args)
+    with pytest.raises(trade.TradingRefused, match=match) as caught:
+        _buy(deps, symbol)
+    assert "reconcile" in caught.value.hint
+    assert reader.requests == [] and trader_rec.requests == []
+    (row,) = _refusals(deps)
+    assert (row["kind"], row["bucket"]) == ("limit", bucket)
+
+
+def test_a_meme_coin_takes_a_meme_slot_not_a_crypto_one(tmp_path):
+    deps, _, _ = _deps(
+        tmp_path,
+        _config(tmp_path, MEME_ON),
+        reader=[_search("BTC"), _candles()],
+        trader=FILLED,
+    )
+    _adds_value(deps, "BTC")
+    _held(deps, "meme", "DOGE", 100043)
+    _held(deps, "crypto", "ETH", 100001)
+    result = _buy(deps, "BTC")
+    assert result["order"]["status"] == "filled"
+    limits = result["limits"]
+    assert (limits["positions_open"], limits["max_positions"]) == (1, 2)
+
+
+def test_the_position_cap_is_checked_again_inside_the_lock(tmp_path):
+    # Another run takes the last crypto slot while this one waits for the ledger lock.
+    deps, reader, trader_rec = _deps(
+        tmp_path, _config(tmp_path, CRYPTO_ON), reader=[_search("BTC"), _candles()]
+    )
+    _adds_value(deps, "BTC")
+    _held(deps, "crypto", "ETH", 100001)
+    unlocked = deps.lock
+
+    def racing_lock():
+        _held(deps, "crypto", "SOL", 100002, ts=NOW.isoformat())
+        return unlocked()
+
+    deps.lock = racing_lock
+    with pytest.raises(trade.TradingRefused, match="already holds 2 crypto position"):
+        _buy(deps, "BTC")
+    assert len(reader.requests) == 2 and trader_rec.requests == []
+    assert {r["status"] for r in trade.read_ledger(deps.ledger)} == {"filled"}
+
+
+def test_meme_coins_have_their_own_daily_order_cap_and_count_as_crypto_buys(tmp_path):
+    deps, reader, _ = _deps(tmp_path, _config(tmp_path, MEME_ON + "\nwatchlist: BTC"))
+    _bought(deps, "meme", 5.0)
+    with pytest.raises(trade.TradingRefused, match="limit of 1 meme-coin buys"):
+        _buy(deps, "PEPE", amount="5")
+    _bought(deps, "crypto", 10.0, n=2)
+    with pytest.raises(trade.TradingRefused, match="limit of 3 crypto buys"):
+        _buy(deps, "BTC", amount="5")
+    assert reader.requests == []
+
+
+@pytest.mark.parametrize(
+    ("bucket_lines", "symbol", "stop", "refused"),
+    [
+        (CRYPTO_ON, "BTC", "80", True),  # 20% below 100; crypto's stop_pct is 12
+        (CRYPTO_ON, "BTC", "87.5", False),  # 12.5%: inside the one-point slack
+        (MEME_ON, "DOGE", "78", True),  # meme coins: 20% (+1 point of slack)
+        (MEME_ON, "DOGE", "81", False),
+        (
+            CRYPTO_ON + "\nstop_pct: 0",
+            "BTC",
+            "60",
+            False,
+        ),  # 0 = ATR: only the 50% bound
+    ],
+)
+def test_a_fixed_stop_pct_refuses_wider_stops(
+    tmp_path, bucket_lines, symbol, stop, refused
+):
+    deps, _, trader_rec = _deps(
+        tmp_path,
+        _config(tmp_path, bucket_lines),
+        reader=[_search(symbol), _candles()],
+    )
+    _adds_value(deps, symbol)
+    extra = ("--stop", stop, "--dry-run")
+    if refused:
+        with pytest.raises(trade.ProtectionRefused, match="stop-loss is"):
+            _buy(deps, symbol, extra=extra)
+    else:
+        assert _buy(deps, symbol, extra=extra)["would_buy"]["stop_loss"] == float(stop)
+    assert trader_rec.requests == []
+
+
+def test_new_crypto_settings_are_understood_and_invalid_ones_refused(tmp_path):
+    path = _config(
+        tmp_path,
+        "max_positions: '4'\nstop_pct: '9.5'\n"
+        "meme:\n  max_orders_per_day: 2\n  max_positions: '3'\n  stop_pct: 0",
+    )
+    settings = trade.load_crypto_config(path)
+    assert (settings.max_positions, settings.stop_pct) == (4, 9.5)
+    assert settings.meme_max_orders_per_day == 2
+    assert (settings.meme_max_positions, settings.meme_stop_pct) == (3, 0.0)
+    for lines in ("stop_pct: 51", "stop_pct: -1", "meme:\n  stop_pct: lots"):
+        with pytest.raises(trade.TradingRefused, match="stop_pct must be a number"):
+            trade.load_crypto_config(_config(tmp_path, lines))
+    with pytest.raises(trade.TradingRefused, match="max_positions"):
+        trade.load_crypto_config(_config(tmp_path, "max_positions: 0"))
+
+
+# ── Counting positions from the ledger ──
+
+
+@pytest.mark.parametrize(
+    ("rows", "expected"),
+    [
+        ([("open", {}), ("open", {})], 2),
+        ([("open", {"status": "unknown"}), ("open", {"status": "not_found"})], 2),
+        ([("open", {"status": "rejected"}), ("open", {"status": "canceled"})], 0),
+        ([("open", {}), ("close", {"status": "submitted"})], 0),
+        ([("open", {}), ("close", {"units": 0.5, "status": "submitted"})], 1),
+        ([("open", {}), ("close", {"status": "failed"})], 1),  # may not have closed
+        ([("open", {}), ("close", {"status": "submitting"})], 1),
+        ([("open", {}), ("open", {}), ("flat", {})], 0),
+        ([("open", {}), ("flat", {}), ("open", {})], 1),
+        (
+            [("close", {}), ("open", {})],
+            1,
+        ),  # closing someone else's position frees nothing
+        ([("open", {}), ("open", {"instrument_id": 8, "bucket": "meme"})], 1),
+        ([("open", {"instrument_id": None}), ("flat", {"instrument_id": None})], 1),
+    ],
+)
+def test_open_positions_follow_buys_full_closes_and_flat_rows(rows, expected):
+    ledger = [
+        {
+            "id": str(i),
+            "ts": YESTERDAY,
+            "action": action,
+            "account": "demo",
+            "instrument_id": 7,
+            "status": "filled",
+            "units": "all",
+            "bucket": "crypto",
+            **fields,
+        }
+        for i, (action, fields) in enumerate(rows)
+    ]
+    assert positions.open_positions(ledger, "demo", "crypto") == expected
+    assert positions.open_positions(ledger, "real", "crypto") == 0
+
+
+def test_reconcile_stops_counting_positions_etoro_closed_on_its_own(tmp_path):
+    still_held = {"instrumentID": 100001, "positionID": 3}
+    deps, reader, trader_rec = _deps(
+        tmp_path,
+        _config(tmp_path, CRYPTO_ON),
+        reader=[{"clientPortfolio": {"positions": [still_held]}}],
+    )
+    _held(deps, "crypto", "BTC", 100000)  # its stop was hit on eToro
+    _held(deps, "crypto", "ETH", 100001)
+    _held(deps, "crypto", "SOL", 100002, ts=NOW.isoformat())  # too fresh to judge
+    before = trade.read_ledger(deps.ledger)
+    assert positions.open_positions(before, "demo", "crypto") == 3
+    result = trade.cmd_reconcile(trade.build_parser().parse_args(["reconcile"]), deps)
+    assert [r["symbol"] for r in result["closed_on_etoro"]] == ["BTC"]
+    rows = trade.read_ledger(deps.ledger)
+    assert positions.open_positions(rows, "demo", "crypto") == 2
+    # The daily caps never loosen: the closed buy still counts for its day.
+    assert trade.usage_today(rows, "demo", NOW, frozenset({"crypto"})) == (1, 10.0)
+    assert len(reader.requests) == 1 and trader_rec.requests == []  # read-only
+
+
+def test_sizing_applies_each_buckets_stop_pct_and_open_positions(tmp_path, capsys):
+    config = _config(tmp_path, MEME_ON)
+    ledger = tmp_path / "kronos" / "trades.jsonl"
+    deps = risk.RiskDeps(config_path=config, ledger=ledger, now=lambda: NOW)
+    argv = ["--account-size", "100000", "--entry", "100", "--json"]
+    assert risk.main([*argv, "--asset", "crypto"], deps) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert (out["stop_loss"], out["stop_rule"]) == (88.0, "fixed_pct")
+    assert "--stop 88.0" in out["buy_args"]
+    assert out["limits"]["positions_left"] == 2
+
+    trade.append_ledger(
+        {
+            "id": "m",
+            "ts": YESTERDAY,
+            "action": "open",
+            "account": "demo",
+            "instrument_id": 100043,
+            "amount": 10.0,
+            "status": "filled",
+            "bucket": "meme",
+        },
+        ledger,
+    )
+    assert risk.main([*argv, "--asset", "meme"], deps) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["stop_loss"] == 80.0
+    assert (out["suggested_amount_usd"], out["binding_cap"]) == (0.0, "positions_left")
+    assert any("already holds 1 meme" in w for w in out["warnings"])
+
+    assert risk.main([*argv, "--asset", "crypto", "--stop", "70"], deps) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["stop_rule"] == "given"
+    assert any("etoro_trade.py will refuse it" in w for w in out["warnings"])

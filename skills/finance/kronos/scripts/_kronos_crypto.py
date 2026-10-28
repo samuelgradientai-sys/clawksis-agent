@@ -10,6 +10,9 @@ Every buy belongs to one bucket, each with its own limits from config.yaml:
   ``kronos.crypto.meme.enabled`` (off by default), counts against the meme caps AND the crypto
   caps, and must be listed by eToro (the buy refuses symbols eToro's search does not know).
 
+Each bucket also has a maximum of open positions and a stop rule (``max_positions``,
+``stop_pct``), counted and applied per bucket only (``_kronos_positions.py``).
+
 Classification fails closed: eToro's ``instrumentTypeID`` 10 (cryptocurrencies) or, when eToro
 did not send a type, Saturday trading in the price history marks crypto; a symbol on the meme
 list is a meme coin whatever eToro calls it. Ledger rows written before the buckets existed have
@@ -51,6 +54,11 @@ class CryptoConfig:
     meme_max_order_usd: float
     meme_max_daily_usd: float
     meme_symbols: tuple[str, ...]
+    max_positions: int
+    stop_pct: float  # 0 = ATR stop
+    meme_max_orders_per_day: int
+    meme_max_positions: int
+    meme_stop_pct: float
 
 
 CRYPTO_DEFAULTS = CryptoConfig(
@@ -63,6 +71,11 @@ CRYPTO_DEFAULTS = CryptoConfig(
     meme_max_order_usd=20.0,
     meme_max_daily_usd=50.0,
     meme_symbols=DEFAULT_MEME_SYMBOLS,
+    max_positions=2,
+    stop_pct=12.0,
+    meme_max_orders_per_day=1,
+    meme_max_positions=1,
+    meme_stop_pct=20.0,
 )
 
 
@@ -73,7 +86,7 @@ class Cap:
     name: str  # stock | crypto | meme
     max_order_usd: float
     max_daily_usd: float
-    max_orders_per_day: int | None
+    max_orders_per_day: int
     counts: frozenset[str]
 
 
@@ -112,6 +125,18 @@ def _positive(value: Any, key: str, kind: type) -> Any:
     return number
 
 
+def _stop_pct(value: Any, key: str) -> float:
+    from _kronos_positions import MAX_STOP_PCT, parse_stop_pct
+
+    pct = parse_stop_pct(value)
+    if pct is None:
+        raise CryptoConfigError(
+            f"skills.config.kronos.crypto.{key} must be a number from 0 (ATR stop) to "
+            f"{MAX_STOP_PCT:g}."
+        )
+    return pct
+
+
 def parse_crypto_config(section: Mapping[str, Any] | None) -> CryptoConfig:
     """The ``skills.config.kronos.crypto`` node as a CryptoConfig; defaults for what is unset."""
     raw = section if isinstance(section, Mapping) else {}
@@ -144,6 +169,21 @@ def parse_crypto_config(section: Mapping[str, Any] | None) -> CryptoConfig:
             float,
         ),
         meme_symbols=d.meme_symbols if symbols is None else parse_symbols(symbols),
+        max_positions=_positive(
+            raw.get("max_positions", d.max_positions), "max_positions", int
+        ),
+        stop_pct=_stop_pct(raw.get("stop_pct", d.stop_pct), "stop_pct"),
+        meme_max_orders_per_day=_positive(
+            meme.get("max_orders_per_day", d.meme_max_orders_per_day),
+            "meme.max_orders_per_day",
+            int,
+        ),
+        meme_max_positions=_positive(
+            meme.get("max_positions", d.meme_max_positions),
+            "meme.max_positions",
+            int,
+        ),
+        meme_stop_pct=_stop_pct(meme.get("stop_pct", d.meme_stop_pct), "meme.stop_pct"),
     )
 
 
@@ -236,7 +276,7 @@ def caps_for(bucket: str, trading: Any, crypto: CryptoConfig | None) -> list[Cap
         MEME,
         crypto.meme_max_order_usd,
         crypto.meme_max_daily_usd,
-        None,
+        crypto.meme_max_orders_per_day,
         frozenset({MEME}),
     )
     return [meme_cap, crypto_cap]

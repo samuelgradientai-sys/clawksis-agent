@@ -417,16 +417,24 @@ def test_crypto_and_meme_buys_get_their_own_panel_and_tags_in_spanish(tmp_path):
     assert items["Trading de cripto"] == "Encendido"
     assert items["Compras cripto hoy"] == "2 / 3"  # the meme coin counts as crypto too
     assert items["Gastado en cripto hoy"] == "$45 / $150"
-    assert items["Máximo por orden cripto"] == "$50"
+    assert items["Posiciones cripto abiertas"] == "1 / 2"  # BTC; DOGE is a meme slot
+    assert items["Stop-loss cripto"] == "12% fijo"
     assert items["Meme coins"] == "Encendido"
+    assert items["Compras de meme coins hoy"] == "1 / 1"
     assert items["Gastado en meme coins hoy"] == "$15 / $50"
-    assert items["Máximo por orden de meme coin"] == "$20"
+    assert items["Posiciones en meme coins"] == "0 / 1"  # DOGE was closed
+    assert items["Stop-loss meme coins"] == "20% fijo"
     assert items["Cripto en seguimiento"] == "BTC, ETH"
     assert items["Lista de meme coins"].startswith("DOGE, SHIB")
+    hints = {i["label"]: i.get("hint") for i in panel["items"]}
+    assert hints["Gastado en cripto hoy"] == "Máximo por orden cripto: $50"
+    assert hints["Gastado en meme coins hoy"] == "Máximo por orden de meme coin: $20"
 
     summary = {i["label"]: i["value"] for i in _panel(snapshot, "summary")["items"]}
     assert summary["Compras hoy"] == "1 / 5"  # stocks only: crypto has its own caps
     assert summary["Cripto hoy"] == "$45 / $150"
+    assert summary["Posiciones abiertas"] == "1 / 5"
+    assert summary["Stop-loss"] == "2×ATR (según volatilidad)"
     bought = {r["symbol"]: r["asset"] for r in _panel(snapshot, "bought")["rows"]}
     assert bought == {"AAPL": "Acción/ETF", "BTC": "Cripto", "DOGE": "Meme coin"}
     (sold,) = _panel(snapshot, "sold")["rows"]
@@ -442,6 +450,39 @@ def test_the_crypto_panel_says_off_by_default(tmp_path):
     assert items["Meme coins"]["value"] == "Off"
     summary = {i["label"]: i["value"] for i in _panel(snapshot, "summary")["items"]}
     assert summary["Crypto today"] == "Off"
+    assert summary["Open positions"] == "0 / 5"
+    assert summary["Stop-loss"] == "2×ATR (volatility)"
+
+
+def test_a_full_bucket_and_a_fixed_stop_show_in_the_panels(tmp_path):
+    config = _write_config(
+        tmp_path,
+        "skills:\n  config:\n    kronos:\n      trading:\n        enabled: true\n"
+        "        max_positions: 2\n        stop_pct: 7.5\n",
+    )
+    day = (NOW - timedelta(days=2)).isoformat()
+    _append(
+        tmp_path / "kronos" / "trades.jsonl",
+        [
+            {
+                "id": f"s{i}",
+                "ts": day,
+                "action": "open",
+                "account": "demo",
+                "symbol": symbol,
+                "instrument_id": i,
+                "amount": 40.0,
+                "status": "filled",
+            }
+            for i, symbol in ((1, "AAPL"), (2, "MSFT"))
+        ],
+    )
+    snapshot = _refresh(tmp_path, config)
+    validate(snapshot)
+    summary = {i["label"]: i for i in _panel(snapshot, "summary")["items"]}
+    assert summary["Open positions"]["value"] == "2 / 2"
+    assert summary["Open positions"]["tone"] == "warning"
+    assert summary["Stop-loss"]["value"] == "fixed 7.5%"
 
 
 def test_an_unreadable_config_still_renders_with_a_warning(tmp_path):
@@ -589,6 +630,46 @@ def test_the_crypto_settings_reach_the_dashboard_form_with_types_and_confirmatio
         crypto.parse_symbols(fields["kronos.crypto.meme.symbols"]["default"])
         == defaults.meme_symbols
     )
+
+
+def test_position_and_stop_settings_reach_the_form_with_types_and_confirmations():
+    text = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+    frontmatter, _body = parse_frontmatter(text[:SKILL_FRONTMATTER_SCAN_CHARS])
+    fields = {v["key"]: v for v in extract_skill_config_vars(frontmatter)}
+    counts = (
+        "kronos.trading.max_positions",
+        "kronos.crypto.max_positions",
+        "kronos.crypto.meme.max_positions",
+        "kronos.crypto.meme.max_orders_per_day",
+    )
+    stops = (
+        "kronos.trading.stop_pct",
+        "kronos.crypto.stop_pct",
+        "kronos.crypto.meme.stop_pct",
+    )
+    for key in counts:  # whole numbers; raising one asks the user first
+        assert (fields[key]["type"], fields[key]["min"]) == ("integer", 1)
+        assert fields[key]["confirm"] is True and fields[key]["label"]["es"]
+    for key in stops:  # a wider stop accepts a bigger loss: raising it asks first
+        assert fields[key]["type"] == "number"
+        assert (fields[key]["min"], fields[key]["max"]) == (
+            0,
+            trade.MAX_STOP_DISTANCE_PCT,
+        )
+        assert fields[key]["confirm"] is True and fields[key]["label"]["es"]
+    # The declared defaults are the ones the scripts fall back to.
+    stock, coins = trade.DEFAULTS, crypto.CRYPTO_DEFAULTS
+    assert [fields[k]["default"] for k in counts] == [
+        stock.max_positions,
+        coins.max_positions,
+        coins.meme_max_positions,
+        coins.meme_max_orders_per_day,
+    ]
+    assert [fields[k]["default"] for k in stops] == [
+        stock.stop_pct,
+        coins.stop_pct,
+        coins.meme_stop_pct,
+    ]
 
 
 def test_the_key_panel_lists_the_scopes_riskiest_first_and_is_empty_until_checked(
