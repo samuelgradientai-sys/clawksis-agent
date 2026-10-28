@@ -637,6 +637,20 @@ class MyChromeRelay:
             if tab_id not in self._attached:
                 await self.ext_call("attach", tabId=tab_id)
                 self._attached.add(tab_id)
+                await self._keep_running(tab_id)
+
+    async def _keep_running(self, tab_id: int) -> None:
+        """Chrome freezes a tab that is not in front (about one timer a second, no frames), so a
+        page the agent works in from behind another tab never finishes rendering. Emulating focus,
+        as Playwright does for its pages, keeps it running at full speed; Chrome drops it when the
+        debugger detaches."""
+        with contextlib.suppress(CdpError):
+            await self.ext_call(
+                "cdp",
+                tabId=tab_id,
+                method="Emulation.setFocusEmulationEnabled",
+                params={"enabled": True},
+            )
 
     async def _detach_tab(self, tab_id: int) -> None:
         lock = self._tab_locks.setdefault(tab_id, asyncio.Lock())

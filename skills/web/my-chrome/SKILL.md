@@ -1,7 +1,7 @@
 ---
 name: my-chrome
 description: Use the user's own Chrome tabs and signed-in sites.
-version: 1.0.0
+version: 1.1.0
 author: Samuel Gómez Dávila (samuelgradientai-sys), Clawksis
 license: MIT
 platforms: [linux, macos, windows]
@@ -58,6 +58,7 @@ the first `browser_navigate` of a session opens its own new tab; later navigatio
 | See what the user has open | `list_tabs(include_chrome=False)` |
 | Work in the user's airline tab | `switch_tab(tab)`; `activate=True` when they should watch |
 | Start fresh | `new_tab(url)` — lands in the purple "Clawksis" group |
+| Read several pages (profiles, products, results) | `read_pages([url, ...], wait_for="main h1")` — parallel tabs, one result per URL, tabs closed after |
 | Close a tab | only the agent's own tabs; the user's tabs are never closed |
 | Bank code / CVV | ask in the chat, use once, never store |
 
@@ -101,8 +102,10 @@ the first `browser_navigate` of a session opens its own new tab; later navigatio
 - Signed out or a captcha: ask the user to sign in / solve it on their laptop, then continue.
   Never type a password you found elsewhere.
 - `chrome://` pages and the Chrome Web Store cannot be controlled and are not listed.
-- A tab in the background does not paint: activate it before screenshots or when the user is
-  watching the dashboard's "Navegador" panel.
+- Tabs the agent works in keep running behind other tabs (focus emulation), so reading several at
+  once is fast — but only READ in parallel: clicking, typing and sending stay one page at a time,
+  with the pauses the task asks for (bursts from one account get it restricted). Activate a tab
+  when the user is watching the dashboard's "Navegador" panel.
 - If the user presses Cancel on Chrome's debugging bar, Mi Chrome pauses and the next browser call
   runs on the VPS browser (signed out): tell the user instead of continuing there.
 
