@@ -146,6 +146,8 @@ export interface Translations {
       integrations?: string;
       /** Optional — English fallback until translated. */
       today?: string;
+      /** Optional — English fallback until translated. */
+      finance?: string;
     };
     modelToolsSheetSubtitle: string;
     modelToolsSheetTitle: string;
@@ -1089,6 +1091,16 @@ export interface Translations {
 
   /** Skill mini dashboards. Optional — English fallback until translated. */
   skillDashboards?: SkillDashboardsCopy;
+  finance?: Partial<FinanceCopy>;
+}
+
+export interface FinanceCopy {
+  title: string;
+  empty: string;
+  emptyHint: string;
+  otherSkills: string;
+  disabled: string;
+  manageSkills: string;
 }
 
 export interface SkillDashboardsCopy {

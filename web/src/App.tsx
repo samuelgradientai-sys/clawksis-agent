@@ -170,6 +170,7 @@ const ProfileBuilderPage = lazyPage(() => import("@/pages/ProfileBuilderPage"));
 const SkillsPage = lazyPage(() => import("@/pages/SkillsPage"));
 const SkillDashboardsPage = lazyPage(() => import("@/pages/SkillDashboardsPage"));
 const SkillDashboardPage = lazyPage(() => import("@/pages/SkillDashboardPage"));
+const FinancePage = lazyPage(() => import("@/pages/FinancePage"));
 const PluginsPage = lazyPage(() => import("@/pages/PluginsPage"));
 const McpPage = lazyPage(() => import("@/pages/McpPage"));
 const PairingPage = lazyPage(() => import("@/pages/PairingPage"));
@@ -279,6 +280,8 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/skills": SkillsPage,
   "/skills/dashboards": SkillDashboardsPage,
   "/skills/dashboards/:name": SkillDashboardPage,
+  "/finanzas": FinancePage,
+  "/finanzas/:name": FinancePage,
   "/plugins": PluginsPage,
   "/mcp": McpPage,
   "/pairing": PairingPage,

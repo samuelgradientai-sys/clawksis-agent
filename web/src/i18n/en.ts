@@ -88,6 +88,7 @@ export const en: Translations = {
       skills: "Skills",
       integrations: "Integrations",
       today: "Today",
+      finance: "Finance",
     },
     modelToolsSheetSubtitle: "& tools",
     modelToolsSheetTitle: "Model",

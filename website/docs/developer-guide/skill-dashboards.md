@@ -92,3 +92,10 @@ The page also shows a **Settings** card for the values the skill declares under
 Add `type`, `choices`, `min`/`max`, `label` and `confirm` there so the form shows the right control
 and asks before a change that gives the agent more power. The skill reads the saved values from
 `skills.config.<key>` on its next run; the server never runs skill code to apply them.
+
+## 5. Finance skills
+
+Dashboards of skills in the `finance` category (the folder under `skills/`) leave the Plugins group:
+they appear together on the **Finance** page (`/finanzas`), one tab per skill, with their panels and
+settings, and the other finance skills listed below. A finance skill gets there just by declaring a
+dashboard.

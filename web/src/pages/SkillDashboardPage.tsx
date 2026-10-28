@@ -18,6 +18,19 @@ const REFRESH_MS = 30_000;
  *  30 s while the tab is visible. */
 export default function SkillDashboardPage() {
   const { name = "" } = useParams();
+  return <SkillDashboardView name={name} />;
+}
+
+/** A skill's dashboard (header, panels, settings). ``backTo`` is the link at the bottom; null hides it. */
+export function SkillDashboardView({
+  name,
+  backTo = "/skills/dashboards",
+  setsTitle = true,
+}: {
+  name: string;
+  backTo?: string | null;
+  setsTitle?: boolean;
+}) {
   const { t, locale } = useI18n();
   const copy = dashboardCopy(t);
   const { setTitle } = usePageHeader();
@@ -53,7 +66,9 @@ export default function SkillDashboardPage() {
   }, [load]);
 
   const title = detail?.snapshot?.title || detail?.title || name;
-  useEffect(() => setTitle(title), [setTitle, title]);
+  useEffect(() => {
+    if (setsTitle) setTitle(title);
+  }, [setTitle, setsTitle, title]);
 
   if (error && !detail) return <LoadErrorNotice detail={errorMessage(error)} onRetry={refresh} what={title} />;
 
@@ -121,9 +136,11 @@ export default function SkillDashboardPage() {
         <SkillSettingsCard key={name} copy={copy} locale={locale} name={name} onSaved={refresh} />
       </div>
 
-      <Link to="/skills/dashboards" className="inline-flex items-center gap-1.5 self-start text-sm text-text-tertiary hover:text-midground">
-        <ArrowLeft className="h-4 w-4" /> {copy.back}
-      </Link>
+      {backTo && (
+        <Link to={backTo} className="inline-flex items-center gap-1.5 self-start text-sm text-text-tertiary hover:text-midground">
+          <ArrowLeft className="h-4 w-4" /> {copy.back}
+        </Link>
+      )}
     </div>
   );
 }

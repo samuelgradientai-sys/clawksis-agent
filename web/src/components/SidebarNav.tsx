@@ -1,11 +1,12 @@
 import { useEffect, useState, type ComponentType, type FocusEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { NavLink, useLocation } from "react-router";
-import { ChevronDown, Gauge, Plug } from "lucide-react";
+import { ChevronDown, Gauge, Landmark, Plug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Translations } from "@/i18n/types";
 import { useSkillDashboards } from "@/hooks/useSkillDashboards";
 import { skillDashboardPath, type SkillDashboardSummary } from "@/lib/api-skill-dashboards";
+import { FINANCE_CATEGORY, FINANCE_PATH } from "@/lib/finance";
 
 export interface NavItem {
   icon: ComponentType<{ className?: string }>;
@@ -58,8 +59,15 @@ const NAV_GROUP_STORAGE_PREFIX = "clawksis-nav-group-";
 
 function dashboardItems(dashboards: SkillDashboardSummary[]): NavItem[] {
   return dashboards
-    .filter((d) => d.enabled)
+    .filter((d) => d.enabled && d.category !== FINANCE_CATEGORY)
     .map((d) => ({ icon: Gauge, label: d.title, path: skillDashboardPath(d.name) }));
+}
+
+/** Finance skills' dashboards live together under one top-level "Finanzas" entry. */
+function financeItem(dashboards: SkillDashboardSummary[]): NavItem | null {
+  return dashboards.some((d) => d.enabled && d.category === FINANCE_CATEGORY)
+    ? { icon: Landmark, label: "Finance", labelKey: "finance", path: FINANCE_PATH }
+    : null;
 }
 
 function navLabel(item: NavItem, t: Translations): string {
@@ -81,8 +89,16 @@ interface SidebarNavProps {
  *  dashboards and plugin tabs inside the Plugins group. Collapsed (icon-only)
  *  mode renders one flat list — groups add nothing there. */
 export function SidebarNav({ closeMobile, collapsed, coreItems, pluginItems, t, tooltipWarmRef }: SidebarNavProps) {
-  const skillBoards = dashboardItems(useSkillDashboards());
+  const dashboards = useSkillDashboards();
+  const skillBoards = dashboardItems(dashboards);
+  const finance = financeItem(dashboards);
   const extensions = [...skillBoards, ...pluginItems];
+  // Finanzas sits right after "Today" (or first when there is no Today entry).
+  const withFinance = (items: NavItem[]) => {
+    if (!finance) return items;
+    const at = items.findIndex((i) => i.path === "/today");
+    return [...items.slice(0, at + 1), finance, ...items.slice(at + 1)];
+  };
   const link = (item: NavItem, isCollapsed = collapsed) => (
     <SidebarNavLink
       closeMobile={closeMobile}
@@ -97,7 +113,7 @@ export function SidebarNav({ closeMobile, collapsed, coreItems, pluginItems, t, 
   if (collapsed) {
     return (
       <nav className="clawk-liquid-nav min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden border-t border-current/10 py-2" aria-label={t.app.navigation}>
-        <ul className="flex flex-col gap-0.5">{[...coreItems, ...extensions].map((item) => link(item))}</ul>
+        <ul className="flex flex-col gap-0.5">{[...withFinance(coreItems), ...extensions].map((item) => link(item))}</ul>
       </nav>
     );
   }
@@ -117,7 +133,7 @@ export function SidebarNav({ closeMobile, collapsed, coreItems, pluginItems, t, 
   return (
     <nav className="clawk-liquid-nav min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden border-t border-current/10 py-2" aria-label={t.app.navigation}>
       <ul className="flex flex-col gap-0.5">
-        {coreItems.map((item) => {
+        {withFinance(coreItems).map((item) => {
           if (!groupedPaths.has(item.path)) return link(item);
           // A group renders where its FIRST present member sits; the rest are
           // skipped at the root level.

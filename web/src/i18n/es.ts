@@ -81,6 +81,7 @@ export const es: Translations = {
       skills: "Habilidades",
       integrations: "Integraciones",
       today: "Hoy",
+      finance: "Finanzas",
     },
     modelToolsSheetSubtitle: "y herramientas",
     modelToolsSheetTitle: "Modelo",
@@ -1007,5 +1008,13 @@ export const es: Translations = {
     settingsOff: "Apagado",
     settingsDefault: "por defecto: {value}",
     settingsNeedsConfirm: "pide confirmación",
+  },
+  finance: {
+    title: "Finanzas",
+    empty: "Todavía no hay una skill de finanzas con dashboard instalada.",
+    emptyHint: "Instala una skill de finanzas (por ejemplo Kronos) para ver aquí sus paneles y ajustes.",
+    otherSkills: "Otras skills de finanzas",
+    disabled: "desactivada",
+    manageSkills: "Gestionar skills",
   },
 };
