@@ -1,6 +1,6 @@
 import type { Translations } from "@/i18n/types";
 
-const BUILTIN: Record<string, Exclude<keyof Translations["app"]["nav"], "integrations" | "today">> = {
+const BUILTIN: Record<string, Exclude<keyof Translations["app"]["nav"], "integrations" | "today" | "finance">> = {
   "/chat": "chat",
   "/sessions": "sessions",
   "/analytics": "analytics",
@@ -43,6 +43,9 @@ export function resolvePageTitle(
   }
   if (normalized === "/today") {
     return t.app.nav.today ?? "Today"; // optional key: English until a locale translates it
+  }
+  if (normalized === "/finanzas" || normalized.startsWith("/finanzas/")) {
+    return t.app.nav.finance ?? "Finance"; // optional key: English until a locale translates it
   }
   const key = BUILTIN[normalized];
   if (key) {
