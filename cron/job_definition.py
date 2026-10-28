@@ -39,6 +39,8 @@ JOB_DEFINITION_FIELDS = frozenset(
         "enabled_toolsets",
         "workdir",
         "attach_to_session",
+        "run_in_chat",
+        "browser",
         "reasoning_effort",
         "failure_deliver",
     }

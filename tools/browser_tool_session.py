@@ -485,6 +485,11 @@ def _create_session_for_key(task_id: str, force_local: bool) -> dict[str, Any]:
     cdp_override = _cdp._get_cdp_override()
     if cdp_override and not force_local:
         return _create_cdp_session(task_id, cdp_override)
+    from tools.browser_my_chrome_state import offline_refusal
+
+    refusal = offline_refusal()
+    if refusal:
+        raise RuntimeError(refusal)
     if force_local:
         return _create_local_session(task_id, allow_real_profile=False)
     provider = _cloud._get_cloud_provider()

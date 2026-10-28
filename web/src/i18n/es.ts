@@ -385,6 +385,15 @@ export const es: Translations = {
     useSoul: "Usar SOUL.md (identidad del asistente)",
     useUserMd: "Usar USER.md (perfil del usuario)",
     useMemory: "Usar MEMORY.md (memoria de largo plazo)",
+    browser: "Navegador",
+    browserAuto: "Automático (mi Chrome cuando está conectado)",
+    browserMyChrome: "Solo mi Chrome (se detiene si está desconectado)",
+    browserServer: "Navegador del servidor (nunca mi Chrome)",
+    browserHint:
+      "Los sitios donde tienes sesión iniciada (LinkedIn, Instagram, tu banco) tienen que usar tu Chrome, o bloquean la cuenta.",
+    runInChat: "Ejecutar en mi chat, como si yo lo escribiera",
+    runInChatHint:
+      "La instrucción llega al chat de entrega y el agente la ejecuta ahí con toda la conversación, la memoria y todas sus herramientas, y te responde en ese mismo chat. Apagado: corre como tarea aislada en segundo plano y solo envía el resultado.",
     contextToggles: "Contexto y entrega",
     fallbackModels: "Modelos de respaldo (opcional)",
     fallbackModelsHint: "Si el modelo principal falla (límite, sobrecarga o error), reintenta con estos. Formato provider:model, separados por coma.",

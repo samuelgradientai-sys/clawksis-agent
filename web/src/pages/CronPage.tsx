@@ -131,6 +131,8 @@ interface CronJobEditorState extends CronJobFormState {
   use_soul: boolean;
   use_user_md: boolean;
   use_memory: boolean;
+  run_in_chat: boolean;
+  browser: string;
 }
 
 /** English fallbacks for the Clawksis cron labels (optional in most locales). */
@@ -139,6 +141,13 @@ interface CronExtraLabels {
   useSoul: string;
   useUserMd: string;
   useMemory: string;
+  runInChat: string;
+  runInChatHint: string;
+  browser: string;
+  browserAuto: string;
+  browserMyChrome: string;
+  browserServer: string;
+  browserHint: string;
   contextToggles: string;
   fallbackModels: string;
   fallbackModelsHint: string;
@@ -155,6 +164,17 @@ function cronExtraLabels(t: Translations): CronExtraLabels {
     useSoul: t.cron.useSoul ?? "Use SOUL.md (assistant identity)",
     useUserMd: t.cron.useUserMd ?? "Use USER.md (user profile)",
     useMemory: t.cron.useMemory ?? "Use MEMORY.md (long-term memory)",
+    runInChat: t.cron.runInChat ?? "Run it in my chat, as if I had sent it",
+    browser: t.cron.browser ?? "Browser",
+    browserAuto: t.cron.browserAuto ?? "Automatic (my Chrome when it is connected)",
+    browserMyChrome: t.cron.browserMyChrome ?? "Only my Chrome (stops if it is offline)",
+    browserServer: t.cron.browserServer ?? "The server's browser (never my Chrome)",
+    browserHint:
+      t.cron.browserHint ??
+      "Sites where you are logged in (LinkedIn, Instagram, your bank) must use your Chrome, or they block the account.",
+    runInChatHint:
+      t.cron.runInChatHint ??
+      "The instruction arrives in the delivery chat and the agent runs it there with the whole conversation, memory and every tool, and answers you right there. Off: it runs as an isolated background task that only sends its result.",
     contextToggles: t.cron.contextToggles ?? "Context & delivery",
     fallbackModels: t.cron.fallbackModels ?? "Fallback models (optional)",
     fallbackModelsHint:
@@ -200,6 +220,8 @@ function emptyCronJobForm(): CronJobEditorState {
     use_soul: true,
     use_user_md: true,
     use_memory: false,
+    run_in_chat: true,
+    browser: "",
   };
 }
 
@@ -216,6 +238,8 @@ function editorFormFromJob(job: CronJob): CronJobEditorState {
     use_soul: job.use_soul ?? true,
     use_user_md: job.use_user_md ?? true,
     use_memory: job.use_memory ?? false,
+    run_in_chat: job.run_in_chat === true,
+    browser: job.browser ?? "",
   };
 }
 
@@ -233,6 +257,8 @@ function buildCronJobPayloadFromEditor(
     use_soul,
     use_user_md,
     use_memory,
+    run_in_chat,
+    browser,
     ...payloadForm
   } = form;
   const repeatText = repeat.trim();
@@ -246,6 +272,8 @@ function buildCronJobPayloadFromEditor(
     use_soul,
     use_user_md,
     use_memory,
+    run_in_chat: payloadForm.no_agent ? null : run_in_chat,
+    browser: payloadForm.no_agent ? null : browser || "auto",
     fallback_models: splitCronList(fallback_models),
   };
 }
@@ -488,6 +516,7 @@ function CronJobFormFields({
   showRepeat,
 }: CronJobFormFieldsProps) {
   const { t } = useI18n();
+  const extra = cronExtraLabels(t);
   const { availableSkills, availableToolsets, deliveryTargets, modelOptions } = resources;
   const update = <K extends keyof CronJobEditorState,>(
     key: K,
@@ -555,7 +584,37 @@ function CronJobFormFields({
               "No messaging platforms configured. Set one up under Channels to deliver reports."}
           </p>
         )}
+        {!form.no_agent && form.deliver !== "local" && (
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="accent-foreground mt-1"
+              checked={form.run_in_chat}
+              onChange={(e) => update("run_in_chat", e.target.checked)}
+            />
+            <span className="grid gap-0.5">
+              <span>{extra.runInChat}</span>
+              <span className="text-xs text-muted-foreground">{extra.runInChatHint}</span>
+            </span>
+          </label>
+        )}
       </div>
+
+      {!form.no_agent && (
+        <div className="grid gap-2">
+          <Label htmlFor={`${idPrefix}-browser`}>{extra.browser}</Label>
+          <Select
+            id={`${idPrefix}-browser`}
+            value={form.browser}
+            onValueChange={(v) => update("browser", v)}
+          >
+            <SelectOption value="">{extra.browserAuto}</SelectOption>
+            <SelectOption value="my_chrome">{extra.browserMyChrome}</SelectOption>
+            <SelectOption value="server">{extra.browserServer}</SelectOption>
+          </Select>
+          <p className="text-xs text-muted-foreground">{extra.browserHint}</p>
+        </div>
+      )}
 
       <div className="grid gap-2">
         <Label htmlFor={`${idPrefix}-skills`}>Skills (optional)</Label>
