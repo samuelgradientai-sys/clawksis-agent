@@ -13,7 +13,7 @@ import itertools
 
 import pytest
 
-from tools.browser_parallel_read import MAX_CONCURRENCY, PREAMBLE, read_pages
+from tools.browser_parallel_read import MAX_CONCURRENCY, preamble, read_pages
 
 
 class FakeBrowser:
@@ -152,32 +152,28 @@ def test_parallel_beats_one_by_one():
     assert browser.now < 4.0
 
 
-@pytest.mark.parametrize("missing", [True, False])
-def test_preamble_binds_the_harness_cdp(missing, monkeypatch):
-    calls = []
+def test_the_helper_runs_without_clawksis_on_the_path(monkeypatch):
+    """The harness's interpreter cannot import ``tools``: the bound helper carries its own code and
+    calls the harness's ``cdp``; only ``read_pages`` lands in the agent's globals."""
+    import builtins
 
-    def cdp(method, session_id=None, **params):
-        calls.append(method)
-        raise RuntimeError("boom")
+    real_import = builtins.__import__
 
-    scope = {"cdp": cdp}
-    if missing:
-        import builtins
+    def no_clawksis(name, *args, **kwargs):
+        if name == "tools" or name.startswith("tools."):
+            raise ImportError(name)
+        return real_import(name, *args, **kwargs)
 
-        real_import = builtins.__import__
-
-        def no_module(name, *args, **kwargs):
-            if name == "tools.browser_parallel_read":
-                raise ImportError(name)
-            return real_import(name, *args, **kwargs)
-
-        monkeypatch.setattr(builtins, "__import__", no_module)
-    exec(PREAMBLE, scope)
-    if missing:
-        assert "read_pages" not in scope
-        return
-    (result,) = scope["read_pages"](["https://a.example/"])
-    assert calls == ["Target.createTarget"] and result["error"] == "boom"
+    browser = FakeBrowser()
+    scope = {"cdp": browser.cdp, "__name__": "__main__"}
+    monkeypatch.setattr(builtins, "__import__", no_clawksis)
+    exec(preamble(), scope)
+    monkeypatch.undo()
+    added = {k for k in scope if not k.startswith("_")} - {"cdp", "__builtins__"}
+    assert added == {"read_pages"}
+    (result,) = scope["read_pages"](URLS[:1], settle=0.0, poll=0.0)
+    assert result["ok"] and result["text"].startswith(f"profile of {URLS[0]}")
+    assert browser.tabs == {}
 
 
 def test_a_page_without_the_awaited_element_gives_up_early():
@@ -200,4 +196,6 @@ def test_helper_is_bound_only_for_code_that_calls_it():
     from tools.browser_parallel_read import with_helper
 
     assert with_helper("print(page_info())") == "print(page_info())"
-    assert with_helper("print(read_pages(['https://a.example/']))").startswith(PREAMBLE)
+    assert with_helper("print(read_pages(['https://a.example/']))").startswith(
+        preamble()
+    )
