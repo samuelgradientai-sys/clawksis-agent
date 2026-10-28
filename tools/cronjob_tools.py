@@ -1512,7 +1512,7 @@ GUIDELINES when creating a job (so it behaves well at run time):
             },
             "run_in_chat": {
                 "type": "boolean",
-                "description": "True = at run time the prompt is sent INTO the job's chat as if the user had typed it, and the agent runs it there as a normal turn: same conversation, long-term memory, every tool and skill (Mi Chrome, messaging, clarify) — and answers in that chat, where the user can reply. Use for instructions to the agent ('every day at 10, message my LinkedIn leads'). False = isolated background run that only delivers its final answer. Unset follows config cron.run_in_chat. Needs a messaging-chat target (origin or platform:chat_id); otherwise the job runs isolated.",
+                "description": "True = at run time the prompt is sent INTO the job's chat as if the user had typed it, and the agent runs it there as a normal turn: same conversation, long-term memory, every tool and skill (Mi Chrome, messaging, clarify) — and answers in that chat, where the user can reply. Use it for most jobs: real work for the main agent ('every day at 10, message my LinkedIn leads'), anything that needs the conversation, memory, the user's Chrome or a follow-up. Set False for small self-contained jobs (a quick check or short report that needs none of that) so they run in the background without occupying the chat; fixed-output pings are script-only (no_agent). False = isolated background run that only delivers its final answer. Unset follows config cron.run_in_chat. Needs a messaging-chat target (origin or platform:chat_id); otherwise the job runs isolated.",
             },
             "browser": {
                 "type": "string",
