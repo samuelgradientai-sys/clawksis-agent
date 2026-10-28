@@ -18,6 +18,7 @@ from tools.registry import registry, tool_error
 from clawk_cli.config import cfg_get
 from agent.skill_utils import (
     EXCLUDED_SKILL_DIRS as _EXCLUDED_SKILL_DIRS,
+    SKILL_FRONTMATTER_SCAN_CHARS,
     extract_skill_metadata_list,
     is_skill_support_path as _is_skill_support_path,
 )
@@ -327,7 +328,7 @@ def _skill_catalog(
                 continue
             try:
                 frontmatter, body = _parse_frontmatter(
-                    _read_skill_text(skill_md)[:4000]
+                    _read_skill_text(skill_md)[:SKILL_FRONTMATTER_SCAN_CHARS]
                 )
                 description = frontmatter.get("description", "")
                 if (

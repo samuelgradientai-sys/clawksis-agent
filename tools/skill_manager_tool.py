@@ -23,6 +23,7 @@ from clawk_constants import get_clawk_home
 from utils import atomic_write_text, is_truthy_value
 from clawk_cli.config import cfg_get
 from agent.skill_utils import (
+    SKILL_FRONTMATTER_SCAN_CHARS,
     extract_skill_description,
     is_skill_description_truncated_for_prompt,
     parse_frontmatter as _parse_frontmatter,
@@ -276,7 +277,9 @@ def _read_frontmatter_name(skill_md: Path) -> Optional[str]:
     try:
         from agent.skill_utils import parse_frontmatter
 
-        content = skill_md.read_text(encoding="utf-8-sig", errors="replace")[:4000]
+        content = skill_md.read_text(encoding="utf-8-sig", errors="replace")[
+            :SKILL_FRONTMATTER_SCAN_CHARS
+        ]
         frontmatter, _ = parse_frontmatter(content)
     except OSError:
         logger.debug("frontmatter read failed for %s", skill_md, exc_info=True)

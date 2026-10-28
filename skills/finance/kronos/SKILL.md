@@ -1,7 +1,7 @@
 ---
 name: kronos
 description: Forecast stocks/crypto; eToro data and limited trading.
-version: 0.4.0
+version: 0.5.0
 author: samuelgradientai-sys, Clawksis
 license: MIT
 platforms: [linux, macos, windows]
@@ -27,22 +27,69 @@ metadata:
         label: {es: "Cuenta de eToro"}
         confirm: [real]
       - key: kronos.trading.max_order_usd
-        description: "Max USD per buy"
+        description: "Max USD per stock/ETF buy (crypto has its own limits)"
         default: 100
         min: 1
-        label: {es: "Máximo por orden (USD)"}
+        label: {es: "Acciones/ETF: máximo por orden (USD)"}
         confirm: true
       - key: kronos.trading.max_daily_usd
-        description: "Max USD of all buys in one UTC day"
+        description: "Max USD of stock/ETF buys in one UTC day"
         default: 300
         min: 1
-        label: {es: "Máximo por día (USD)"}
+        label: {es: "Acciones/ETF: máximo por día (USD)"}
         confirm: true
       - key: kronos.trading.max_orders_per_day
-        description: "Max buys per UTC day"
+        description: "Max stock/ETF buys per UTC day"
         default: 5
         min: 1
-        label: {es: "Compras máximas por día"}
+        label: {es: "Acciones/ETF: compras máximas por día"}
+        confirm: true
+      - key: kronos.crypto.enabled
+        description: "Let Kronos buy crypto (24/7) inside the crypto limits; needs trading on"
+        default: false
+        label: {es: "Comprar criptomonedas"}
+        confirm: true
+      - key: kronos.crypto.watchlist
+        description: "Crypto Kronos follows, comma-separated eToro symbols (e.g. BTC, ETH, SOL)"
+        label: {es: "Cripto: lista de seguimiento"}
+      - key: kronos.crypto.max_order_usd
+        description: "Max USD per crypto buy (meme coins included)"
+        default: 50
+        min: 1
+        label: {es: "Cripto: máximo por orden (USD)"}
+        confirm: true
+      - key: kronos.crypto.max_daily_usd
+        description: "Max USD of crypto buys (meme coins included) in one UTC day"
+        default: 150
+        min: 1
+        label: {es: "Cripto: máximo por día (USD)"}
+        confirm: true
+      - key: kronos.crypto.max_orders_per_day
+        description: "Max crypto buys (meme coins included) per UTC day"
+        default: 3
+        min: 1
+        label: {es: "Cripto: compras máximas por día"}
+        confirm: true
+      - key: kronos.crypto.meme.enabled
+        description: "Also let Kronos buy meme coins (extremely volatile; needs crypto on)"
+        default: false
+        label: {es: "Comprar meme coins"}
+        confirm: true
+      - key: kronos.crypto.meme.symbols
+        description: "Coins treated as meme coins, comma-separated eToro symbols"
+        default: "DOGE, SHIB, PEPE, BONK, FLOKI, WIF"
+        label: {es: "Meme coins: lista"}
+      - key: kronos.crypto.meme.max_order_usd
+        description: "Max USD per meme-coin buy"
+        default: 20
+        min: 1
+        label: {es: "Meme coins: máximo por orden (USD)"}
+        confirm: true
+      - key: kronos.crypto.meme.max_daily_usd
+        description: "Max USD of meme-coin buys in one UTC day"
+        default: 50
+        min: 1
+        label: {es: "Meme coins: máximo por día (USD)"}
         confirm: true
       - key: kronos.goals.watchlist
         description: "Symbols Kronos follows, comma-separated (e.g. AAPL, BTC)"
@@ -82,7 +129,8 @@ required_environment_variables:
 Forecasts the next candles of a stock, ETF, index or crypto with the open-source Kronos model
 on CPU, adds technical indicators and position sizing, reads eToro candles and portfolios, and,
 when the user turns trading on, buys (always with a stop-loss when it decides alone) and closes
-eToro positions inside hard limits (demo account by default). It scores every forecast against
+eToro positions inside hard limits (demo account by default); crypto and meme coins are
+separate buckets with their own switches and smaller limits. It scores every forecast against
 "repeat the last close" and a classical ETS model, turns misses into lessons that block
 automatic buys, replays its own rules on past prices, and publishes a dashboard of what it
 bought, sold, refused and learned. Kronos is a research model that often loses to those simple
@@ -98,6 +146,8 @@ baselines; this is not a live-quote, fundamentals or leverage tool.
 - Setting goals and a recurring routine (watchlist, objective, risk, horizon, schedule).
 - Trading when enabled: "compra 50 dólares de Apple", "vende mi posición de Tesla", "opera
   automáticamente con Kronos", "¿cuánto me queda del límite de hoy?".
+- Crypto and meme coins when enabled: "compra 20 dólares de Bitcoin", "compra DOGE",
+  "opera criptos cada hora", "¿cuánto me queda de cripto hoy?", "¿qué meme coins sigue?".
 - Checking the rules: "¿cómo le habría ido a la estrategia con Apple?", "backtest de la
   estrategia contra el SPY", "¿Kronos le gana a un modelo simple?".
 - Not for: leverage, short selling, limit orders, moving a stop after the buy (the user does
@@ -125,8 +175,16 @@ baselines; this is not a live-quote, fundamentals or leverage tool.
 - **Trading (off by default)**: only the user runs `clawk config set
   skills.config.kronos.trading.enabled true`. Orders go to the demo account unless the user
   sets `trading.account real`; limits `max_order_usd` (100), `max_daily_usd` (300),
-  `max_orders_per_day` (5). Never change these yourself. The script adds its own refusals on
-  top: automatic buys need a stop, a fresh `adds_value` backtest and an open market.
+  `max_orders_per_day` (5), which cover stocks, ETFs and everything but crypto. Never change
+  these yourself. The script adds its own refusals on top: automatic buys need a stop, a fresh
+  `adds_value` backtest and an open market.
+- **Crypto (off by default, on top of trading)**: `kronos.crypto.enabled` lets Kronos buy
+  crypto (eToro instrument type 10) inside its own caps `crypto.max_order_usd` (50),
+  `max_daily_usd` (150), `max_orders_per_day` (3); `crypto.watchlist` lists the coins it
+  follows. Meme coins (`crypto.meme.symbols`, default DOGE, SHIB, PEPE, BONK, FLOKI, WIF) also
+  need `crypto.meme.enabled` and count against `meme.max_order_usd` (20), `meme.max_daily_usd`
+  (50) and the crypto caps. The user flips these in the Kronos dashboard's Settings (it asks
+  them to confirm) or with `clawk config set`; never you. Rules: playbook § 7.
 - **Goals** (`skills.config.kronos.goals.*`): saved by you when the user states them. The
   loaded skill's `[Skill config]` block shows all current values.
 
@@ -175,6 +233,8 @@ python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py status
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py positions
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py buy AAPL --amount 50 --stop 180.5 --target 199.3 --reason "adds_value, +2.1% in 5d, bullish" --dry-run
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py buy AAPL --amount 50 --reason "user asked" --user-requested
+python3 ${CLAWK_SKILL_DIR}/scripts/kronos_risk.py --account-size 10000 --etoro DOGE --interval OneHour --asset meme
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py buy BTC --amount 30 --stop 61000 --target 68000 --reason "adds_value, +1.8% in 24h" --dry-run
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py close 123456789 --units 0.5 --reason "thesis broken"
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py reconcile
 ```
@@ -194,7 +254,8 @@ Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMi
 2. **Offer the routine.** Create one `cronjob_manage` job (`action="create"`,
    `skills=["kronos"]`, `schedule` from the goals, the prompt template in playbook § 2;
    leave `deliver` unset). Schedule times are the user's Clawksis timezone; keep US stocks
-   inside 9:30–16:00 New York. Update that job when goals change; never duplicate it.
+   inside 9:30–16:00 New York. Update that job when goals change; never duplicate it. With
+   crypto on, offer a second job for `crypto.watchlist` every hour (crypto trades 24/7).
 3. **Runtime.** `kronos_setup.py --check`; if `setup_needed`, say it is a one-time ~1.5 GB
    download (with the optional extras), then run `kronos_setup.py`.
 4. **Learn first.** Run `kronos_review.py --etoro` (or `--bars SYMBOL=FILE` for file data)
@@ -225,6 +286,10 @@ Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMi
      closed or the price is stale; accept it and tell the user. `--user-requested` is ONLY for
      a buy the user explicitly asked for in this conversation (it skips the lesson and
      backtest checks and may omit the stop); never in a scheduled run or to get past a refusal.
+   - Crypto and meme coins follow the same checks with their own caps (playbook § 7):
+     size them with `kronos_risk.py --asset crypto|meme` (auto when eToro says crypto or the
+     symbol is on a list) and buy the exact eToro symbol (`etoro_data.py search`). A
+     `CryptoRefused` (switch off, meme coin eToro does not list) is final; tell the user.
    - Manage open positions every run (broken thesis, time stop; playbook § 4) by closing
      with `close` (not capped).
    - Always pass a one-line `--reason`; after every order report what, how much, the stop,
@@ -264,6 +329,12 @@ Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMi
 - **Calendar**: weekday series get NYSE trading days (holidays, early closes) as future
   timestamps; `--calendar weekdays` or `sessions` for markets open on US holidays.
   Unscheduled closures cannot be known in advance.
+- **Meme coins are extremely volatile.** They can halve in hours and gap through a stop;
+  say so whenever one is bought or suggested, keep to the meme caps, and never present a meme
+  forecast as more than a coin flip. eToro lists some coins per million units (`SHIBxM`): the
+  meme list matches both spellings, but buy the exact symbol eToro shows.
+- **Crypto limits are separate.** Crypto buys never use the stock limits and stock buys never
+  use the crypto ones; a meme coin uses both its own and the crypto caps. `status` shows each.
 - **Replays are not forecasts.** With $100 orders on a large account the equity curve barely
   moves; read the win rate and average trade too, and never suggest raising limits because a
   replay looked good.
@@ -285,7 +356,7 @@ Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMi
   pipeline. Uninstall: delete `$CLAWK_HOME/kronos/`.
 
 Details: `references/trading-playbook.md` (decisions, onboarding, routine prompt, reporting,
-replaying the rules), `references/learning-loop.md` (journal, scoring, lessons, gates,
+replaying the rules, crypto and meme coins), `references/learning-loop.md` (journal, scoring, lessons, gates,
 dashboard panels), `references/etoro-api.md` (routes, at-most-once orders, reconcile),
 `references/etoro-permissions.md` (scope catalog, read-only set),
 `references/model-notes.md` (models, CPU knobs, baselines).
@@ -303,4 +374,4 @@ python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py status
 `--check` prints `"ok": true` and which `extras` are installed; indicators print a `signal`
 with `reasons`; the review prints `"ok": true` with `accuracy`, `buy_gate` and `lessons` and
 refreshes the dashboard file; the replay prints `strategy`, `buy_and_hold` and `limits`;
-`status` prints the trading settings and today's remaining limits.
+`status` prints the trading settings and today's remaining limits, crypto and meme coins apart.

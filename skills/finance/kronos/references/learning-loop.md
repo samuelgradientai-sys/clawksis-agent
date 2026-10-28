@@ -82,9 +82,11 @@ slightly (spread, fill price).
 
 ## Dashboard panels (`dashboards/kronos.json`, contract version 1)
 
-`summary` (account, trading on/off, buys and USD today vs caps, orders in flight, forecast hit
-rate, closed P&L, active lessons), `goals`, `lessons` ("What it learned"), `bought`, `sold`,
-`refused`, `accuracy_chart` (rolling hit rate, overall + busiest symbols), `accuracy_by_symbol`,
+`summary` (account, trading on/off, stock buys and USD today vs caps, crypto USD today,
+orders in flight, forecast hit rate, closed P&L, active lessons), `crypto` (crypto and meme-coin
+switches, buys and USD today vs their own caps, per-order maximums, the crypto watchlist and
+meme list), `goals`, `etoro_key` (key scopes), `lessons` ("What it learned"), `bought`, `sold` and `refused`
+(each row tagged Stock/ETF, Crypto or Meme coin), `accuracy_chart` (rolling hit rate, overall + busiest symbols), `accuracy_by_symbol`,
 `backtests` (newest verdict per symbol and bar size, skill vs "no change" and ETS, stale ones
 marked), `strategy` (newest playbook replay per symbol: trades, win rate, CAGR, max drawdown,
 Sharpe vs buy-and-hold and the benchmark), `forecasts` (recent, with hit/miss), `disclaimer`. Written atomically, at most 512 KiB, local

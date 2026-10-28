@@ -17,7 +17,11 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from clawk_constants import get_clawk_home
-from agent.skill_utils import is_excluded_skill_path, is_external_skill_path
+from agent.skill_utils import (
+    SKILL_FRONTMATTER_SCAN_CHARS,
+    is_excluded_skill_path,
+    is_external_skill_path,
+)
 from utils import atomic_write_text
 
 logger = logging.getLogger(__name__)
@@ -303,12 +307,13 @@ def list_archived_skill_names() -> list[str]:
 
 
 def read_skill_name(skill_md: Path, fallback: str) -> str:
-    """The frontmatter ``name:`` field of a SKILL.md (first 4000 chars), else *fallback*."""
+    """The frontmatter ``name:`` field of a SKILL.md (its first
+    SKILL_FRONTMATTER_SCAN_CHARS chars), else *fallback*."""
     try:
         lines = [
             line.strip()
             for line in skill_md.read_text(encoding="utf-8-sig", errors="replace")[
-                :4000
+                :SKILL_FRONTMATTER_SCAN_CHARS
             ].split("\n")
         ]
     except OSError:

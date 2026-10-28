@@ -4,7 +4,8 @@ The snapshot at ``$CLAWK_HOME/dashboards/kronos.json`` is read by the web dashbo
 snapshot is validated against the contract (version 1: stats/table/list/chart/text panels and
 their caps), in English and Spanish, empty and full. Writes are atomic and stay under 512 KiB;
 an unreadable config still renders; ``refresh_safely`` never raises. Also pins the SKILL.md
-frontmatter budget the skill catalog parses (first 4000 chars) and the dashboard declaration.
+frontmatter budget the skill scanners parse (SKILL_FRONTMATTER_SCAN_CHARS), the dashboard
+declaration and the crypto settings the dashboard form shows.
 """
 
 from __future__ import annotations
@@ -19,7 +20,11 @@ from pathlib import Path
 
 import pytest
 
-from agent.skill_utils import extract_skill_config_vars, parse_frontmatter
+from agent.skill_utils import (
+    SKILL_FRONTMATTER_SCAN_CHARS,
+    extract_skill_config_vars,
+    parse_frontmatter,
+)
 
 REPO = Path(__file__).resolve().parents[2]
 SKILL_DIR = REPO / "skills" / "finance" / "kronos"
@@ -38,6 +43,7 @@ def _load(name: str) -> types.ModuleType:
 
 
 kc = _load("_kronos_common")
+crypto = _load("_kronos_crypto")
 trade = _load("etoro_trade")
 lessons = _load("_kronos_lessons")
 dash = _load("kronos_dashboard")
@@ -47,6 +53,7 @@ TONES = {"positive", "negative", "warning", "neutral"}
 FORMATS = {"text", "number", "money", "percent", "datetime"}
 EXPECTED_PANELS = [
     "summary",
+    "crypto",
     "goals",
     "etoro_key",
     "lessons",
@@ -345,6 +352,98 @@ def test_a_full_profile_renders_what_was_bought_sold_refused_and_learned_in_span
     assert summary["P&L cerrado (est.)"]["value"] == "-$4.50"
 
 
+def test_crypto_and_meme_buys_get_their_own_panel_and_tags_in_spanish(tmp_path):
+    config = _write_config(
+        tmp_path,
+        "display:\n  language: es\nskills:\n  config:\n    kronos:\n      trading:\n"
+        "        enabled: true\n      crypto:\n        enabled: true\n"
+        "        watchlist: btc, eth\n        meme:\n          enabled: true\n",
+    )
+    ts = NOW.isoformat()
+    base = {"ts": ts, "action": "open", "account": "demo", "status": "filled"}
+    _append(
+        tmp_path / "kronos" / "trades.jsonl",
+        [
+            {**base, "id": "s", "symbol": "AAPL", "instrument_id": 1, "amount": 40.0},
+            {
+                **base,
+                "id": "c",
+                "symbol": "BTC",
+                "instrument_id": 100000,
+                "amount": 30.0,
+                "bucket": "crypto",
+            },
+            {
+                **base,
+                "id": "m",
+                "symbol": "DOGE",
+                "instrument_id": 100043,
+                "amount": 15.0,
+                "bucket": "meme",
+            },
+            {
+                "id": "x",
+                "ts": ts,
+                "action": "close",
+                "account": "demo",
+                "instrument_id": 100043,
+                "units": "all",
+                "pnl_usd": 2.0,
+                "status": "submitted",
+            },
+        ],
+    )
+    _append(
+        tmp_path / "kronos" / "refused.jsonl",
+        [
+            {
+                "id": "r",
+                "ts": ts,
+                "symbol": "PEPE",
+                "amount": 10,
+                "kind": "crypto",
+                "bucket": "meme",
+                "refusal": "Meme-coin trading is turned off",
+            }
+        ],
+    )
+    snapshot = _refresh(tmp_path, config)
+    validate(snapshot)
+    assert [p["id"] for p in snapshot["panels"]] == EXPECTED_PANELS
+
+    panel = _panel(snapshot, "crypto")
+    assert panel["title"] == "Cripto y meme coins" and "24/7" in panel["description"]
+    items = {i["label"]: i["value"] for i in panel["items"]}
+    assert items["Trading de cripto"] == "Encendido"
+    assert items["Compras cripto hoy"] == "2 / 3"  # the meme coin counts as crypto too
+    assert items["Gastado en cripto hoy"] == "$45 / $150"
+    assert items["Máximo por orden cripto"] == "$50"
+    assert items["Meme coins"] == "Encendido"
+    assert items["Gastado en meme coins hoy"] == "$15 / $50"
+    assert items["Máximo por orden de meme coin"] == "$20"
+    assert items["Cripto en seguimiento"] == "BTC, ETH"
+    assert items["Lista de meme coins"].startswith("DOGE, SHIB")
+
+    summary = {i["label"]: i["value"] for i in _panel(snapshot, "summary")["items"]}
+    assert summary["Compras hoy"] == "1 / 5"  # stocks only: crypto has its own caps
+    assert summary["Cripto hoy"] == "$45 / $150"
+    bought = {r["symbol"]: r["asset"] for r in _panel(snapshot, "bought")["rows"]}
+    assert bought == {"AAPL": "Acción/ETF", "BTC": "Cripto", "DOGE": "Meme coin"}
+    (sold,) = _panel(snapshot, "sold")["rows"]
+    assert (sold["symbol"], sold["asset"]) == ("DOGE", "Meme coin")
+    (refused,) = _panel(snapshot, "refused")["rows"]
+    assert (refused["asset"], refused["kind"]) == ("Meme coin", "reglas cripto")
+
+
+def test_the_crypto_panel_says_off_by_default(tmp_path):
+    snapshot = _refresh(tmp_path, tmp_path / "missing.yaml")
+    items = {i["label"]: i for i in _panel(snapshot, "crypto")["items"]}
+    assert items["Crypto trading"]["value"] == "Off"
+    assert items["Meme coins"]["value"] == "Off"
+    summary = {i["label"]: i["value"] for i in _panel(snapshot, "summary")["items"]}
+    assert summary["Crypto today"] == "Off"
+
+
 def test_an_unreadable_config_still_renders_with_a_warning(tmp_path):
     config = _write_config(tmp_path, "skills: [unclosed\n")
     snapshot = _refresh(tmp_path, config)
@@ -433,8 +532,12 @@ def test_the_cli_writes_into_the_profile_home(tmp_path, monkeypatch, capsys):
 def test_skill_frontmatter_declares_the_dashboard_within_the_catalog_budget():
     text = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
     end = text.index("\n---", 3) + len("\n---")
-    assert end < 3500, f"frontmatter is {end} chars; the catalog parses only 4000"
-    frontmatter, _body = parse_frontmatter(text[:4000])  # what tools/skills_tool reads
+    budget = SKILL_FRONTMATTER_SCAN_CHARS
+    # Keep a quarter of the scan window free so new settings never cut the YAML short.
+    assert end < budget * 3 // 4, f"frontmatter is {end} chars; scanners read {budget}"
+    frontmatter, _body = parse_frontmatter(
+        text[:budget]
+    )  # what tools/skills_tool reads
     clawk = frontmatter["metadata"]["clawk"]
     assert clawk["dashboard"]["title"] == "Kronos"
     assert clawk["dashboard"]["description"].strip()
@@ -444,6 +547,48 @@ def test_skill_frontmatter_declares_the_dashboard_within_the_catalog_budget():
         for k in ("watchlist", "objective", "risk", "horizon", "schedule")
     } <= keys
     assert "kronos.trading.max_order_usd" in keys
+
+
+def test_the_crypto_settings_reach_the_dashboard_form_with_types_and_confirmations():
+    text = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+    frontmatter, _body = parse_frontmatter(text[:SKILL_FRONTMATTER_SCAN_CHARS])
+    fields = {v["key"]: v for v in extract_skill_config_vars(frontmatter)}
+    switches = ("kronos.crypto.enabled", "kronos.crypto.meme.enabled")
+    caps = (
+        "kronos.crypto.max_order_usd",
+        "kronos.crypto.max_daily_usd",
+        "kronos.crypto.max_orders_per_day",
+        "kronos.crypto.meme.max_order_usd",
+        "kronos.crypto.meme.max_daily_usd",
+    )
+    for key in switches:  # off by default; turning one on asks the user first
+        assert (fields[key]["type"], fields[key]["default"]) == ("bool", False)
+        assert fields[key]["confirm"] is True
+    for key in caps:  # raising a cap asks the user first
+        assert fields[key]["type"] == "integer" and fields[key]["min"] == 1
+        assert fields[key]["confirm"] is True
+    for key in ("kronos.crypto.watchlist", "kronos.crypto.meme.symbols"):
+        assert fields[key]["type"] == "text"
+    assert all(fields[k]["label"]["es"] for k in fields if k.startswith("kronos."))
+    # The declared defaults are the ones the scripts fall back to.
+    defaults = crypto.CRYPTO_DEFAULTS
+    assert (
+        fields["kronos.crypto.max_order_usd"]["default"],
+        fields["kronos.crypto.max_daily_usd"]["default"],
+        fields["kronos.crypto.max_orders_per_day"]["default"],
+        fields["kronos.crypto.meme.max_order_usd"]["default"],
+        fields["kronos.crypto.meme.max_daily_usd"]["default"],
+    ) == (
+        defaults.max_order_usd,
+        defaults.max_daily_usd,
+        defaults.max_orders_per_day,
+        defaults.meme_max_order_usd,
+        defaults.meme_max_daily_usd,
+    )
+    assert (
+        crypto.parse_symbols(fields["kronos.crypto.meme.symbols"]["default"])
+        == defaults.meme_symbols
+    )
 
 
 def test_the_key_panel_lists_the_scopes_riskiest_first_and_is_empty_until_checked(

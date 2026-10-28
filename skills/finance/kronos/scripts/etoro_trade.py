@@ -10,6 +10,11 @@ OFF BY DEFAULT. Every guard runs here, before any order leaves the machine:
   ``max_order_usd``; today's (UTC) opened total stays within ``max_daily_usd`` and
   ``max_orders_per_day``, counted from a local ledger under a file lock so two concurrent
   runs cannot both slip under the cap. A buy whose outcome is unknown keeps counting.
+- Crypto is its own bucket (``_kronos_crypto.py``): a crypto buy (eToro instrument type 10,
+  else Saturday trading) needs ``skills.config.kronos.crypto.enabled`` and counts only against
+  the ``kronos.crypto.*`` caps; a meme coin (symbol in ``kronos.crypto.meme.symbols``) also
+  needs ``kronos.crypto.meme.enabled``, must be listed by eToro, and counts against the meme
+  caps and the crypto caps. The ``trading.*`` caps then cover the other (stock) buys only.
 - Lessons bite: an automatic buy is refused while Kronos got the symbol's direction right in
   under half of its last reviewed forecasts (at least 5, scored by kronos_review.py into the
   forecast journal), and unless the symbol's backtests of the last 7 days say ``adds_value``
@@ -55,7 +60,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -82,6 +87,21 @@ from _kronos_common import (
     run_cli,
 )
 from _kronos_config import ConfigError, kronos_settings, load_config
+from _kronos_crypto import (
+    CRYPTO,
+    MEME,
+    STOCK,
+    Cap,
+    CryptoConfig,
+    CryptoConfigError,
+    bucket_of,
+    caps_for,
+    classify,
+    hint_bucket,
+    is_meme,
+    parse_crypto_config,
+)
+from _kronos_crypto import SET_CMD as CRYPTO_SET_CMD
 from _kronos_journal import (
     BACKTEST_MAX_AGE,
     GATE_MIN_HIT_RATE,
@@ -102,6 +122,8 @@ from etoro_data import (
     _error_detail,
     _lookup_names,
     load_keys,
+    pick_exact,
+    search_candidates,
 )
 
 SET_CMD = "clawk config set skills.config.kronos.trading"
@@ -177,6 +199,7 @@ class TradingRefused(SkillError):
     """A guard stopped the order before any order request was made."""
 
     kind = "limit"  # what the dashboard's refusal log calls it
+    bucket: str | None = None  # stock / crypto / meme once known, for the refusal log
 
 
 class LessonRefused(TradingRefused):
@@ -201,6 +224,12 @@ class MarketRefused(TradingRefused):
     """The instrument's market is closed or its price is stale."""
 
     kind = "market"
+
+
+class CryptoRefused(TradingRefused):
+    """Crypto or meme-coin trading is off, or eToro does not list the meme coin."""
+
+    kind = "crypto"
 
 
 class _RateLimited(Exception):
@@ -287,6 +316,17 @@ def load_trading_config(path: Path | None = None) -> TradingConfig:
     )
 
 
+def load_crypto_config(path: Path | None = None) -> CryptoConfig:
+    """``skills.config.kronos.crypto`` (defaults: off, $50/order, $150/day, 3 buys; meme coins
+    off, $20/order, $50/day); an unreadable or invalid value refuses instead of guessing."""
+    try:
+        return parse_crypto_config(kronos_settings(load_config(path)).get("crypto"))
+    except ConfigError as exc:
+        raise TradingRefused(f"{exc}; trading stays off.", hint=exc.hint) from None
+    except CryptoConfigError as exc:
+        raise TradingRefused(str(exc), hint="Only the user fixes it.") from None
+
+
 def require_enabled(config: TradingConfig) -> None:
     if not config.enabled:
         raise TradingRefused(
@@ -333,10 +373,19 @@ def append_ledger(row: Mapping[str, Any], path: Path | None = None) -> None:
     append_jsonl(path or ledger_path(), dict(row))
 
 
+STOCK_ONLY = frozenset({STOCK})
+# How a refusal names each bucket's limits ("the crypto daily limit"); stocks keep the old text.
+_CAP_WORD = {STOCK: "", CRYPTO: "crypto ", MEME: "meme-coin "}
+
+
 def usage_today(
-    entries: list[dict[str, Any]], account: str, now: datetime
+    entries: list[dict[str, Any]],
+    account: str,
+    now: datetime,
+    buckets: frozenset[str] = STOCK_ONLY,
 ) -> tuple[int, float]:
-    """(orders opened, USD opened) today in UTC on *account*, excluding no-money outcomes."""
+    """(orders opened, USD opened) today in UTC on *account* in *buckets* (stock by default;
+    rows from before the buckets count as stock), excluding no-money outcomes."""
     today = now.astimezone(UTC).date().isoformat()
     opened = [
         e
@@ -345,39 +394,91 @@ def usage_today(
         and e.get("account") == account
         and str(e.get("ts", "")).startswith(today)
         and e.get("status") not in NOT_COUNTED
+        and bucket_of(e) in buckets
     ]
     return len(opened), round(sum(float(e.get("amount") or 0.0) for e in opened), 2)
 
 
-def check_limits(
-    config: TradingConfig, amount: float, entries: list[dict[str, Any]], now: datetime
+def check_cap(
+    cap: Cap,
+    account: str,
+    amount: float,
+    entries: list[dict[str, Any]],
+    now: datetime,
 ) -> dict[str, Any]:
+    """Refuse *amount* when it breaks one bucket's per-order, daily-count or daily-USD cap."""
+    word = _CAP_WORD.get(cap.name, "")
     if amount <= 0:
         raise TradingRefused("The amount must be a positive number of USD.")
-    if amount > config.max_order_usd:
+    if amount > cap.max_order_usd:
         raise TradingRefused(
-            f"{amount:.2f} USD is over the per-order limit of {config.max_order_usd:.2f} USD.",
+            f"{amount:.2f} USD is over the {word}per-order limit of "
+            f"{cap.max_order_usd:.2f} USD.",
             hint="Use a smaller amount. Only the user can raise the limit.",
         )
-    count, spent = usage_today(entries, config.account, now)
-    if count >= config.max_orders_per_day:
+    count, spent = usage_today(entries, account, now, cap.counts)
+    if cap.max_orders_per_day is not None and count >= cap.max_orders_per_day:
         raise TradingRefused(
-            f"Today's limit of {config.max_orders_per_day} buys on the {config.account} "
+            f"Today's limit of {cap.max_orders_per_day} {word}buys on the {account} "
             "account is used up.",
             hint="Limits reset at 00:00 UTC. Only the user can raise them.",
         )
-    if spent + amount > config.max_daily_usd + 1e-9:
-        left = max(config.max_daily_usd - spent, 0.0)
+    if spent + amount > cap.max_daily_usd + 1e-9:
+        left = max(cap.max_daily_usd - spent, 0.0)
         raise TradingRefused(
-            f"This buy would take today's total to {spent + amount:.2f} USD; the daily "
-            f"limit is {config.max_daily_usd:.2f} USD ({left:.2f} USD left).",
+            f"This buy would take today's {word}total to {spent + amount:.2f} USD; the "
+            f"{word}daily limit is {cap.max_daily_usd:.2f} USD ({left:.2f} USD left).",
             hint="Limits reset at 00:00 UTC. Only the user can raise them.",
         )
     return {
         "orders_today": count,
         "usd_today": spent,
-        "usd_left_after": round(config.max_daily_usd - spent - amount, 2),
+        "usd_left_after": round(cap.max_daily_usd - spent - amount, 2),
     }
+
+
+def check_limits(
+    config: TradingConfig, amount: float, entries: list[dict[str, Any]], now: datetime
+) -> dict[str, Any]:
+    """The stock bucket's caps (``trading.*``)."""
+    (cap,) = caps_for(STOCK, config, None)
+    return check_cap(cap, config.account, amount, entries, now)
+
+
+def check_bucket_limits(
+    config: TradingConfig,
+    crypto: CryptoConfig,
+    bucket: str,
+    amount: float,
+    entries: list[dict[str, Any]],
+    now: datetime,
+) -> dict[str, Any]:
+    """Every cap of *bucket* (a meme coin: the meme caps, then the crypto caps). The result
+    describes the bucket's own cap and, for a meme coin, what the crypto cap leaves too."""
+    own, *others = caps_for(bucket, config, crypto)
+    result = {"bucket": bucket, **check_cap(own, config.account, amount, entries, now)}
+    for cap in others:
+        left = check_cap(cap, config.account, amount, entries, now)["usd_left_after"]
+        result[f"{cap.name}_usd_left_after"] = left
+    return result
+
+
+def require_bucket_enabled(bucket: str, crypto: CryptoConfig) -> None:
+    """Crypto and meme coins each have their own switch, off until the user turns it on."""
+    if bucket in {CRYPTO, MEME} and not crypto.enabled:
+        raise CryptoRefused(
+            "Crypto trading is turned off for this profile.",
+            hint=f"Only the user turns it on: `{CRYPTO_SET_CMD}.enabled true` (or Settings "
+            "in the Kronos dashboard); it has its own limits, separate from the stock ones. "
+            "Do not change trading settings on your own.",
+        )
+    if bucket == MEME and not crypto.meme_enabled:
+        raise CryptoRefused(
+            "Meme-coin trading is turned off for this profile: meme coins are extremely "
+            "volatile and have their own, smaller limits.",
+            hint=f"Only the user turns it on: `{CRYPTO_SET_CMD}.meme.enabled true` (or "
+            "Settings in the Kronos dashboard). Do not change trading settings on your own.",
+        )
 
 
 def check_lessons(
@@ -825,22 +926,51 @@ class Deps:
         )
 
 
+def cap_usage(
+    cap: Cap, account: str, entries: list[dict[str, Any]], now: datetime
+) -> dict[str, Any]:
+    """Today's (UTC) use of one cap and what is left of it."""
+    count, spent = usage_today(entries, account, now, cap.counts)
+    usage: dict[str, Any] = {"buys": count, "usd": spent}
+    if cap.max_orders_per_day is not None:
+        usage["buys_left"] = max(cap.max_orders_per_day - count, 0)
+    usage["usd_left"] = round(max(cap.max_daily_usd - spent, 0.0), 2)
+    return usage
+
+
+def _crypto_status(
+    config: TradingConfig, deps: Deps, entries: list[dict[str, Any]]
+) -> dict[str, Any]:
+    try:
+        crypto = load_crypto_config(deps.config_path)
+    except TradingRefused as exc:
+        return {"error": str(exc)}
+    meme_cap, crypto_cap = caps_for(MEME, config, crypto)
+    return {
+        "config": asdict(crypto),
+        "today_utc": cap_usage(crypto_cap, config.account, entries, deps.now()),
+        "meme_today_utc": cap_usage(meme_cap, config.account, entries, deps.now()),
+        "note": "Crypto buys count only against these caps, meme coins against both the "
+        "meme and the crypto caps; the stock limits above cover everything else.",
+        "change_settings": f"{CRYPTO_SET_CMD}.<enabled|watchlist|max_order_usd|"
+        "max_daily_usd|max_orders_per_day|meme.enabled|meme.symbols|meme.max_order_usd|"
+        "meme.max_daily_usd> <value> (the user decides)",
+    }
+
+
 def cmd_status(_args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
     config = load_trading_config(deps.config_path)
-    count, spent = usage_today(read_ledger(deps.ledger), config.account, deps.now())
+    entries = read_ledger(deps.ledger)
+    (stock_cap,) = caps_for(STOCK, config, None)
     return {
         "ok": True,
         "config": asdict(config),
-        "today_utc": {
-            "buys": count,
-            "usd": spent,
-            "buys_left": max(config.max_orders_per_day - count, 0),
-            "usd_left": round(max(config.max_daily_usd - spent, 0.0), 2),
-        },
+        "today_utc": cap_usage(stock_cap, config.account, entries, deps.now()),
+        "crypto": _crypto_status(config, deps, entries),
         "ledger": str(deps.ledger or ledger_path()),
         "change_settings": f"{SET_CMD}.<enabled|account|max_order_usd|max_daily_usd|"
         "max_orders_per_day> <value> (the user decides; config.yaml in "
-        f"{display_home()})",
+        f"{display_home()}; these cover stocks, ETFs and everything but crypto)",
     }
 
 
@@ -932,6 +1062,8 @@ def log_refusal(deps: Deps, args: argparse.Namespace, exc: TradingRefused) -> No
         "refusal": str(exc),
         "user_requested": args.user_requested,
     }
+    if exc.bucket:
+        row["bucket"] = exc.bucket
     try:
         append_jsonl(refused_path(deps.kronos_dir()), row)
     except OSError as err:
@@ -947,11 +1079,79 @@ def cmd_buy(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
         raise
 
 
-def _local_checks(
-    args: argparse.Namespace, deps: Deps, config: TradingConfig, amount: float
+@dataclass
+class BucketGate:
+    """Which bucket a buy belongs to and whether its switch and caps let it through.
+
+    Before any request the user's own lists (meme symbols, crypto watchlist) give a hint and
+    that bucket is checked; an unlisted symbol is checked as a stock. Once eToro has named the
+    instrument the real bucket is checked too. A stock-limit refusal of an unlisted symbol waits
+    for that answer while crypto trading is on, so a crypto buy is never refused by the stock
+    caps it does not count against.
+    """
+
+    trading: TradingConfig
+    crypto: CryptoConfig
+    amount: float
+    symbol: str
+    hint: str | None = field(init=False, default=None)
+    deferred: TradingRefused | None = field(init=False, default=None)
+
+    def __post_init__(self) -> None:
+        self.hint = hint_bucket(self.symbol, self.crypto)
+
+    def enforce(self, bucket: str, deps: Deps) -> dict[str, Any]:
+        try:
+            require_bucket_enabled(bucket, self.crypto)
+            return check_bucket_limits(
+                self.trading,
+                self.crypto,
+                bucket,
+                self.amount,
+                read_ledger(deps.ledger),
+                deps.now(),
+            )
+        except TradingRefused as exc:
+            exc.bucket = bucket
+            raise
+
+    def precheck(self, deps: Deps) -> None:
+        try:
+            self.enforce(self.hint or STOCK, deps)
+        except TradingRefused as exc:
+            if self.hint is not None or not self.crypto.enabled:
+                raise
+            self.deferred = exc
+
+    def settle(self, bucket: str, deps: Deps) -> None:
+        if bucket == (self.hint or STOCK) and self.deferred is not None:
+            raise self.deferred
+        if bucket != (self.hint or STOCK):
+            self.enforce(bucket, deps)
+
+
+def resolve_instrument(
+    reader: EtoroClient, symbol: str, crypto: CryptoConfig
 ) -> dict[str, Any]:
-    """Every guard that needs no network, in the order a refusal is most useful to hear."""
-    check_limits(config, amount, read_ledger(deps.ledger), deps.now())
+    """eToro's exact instrument for *symbol*; a meme coin eToro does not list is a refusal."""
+    items = reader.search(symbol)
+    try:
+        return pick_exact(items, symbol)
+    except EtoroError:
+        if not is_meme(symbol, crypto):
+            raise
+    refusal = CryptoRefused(
+        f"eToro does not list the meme coin {symbol} under that exact symbol (search "
+        f"returned: {search_candidates(items)}); nothing was bought.",
+        hint="Use the exact eToro symbol from `etoro_data.py search` (some coins are listed "
+        "per million units, e.g. SHIBxM). Tell the user if eToro does not offer the coin.",
+    )
+    refusal.bucket = MEME
+    raise refusal
+
+
+def _local_checks(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
+    """The guards after the limits that need no network, most useful refusal first."""
     track_record = check_lessons(
         args.symbol,
         forecasts_path(deps.kronos_dir()),
@@ -968,23 +1168,37 @@ def _local_checks(
 
 
 def _market_checks(
-    args: argparse.Namespace, deps: Deps, reader: EtoroClient
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """(instrument, market) after the read-only checks: tradable, open, fresh price, levels."""
-    instrument = reader.resolve(args.symbol)
+    args: argparse.Namespace, deps: Deps, reader: EtoroClient, gate: BucketGate
+) -> tuple[dict[str, Any], dict[str, Any], str]:
+    """(instrument, market, bucket) after the read-only checks: the instrument's bucket with
+    its switch and caps, then tradable, open, fresh price, levels."""
+    instrument = resolve_instrument(reader, args.symbol, gate.crypto)
     snapshot = market_snapshot(reader, int(instrument["instrumentId"]))
-    market = check_market(args.symbol, instrument, snapshot, deps.now())
-    check_price_levels(args.stop, args.target, market["price"])
-    return instrument, market
+    names = (args.symbol, str(instrument.get("internalSymbolFull") or ""))
+    bucket = classify(names, instrument, snapshot["trades_weekends"], gate.crypto)
+    gate.settle(bucket, deps)
+    try:
+        market = check_market(args.symbol, instrument, snapshot, deps.now())
+        check_price_levels(args.stop, args.target, market["price"])
+    except TradingRefused as exc:
+        exc.bucket = bucket
+        raise
+    return instrument, market, bucket
 
 
 def _buy(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
     config = load_trading_config(deps.config_path)
     require_enabled(config)
     amount = round(float(args.amount), 2)
-    checks = _local_checks(args, deps, config, amount)
+    gate = BucketGate(config, load_crypto_config(deps.config_path), amount, args.symbol)
+    gate.precheck(deps)
+    try:
+        checks = _local_checks(args, deps)
+    except TradingRefused as exc:
+        exc.bucket = gate.hint
+        raise
     reader, trader = deps.clients()
-    instrument, market = _market_checks(args, deps, reader)
+    instrument, market, bucket = _market_checks(args, deps, reader, gate)
     entry = {
         "id": str(uuid.uuid4()),  # also the v2 order's x-request-id (its lookup handle)
         "legacy_request_id": str(uuid.uuid4()),
@@ -999,13 +1213,14 @@ def _buy(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
         "take_profit": args.target,
         "reason": args.reason,
         "user_requested": args.user_requested,
+        "bucket": bucket,
         **checks,
         "market": market,
     }
     if args.dry_run:
         return {"ok": True, "dry_run": True, "would_buy": entry}
     with deps.lock():
-        limits = check_limits(config, amount, read_ledger(deps.ledger), deps.now())
+        limits = gate.enforce(bucket, deps)
         append_ledger({**entry, "status": "submitting"}, deps.ledger)
         order_id, api = _submit_buy(deps, trader, entry)
     status, error = "submitted", None

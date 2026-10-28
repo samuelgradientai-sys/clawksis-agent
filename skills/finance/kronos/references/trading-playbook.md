@@ -1,8 +1,8 @@
 # Kronos trading playbook
 
 How the agent turns a forecast, indicators and lessons into a decision, when it stays out,
-how it manages open positions, how it reports, how it onboards a new user, and how it replays
-these rules on past prices. Every script
+how it manages open positions, how it reports, how it onboards a new user, how it replays
+these rules on past prices, and how crypto and meme coins differ. Every script
 named here lives in `scripts/` and runs through the `terminal` tool. Nothing in this playbook
 overrides the hard limits in `etoro_trade.py` or the user's own instructions.
 
@@ -19,6 +19,8 @@ On first use (the loaded skill's `[Skill config]` block shows `kronos.goals.watc
    0.5% / 1% / 2% of the account).
 4. How long do you hold? days / weeks / months.
 5. How often should Kronos analyze? e.g. every hour, every weekday at 10:30, every Monday.
+6. Crypto too? Which coins (e.g. `BTC, ETH, SOL`), and meme coins as well? Say plainly that
+   meme coins are extremely volatile and can lose most of their value in hours.
 
 Save the answers (values are plain text; quote them):
 
@@ -30,8 +32,14 @@ clawk config set skills.config.kronos.goals.horizon weeks
 clawk config set skills.config.kronos.goals.schedule "weekdays at 10:30"
 ```
 
-Goals are the user's to change at any time; the trading limits (`kronos.trading.*`) are not
-goals and only the user changes them. Saving goals never turns trading on. When the objective
+Save the crypto coins with `clawk config set skills.config.kronos.crypto.watchlist "BTC,
+ETH"`: it only says what to follow. Turning crypto or meme coins on, and their limits, are the
+user's: point them to Settings in the Kronos dashboard (each switch and higher limit asks them
+to confirm) or `clawk config set skills.config.kronos.crypto.enabled true` /
+`...crypto.meme.enabled true`.
+
+Goals are the user's to change at any time; the trading limits (`kronos.trading.*`,
+`kronos.crypto.*` except the watchlist) are not goals and only the user changes them. Saving goals never turns trading on. When the objective
 is "just watch" (or similar), never buy: analyze, learn and report only.
 
 Map the horizon to bar size and forecast length:
@@ -71,6 +79,13 @@ scripts through the terminal tool and follow its references/trading-playbook.md.
    and nothing new was learned, three lines are enough.
 ```
 
+**Crypto routine.** When `kronos.crypto.watchlist` is set, offer a second job (`name="Kronos
+crypto"`, `schedule="every 1h"`; crypto trades 24/7, so weekends and nights count) with the
+same template on `{CRYPTO WATCHLIST}`, `OneHour` bars and horizon 12–24, plus: "Size crypto with
+`kronos_risk.py --asset crypto` (meme coins `--asset meme`) and follow § 7; if `status` shows
+`crypto.config.enabled: false`, analyze and report only." Hourly runs are cheap to skip: when
+nothing changed, a one-line report is enough.
+
 ## 3. Decision checklist (buy)
 
 Gather, per symbol: the review (`kronos_review.py`), the indicator signal
@@ -79,7 +94,8 @@ forecast JSON (`summary`, `track_record`, `lessons`) and `etoro_trade.py status`
 
 Buy only when ALL of these hold:
 
-- `status` shows `enabled: true`, `buys_left > 0` and enough `usd_left`.
+- `status` shows `enabled: true`, `buys_left > 0` and enough `usd_left` (for crypto also
+  `crypto.config.enabled` and its own `crypto.today_utc`; meme coins: § 7).
 - The user's objective allows trading (not "just watch").
 - Backtest verdict is `adds_value` for this symbol and interval, from the last 7 days: Kronos
   beat both "repeat the last close" and the ETS baseline (the script enforces this).
@@ -154,4 +170,39 @@ max drawdown, Sharpe, win rate, exposure and how many buys the limits, lessons o
 the stop refused, against buying and holding the symbol and the benchmark; `--report` adds a
 quantstats HTML tear sheet when installed. Present it as history under today's rules, never as
 a promise: with small orders on a large account the curve barely moves, so read the per-trade
-numbers too, and never propose raising limits because a replay looked good.
+numbers too, and never propose raising limits because a replay looked good. The replay
+always applies the stock limits (`trading.*`), crypto symbols included.
+
+## 7. Crypto and meme coins
+
+Crypto is a separate bucket with its own switch and limits; meme coins are a riskier
+sub-bucket inside it. `etoro_trade.py` enforces all of this on every buy:
+
+| | Switch (default off) | Caps (defaults) | Counts against |
+|---|---|---|---|
+| Stocks, ETFs, rest | `trading.enabled` | `trading.max_order_usd` 100, `max_daily_usd` 300, `max_orders_per_day` 5 | stock caps only |
+| Crypto | `trading.enabled` + `crypto.enabled` | `crypto.max_order_usd` 50, `max_daily_usd` 150, `max_orders_per_day` 3 | crypto caps only |
+| Meme coins | the above + `crypto.meme.enabled` | `crypto.meme.max_order_usd` 20, `max_daily_usd` 50 | meme caps AND crypto caps |
+
+- **Which bucket.** eToro's instrument type 10 is crypto (no type: trading on Saturdays
+  means crypto); any symbol on `crypto.meme.symbols` is a meme coin, also in eToro's per-million
+  spelling (`SHIB` matches `SHIBxM`). Unsure means the stricter bucket. The ledger row, the
+  refusal log and the dashboard's "Type" column show the bucket.
+- **Same checks, own caps.** A crypto buy needs everything in § 3 (fresh `adds_value`, forecast
+  up by half an ATR, indicators not bearish, no blocking lesson, a stop) and is sized with
+  `kronos_risk.py --asset crypto|meme`, which caps the amount by that bucket's limits (auto
+  when eToro or the lists say crypto). Long-only, leverage 1, real-asset settlement, demo
+  account unless the user chose real: nothing changes there.
+- **Stops.** There is no fixed stop percentage: `kronos_risk.py` puts the stop 2 ATR below the
+  entry, so volatile coins get wider stops automatically (and a smaller amount for the same
+  risk). The script refuses a stop more than 50% below the price. On hourly bars a meme-coin
+  stop 10–25% away is normal; never tighten it to make a trade look safer, and remember a
+  gap can jump past it.
+- **Meme coins only when listed.** The buy looks the symbol up in eToro's instrument search
+  and refuses (`CryptoRefused`) a meme coin eToro does not list under that exact symbol; use the
+  symbol `etoro_data.py search` shows and tell the user when eToro does not offer the coin.
+- **Hours.** Crypto trades around the clock, so the New York session rule does not apply; the
+  newest eToro price must still be under 2 hours old. Limits reset at 00:00 UTC.
+- **Honesty.** Not financial advice. Kronos's track record on crypto is usually no better than
+  on stocks, and meme coins move on news and social media no price model sees: report every
+  meme-coin buy with its stop and the reminder that it can go to near zero.

@@ -43,7 +43,11 @@ journal = _load("_kronos_journal")
 dashboard = _load("kronos_dashboard")
 
 NOW = datetime(2026, 10, 26, 15, 0, tzinfo=kc.UTC)  # a Monday, 11:00 in New York
-SEARCH_AAPL = {"items": [{"instrumentId": 1001, "internalSymbolFull": "AAPL"}]}
+SEARCH_AAPL = {
+    "items": [
+        {"instrumentId": 1001, "internalSymbolFull": "AAPL", "instrumentTypeID": 5}
+    ]
+}
 FILLED = [{"orderId": 77}, {"status": {"id": 3}}]
 PROTECTED = ("--stop", "95", "--target", "110")
 
