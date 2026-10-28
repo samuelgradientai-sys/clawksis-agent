@@ -7,7 +7,7 @@ attached once, kept running with focus emulation (what Playwright does for its p
 and read only when its own URL has loaded and its text has stopped changing, so each result is the
 page that was asked for. At most ``concurrency`` tabs are open at a time and every tab is closed.
 
-Runs inside the browser-harness process; ``cdp`` is the harness's raw CDP helper
+Its source runs inside the browser-harness process (see ``preamble``); ``cdp`` is the harness's raw CDP helper
 (``cdp(method, session_id=None, **params)``). Only reads: sending or clicking stays one page at a
 time in the agent's own code.
 """
@@ -15,9 +15,11 @@ time in the agent's own code.
 from __future__ import annotations
 
 import contextlib
+import functools
 import json
 import time
 from collections import deque
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 MAX_CONCURRENCY = 8
@@ -177,15 +179,18 @@ def read_pages(
     return [r for r in results if r is not None]
 
 
-# Prepended to every browser_exec call: binds read_pages to the harness's own cdp().
-PREAMBLE = """\
-try:
-    from tools.browser_parallel_read import read_pages as _clawk_read_pages
-    def read_pages(urls, **options):
-        return _clawk_read_pages(cdp, urls, **options)
-except ImportError:
-    pass
+# The harness runs on a bare interpreter whose path does not include Clawksis's source, so
+# browser_exec ships this module's own source along with the code that calls read_pages, loaded
+# into a private module (the agent's globals only gain ``read_pages``).
+_BIND = """
+import types as _clawk_types
+_clawk_read_pages_module = _clawk_types.ModuleType("clawk_read_pages")
+exec(%r, _clawk_read_pages_module.__dict__)
+def read_pages(urls, **options):
+    return _clawk_read_pages_module.read_pages(cdp, urls, **options)
+del _clawk_types
 """
+
 
 DIGEST = (
     " read_pages(urls, selector=None, wait_for=None) reads many pages AT ONCE in parallel tabs "
@@ -195,6 +200,12 @@ DIGEST = (
 )
 
 
+@functools.cache
+def preamble() -> str:
+    """The code that defines ``read_pages`` inside the harness, bound to its ``cdp``."""
+    return _BIND % Path(__file__).read_text(encoding="utf-8")
+
+
 def with_helper(code: str) -> str:
-    """``code`` with ``read_pages`` bound in front, only when it calls it."""
-    return PREAMBLE + code if "read_pages" in code else code
+    """``code`` with ``read_pages`` defined in front, only when it calls it."""
+    return preamble() + code if "read_pages" in code else code
