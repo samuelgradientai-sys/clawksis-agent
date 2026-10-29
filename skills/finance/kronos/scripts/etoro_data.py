@@ -45,10 +45,12 @@ from _kronos_common import (
     UTC,
     Bar,
     SkillError,
+    append_jsonl,
     display_home,
     drop_unclosed_bar,
     dump_json,
     iso_z,
+    kronos_home,
     render_table,
     rows_to_bars,
     run_cli,
@@ -646,8 +648,58 @@ def _portfolio_table(summary: dict[str, Any]) -> str:
     return f"{head}\n{table}{copies}\n(read-only snapshot; no trades can be placed from here)"
 
 
+def portfolio_history_path(kronos_dir: Path | None = None) -> Path:
+    """Local log of portfolio snapshots (``portfolio --record``) the dashboard charts."""
+    return (kronos_dir or kronos_home()) / "portfolio_history.jsonl"
+
+
+def snapshot_row(account: str, summary: Mapping[str, Any], ts: str) -> dict[str, Any]:
+    """One point of the portfolio-value chart: cash, invested, open P&L and their sum."""
+
+    def num(value: Any) -> float | None:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    cash = num(summary.get("cash_credit_usd"))
+    invested = num(summary.get("invested_usd_direct")) or 0.0
+    pnl = num(summary.get("unrealized_pnl"))
+    equity = None if cash is None or pnl is None else round(cash + invested + pnl, 2)
+    return {
+        "ts": ts,
+        "account": account,
+        "cash_usd": cash,
+        "invested_usd": round(invested, 2),
+        "unrealized_pnl": pnl,
+        "equity_usd": equity,
+        "positions": [
+            {
+                "symbol": row.get("symbol") or f"#{row.get('instrument_id')}",
+                "invested_usd": num(row.get("invested_usd")),
+                "unrealized_pnl": num(row.get("unrealized_pnl")),
+            }
+            for row in summary.get("positions") or []
+        ],
+    }
+
+
+def record_snapshot(account: str, summary: Mapping[str, Any]) -> dict[str, Any]:
+    """Append a snapshot to the local history and refresh the dashboard (best effort)."""
+    row = snapshot_row(
+        account, summary, datetime.now(UTC).isoformat(timespec="seconds")
+    )
+    append_jsonl(portfolio_history_path(), row)
+    from kronos_dashboard import refresh_safely
+
+    refresh_safely()
+    return row
+
+
 def cmd_portfolio(args: argparse.Namespace) -> int:
     summary = fetch_portfolio(args.account)
+    if args.record:
+        summary["recorded"] = record_snapshot(args.account, summary)
     print(
         _portfolio_table(summary)
         if args.format == "table"
@@ -683,6 +735,12 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio = sub.add_parser("portfolio", help="Open positions, P&L and copy-trading")
     portfolio.add_argument("--account", choices=tuple(PORTFOLIO_PATHS), default="real")
     portfolio.add_argument("--format", choices=("json", "table"), default="json")
+    portfolio.add_argument(
+        "--record",
+        action="store_true",
+        help="also save a snapshot (cash, invested, open P&L) for the dashboard's "
+        "portfolio-value chart",
+    )
     portfolio.set_defaults(func=cmd_portfolio)
     return parser
 

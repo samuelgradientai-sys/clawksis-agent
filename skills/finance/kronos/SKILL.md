@@ -354,7 +354,8 @@ Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMi
    - Always pass a one-line `--reason`; after every order report what, how much, the stop,
      status and why. `submitted`/`placed` means not filled yet: check `positions` later.
 9. **Dashboard.** Forecasts, reviews and orders refresh `$CLAWK_HOME/dashboards/kronos.json`
-   on their own; `kronos_dashboard.py` rebuilds it. Point the user to the Kronos dashboard in
+   on their own; `kronos_dashboard.py` rebuilds it. `etoro_data.py portfolio --account demo
+   --record` saves a portfolio snapshot for the value and P&L charts (run it on a schedule). Point the user to the Kronos dashboard in
    the Clawksis web dashboard for what was bought, sold, refused and learned.
 
 ## Pitfalls
