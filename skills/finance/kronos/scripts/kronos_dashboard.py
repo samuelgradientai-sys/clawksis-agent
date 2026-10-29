@@ -26,7 +26,7 @@ import os
 import sys
 import tempfile
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -70,6 +70,7 @@ from _kronos_journal import (
 )
 from _kronos_lessons import all_lessons, interval_label, lessons_path, money, render
 from _kronos_positions import BucketRules, bucket_rules, positions_usage
+from etoro_data import portfolio_history_path
 from etoro_trade import (
     TradingConfig,
     cap_usage,
@@ -145,6 +146,7 @@ class Inputs:
     strategies: list[dict[str, Any]]
     key_check: dict[str, Any] | None = None
     crypto: CryptoConfig | None = None
+    history: list[dict[str, Any]] = field(default_factory=list)
 
 
 def key_check_path(kronos_dir: Path | None = None) -> Path:
@@ -182,6 +184,7 @@ def load_inputs(config_path: Path | None, kronos_dir: Path) -> Inputs:
         strategies=read_jsonl(strategy_path(kronos_dir)),
         key_check=_read_key_check(key_check_path(kronos_dir)),
         crypto=crypto,
+        history=read_jsonl(portfolio_history_path(kronos_dir)),
     )
 
 
@@ -605,6 +608,23 @@ def _close_row(
     }
 
 
+def _unique_closes(ledger: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Full closes, one per position: a second order to close a position already being
+    closed (a retry while the market was shut) is not a second sale."""
+    seen: set[Any] = set()
+    closes = []
+    for entry in ledger:
+        if entry.get("action") != "close":
+            continue
+        position = entry.get("position_id")
+        if entry.get("units") == "all" and position is not None:
+            if position in seen:
+                continue
+            seen.add(position)
+        closes.append(entry)
+    return closes
+
+
 def sold_panel(inputs: Inputs) -> dict[str, Any]:
     t = LABELS[inputs.lang]
     opens = [e for e in inputs.ledger if e.get("action") == "open"]
@@ -612,7 +632,7 @@ def sold_panel(inputs: Inputs) -> dict[str, Any]:
     # A close is in the bucket of the buys of the same instrument (positions bought in the
     # eToro app have no buy here and show no type).
     buckets = {e.get("instrument_id"): bucket_of(e) for e in opens}
-    closes = [e for e in inputs.ledger if e.get("action") == "close"]
+    closes = _unique_closes(inputs.ledger)
     return {
         "id": "sold",
         "type": "table",
@@ -675,6 +695,73 @@ def _rolling(rows: list[dict[str, Any]], window: int = RECENT_WINDOW) -> list[li
         if when:
             points.append([when, round(hits / len(chunk) * 100.0, 1)])
     return points[-CHART_POINTS:]
+
+
+def _account_history(inputs: Inputs) -> list[dict[str, Any]]:
+    account = inputs.trading.account if inputs.trading is not None else None
+    return [
+        row
+        for row in inputs.history
+        if account is None or row.get("account") in (None, account)
+    ]
+
+
+def portfolio_chart_panel(inputs: Inputs) -> dict[str, Any]:
+    """Portfolio value (cash + invested + open P&L) at every recorded snapshot."""
+    t = LABELS[inputs.lang]
+    points = [
+        [when, value]
+        for row in _account_history(inputs)
+        if (when := iso_z(row.get("ts"))) and (value := _num(row.get("equity_usd")))
+    ]
+    return {
+        "id": "portfolio_chart",
+        "type": "chart",
+        "title": t["portfolio_chart"],
+        "description": t["portfolio_desc"],
+        "kind": "line",
+        "x_label": t["time"],
+        "y_label": t["portfolio_y"],
+        "series": [{"name": t["portfolio_series"], "points": points[-CHART_POINTS:]}],
+    }
+
+
+def pnl_chart_panel(inputs: Inputs) -> dict[str, Any]:
+    """Gain or loss per symbol: open positions from the latest snapshot, closed ones from
+    the ledger's estimates."""
+    t = LABELS[inputs.lang]
+    history = _account_history(inputs)
+    open_points = [
+        [str(p.get("symbol")), round(pnl, 2)]
+        for p in (history[-1].get("positions") or [] if history else [])
+        if (pnl := _num(p.get("unrealized_pnl"))) is not None
+    ]
+    opens = [e for e in inputs.ledger if e.get("action") == "open"]
+    names = {e.get("instrument_id"): e.get("symbol") for e in opens if e.get("symbol")}
+    closed: dict[str, float] = {}
+    for entry in _unique_closes(inputs.ledger):
+        pnl = _num(entry.get("pnl_usd"))
+        if pnl is None:
+            continue
+        symbol = entry.get("symbol") or names.get(entry.get("instrument_id"))
+        key = str(symbol or f"#{entry.get('instrument_id')}")
+        closed[key] = closed.get(key, 0.0) + pnl
+    return {
+        "id": "pnl_chart",
+        "type": "chart",
+        "title": t["pnl_chart"],
+        "description": t["pnl_desc"],
+        "kind": "bar",
+        "x_label": t["symbol"],
+        "y_label": t["pnl_y"],
+        "series": [
+            {"name": t["pnl_open"], "points": open_points},
+            {
+                "name": t["pnl_closed"],
+                "points": [[k, round(v, 2)] for k, v in closed.items()],
+            },
+        ],
+    }
 
 
 def accuracy_chart_panel(inputs: Inputs) -> dict[str, Any]:
@@ -923,6 +1010,8 @@ def build_snapshot(inputs: Inputs, now: datetime) -> dict[str, Any]:
         goals_panel(inputs),
         key_panel(inputs),
         lessons_panel(inputs),
+        portfolio_chart_panel(inputs),
+        pnl_chart_panel(inputs),
         bought_panel(inputs),
         sold_panel(inputs),
         refused_panel(inputs),

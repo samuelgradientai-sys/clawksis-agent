@@ -587,6 +587,40 @@ def test_real_portfolio_falls_back_when_pnl_route_is_missing():
     assert rec.requests[0].full_url.endswith("/api/v1/trading/info/demo/pnl")
 
 
+def test_a_portfolio_snapshot_adds_cash_invested_and_open_pnl():
+    summary = {
+        "cash_credit_usd": 97721.0,
+        "invested_usd_direct": 2000.0,
+        "unrealized_pnl": -35.4,
+        "positions": [
+            {
+                "symbol": "PANW",
+                "instrument_id": 4124,
+                "invested_usd": 1000.0,
+                "unrealized_pnl": -33.12,
+            },
+            {
+                "symbol": None,
+                "instrument_id": 4286,
+                "invested_usd": 1000.0,
+                "unrealized_pnl": None,
+            },
+        ],
+    }
+    row = etoro.snapshot_row("demo", summary, "2026-10-29T14:00:00+00:00")
+    assert row["equity_usd"] == 99685.6
+    assert row["positions"] == [
+        {"symbol": "PANW", "invested_usd": 1000.0, "unrealized_pnl": -33.12},
+        {"symbol": "#4286", "invested_usd": 1000.0, "unrealized_pnl": None},
+    ]
+    assert (
+        etoro.snapshot_row("demo", {**summary, "unrealized_pnl": None}, "t")[
+            "equity_usd"
+        ]
+        is None
+    )  # no made-up value when eToro leaves out the P&L
+
+
 def test_portfolio_summary_groups_positions_and_weights():
     portfolio = {
         "credit": 50.0,

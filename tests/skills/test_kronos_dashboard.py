@@ -57,6 +57,8 @@ EXPECTED_PANELS = [
     "goals",
     "etoro_key",
     "lessons",
+    "portfolio_chart",
+    "pnl_chart",
     "bought",
     "sold",
     "refused",
@@ -136,8 +138,8 @@ def _chart(panel) -> None:
         assert len(series["points"]) <= 500
         for x, y in series["points"]:
             assert isinstance(x, (str, int, float))
-            if isinstance(x, str):
-                _iso_utc(x)
+            if isinstance(x, str) and panel["kind"] == "line":
+                _iso_utc(x)  # a bar chart's x may be a category (a symbol)
             assert isinstance(y, (int, float)) and not isinstance(y, bool)
 
 
@@ -350,6 +352,93 @@ def test_a_full_profile_renders_what_was_bought_sold_refused_and_learned_in_span
     assert summary["Compras hoy"]["value"] == "2 / 5"
     assert summary["Órdenes en curso"]["tone"] == "warning"
     assert summary["P&L cerrado (est.)"]["value"] == "-$4.50"
+
+
+def test_portfolio_value_and_pnl_charts_come_from_recorded_snapshots(tmp_path):
+    config = _write_config(
+        tmp_path,
+        "display:\n  language: es-ES\nskills:\n  config:\n    kronos:\n      trading:\n"
+        "        enabled: true\n",
+    )
+    kdir = _full_home(tmp_path)
+    _append(
+        kdir / "portfolio_history.jsonl",
+        [
+            {
+                "ts": "2026-10-25T14:00:00+00:00",
+                "account": "demo",
+                "equity_usd": 100000.0,
+            },
+            {"ts": "2026-10-25T15:00:00+00:00", "account": "real", "equity_usd": 5.0},
+            {
+                "ts": "2026-10-26T14:00:00+00:00",
+                "account": "demo",
+                "equity_usd": 99690.5,
+                "positions": [
+                    {"symbol": "TSLA", "invested_usd": 30.0, "unrealized_pnl": 1.25},
+                    {"symbol": "PANW", "invested_usd": 1000.0, "unrealized_pnl": None},
+                ],
+            },
+        ],
+    )
+    snapshot = _refresh(tmp_path, config)
+    validate(snapshot)
+    value = _panel(snapshot, "portfolio_chart")
+    assert value["title"] == "Valor de la cartera" and value["kind"] == "line"
+    assert value["series"][0]["points"] == [
+        ["2026-10-25T14:00:00Z", 100000.0],
+        ["2026-10-26T14:00:00Z", 99690.5],
+    ]  # only the configured account
+    pnl = _panel(snapshot, "pnl_chart")
+    assert pnl["kind"] == "bar"
+    assert {s["name"]: s["points"] for s in pnl["series"]} == {
+        "Abiertas": [["TSLA", 1.25]],
+        "Cerradas": [["AAPL", -4.5]],
+    }
+
+
+def test_a_retried_close_of_the_same_position_is_one_sale(tmp_path):
+    kdir = tmp_path / "kronos"
+    close = {
+        "action": "close",
+        "account": "demo",
+        "instrument_id": 4286,
+        "units": "all",
+    }
+    _append(
+        kdir / "trades.jsonl",
+        [
+            {
+                "id": "o",
+                "action": "open",
+                "account": "demo",
+                "symbol": "TEAM",
+                "instrument_id": 4286,
+                "amount": 1000.0,
+                "status": "filled",
+            },
+            {
+                **close,
+                "id": "c1",
+                "ts": NOW.isoformat(),
+                "position_id": 9,
+                "pnl_usd": -80.07,
+                "reason": "stop",
+            },
+            {
+                **close,
+                "id": "c2",
+                "ts": NOW.isoformat(),
+                "position_id": 9,
+                "pnl_usd": -80.07,
+                "reason": "retry",
+            },
+        ],
+    )
+    snapshot = _refresh(tmp_path, tmp_path / "missing.yaml")
+    (sold,) = _panel(snapshot, "sold")["rows"]
+    assert (sold["symbol"], sold["reason"]) == ("TEAM", "stop")
+    assert _panel(snapshot, "pnl_chart")["series"][1]["points"] == [["TEAM", -80.07]]
 
 
 def test_crypto_and_meme_buys_get_their_own_panel_and_tags_in_spanish(tmp_path):
