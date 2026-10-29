@@ -48,9 +48,10 @@ Usage:
   etoro_trade.py status
   etoro_trade.py positions [--format table|json]
   etoro_trade.py buy SYMBOL --amount USD --reason TEXT [--stop RATE] [--target RATE]
-                 [--user-requested] [--dry-run]
+                 [--trailing] [--user-requested] [--dry-run]
   etoro_trade.py close POSITION_ID [--units N] --reason TEXT [--dry-run]
-  etoro_trade.py set-stop POSITION_ID --stop RATE [--target RATE] --reason TEXT [--dry-run]
+  etoro_trade.py set-stop POSITION_ID --stop RATE [--target RATE] [--trailing] --reason TEXT
+                 [--dry-run]
   etoro_trade.py reconcile
 """
 
@@ -756,11 +757,13 @@ def _retry_wait(header: str | None, default: float, cap: float) -> float:
 
 
 def _protection_fields(order: Mapping[str, Any]) -> dict[str, Any]:
-    """v2 order fields for a fixed stop-loss and a take-profit (absolute rates); {} when none."""
+    """v2 order fields for a stop-loss and a take-profit (absolute rates); {} when none.
+
+    A trailing stop starts at the given rate and eToro moves it up with the price."""
     fields: dict[str, Any] = {}
     if order.get("stop_loss") is not None:
         fields["stopLossRate"] = order["stop_loss"]
-        fields["stopLossType"] = "fixed"
+        fields["stopLossType"] = "trailing" if order.get("trailing_stop") else "fixed"
     if order.get("take_profit") is not None:
         fields["takeProfitRate"] = order["take_profit"]
     return fields
@@ -917,11 +920,20 @@ class TradeClient:
         return self.send("POST", path, body=body, request_id=str(uuid.uuid4()))
 
     def set_protection(
-        self, account: str, position_id: int, stop: float, target: float | None
+        self,
+        account: str,
+        position_id: int,
+        stop: float,
+        target: float | None,
+        *,
+        trailing: bool = False,
     ) -> Any:
         """Set an open position's stop-loss (and take-profit) in place. Asynchronous at eToro:
         the answer only says the change was accepted; `positions` shows when it applies."""
-        body: dict[str, Any] = {"stopLossRate": stop, "stopLossType": "fixed"}
+        body: dict[str, Any] = {
+            "stopLossRate": stop,
+            "stopLossType": "trailing" if trailing else "fixed",
+        }
         if target is not None:
             body["takeProfitRate"] = target
         path = f"/api/v2/trading/{_segment(account)}positions/{int(position_id)}"
@@ -1093,6 +1105,7 @@ def _position_row(pos: Mapping[str, Any], names: Mapping[int, Any]) -> dict[str,
         "invested_usd": pos.get("amount"),
         "open_rate": pos.get("openRate"),
         "stop_loss": pos.get("stopLossRate"),
+        "trailing_stop": bool(pos.get("isTslEnabled")),
         "take_profit": pos.get("takeProfitRate"),
         "opened": pos.get("openDateTime"),
         "leverage": pos.get("leverage"),
@@ -1295,6 +1308,8 @@ def _market_checks(
 
 
 def _buy(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
+    if args.trailing and args.stop is None:
+        raise TradingRefused("--trailing needs --stop: it is where the trailing stop starts.")
     config = load_trading_config(deps.config_path)
     require_enabled(config)
     amount = round(float(args.amount), 2)
@@ -1318,6 +1333,7 @@ def _buy(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
         "amount": amount,
         "leverage": 1,
         "stop_loss": args.stop,
+        "trailing_stop": args.trailing,
         "take_profit": args.target,
         "reason": args.reason,
         "user_requested": args.user_requested,
@@ -1497,6 +1513,7 @@ def cmd_set_stop(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
         "instrument_id": instrument_id,
         "symbol": _symbol_from_ledger(read_ledger(deps.ledger), instrument_id),
         "stop_loss": args.stop,
+        "trailing_stop": args.trailing,
         "take_profit": args.target,
         "previous_stop_loss": _number(position.get("stopLossRate")),
         "reason": args.reason,
@@ -1506,7 +1523,11 @@ def cmd_set_stop(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
     with deps.lock():
         try:
             trader.set_protection(
-                config.account, entry["position_id"], args.stop, args.target
+                config.account,
+                entry["position_id"],
+                args.stop,
+                args.target,
+                trailing=args.trailing,
             )
         except EtoroError as exc:
             append_ledger({**entry, "status": "failed", "error": str(exc)}, deps.ledger)
@@ -1685,6 +1706,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="take-profit price sent with the order (kronos_risk.py take_profit)",
     )
     buy.add_argument(
+        "--trailing",
+        action="store_true",
+        help="trailing stop: starts at --stop and eToro raises it as the price rises",
+    )
+    buy.add_argument(
         "--user-requested",
         action="store_true",
         help="the user explicitly asked for this exact buy: skip the lesson and backtest "
@@ -1704,6 +1730,11 @@ def build_parser() -> argparse.ArgumentParser:
     protect.add_argument("position_id", type=int)
     protect.add_argument("--stop", type=float, required=True, metavar="RATE")
     protect.add_argument("--target", type=float, default=None, metavar="RATE")
+    protect.add_argument(
+        "--trailing",
+        action="store_true",
+        help="trailing stop: starts at --stop and eToro raises it as the price rises",
+    )
     protect.add_argument("--reason", required=True, help="why, for the trade log")
     protect.add_argument("--dry-run", action="store_true")
     sub.add_parser(
