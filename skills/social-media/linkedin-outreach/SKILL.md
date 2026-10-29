@@ -1,7 +1,7 @@
 ---
 name: linkedin-outreach
 description: "Find LinkedIn B2B leads and run rate-limited outreach."
-version: 1.0.0
+version: 1.1.0
 author: Clawksis + Gradient AI
 license: MIT
 platforms: [linux, macos, windows]
@@ -51,6 +51,25 @@ scale" automation. Treat every action as if a human reviewer will see it.
   message failure, and tell the operator. Do not retry around a checkpoint.
 - **Never** scrape/store third-party personal data beyond what the campaign
   needs, and respect anyone who declines or doesn't reply (no repeated pokes).
+- **Never use an unofficial LinkedIn API or the operator's session cookies
+  outside their browser.** Python wrappers of LinkedIn's internal API
+  (`linkedin-api` and forks) fed with the `li_at`/`JSESSIONID` cookies copied
+  from the operator's Chrome got the session invalidated within minutes on a
+  real account: the API calls went into a redirect loop and the operator was
+  logged out of LinkedIn in their own browser too. The MCP's own saved session
+  (created by `--login` on the operator's machine) is the only automation channel;
+  do not use its `--import-from-browser` either, for the same reason. The server
+  ALSO imports the browser session on its own when its saved one lapses
+  (`--auto-import`, on by default upstream): the catalog entry passes
+  `--no-auto-import`; keep it.
+- **Tool calls run one at a time** (one shared browser, even across clients):
+  never fan them out in parallel. Each page costs ~7 s (a profile's main page) to
+  ~25 s (a connection request); read only the sections a step needs.
+- **A free account has a monthly cap on people searches** ("Has llegado al límite
+  mensual de búsquedas", commercial-use limit). It is account-wide (the browser
+  hits it too) and is not a security checkpoint: stop searching for the run,
+  and source new people from `get_sidebar_profiles` (People You May Know), which
+  does not spend that cap.
 
 If the operator asks for high-volume blasting, refuse the volume and explain the
 ban risk — offer the personalized, capped approach instead.
@@ -81,7 +100,17 @@ clawk mcp list                 # confirm it's registered
 
 This installs **stickerdaniel/linkedin-mcp-server** (PyPI package
 `mcp-server-linkedin`) — open-source, self-hosted, launched locally via `uvx`
-(stdio). Requires `uv` on PATH.
+(stdio). Clawksis resolves a bare `uvx` to its own managed copy of uv, so the
+`command: uvx` the catalog writes works even when `uv` is not on the user's PATH
+(do not replace it with an absolute path). The first launch downloads the
+server and its Patchright browser (about 50 MB): `clawk mcp test linkedin` can
+take a few minutes the first time.
+
+The two action tools (`send_message`, `connect_with_person`) are off by default;
+add them to `mcp_servers.linkedin.tools.include` in `config.yaml` (or
+`clawk mcp configure linkedin`) once the operator decides to send, then restart
+the gateway so the agent sees them. Verify with one real action (a single
+connection request) before scheduling anything.
 
 ### Authentication — read carefully (this is how the last account got banned)
 

@@ -15,7 +15,10 @@ transport:
   type: stdio
   command: "uvx"
   args:
-    - "mcp-server-linkedin@4.26.2"  # exact pin (supply-chain policy); bump deliberately
+    - "mcp-server-linkedin@4.28.0"  # exact pin (supply-chain policy); bump deliberately
+    # Never copy the session out of the operator's everyday browser: on by default upstream,
+    # it fires whenever the saved session lapses. Re-run `--login` instead.
+    - "--no-auto-import"
 
 # No credential clawk can store or inject. This server authenticates ONLY by
 # driving a real browser and saving a session profile under ~/.linkedin-mcp/.
