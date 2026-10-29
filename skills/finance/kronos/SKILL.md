@@ -349,6 +349,8 @@ Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMi
      with `close` (not capped). A position whose `stop_loss` in `positions --format json` is
      missing or ~0 has no stop at eToro: give it one with `set-stop` (eToro then closes it
      between runs too; a stop at or above the price is refused, it would close at once).
+     `--trailing` (on `buy` and `set-stop`) makes it a trailing stop that eToro raises as the
+     price rises; `positions` shows it as `trailing_stop`. Suited to meme coins.
    - Always pass a one-line `--reason`; after every order report what, how much, the stop,
      status and why. `submitted`/`placed` means not filled yet: check `positions` later.
 9. **Dashboard.** Forecasts, reviews and orders refresh `$CLAWK_HOME/dashboards/kronos.json`
