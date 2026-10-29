@@ -287,6 +287,7 @@ python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py buy AAPL --amount 50 --reason 
 python3 ${CLAWK_SKILL_DIR}/scripts/kronos_risk.py --account-size 10000 --etoro DOGE --interval OneHour --asset meme
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py buy BTC --amount 30 --stop 61000 --target 68000 --reason "adds_value, +1.8% in 24h" --dry-run
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py close 123456789 --units 0.5 --reason "thesis broken"
+python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py set-stop 123456789 --stop 359.98 --target 456.3 --reason "no broker stop"
 python3 ${CLAWK_SKILL_DIR}/scripts/etoro_trade.py reconcile
 ```
 
@@ -345,7 +346,9 @@ Intervals: `OneMinute`, `FiveMinutes`, `TenMinutes`, `FifteenMinutes`, `ThirtyMi
      symbol is on a list) and buy the exact eToro symbol (`etoro_data.py search`). A
      `CryptoRefused` (switch off, meme coin eToro does not list) is final; tell the user.
    - Manage open positions every run (broken thesis, time stop; playbook § 4) by closing
-     with `close` (not capped).
+     with `close` (not capped). A position whose `stop_loss` in `positions --format json` is
+     missing or ~0 has no stop at eToro: give it one with `set-stop` (eToro then closes it
+     between runs too; a stop at or above the price is refused, it would close at once).
    - Always pass a one-line `--reason`; after every order report what, how much, the stop,
      status and why. `submitted`/`placed` means not filled yet: check `positions` later.
 9. **Dashboard.** Forecasts, reviews and orders refresh `$CLAWK_HOME/dashboards/kronos.json`

@@ -50,6 +50,7 @@ Usage:
   etoro_trade.py buy SYMBOL --amount USD --reason TEXT [--stop RATE] [--target RATE]
                  [--user-requested] [--dry-run]
   etoro_trade.py close POSITION_ID [--units N] --reason TEXT [--dry-run]
+  etoro_trade.py set-stop POSITION_ID --stop RATE [--target RATE] --reason TEXT [--dry-run]
   etoro_trade.py reconcile
 """
 
@@ -160,6 +161,8 @@ TRADE_ROUTES = (
         ),
     ),
     ("GET", re.compile(r"^/api/v2/trading/info/(?:demo/)?orders:lookup$")),
+    # Stop-loss / take-profit of an open position, changed in place (eToro, June 2026).
+    ("PATCH", re.compile(r"^/api/v2/trading/(?:demo/)?positions/\d+$")),
 )
 # v2 order lookup status ids (etoro-go); see references/etoro-api.md.
 ORDER_STATUS = {
@@ -913,6 +916,17 @@ class TradeClient:
         body = {"InstrumentId": instrument_id, "UnitsToDeduct": units}
         return self.send("POST", path, body=body, request_id=str(uuid.uuid4()))
 
+    def set_protection(
+        self, account: str, position_id: int, stop: float, target: float | None
+    ) -> Any:
+        """Set an open position's stop-loss (and take-profit) in place. Asynchronous at eToro:
+        the answer only says the change was accepted; `positions` shows when it applies."""
+        body: dict[str, Any] = {"stopLossRate": stop, "stopLossType": "fixed"}
+        if target is not None:
+            body["takeProfitRate"] = target
+        path = f"/api/v2/trading/{_segment(account)}positions/{int(position_id)}"
+        return self.send("PATCH", path, body=body, request_id=str(uuid.uuid4()))
+
     def order_status(
         self, account: str, query: Mapping[str, Any]
     ) -> tuple[str | None, str | None, int | None]:
@@ -1435,6 +1449,77 @@ def cmd_close(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
     }
 
 
+def _current_rate(position: Mapping[str, Any]) -> float | None:
+    """The long position's current rate, from its open rate and unrealized P&L (leverage 1)."""
+    open_rate = _number(position.get("openRate"))
+    pnl = position.get("unrealizedPnL")
+    pnl_value = _number(pnl.get("pnL")) if isinstance(pnl, dict) else None
+    invested = _number(position.get("amount"))
+    if not open_rate or pnl_value is None or not invested:
+        return None
+    return open_rate * (1 + pnl_value / invested)
+
+
+def _check_protection(
+    position: Mapping[str, Any], stop: float, target: float | None
+) -> None:
+    """A stop at or above the price would close the position at once; refuse it."""
+    if position.get("isBuy") is False:
+        raise TradingRefused("Only long positions are supported.")
+    if stop <= 0:
+        raise TradingRefused("--stop must be above 0.")
+    current = _current_rate(position)
+    if current is not None and stop >= current:
+        raise TradingRefused(
+            f"--stop {stop} is not below the current price (~{current:.4g}): eToro would close "
+            "the position at once.",
+            hint="Use a stop under the price, e.g. from kronos_risk.py.",
+        )
+    if target is not None and target <= max(stop, current or 0):
+        raise TradingRefused("--target must be above the current price and the stop.")
+
+
+def cmd_set_stop(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
+    """Put a broker-side stop-loss on an open position, so eToro closes it even between runs."""
+    config = load_trading_config(deps.config_path)
+    require_enabled(config)
+    reader, trader = deps.clients()
+    portfolio, _path = reader.portfolio(config.account)
+    position = _find_position(portfolio, args.position_id)
+    _check_protection(position, args.stop, args.target)
+    instrument_id = int(position.get("instrumentID") or 0)
+    entry = {
+        "id": str(uuid.uuid4()),
+        "ts": deps.now().astimezone(UTC).isoformat(),
+        "action": "protect",
+        "account": config.account,
+        "position_id": int(args.position_id),
+        "instrument_id": instrument_id,
+        "symbol": _symbol_from_ledger(read_ledger(deps.ledger), instrument_id),
+        "stop_loss": args.stop,
+        "take_profit": args.target,
+        "previous_stop_loss": _number(position.get("stopLossRate")),
+        "reason": args.reason,
+    }
+    if args.dry_run:
+        return {"ok": True, "dry_run": True, "would_protect": entry}
+    with deps.lock():
+        try:
+            trader.set_protection(
+                config.account, entry["position_id"], args.stop, args.target
+            )
+        except EtoroError as exc:
+            append_ledger({**entry, "status": "failed", "error": str(exc)}, deps.ledger)
+            raise
+        append_ledger({**entry, "status": "submitted"}, deps.ledger)
+    return {
+        "ok": True,
+        "protect": {**entry, "status": "submitted"},
+        "note": "eToro applies the change asynchronously; confirm the stop_loss with "
+        "`etoro_trade.py positions --format json`.",
+    }
+
+
 # ── Reconcile buys whose outcome is unknown (read-only: never places an order) ──
 
 
@@ -1612,6 +1697,15 @@ def build_parser() -> argparse.ArgumentParser:
     close.add_argument("--units", type=float, default=None)
     close.add_argument("--reason", required=True, help="why, for the trade log")
     close.add_argument("--dry-run", action="store_true")
+    protect = sub.add_parser(
+        "set-stop",
+        help="put a broker-side stop-loss (and take-profit) on an open position",
+    )
+    protect.add_argument("position_id", type=int)
+    protect.add_argument("--stop", type=float, required=True, metavar="RATE")
+    protect.add_argument("--target", type=float, default=None, metavar="RATE")
+    protect.add_argument("--reason", required=True, help="why, for the trade log")
+    protect.add_argument("--dry-run", action="store_true")
     sub.add_parser(
         "reconcile",
         help="settle buys whose outcome is unknown from eToro's order lookup and portfolio "
@@ -1625,9 +1719,10 @@ COMMANDS = {
     "positions": cmd_positions,
     "buy": cmd_buy,
     "close": cmd_close,
+    "set-stop": cmd_set_stop,
     "reconcile": cmd_reconcile,
 }
-WRITES_LEDGER = {"buy", "close", "reconcile"}
+WRITES_LEDGER = {"buy", "close", "set-stop", "reconcile"}
 
 
 def main(argv: list[str] | None = None, deps: Deps | None = None) -> int:

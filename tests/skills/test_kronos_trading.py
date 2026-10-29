@@ -481,20 +481,96 @@ def test_close_refuses_unknown_positions_and_impossible_units(tmp_path, argv):
     assert trader_rec.requests == []
 
 
+PROTECTABLE = {
+    "clientPortfolio": {
+        "positions": [
+            {
+                "positionID": 555,
+                "instrumentID": 1001,
+                "isBuy": True,
+                "units": 2.0,
+                "amount": 400,
+                "openRate": 200,
+                "stopLossRate": 0.0001,
+                "unrealizedPnL": {"pnL": -20},  # price ~190
+            }
+        ]
+    }
+}
+
+
+def test_set_stop_puts_a_broker_stop_on_an_open_position(tmp_path):
+    deps, _, trader_rec = _deps(
+        tmp_path,
+        _config(tmp_path, enabled="true"),
+        reader_responses=[PROTECTABLE],
+        trader_responses=[{"operationId": "op", "positionId": 555}],
+    )
+    result = trade.cmd_set_stop(
+        _args(
+            "set-stop", "555", "--stop", "180", "--target", "230", "--reason", "no stop"
+        ),
+        deps,
+    )
+    (request,) = trader_rec.requests
+    assert request.get_method() == "PATCH"
+    assert request.full_url.endswith("/api/v2/trading/demo/positions/555")
+    assert json.loads(request.data) == {
+        "stopLossRate": 180.0,
+        "stopLossType": "fixed",
+        "takeProfitRate": 230.0,
+    }
+    (row,) = _ledger_rows(deps)
+    assert row["action"] == "protect" and row["status"] == "submitted"
+    assert row["stop_loss"] == 180.0 and result["ok"]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["555", "--stop", "195"],  # above the ~190 price: eToro would close it at once
+        ["555", "--stop", "0"],
+        ["555", "--stop", "180", "--target", "185"],
+        ["999", "--stop", "180"],
+    ],
+)
+def test_set_stop_refuses_a_stop_that_would_close_or_an_unknown_position(
+    tmp_path, argv
+):
+    deps, _, trader_rec = _deps(
+        tmp_path, _config(tmp_path, enabled="true"), reader_responses=[PROTECTABLE]
+    )
+    with pytest.raises(trade.TradingRefused):
+        trade.cmd_set_stop(_args("set-stop", *argv, "--reason", "x"), deps)
+    assert trader_rec.requests == []
+
+
+def test_set_stop_dry_run_sends_nothing(tmp_path):
+    deps, _, trader_rec = _deps(
+        tmp_path, _config(tmp_path, enabled="true"), reader_responses=[PROTECTABLE]
+    )
+    result = trade.cmd_set_stop(
+        _args("set-stop", "555", "--stop", "180", "--reason", "x", "--dry-run"), deps
+    )
+    assert result["would_protect"]["stop_loss"] == 180.0
+    assert trader_rec.requests == [] and _ledger_rows(deps) == []
+
+
 # ── Client surface and lock ──
 
 
 @pytest.mark.parametrize(
     ("method", "path"),
     [
-        ("PATCH", "/api/v2/trading/positions/1"),
+        ("PATCH", "/api/v2/trading/positions/1/close"),
+        ("DELETE", "/api/v2/trading/demo/positions/1"),
         ("DELETE", "/api/v2/trading/execution/demo/orders/1"),
         ("POST", "/api/v2/trading/execution/demo/orders/1"),
         ("GET", "/api/v1/trading/info/demo/pnl"),
         ("POST", "/api/v1/watchlists"),
     ],
 )
-def test_trade_client_reaches_only_its_three_routes(method, path):
+def test_trade_client_reaches_only_its_trading_routes(method, path):
     rec = Recorder()
     client = trade.TradeClient("a", "u", opener=rec)
     with pytest.raises(trade.TradingRefused, match="Refusing"):
