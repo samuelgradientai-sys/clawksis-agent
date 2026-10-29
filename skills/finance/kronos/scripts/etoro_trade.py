@@ -1309,7 +1309,9 @@ def _market_checks(
 
 def _buy(args: argparse.Namespace, deps: Deps) -> dict[str, Any]:
     if args.trailing and args.stop is None:
-        raise TradingRefused("--trailing needs --stop: it is where the trailing stop starts.")
+        raise TradingRefused(
+            "--trailing needs --stop: it is where the trailing stop starts."
+        )
     config = load_trading_config(deps.config_path)
     require_enabled(config)
     amount = round(float(args.amount), 2)

@@ -533,17 +533,24 @@ def test_set_stop_trailing_asks_etoro_for_a_trailing_stop(tmp_path):
         trader_responses=[{"operationId": "op", "positionId": 555}],
     )
     trade.cmd_set_stop(
-        _args("set-stop", "555", "--stop", "180", "--trailing", "--reason", "meme"), deps
+        _args("set-stop", "555", "--stop", "180", "--trailing", "--reason", "meme"),
+        deps,
     )
     (request,) = trader_rec.requests
-    assert json.loads(request.data) == {"stopLossRate": 180.0, "stopLossType": "trailing"}
+    assert json.loads(request.data) == {
+        "stopLossRate": 180.0,
+        "stopLossType": "trailing",
+    }
     (row,) = _ledger_rows(deps)
     assert row["trailing_stop"] is True
 
 
 def test_buy_order_fields_carry_a_trailing_stop_only_when_asked():
     order = {"stop_loss": 95.0, "take_profit": None}
-    assert trade._protection_fields(order) == {"stopLossRate": 95.0, "stopLossType": "fixed"}
+    assert trade._protection_fields(order) == {
+        "stopLossRate": 95.0,
+        "stopLossType": "fixed",
+    }
     assert trade._protection_fields({**order, "trailing_stop": True}) == {
         "stopLossRate": 95.0,
         "stopLossType": "trailing",
